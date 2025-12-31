@@ -1,0 +1,13 @@
+{
+  "timestamp": 1767220363888,
+  "script": "azure/rg-details.bash",
+  "args": [
+    "--resource-group",
+    "revenueqaupload"
+  ],
+  "success": true,
+  "exit_code": 0,
+  "stdout": "Script started at: 2025-12-31T22:32:21Z\n\nNote: Activity Log only covers the last 90 days.\n\nResource Group details for: revenueqaupload\n{\n  \"id\": \"/subscriptions/ada50b0a-2a52-4258-91b0-ba99371472c5/resourceGroups/revenueqaupload\",\n  \"location\": \"eastus\",\n  \"managedBy\": null,\n  \"name\": \"revenueqaupload\",\n  \"properties\": {\n    \"provisioningState\": \"Succeeded\"\n  },\n  \"tags\": null,\n  \"type\": \"Microsoft.Resources/resourceGroups\"\n}\n\nResource Group audit\nResourceGroup                                     CreatedAt             LastModified          CreatedBy                           \n------------------------------------------------  --------------------  --------------------  ------------------------------------\nrevenueqaupload                                   N/A                   N/A                   N/A                                 \n\nResource                              Type                                              CreatedAt             LastModified          CreatedBy                           \n------------------------------------  ------------------------------------------------  --------------------  --------------------  ------------------------------------\nASP-RevenueQAUpload-5f07              Microsoft.Web/serverFarms                         N/A                   N/A                   N/A                                 \nrevenueqaupload                       Microsoft.Storage/storageAccounts                 2025-12-31T16:34:41.1198851Z  2025-12-31T21:06:14.3370001Z  e0c4b368-7288-4a7b-985b-f92dd0a2b54c\nrevenueqaupload                       Microsoft.Insights/components                     N/A                   N/A                   N/A                                 \nRevenueQAUpload                       Microsoft.Web/sites                               N/A                   N/A                   N/A                                 \nFailure Anomalies - revenueqaupload   microsoft.alertsmanagement/smartDetectorAlertRul  N/A                   N/A                   N/A                                 \n\nScript finished at: 2025-12-31T22:32:43Z\n",
+  "stderr": "",
+  "error": null
+}

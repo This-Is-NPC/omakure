@@ -1,0 +1,9 @@
+/target
+/dist
+*.log
+*.tmp
+.DS_Store
+.env
+.env.*
+.idea/
+.vscode/

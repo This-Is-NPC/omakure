@@ -1,0 +1,454 @@
+use crate::history::HistoryEntry;
+use crate::lua_widget::{self, WidgetData};
+use crate::ports::{WorkspaceEntry, WorkspaceEntryKind};
+use crate::domain::Schema;
+use crate::use_cases::ScriptService;
+use crate::workspace::Workspace;
+use ratatui::widgets::{ListState, TableState};
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) enum Screen {
+    ScriptSelect,
+    FieldInput,
+    History,
+    Running,
+    RunResult,
+    Error,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) enum HistoryFocus {
+    List,
+    Output,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SchemaPreview {
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) fields: Vec<SchemaFieldPreview>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SchemaFieldPreview {
+    pub(crate) name: String,
+    pub(crate) prompt: Option<String>,
+    pub(crate) kind: String,
+    pub(crate) required: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum ExecutionStatus {
+    Success,
+    Failed(Option<i32>),
+    Error,
+}
+
+pub(crate) struct App<'a> {
+    service: &'a ScriptService,
+    pub(crate) workspace: Workspace,
+    pub(crate) current_dir: PathBuf,
+    pub(crate) entries: Vec<WorkspaceEntry>,
+    pub(crate) widget: Option<WidgetData>,
+    pub(crate) widget_error: Option<String>,
+    pub(crate) schema_preview: Option<SchemaPreview>,
+    pub(crate) schema_preview_error: Option<String>,
+    preview_script: Option<PathBuf>,
+    schema_cache: Option<(PathBuf, Schema)>,
+    pub(crate) list_state: ListState,
+    selection: usize,
+    pub(crate) history: Vec<HistoryEntry>,
+    pub(crate) history_state: TableState,
+    history_selection: usize,
+    pub(crate) history_focus: HistoryFocus,
+    pub(crate) screen: Screen,
+    pub(crate) schema_name: Option<String>,
+    pub(crate) schema_description: Option<String>,
+    pub(crate) fields: Vec<crate::domain::Field>,
+    pub(crate) field_index: usize,
+    pub(crate) field_inputs: Vec<String>,
+    pub(crate) args: Vec<String>,
+    pub(crate) error: Option<String>,
+    pub(crate) selected_script: Option<PathBuf>,
+    pub(crate) result: Option<(PathBuf, Vec<String>)>,
+    pub(crate) should_quit: bool,
+    pub(crate) run_output_scroll: u16,
+}
+
+impl<'a> App<'a> {
+    pub(crate) fn new(
+        service: &'a ScriptService,
+        workspace: Workspace,
+        entries: Vec<WorkspaceEntry>,
+        history: Vec<HistoryEntry>,
+    ) -> Self {
+        let mut list_state = ListState::default();
+        if !entries.is_empty() {
+            list_state.select(Some(0));
+        }
+        let mut history_state = TableState::default();
+        if !history.is_empty() {
+            history_state.select(Some(0));
+        }
+        let current_dir = workspace.root().to_path_buf();
+        let (widget, widget_error) = load_widget_state(&current_dir);
+        let mut app = Self {
+            service,
+            workspace,
+            current_dir,
+            entries,
+            widget,
+            widget_error,
+            schema_preview: None,
+            schema_preview_error: None,
+            preview_script: None,
+            schema_cache: None,
+            list_state,
+            selection: 0,
+            history,
+            history_state,
+            history_selection: 0,
+            history_focus: HistoryFocus::List,
+            screen: Screen::ScriptSelect,
+            schema_name: None,
+            schema_description: None,
+            fields: Vec::new(),
+            field_index: 0,
+            field_inputs: Vec::new(),
+            args: Vec::new(),
+            error: None,
+            selected_script: None,
+            result: None,
+            should_quit: false,
+            run_output_scroll: 0,
+        };
+        app.update_schema_preview();
+        app
+    }
+
+    pub(crate) fn selected_entry(&self) -> Option<&WorkspaceEntry> {
+        self.entries.get(self.selection)
+    }
+
+    pub(crate) fn move_selection(&mut self, delta: isize) {
+        if self.entries.is_empty() {
+            return;
+        }
+        let len = self.entries.len() as isize;
+        let mut new_index = self.selection as isize + delta;
+        if new_index < 0 {
+            new_index = 0;
+        } else if new_index >= len {
+            new_index = len - 1;
+        }
+        self.selection = new_index as usize;
+        self.list_state.select(Some(self.selection));
+        self.update_schema_preview();
+    }
+
+    pub(crate) fn enter_selected(&mut self) {
+        let entry = match self.selected_entry() {
+            Some(entry) => entry.clone(),
+            None => return,
+        };
+
+        match entry.kind {
+            WorkspaceEntryKind::Directory => {
+                self.current_dir = entry.path;
+                self.refresh_entries();
+            }
+            WorkspaceEntryKind::Script => {
+                self.load_schema(entry.path);
+            }
+        }
+    }
+
+    pub(crate) fn navigate_up(&mut self) {
+        if self.current_dir == self.workspace.root() {
+            return;
+        }
+        if let Some(parent) = self.current_dir.parent() {
+            self.current_dir = parent.to_path_buf();
+            self.refresh_entries();
+        }
+    }
+
+    pub(crate) fn move_history_selection(&mut self, delta: isize) {
+        if self.history.is_empty() {
+            return;
+        }
+        let len = self.history.len() as isize;
+        let mut new_index = self.history_selection as isize + delta;
+        if new_index < 0 {
+            new_index = 0;
+        } else if new_index >= len {
+            new_index = len - 1;
+        }
+        self.history_selection = new_index as usize;
+        self.history_state.select(Some(self.history_selection));
+        self.reset_run_output_scroll();
+    }
+
+    pub(crate) fn add_history_entry(&mut self, entry: HistoryEntry) {
+        self.history.insert(0, entry);
+        self.history_selection = 0;
+        self.history_state.select(Some(0));
+    }
+
+    pub(crate) fn current_history_entry(&self) -> Option<&HistoryEntry> {
+        self.history.get(self.history_selection)
+    }
+
+    pub(crate) fn load_schema(&mut self, script: PathBuf) {
+        let schema_result = match self.schema_cache.as_ref() {
+            Some((path, schema)) if path == &script => Ok(schema.clone()),
+            _ => self.service.load_schema(&script),
+        };
+
+        match schema_result {
+            Ok(mut schema) => {
+                schema.fields.sort_by_key(|field| field.order);
+                self.schema_name = Some(schema.name);
+                self.schema_description = schema.description;
+                self.fields = schema.fields;
+                self.field_index = 0;
+                self.field_inputs = vec![String::new(); self.fields.len()];
+                self.args.clear();
+                self.error = None;
+                self.selected_script = Some(script.clone());
+                self.schema_cache = Some((script.clone(), Schema {
+                    name: self.schema_name.clone().unwrap_or_default(),
+                    description: self.schema_description.clone(),
+                    fields: self.fields.clone(),
+                }));
+                if self.fields.is_empty() {
+                    self.result = Some((script, Vec::new()));
+                } else {
+                    self.screen = Screen::FieldInput;
+                }
+            }
+            Err(err) => {
+                self.error = Some(err.to_string());
+                self.screen = Screen::Error;
+            }
+        }
+    }
+
+    pub(crate) fn move_field_selection(&mut self, delta: isize) {
+        if self.fields.is_empty() {
+            return;
+        }
+        let len = self.fields.len() as isize;
+        let mut new_index = self.field_index as isize + delta;
+        while new_index < 0 {
+            new_index += len;
+        }
+        while new_index >= len {
+            new_index -= len;
+        }
+        self.field_index = new_index as usize;
+        self.error = None;
+    }
+
+    pub(crate) fn append_field_char(&mut self, ch: char) {
+        if let Some(value) = self.field_inputs.get_mut(self.field_index) {
+            value.push(ch);
+            self.error = None;
+        }
+    }
+
+    pub(crate) fn pop_field_char(&mut self) {
+        if let Some(value) = self.field_inputs.get_mut(self.field_index) {
+            value.pop();
+            self.error = None;
+        }
+    }
+
+    pub(crate) fn submit_form(&mut self) {
+        if self.fields.is_empty() {
+            self.finish();
+            return;
+        }
+
+        let mut args = Vec::new();
+        for (idx, field) in self.fields.iter().enumerate() {
+            let input = self
+                .field_inputs
+                .get(idx)
+                .map(String::as_str)
+                .unwrap_or("");
+            match crate::domain::normalize_input(field, input) {
+                Ok(value) => {
+                    if let Some(value) = value {
+                        let arg = field
+                            .arg
+                            .clone()
+                            .unwrap_or_else(|| format!("--{}", field.name));
+                        args.push(arg);
+                        args.push(value);
+                    }
+                }
+                Err(message) => {
+                    self.error = Some(format!("{}: {}", field.name, message));
+                    self.field_index = idx;
+                    return;
+                }
+            }
+        }
+
+        self.args = args;
+        self.error = None;
+        self.finish();
+    }
+
+    fn finish(&mut self) {
+        if let Some(script) = &self.selected_script {
+            self.result = Some((script.clone(), self.args.clone()));
+        } else {
+            self.should_quit = true;
+        }
+    }
+
+    pub(crate) fn refresh_entries(&mut self) {
+        match self.service.list_entries(&self.current_dir) {
+            Ok(entries) => {
+                self.entries = entries;
+                self.selection = 0;
+                if self.entries.is_empty() {
+                    self.list_state.select(None);
+                } else {
+                    self.list_state.select(Some(0));
+                }
+                self.error = None;
+                self.load_widget();
+                self.update_schema_preview();
+            }
+            Err(err) => {
+                self.error = Some(err.to_string());
+                self.screen = Screen::Error;
+            }
+        }
+    }
+
+    pub(crate) fn refresh_status(&mut self) {
+        self.load_widget();
+        self.update_schema_preview();
+    }
+
+    pub(crate) fn back_to_script_select(&mut self) {
+        self.screen = Screen::ScriptSelect;
+        self.schema_name = None;
+        self.schema_description = None;
+        self.fields.clear();
+        self.field_index = 0;
+        self.field_inputs.clear();
+        self.args.clear();
+        self.error = None;
+        self.selected_script = None;
+        self.result = None;
+    }
+
+    pub(crate) fn reset_run_output_scroll(&mut self) {
+        self.run_output_scroll = 0;
+    }
+
+    pub(crate) fn scroll_run_output(&mut self, delta: i16) {
+        if delta > 0 {
+            self.run_output_scroll = self
+                .run_output_scroll
+                .saturating_add(delta as u16);
+        } else if delta < 0 {
+            let amount = (-delta) as u16;
+            self.run_output_scroll = self.run_output_scroll.saturating_sub(amount);
+        }
+    }
+
+    pub(crate) fn display_path(&self, path: &Path) -> String {
+        path.strip_prefix(self.workspace.root())
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string()
+    }
+
+    fn load_widget(&mut self) {
+        let (widget, error) = load_widget_state(&self.current_dir);
+        self.widget = widget;
+        self.widget_error = error;
+    }
+
+    fn update_schema_preview(&mut self) {
+        let (entry_path, entry_kind) = match self.selected_entry() {
+            Some(entry) => (entry.path.clone(), entry.kind),
+            None => {
+                self.schema_preview = None;
+                self.schema_preview_error = None;
+                self.preview_script = None;
+                return;
+            }
+        };
+
+        if entry_kind != WorkspaceEntryKind::Script {
+            self.schema_preview = None;
+            self.schema_preview_error = None;
+            self.preview_script = None;
+            return;
+        }
+
+        if self.preview_script.as_ref() == Some(&entry_path) {
+            return;
+        }
+
+        match self.service.load_schema(&entry_path) {
+            Ok(mut schema) => {
+                schema.fields.sort_by_key(|field| field.order);
+                self.schema_preview = Some(schema_to_preview(&schema));
+                self.schema_preview_error = None;
+                self.preview_script = Some(entry_path.clone());
+                self.schema_cache = Some((entry_path, schema));
+            }
+            Err(err) => {
+                self.schema_preview = None;
+                self.schema_preview_error = Some(err.to_string());
+                self.preview_script = Some(entry_path);
+            }
+        }
+    }
+}
+
+impl ExecutionStatus {
+    pub(crate) fn from_history(entry: &HistoryEntry) -> Self {
+        if entry.error.is_some() {
+            ExecutionStatus::Error
+        } else if entry.success {
+            ExecutionStatus::Success
+        } else {
+            ExecutionStatus::Failed(entry.exit_code)
+        }
+    }
+}
+
+fn load_widget_state(dir: &Path) -> (Option<WidgetData>, Option<String>) {
+    match lua_widget::load_widget(dir) {
+        Ok(widget) => (widget, None),
+        Err(err) => (None, Some(err)),
+    }
+}
+
+fn schema_to_preview(schema: &Schema) -> SchemaPreview {
+    let fields = schema
+        .fields
+        .iter()
+        .map(|field| SchemaFieldPreview {
+            name: field.name.clone(),
+            prompt: field.prompt.clone(),
+            kind: field.kind.clone(),
+            required: field.required.unwrap_or(false),
+        })
+        .collect();
+    SchemaPreview {
+        name: schema.name.clone(),
+        description: schema.description.clone(),
+        fields,
+    }
+}

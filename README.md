@@ -63,3 +63,7 @@ omakure
 - How it works (overview + examples): `.docs/how-it-works.md`
 - Development guide: `.docs/development.md`
 - Release artifacts: `.docs/release-artifacts.md`
+
+## License
+
+AGPL-3.0-only. See `LICENSE`.

@@ -6,6 +6,7 @@ mod widgets;
 
 use crate::use_cases::ScriptService;
 use crate::workspace::Workspace;
+use crate::search_index::SearchIndex;
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::ExecutableCommand;
@@ -49,9 +50,14 @@ pub fn run_app(
         Ok(entries) => entries,
         Err(_) => Vec::new(),
     };
-    let mut app = App::new(service, workspace, entries, history);
+    let search_index = SearchIndex::new(workspace.search_db_path());
+    search_index.start_background_rebuild(workspace.root().to_path_buf());
+    let mut app = App::new(service, workspace, entries, history, search_index);
 
     loop {
+        if app.screen == Screen::Search {
+            app.refresh_search_status();
+        }
         terminal.draw(|frame| render_ui(frame, &mut app))?;
 
         if event::poll(Duration::from_millis(200))? {

@@ -7,3 +7,4 @@ pub(crate) mod run_result;
 pub(crate) mod running;
 pub(crate) mod schema;
 pub(crate) mod scripts;
+pub(crate) mod search;

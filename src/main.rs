@@ -15,6 +15,7 @@ mod update;
 mod use_cases;
 mod runtime;
 mod workspace;
+mod search_index;
 
 use adapters::script_runner::MultiScriptRunner;
 use adapters::workspace_repository::FsWorkspaceRepository;

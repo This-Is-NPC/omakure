@@ -34,6 +34,10 @@ impl Workspace {
         &self.history_dir
     }
 
+    pub fn search_db_path(&self) -> PathBuf {
+        self.history_dir.join("search-index.sqlite")
+    }
+
     pub fn config_path(&self) -> &Path {
         &self.config_path
     }

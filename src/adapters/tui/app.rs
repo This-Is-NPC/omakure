@@ -2,6 +2,7 @@ use crate::history::HistoryEntry;
 use crate::lua_widget::{self, WidgetData};
 use crate::ports::{WorkspaceEntry, WorkspaceEntryKind};
 use crate::domain::Schema;
+use crate::search_index::{SearchDetails, SearchIndex, SearchResult, SearchStatus};
 use crate::use_cases::ScriptService;
 use crate::workspace::Workspace;
 use ratatui::widgets::{ListState, TableState};
@@ -10,6 +11,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum Screen {
     ScriptSelect,
+    Search,
     FieldInput,
     History,
     Running,
@@ -64,6 +66,14 @@ pub(crate) struct App<'a> {
     history_selection: usize,
     pub(crate) history_focus: HistoryFocus,
     pub(crate) screen: Screen,
+    search_index: SearchIndex,
+    pub(crate) search_query: String,
+    pub(crate) search_results: Vec<SearchResult>,
+    pub(crate) search_state: ListState,
+    search_selection: usize,
+    pub(crate) search_details: Option<SearchDetails>,
+    pub(crate) search_status: SearchStatus,
+    pub(crate) search_error: Option<String>,
     pub(crate) schema_name: Option<String>,
     pub(crate) schema_description: Option<String>,
     pub(crate) fields: Vec<crate::domain::Field>,
@@ -83,6 +93,7 @@ impl<'a> App<'a> {
         workspace: Workspace,
         entries: Vec<WorkspaceEntry>,
         history: Vec<HistoryEntry>,
+        search_index: SearchIndex,
     ) -> Self {
         let mut list_state = ListState::default();
         if !entries.is_empty() {
@@ -94,6 +105,7 @@ impl<'a> App<'a> {
         }
         let current_dir = workspace.root().to_path_buf();
         let (widget, widget_error) = load_widget_state(&current_dir);
+        let search_status = search_index.status();
         let mut app = Self {
             service,
             workspace,
@@ -112,6 +124,14 @@ impl<'a> App<'a> {
             history_selection: 0,
             history_focus: HistoryFocus::List,
             screen: Screen::ScriptSelect,
+            search_index,
+            search_query: String::new(),
+            search_results: Vec::new(),
+            search_state: ListState::default(),
+            search_selection: 0,
+            search_details: None,
+            search_status,
+            search_error: None,
             schema_name: None,
             schema_description: None,
             fields: Vec::new(),
@@ -146,6 +166,57 @@ impl<'a> App<'a> {
         self.selection = new_index as usize;
         self.list_state.select(Some(self.selection));
         self.update_schema_preview();
+    }
+
+    pub(crate) fn enter_search(&mut self) {
+        self.search_status = self.search_index.status();
+        self.screen = Screen::Search;
+        self.refresh_search_results();
+    }
+
+    pub(crate) fn refresh_search_status(&mut self) {
+        let status = self.search_index.status();
+        if status != self.search_status {
+            self.search_status = status.clone();
+            if self.screen == Screen::Search {
+                self.refresh_search_results();
+            }
+        }
+    }
+
+    pub(crate) fn move_search_selection(&mut self, delta: isize) {
+        if self.search_results.is_empty() {
+            return;
+        }
+        let len = self.search_results.len() as isize;
+        let mut new_index = self.search_selection as isize + delta;
+        if new_index < 0 {
+            new_index = 0;
+        } else if new_index >= len {
+            new_index = len - 1;
+        }
+        self.search_selection = new_index as usize;
+        self.search_state.select(Some(self.search_selection));
+        self.update_search_details();
+    }
+
+    pub(crate) fn append_search_char(&mut self, ch: char) {
+        self.search_query.push(ch);
+        self.refresh_search_results();
+    }
+
+    pub(crate) fn pop_search_char(&mut self) {
+        self.search_query.pop();
+        self.refresh_search_results();
+    }
+
+    pub(crate) fn open_selected_search(&mut self) {
+        let entry = match self.search_results.get(self.search_selection) {
+            Some(entry) => entry,
+            None => return,
+        };
+        let script_path = self.workspace.root().join(&entry.script_path);
+        self.load_schema(script_path);
     }
 
     pub(crate) fn enter_selected(&mut self) {
@@ -414,6 +485,43 @@ impl<'a> App<'a> {
                 self.schema_preview = None;
                 self.schema_preview_error = Some(err.to_string());
                 self.preview_script = Some(entry_path);
+            }
+        }
+    }
+
+    fn refresh_search_results(&mut self) {
+        match self.search_index.query(&self.search_query) {
+            Ok(results) => {
+                self.search_results = results;
+                self.search_error = None;
+            }
+            Err(err) => {
+                self.search_results.clear();
+                self.search_error = Some(err);
+            }
+        }
+        self.search_selection = 0;
+        if self.search_results.is_empty() {
+            self.search_state.select(None);
+        } else {
+            self.search_state.select(Some(0));
+        }
+        self.update_search_details();
+    }
+
+    fn update_search_details(&mut self) {
+        self.search_details = None;
+        let entry = match self.search_results.get(self.search_selection) {
+            Some(entry) => entry,
+            None => return,
+        };
+        match self.search_index.load_details(&entry.script_path) {
+            Ok(details) => {
+                self.search_details = details;
+                self.search_error = None;
+            }
+            Err(err) => {
+                self.search_error = Some(err);
             }
         }
     }

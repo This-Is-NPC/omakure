@@ -5,6 +5,7 @@ use super::app::{App, HistoryFocus, Screen};
 pub(crate) fn handle_key_event(app: &mut App, key: KeyEvent) {
     match app.screen {
         Screen::ScriptSelect => handle_list_key(app, key),
+        Screen::Search => handle_search_key(app, key),
         Screen::FieldInput => handle_input_key(app, key),
         Screen::History => handle_history_key(app, key),
         Screen::Running => {}
@@ -15,6 +16,11 @@ pub(crate) fn handle_key_event(app: &mut App, key: KeyEvent) {
 
 fn handle_list_key(app: &mut App, key: KeyEvent) {
     match key.code {
+        KeyCode::Char('s') | KeyCode::Char('S')
+            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            app.enter_search()
+        }
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Esc => {
             if app.current_dir == app.workspace.root() {
@@ -35,6 +41,23 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
         KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
         KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
         KeyCode::Enter => app.enter_selected(),
+        _ => {}
+    }
+}
+
+fn handle_search_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => app.screen = Screen::ScriptSelect,
+        KeyCode::Down | KeyCode::Char('j') => app.move_search_selection(1),
+        KeyCode::Up | KeyCode::Char('k') => app.move_search_selection(-1),
+        KeyCode::Enter => app.open_selected_search(),
+        KeyCode::Backspace => app.pop_search_char(),
+        KeyCode::Char(c)
+            if !key.modifiers.contains(KeyModifiers::CONTROL)
+                && !key.modifiers.contains(KeyModifiers::ALT) =>
+        {
+            app.append_search_char(c)
+        }
         _ => {}
     }
 }

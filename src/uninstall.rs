@@ -82,7 +82,27 @@ fn uninstall_windows(exe: &Path) -> Result<(), Box<dyn Error>> {
     let script = format!(
         "$processId = {pid}; \
          try {{ $p = Get-Process -Id $processId -ErrorAction SilentlyContinue; if ($p) {{ $p.WaitForExit(); }} }} catch {{}}; \
-         if (Test-Path {target}) {{ Remove-Item -Force {target}; }}",
+         $target = {target}; \
+         if (Test-Path -LiteralPath $target) {{ Remove-Item -LiteralPath $target -Force; }} \
+         $installDir = Split-Path -Parent $target; \
+         if (Test-Path -LiteralPath $installDir) {{ \
+           $items = Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue; \
+           if (-not $items) {{ Remove-Item -LiteralPath $installDir -Force; }} \
+         }} \
+         $rootDir = Split-Path -Parent $installDir; \
+         if (Test-Path -LiteralPath $rootDir) {{ \
+           $items = Get-ChildItem -LiteralPath $rootDir -Force -ErrorAction SilentlyContinue; \
+           if (-not $items) {{ Remove-Item -LiteralPath $rootDir -Force; }} \
+         }} \
+         function Normalize-Path([string]$p) {{ return ($p.Trim('\"').TrimEnd('\\')).ToLowerInvariant(); }} \
+         $envKey = 'HKCU:\\Environment'; \
+         try {{ $pathValue = (Get-ItemProperty -Path $envKey -Name Path -ErrorAction SilentlyContinue).Path }} catch {{ $pathValue = $null }}; \
+         if ($pathValue) {{ \
+           $normalizedInstall = Normalize-Path $installDir; \
+           $parts = $pathValue -split ';' | Where-Object {{ $_ -and (Normalize-Path $_) -ne $normalizedInstall }}; \
+           $newPath = ($parts -join ';'); \
+           if ($newPath -ne $pathValue) {{ Set-ItemProperty -Path $envKey -Name Path -Value $newPath; }} \
+         }}",
         pid = std::process::id(),
         target = ps_quote(&exe.display().to_string())
     );

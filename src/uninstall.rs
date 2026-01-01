@@ -196,5 +196,39 @@ fn remove_from_user_path(install_dir: &Path) -> Result<bool, Box<dyn Error>> {
 fn normalize_path(path: &str) -> String {
     let trimmed = path.trim().trim_matches('"');
     let trimmed = trimmed.trim_end_matches('\\').trim_end_matches('/');
-    trimmed.replace('/', "\\").to_lowercase()
+    let replaced = trimmed.replace('/', "\\");
+    collapse_backslashes(&replaced).to_lowercase()
+}
+
+#[cfg(windows)]
+fn collapse_backslashes(path: &str) -> String {
+    if path.is_empty() {
+        return String::new();
+    }
+
+    let mut output = String::with_capacity(path.len());
+    let mut chars = path.chars();
+    let mut last_was_backslash = false;
+
+    if path.starts_with("\\\\") {
+        output.push('\\');
+        output.push('\\');
+        chars.next();
+        chars.next();
+        last_was_backslash = true;
+    }
+
+    for ch in chars {
+        if ch == '\\' {
+            if !last_was_backslash {
+                output.push('\\');
+            }
+            last_was_backslash = true;
+        } else {
+            output.push(ch);
+            last_was_backslash = false;
+        }
+    }
+
+    output
 }

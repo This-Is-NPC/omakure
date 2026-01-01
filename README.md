@@ -50,13 +50,13 @@ Omakure treats the workspace as a filesystem score:
 ```
 omakure-scripts/
 ├── .omaken/        # Curated flavors managed by Omakure
+│   └── azure/
+│       ├── index.lua   # Optional folder widget
+│       ├── rg-list-all.bash
+│       ├── rg-details.bash
+│       └── rg-delete.bash
 ├── .history/       # Execution logs
-├── omakure.toml    # Optional workspace config
-└── azure/
-    ├── index.lua   # Optional folder widget
-    ├── rg-list-all.bash
-    ├── rg-details.bash
-    └── rg-delete.bash
+└── omakure.toml    # Optional workspace config
 ```
 
 If a folder includes `index.lua`, Omakure renders it in the TUI instead of the entries list.
@@ -107,7 +107,7 @@ Lists scripts recursively across the workspace (including `.omaken`).
 ## Run a script without the TUI
 
 ```bash
-omakure run azure/rg-list-all
+omakure run .omaken/azure/rg-list-all
 omakure run tools/cleanup
 omakure run scripts/cleanup.py -- --force
 ```
@@ -204,9 +204,9 @@ To override the scripts location, set `OMAKURE_SCRIPTS_DIR=/path/to/scripts`.
 
 | Script | Description |
 | --- | --- |
-| `scripts/azure/rg-list-all.bash` | List resource groups with CreatedAt, LastModified, and CreatedBy. |
-| `scripts/azure/rg-details.bash` | Show resource group details and list resources with CreatedAt, LastModified, and CreatedBy. |
-| `scripts/azure/rg-delete.bash` | Delete a resource group and all resources inside it. |
+| `scripts/.omaken/azure/rg-list-all.bash` | List resource groups with CreatedAt, LastModified, and CreatedBy. |
+| `scripts/.omaken/azure/rg-details.bash` | Show resource group details and list resources with CreatedAt, LastModified, and CreatedBy. |
+| `scripts/.omaken/azure/rg-delete.bash` | Delete a resource group and all resources inside it. |
 
 ## How to create a new script (step by step)
 

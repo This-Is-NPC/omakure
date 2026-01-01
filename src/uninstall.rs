@@ -3,6 +3,11 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(windows)]
+use winreg::enums::HKEY_CURRENT_USER;
+#[cfg(windows)]
+use winreg::RegKey;
+
 pub struct UninstallOptions {
     pub scripts_dir: PathBuf,
     pub remove_scripts: bool,
@@ -79,6 +84,20 @@ fn uninstall_unix(exe: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn uninstall_windows(exe: &Path) -> Result<(), Box<dyn Error>> {
+    let install_dir = exe
+        .parent()
+        .ok_or("Unable to determine install directory")?;
+
+    #[cfg(windows)]
+    {
+        remove_from_user_path(install_dir)?;
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = install_dir;
+    }
+
     let script = format!(
         r#"$processId = {pid}
 try {{
@@ -91,7 +110,7 @@ if (Test-Path -LiteralPath $target) {{
   Remove-Item -LiteralPath $target -Force
 }}
 
-$installDir = Split-Path -Parent $target
+$installDir = {install_dir}
 if (Test-Path -LiteralPath $installDir) {{
   $items = Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue
   if (-not $items) {{ Remove-Item -LiteralPath $installDir -Force }}
@@ -102,68 +121,10 @@ if (Test-Path -LiteralPath $rootDir) {{
   $items = Get-ChildItem -LiteralPath $rootDir -Force -ErrorAction SilentlyContinue
   if (-not $items) {{ Remove-Item -LiteralPath $rootDir -Force }}
 }}
-
-function Normalize-Path([string]$p) {{
-  if (-not $p) {{ return "" }}
-  return ($p.Trim().Trim('"').TrimEnd('\')).ToLowerInvariant()
-}}
-
-$envKey = 'HKCU:\Environment'
-try {{
-  $pathValue = (Get-ItemProperty -Path $envKey -Name Path -ErrorAction SilentlyContinue).Path
-}} catch {{
-  $pathValue = $null
-}}
-
-if ($pathValue) {{
-  $dirsToRemove = @()
-  if ($installDir) {{ $dirsToRemove += $installDir }}
-  if ($env:LOCALAPPDATA) {{
-    $dirsToRemove += (Join-Path $env:LOCALAPPDATA 'omakure\bin')
-  }} elseif ($env:USERPROFILE) {{
-    $dirsToRemove += (Join-Path $env:USERPROFILE 'AppData\Local\omakure\bin')
-  }}
-
-  $normalizedRemove = $dirsToRemove | ForEach-Object {{ Normalize-Path $_ }} | Where-Object {{ $_ }}
-  $parts = $pathValue -split ';' | Where-Object {{
-    $candidate = Normalize-Path $_
-    $candidate -and ($normalizedRemove -notcontains $candidate) -and ($candidate -notlike '*\omakure\bin')
-  }}
-  $newPath = ($parts -join ';')
-  if ($newPath -ne $pathValue) {{
-    Set-ItemProperty -Path $envKey -Name Path -Value $newPath
-  }}
-}}
-
-try {{
-  $signature = @'
-using System;
-using System.Runtime.InteropServices;
-public static class NativeMethods {{
-  [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
-  public static extern IntPtr SendMessageTimeout(
-    IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
-    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
-}}
-'@
-  Add-Type -TypeDefinition $signature -ErrorAction SilentlyContinue | Out-Null
-  $HWND_BROADCAST = [IntPtr]0xffff
-  $WM_SETTINGCHANGE = 0x1A
-  $SMTO_ABORTIFHUNG = 0x2
-  [UIntPtr]$result = [UIntPtr]::Zero
-  [NativeMethods]::SendMessageTimeout(
-    $HWND_BROADCAST,
-    $WM_SETTINGCHANGE,
-    [UIntPtr]::Zero,
-    'Environment',
-    $SMTO_ABORTIFHUNG,
-    5000,
-    [ref]$result
-  ) | Out-Null
-}} catch {{}}
 "#,
         pid = std::process::id(),
-        target = ps_quote(&exe.display().to_string())
+        target = ps_quote(&exe.display().to_string()),
+        install_dir = ps_quote(&install_dir.display().to_string())
     );
 
     Command::new("powershell")
@@ -176,4 +137,64 @@ public static class NativeMethods {{
 
 fn ps_quote(input: &str) -> String {
     format!("'{}'", input.replace('\'', "''"))
+}
+
+#[cfg(windows)]
+fn remove_from_user_path(install_dir: &Path) -> Result<bool, Box<dyn Error>> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (env_key, _) = hkcu.create_subkey("Environment")?;
+    let current: String = env_key.get_value("Path").unwrap_or_default();
+    if current.trim().is_empty() {
+        return Ok(false);
+    }
+
+    let mut remove_candidates = Vec::new();
+    remove_candidates.push(normalize_path(&install_dir.to_string_lossy()));
+    if let Ok(local) = env::var("LOCALAPPDATA") {
+        remove_candidates.push(normalize_path(
+            &PathBuf::from(local).join("omakure").join("bin").to_string_lossy(),
+        ));
+    } else if let Ok(profile) = env::var("USERPROFILE") {
+        remove_candidates.push(normalize_path(
+            &PathBuf::from(profile)
+                .join("AppData")
+                .join("Local")
+                .join("omakure")
+                .join("bin")
+                .to_string_lossy(),
+        ));
+    }
+
+    remove_candidates.retain(|value| !value.is_empty());
+    remove_candidates.sort();
+    remove_candidates.dedup();
+
+    let mut kept = Vec::new();
+    for entry in current.split(';') {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let normalized = normalize_path(trimmed);
+        let remove = remove_candidates.contains(&normalized)
+            || normalized.ends_with("\\omakure\\bin");
+        if !remove {
+            kept.push(trimmed.to_string());
+        }
+    }
+
+    let new_value = kept.join(";");
+    if new_value != current {
+        env_key.set_value("Path", &new_value)?;
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+#[cfg(windows)]
+fn normalize_path(path: &str) -> String {
+    let trimmed = path.trim().trim_matches('"');
+    let trimmed = trimmed.trim_end_matches('\\').trim_end_matches('/');
+    trimmed.replace('/', "\\").to_lowercase()
 }

@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 env:
-  APP_NAME: cloud-mgmt
+  APP_NAME: omakure
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
@@ -29,19 +29,19 @@ jobs:
             target: x86_64-unknown-linux-gnu
             asset_os: linux
             ext: tar.gz
-            bin: cloud-mgmt
+            bin: omakure
             rustflags: ""
           - os: macos-latest
             target: x86_64-apple-darwin
             asset_os: darwin
             ext: tar.gz
-            bin: cloud-mgmt
+            bin: omakure
             rustflags: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             asset_os: windows
             ext: zip
-            bin: cloud-mgmt.exe
+            bin: omakure.exe
             rustflags: "-C target-feature=+crt-static"
 
     steps:
@@ -56,7 +56,7 @@ jobs:
       - name: Build
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
-        run: cargo build --release --bin cloud-mgmt --target ${{ matrix.target }}
+        run: cargo build --release --bin omakure --target ${{ matrix.target }}
 
       - name: Package
         shell: bash

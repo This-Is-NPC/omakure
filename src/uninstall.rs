@@ -80,29 +80,88 @@ fn uninstall_unix(exe: &Path) -> Result<(), Box<dyn Error>> {
 
 fn uninstall_windows(exe: &Path) -> Result<(), Box<dyn Error>> {
     let script = format!(
-        "$processId = {pid}; \
-         try {{ $p = Get-Process -Id $processId -ErrorAction SilentlyContinue; if ($p) {{ $p.WaitForExit(); }} }} catch {{}}; \
-         $target = {target}; \
-         if (Test-Path -LiteralPath $target) {{ Remove-Item -LiteralPath $target -Force; }} \
-         $installDir = Split-Path -Parent $target; \
-         if (Test-Path -LiteralPath $installDir) {{ \
-           $items = Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue; \
-           if (-not $items) {{ Remove-Item -LiteralPath $installDir -Force; }} \
-         }} \
-         $rootDir = Split-Path -Parent $installDir; \
-         if (Test-Path -LiteralPath $rootDir) {{ \
-           $items = Get-ChildItem -LiteralPath $rootDir -Force -ErrorAction SilentlyContinue; \
-           if (-not $items) {{ Remove-Item -LiteralPath $rootDir -Force; }} \
-         }} \
-         function Normalize-Path([string]$p) {{ return ($p.Trim('\"').TrimEnd('\\')).ToLowerInvariant(); }} \
-         $envKey = 'HKCU:\\Environment'; \
-         try {{ $pathValue = (Get-ItemProperty -Path $envKey -Name Path -ErrorAction SilentlyContinue).Path }} catch {{ $pathValue = $null }}; \
-         if ($pathValue) {{ \
-           $normalizedInstall = Normalize-Path $installDir; \
-           $parts = $pathValue -split ';' | Where-Object {{ $_ -and (Normalize-Path $_) -ne $normalizedInstall }}; \
-           $newPath = ($parts -join ';'); \
-           if ($newPath -ne $pathValue) {{ Set-ItemProperty -Path $envKey -Name Path -Value $newPath; }} \
-         }}",
+        r#"$processId = {pid}
+try {{
+  $p = Get-Process -Id $processId -ErrorAction SilentlyContinue
+  if ($p) {{ $p.WaitForExit() }}
+}} catch {{}}
+
+$target = {target}
+if (Test-Path -LiteralPath $target) {{
+  Remove-Item -LiteralPath $target -Force
+}}
+
+$installDir = Split-Path -Parent $target
+if (Test-Path -LiteralPath $installDir) {{
+  $items = Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue
+  if (-not $items) {{ Remove-Item -LiteralPath $installDir -Force }}
+}}
+
+$rootDir = Split-Path -Parent $installDir
+if (Test-Path -LiteralPath $rootDir) {{
+  $items = Get-ChildItem -LiteralPath $rootDir -Force -ErrorAction SilentlyContinue
+  if (-not $items) {{ Remove-Item -LiteralPath $rootDir -Force }}
+}}
+
+function Normalize-Path([string]$p) {{
+  if (-not $p) {{ return "" }}
+  return ($p.Trim().Trim('"').TrimEnd('\')).ToLowerInvariant()
+}}
+
+$envKey = 'HKCU:\Environment'
+try {{
+  $pathValue = (Get-ItemProperty -Path $envKey -Name Path -ErrorAction SilentlyContinue).Path
+}} catch {{
+  $pathValue = $null
+}}
+
+if ($pathValue) {{
+  $dirsToRemove = @()
+  if ($installDir) {{ $dirsToRemove += $installDir }}
+  if ($env:LOCALAPPDATA) {{
+    $dirsToRemove += (Join-Path $env:LOCALAPPDATA 'omakure\bin')
+  }} elseif ($env:USERPROFILE) {{
+    $dirsToRemove += (Join-Path $env:USERPROFILE 'AppData\Local\omakure\bin')
+  }}
+
+  $normalizedRemove = $dirsToRemove | ForEach-Object {{ Normalize-Path $_ }} | Where-Object {{ $_ }}
+  $parts = $pathValue -split ';' | Where-Object {{
+    $candidate = Normalize-Path $_
+    $candidate -and ($normalizedRemove -notcontains $candidate) -and ($candidate -notlike '*\omakure\bin')
+  }}
+  $newPath = ($parts -join ';')
+  if ($newPath -ne $pathValue) {{
+    Set-ItemProperty -Path $envKey -Name Path -Value $newPath
+  }}
+}}
+
+try {{
+  $signature = @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeMethods {{
+  [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+  public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+}}
+'@
+  Add-Type -TypeDefinition $signature -ErrorAction SilentlyContinue | Out-Null
+  $HWND_BROADCAST = [IntPtr]0xffff
+  $WM_SETTINGCHANGE = 0x1A
+  $SMTO_ABORTIFHUNG = 0x2
+  [UIntPtr]$result = [UIntPtr]::Zero
+  [NativeMethods]::SendMessageTimeout(
+    $HWND_BROADCAST,
+    $WM_SETTINGCHANGE,
+    [UIntPtr]::Zero,
+    'Environment',
+    $SMTO_ABORTIFHUNG,
+    5000,
+    [ref]$result
+  ) | Out-Null
+}} catch {{}}
+"#,
         pid = std::process::id(),
         target = ps_quote(&exe.display().to_string())
     );

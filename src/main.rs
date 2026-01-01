@@ -31,10 +31,12 @@ use workspace::Workspace;
 fn scripts_dir_for(name: &str) -> PathBuf {
     #[cfg(windows)]
     {
+        if let Some(documents) = windows_documents_dir() {
+            return documents.join(name);
+        }
+
         if let Ok(user_profile) = env::var("USERPROFILE") {
-            return PathBuf::from(user_profile)
-                .join("Documents")
-                .join(name);
+            return PathBuf::from(user_profile).join("Documents").join(name);
         }
     }
 
@@ -48,6 +50,75 @@ fn scripts_dir_for(name: &str) -> PathBuf {
     }
 
     PathBuf::from("scripts")
+}
+
+#[cfg(windows)]
+fn windows_documents_dir() -> Option<PathBuf> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let subkeys = [
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders",
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders",
+    ];
+
+    for subkey in subkeys {
+        if let Ok(key) = hkcu.open_subkey(subkey) {
+            if let Ok(value) = key.get_value::<String, _>("Personal") {
+                let trimmed = value.trim();
+                if !trimmed.is_empty() {
+                    return Some(PathBuf::from(expand_windows_env_vars(trimmed)));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(windows)]
+fn expand_windows_env_vars(value: &str) -> String {
+    let mut output = String::new();
+    let mut chars = value.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch != '%' {
+            output.push(ch);
+            continue;
+        }
+
+        let mut name = String::new();
+        let mut found_end = false;
+        while let Some(next) = chars.next() {
+            if next == '%' {
+                found_end = true;
+                break;
+            }
+            name.push(next);
+        }
+
+        if !found_end {
+            output.push('%');
+            output.push_str(&name);
+            break;
+        }
+
+        if name.is_empty() {
+            output.push('%');
+            continue;
+        }
+
+        if let Ok(value) = env::var(&name) {
+            output.push_str(&value);
+        } else {
+            output.push('%');
+            output.push_str(&name);
+            output.push('%');
+        }
+    }
+
+    output
 }
 
 fn default_scripts_dir() -> PathBuf {

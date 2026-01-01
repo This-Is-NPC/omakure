@@ -55,11 +55,19 @@ omakure-scripts/
 │       ├── rg-list-all.bash
 │       ├── rg-details.bash
 │       └── rg-delete.bash
+│   └── envs/       # Environment defaults (active file listed in .omaken/envs/active)
+│       ├── active
+│       └── env_template.conf
 ├── .history/       # Execution logs
 └── omakure.toml    # Optional workspace config
 ```
 
-If a folder includes `index.lua`, Omakure renders it in the TUI instead of the entries list.
+If a folder includes `index.lua`, Omakure renders it in the TUI header panel.
+
+Environment defaults live in `.omaken/envs/*.conf`. Use the TUI (Alt+E) to switch the active file.
+Defaults are applied by matching field names (case-insensitive) to `key=value` pairs.
+
+The `.history/` folder stores local run logs and is ignored by git.
 
 ## Update
 
@@ -73,7 +81,7 @@ The update also syncs new scripts from the repo without overwriting existing fil
 Optional overrides:
 
 ```bash
-omakure update --version v0.1.0 --repo This-Is-NPC/omakure
+omakure update --version v0.1.1 --repo This-Is-NPC/omakure
 ```
 
 ## Uninstall
@@ -148,14 +156,14 @@ omakure completion pwsh
 Linux/macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh | VERSION=v0.1.0 bash -s -- --repo This-Is-NPC/omakure
+curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh | VERSION=v0.1.1 bash -s -- --repo This-Is-NPC/omakure
 ```
 
 Windows (PowerShell):
 
 ```powershell
 $env:REPO = "This-Is-NPC/omakure"
-$env:VERSION = "v0.1.0"
+$env:VERSION = "v0.1.1"
 irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.ps1 | iex
 ```
 
@@ -187,7 +195,10 @@ bash install-from-source.sh
 cargo run
 ```
 
-Use the TUI to select a script, fill the fields, and run.
+Use the TUI to select a script, fill the fields, and run. Shortcuts:
+
+- Ctrl+S: search scripts (background indexing)
+- Alt+E: environment selector
 
 In debug builds, the app will use the repo `scripts/` folder if it exists.
 To override the scripts location, set `OMAKURE_SCRIPTS_DIR=/path/to/scripts`.
@@ -196,7 +207,7 @@ To override the scripts location, set `OMAKURE_SCRIPTS_DIR=/path/to/scripts`.
 
 1) Scripts live anywhere under `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`) with `.bash`, `.sh`, `.ps1`, or `.py` extensions.
 2) When `SCHEMA_MODE=1`, the script prints JSON with `Name`, `Description`, and `Fields`.
-3) If a folder has `index.lua`, the TUI renders the widget instead of the entries list.
+3) If a folder has `index.lua`, the TUI renders the widget in the header panel.
 4) The TUI reads schemas, prompts for values, and runs the script with args.
 5) Every execution is captured in `.history/`.
 

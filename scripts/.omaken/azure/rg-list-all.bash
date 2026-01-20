@@ -5,25 +5,22 @@
 # Uses Azure Activity Log (last 90 days limitation applies)
 # ------------------------------------------------------------
 
-if [[ "${SCHEMA_MODE:-}" == "1" ]]; then
-  cat <<'JSON'
-{
-  "Name": "rg_list_all",
-  "Description": "List resource groups with CreatedAt, LastModified, and CreatedBy.",
-  "Fields": [
-    {
-      "Name": "subscription_id",
-      "Prompt": "Subscription id (optional)",
-      "Type": "string",
-      "Order": 1,
-      "Required": false,
-      "Arg": "--subscription-id"
-    }
-  ]
-}
-JSON
-  exit 0
-fi
+# OMAKURE_SCHEMA_START
+# {
+#   "Name": "rg_list_all",
+#   "Description": "List resource groups with CreatedAt, LastModified, and CreatedBy.",
+#   "Fields": [
+#     {
+#       "Name": "subscription_id",
+#       "Prompt": "Subscription id (optional)",
+#       "Type": "string",
+#       "Order": 1,
+#       "Required": false,
+#       "Arg": "--subscription-id"
+#     }
+#   ]
+# }
+# OMAKURE_SCHEMA_END
 
 run_az() {
   local err_file output

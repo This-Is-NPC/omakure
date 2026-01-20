@@ -40,6 +40,12 @@ omakure config
 omakure env
 ```
 
+TUI notes:
+
+- The Environments screen shows a preview panel for the selected env file.
+- Preview scroll: `PgUp` / `PgDn`, `Home` / `End`.
+- See `environments.md` for details.
+
 ## Omaken flavors
 
 ```bash

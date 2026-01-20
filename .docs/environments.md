@@ -12,10 +12,28 @@ Environment defaults live in `.omaken/envs/*.conf`. The active file name is stor
 
 Use the TUI (Alt+E) to select the active file.
 
+## Environments UI
+
+The Environments screen shows a preview panel on the right for the selected file.
+The preview lists parsed KEY=VALUE entries and masks sensitive values with `***`.
+
+Preview scroll shortcuts:
+
+- `PgUp` / `PgDn`
+- `Home` / `End`
+
 ## Example
 
 ```
 SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000
+RESOURCE_GROUP=rg-prod
+REGION=eastus
+```
+
+Preview example:
+
+```
+SUBSCRIPTION_ID=***
 RESOURCE_GROUP=rg-prod
 REGION=eastus
 ```

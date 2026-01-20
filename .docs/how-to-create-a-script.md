@@ -35,6 +35,8 @@ A script needs 4 clear blocks:
 - `Outputs`: values the script produces (optional).
 - `Queue`: queue configuration for batch runs (optional).
 
+Outputs and Queue details render in the schema preview panel in the TUI.
+
 For each field in `Fields`:
 
 - `Name`: internal field name.

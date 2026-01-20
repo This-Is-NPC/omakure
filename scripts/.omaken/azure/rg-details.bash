@@ -6,33 +6,30 @@ set -euo pipefail
 # Uses Azure Activity Log (last 90 days limitation applies)
 # ------------------------------------------------------------
 
-if [[ "${SCHEMA_MODE:-}" == "1" ]]; then
-  cat <<'JSON'
-{
-  "Name": "rg_details",
-  "Description": "Show resource group details and list resources with CreatedAt, LastModified, and CreatedBy.",
-  "Fields": [
-    {
-      "Name": "resource_group",
-      "Prompt": "Resource group name",
-      "Type": "string",
-      "Order": 1,
-      "Required": true,
-      "Arg": "--resource-group"
-    },
-    {
-      "Name": "subscription_id",
-      "Prompt": "Subscription id (optional)",
-      "Type": "string",
-      "Order": 2,
-      "Required": false,
-      "Arg": "--subscription-id"
-    }
-  ]
-}
-JSON
-  exit 0
-fi
+# OMAKURE_SCHEMA_START
+# {
+#   "Name": "rg_details",
+#   "Description": "Show resource group details and list resources with CreatedAt, LastModified, and CreatedBy.",
+#   "Fields": [
+#     {
+#       "Name": "resource_group",
+#       "Prompt": "Resource group name",
+#       "Type": "string",
+#       "Order": 1,
+#       "Required": true,
+#       "Arg": "--resource-group"
+#     },
+#     {
+#       "Name": "subscription_id",
+#       "Prompt": "Subscription id (optional)",
+#       "Type": "string",
+#       "Order": 2,
+#       "Required": false,
+#       "Arg": "--subscription-id"
+#     }
+#   ]
+# }
+# OMAKURE_SCHEMA_END
 
 run_az() {
   local err_file output

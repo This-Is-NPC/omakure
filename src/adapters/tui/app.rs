@@ -34,6 +34,38 @@ pub(crate) struct SchemaPreview {
     pub(crate) description: Option<String>,
     pub(crate) tags: Vec<String>,
     pub(crate) fields: Vec<SchemaFieldPreview>,
+    pub(crate) outputs: Vec<SchemaOutputPreview>,
+    pub(crate) queue: Option<QueuePreview>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SchemaOutputPreview {
+    pub(crate) name: String,
+    pub(crate) kind: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum QueuePreview {
+    Matrix { values: Vec<MatrixPreview> },
+    Cases { cases: Vec<QueueCasePreview> },
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct MatrixPreview {
+    pub(crate) name: String,
+    pub(crate) values: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct QueueCasePreview {
+    pub(crate) name: Option<String>,
+    pub(crate) values: Vec<QueueCaseValuePreview>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct QueueCaseValuePreview {
+    pub(crate) name: String,
+    pub(crate) value: String,
 }
 
 #[derive(Debug, Clone)]
@@ -367,6 +399,8 @@ impl<'a> App<'a> {
                 self.load_env_config();
                 schema.fields.sort_by_key(|field| field.order);
                 let tags = schema.tags.clone();
+                let outputs = schema.outputs.clone();
+                let queue = schema.queue.clone();
                 self.schema_name = Some(schema.name);
                 self.schema_description = schema.description;
                 self.fields = schema.fields;
@@ -382,8 +416,8 @@ impl<'a> App<'a> {
                         description: self.schema_description.clone(),
                         tags,
                         fields: self.fields.clone(),
-                        outputs: None,
-                        queue: None,
+                        outputs,
+                        queue,
                     },
                 ));
                 if self.fields.is_empty() {
@@ -797,10 +831,60 @@ fn schema_to_preview(schema: &Schema) -> SchemaPreview {
             required: field.required.unwrap_or(false),
         })
         .collect();
+    let outputs = schema
+        .outputs
+        .as_ref()
+        .map(|items| {
+            items
+                .iter()
+                .map(|output| SchemaOutputPreview {
+                    name: output.name.clone(),
+                    kind: output.kind.clone(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let queue = schema.queue.as_ref().map(|queue| {
+        if let Some(matrix) = &queue.matrix {
+            QueuePreview::Matrix {
+                values: matrix
+                    .values
+                    .iter()
+                    .map(|value| MatrixPreview {
+                        name: value.name.clone(),
+                        values: value.values.clone(),
+                    })
+                    .collect(),
+            }
+        } else if let Some(cases) = &queue.cases {
+            QueuePreview::Cases {
+                cases: cases
+                    .iter()
+                    .map(|case| QueueCasePreview {
+                        name: case.name.clone(),
+                        values: case
+                            .values
+                            .iter()
+                            .map(|value| QueueCaseValuePreview {
+                                name: value.name.clone(),
+                                value: value.value.clone(),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            }
+        } else {
+            QueuePreview::Cases { cases: Vec::new() }
+        }
+    });
+
     SchemaPreview {
         name: schema.name.clone(),
         description: schema.description.clone(),
         tags,
         fields,
+        outputs,
+        queue,
     }
 }

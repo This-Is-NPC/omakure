@@ -6,8 +6,8 @@ use ratatui::Frame;
 
 use super::super::app::{App, SchemaFieldPreview, SchemaPreview};
 use super::super::theme;
-use crate::search_index::{SearchDetails, SearchResult, SearchStatus};
 use super::schema;
+use crate::search_index::{SearchDetails, SearchResult, SearchStatus};
 
 pub(crate) fn render_search(frame: &mut Frame, area: Rect, app: &mut App) {
     let outer = Block::default().borders(Borders::ALL).title("Search");
@@ -90,7 +90,9 @@ fn render_search_results(frame: &mut Frame, area: Rect, app: &mut App) {
 }
 
 fn render_search_schema(frame: &mut Frame, area: Rect, app: &App) {
-    let selected = app.search_results.get(app.search_state.selected().unwrap_or(0));
+    let selected = app
+        .search_results
+        .get(app.search_state.selected().unwrap_or(0));
     let title = schema_title(selected);
     let (preview, error) = match (app.search_details.as_ref(), selected) {
         (Some(details), _) => (
@@ -155,6 +157,8 @@ fn build_schema_preview_from_details(details: &SearchDetails) -> SchemaPreview {
         description: details.description.clone(),
         tags: details.tags.clone(),
         fields,
+        outputs: Vec::new(),
+        queue: None,
     }
 }
 
@@ -164,5 +168,7 @@ fn build_schema_preview_from_result(result: &SearchResult) -> SchemaPreview {
         description: result.description.clone(),
         tags: result.tags.clone(),
         fields: Vec::new(),
+        outputs: Vec::new(),
+        queue: None,
     }
 }

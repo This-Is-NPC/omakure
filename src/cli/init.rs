@@ -244,28 +244,25 @@ Write-Output "TODO: implement {script_id}"
 fn build_python_template(script_id: &str) -> String {
     format!(
         r#"#!/usr/bin/env python3
-import json
-import os
-import sys
 import argparse
 
-if os.environ.get("SCHEMA_MODE") == "1":
-    print(json.dumps({
-        "Name": "{script_id}",
-        "Description": "Describe what this script does.",
-        "Tags": [],
-        "Fields": [
-            {
-                "Name": "target",
-                "Prompt": "Target (optional)",
-                "Type": "string",
-                "Order": 1,
-                "Required": False,
-                "Arg": "--target"
-            }
-        ]
-    }, indent=2))
-    sys.exit(0)
+# OMAKURE_SCHEMA_START
+# {{
+#   "Name": "{script_id}",
+#   "Description": "Describe what this script does.",
+#   "Tags": [],
+#   "Fields": [
+#     {{
+#       "Name": "target",
+#       "Prompt": "Target (optional)",
+#       "Type": "string",
+#       "Order": 1,
+#       "Required": false,
+#       "Arg": "--target"
+#     }}
+#   ]
+# }}
+# OMAKURE_SCHEMA_END
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--target", default="")

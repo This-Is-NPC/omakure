@@ -3,6 +3,7 @@ use std::error::Error;
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 pub struct Schema {
     pub name: String,
     pub description: Option<String>,

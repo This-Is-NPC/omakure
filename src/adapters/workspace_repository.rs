@@ -2,6 +2,7 @@ use crate::adapters::system_checks::{
     ensure_bash_installed, ensure_git_installed, ensure_powershell_installed,
     ensure_python_installed,
 };
+use crate::domain::{extract_schema_block, parse_schema, Schema};
 use crate::domain::{parse_schema, Schema};
 use crate::ports::{ScriptRepository, WorkspaceEntry, WorkspaceEntryKind};
 use crate::runtime::{command_for_script, script_kind, ScriptKind};
@@ -16,9 +17,7 @@ pub struct FsWorkspaceRepository {
 
 impl FsWorkspaceRepository {
     pub fn new<P: Into<PathBuf>>(root: P) -> Self {
-        Self {
-            root: root.into(),
-        }
+        Self { root: root.into() }
     }
 }
 
@@ -87,7 +86,9 @@ impl ScriptRepository for FsWorkspaceRepository {
             }
         }
 
-        let output = command_for_script(script)?.env("SCHEMA_MODE", "1").output()?;
+        let output = command_for_script(script)?
+            .env("SCHEMA_MODE", "1")
+            .output()?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

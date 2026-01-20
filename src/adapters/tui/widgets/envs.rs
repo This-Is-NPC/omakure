@@ -7,6 +7,34 @@ use ratatui::Frame;
 use super::super::app::App;
 use super::super::theme;
 
+fn build_preview_lines(app: &App) -> Vec<Line<'static>> {
+    if let Some(err) = app.env_preview_error.as_deref() {
+        return vec![
+            Line::from(Span::styled(
+                "Failed to load env file.",
+                Style::default().fg(Color::Red),
+            )),
+            Line::from(err.to_string()),
+        ];
+    }
+
+    if app.env_entries.is_empty() {
+        return vec![Line::from(Span::styled(
+            "No environment files found.",
+            Style::default().fg(Color::Gray),
+        ))];
+    }
+
+    if app.env_preview_lines.is_empty() {
+        return vec![Line::from(Span::styled(
+            "Select a file to preview.",
+            Style::default().fg(Color::Gray),
+        ))];
+    }
+
+    app.env_preview_lines.clone()
+}
+
 pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App) {
     let outer = Block::default().borders(Borders::ALL).title("Environments");
     let inner = outer.inner(area);
@@ -55,11 +83,16 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App) {
         .wrap(Wrap { trim: true });
     frame.render_widget(info, chunks[0]);
 
+    let files_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(chunks[1]);
+
     if app.env_entries.is_empty() {
         let empty = Paragraph::new("No environment files found.")
             .block(Block::default().borders(Borders::ALL).title("Files"))
             .wrap(Wrap { trim: true });
-        frame.render_widget(empty, chunks[1]);
+        frame.render_widget(empty, files_chunks[0]);
     } else {
         let items: Vec<ListItem> = app
             .env_entries
@@ -84,10 +117,19 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App) {
             .block(Block::default().borders(Borders::ALL).title("Files"))
             .highlight_style(theme::selection_style())
             .highlight_symbol(theme::selection_symbol_str());
-        frame.render_stateful_widget(list, chunks[1], &mut app.env_state);
+        frame.render_stateful_widget(list, files_chunks[0], &mut app.env_state);
     }
 
-    let footer = Paragraph::new("Up/Down move, Enter activate, d deactivate, r reload, Esc/q back")
-        .style(Style::default().fg(Color::Gray));
+    let preview_lines = build_preview_lines(app);
+    let preview = Paragraph::new(preview_lines)
+        .block(Block::default().borders(Borders::ALL).title("Preview"))
+        .wrap(Wrap { trim: false })
+        .scroll((app.env_preview_scroll, 0));
+    frame.render_widget(preview, files_chunks[1]);
+
+    let footer = Paragraph::new(
+        "Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc/q back",
+    )
+    .style(Style::default().fg(Color::Gray));
     frame.render_widget(footer, chunks[2]);
 }

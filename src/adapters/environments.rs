@@ -14,6 +14,41 @@ pub struct EnvFile {
     pub name: String,
 }
 
+pub fn load_env_preview(path: &Path) -> Result<Vec<(String, String)>, String> {
+    let contents = fs::read_to_string(path).map_err(|err| {
+        format!(
+            "Failed to read environment file {}: {}",
+            path.display(),
+            err
+        )
+    })?;
+    let mut entries = Vec::new();
+
+    for line in contents.lines() {
+        let mut trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
+            continue;
+        }
+        if let Some(stripped) = trimmed.strip_prefix("export ") {
+            trimmed = stripped.trim();
+        }
+
+        let mut parts = trimmed.splitn(2, '=');
+        let key = parts.next().unwrap_or("").trim();
+        let raw_value = parts.next().unwrap_or("").trim();
+        if key.is_empty() {
+            continue;
+        }
+        let mut value = strip_quotes(raw_value).trim().to_string();
+        if is_sensitive_key(key) && !value.is_empty() {
+            value = "***".to_string();
+        }
+        entries.push((key.to_string(), value));
+    }
+
+    Ok(entries)
+}
+
 pub fn list_env_files(envs_dir: &Path) -> Result<Vec<EnvFile>, String> {
     let mut entries = Vec::new();
     let dir = match fs::read_dir(envs_dir) {
@@ -55,10 +90,7 @@ pub fn load_environment_config(envs_dir: &Path) -> Result<EnvironmentConfig, Str
     let defaults = if let Some(name) = &active {
         let path = envs_dir.join(name);
         if !path.is_file() {
-            return Err(format!(
-                "Active environment not found: {}",
-                path.display()
-            ));
+            return Err(format!("Active environment not found: {}", path.display()));
         }
         load_env_defaults(&path)?
     } else {
@@ -185,4 +217,12 @@ fn strip_quotes(value: &str) -> &str {
         }
     }
     trimmed
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    let tokens = [
+        "password", "secret", "token", "key", "api", "private", "cred",
+    ];
+    tokens.iter().any(|token| lower.contains(token))
 }

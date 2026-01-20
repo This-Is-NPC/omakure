@@ -31,7 +31,6 @@ impl TempDirGuard {
     pub fn new(path: PathBuf) -> Self {
         Self { path }
     }
-
 }
 
 impl Drop for TempDirGuard {

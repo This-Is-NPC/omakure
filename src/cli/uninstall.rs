@@ -64,7 +64,10 @@ pub fn run(options: UninstallOptions) -> Result<(), Box<dyn Error>> {
             std::fs::remove_dir_all(&options.scripts_dir)?;
             println!("Removed scripts folder: {}", options.scripts_dir.display());
         } else {
-            println!("Scripts folder not found: {}", options.scripts_dir.display());
+            println!(
+                "Scripts folder not found: {}",
+                options.scripts_dir.display()
+            );
         }
     }
 

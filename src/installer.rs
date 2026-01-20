@@ -78,7 +78,10 @@ fn add_to_user_path(dir: &Path) -> Result<(), Box<dyn Error>> {
 
 #[cfg(windows)]
 fn normalize_path(input: &str) -> String {
-    input.trim_matches('"').trim_end_matches('\\').to_lowercase()
+    input
+        .trim_matches('"')
+        .trim_end_matches('\\')
+        .to_lowercase()
 }
 
 #[cfg(not(windows))]

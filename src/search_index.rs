@@ -59,7 +59,9 @@ impl SearchIndex {
         self.status
             .lock()
             .map(|status| status.clone())
-            .unwrap_or(SearchStatus::Error("Search status lock poisoned".to_string()))
+            .unwrap_or(SearchStatus::Error(
+                "Search status lock poisoned".to_string(),
+            ))
     }
 
     pub fn start_background_rebuild(&self, root: PathBuf) {
@@ -69,7 +71,12 @@ impl SearchIndex {
             let _ = update_status(&status, SearchStatus::Indexing);
             match rebuild_index(&db_path, &root) {
                 Ok(count) => {
-                    let _ = update_status(&status, SearchStatus::Ready { script_count: count });
+                    let _ = update_status(
+                        &status,
+                        SearchStatus::Ready {
+                            script_count: count,
+                        },
+                    );
                 }
                 Err(err) => {
                     let _ = update_status(&status, SearchStatus::Error(err));
@@ -305,8 +312,8 @@ fn open_connection(db_path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Create search db folder failed: {}", err))?;
     }
-    let conn = Connection::open(db_path)
-        .map_err(|err| format!("Open search db failed: {}", err))?;
+    let conn =
+        Connection::open(db_path).map_err(|err| format!("Open search db failed: {}", err))?;
     conn.busy_timeout(Duration::from_millis(500))
         .map_err(|err| format!("Search db busy timeout failed: {}", err))?;
     let _journal_mode: String = conn
@@ -376,7 +383,10 @@ fn split_query(query: &str) -> Vec<String> {
 }
 
 fn escape_like(input: &str) -> String {
-    input.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 fn parse_tags(tags_raw: Option<String>) -> Vec<String> {

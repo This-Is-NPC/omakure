@@ -28,7 +28,9 @@ pub fn load_widget(dir: &Path) -> Result<Option<WidgetData>, String> {
     }
 
     let globals = lua.globals();
-    if let Some(table) = globals.get::<_, Option<Table>>("widget").map_err(|err| err.to_string())?
+    if let Some(table) = globals
+        .get::<_, Option<Table>>("widget")
+        .map_err(|err| err.to_string())?
     {
         return Ok(Some(read_widget_table(table)?));
     }

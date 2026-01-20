@@ -8,6 +8,8 @@ pub struct Schema {
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
     pub fields: Vec<Field>,
+    pub outputs: Option<Vec<OutputField>>,
+    pub queue: Option<QueueSpec>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -22,6 +24,54 @@ pub struct Field {
     pub default: Option<String>,
     pub choices: Option<Vec<String>>,
     pub arg: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct OutputField {
+    pub name: String,
+    #[serde(rename = "Type")]
+    pub kind: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct QueueSpec {
+    pub matrix: Option<MatrixSpec>,
+    pub cases: Option<Vec<QueueCase>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct MatrixSpec {
+    pub values: Vec<MatrixValue>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct MatrixValue {
+    pub name: String,
+    pub values: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct QueueCase {
+    pub name: Option<String>,
+    pub values: Vec<CaseValue>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct CaseValue {
+    pub name: String,
+    pub value: String,
 }
 
 pub fn parse_schema(output: &str) -> Result<Schema, Box<dyn Error>> {

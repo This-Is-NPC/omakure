@@ -22,9 +22,7 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
         {
             app.enter_search()
         }
-        KeyCode::Char('e') | KeyCode::Char('E')
-            if key.modifiers.contains(KeyModifiers::ALT) =>
-        {
+        KeyCode::Char('e') | KeyCode::Char('E') if key.modifiers.contains(KeyModifiers::ALT) => {
             app.enter_envs()
         }
         KeyCode::Char('q') => app.should_quit = true,
@@ -54,9 +52,7 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
 fn handle_search_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => app.screen = Screen::ScriptSelect,
-        KeyCode::Char('e') | KeyCode::Char('E')
-            if key.modifiers.contains(KeyModifiers::ALT) =>
-        {
+        KeyCode::Char('e') | KeyCode::Char('E') if key.modifiers.contains(KeyModifiers::ALT) => {
             app.enter_envs()
         }
         KeyCode::Down | KeyCode::Char('j') => app.move_search_selection(1),
@@ -76,7 +72,9 @@ fn handle_search_key(app: &mut App, key: KeyEvent) {
 fn handle_input_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => app.back_to_script_select(),
-        KeyCode::Char('b') | KeyCode::Char('B') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+        KeyCode::Char('b') | KeyCode::Char('B')
+            if key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
             app.back_to_script_select()
         }
         KeyCode::Enter => app.submit_form(),
@@ -136,9 +134,7 @@ fn handle_history_key(app: &mut App, key: KeyEvent) {
 
 fn handle_run_result_key(app: &mut App, key: KeyEvent) {
     match key.code {
-        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Enter => {
-            app.screen = Screen::ScriptSelect
-        }
+        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Enter => app.screen = Screen::ScriptSelect,
         KeyCode::Char('h') | KeyCode::Char('H') => {
             app.screen = Screen::History;
             app.history_focus = HistoryFocus::List;
@@ -159,6 +155,10 @@ fn handle_envs_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('r') | KeyCode::Char('R') => app.refresh_status(),
         KeyCode::Down | KeyCode::Char('j') => app.move_env_selection(1),
         KeyCode::Up | KeyCode::Char('k') => app.move_env_selection(-1),
+        KeyCode::PageDown => app.scroll_env_preview(10),
+        KeyCode::PageUp => app.scroll_env_preview(-10),
+        KeyCode::Home => app.env_preview_scroll = 0,
+        KeyCode::End => app.env_preview_scroll = u16::MAX,
         KeyCode::Enter => app.activate_selected_env(),
         KeyCode::Char('d') | KeyCode::Char('D') => app.deactivate_env(),
         _ => {}

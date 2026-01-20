@@ -80,27 +80,6 @@ impl ScriptRepository for FsWorkspaceRepository {
             .map_err(|err| format!("Schema block not found: {}", err))?;
         parse_schema(&block)
     }
-
-            ScriptKind::PowerShell => {
-                ensure_powershell_installed()?;
-            }
-            ScriptKind::Python => {
-                ensure_python_installed()?;
-            }
-        }
-
-        let output = command_for_script(script)?
-            .env("SCHEMA_MODE", "1")
-            .output()?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Schema mode failed: {}", stderr.trim()).into());
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        parse_schema(&stdout)
-    }
 }
 
 fn collect_scripts(dir: &Path, scripts: &mut Vec<PathBuf>) -> io::Result<()> {

@@ -1,11 +1,7 @@
-use crate::adapters::system_checks::{
-    ensure_bash_installed, ensure_git_installed, ensure_powershell_installed,
-    ensure_python_installed,
-};
 use crate::domain::{extract_schema_block, parse_schema, Schema};
-use crate::domain::{parse_schema, Schema};
 use crate::ports::{ScriptRepository, WorkspaceEntry, WorkspaceEntryKind};
-use crate::runtime::{command_for_script, script_kind, ScriptKind};
+use crate::runtime::{script_kind, ScriptKind};
+
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -73,11 +69,18 @@ impl ScriptRepository for FsWorkspaceRepository {
     }
 
     fn read_schema(&self, script: &Path) -> Result<Schema, Box<dyn Error>> {
-        match script_kind(script).ok_or("Unsupported script type")? {
-            ScriptKind::Bash => {
-                ensure_git_installed()?;
-                ensure_bash_installed()?;
-            }
+        let prefixes = match script_kind(script).ok_or("Unsupported script type")? {
+            ScriptKind::Bash => vec!["#"],
+            ScriptKind::PowerShell => vec!["#", ";"],
+            ScriptKind::Python => vec!["#"],
+        };
+
+        let contents = fs::read_to_string(script)?;
+        let block = extract_schema_block(&contents, &prefixes)
+            .map_err(|err| format!("Schema block not found: {}", err))?;
+        parse_schema(&block)
+    }
+
             ScriptKind::PowerShell => {
                 ensure_powershell_installed()?;
             }

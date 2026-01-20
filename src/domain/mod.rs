@@ -36,6 +36,57 @@ pub fn parse_schema(output: &str) -> Result<Schema, Box<dyn Error>> {
     Err("Schema JSON object not found in output".into())
 }
 
+pub fn extract_schema_block(contents: &str, prefixes: &[&str]) -> Result<String, String> {
+    let mut in_block = false;
+    let mut buffer = String::new();
+
+    for (index, line) in contents.lines().enumerate() {
+        if let Some(commented) = strip_comment_prefix(line, prefixes) {
+            let trimmed = commented.trim();
+            if !in_block && trimmed == "OMAKURE_SCHEMA_START" {
+                in_block = true;
+                continue;
+            }
+            if in_block && trimmed == "OMAKURE_SCHEMA_END" {
+                if buffer.trim().is_empty() {
+                    return Err("Schema block is empty".to_string());
+                }
+                return Ok(buffer);
+            }
+            if in_block {
+                if !buffer.is_empty() {
+                    buffer.push('\n');
+                }
+                buffer.push_str(commented);
+            }
+        } else if in_block {
+            if line.trim().is_empty() {
+                continue;
+            }
+            return Err(format!(
+                "Schema block line missing comment prefix at line {}",
+                index + 1
+            ));
+        }
+    }
+
+    Err("Schema block not found".to_string())
+}
+
+fn strip_comment_prefix<'a>(line: &'a str, prefixes: &[&str]) -> Option<&'a str> {
+    let trimmed = line.trim_start();
+    for prefix in prefixes {
+        if trimmed.starts_with(prefix) {
+            let mut remainder = &trimmed[prefix.len()..];
+            if remainder.starts_with(' ') {
+                remainder = &remainder[1..];
+            }
+            return Some(remainder);
+        }
+    }
+    None
+}
+
 pub fn normalize_input(field: &Field, input: &str) -> Result<Option<String>, String> {
     let trimmed = input.trim();
     let required = field.required.unwrap_or(false);

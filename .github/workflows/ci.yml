@@ -21,3 +21,26 @@ jobs:
           components: clippy, rustfmt
       - run: cargo clippy -- -D warnings
       - run: cargo fmt --check
+
+  release-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version bump and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(grep -m1 '^version\s*=' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')"
+          tag="v${version}"
+          if git rev-parse "${tag}" >/dev/null 2>&1; then
+            echo "::error::Cargo.toml version ${version} already has tag ${tag} — bump the version before merging"
+            exit 1
+          fi
+          if [[ ! -f "release-notes/${tag}.md" ]]; then
+            echo "::error::Missing release-notes/${tag}.md — add release notes before merging"
+            exit 1
+          fi
+          echo "Ready to release ${tag}"

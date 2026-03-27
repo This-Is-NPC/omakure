@@ -27,69 +27,27 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-      - name: Determine next version
+      - name: Read version from Cargo.toml
         id: version
         shell: bash
         run: |
           set -euo pipefail
-          latest="$(git tag --list "v*" --sort=-version:refname | head -n1)"
-          if [[ -z "${latest}" ]]; then
-            latest="v0.0.0"
-          fi
-          base="${latest#v}"
-          IFS='.' read -r major minor patch <<< "${base}"
-          if [[ -z "${major}" || -z "${minor}" || -z "${patch}" ]]; then
-            echo "Latest tag ${latest} is not semver" >&2
+          version="$(grep -m1 '^version\s*=' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')"
+          if [[ -z "${version}" ]]; then
+            echo "Could not read version from Cargo.toml" >&2
             exit 1
           fi
-          new_patch=$((patch + 1))
-          new_version="${major}.${minor}.${new_patch}"
-          new_tag="v${new_version}"
-          if git rev-parse "${new_tag}" >/dev/null 2>&1; then
-            echo "Tag ${new_tag} already exists" >&2
+          tag="v${version}"
+          if git rev-parse "${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists — did you forget to bump Cargo.toml?" >&2
             exit 1
           fi
-          echo "latest=${latest}" >> "${GITHUB_OUTPUT}"
-          echo "version=${new_version}" >> "${GITHUB_OUTPUT}"
-          echo "tag=${new_tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Ensure release notes exist
         run: |
           test -f "release-notes/${{ steps.version.outputs.tag }}.md"
-
-      - name: Update Cargo.toml version
-        env:
-          NEW_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          python - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          version = os.environ["NEW_VERSION"]
-          path = Path("Cargo.toml")
-          text = path.read_text()
-          new_text, count = re.subn(
-              r'(?m)^version\s*=\s*"[0-9]+\.[0-9]+\.[0-9]+"\s*$',
-              f'version = "{version}"',
-              text,
-          )
-          if count != 1:
-              raise SystemExit("Failed to update version in Cargo.toml")
-          path.write_text(new_text)
-          PY
-
-      - name: Commit and push version bump
-        env:
-          NEW_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          git add Cargo.toml
-          if git diff --cached --quiet; then
-            echo "No Cargo.toml changes to commit"
-            exit 0
-          fi
-          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" commit -m "Bump version to v${NEW_VERSION}"
-          git push origin "HEAD:${{ github.event.pull_request.base.ref }}"
 
       - name: Create and push tag
         env:

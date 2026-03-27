@@ -72,15 +72,13 @@ fn set_theme(name: &str) -> Result<(), Box<dyn Error>> {
 fn preview_theme(name: &str) -> Result<(), Box<dyn Error>> {
     let layout = theme_config::ensure_theme_layout()?;
     let theme = if name == "system" {
-        omarchy::resolve_system_colors()
-            .and_then(|colors| omarchy::map_to_theme("system", &colors))
+        omarchy::resolve_system_colors().and_then(|colors| omarchy::map_to_theme("system", &colors))
     } else if let Some(theme) = load_theme_from_name(name, &layout.themes_dir) {
         Some(theme)
     } else if let Some(theme) = load_theme_from_builtin(name) {
         Some(theme)
     } else {
-        omarchy::resolve_theme_colors(name)
-            .and_then(|colors| omarchy::map_to_theme(name, &colors))
+        omarchy::resolve_theme_colors(name).and_then(|colors| omarchy::map_to_theme(name, &colors))
     };
 
     match theme {

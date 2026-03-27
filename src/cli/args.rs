@@ -133,7 +133,7 @@ pub enum Shell {
     Bash,
     Zsh,
     Fish,
-    PowerShell,
+    Pwsh,
 }
 
 #[derive(Args, Debug)]

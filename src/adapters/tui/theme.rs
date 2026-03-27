@@ -169,7 +169,7 @@ impl HexColor {
     }
 
     pub(crate) fn color(&self) -> Color {
-        self.0.clone()
+        self.0
     }
 }
 

@@ -244,14 +244,8 @@ color15 = "#acb0d0"
         assert_eq!(colors.color4, "#7aa2f7");
         assert_eq!(colors.color7, "#787c99");
         assert_eq!(colors.color8, "#444b6a");
-        assert_eq!(
-            colors.selection_foreground,
-            Some("#c0caf5".to_string())
-        );
-        assert_eq!(
-            colors.selection_background,
-            Some("#7aa2f7".to_string())
-        );
+        assert_eq!(colors.selection_foreground, Some("#c0caf5".to_string()));
+        assert_eq!(colors.selection_background, Some("#7aa2f7".to_string()));
     }
 
     #[test]

@@ -203,7 +203,7 @@ fn generate_completions(shell: Shell) {
         Shell::Bash => ClapShell::Bash,
         Shell::Zsh => ClapShell::Zsh,
         Shell::Fish => ClapShell::Fish,
-        Shell::PowerShell => ClapShell::PowerShell,
+        Shell::Pwsh => ClapShell::PowerShell,
     };
 
     generate(shell, &mut cmd, "omakure", &mut std::io::stdout());

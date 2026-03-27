@@ -61,10 +61,7 @@ pub fn run_app(
     let theme = load_theme(theme_name.as_deref(), theme_dir);
     terminal.draw(|frame| render_loading(frame, &theme))?;
     let entries = service.list_entries(workspace.root())?;
-    let history = match history::load_entries(&workspace) {
-        Ok(entries) => entries,
-        Err(_) => Vec::new(),
-    };
+    let history = history::load_entries(&workspace).unwrap_or_default();
     let search_index = SearchIndex::new(workspace.search_db_path());
     search_index.start_background_rebuild(workspace.root().to_path_buf());
     let mut app = App::new(service, workspace, entries, history, search_index, theme);

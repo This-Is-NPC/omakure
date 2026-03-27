@@ -55,8 +55,7 @@ pub fn error_entry(
 }
 
 pub fn record_entry(workspace: &Workspace, entry: &HistoryEntry) -> io::Result<PathBuf> {
-    let data = serde_json::to_vec_pretty(entry)
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+    let data = serde_json::to_vec_pretty(entry).map_err(io::Error::other)?;
     let file_name = history_file_name(entry);
     let path = workspace.history_dir().join(file_name);
     fs::write(&path, data)?;

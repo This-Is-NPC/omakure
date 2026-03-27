@@ -1,5 +1,5 @@
 [tools]
-rust = "1.92.0"
+rust = "latest"
 
 [tasks.tui]
 description = "Start the TUI interface"

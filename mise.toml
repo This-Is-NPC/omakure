@@ -1,2 +1,22 @@
 [tools]
-rust = "1.92.0"
+rust = "latest"
+
+[tasks.tui]
+description = "Start the TUI interface"
+run = "cargo run --bin omakure"
+
+[tasks.build]
+description = "Build the project in debug mode"
+run = "cargo build"
+
+[tasks.test]
+description = "Run all tests"
+run = "cargo test"
+
+[tasks.lint]
+description = "Run clippy and check formatting"
+run = ["cargo clippy -- -D warnings", "cargo fmt --check"]
+
+[tasks.install]
+description = "Install omakure locally"
+run = "cargo install --path ."

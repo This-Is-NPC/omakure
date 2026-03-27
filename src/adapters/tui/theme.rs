@@ -169,7 +169,7 @@ impl HexColor {
     }
 
     pub(crate) fn color(&self) -> Color {
-        self.0.clone()
+        self.0
     }
 }
 
@@ -260,6 +260,14 @@ fn fallback_default_theme() -> Theme {
 
 pub(crate) fn load_theme(theme_name: Option<&str>, theme_dir: Option<&Path>) -> Theme {
     if let Some(name) = theme_name {
+        if name == "system" {
+            if let Some(colors) = crate::adapters::omarchy::resolve_system_colors() {
+                if let Some(theme) = crate::adapters::omarchy::map_to_theme("system", &colors) {
+                    return theme;
+                }
+            }
+            return default_theme();
+        }
         if let Some(dir) = theme_dir {
             if let Some(theme) = load_theme_from_name(name, dir) {
                 return theme;
@@ -267,6 +275,11 @@ pub(crate) fn load_theme(theme_name: Option<&str>, theme_dir: Option<&Path>) -> 
         }
         if let Some(theme) = load_theme_from_builtin(name) {
             return theme;
+        }
+        if let Some(colors) = crate::adapters::omarchy::resolve_theme_colors(name) {
+            if let Some(theme) = crate::adapters::omarchy::map_to_theme(name, &colors) {
+                return theme;
+            }
         }
     }
     default_theme()

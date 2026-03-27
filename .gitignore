@@ -8,8 +8,18 @@
 .idea/
 .vscode/
 .opencode/
+.claude/
 scripts/.history/search-index.sqlite*
 scripts/.history/*
 !scripts/.history/.gitkeep
 scripts/.omaken/envs/*
 !scripts/.omaken/envs/env_template.conf
+
+# >>> assisted_workflow >>>
+.workflow/requirements/*
+!.workflow/requirements/.gitkeep
+.workflow/plans/*
+!.workflow/plans/.gitkeep
+.workflow/summaries/*
+!.workflow/summaries/.gitkeep
+# <<< assisted_workflow <<<

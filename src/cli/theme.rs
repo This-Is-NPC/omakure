@@ -1,3 +1,4 @@
+use crate::adapters::omarchy;
 use crate::adapters::tui::theme::{
     builtin_theme_names, load_theme_from_builtin, load_theme_from_name, theme_file_path, Theme,
     ThemeVariant,
@@ -43,6 +44,15 @@ fn list_themes() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    if omarchy::is_omarchy_system() {
+        println!("\nOmarchy themes:");
+        let current = omarchy::current_theme_name().unwrap_or_else(|| "unknown".to_string());
+        println!(" - system (current: {})", omarchy::display_name(&current));
+        for name in omarchy::list_themes() {
+            println!(" - {}", name);
+        }
+    }
+
     Ok(())
 }
 
@@ -61,16 +71,23 @@ fn set_theme(name: &str) -> Result<(), Box<dyn Error>> {
 
 fn preview_theme(name: &str) -> Result<(), Box<dyn Error>> {
     let layout = theme_config::ensure_theme_layout()?;
-    let theme = if let Some(theme) = load_theme_from_name(name, &layout.themes_dir) {
-        theme
+    let theme = if name == "system" {
+        omarchy::resolve_system_colors().and_then(|colors| omarchy::map_to_theme("system", &colors))
+    } else if let Some(theme) = load_theme_from_name(name, &layout.themes_dir) {
+        Some(theme)
     } else if let Some(theme) = load_theme_from_builtin(name) {
-        theme
+        Some(theme)
     } else {
-        return Err(format!("Theme not found: {}", name).into());
+        omarchy::resolve_theme_colors(name).and_then(|colors| omarchy::map_to_theme(name, &colors))
     };
 
-    print_theme_preview(name, &theme);
-    Ok(())
+    match theme {
+        Some(theme) => {
+            print_theme_preview(name, &theme);
+            Ok(())
+        }
+        None => Err(format!("Theme not found: {}", name).into()),
+    }
 }
 
 fn print_paths() -> Result<(), Box<dyn Error>> {
@@ -138,13 +155,21 @@ fn format_color(color: Color) -> String {
 }
 
 fn ensure_theme_exists(name: &str, theme_dir: &Path) -> Result<(), Box<dyn Error>> {
-    let is_builtin = builtin_theme_names().iter().any(|builtin| *builtin == name);
+    if name == "system" {
+        return Ok(());
+    }
+
+    let is_builtin = builtin_theme_names().contains(&name);
     if is_builtin {
         return Ok(());
     }
 
     let theme_path = theme_file_path(theme_dir, name);
     if theme_path.is_file() {
+        return Ok(());
+    }
+
+    if omarchy::resolve_theme_colors(name).is_some() {
         return Ok(());
     }
 

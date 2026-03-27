@@ -55,8 +55,8 @@ pub fn extract_schema_block(contents: &str, prefixes: &[&str]) -> Result<String,
 fn strip_comment_prefix<'a>(line: &'a str, prefixes: &[&str]) -> Option<&'a str> {
     let trimmed = line.trim_start();
     for prefix in prefixes {
-        if trimmed.starts_with(prefix) {
-            let mut remainder = &trimmed[prefix.len()..];
+        if let Some(stripped) = trimmed.strip_prefix(prefix) {
+            let mut remainder = stripped;
             if remainder.starts_with(' ') {
                 remainder = &remainder[1..];
             }

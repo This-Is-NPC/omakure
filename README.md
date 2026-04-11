@@ -65,8 +65,37 @@ you point it at.
 - Environment documents and defaults: `.docs/environments.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 
+## Using Omakure from an AI agent
+
+Omakure exposes a low-token, machine-readable CLI surface so AI agents
+can list, describe, create, run, and audit scripts as fluently as `git`
+or `gh`. Every AI-relevant verb supports `--json` and emits a stable
+envelope `{ ok, data, error, schema_version }`. Run history is
+persisted in `<workspace>/.history/runs.sqlite` and is queryable via
+`omakure history`.
+
+```bash
+# One-call discovery
+omakure help-ai
+
+# Create a script and run it under an AI actor
+omakure --json init my-task.sh --schema-json '{"Name":"my_task","Fields":[]}' --body-stdin <<'BODY'
+#!/usr/bin/env bash
+echo "hi"
+BODY
+omakure --json run my-task --actor ai --reason "smoke test"
+omakure --json history list --actor ai --since 1h
+```
+
+> **Upgrading from an older release deletes legacy `.history/*.json`
+> files.** Back up `.history/` first if you care about historical run
+> data. See `.docs/ai-interface.md` for the full contract.
+
+Full reference: `.docs/ai-interface.md`.
+
 ## Documentation
 
+- AI agent interface: `.docs/ai-interface.md`
 - Installation, updates, and uninstall: `.docs/installation.md`
 - Workspace layout and defaults: `.docs/workspace.md`
 - Scripts path overrides: `.docs/scripts-path.md`

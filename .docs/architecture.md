@@ -42,7 +42,7 @@ src/
 ├── installer.rs             # Standalone binary for omakure-installer
 ├── app_meta.rs              # App version and repo URL constants
 ├── error.rs                 # Centralized error types (AppError, SchemaError, ScriptError, EnvironmentError)
-├── history.rs               # Execution history: record, load, format (JSON files)
+├── runs.rs                  # SQLite-backed run history (replaces the deleted history.rs)
 ├── runtime.rs               # Script runtime detection (bash, ps1, py) and command builder
 ├── search_index.rs          # SQLite-backed full-text search index
 ├── lua_widget.rs            # Lua widget loader for custom directory widgets
@@ -89,12 +89,17 @@ src/
 │   ├── mod.rs               # ScriptService (list, load schema, run)
 │   └── environment.rs       # EnvironmentService (list, load config, set active)
 └── cli/                     # CLI subcommand handlers
-    ├── args.rs              # Clap argument definitions
-    ├── run.rs               # `omakure run <script>`
+    ├── args.rs              # Clap argument definitions (incl. global --json)
+    ├── json.rs              # Single JSON envelope writer + stable error codes
+    ├── run.rs               # `omakure run <script>` (+ --actor/--reason/--json/--no-prompt)
     ├── doctor.rs            # `omakure doctor` runtime checks
-    ├── list.rs              # `omakure scripts` list available scripts
-    ├── init.rs              # `omakure init` create script template
-    ├── config.rs            # `omakure config` show resolved paths
+    ├── describe.rs          # `omakure describe <script>` AI verb
+    ├── search.rs            # `omakure search <query>` AI verb
+    ├── history.rs           # `omakure history list|show|tail` AI verb
+    ├── help_ai.rs           # `omakure help-ai` capability discovery
+    ├── list.rs              # `omakure scripts` list available scripts (+ --json)
+    ├── init.rs              # `omakure init` create script template (+ --schema-json/--body-stdin/--force)
+    ├── config.rs            # `omakure config` show resolved paths (+ --json)
     ├── omaken.rs            # `omakure list/install` flavor management
     ├── theme.rs             # `omakure theme` list/set/preview themes
     ├── update.rs            # `omakure update` self-update from GitHub
@@ -111,6 +116,8 @@ scripts/                     # Development scripts directory (workspace root in 
 - **Service Layer:** `use_cases/` contains `ScriptService` and `EnvironmentService` that compose port traits, decoupling CLI/TUI from concrete adapters.
 - **Embedded Schema Convention:** Scripts embed their schema as JSON inside comment blocks (`OMAKURE_SCHEMA_START`/`OMAKURE_SCHEMA_END`), parsed at runtime.
 - **Background Indexing:** `SearchIndex` rebuilds a SQLite index on a background thread, using `Arc<Mutex<SearchStatus>>` for status communication.
+- **AI JSON Envelope:** All AI-facing CLI verbs route their output through a single helper in `src/cli/json.rs` that emits a uniform `{ ok, data, error, schema_version }` payload. Stable error codes (`not_found`, `schema_invalid`, `script_exists`, `missing_required_field`, `invalid_argument`, `not_implemented`, `internal`) live in one place so the contract cannot drift verb-by-verb.
+- **SQLite Run Log:** Run history is persisted in `<workspace>/.history/runs.sqlite` via `src/runs.rs`, which exposes `RunRow`/`RunFilters` and is the only writer of the run log. The TUI history screen reads `RunRow` directly. On first open against a workspace, every top-level legacy `*.json` file in `history_dir()` is unlinked — there is no migration path from the previous JSON-file format.
 - **Theme System:** TOML-based themes with built-in defaults compiled via `include_str!`. Supports user-defined themes in the config directory.
 - **Lua Widget Extension:** Directories can contain `index.lua` files that return custom widget data rendered in the TUI.
 - **Global Workspace vs. Session Scripts Root:** The `Workspace` type tracks two distinct path anchors. The **global root** owns all persisted Omakure state (`.history/`, `.omaken/`, `.omaken/envs/`, the SQLite search index, `omakure.toml`) and is the only path `Workspace::ensure_layout()` ever creates files in. The **scripts root** is the directory the TUI browses for the current session. By default both anchors point at the same directory; `omakure <PATH>` overrides only the scripts root, and the global root remains anchored to the platform default. History entries are keyed by absolute canonical script paths so runs are addressable across both invocation modes; the in-session history view is filtered by `history_belongs_to_scripts_root` against the active scripts root, with legacy relative entries resolved against the global root for backward compatibility. A per-directory `<scripts-root>/omakure.conf` is treated as a read-only session env override (parsed via `parse_env_defaults`) only when the TUI was launched with a positional path; the override never writes to `.omaken/envs/active` or copies into `.omaken/envs/`.

@@ -1,10 +1,15 @@
 pub mod args;
 pub mod config;
+pub mod describe;
 pub mod doctor;
+pub mod help_ai;
+pub mod history;
 pub mod init;
+pub mod json;
 pub mod list;
 pub mod omaken;
 pub mod run;
+pub mod search;
 pub mod theme;
 pub mod uninstall;
 pub mod update;

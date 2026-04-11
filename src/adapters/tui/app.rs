@@ -1,8 +1,8 @@
 use crate::adapters::environments::FsEnvironmentRepository;
 use crate::domain::Schema;
-use crate::history::HistoryEntry;
 use crate::lua_widget::{self, WidgetData};
 use crate::ports::{EnvironmentConfig, WorkspaceEntry, WorkspaceEntryKind};
+use crate::runs::RunRow;
 use crate::search_index::SearchIndex;
 use crate::use_cases::{EnvironmentService, ScriptService};
 use crate::workspace::Workspace;
@@ -110,21 +110,17 @@ impl<'a> App<'a> {
         service: &'a ScriptService,
         workspace: Workspace,
         entries: Vec<WorkspaceEntry>,
-        history: Vec<HistoryEntry>,
+        history: Vec<RunRow>,
         search_index: SearchIndex,
         theme: Theme,
     ) -> Self {
         let current_dir = workspace.scripts_root().to_path_buf();
         let navigation = NavigationState::new(current_dir, entries);
         // Filter loaded history entries to those whose script lives under
-        // the active scripts root. Legacy relative entries are interpreted
-        // as relative to the global workspace root so they remain visible
-        // when the scripts root is the global workspace.
-        let history = filter_history_for_scripts_root(
-            history,
-            workspace.scripts_root(),
-            workspace.root(),
-        );
+        // the active scripts root. Run rows always carry absolute paths,
+        // so the filter is a simple prefix check.
+        let history =
+            filter_history_for_scripts_root(history, workspace.scripts_root());
         let history = HistoryState::new(history);
         let search_status = search_index.status();
         let search = SearchState::new(search_status);
@@ -337,13 +333,13 @@ impl<'a> App<'a> {
         self.reset_run_output_scroll();
     }
 
-    pub(crate) fn add_history_entry(&mut self, entry: HistoryEntry) {
+    pub(crate) fn add_history_entry(&mut self, entry: RunRow) {
         self.history.entries.insert(0, entry);
         self.history.selection = 0;
         self.history.table_state.select(Some(0));
     }
 
-    pub(crate) fn current_history_entry(&self) -> Option<&HistoryEntry> {
+    pub(crate) fn current_history_entry(&self) -> Option<&RunRow> {
         self.history.entries.get(self.history.selection)
     }
 
@@ -815,7 +811,7 @@ impl<'a> App<'a> {
 }
 
 impl ExecutionStatus {
-    pub(crate) fn from_history(entry: &HistoryEntry) -> Self {
+    pub(crate) fn from_run(entry: &RunRow) -> Self {
         if entry.error.is_some() {
             ExecutionStatus::Error
         } else if entry.success {
@@ -874,33 +870,22 @@ pub(crate) fn load_session_env_config(
     })
 }
 
-/// Decide whether a history entry belongs to the currently active scripts root.
+/// Decide whether a run row belongs to the currently active scripts root.
 ///
-/// Absolute script paths are compared directly against `scripts_root`.
-/// Legacy relative entries (recorded by older versions of Omakure that
-/// stored workspace-relative paths) are joined against `global_root` so
-/// they remain visible whenever the active scripts root coincides with
-/// the global workspace.
-pub(crate) fn history_belongs_to_scripts_root(
-    entry: &HistoryEntry,
-    scripts_root: &Path,
-    global_root: &Path,
-) -> bool {
-    let script = &entry.script;
-    if script.is_absolute() {
-        return script.starts_with(scripts_root);
-    }
-    global_root.join(script).starts_with(scripts_root)
+/// Run rows always carry absolute, canonical script paths (no legacy
+/// relative form exists in `runs.sqlite`), so this is a simple prefix
+/// check.
+pub(crate) fn history_belongs_to_scripts_root(entry: &RunRow, scripts_root: &Path) -> bool {
+    Path::new(&entry.script_path).starts_with(scripts_root)
 }
 
 fn filter_history_for_scripts_root(
-    entries: Vec<HistoryEntry>,
+    entries: Vec<RunRow>,
     scripts_root: &Path,
-    global_root: &Path,
-) -> Vec<HistoryEntry> {
+) -> Vec<RunRow> {
     entries
         .into_iter()
-        .filter(|entry| history_belongs_to_scripts_root(entry, scripts_root, global_root))
+        .filter(|entry| history_belongs_to_scripts_root(entry, scripts_root))
         .collect()
 }
 
@@ -978,71 +963,50 @@ fn schema_to_preview(schema: &Schema) -> SchemaPreview {
 mod tests {
     use super::*;
 
-    fn entry_with_script(script: PathBuf) -> HistoryEntry {
-        HistoryEntry {
-            timestamp: 0,
-            script,
-            args: Vec::new(),
-            success: true,
+    fn entry_with_script(script: &str) -> RunRow {
+        RunRow {
+            run_id: "rid".into(),
+            script_path: script.into(),
+            script_name: None,
+            args_json: "[]".into(),
+            actor: "human".into(),
+            reason: None,
+            started_at: 0,
+            finished_at: 0,
+            duration_ms: 0,
             exit_code: Some(0),
+            success: true,
             stdout: String::new(),
             stderr: String::new(),
             error: None,
+            parent_run_id: None,
+            omakure_version: "test".into(),
         }
     }
 
     #[test]
     fn absolute_entry_inside_scripts_root_is_visible() {
-        let entry = entry_with_script(PathBuf::from("/abs/scripts/team/run.sh"));
+        let entry = entry_with_script("/abs/scripts/team/run.sh");
         let scripts_root = Path::new("/abs/scripts/team");
-        let global = Path::new("/abs/scripts");
-        assert!(history_belongs_to_scripts_root(&entry, scripts_root, global));
+        assert!(history_belongs_to_scripts_root(&entry, scripts_root));
     }
 
     #[test]
     fn absolute_entry_outside_scripts_root_is_hidden() {
-        let entry = entry_with_script(PathBuf::from("/abs/other/run.sh"));
+        let entry = entry_with_script("/abs/other/run.sh");
         let scripts_root = Path::new("/abs/scripts/team");
-        let global = Path::new("/abs/scripts");
-        assert!(!history_belongs_to_scripts_root(&entry, scripts_root, global));
-    }
-
-    #[test]
-    fn legacy_relative_entry_visible_when_scripts_root_is_global() {
-        // Legacy entries stored workspace-relative paths. They must remain
-        // visible whenever the active scripts root coincides with the
-        // global workspace root.
-        let entry = entry_with_script(PathBuf::from("team/run.sh"));
-        let global = Path::new("/abs/scripts");
-        assert!(history_belongs_to_scripts_root(&entry, global, global));
-    }
-
-    #[test]
-    fn legacy_relative_entry_visible_in_matching_subroot() {
-        let entry = entry_with_script(PathBuf::from("team/run.sh"));
-        let global = Path::new("/abs/scripts");
-        let scripts_root = Path::new("/abs/scripts/team");
-        assert!(history_belongs_to_scripts_root(&entry, scripts_root, global));
-    }
-
-    #[test]
-    fn legacy_relative_entry_hidden_in_unrelated_subroot() {
-        let entry = entry_with_script(PathBuf::from("team/run.sh"));
-        let global = Path::new("/abs/scripts");
-        let scripts_root = Path::new("/abs/scripts/other");
-        assert!(!history_belongs_to_scripts_root(&entry, scripts_root, global));
+        assert!(!history_belongs_to_scripts_root(&entry, scripts_root));
     }
 
     #[test]
     fn filter_drops_entries_outside_scripts_root() {
         let entries = vec![
-            entry_with_script(PathBuf::from("/abs/scripts/team/run.sh")),
-            entry_with_script(PathBuf::from("/abs/other/run.sh")),
-            entry_with_script(PathBuf::from("team/run.sh")),
+            entry_with_script("/abs/scripts/team/run.sh"),
+            entry_with_script("/abs/other/run.sh"),
+            entry_with_script("/abs/scripts/team/another.sh"),
         ];
         let scripts_root = Path::new("/abs/scripts/team");
-        let global = Path::new("/abs/scripts");
-        let filtered = filter_history_for_scripts_root(entries, scripts_root, global);
+        let filtered = filter_history_for_scripts_root(entries, scripts_root);
         assert_eq!(filtered.len(), 2);
     }
 

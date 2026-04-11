@@ -60,9 +60,11 @@ pub fn run_app(
     let theme_name = workspace_theme.or(global_theme);
     let theme = load_theme(theme_name.as_deref(), theme_dir);
     terminal.draw(|frame| render_loading(frame, &theme))?;
-    let entries = service.list_entries(workspace.root())?;
+    let entries = service.list_entries(workspace.scripts_root())?;
     let history = history::load_entries(&workspace).unwrap_or_default();
     let search_index = SearchIndex::new(workspace.search_db_path());
+    // The search index continues to crawl the **global** workspace root —
+    // it backs the search screen and is part of the global state contract.
     search_index.start_background_rebuild(workspace.root().to_path_buf());
     let mut app = App::new(service, workspace, entries, history, search_index, theme);
 

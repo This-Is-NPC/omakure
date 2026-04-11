@@ -18,9 +18,11 @@ use adapters::tui;
 use adapters::workspace_repository::FsWorkspaceRepository;
 use clap::Parser;
 use cli::args::{Cli, Commands, Shell};
+use error::AppError;
 use std::env;
 use std::error::Error;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use use_cases::ScriptService;
 use workspace::Workspace;
 
@@ -156,33 +158,85 @@ fn scripts_dir() -> PathBuf {
     default_dir
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
+    if let Err(err) = run() {
+        // Top-level errors are rendered via Display so users see the
+        // configured error messages instead of Rust's `Debug` rendering.
+        eprintln!("error: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
-    let scripts_dir = cli.scripts_dir.unwrap_or_else(scripts_dir);
+    let global_root = cli.scripts_dir.clone().unwrap_or_else(scripts_dir);
 
     match cli.command {
-        Some(Commands::Update(args)) => cli::update::run(scripts_dir, args)?,
-        Some(Commands::Uninstall(args)) => cli::uninstall::run(scripts_dir, args)?,
-        Some(Commands::Doctor) => cli::doctor::run(scripts_dir)?,
-        Some(Commands::List) => cli::omaken::run_list(scripts_dir)?,
-        Some(Commands::Install(args)) => cli::omaken::run_install(scripts_dir, args)?,
-        Some(Commands::Scripts) => cli::list::run(scripts_dir)?,
-        Some(Commands::Run(args)) => cli::run::run(scripts_dir, args)?,
-        Some(Commands::Init(args)) => cli::init::run(scripts_dir, args)?,
-        Some(Commands::Config) => cli::config::run(scripts_dir)?,
-        Some(Commands::Theme(args)) => cli::theme::run(scripts_dir, args)?,
+        Some(Commands::Update(args)) => cli::update::run(global_root, args)?,
+        Some(Commands::Uninstall(args)) => cli::uninstall::run(global_root, args)?,
+        Some(Commands::Doctor) => cli::doctor::run(global_root)?,
+        Some(Commands::List) => cli::omaken::run_list(global_root)?,
+        Some(Commands::Install(args)) => cli::omaken::run_install(global_root, args)?,
+        Some(Commands::Scripts) => cli::list::run(global_root)?,
+        Some(Commands::Run(args)) => cli::run::run(global_root, args)?,
+        Some(Commands::Init(args)) => cli::init::run(global_root, args)?,
+        Some(Commands::Config) => cli::config::run(global_root)?,
+        Some(Commands::Theme(args)) => cli::theme::run(global_root, args)?,
         Some(Commands::Completion(args)) => generate_completions(args.shell),
-        None => run_tui(scripts_dir)?,
+        None => {
+            let scripts_root = resolve_scripts_root(cli.path.as_deref(), &global_root)?;
+            let scripts_root_override = cli.path.is_some();
+            run_tui(global_root, scripts_root, scripts_root_override)?;
+        }
     }
 
     Ok(())
 }
 
-fn run_tui(scripts_dir: PathBuf) -> Result<(), Box<dyn Error>> {
-    let workspace = Workspace::new(scripts_dir.clone());
+/// Resolve the scripts root the TUI should browse.
+///
+/// When `positional` is `None`, returns `default_root` unchanged so the
+/// existing precedence chain in [`scripts_dir`] continues to drive the
+/// global workspace location. When `positional` is `Some`, validates that
+/// the path exists, is a directory, and canonicalizes it (following
+/// symlinks) so the same physical directory always produces the same key.
+fn resolve_scripts_root(
+    positional: Option<&Path>,
+    default_root: &Path,
+) -> Result<PathBuf, AppError> {
+    let Some(path) = positional else {
+        return Ok(default_root.to_path_buf());
+    };
+
+    if !path.exists() {
+        return Err(AppError::ScriptsDirNotFound {
+            path: path.to_path_buf(),
+        });
+    }
+
+    if !path.is_dir() {
+        // Surface the canonical absolute form when possible so the user
+        // sees a deterministic path in the error.
+        let display_path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        return Err(AppError::ScriptsDirNotADirectory { path: display_path });
+    }
+
+    fs::canonicalize(path).map_err(|err| AppError::ScriptsDirResolveFailed {
+        path: path.to_path_buf(),
+        message: err.to_string(),
+    })
+}
+
+fn run_tui(
+    global_root: PathBuf,
+    scripts_root: PathBuf,
+    scripts_root_override: bool,
+) -> Result<(), Box<dyn Error>> {
+    let workspace =
+        Workspace::with_scripts_root(global_root, scripts_root.clone(), scripts_root_override);
     workspace.ensure_layout()?;
 
-    let repo = Box::new(FsWorkspaceRepository::new(scripts_dir));
+    let repo = Box::new(FsWorkspaceRepository::new(scripts_root));
     let runner = Box::new(MultiScriptRunner::new());
     let service = ScriptService::new(repo, runner);
 
@@ -207,4 +261,66 @@ fn generate_completions(shell: Shell) {
     };
 
     generate(shell, &mut cmd, "omakure", &mut std::io::stdout());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_scripts_root_returns_default_when_none() {
+        let default = PathBuf::from("/tmp/default-omakure-root");
+        let resolved = resolve_scripts_root(None, &default).expect("default should pass through");
+        assert_eq!(resolved, default);
+    }
+
+    #[test]
+    fn resolve_scripts_root_errors_on_nonexistent_path() {
+        let default = PathBuf::from("/tmp");
+        let missing = PathBuf::from("/tmp/__omakure_definitely_missing_path__");
+        let err = resolve_scripts_root(Some(&missing), &default)
+            .expect_err("missing path must fail");
+        assert!(matches!(err, AppError::ScriptsDirNotFound { .. }));
+        let msg = format!("{}", err);
+        assert!(
+            msg.contains("scripts directory not found"),
+            "message was: {msg}"
+        );
+    }
+
+    #[test]
+    fn resolve_scripts_root_errors_when_path_is_a_file() {
+        let tmp = std::env::temp_dir().join("__omakure_resolve_root_file_test__");
+        let _ = fs::remove_file(&tmp);
+        fs::write(&tmp, "not a directory").expect("create temp file");
+        let default = std::env::temp_dir();
+        let err = resolve_scripts_root(Some(&tmp), &default)
+            .expect_err("file path must fail");
+        assert!(matches!(err, AppError::ScriptsDirNotADirectory { .. }));
+        let msg = format!("{}", err);
+        assert!(msg.contains("expected a directory"), "message was: {msg}");
+        let _ = fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn resolve_scripts_root_canonicalizes_relative_and_absolute_to_same_path() {
+        let tmp = std::env::temp_dir().join("__omakure_resolve_root_canon_test__");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).expect("create temp dir");
+
+        // Sanity: from /tmp the relative form `__omakure_resolve_root_canon_test__`
+        // and the absolute form should canonicalize to the same path.
+        let abs = resolve_scripts_root(Some(&tmp), &PathBuf::from("/"))
+            .expect("absolute path resolves");
+
+        let prev = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(std::env::temp_dir()).expect("chdir tmp");
+        let rel = PathBuf::from("__omakure_resolve_root_canon_test__");
+        let rel_resolved = resolve_scripts_root(Some(&rel), &PathBuf::from("/"))
+            .expect("relative path resolves");
+        std::env::set_current_dir(&prev).expect("restore cwd");
+
+        assert_eq!(abs, rel_resolved);
+        let _ = fs::remove_dir_all(&tmp);
+    }
 }

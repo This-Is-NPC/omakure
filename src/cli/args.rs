@@ -2,6 +2,10 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Omakure - TUI for navigating and running automation scripts.
+///
+/// Run `omakure` to open the TUI against the global workspace, or
+/// `omakure <PATH>` (e.g. `omakure .`) to open the TUI against any
+/// directory while keeping history, environments, and config global.
 #[derive(Parser, Debug)]
 #[command(name = "omakure")]
 #[command(author, version, about, long_about = None)]
@@ -10,6 +14,14 @@ pub struct Cli {
     /// Scripts directory override
     #[arg(long, global = true)]
     pub scripts_dir: Option<PathBuf>,
+
+    /// Open the TUI against the given directory as a session-only scripts
+    /// root. History, environments, and workspace config stay anchored to
+    /// the global workspace; only script listings, the root `index.lua`,
+    /// and an optional `<PATH>/omakure.conf` session env are read from
+    /// `<PATH>`. Mutually exclusive with `--scripts-dir`.
+    #[arg(value_name = "PATH", conflicts_with = "scripts_dir")]
+    pub path: Option<PathBuf>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,

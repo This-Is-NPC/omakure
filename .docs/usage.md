@@ -1,5 +1,32 @@
 # CLI usage
 
+## Open the TUI
+
+```bash
+omakure                       # browse the global workspace
+omakure .                     # browse the current directory
+omakure ../team-scripts       # browse a relative path
+omakure /abs/path/to/scripts  # browse an absolute path
+```
+
+The optional positional `PATH` argument is a **session-only scripts root
+override**. While the TUI is open it lists scripts and loads
+`<PATH>/index.lua` from that directory, but every other piece of
+Omakure state stays in the global workspace:
+
+- `.history/` and the SQLite search index always live in the global
+  workspace and never under `PATH`.
+- `.omaken/`, `.omaken/envs/`, and `omakure.toml` are never created
+  inside `PATH` as a side effect of opening it.
+- The Environments screen (`Alt+E`) continues to list and modify the
+  global `.omaken/envs/` directory only.
+
+The positional path is mutually exclusive with `--scripts-dir`. If both
+are supplied, Omakure exits before launching the TUI with a clear error.
+
+If `<PATH>` does not exist or is a regular file (not a directory),
+Omakure exits with a deterministic error and does not start the TUI.
+
 ## Doctor
 
 ```bash

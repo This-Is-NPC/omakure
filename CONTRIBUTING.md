@@ -14,6 +14,14 @@
 - Fix: `fix/{short-name}` (e.g., `fix/duplicate-insert`)
 - Use lowercase kebab-case. Keep names short and descriptive.
 
+### Default base branch
+
+- **Branch new work off `test`**, not `master`. `test` is the integration
+  branch and is always ahead of `master`. `master` is only updated when
+  `test` is merged for a release.
+- PRs targeting `master` are wrong by default — open them against `test`
+  unless the change is explicitly a release-branch fix.
+
 ## Workflow Templates
 
 | Template | Path | Used by |

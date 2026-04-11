@@ -2,11 +2,12 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
+use std::path::PathBuf;
 
 use super::super::app::{App, ExecutionStatus};
 use super::super::theme::Theme;
 use super::common::status_label_and_style;
-use crate::history;
+use super::history::format_run_output;
 
 pub(crate) fn render_run_result(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
@@ -48,13 +49,13 @@ fn render_lines(app: &App, theme: &Theme) -> Vec<Line<'static>> {
         }
     };
 
-    let name = app.display_path(&entry.script);
-    let args = if entry.args.is_empty() {
-        "-".to_string()
-    } else {
-        entry.args.join(" ")
+    let name = app.display_path(&PathBuf::from(&entry.script_path));
+    let args = match serde_json::from_str::<Vec<String>>(&entry.args_json) {
+        Ok(args) if args.is_empty() => "-".to_string(),
+        Ok(args) => args.join(" "),
+        Err(_) => entry.args_json.clone(),
     };
-    let status = ExecutionStatus::from_history(entry);
+    let status = ExecutionStatus::from_run(entry);
     let (status_label, status_style) = status_label_and_style(&status, theme);
     lines.push(Line::from(format!("Script: {}", name)));
     lines.push(Line::from(format!("Args: {}", args)));
@@ -63,7 +64,7 @@ fn render_lines(app: &App, theme: &Theme) -> Vec<Line<'static>> {
         Span::styled(status_label, status_style),
     ]));
     lines.push(Line::from(""));
-    let output = history::format_output(entry);
+    let output = format_run_output(entry);
     if output.trim().is_empty() {
         lines.push(Line::from("(no output)"));
     } else {

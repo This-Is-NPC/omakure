@@ -19,7 +19,7 @@ use std::error::Error;
 use std::io;
 use std::time::Duration;
 
-use crate::history;
+use crate::runs::{self, RunFilters, RunRow};
 use crate::theme_config;
 use app::{App, Screen};
 use events::handle_key_event;
@@ -61,7 +61,10 @@ pub fn run_app(
     let theme = load_theme(theme_name.as_deref(), theme_dir);
     terminal.draw(|frame| render_loading(frame, &theme))?;
     let entries = service.list_entries(workspace.scripts_root())?;
-    let history = history::load_entries(&workspace).unwrap_or_default();
+    let history = match runs::open(&workspace) {
+        Ok(conn) => runs::query_runs(&conn, &RunFilters::default()).unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
     let search_index = SearchIndex::new(workspace.search_db_path());
     // The search index continues to crawl the **global** workspace root —
     // it backs the search screen and is part of the global state contract.
@@ -92,16 +95,71 @@ pub fn run_app(
             app.screen = Screen::Running;
             let theme = app.theme.clone();
             terminal.draw(|frame| render_ui(frame, &mut app, &theme))?;
+            let started_at = runs::current_unix_ms();
             let run_result = service.run_script(&script, &args);
-            let entry = match run_result {
-                Ok(output) => history::success_entry(&app.workspace, &script, &args, output),
-                Err(err) => history::error_entry(&app.workspace, &script, &args, err.to_string()),
-            };
-            let _ = history::record_entry(&app.workspace, &entry);
-            app.add_history_entry(entry);
+            let finished_at = runs::current_unix_ms();
+            let row = build_run_row(&script, &args, run_result, started_at, finished_at);
+            if let Ok(conn) = runs::open(&app.workspace) {
+                let _ = runs::insert_run(&conn, &row);
+            }
+            app.add_history_entry(row);
             app.back_to_script_select();
             app.reset_run_output_scroll();
             app.screen = Screen::RunResult;
         }
+    }
+}
+
+fn build_run_row(
+    script: &std::path::Path,
+    args: &[String],
+    run_result: Result<crate::ports::ScriptRunOutput, crate::error::AppError>,
+    started_at: i64,
+    finished_at: i64,
+) -> RunRow {
+    let canonical = std::fs::canonicalize(script).unwrap_or_else(|_| script.to_path_buf());
+    let script_path = canonical.to_string_lossy().to_string();
+    let args_json = serde_json::to_string(args).unwrap_or_else(|_| "[]".to_string());
+    let duration_ms = (finished_at - started_at).max(0);
+    let omakure_version = crate::app_meta::APP_VERSION.to_string();
+    let run_id = runs::generate_run_id();
+
+    match run_result {
+        Ok(output) => RunRow {
+            run_id,
+            script_path,
+            script_name: None,
+            args_json,
+            actor: "human".into(),
+            reason: None,
+            started_at,
+            finished_at,
+            duration_ms,
+            exit_code: output.exit_code,
+            success: output.success,
+            stdout: output.stdout,
+            stderr: output.stderr,
+            error: None,
+            parent_run_id: None,
+            omakure_version,
+        },
+        Err(err) => RunRow {
+            run_id,
+            script_path,
+            script_name: None,
+            args_json,
+            actor: "human".into(),
+            reason: None,
+            started_at,
+            finished_at,
+            duration_ms,
+            exit_code: None,
+            success: false,
+            stdout: String::new(),
+            stderr: String::new(),
+            error: Some(err.to_string()),
+            parent_run_id: None,
+            omakure_version,
+        },
     }
 }

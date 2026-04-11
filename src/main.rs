@@ -3,9 +3,9 @@ mod app_meta;
 mod cli;
 mod domain;
 mod error;
-mod history;
 mod lua_widget;
 mod ports;
+mod runs;
 mod runtime;
 mod search_index;
 mod theme_config;
@@ -170,6 +170,7 @@ fn main() {
 fn run() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
     let global_root = cli.scripts_dir.clone().unwrap_or_else(scripts_dir);
+    let json_output = cli.json;
 
     match cli.command {
         Some(Commands::Update(args)) => cli::update::run(global_root, args)?,
@@ -177,10 +178,14 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Commands::Doctor) => cli::doctor::run(global_root)?,
         Some(Commands::List) => cli::omaken::run_list(global_root)?,
         Some(Commands::Install(args)) => cli::omaken::run_install(global_root, args)?,
-        Some(Commands::Scripts) => cli::list::run(global_root)?,
-        Some(Commands::Run(args)) => cli::run::run(global_root, args)?,
-        Some(Commands::Init(args)) => cli::init::run(global_root, args)?,
-        Some(Commands::Config) => cli::config::run(global_root)?,
+        Some(Commands::Scripts) => cli::list::run(global_root, json_output)?,
+        Some(Commands::Describe(args)) => cli::describe::run(global_root, args, json_output)?,
+        Some(Commands::Search(args)) => cli::search::run(global_root, args, json_output)?,
+        Some(Commands::History(args)) => cli::history::run(global_root, args, json_output)?,
+        Some(Commands::HelpAi) => cli::help_ai::run()?,
+        Some(Commands::Run(args)) => cli::run::run(global_root, args, json_output)?,
+        Some(Commands::Init(args)) => cli::init::run_with_format(global_root, args, json_output)?,
+        Some(Commands::Config) => cli::config::run(global_root, json_output)?,
         Some(Commands::Theme(args)) => cli::theme::run(global_root, args)?,
         Some(Commands::Completion(args)) => generate_completions(args.shell),
         None => {

@@ -19,14 +19,14 @@ pub struct HistoryEntry {
 }
 
 pub fn success_entry(
-    workspace: &Workspace,
+    _workspace: &Workspace,
     script: &Path,
     args: &[String],
     output: ScriptRunOutput,
 ) -> HistoryEntry {
     HistoryEntry {
         timestamp: timestamp_ms(),
-        script: script_path(workspace, script),
+        script: script_path(script),
         args: args.to_vec(),
         success: output.success,
         exit_code: output.exit_code,
@@ -37,14 +37,14 @@ pub fn success_entry(
 }
 
 pub fn error_entry(
-    workspace: &Workspace,
+    _workspace: &Workspace,
     script: &Path,
     args: &[String],
     message: String,
 ) -> HistoryEntry {
     HistoryEntry {
         timestamp: timestamp_ms(),
-        script: script_path(workspace, script),
+        script: script_path(script),
         args: args.to_vec(),
         success: false,
         exit_code: None,
@@ -173,11 +173,16 @@ fn safe_slug(input: &str) -> String {
     slug
 }
 
-fn script_path(workspace: &Workspace, script: &Path) -> PathBuf {
-    script
-        .strip_prefix(workspace.root())
-        .unwrap_or(script)
-        .to_path_buf()
+/// Resolve the path that should be persisted in a history entry.
+///
+/// History entries are keyed by the **absolute canonical** path of the
+/// executed script so that the same physical script always produces the
+/// same key, regardless of which working directory or scripts root the
+/// run was launched from. When canonicalization fails (e.g. the script
+/// no longer exists by the time the entry is recorded), fall back to the
+/// path as supplied — better an addressable string than a panic.
+fn script_path(script: &Path) -> PathBuf {
+    fs::canonicalize(script).unwrap_or_else(|_| script.to_path_buf())
 }
 
 fn timestamp_ms() -> i64 {
@@ -256,6 +261,129 @@ mod tests {
         let output = format_output(&entry);
         assert!(output.contains("STDOUT:"));
         assert!(output.contains("output here"));
+    }
+
+    #[test]
+    fn script_path_returns_absolute_canonical_for_existing_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "omakure_history_script_path_{}_{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let script_file = dir.join("run.sh");
+        fs::write(&script_file, "#!/bin/bash\n").expect("write script");
+
+        // Pass the file via a relative path to confirm canonicalization.
+        let prev = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&dir).expect("chdir tmp");
+        let resolved = script_path(&PathBuf::from("run.sh"));
+        std::env::set_current_dir(&prev).expect("restore cwd");
+
+        assert!(resolved.is_absolute(), "expected absolute path: {:?}", resolved);
+        let canonical = fs::canonicalize(&script_file).expect("canonicalize");
+        assert_eq!(resolved, canonical);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn script_path_falls_back_to_input_when_canonicalization_fails() {
+        let missing = PathBuf::from("/__omakure_definitely_missing_script__");
+        let resolved = script_path(&missing);
+        assert_eq!(resolved, missing);
+    }
+
+    #[test]
+    fn record_and_load_round_trip_preserves_absolute_script_path() {
+        use crate::ports::ScriptRunOutput;
+        use crate::workspace::Workspace;
+
+        let dir = std::env::temp_dir().join(format!(
+            "omakure_history_round_trip_{}_{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let global = dir.join("global");
+        let scripts = dir.join("scripts");
+        fs::create_dir_all(&scripts).expect("create scripts");
+
+        let script_file = scripts.join("run.sh");
+        fs::write(&script_file, "#!/bin/bash\n").expect("write script");
+
+        let workspace = Workspace::with_scripts_root(global.clone(), scripts.clone(), true);
+        workspace.ensure_layout().expect("layout");
+
+        let output = ScriptRunOutput {
+            stdout: "ok".into(),
+            stderr: String::new(),
+            exit_code: Some(0),
+            success: true,
+        };
+        let entry = success_entry(&workspace, &script_file, &[], output);
+        record_entry(&workspace, &entry).expect("record");
+
+        let loaded = load_entries(&workspace).expect("load");
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded[0].script.is_absolute());
+        let canonical = fs::canonicalize(&script_file).expect("canonicalize");
+        assert_eq!(loaded[0].script, canonical);
+
+        // Confirm absolutely no metadata was created in the scripts root.
+        assert!(!scripts.join(".history").exists());
+        assert!(!scripts.join(".omaken").exists());
+        assert!(!scripts.join("omakure.toml").exists());
+
+        // History was written to the global root.
+        assert!(global.join(".history").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_relative_history_entries_still_load() {
+        // Insert a legacy-shaped entry directly into .history/ as JSON
+        // and confirm load_entries returns it without dropping or
+        // erroring on the relative `script` field.
+        use crate::workspace::Workspace;
+
+        let dir = std::env::temp_dir().join(format!(
+            "omakure_history_legacy_{}_{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let workspace = Workspace::new(dir.clone());
+        workspace.ensure_layout().expect("layout");
+
+        let legacy_json = r#"{
+            "timestamp": 1700000000000,
+            "script": "team/run.sh",
+            "args": [],
+            "success": true,
+            "exit_code": 0,
+            "stdout": "",
+            "stderr": "",
+            "error": null
+        }"#;
+        fs::write(workspace.history_dir().join("1700000000000-1-legacy.json"), legacy_json)
+            .expect("write legacy entry");
+
+        let loaded = load_entries(&workspace).expect("load");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].script, PathBuf::from("team/run.sh"));
+        assert!(!loaded[0].script.is_absolute());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

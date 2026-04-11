@@ -44,3 +44,6 @@ lines = {
 
 - `lines` must be a list/array of strings.
 - If the file exists but does not provide `title` and `lines`, Omakure will show a load error.
+- When you launch the TUI with `omakure <PATH>`, the widget loader is
+  invoked against `<PATH>/index.lua`. If the file is absent, no error
+  is shown — the header simply renders the default workspace status.

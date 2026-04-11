@@ -40,8 +40,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 2) Run:
 
 ```bash
+# Open the TUI against the global workspace
 omakure
+
+# Or open the TUI against any directory (session-only scripts root)
+omakure .
+omakure ../team-scripts
+omakure /abs/path/to/scripts
 ```
+
+The positional path only changes which directory the TUI browses for the
+current session. History, environments, the search index, and
+`omakure.toml` always stay in the global workspace — Omakure never
+creates `.omaken/`, `.history/`, or `omakure.toml` inside the directory
+you point it at.
 
 3) Put scripts under `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`). Omakure scans this tree (including `.omaken`) for `.bash`, `.sh`, `.ps1`, and `.py` scripts.
 

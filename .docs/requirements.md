@@ -34,6 +34,9 @@
 | FR-028 | Queue/Matrix execution support via schema (matrix values and named cases) | `src/domain/schema.rs` (QueueSpec, MatrixSpec, QueueCase) |
 | FR-029 | Schema preview in script browser showing name, description, tags, fields, outputs, queue | `src/adapters/tui/app.rs` (update_schema_preview), `src/adapters/tui/widgets/schema.rs` |
 | FR-030 | Standalone installer binary | `src/installer.rs` |
+| FR-031 | Optional positional path argument launches TUI against any directory as a session-only scripts root, leaving global state untouched | `src/cli/args.rs`, `src/main.rs` (resolve_scripts_root, run_tui) |
+| FR-032 | History entries are recorded with the absolute canonical path of the executed script; legacy relative entries continue to load and are filtered against the global workspace root | `src/history.rs` (script_path), `src/adapters/tui/app.rs` (history_belongs_to_scripts_root) |
+| FR-033 | `<scripts-root>/omakure.conf` becomes the session-active environment when the TUI is launched with a positional path; absent file falls back to the globally active env; parser tolerates malformed lines silently and any I/O failure surfaces a non-fatal error while the TUI keeps launching | `src/adapters/tui/app.rs` (load_env_config, load_session_env_config), `src/adapters/environments.rs` (parse_env_defaults), `src/workspace.rs` (has_scripts_root_override) |
 
 ## Non-Functional Requirements
 

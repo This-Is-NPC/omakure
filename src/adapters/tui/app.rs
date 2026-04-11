@@ -2,12 +2,17 @@ use crate::adapters::environments::FsEnvironmentRepository;
 use crate::domain::Schema;
 use crate::history::HistoryEntry;
 use crate::lua_widget::{self, WidgetData};
-use crate::ports::{WorkspaceEntry, WorkspaceEntryKind};
+use crate::ports::{EnvironmentConfig, WorkspaceEntry, WorkspaceEntryKind};
 use crate::search_index::SearchIndex;
 use crate::use_cases::{EnvironmentService, ScriptService};
 use crate::workspace::Workspace;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, TryRecvError};
+
+/// Display label used in `EnvironmentConfig.active` when the active env
+/// for the session is the per-directory `omakure.conf` override rather
+/// than a file from the global `.omaken/envs/` directory.
+pub(crate) const SESSION_ENV_LABEL: &str = "omakure.conf (session)";
 
 pub(crate) use super::state::HistoryFocus;
 use super::state::{
@@ -109,8 +114,17 @@ impl<'a> App<'a> {
         search_index: SearchIndex,
         theme: Theme,
     ) -> Self {
-        let current_dir = workspace.root().to_path_buf();
+        let current_dir = workspace.scripts_root().to_path_buf();
         let navigation = NavigationState::new(current_dir, entries);
+        // Filter loaded history entries to those whose script lives under
+        // the active scripts root. Legacy relative entries are interpreted
+        // as relative to the global workspace root so they remain visible
+        // when the scripts root is the global workspace.
+        let history = filter_history_for_scripts_root(
+            history,
+            workspace.scripts_root(),
+            workspace.root(),
+        );
         let history = HistoryState::new(history);
         let search_status = search_index.status();
         let search = SearchState::new(search_status);
@@ -294,7 +308,9 @@ impl<'a> App<'a> {
     }
 
     pub(crate) fn navigate_up(&mut self) {
-        if self.navigation.current_dir == self.workspace.root() {
+        // The user must not be able to escape the active scripts root,
+        // even when it differs from the global workspace root.
+        if self.navigation.current_dir == self.workspace.scripts_root() {
             return;
         }
         if let Some(parent) = self.navigation.current_dir.parent() {
@@ -514,6 +530,13 @@ impl<'a> App<'a> {
     }
 
     pub(crate) fn display_path(&self, path: &Path) -> String {
+        // Strip the active scripts root prefix so navigation paths render
+        // relative to the directory the user is browsing. Fall back to the
+        // global workspace root for legacy history entries that were
+        // recorded as workspace-relative paths.
+        if let Ok(stripped) = path.strip_prefix(self.workspace.scripts_root()) {
+            return stripped.to_string_lossy().to_string();
+        }
         path.strip_prefix(self.workspace.root())
             .unwrap_or(path)
             .to_string_lossy()
@@ -562,13 +585,40 @@ impl<'a> App<'a> {
         let mut env_error = None;
 
         let service = self.environment_service();
-        let env_config = match service.load_environment_config() {
+        let mut env_config = match service.load_environment_config() {
             Ok(config) => Some(config),
             Err(err) => {
                 env_error = Some(err.to_string());
                 None
             }
         };
+
+        // If the TUI was launched with a positional scripts-root override
+        // and `<scripts-root>/omakure.conf` exists, prefer it as the
+        // session-active environment over the globally active env. The
+        // override is read-only: nothing is written to `.omaken/envs/`
+        // and the file is never copied. On parse error we surface the
+        // message but fall back to the global config so the TUI keeps
+        // launching.
+        if let Some(result) = load_session_env_config(&self.workspace) {
+            match result {
+                Ok(session) => {
+                    let session_config = EnvironmentConfig {
+                        envs_dir: env_config
+                            .as_ref()
+                            .map(|c| c.envs_dir.clone())
+                            .unwrap_or_else(|| self.workspace.envs_dir().to_path_buf()),
+                        active: Some(SESSION_ENV_LABEL.to_string()),
+                        defaults: session.defaults,
+                        session_conf_path: Some(session.path),
+                    };
+                    env_config = Some(session_config);
+                }
+                Err(message) => {
+                    env_error = Some(message);
+                }
+            }
+        }
 
         let env_entries = match service.list_env_files() {
             Ok(entries) => entries,
@@ -783,6 +833,77 @@ fn load_widget_state(dir: &Path) -> (Option<WidgetData>, Option<String>) {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct SessionEnvLoad {
+    pub(crate) path: PathBuf,
+    pub(crate) defaults: std::collections::HashMap<String, String>,
+}
+
+/// Resolve the per-session `<scripts-root>/omakure.conf` override.
+///
+/// Returns:
+/// - `None` when the workspace has no scripts-root override or no
+///   `omakure.conf` file is present at the scripts root.
+/// - `Some(Ok(load))` when the file exists and parses cleanly.
+/// - `Some(Err(message))` when the file exists but cannot be read.
+///
+/// This function never writes to disk and never touches `.omaken/envs/`.
+/// Parse failures from the underlying KEY=value parser are non-fatal:
+/// the parser silently skips malformed lines, so a literally unreadable
+/// file (I/O error) is the only branch that surfaces an error here.
+pub(crate) fn load_session_env_config(
+    workspace: &Workspace,
+) -> Option<Result<SessionEnvLoad, String>> {
+    if !workspace.has_scripts_root_override() {
+        return None;
+    }
+    let session_path = workspace.scripts_root().join("omakure.conf");
+    if !session_path.is_file() {
+        return None;
+    }
+    Some(match std::fs::read_to_string(&session_path) {
+        Ok(contents) => Ok(SessionEnvLoad {
+            path: session_path,
+            defaults: crate::adapters::environments::parse_env_defaults(&contents),
+        }),
+        Err(err) => Err(format!(
+            "Failed to read session env {}: {}",
+            session_path.display(),
+            err
+        )),
+    })
+}
+
+/// Decide whether a history entry belongs to the currently active scripts root.
+///
+/// Absolute script paths are compared directly against `scripts_root`.
+/// Legacy relative entries (recorded by older versions of Omakure that
+/// stored workspace-relative paths) are joined against `global_root` so
+/// they remain visible whenever the active scripts root coincides with
+/// the global workspace.
+pub(crate) fn history_belongs_to_scripts_root(
+    entry: &HistoryEntry,
+    scripts_root: &Path,
+    global_root: &Path,
+) -> bool {
+    let script = &entry.script;
+    if script.is_absolute() {
+        return script.starts_with(scripts_root);
+    }
+    global_root.join(script).starts_with(scripts_root)
+}
+
+fn filter_history_for_scripts_root(
+    entries: Vec<HistoryEntry>,
+    scripts_root: &Path,
+    global_root: &Path,
+) -> Vec<HistoryEntry> {
+    entries
+        .into_iter()
+        .filter(|entry| history_belongs_to_scripts_root(entry, scripts_root, global_root))
+        .collect()
+}
+
 fn schema_to_preview(schema: &Schema) -> SchemaPreview {
     let tags = schema.tags.clone().unwrap_or_default();
     let fields = schema
@@ -850,5 +971,167 @@ fn schema_to_preview(schema: &Schema) -> SchemaPreview {
         fields,
         outputs,
         queue,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry_with_script(script: PathBuf) -> HistoryEntry {
+        HistoryEntry {
+            timestamp: 0,
+            script,
+            args: Vec::new(),
+            success: true,
+            exit_code: Some(0),
+            stdout: String::new(),
+            stderr: String::new(),
+            error: None,
+        }
+    }
+
+    #[test]
+    fn absolute_entry_inside_scripts_root_is_visible() {
+        let entry = entry_with_script(PathBuf::from("/abs/scripts/team/run.sh"));
+        let scripts_root = Path::new("/abs/scripts/team");
+        let global = Path::new("/abs/scripts");
+        assert!(history_belongs_to_scripts_root(&entry, scripts_root, global));
+    }
+
+    #[test]
+    fn absolute_entry_outside_scripts_root_is_hidden() {
+        let entry = entry_with_script(PathBuf::from("/abs/other/run.sh"));
+        let scripts_root = Path::new("/abs/scripts/team");
+        let global = Path::new("/abs/scripts");
+        assert!(!history_belongs_to_scripts_root(&entry, scripts_root, global));
+    }
+
+    #[test]
+    fn legacy_relative_entry_visible_when_scripts_root_is_global() {
+        // Legacy entries stored workspace-relative paths. They must remain
+        // visible whenever the active scripts root coincides with the
+        // global workspace root.
+        let entry = entry_with_script(PathBuf::from("team/run.sh"));
+        let global = Path::new("/abs/scripts");
+        assert!(history_belongs_to_scripts_root(&entry, global, global));
+    }
+
+    #[test]
+    fn legacy_relative_entry_visible_in_matching_subroot() {
+        let entry = entry_with_script(PathBuf::from("team/run.sh"));
+        let global = Path::new("/abs/scripts");
+        let scripts_root = Path::new("/abs/scripts/team");
+        assert!(history_belongs_to_scripts_root(&entry, scripts_root, global));
+    }
+
+    #[test]
+    fn legacy_relative_entry_hidden_in_unrelated_subroot() {
+        let entry = entry_with_script(PathBuf::from("team/run.sh"));
+        let global = Path::new("/abs/scripts");
+        let scripts_root = Path::new("/abs/scripts/other");
+        assert!(!history_belongs_to_scripts_root(&entry, scripts_root, global));
+    }
+
+    #[test]
+    fn filter_drops_entries_outside_scripts_root() {
+        let entries = vec![
+            entry_with_script(PathBuf::from("/abs/scripts/team/run.sh")),
+            entry_with_script(PathBuf::from("/abs/other/run.sh")),
+            entry_with_script(PathBuf::from("team/run.sh")),
+        ];
+        let scripts_root = Path::new("/abs/scripts/team");
+        let global = Path::new("/abs/scripts");
+        let filtered = filter_history_for_scripts_root(entries, scripts_root, global);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    fn unique_session_env_dir(label: &str) -> PathBuf {
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("omakure_session_env_{label}_{pid}_{nanos}"))
+    }
+
+    #[test]
+    fn session_env_returns_none_without_override() {
+        let dir = unique_session_env_dir("no_override");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        // No override flag — even if omakure.conf exists, ignore it.
+        std::fs::write(dir.join("omakure.conf"), "FOO=bar").expect("write");
+        let ws = Workspace::with_scripts_root(dir.clone(), dir.clone(), false);
+        assert!(load_session_env_config(&ws).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn session_env_returns_none_when_file_missing() {
+        let dir = unique_session_env_dir("file_missing");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let ws = Workspace::with_scripts_root(dir.clone(), dir.clone(), true);
+        assert!(load_session_env_config(&ws).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn session_env_parses_defaults_when_override_and_file_present() {
+        let parent = unique_session_env_dir("parses");
+        let global = parent.join("global");
+        let scripts = parent.join("scripts");
+        std::fs::create_dir_all(&global).expect("create global");
+        std::fs::create_dir_all(&scripts).expect("create scripts");
+        std::fs::write(
+            scripts.join("omakure.conf"),
+            "RESOURCE_GROUP=rg-test\nREGION=eastus\n",
+        )
+        .expect("write conf");
+
+        let ws = Workspace::with_scripts_root(global.clone(), scripts.clone(), true);
+        let result = load_session_env_config(&ws).expect("override should activate");
+        let load = result.expect("parsing should succeed");
+
+        assert_eq!(load.path, scripts.join("omakure.conf"));
+        assert_eq!(
+            load.defaults.get("resource_group").map(String::as_str),
+            Some("rg-test")
+        );
+        assert_eq!(
+            load.defaults.get("region").map(String::as_str),
+            Some("eastus")
+        );
+
+        // Critically: nothing was written into the global envs dir or
+        // touched the scripts root layout.
+        assert!(!global.join(".omaken").exists());
+        assert!(!global.join(".history").exists());
+        assert!(!global.join("omakure.toml").exists());
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn session_env_with_blank_or_garbage_lines_skips_them_silently() {
+        // The KEY=value parser already tolerates malformed lines (skips
+        // anything without an `=`). Verify this is the contract — a
+        // "garbage" file does not produce an Err here.
+        let parent = unique_session_env_dir("garbage");
+        let global = parent.join("global");
+        let scripts = parent.join("scripts");
+        std::fs::create_dir_all(&global).expect("create global");
+        std::fs::create_dir_all(&scripts).expect("create scripts");
+        std::fs::write(
+            scripts.join("omakure.conf"),
+            "this is not a key=value line\n# comment\n   \nVALID=ok\n",
+        )
+        .expect("write conf");
+
+        let ws = Workspace::with_scripts_root(global, scripts.clone(), true);
+        let result = load_session_env_config(&ws).expect("override active");
+        let load = result.expect("parser should never return Err for malformed lines");
+        assert_eq!(load.defaults.get("valid").map(String::as_str), Some("ok"));
+
+        let _ = std::fs::remove_dir_all(&parent);
     }
 }

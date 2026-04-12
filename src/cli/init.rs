@@ -392,4 +392,107 @@ mod tests {
         assert!(from_file.contains("\"y\""));
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn normalize_script_id_alphanumeric() {
+        assert_eq!(
+            normalize_script_id(Path::new("deploy-app.sh")),
+            "deploy_app"
+        );
+    }
+
+    #[test]
+    fn normalize_script_id_collapses_special_chars() {
+        assert_eq!(
+            normalize_script_id(Path::new("my--weird___script.py")),
+            "my_weird_script"
+        );
+    }
+
+    #[test]
+    fn normalize_script_id_trims_underscores() {
+        assert_eq!(normalize_script_id(Path::new("_leading_.sh")), "leading");
+    }
+
+    #[test]
+    fn ensure_script_path_adds_bash_extension() {
+        let path = ensure_script_path("deploy").unwrap();
+        assert_eq!(path, PathBuf::from("deploy.bash"));
+    }
+
+    #[test]
+    fn ensure_script_path_preserves_valid_extension() {
+        let path = ensure_script_path("deploy.py").unwrap();
+        assert_eq!(path, PathBuf::from("deploy.py"));
+    }
+
+    #[test]
+    fn ensure_script_path_rejects_absolute() {
+        let result = ensure_script_path("/abs/deploy.sh");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_script_path_rejects_parent_dir() {
+        let result = ensure_script_path("../deploy.sh");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_script_path_rejects_unsupported_extension() {
+        let result = ensure_script_path("deploy.rb");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn build_bash_template_contains_schema() {
+        let t = build_bash_template("deploy");
+        assert!(t.contains("OMAKURE_SCHEMA_START"));
+        assert!(t.contains("OMAKURE_SCHEMA_END"));
+        assert!(t.contains("\"Name\": \"deploy\""));
+        assert!(t.contains("#!/usr/bin/env bash"));
+    }
+
+    #[test]
+    fn build_python_template_contains_schema() {
+        let t = build_python_template("setup");
+        assert!(t.contains("OMAKURE_SCHEMA_START"));
+        assert!(t.contains("\"Name\": \"setup\""));
+        assert!(t.contains("#!/usr/bin/env python3"));
+        assert!(t.contains("argparse"));
+    }
+
+    #[test]
+    fn build_powershell_template_contains_schema() {
+        let t = build_powershell_template("config");
+        assert!(t.contains("OMAKURE_SCHEMA_START"));
+        assert!(t.contains("\"Name\": \"config\""));
+        assert!(t.contains("PowerShell"));
+    }
+
+    #[test]
+    fn build_template_dispatches_correctly() {
+        let bash = build_template("test", ScriptKind::Bash);
+        assert!(bash.contains("#!/usr/bin/env bash"));
+        let py = build_template("test", ScriptKind::Python);
+        assert!(py.contains("#!/usr/bin/env python3"));
+        let ps = build_template("test", ScriptKind::PowerShell);
+        assert!(ps.contains("PowerShell"));
+    }
+
+    #[test]
+    fn build_with_schema_python_kind() {
+        let schema = r#"{"Name":"x","Fields":[]}"#;
+        let out = build_with_schema(schema, None, ScriptKind::Python);
+        assert!(out.starts_with("#!/usr/bin/env python3"));
+        assert!(out.contains("# OMAKURE_SCHEMA_START"));
+    }
+
+    #[test]
+    fn build_with_schema_powershell_kind() {
+        let schema = r#"{"Name":"x","Fields":[]}"#;
+        let out = build_with_schema(schema, None, ScriptKind::PowerShell);
+        assert!(out.contains("# OMAKURE_SCHEMA_START"));
+        assert!(!out.contains("#!/usr/bin/env bash"));
+    }
 }

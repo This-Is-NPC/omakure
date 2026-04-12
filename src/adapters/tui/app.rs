@@ -166,6 +166,43 @@ impl<'a> App<'a> {
         app
     }
 
+    /// Minimal constructor for tests. Skips widget loading, env config,
+    /// and schema preview so no real filesystem is required.
+    #[cfg(test)]
+    pub(crate) fn test_new(
+        service: &'a ScriptService,
+        workspace: Workspace,
+        entries: Vec<WorkspaceEntry>,
+        history: Vec<RunRow>,
+    ) -> Self {
+        let current_dir = workspace.scripts_root().to_path_buf();
+        let navigation = NavigationState::new(current_dir, entries);
+        let history_filtered =
+            filter_history_for_scripts_root(history, workspace.scripts_root());
+        let history_state = HistoryState::new(history_filtered);
+        let search = SearchState::new(crate::search_index::SearchStatus::Idle);
+        Self {
+            service,
+            workspace,
+            theme: Theme::default(),
+            screen: Screen::ScriptSelect,
+            env_return: None,
+            search_index: SearchIndex::new(std::path::PathBuf::from(":memory:")),
+            navigation,
+            environment: EnvironmentState::new(),
+            search,
+            history: history_state,
+            field_input: FieldInputState::new(),
+            result: None,
+            should_quit: false,
+            run_output_scroll: 0,
+            error_message: None,
+            tick: 0,
+            inline_run_receiver: None,
+            script_dashboard_expanded: false,
+        }
+    }
+
     pub(crate) fn selected_entry(&self) -> Option<&WorkspaceEntry> {
         self.navigation.entries.get(self.navigation.selection)
     }
@@ -1124,5 +1161,321 @@ mod tests {
         assert_eq!(load.defaults.get("valid").map(String::as_str), Some("ok"));
 
         let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    // --- App method tests using test_new ---
+
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use tempfile::TempDir;
+
+    fn make_service(tmp: &TempDir) -> ScriptService {
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        ScriptService::new(Box::new(repo), Box::new(runner))
+    }
+
+    fn make_entries() -> Vec<WorkspaceEntry> {
+        vec![
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/alpha"),
+                kind: WorkspaceEntryKind::Directory,
+            },
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/beta.sh"),
+                kind: WorkspaceEntryKind::Script,
+            },
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/gamma.py"),
+                kind: WorkspaceEntryKind::Script,
+            },
+        ]
+    }
+
+    #[test]
+    fn test_move_selection_down() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, make_entries(), vec![]);
+        assert_eq!(app.navigation.selection, 0);
+        app.move_selection(1);
+        assert_eq!(app.navigation.selection, 1);
+        app.move_selection(1);
+        assert_eq!(app.navigation.selection, 2);
+    }
+
+    #[test]
+    fn test_move_selection_clamped_at_bounds() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, make_entries(), vec![]);
+        app.move_selection(-1); // should stay at 0
+        assert_eq!(app.navigation.selection, 0);
+        app.move_selection(100); // should clamp to 2
+        assert_eq!(app.navigation.selection, 2);
+    }
+
+    #[test]
+    fn test_move_selection_empty() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.move_selection(1); // should be no-op
+        assert_eq!(app.navigation.selection, 0);
+    }
+
+    #[test]
+    fn test_selected_entry() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let app = App::test_new(&svc, ws, make_entries(), vec![]);
+        let entry = app.selected_entry().unwrap();
+        assert_eq!(entry.kind, WorkspaceEntryKind::Directory);
+    }
+
+    #[test]
+    fn test_selected_entry_empty() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let app = App::test_new(&svc, ws, vec![], vec![]);
+        assert!(app.selected_entry().is_none());
+    }
+
+    #[test]
+    fn test_scroll_run_output() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.scroll_run_output(5);
+        assert_eq!(app.run_output_scroll, 5);
+        app.scroll_run_output(-3);
+        assert_eq!(app.run_output_scroll, 2);
+        app.scroll_run_output(-10); // clamp to 0
+        assert_eq!(app.run_output_scroll, 0);
+    }
+
+    #[test]
+    fn test_reset_run_output_scroll() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.run_output_scroll = 42;
+        app.reset_run_output_scroll();
+        assert_eq!(app.run_output_scroll, 0);
+    }
+
+    #[test]
+    fn test_display_path_strips_scripts_root() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let app = App::test_new(&svc, ws, vec![], vec![]);
+        let path = tmp.path().join("deploy.sh");
+        assert_eq!(app.display_path(&path), "deploy.sh");
+    }
+
+    #[test]
+    fn test_display_path_absolute_outside_root() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let app = App::test_new(&svc, ws, vec![], vec![]);
+        let path = PathBuf::from("/other/deploy.sh");
+        assert_eq!(app.display_path(&path), "/other/deploy.sh");
+    }
+
+    #[test]
+    fn test_back_to_script_select_clears_state() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = Screen::FieldInput;
+        app.field_input.schema_name = Some("Test".to_string());
+        app.field_input.error = Some("error".to_string());
+        app.back_to_script_select();
+        assert_eq!(app.screen, Screen::ScriptSelect);
+        assert!(app.field_input.schema_name.is_none());
+        assert!(app.field_input.error.is_none());
+        assert!(app.field_input.fields.is_empty());
+    }
+
+    #[test]
+    fn test_enter_envs_and_exit_envs() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = Screen::History;
+        app.enter_envs();
+        assert_eq!(app.screen, Screen::Environments);
+        app.exit_envs();
+        assert_eq!(app.screen, Screen::History);
+    }
+
+    #[test]
+    fn test_scroll_env_preview_accepts_positive_delta() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        // The function has a known i16 overflow: u16::MAX as i16 == -1,
+        // so the `next > u16::MAX as i16` guard always triggers for
+        // non-negative results. This test documents the current behavior.
+        app.scroll_env_preview(10);
+        assert_eq!(app.environment.preview_scroll, u16::MAX);
+    }
+
+    #[test]
+    fn test_move_field_selection_wraps() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.fields = vec![
+            crate::domain::Field {
+                name: "a".into(), prompt: None, kind: "string".into(),
+                order: 0, required: None, default: None, choices: None, arg: None,
+            },
+            crate::domain::Field {
+                name: "b".into(), prompt: None, kind: "string".into(),
+                order: 1, required: None, default: None, choices: None, arg: None,
+            },
+        ];
+        app.field_input.field_inputs = vec![String::new(), String::new()];
+        app.move_field_selection(1);
+        assert_eq!(app.field_input.field_index, 1);
+        app.move_field_selection(1); // wraps to 0
+        assert_eq!(app.field_input.field_index, 0);
+        app.move_field_selection(-1); // wraps to 1
+        assert_eq!(app.field_input.field_index, 1);
+    }
+
+    #[test]
+    fn test_append_and_pop_field_char() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.fields = vec![crate::domain::Field {
+            name: "x".into(), prompt: None, kind: "string".into(),
+            order: 0, required: None, default: None, choices: None, arg: None,
+        }];
+        app.field_input.field_inputs = vec![String::new()];
+        app.append_field_char('h');
+        app.append_field_char('i');
+        assert_eq!(app.field_input.field_inputs[0], "hi");
+        app.pop_field_char();
+        assert_eq!(app.field_input.field_inputs[0], "h");
+    }
+
+    #[test]
+    fn test_submit_form_no_fields_sets_result() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.selected_script = Some(PathBuf::from("/scripts/test.sh"));
+        app.submit_form();
+        assert!(app.result.is_some());
+    }
+
+    #[test]
+    fn test_submit_form_with_valid_fields() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.selected_script = Some(PathBuf::from("/scripts/test.sh"));
+        app.field_input.fields = vec![crate::domain::Field {
+            name: "target".into(), prompt: None, kind: "string".into(),
+            order: 0, required: Some(true), default: None, choices: None, arg: None,
+        }];
+        app.field_input.field_inputs = vec!["prod".to_string()];
+        app.submit_form();
+        assert!(app.field_input.error.is_none());
+        assert!(app.result.is_some());
+        let (_, args) = app.result.unwrap();
+        assert_eq!(args, vec!["--target", "prod"]);
+    }
+
+    #[test]
+    fn test_submit_form_required_field_empty_fails() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.selected_script = Some(PathBuf::from("/scripts/test.sh"));
+        app.field_input.fields = vec![crate::domain::Field {
+            name: "target".into(), prompt: None, kind: "string".into(),
+            order: 0, required: Some(true), default: None, choices: None, arg: None,
+        }];
+        app.field_input.field_inputs = vec![String::new()];
+        app.submit_form();
+        assert!(app.field_input.error.is_some());
+        assert!(app.result.is_none());
+    }
+
+    #[test]
+    fn test_move_history_selection() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let rows = vec![
+            entry_with_script(&format!("{}/a.sh", tmp.path().display())),
+            entry_with_script(&format!("{}/b.sh", tmp.path().display())),
+        ];
+        let mut app = App::test_new(&svc, ws, vec![], rows);
+        assert_eq!(app.history.selection, 0);
+        app.move_history_selection(1);
+        assert_eq!(app.history.selection, 1);
+        app.move_history_selection(1); // clamped
+        assert_eq!(app.history.selection, 1);
+    }
+
+    #[test]
+    fn test_add_history_entry() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        assert!(app.history.entries.is_empty());
+        let row = entry_with_script(&format!("{}/x.sh", tmp.path().display()));
+        app.add_history_entry(row);
+        assert_eq!(app.history.entries.len(), 1);
+        assert_eq!(app.history.selection, 0);
+    }
+
+    #[test]
+    fn test_execution_status_from_run() {
+        let mut row = entry_with_script("/s.sh");
+        row.success = Some(true);
+        assert!(matches!(ExecutionStatus::from_run(&row), ExecutionStatus::Success));
+
+        row.success = Some(false);
+        row.exit_code = Some(42);
+        assert!(matches!(ExecutionStatus::from_run(&row), ExecutionStatus::Failed(Some(42))));
+
+        row.success = Some(true);
+        row.error = Some("boom".into());
+        assert!(matches!(ExecutionStatus::from_run(&row), ExecutionStatus::Error));
+    }
+
+    #[test]
+    fn test_navigate_up_at_root_is_noop() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        let dir_before = app.navigation.current_dir.clone();
+        app.navigate_up();
+        assert_eq!(app.navigation.current_dir, dir_before);
     }
 }

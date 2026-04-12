@@ -71,7 +71,7 @@ fn resolve_version(version: Option<String>) -> Option<String> {
     version.or_else(|| env::var("VERSION").ok())
 }
 
-fn normalize_version_tag(version: &str) -> String {
+pub(crate) fn normalize_version_tag(version: &str) -> String {
     if version.starts_with('v') {
         version.to_string()
     } else {
@@ -90,7 +90,7 @@ fn fetch_latest_version(repo: &str) -> Result<String, Box<dyn Error>> {
     Ok(normalize_version_tag(tag))
 }
 
-fn release_asset(version: &str) -> Result<String, Box<dyn Error>> {
+pub(crate) fn release_asset(version: &str) -> Result<String, Box<dyn Error>> {
     let os = if cfg!(target_os = "linux") {
         "linux"
     } else if cfg!(target_os = "macos") {
@@ -392,4 +392,100 @@ fn find_dir_named(root: &Path, name: &str) -> Option<PathBuf> {
 
 fn command_exists(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+    use tempfile::TempDir;
+
+    #[rstest]
+    #[case::with_prefix("v1.2.3", "v1.2.3")]
+    #[case::without_prefix("1.2.3", "v1.2.3")]
+    #[case::already_prefixed("v0.1.8", "v0.1.8")]
+    fn test_normalize_version_tag(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(normalize_version_tag(input), expected);
+    }
+
+    #[test]
+    fn test_release_asset_format() {
+        let asset = release_asset("v0.1.8").unwrap();
+        assert!(asset.starts_with("omakure-v0.1.8-"));
+        assert!(asset.ends_with(".tar.gz") || asset.ends_with(".zip"));
+    }
+
+    #[test]
+    fn test_resolve_repo_default() {
+        env::remove_var("OMAKURE_REPO");
+        env::remove_var("OVERTURE_REPO");
+        env::remove_var("CLOUD_MGMT_REPO");
+        env::remove_var("REPO");
+        assert_eq!(resolve_repo(None), DEFAULT_REPO);
+    }
+
+    #[test]
+    fn test_resolve_repo_explicit() {
+        assert_eq!(resolve_repo(Some("user/repo".to_string())), "user/repo");
+    }
+
+    #[test]
+    fn test_resolve_version_none() {
+        env::remove_var("VERSION");
+        assert_eq!(resolve_version(None), None);
+    }
+
+    #[test]
+    fn test_resolve_version_explicit() {
+        assert_eq!(
+            resolve_version(Some("1.0.0".to_string())),
+            Some("1.0.0".to_string())
+        );
+    }
+
+    #[test]
+    fn test_find_file_recursive() {
+        let tmp = TempDir::new().unwrap();
+        let sub = tmp.path().join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("target.txt"), "found").unwrap();
+
+        let result = find_file(tmp.path(), "target.txt").unwrap();
+        assert_eq!(result, sub.join("target.txt"));
+    }
+
+    #[test]
+    fn test_find_file_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let result = find_file(tmp.path(), "nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_find_dir_named() {
+        let tmp = TempDir::new().unwrap();
+        let scripts = tmp.path().join("archive/scripts");
+        fs::create_dir_all(&scripts).unwrap();
+
+        let result = find_dir_named(tmp.path(), "scripts");
+        assert_eq!(result, Some(scripts));
+    }
+
+    #[test]
+    fn test_copy_missing_files() {
+        let src = TempDir::new().unwrap();
+        let dest = TempDir::new().unwrap();
+
+        fs::write(src.path().join("a.sh"), "script a").unwrap();
+        fs::write(src.path().join("b.sh"), "script b").unwrap();
+        fs::write(dest.path().join("a.sh"), "existing").unwrap();
+
+        let (copied, skipped) = copy_missing_files(src.path(), dest.path()).unwrap();
+        assert_eq!(copied, 1);
+        assert_eq!(skipped, 1);
+        // existing file not overwritten
+        assert_eq!(fs::read_to_string(dest.path().join("a.sh")).unwrap(), "existing");
+        assert_eq!(fs::read_to_string(dest.path().join("b.sh")).unwrap(), "script b");
+    }
 }

@@ -176,7 +176,7 @@ fn ensure_theme_exists(name: &str, theme_dir: &Path) -> Result<(), Box<dyn Error
     Err(format!("Theme not found: {}", name).into())
 }
 
-fn read_theme_names(theme_dir: &Path) -> Result<Vec<String>, Box<dyn Error>> {
+pub(crate) fn read_theme_names(theme_dir: &Path) -> Result<Vec<String>, Box<dyn Error>> {
     let mut names = Vec::new();
     for entry in fs::read_dir(theme_dir)? {
         let entry = entry?;
@@ -191,4 +191,74 @@ fn read_theme_names(theme_dir: &Path) -> Result<Vec<String>, Box<dyn Error>> {
     names.sort();
     names.dedup();
     Ok(names)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::tui::theme::builtin_theme_names;
+    use pretty_assertions::assert_eq;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_builtin_themes_count() {
+        let names = builtin_theme_names();
+        assert_eq!(names.len(), 5);
+        assert!(names.contains(&"default"));
+        assert!(names.contains(&"dracula"));
+        assert!(names.contains(&"catppuccin-mocha"));
+        assert!(names.contains(&"nord"));
+        assert!(names.contains(&"solarized-dark"));
+    }
+
+    #[test]
+    fn test_ensure_theme_exists_builtin() {
+        let tmp = TempDir::new().unwrap();
+        assert!(ensure_theme_exists("default", tmp.path()).is_ok());
+        assert!(ensure_theme_exists("dracula", tmp.path()).is_ok());
+    }
+
+    #[test]
+    fn test_ensure_theme_exists_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let result = ensure_theme_exists("nonexistent_theme_xyz", tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ensure_theme_exists_system() {
+        let tmp = TempDir::new().unwrap();
+        assert!(ensure_theme_exists("system", tmp.path()).is_ok());
+    }
+
+    #[test]
+    fn test_read_theme_names_from_dir() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("custom.toml"), "[meta]\nname = \"custom\"").unwrap();
+        fs::write(tmp.path().join("other.toml"), "[meta]\nname = \"other\"").unwrap();
+        fs::write(tmp.path().join("readme.md"), "not a theme").unwrap();
+
+        let names = read_theme_names(tmp.path()).unwrap();
+        assert_eq!(names, vec!["custom", "other"]);
+    }
+
+    #[test]
+    fn test_read_theme_names_empty_dir() {
+        let tmp = TempDir::new().unwrap();
+        let names = read_theme_names(tmp.path()).unwrap();
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_format_variant() {
+        assert_eq!(format_variant(ThemeVariant::Dark), "dark");
+        assert_eq!(format_variant(ThemeVariant::Light), "light");
+    }
+
+    #[test]
+    fn test_format_color_rgb() {
+        let result = format_color(Color::Rgb(255, 0, 128));
+        assert_eq!(result, "#ff0080");
+    }
 }

@@ -55,6 +55,14 @@ impl SearchIndex {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_in_memory() -> Self {
+        Self {
+            db_path: PathBuf::from(":memory:"),
+            status: Arc::new(Mutex::new(SearchStatus::Idle)),
+        }
+    }
+
     pub fn status(&self) -> SearchStatus {
         self.status
             .lock()
@@ -199,7 +207,7 @@ impl SearchIndex {
     }
 }
 
-fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String> {
+pub(crate) fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String> {
     let repo = FsWorkspaceRepository::new(root.to_path_buf());
     let scripts = repo
         .list_scripts_recursive()
@@ -348,7 +356,7 @@ fn init_db(conn: &Connection) -> Result<(), String> {
     .map_err(|err| format!("Init search db failed: {}", err))
 }
 
-fn build_search_blob(
+pub(crate) fn build_search_blob(
     script_path: &str,
     display_name: &str,
     description: Option<&str>,
@@ -374,7 +382,7 @@ fn build_search_blob(
     parts.join(" ").to_lowercase()
 }
 
-fn split_query(query: &str) -> Vec<String> {
+pub(crate) fn split_query(query: &str) -> Vec<String> {
     query
         .split_whitespace()
         .filter(|token| !token.is_empty())
@@ -382,14 +390,14 @@ fn split_query(query: &str) -> Vec<String> {
         .collect()
 }
 
-fn escape_like(input: &str) -> String {
+pub(crate) fn escape_like(input: &str) -> String {
     input
         .replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_")
 }
 
-fn parse_tags(tags_raw: Option<String>) -> Vec<String> {
+pub(crate) fn parse_tags(tags_raw: Option<String>) -> Vec<String> {
     let Some(tags_raw) = tags_raw else {
         return Vec::new();
     };
@@ -415,4 +423,188 @@ fn timestamp_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     duration.as_millis() as i64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+    use tempfile::TempDir;
+
+    // --- Pure helper tests ---
+
+    #[test]
+    fn test_build_search_blob_basic() {
+        let result = build_search_blob("path/script.sh", "My Script", Some("desc"), &[], &[]);
+        assert_eq!(result, "path/script.sh my script desc");
+    }
+
+    #[test]
+    fn test_build_search_blob_no_description() {
+        let result = build_search_blob("s.sh", "S", None, &[], &[]);
+        assert_eq!(result, "s.sh s");
+    }
+
+    #[test]
+    fn test_build_search_blob_with_tags_and_fields() {
+        let tags = vec!["deploy".to_string(), "infra".to_string()];
+        let fields = vec![SearchField {
+            name: "env".to_string(),
+            prompt: Some("Environment".to_string()),
+            kind: "string".to_string(),
+            required: true,
+        }];
+        let blob = build_search_blob("s.sh", "S", None, &tags, &fields);
+        assert!(blob.contains("deploy"));
+        assert!(blob.contains("infra"));
+        assert!(blob.contains("env"));
+        assert!(blob.contains("environment"));
+        assert!(blob.contains("string"));
+    }
+
+    #[rstest]
+    #[case::two_tokens("hello world", vec!["hello", "world"])]
+    #[case::trimmed("  spaced  ", vec!["spaced"])]
+    #[case::empty("", vec![])]
+    #[case::lowercased("UPPER Case", vec!["upper", "case"])]
+    fn test_split_query(#[case] input: &str, #[case] expected: Vec<&str>) {
+        let result = split_query(input);
+        let expected: Vec<String> = expected.into_iter().map(String::from).collect();
+        assert_eq!(result, expected);
+    }
+
+    #[rstest]
+    #[case::no_special_chars("hello", "hello")]
+    #[case::percent_escaped("50%", "50\\%")]
+    #[case::underscore_escaped("under_score", "under\\_score")]
+    #[case::backslash_escaped("back\\slash", "back\\\\slash")]
+    fn test_escape_like(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(escape_like(input), expected);
+    }
+
+    #[test]
+    fn test_parse_tags_csv() {
+        assert_eq!(parse_tags(Some("a,b,c".to_string())), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_parse_tags_single() {
+        assert_eq!(parse_tags(Some("single".to_string())), vec!["single"]);
+    }
+
+    #[test]
+    fn test_parse_tags_trimmed() {
+        assert_eq!(
+            parse_tags(Some(" spaced , tags ".to_string())),
+            vec!["spaced", "tags"]
+        );
+    }
+
+    #[test]
+    fn test_parse_tags_none() {
+        let result: Vec<String> = parse_tags(None);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_tags_empty_string() {
+        let result: Vec<String> = parse_tags(Some("".to_string()));
+        assert!(result.is_empty());
+    }
+
+    // --- SQLite integration tests ---
+
+    #[test]
+    fn test_query_empty_index() {
+        let tmp = TempDir::new().unwrap();
+        let db = tmp.path().join("test.sqlite");
+        let index = SearchIndex::new(db);
+        let results = index.query("anything").unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_rebuild_and_query() {
+        let tmp = TempDir::new().unwrap();
+        let scripts_dir = tmp.path().join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+
+        fs::write(
+            scripts_dir.join("deploy.sh"),
+            r#"#!/bin/bash
+# OMAKURE_SCHEMA_START
+# {"Name": "Deploy App", "Description": "Deploy to production", "Tags": ["deploy", "infra"], "Fields": []}
+# OMAKURE_SCHEMA_END
+echo deploying
+"#,
+        )
+        .unwrap();
+
+        fs::write(
+            scripts_dir.join("test.sh"),
+            "#!/bin/bash\necho testing",
+        )
+        .unwrap();
+
+        let db = tmp.path().join("search.sqlite");
+        let count = rebuild_index(&db, &scripts_dir).unwrap();
+        assert_eq!(count, 2);
+
+        let index = SearchIndex::new(db);
+
+        // Query by name
+        let results = index.query("deploy").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].display_name, "Deploy App");
+        assert_eq!(results[0].tags, vec!["deploy", "infra"]);
+
+        // Query all
+        let all = index.query("").unwrap();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn test_load_details() {
+        let tmp = TempDir::new().unwrap();
+        let scripts_dir = tmp.path().join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+
+        fs::write(
+            scripts_dir.join("setup.sh"),
+            r#"#!/bin/bash
+# OMAKURE_SCHEMA_START
+# {"Name": "Setup", "Fields": [{"Name": "env", "Type": "string", "Order": 0, "Required": true}]}
+# OMAKURE_SCHEMA_END
+echo setup
+"#,
+        )
+        .unwrap();
+
+        let db = tmp.path().join("search.sqlite");
+        rebuild_index(&db, &scripts_dir).unwrap();
+
+        let index = SearchIndex::new(db);
+        let details = index.load_details(Path::new("setup.sh")).unwrap().unwrap();
+        assert_eq!(details.display_name, "Setup");
+        assert_eq!(details.fields.len(), 1);
+        assert_eq!(details.fields[0].name, "env");
+        assert!(details.fields[0].required);
+    }
+
+    #[test]
+    fn test_load_details_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let db = tmp.path().join("search.sqlite");
+        let index = SearchIndex::new(db);
+        let _ = index.query(""); // initialize DB
+        let details = index.load_details(Path::new("nonexistent.sh")).unwrap();
+        assert!(details.is_none());
+    }
+
+    #[test]
+    fn test_status_lifecycle() {
+        let index = SearchIndex::new(PathBuf::from(":memory:"));
+        assert_eq!(index.status(), SearchStatus::Idle);
+    }
 }

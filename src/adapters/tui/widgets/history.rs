@@ -1,5 +1,5 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
@@ -8,7 +8,22 @@ use std::path::PathBuf;
 use super::super::app::{App, ExecutionStatus, HistoryFocus};
 use super::super::theme::Theme;
 use super::common::status_label_and_style;
-use crate::runs::{format_run_timestamp, RunRow};
+use crate::runs::{format_run_timestamp, RunRow, RunState};
+
+/// Per-state color used in the TUI history State column. Falls back to
+/// the theme's text_primary style for runs in `queued` (so the muted
+/// color matches the placeholder rows).
+fn state_color(_theme: &Theme, state: RunState) -> Style {
+    match state {
+        RunState::Queued => Style::default().fg(Color::Gray),
+        RunState::Running => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        RunState::Completed => Style::default().fg(Color::Green),
+        RunState::Failed => Style::default().fg(Color::Red),
+        RunState::Cancelled => Style::default().fg(Color::Yellow),
+        RunState::TimedOut => Style::default().fg(Color::Magenta),
+        RunState::DeadLetter => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    }
+}
 
 pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
@@ -50,10 +65,13 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
         .iter()
         .map(|entry| {
             let name = app.display_path(&PathBuf::from(&entry.script_path));
-            let date = format_run_timestamp(entry.started_at);
+            let date = format_run_timestamp(entry.started_at.unwrap_or(entry.enqueued_at));
+            let state_label = entry.state.as_str();
+            let state_style = state_color(theme, entry.state);
             let status = ExecutionStatus::from_run(entry);
             let (status_label, status_style) = status_label_and_style(&status, theme);
             Row::new(vec![
+                Cell::from(Span::styled(state_label, state_style)),
                 Cell::from(Span::styled(status_label, status_style)),
                 Cell::from(Span::raw(date)),
                 Cell::from(Span::raw(name)),
@@ -63,6 +81,7 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
         .collect();
 
     let header = Row::new(vec![
+        Cell::from(Span::styled("State", theme.text_secondary())),
         Cell::from(Span::styled("Status", theme.text_secondary())),
         Cell::from(Span::styled("Date", theme.text_secondary())),
         Cell::from(Span::styled("Script", theme.text_secondary())),
@@ -80,6 +99,7 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
     let table = Table::new(
         rows,
         [
+            Constraint::Length(HISTORY_STATE_WIDTH),
             Constraint::Length(HISTORY_STATUS_WIDTH),
             Constraint::Length(HISTORY_DATE_WIDTH),
             Constraint::Min(HISTORY_MIN_SCRIPT_WIDTH),
@@ -169,6 +189,7 @@ fn format_args_human(args_json: &str) -> String {
     }
 }
 
+const HISTORY_STATE_WIDTH: u16 = 12;
 const HISTORY_STATUS_WIDTH: u16 = 10;
 const HISTORY_DATE_WIDTH: u16 = 16;
 const HISTORY_MIN_SCRIPT_WIDTH: u16 = 10;
@@ -188,11 +209,12 @@ fn history_list_width(total_width: u16, app: &App) -> u16 {
         .unwrap_or(0)
         .max(HISTORY_MIN_SCRIPT_WIDTH);
 
-    let content_width = HISTORY_STATUS_WIDTH
+    let content_width = HISTORY_STATE_WIDTH
+        + HISTORY_STATUS_WIDTH
         + HISTORY_DATE_WIDTH
         + max_script
         + HISTORY_ACTOR_WIDTH
-        + HISTORY_COLUMN_SPACING * 3;
+        + HISTORY_COLUMN_SPACING * 4;
     let desired = content_width + HISTORY_BORDER_WIDTH + HISTORY_HIGHLIGHT_WIDTH;
     let min_output = HISTORY_MIN_OUTPUT_WIDTH.min(total_width.saturating_sub(10).max(1));
     let max_list = total_width.saturating_sub(min_output);
@@ -211,11 +233,18 @@ mod tests {
             args_json: "[]".into(),
             actor: "human".into(),
             reason: None,
-            started_at: 0,
-            finished_at: 0,
-            duration_ms: 0,
+            state: RunState::Completed,
+            priority: 0,
+            enqueued_at: 0,
+            worker_id: None,
+            lease_until: None,
+            timeout_ms: None,
+            cron_schedule_id: None,
+            started_at: Some(0),
+            finished_at: Some(0),
+            duration_ms: Some(0),
             exit_code: Some(0),
-            success: true,
+            success: Some(true),
             stdout: stdout.to_string(),
             stderr: stderr.to_string(),
             error: error.map(|s| s.to_string()),

@@ -814,10 +814,15 @@ impl ExecutionStatus {
     pub(crate) fn from_run(entry: &RunRow) -> Self {
         if entry.error.is_some() {
             ExecutionStatus::Error
-        } else if entry.success {
-            ExecutionStatus::Success
         } else {
-            ExecutionStatus::Failed(entry.exit_code)
+            match entry.success {
+                Some(true) => ExecutionStatus::Success,
+                Some(false) => ExecutionStatus::Failed(entry.exit_code),
+                // Still in flight (queued/running): no status yet — treat
+                // as success for the legacy color path. The new state
+                // column already conveys the in-flight state.
+                None => ExecutionStatus::Success,
+            }
         }
     }
 }
@@ -971,11 +976,18 @@ mod tests {
             args_json: "[]".into(),
             actor: "human".into(),
             reason: None,
-            started_at: 0,
-            finished_at: 0,
-            duration_ms: 0,
+            state: crate::runs::RunState::Completed,
+            priority: 0,
+            enqueued_at: 0,
+            worker_id: None,
+            lease_until: None,
+            timeout_ms: None,
+            cron_schedule_id: None,
+            started_at: Some(0),
+            finished_at: Some(0),
+            duration_ms: Some(0),
             exit_code: Some(0),
-            success: true,
+            success: Some(true),
             stdout: String::new(),
             stderr: String::new(),
             error: None,

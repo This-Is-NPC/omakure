@@ -36,6 +36,22 @@ impl Workspace {
         Self::with_scripts_root(root, scripts_root, false)
     }
 
+    /// Clone the workspace for use inside a background thread (the
+    /// run executor's heartbeat / cancel watcher). The clone preserves
+    /// every path anchor; it does not re-run any I/O.
+    pub fn clone_for_executor(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            scripts_root: self.scripts_root.clone(),
+            scripts_root_override: self.scripts_root_override,
+            omaken_dir: self.omaken_dir.clone(),
+            history_dir: self.history_dir.clone(),
+            config_path: self.config_path.clone(),
+            envs_dir: self.envs_dir.clone(),
+            envs_active_path: self.envs_active_path.clone(),
+        }
+    }
+
     /// Build a workspace where the scripts root may differ from the global
     /// root. `scripts_root_override` is `true` only when the scripts root
     /// was supplied via the positional CLI argument; this controls whether

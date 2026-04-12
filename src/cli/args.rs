@@ -52,7 +52,7 @@ pub enum Commands {
     Install(OmakenInstallArgs),
 
     /// List available scripts
-    Scripts,
+    Scripts(ScriptsArgs),
 
     /// Show the full schema of one script
     Describe(DescribeArgs),
@@ -62,6 +62,12 @@ pub enum Commands {
 
     /// Query the run history
     History(HistoryArgs),
+
+    /// Push, cancel, drain, and inspect the run queue
+    Queue(QueueArgs),
+
+    /// Append a structured trace event from inside a running script
+    Trace(TraceArgs),
 
     /// Print the AI capability surface as JSON
     HelpAi,
@@ -87,6 +93,14 @@ pub enum Commands {
 }
 
 #[derive(Args, Debug)]
+pub struct ScriptsArgs {
+    /// Filter by tag (repeatable; AND semantics, case-sensitive literal
+    /// match against the script's embedded `Tags` field).
+    #[arg(long = "tag")]
+    pub tag: Vec<String>,
+}
+
+#[derive(Args, Debug)]
 pub struct DescribeArgs {
     /// Script name or path
     #[arg(value_name = "SCRIPT")]
@@ -98,6 +112,11 @@ pub struct SearchArgs {
     /// Free-text query (matches name, description, tags, fields)
     #[arg(value_name = "QUERY", default_value = "")]
     pub query: String,
+
+    /// Filter by tag (repeatable; AND semantics, case-sensitive literal
+    /// match against the script's embedded `Tags` field).
+    #[arg(long = "tag")]
+    pub tag: Vec<String>,
 }
 
 #[derive(Args, Debug)]
@@ -116,6 +135,12 @@ pub enum HistoryCommand {
 
     /// Print the most recent N runs (no --follow in v1)
     Tail(HistoryTailArgs),
+
+    /// Aggregate counts per state and per actor
+    Stats,
+
+    /// Read the structured trace stream of one run
+    Traces(HistoryTracesArgs),
 }
 
 #[derive(Args, Debug)]
@@ -147,6 +172,36 @@ pub struct HistoryListArgs {
     /// Maximum number of rows to return
     #[arg(long)]
     pub limit: Option<i64>,
+
+    /// Filter by run state (repeatable; logical OR within the flag).
+    /// Valid values: queued, running, completed, failed, cancelled,
+    /// timed_out, dead_letter. Mutually exclusive with `--state-set`.
+    #[arg(long = "state", conflicts_with = "state_set")]
+    pub state: Vec<String>,
+
+    /// Filter by a named state group: `in_flight` (queued+running),
+    /// `terminal` (everything else), or `all`. Default when neither
+    /// `--state` nor `--state-set` is set: `terminal` so existing
+    /// callers see no behavior change.
+    #[arg(long = "state-set", conflicts_with = "state")]
+    pub state_set: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct HistoryTracesArgs {
+    /// Run id
+    #[arg(value_name = "RUN_ID")]
+    pub run_id: String,
+
+    /// Minimum level (debug, info, warn, error). Defaults to `debug`
+    /// (returns every record).
+    #[arg(long)]
+    pub level: Option<String>,
+
+    /// Return only entries with `sequence > N`. Used by agents for
+    /// incremental fetches.
+    #[arg(long = "since-sequence")]
+    pub since_sequence: Option<i64>,
 }
 
 #[derive(Args, Debug)]
@@ -298,4 +353,131 @@ pub struct OmakenInstallArgs {
     /// Override the install folder name
     #[arg(long)]
     pub name: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Queue subcommand
+// ---------------------------------------------------------------------------
+
+#[derive(Args, Debug)]
+pub struct QueueArgs {
+    #[command(subcommand)]
+    pub command: QueueCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum QueueCommand {
+    /// Push a job onto the queue
+    Add(QueueAddArgs),
+
+    /// Cancel a queued or running job
+    Cancel(QueueCancelArgs),
+
+    /// Promote a `failed` or `timed_out` row into `dead_letter`
+    DeadLetter(QueueDeadLetterArgs),
+
+    /// Drain the queue (long-running daemon)
+    Worker(QueueWorkerArgs),
+
+    /// Aggregate counts per state and per actor
+    Stats,
+}
+
+#[derive(Args, Debug)]
+pub struct QueueAddArgs {
+    /// Script name or path
+    #[arg(value_name = "SCRIPT")]
+    pub script: String,
+
+    /// Actor tag recorded on the row (default: `human`)
+    #[arg(long, default_value = "human")]
+    pub actor: String,
+
+    /// Optional free-form reason
+    #[arg(long)]
+    pub reason: Option<String>,
+
+    /// Higher value picked first (default 0)
+    #[arg(long, default_value_t = 0)]
+    pub priority: i64,
+
+    /// Per-job execution timeout (e.g. `30s`, `5m`, `1h`).
+    /// Without this flag the job has no execution limit.
+    #[arg(long)]
+    pub timeout: Option<String>,
+
+    /// Optional parent run id, for chained agent workflows
+    #[arg(long = "parent-run-id")]
+    pub parent_run_id: Option<String>,
+
+    /// Caller-provided run id; otherwise a fresh id is generated
+    #[arg(long = "run-id")]
+    pub run_id: Option<String>,
+
+    /// Provenance id for the future omakure cron scheduler. Stored
+    /// in the row but never written by current code.
+    #[arg(long = "cron-schedule-id")]
+    pub cron_schedule_id: Option<String>,
+
+    /// Arguments forwarded to the script (after `--`)
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub args: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct QueueCancelArgs {
+    /// Run id to cancel
+    #[arg(value_name = "RUN_ID")]
+    pub run_id: String,
+
+    /// Optional reason recorded on the cancelled row
+    #[arg(long)]
+    pub reason: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct QueueDeadLetterArgs {
+    /// Run id to promote
+    #[arg(value_name = "RUN_ID")]
+    pub run_id: String,
+
+    /// Optional reason appended to the row
+    #[arg(long)]
+    pub reason: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct QueueWorkerArgs {
+    /// Number of parallel workers (default 1)
+    #[arg(long, default_value_t = 1)]
+    pub concurrency: u32,
+
+    /// Only claim jobs whose actor matches this tag
+    #[arg(long = "actor-filter")]
+    pub actor_filter: Option<String>,
+
+    /// Only claim jobs whose script path or name contains this pattern
+    #[arg(long = "script-filter")]
+    pub script_filter: Option<String>,
+
+    /// Test convenience: drain at most one job per worker thread, then
+    /// exit. Hidden from --help and help-ai. Used by integration tests
+    /// so the daemon does not block the test harness.
+    #[arg(long, hide = true)]
+    pub once: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct TraceArgs {
+    /// Trace message
+    #[arg(value_name = "MESSAGE")]
+    pub message: String,
+
+    /// Level (debug, info, warn, error). Defaults to `info`.
+    #[arg(long, default_value = "info")]
+    pub level: String,
+
+    /// Optional structured payload (must parse as JSON)
+    #[arg(long)]
+    pub data: Option<String>,
 }

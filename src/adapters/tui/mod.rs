@@ -19,7 +19,8 @@ use std::error::Error;
 use std::io;
 use std::time::Duration;
 
-use crate::runs::{self, RunFilters, RunRow};
+use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
+use crate::runs::{self, EnqueueOptions, RunFilters, RunRow, RunStateSet};
 use crate::theme_config;
 use app::{App, Screen};
 use events::handle_key_event;
@@ -61,10 +62,7 @@ pub fn run_app(
     let theme = load_theme(theme_name.as_deref(), theme_dir);
     terminal.draw(|frame| render_loading(frame, &theme))?;
     let entries = service.list_entries(workspace.scripts_root())?;
-    let history = match runs::open(&workspace) {
-        Ok(conn) => runs::query_runs(&conn, &RunFilters::default()).unwrap_or_default(),
-        Err(_) => Vec::new(),
-    };
+    let history = load_history(&workspace);
     let search_index = SearchIndex::new(workspace.search_db_path());
     // The search index continues to crawl the **global** workspace root —
     // it backs the search screen and is part of the global state contract.
@@ -95,14 +93,10 @@ pub fn run_app(
             app.screen = Screen::Running;
             let theme = app.theme.clone();
             terminal.draw(|frame| render_ui(frame, &mut app, &theme))?;
-            let started_at = runs::current_unix_ms();
-            let run_result = service.run_script(&script, &args);
-            let finished_at = runs::current_unix_ms();
-            let row = build_run_row(&script, &args, run_result, started_at, finished_at);
-            if let Ok(conn) = runs::open(&app.workspace) {
-                let _ = runs::insert_run(&conn, &row);
+            let row = run_through_state_machine(&app.workspace, &script, &args);
+            if let Some(row) = row {
+                app.add_history_entry(row);
             }
-            app.add_history_entry(row);
             app.back_to_script_select();
             app.reset_run_output_scroll();
             app.screen = Screen::RunResult;
@@ -110,56 +104,57 @@ pub fn run_app(
     }
 }
 
-fn build_run_row(
+/// Insert a `running` row, drive the script through the shared executor,
+/// transition to the correct terminal state, and return the final row so
+/// the TUI history view can display it. The TUI does not use a worker
+/// daemon — it always uses the inline fast path, just like `omakure run`.
+fn run_through_state_machine(
+    workspace: &Workspace,
     script: &std::path::Path,
     args: &[String],
-    run_result: Result<crate::ports::ScriptRunOutput, crate::error::AppError>,
-    started_at: i64,
-    finished_at: i64,
-) -> RunRow {
+) -> Option<RunRow> {
     let canonical = std::fs::canonicalize(script).unwrap_or_else(|_| script.to_path_buf());
-    let script_path = canonical.to_string_lossy().to_string();
-    let args_json = serde_json::to_string(args).unwrap_or_else(|_| "[]".to_string());
-    let duration_ms = (finished_at - started_at).max(0);
-    let omakure_version = crate::app_meta::APP_VERSION.to_string();
-    let run_id = runs::generate_run_id();
+    let canonical_str = canonical.to_string_lossy().to_string();
+    let conn = runs::open(workspace).ok()?;
+    let row = runs::start_inline(
+        &conn,
+        &canonical_str,
+        args,
+        &format!("inline:{}", std::process::id()),
+        EnqueueOptions {
+            actor: "human".into(),
+            omakure_version: crate::app_meta::APP_VERSION.to_string(),
+            ..Default::default()
+        },
+    )
+    .ok()?;
+    drop(conn);
 
-    match run_result {
-        Ok(output) => RunRow {
-            run_id,
-            script_path,
-            script_name: None,
-            args_json,
-            actor: "human".into(),
-            reason: None,
-            started_at,
-            finished_at,
-            duration_ms,
-            exit_code: output.exit_code,
-            success: output.success,
-            stdout: output.stdout,
-            stderr: output.stderr,
-            error: None,
-            parent_run_id: None,
-            omakure_version,
-        },
-        Err(err) => RunRow {
-            run_id,
-            script_path,
-            script_name: None,
-            args_json,
-            actor: "human".into(),
-            reason: None,
-            started_at,
-            finished_at,
-            duration_ms,
-            exit_code: None,
-            success: false,
-            stdout: String::new(),
-            stderr: String::new(),
-            error: Some(err.to_string()),
-            parent_run_id: None,
-            omakure_version,
-        },
+    let result = execute_with_heartbeat(workspace, &row, vec![], None);
+    let conn = runs::open(workspace).ok()?;
+    let _ = match result.terminal {
+        ExecutionTerminal::Completed => runs::complete(&conn, &row.run_id, result.completion),
+        ExecutionTerminal::Failed | ExecutionTerminal::Errored => {
+            runs::fail(&conn, &row.run_id, result.completion)
+        }
+        ExecutionTerminal::TimedOut => runs::time_out(&conn, &row.run_id, result.completion),
+        ExecutionTerminal::Cancelled => {
+            runs::record_cancelled_output(&conn, &row.run_id, result.completion)
+        }
+    };
+    runs::get_run(&conn, &row.run_id).ok().flatten()
+}
+
+fn load_history(workspace: &Workspace) -> Vec<RunRow> {
+    match runs::open(workspace) {
+        Ok(conn) => runs::query_runs(
+            &conn,
+            &RunFilters {
+                states: RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_default(),
+        Err(_) => Vec::new(),
     }
 }

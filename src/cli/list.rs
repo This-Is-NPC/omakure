@@ -1,4 +1,5 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
+use crate::cli::args::ScriptsArgs;
 use crate::cli::json;
 use crate::ports::ScriptRepository;
 use serde::Serialize;
@@ -20,35 +21,52 @@ pub struct ScriptListEntry {
     pub schema_error: Option<String>,
 }
 
-pub fn run(scripts_dir: PathBuf, json_output: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(
+    scripts_dir: PathBuf,
+    args: ScriptsArgs,
+    json_output: bool,
+) -> Result<(), Box<dyn Error>> {
     let repo = FsWorkspaceRepository::new(scripts_dir.clone());
     let mut scripts = repo.list_scripts_recursive()?;
     scripts.sort();
 
+    let entries: Vec<ScriptListEntry> = scripts
+        .into_iter()
+        .map(|script| build_entry(&repo, &scripts_dir, script))
+        .filter(|entry| matches_all_tags(entry, &args.tag))
+        .collect();
+
     if json_output {
-        let entries: Vec<ScriptListEntry> = scripts
-            .into_iter()
-            .map(|script| build_entry(&repo, &scripts_dir, script))
-            .collect();
         json::print_ok(entries);
         return Ok(());
     }
 
     println!("Scripts folder: {}", scripts_dir.display());
-    if scripts.is_empty() {
+    if entries.is_empty() {
         println!("(no scripts found)");
         return Ok(());
     }
 
-    for script in scripts {
-        let display_path = script
-            .strip_prefix(&scripts_dir)
-            .unwrap_or(&script)
-            .to_string_lossy();
-        println!(" - {}", display_path);
+    for entry in entries {
+        let display = if entry.relative_path.is_empty() {
+            entry.absolute_path.clone()
+        } else {
+            entry.relative_path.clone()
+        };
+        println!(" - {}", display);
     }
 
     Ok(())
+}
+
+/// Test/internal helper: returns true when `entry` carries every tag in
+/// `required` (case-sensitive literal AND match). When `required` is
+/// empty, every entry passes.
+pub(crate) fn matches_all_tags(entry: &ScriptListEntry, required: &[String]) -> bool {
+    if required.is_empty() {
+        return true;
+    }
+    required.iter().all(|t| entry.tags.iter().any(|et| et == t))
 }
 
 fn build_entry(
@@ -85,5 +103,55 @@ fn build_entry(
             field_count: 0,
             schema_error: Some(err.to_string()),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry_with_tags(tags: &[&str]) -> ScriptListEntry {
+        ScriptListEntry {
+            absolute_path: "/x/a.sh".into(),
+            relative_path: "a.sh".into(),
+            name: Some("a".into()),
+            description: None,
+            tags: tags.iter().map(|t| (*t).to_string()).collect(),
+            field_count: 0,
+            schema_error: None,
+        }
+    }
+
+    #[test]
+    fn matches_all_tags_no_required_passes() {
+        let e = entry_with_tags(&["foo"]);
+        assert!(matches_all_tags(&e, &[]));
+    }
+
+    #[test]
+    fn matches_all_tags_single_required() {
+        let e = entry_with_tags(&["prefeitura"]);
+        assert!(matches_all_tags(&e, &["prefeitura".into()]));
+        assert!(!matches_all_tags(&e, &["other".into()]));
+    }
+
+    #[test]
+    fn matches_all_tags_multi_required_and_semantics() {
+        let e = entry_with_tags(&["prefeitura", "sp", "production"]);
+        assert!(matches_all_tags(
+            &e,
+            &["prefeitura".into(), "sp".into()]
+        ));
+        assert!(!matches_all_tags(
+            &e,
+            &["prefeitura".into(), "rj".into()]
+        ));
+    }
+
+    #[test]
+    fn matches_all_tags_case_sensitive() {
+        let e = entry_with_tags(&["Prefeitura"]);
+        assert!(!matches_all_tags(&e, &["prefeitura".into()]));
+        assert!(matches_all_tags(&e, &["Prefeitura".into()]));
     }
 }

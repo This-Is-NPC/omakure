@@ -35,26 +35,27 @@ pub fn run(
         }
     };
 
+    let entries: Vec<ScriptListEntry> = results
+        .into_iter()
+        .map(|r| to_entry(r, workspace.root()))
+        .filter(|entry| crate::cli::list::matches_all_tags(entry, &options.tag))
+        .collect();
+
     if json_output {
-        let entries: Vec<ScriptListEntry> = results
-            .into_iter()
-            .map(|r| to_entry(r, workspace.root()))
-            .collect();
         json::print_ok(entries);
         return Ok(());
     }
 
-    if results.is_empty() {
+    if entries.is_empty() {
         println!("(no matches)");
         return Ok(());
     }
-    for r in results {
-        let path = r.script_path.to_string_lossy();
-        let desc = r.description.as_deref().unwrap_or("");
+    for entry in entries {
+        let desc = entry.description.as_deref().unwrap_or("");
         if desc.is_empty() {
-            println!(" - {}", path);
+            println!(" - {}", entry.relative_path);
         } else {
-            println!(" - {} — {}", path, desc);
+            println!(" - {} — {}", entry.relative_path, desc);
         }
     }
     Ok(())

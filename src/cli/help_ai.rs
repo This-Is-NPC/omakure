@@ -56,6 +56,8 @@ const AI_VERBS: &[&str] = &[
     "run",
     "init",
     "history",
+    "queue",
+    "trace",
     "config",
     "help-ai",
 ];

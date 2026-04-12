@@ -1,4 +1,5 @@
 [tools]
+powershell = "latest"
 rust = "latest"
 
 [tasks.tui]

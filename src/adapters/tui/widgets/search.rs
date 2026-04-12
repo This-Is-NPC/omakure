@@ -7,6 +7,7 @@ use super::super::app::{App, SchemaFieldPreview, SchemaPreview};
 use super::super::theme::{self, Theme};
 use super::common::{horizontal_split, standard_screen_layout};
 use super::schema;
+use super::spinner::{spinner_span, SpinnerKind};
 use crate::search_index::{SearchDetails, SearchResult, SearchStatus};
 
 pub(crate) fn render_search(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
@@ -22,11 +23,16 @@ pub(crate) fn render_search(frame: &mut Frame, area: Rect, app: &mut App, theme:
 }
 
 fn render_search_input(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
-    let title = match &app.search.status {
-        SearchStatus::Indexing => "Search (indexing...)".to_string(),
-        SearchStatus::Ready { script_count } => format!("Search ({} scripts)", script_count),
-        SearchStatus::Error(_) => "Search (index error)".to_string(),
-        SearchStatus::Idle => "Search".to_string(),
+    let title_line: Line<'static> = match &app.search.status {
+        SearchStatus::Indexing => Line::from(vec![
+            spinner_span(SpinnerKind::Scan, app.tick, theme),
+            Span::raw("Search (indexing...)"),
+        ]),
+        SearchStatus::Ready { script_count } => {
+            Line::from(format!("Search ({} scripts)", script_count))
+        }
+        SearchStatus::Error(_) => Line::from("Search (index error)".to_string()),
+        SearchStatus::Idle => Line::from("Search".to_string()),
     };
     let query_line = if app.search.query.is_empty() {
         Line::from(Span::styled("Type to search...", theme.text_muted()))
@@ -34,21 +40,24 @@ fn render_search_input(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) 
         Line::from(app.search.query.clone())
     };
     let input = Paragraph::new(vec![query_line])
-        .block(Block::default().borders(Borders::ALL).title(title))
+        .block(Block::default().borders(Borders::ALL).title(title_line))
         .wrap(Wrap { trim: true });
     frame.render_widget(input, area);
 }
 
 fn render_search_body(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     if app.search.results.is_empty() {
-        let message = if let Some(err) = &app.search.error {
-            format!("Search error: {}", err)
+        let lines: Vec<Line<'static>> = if let Some(err) = &app.search.error {
+            vec![Line::from(format!("Search error: {}", err))]
         } else if matches!(app.search.status, SearchStatus::Indexing) {
-            "Indexing scripts...".to_string()
+            vec![Line::from(vec![
+                spinner_span(SpinnerKind::Scan, app.tick, theme),
+                Span::raw("Indexing scripts..."),
+            ])]
         } else {
-            "No scripts found for this search.".to_string()
+            vec![Line::from("No scripts found for this search.")]
         };
-        let empty = Paragraph::new(message)
+        let empty = Paragraph::new(lines)
             .block(Block::default().borders(Borders::ALL).title("Results"))
             .wrap(Wrap { trim: true });
         frame.render_widget(empty, area);

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::app::{App, HistoryFocus, Screen};
+use super::app::{App, HistoryFocus, HistoryView, Screen};
 
 pub(crate) fn handle_key_event(app: &mut App, key: KeyEvent) {
     match app.screen {
@@ -16,18 +16,26 @@ pub(crate) fn handle_key_event(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_list_key(app: &mut App, key: KeyEvent) {
+    // `Alt+E` (envs) is checked before any non-modified `e` shortcut so
+    // the modifier branch always wins.
+    if matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))
+        && key.modifiers.contains(KeyModifiers::ALT)
+    {
+        app.enter_envs();
+        return;
+    }
     match key.code {
         KeyCode::Char('s') | KeyCode::Char('S')
             if key.modifiers.contains(KeyModifiers::CONTROL) =>
         {
             app.enter_search()
         }
-        KeyCode::Char('e') | KeyCode::Char('E') if key.modifiers.contains(KeyModifiers::ALT) => {
-            app.enter_envs()
-        }
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Esc => {
-            if app.navigation.current_dir == app.workspace.root() {
+            // Esc collapses the per-script dashboard expansion first.
+            if app.script_dashboard_expanded {
+                app.script_dashboard_expanded = false;
+            } else if app.navigation.current_dir == app.workspace.root() {
                 app.should_quit = true;
             } else {
                 app.navigate_up();
@@ -39,6 +47,17 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
             app.screen = Screen::History;
             app.history.focus = HistoryFocus::List;
             app.reset_run_output_scroll();
+        }
+        KeyCode::Char('e') | KeyCode::Char('E') => {
+            // `e` toggles the per-script dashboard expansion, but only
+            // when a script (not a directory) is highlighted. Pressing
+            // `e` over a directory is a no-op.
+            if matches!(
+                app.selected_entry(),
+                Some(entry) if entry.kind == crate::ports::WorkspaceEntryKind::Script
+            ) {
+                app.script_dashboard_expanded = !app.script_dashboard_expanded;
+            }
         }
         KeyCode::Backspace | KeyCode::Left => app.navigate_up(),
         _ if app.navigation.entries.is_empty() => {}
@@ -100,14 +119,32 @@ fn handle_error_key(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_history_key(app: &mut App, key: KeyEvent) {
+    // `Alt+E` always routes to the envs screen, regardless of view, so
+    // it must be checked before any non-modified `e` shortcut below.
+    if matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))
+        && key.modifiers.contains(KeyModifiers::ALT)
+    {
+        app.enter_envs();
+        return;
+    }
+
+    // `Tab` toggles List <-> Dashboards in either view, regardless of
+    // the inner `HistoryFocus` of the List view.
+    if matches!(key.code, KeyCode::Tab) {
+        app.history.toggle_view();
+        return;
+    }
+
+    match app.history.view {
+        HistoryView::List => handle_history_list_key(app, key),
+        HistoryView::Dashboards => handle_history_dashboards_key(app, key),
+    }
+}
+
+fn handle_history_list_key(app: &mut App, key: KeyEvent) {
     match app.history.focus {
         HistoryFocus::List => match key.code {
             KeyCode::Char('q') | KeyCode::Esc => app.screen = Screen::ScriptSelect,
-            KeyCode::Char('e') | KeyCode::Char('E')
-                if key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                app.enter_envs()
-            }
             KeyCode::Down | KeyCode::Char('j') => app.move_history_selection(1),
             KeyCode::Up | KeyCode::Char('k') => app.move_history_selection(-1),
             KeyCode::Enter | KeyCode::Right => {
@@ -129,6 +166,26 @@ fn handle_history_key(app: &mut App, key: KeyEvent) {
             KeyCode::End => app.run_output_scroll = u16::MAX,
             _ => {}
         },
+    }
+}
+
+fn handle_history_dashboards_key(app: &mut App, key: KeyEvent) {
+    let has_selection = !app.history.entries.is_empty();
+    match key.code {
+        KeyCode::Char('q') => app.screen = Screen::ScriptSelect,
+        KeyCode::Esc => {
+            // Esc collapses an expanded per-script panel first; only
+            // when already in the split layout does it leave History.
+            if app.history.dashboards_escape() {
+                app.screen = Screen::ScriptSelect;
+            }
+        }
+        KeyCode::Char('e') | KeyCode::Char('E') | KeyCode::Enter if has_selection => {
+            app.history.toggle_dashboard_expand();
+        }
+        KeyCode::Down | KeyCode::Char('j') => app.move_history_selection(1),
+        KeyCode::Up | KeyCode::Char('k') => app.move_history_selection(-1),
+        _ => {}
     }
 }
 

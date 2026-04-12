@@ -24,6 +24,7 @@ use crate::runs::{self, EnqueueOptions, RunFilters, RunRow, RunStateSet};
 use crate::theme_config;
 use app::{App, Screen};
 use events::handle_key_event;
+use std::sync::mpsc::{self, TryRecvError};
 use theme::load_theme;
 use ui::{render_loading, render_ui};
 
@@ -74,8 +75,10 @@ pub fn run_app(
             app.refresh_search_status();
         }
         app.poll_widget_load();
+        poll_inline_run(&mut app);
         let theme = app.theme.clone();
         terminal.draw(|frame| render_ui(frame, &mut app, &theme))?;
+        app.tick = app.tick.wrapping_add(1);
 
         if event::poll(Duration::from_millis(200))? {
             match event::read()? {
@@ -90,16 +93,52 @@ pub fn run_app(
             return Ok(());
         }
         if let Some((script, args)) = app.result.take() {
-            app.screen = Screen::Running;
-            let theme = app.theme.clone();
-            terminal.draw(|frame| render_ui(frame, &mut app, &theme))?;
-            let row = run_through_state_machine(&app.workspace, &script, &args);
+            start_inline_run(&mut app, script, args);
+        }
+    }
+}
+
+/// Spawn a worker thread that drives an inline script execution
+/// through `run_through_state_machine` and sends the resulting row
+/// back over an mpsc channel. The main loop keeps drawing and
+/// incrementing `app.tick` while the worker runs, so the Sand spinner
+/// on the Running screen animates instead of freezing on a single
+/// frame. Mirrors the existing `App::start_widget_load` pattern.
+fn start_inline_run(app: &mut App, script: std::path::PathBuf, args: Vec<String>) {
+    let workspace = app.workspace.clone_for_executor();
+    let (tx, rx) = mpsc::channel();
+    app.inline_run_receiver = Some(rx);
+    app.screen = Screen::Running;
+    std::thread::spawn(move || {
+        let row = run_through_state_machine(&workspace, &script, &args);
+        let _ = tx.send(row);
+    });
+}
+
+/// Drain a completed inline run from the worker thread, if any. On
+/// success, append the row to history and transition to `RunResult`.
+/// On `Disconnected` (worker panicked or channel dropped), bail out
+/// to `RunResult` so the user is not stranded on the Running screen.
+fn poll_inline_run(app: &mut App) {
+    let Some(receiver) = &app.inline_run_receiver else {
+        return;
+    };
+    match receiver.try_recv() {
+        Ok(row) => {
             if let Some(row) = row {
                 app.add_history_entry(row);
             }
             app.back_to_script_select();
             app.reset_run_output_scroll();
             app.screen = Screen::RunResult;
+            app.inline_run_receiver = None;
+        }
+        Err(TryRecvError::Empty) => {}
+        Err(TryRecvError::Disconnected) => {
+            app.back_to_script_select();
+            app.reset_run_output_scroll();
+            app.screen = Screen::RunResult;
+            app.inline_run_receiver = None;
         }
     }
 }

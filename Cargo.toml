@@ -27,6 +27,7 @@ toml = "0.8"
 dirs = "5.0"
 humantime = "2.1"
 signal-hook = "0.3"
+rattles = "0.2.2"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

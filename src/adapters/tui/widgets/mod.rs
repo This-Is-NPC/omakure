@@ -1,4 +1,5 @@
 pub(crate) mod common;
+pub(crate) mod dashboards;
 pub(crate) mod environment;
 pub(crate) mod envs;
 pub(crate) mod error;
@@ -10,3 +11,4 @@ pub(crate) mod running;
 pub(crate) mod schema;
 pub(crate) mod scripts;
 pub(crate) mod search;
+pub(crate) mod spinner;

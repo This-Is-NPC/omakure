@@ -7,8 +7,8 @@ use ratatui::Frame;
 use super::app::{App, Screen};
 use super::theme::Theme;
 use super::widgets::{
-    environment, envs, error as error_widget, field_input, history, loading as loading_widget,
-    run_result, running, schema, scripts, search,
+    dashboards, environment, envs, error as error_widget, field_input, history,
+    loading as loading_widget, run_result, running, schema, scripts, search,
 };
 
 pub(crate) fn render_ui(frame: &mut Frame, app: &mut App, theme: &Theme) {
@@ -18,15 +18,18 @@ pub(crate) fn render_ui(frame: &mut Frame, app: &mut App, theme: &Theme) {
         Screen::Environments => envs::render_envs(frame, frame.size(), app, theme),
         Screen::FieldInput => field_input::render_field_input(frame, frame.size(), app, theme),
         Screen::History => history::render_history(frame, frame.size(), app, theme),
-        Screen::Running => running::render_running(frame, frame.size(), app),
+        Screen::Running => running::render_running(frame, frame.size(), app, theme),
         Screen::RunResult => run_result::render_run_result(frame, frame.size(), app, theme),
         Screen::Error => render_error(frame, app, theme),
     }
 }
 
 pub(crate) fn render_loading(frame: &mut Frame, theme: &Theme) {
-    let _ = theme;
-    loading_widget::render_loading(frame, frame.size());
+    // The bootstrap loading screen runs before any `App` exists, so it
+    // does not have a real frame counter. Tick = 0 still renders the
+    // first frame of the spinner — animation kicks in once the main
+    // loop takes over and starts incrementing `App.tick`.
+    loading_widget::render_loading(frame, frame.size(), theme, 0);
 }
 
 fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
@@ -35,6 +38,8 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
         app.navigation.widget.as_ref(),
         app.navigation.widget_error.as_deref(),
         app.navigation.widget_loading,
+        theme,
+        app.tick,
     );
     let info_height = info_lines.len() as u16 + 2;
 
@@ -60,12 +65,42 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
     let entries_area = entries_block.inner(chunks[1]);
     frame.render_widget(entries_block, chunks[1]);
 
-    let show_schema = matches!(
-        app.selected_entry(),
-        Some(entry) if entry.kind == crate::ports::WorkspaceEntryKind::Script
-    );
+    let selected_script_path = match app.selected_entry() {
+        Some(entry) if entry.kind == crate::ports::WorkspaceEntryKind::Script => {
+            Some(entry.path.clone())
+        }
+        _ => None,
+    };
 
-    if show_schema {
+    if app.script_dashboard_expanded {
+        if let Some(script_path) = selected_script_path.as_ref() {
+            // Fullscreen per-script charts. The list is hidden until
+            // the user presses Esc to collapse the expanded view.
+            dashboards::render_script_charts(
+                frame,
+                entries_area,
+                app,
+                theme,
+                script_path,
+                true,
+            );
+        } else {
+            // Fallback: nothing meaningful to expand. Render the
+            // normal list (defensive — `e` is gated on script
+            // selection so this branch is unreachable in practice).
+            scripts::render_scripts(
+                frame,
+                entries_area,
+                &app.workspace,
+                &app.navigation.current_dir,
+                &app.navigation.entries,
+                &mut app.navigation.list_state,
+                theme,
+            );
+        }
+    } else if let Some(script_path) = selected_script_path.as_ref() {
+        // Compact layout: scripts list on the left, vertical stack of
+        // Schema (top) + Charts (bottom) on the right.
         let body_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
@@ -80,14 +115,28 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
             &mut app.navigation.list_state,
             theme,
         );
+
+        let right_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(body_chunks[1]);
+
         let schema_title = schema_title(app);
         schema::render_schema_preview(
             frame,
-            body_chunks[1],
+            right_chunks[0],
             &schema_title,
             app.navigation.schema_preview.as_ref(),
             app.navigation.schema_preview_error.as_deref(),
             theme,
+        );
+        dashboards::render_script_charts(
+            frame,
+            right_chunks[1],
+            app,
+            theme,
+            script_path,
+            false,
         );
     } else {
         scripts::render_scripts(
@@ -101,25 +150,36 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
         );
     }
 
-    let mut footer_text = if app.navigation.entries.is_empty() {
-        "Folder is empty. r refresh, h history, Ctrl+S search, Alt+E envs, q quit".to_string()
-    } else {
-        "Up/Down move, Enter open/run, r refresh, h history, Ctrl+S search, Alt+E envs, q quit"
-            .to_string()
-    };
-    if app.navigation.current_dir != app.workspace.root() {
-        if app.navigation.entries.is_empty() {
-            footer_text =
-                "Folder is empty. Backspace up, r refresh, h history, Ctrl+S search, Alt+E envs, q quit"
-                    .to_string();
-        } else {
-            footer_text =
-                "Up/Down move, Enter open/run, Backspace up, r refresh, h history, Ctrl+S search, Alt+E envs, q quit"
-                    .to_string();
-        }
-    }
+    let footer_text = build_script_select_footer(app);
     let footer = Paragraph::new(footer_text).style(theme.text_secondary());
     frame.render_widget(footer, chunks[2]);
+}
+
+fn build_script_select_footer(app: &App) -> String {
+    if app.script_dashboard_expanded {
+        return "Esc collapse, e collapse, Enter run, h history, Alt+E envs, q quit".to_string();
+    }
+    let has_script = matches!(
+        app.selected_entry(),
+        Some(entry) if entry.kind == crate::ports::WorkspaceEntryKind::Script
+    );
+    let expand_hint = if has_script { ", e expand charts" } else { "" };
+    let nav_hint = if app.navigation.current_dir != app.workspace.root() {
+        ", Backspace up"
+    } else {
+        ""
+    };
+    if app.navigation.entries.is_empty() {
+        format!(
+            "Folder is empty{}, r refresh, h history, Ctrl+S search, Alt+E envs, q quit",
+            nav_hint
+        )
+    } else {
+        format!(
+            "Up/Down move, Enter open/run{}{}, r refresh, h history, Ctrl+S search, Alt+E envs, q quit",
+            nav_hint, expand_hint
+        )
+    }
 }
 
 fn render_error(frame: &mut Frame, app: &mut App, theme: &Theme) {

@@ -1,29 +1,15 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
 use std::path::PathBuf;
 
-use super::super::app::{App, ExecutionStatus, HistoryFocus};
+use super::super::app::{App, ExecutionStatus, HistoryFocus, HistoryView};
 use super::super::theme::Theme;
-use super::common::status_label_and_style;
-use crate::runs::{format_run_timestamp, RunRow, RunState};
-
-/// Per-state color used in the TUI history State column. Falls back to
-/// the theme's text_primary style for runs in `queued` (so the muted
-/// color matches the placeholder rows).
-fn state_color(_theme: &Theme, state: RunState) -> Style {
-    match state {
-        RunState::Queued => Style::default().fg(Color::Gray),
-        RunState::Running => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-        RunState::Completed => Style::default().fg(Color::Green),
-        RunState::Failed => Style::default().fg(Color::Red),
-        RunState::Cancelled => Style::default().fg(Color::Yellow),
-        RunState::TimedOut => Style::default().fg(Color::Magenta),
-        RunState::DeadLetter => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-    }
-}
+use super::common::{state_style, status_label_and_style};
+use super::dashboards::render_dashboards;
+use crate::runs::{format_run_timestamp, RunRow};
 
 pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
@@ -31,20 +17,32 @@ pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme
         .constraints([Constraint::Min(3), Constraint::Length(2)])
         .split(area);
 
-    let list_width = history_list_width(chunks[0].width, app);
-    let body_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(list_width), Constraint::Min(10)])
-        .split(chunks[0]);
+    match app.history.view {
+        HistoryView::List => {
+            let list_width = history_list_width(chunks[0].width, app);
+            let body_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(list_width), Constraint::Min(10)])
+                .split(chunks[0]);
 
-    render_history_list(frame, body_chunks[0], app, theme);
-    render_history_output(frame, body_chunks[1], app, theme);
-
-    let footer_text = match app.history.focus {
-        HistoryFocus::List => {
-            "Up/Down to select, Enter to view output, Alt+E envs, Esc/q to go back"
+            render_history_list(frame, body_chunks[0], app, theme);
+            render_history_output(frame, body_chunks[1], app, theme);
         }
-        HistoryFocus::Output => "Up/Down to scroll, PgUp/PgDn, Esc to return, q to go back",
+        HistoryView::Dashboards => {
+            render_dashboards(frame, chunks[0], app, theme);
+        }
+    }
+
+    let footer_text = match app.history.view {
+        HistoryView::List => match app.history.focus {
+            HistoryFocus::List => {
+                "Tab dashboards, Up/Down select, Enter view output, Alt+E envs, Esc/q back"
+            }
+            HistoryFocus::Output => "Tab dashboards, Up/Down scroll, PgUp/PgDn, Esc return, q back",
+        },
+        HistoryView::Dashboards => {
+            "Tab list, Up/Down select script, e/Enter expand, Alt+E envs, Esc/q back"
+        }
     };
     let footer = Paragraph::new(footer_text).style(theme.text_secondary());
     frame.render_widget(footer, chunks[1]);
@@ -67,11 +65,11 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
             let name = app.display_path(&PathBuf::from(&entry.script_path));
             let date = format_run_timestamp(entry.started_at.unwrap_or(entry.enqueued_at));
             let state_label = entry.state.as_str();
-            let state_style = state_color(theme, entry.state);
+            let state_text_style = state_style(theme, entry.state);
             let status = ExecutionStatus::from_run(entry);
             let (status_label, status_style) = status_label_and_style(&status, theme);
             Row::new(vec![
-                Cell::from(Span::styled(state_label, state_style)),
+                Cell::from(Span::styled(state_label, state_text_style)),
                 Cell::from(Span::styled(status_label, status_style)),
                 Cell::from(Span::raw(date)),
                 Cell::from(Span::raw(name)),
@@ -224,6 +222,7 @@ fn history_list_width(total_width: u16, app: &App) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runs::RunState;
 
     fn row(stdout: &str, stderr: &str, error: Option<&str>) -> RunRow {
         RunRow {

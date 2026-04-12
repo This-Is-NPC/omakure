@@ -3,11 +3,13 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
+use std::path::PathBuf;
 
-use super::super::app::{App, ExecutionStatus, HistoryFocus};
+use super::super::app::{App, ExecutionStatus, HistoryFocus, HistoryView};
 use super::super::theme::Theme;
-use super::common::status_label_and_style;
-use crate::history;
+use super::common::{state_style, status_label_and_style};
+use super::dashboards::render_dashboards;
+use crate::runs::{format_run_timestamp, RunRow};
 
 pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
@@ -15,20 +17,32 @@ pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme
         .constraints([Constraint::Min(3), Constraint::Length(2)])
         .split(area);
 
-    let list_width = history_list_width(chunks[0].width, app);
-    let body_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(list_width), Constraint::Min(10)])
-        .split(chunks[0]);
+    match app.history.view {
+        HistoryView::List => {
+            let list_width = history_list_width(chunks[0].width, app);
+            let body_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(list_width), Constraint::Min(10)])
+                .split(chunks[0]);
 
-    render_history_list(frame, body_chunks[0], app, theme);
-    render_history_output(frame, body_chunks[1], app, theme);
-
-    let footer_text = match app.history.focus {
-        HistoryFocus::List => {
-            "Up/Down to select, Enter to view output, Alt+E envs, Esc/q to go back"
+            render_history_list(frame, body_chunks[0], app, theme);
+            render_history_output(frame, body_chunks[1], app, theme);
         }
-        HistoryFocus::Output => "Up/Down to scroll, PgUp/PgDn, Esc to return, q to go back",
+        HistoryView::Dashboards => {
+            render_dashboards(frame, chunks[0], app, theme);
+        }
+    }
+
+    let footer_text = match app.history.view {
+        HistoryView::List => match app.history.focus {
+            HistoryFocus::List => {
+                "Tab dashboards, Up/Down select, Enter view output, Alt+E envs, Esc/q back"
+            }
+            HistoryFocus::Output => "Tab dashboards, Up/Down scroll, PgUp/PgDn, Esc return, q back",
+        },
+        HistoryView::Dashboards => {
+            "Tab list, Up/Down select script, e/Enter expand, Alt+E envs, Esc/q back"
+        }
     };
     let footer = Paragraph::new(footer_text).style(theme.text_secondary());
     frame.render_widget(footer, chunks[1]);
@@ -48,22 +62,28 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
         .entries
         .iter()
         .map(|entry| {
-            let name = app.display_path(&entry.script);
-            let date = history::format_timestamp(entry.timestamp);
-            let status = ExecutionStatus::from_history(entry);
+            let name = app.display_path(&PathBuf::from(&entry.script_path));
+            let date = format_run_timestamp(entry.started_at.unwrap_or(entry.enqueued_at));
+            let state_label = entry.state.as_str();
+            let state_text_style = state_style(theme, entry.state);
+            let status = ExecutionStatus::from_run(entry);
             let (status_label, status_style) = status_label_and_style(&status, theme);
             Row::new(vec![
+                Cell::from(Span::styled(state_label, state_text_style)),
                 Cell::from(Span::styled(status_label, status_style)),
                 Cell::from(Span::raw(date)),
                 Cell::from(Span::raw(name)),
+                Cell::from(Span::raw(entry.actor.clone())),
             ])
         })
         .collect();
 
     let header = Row::new(vec![
+        Cell::from(Span::styled("State", theme.text_secondary())),
         Cell::from(Span::styled("Status", theme.text_secondary())),
         Cell::from(Span::styled("Date", theme.text_secondary())),
         Cell::from(Span::styled("Script", theme.text_secondary())),
+        Cell::from(Span::styled("Actor", theme.text_secondary())),
     ]);
     let highlight_style = match app.history.focus {
         HistoryFocus::List => theme.selection_style(),
@@ -77,9 +97,11 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
     let table = Table::new(
         rows,
         [
+            Constraint::Length(HISTORY_STATE_WIDTH),
             Constraint::Length(HISTORY_STATUS_WIDTH),
             Constraint::Length(HISTORY_DATE_WIDTH),
             Constraint::Min(HISTORY_MIN_SCRIPT_WIDTH),
+            Constraint::Length(HISTORY_ACTOR_WIDTH),
         ],
     )
     .header(header)
@@ -93,13 +115,9 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
 fn render_history_output(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     let mut lines = Vec::new();
     if let Some(entry) = app.current_history_entry() {
-        let name = app.display_path(&entry.script);
-        let args = if entry.args.is_empty() {
-            "-".to_string()
-        } else {
-            entry.args.join(" ")
-        };
-        let status = ExecutionStatus::from_history(entry);
+        let name = app.display_path(&PathBuf::from(&entry.script_path));
+        let args = format_args_human(&entry.args_json);
+        let status = ExecutionStatus::from_run(entry);
         let (status_label, status_style) = status_label_and_style(&status, theme);
         lines.push(Line::from(format!("Script: {}", name)));
         lines.push(Line::from(format!("Args: {}", args)));
@@ -107,8 +125,13 @@ fn render_history_output(frame: &mut Frame, area: Rect, app: &mut App, theme: &T
             Span::raw("Status: "),
             Span::styled(status_label, status_style),
         ]));
+        lines.push(Line::from(format!("Actor: {}", entry.actor)));
+        if let Some(reason) = &entry.reason {
+            lines.push(Line::from(format!("Reason: {}", reason)));
+        }
+        lines.push(Line::from(format!("Run id: {}", entry.run_id)));
         lines.push(Line::from(""));
-        let output = history::format_output(entry);
+        let output = format_run_output(entry);
         if output.trim().is_empty() {
             lines.push(Line::from("(no output)"));
         } else {
@@ -140,9 +163,35 @@ fn render_history_output(frame: &mut Frame, area: Rect, app: &mut App, theme: &T
     frame.render_widget(output, area);
 }
 
+/// Format the stdout/stderr/error trio of a [`RunRow`] into a single
+/// human-readable string for the TUI history screen.
+pub(crate) fn format_run_output(entry: &RunRow) -> String {
+    if let Some(error) = &entry.error {
+        return error.trim().to_string();
+    }
+    let mut parts = Vec::new();
+    if !entry.stdout.trim().is_empty() {
+        parts.push(format!("STDOUT:\n{}", entry.stdout.trim_end()));
+    }
+    if !entry.stderr.trim().is_empty() {
+        parts.push(format!("STDERR:\n{}", entry.stderr.trim_end()));
+    }
+    parts.join("\n\n")
+}
+
+fn format_args_human(args_json: &str) -> String {
+    match serde_json::from_str::<Vec<String>>(args_json) {
+        Ok(args) if args.is_empty() => "-".to_string(),
+        Ok(args) => args.join(" "),
+        Err(_) => args_json.to_string(),
+    }
+}
+
+const HISTORY_STATE_WIDTH: u16 = 12;
 const HISTORY_STATUS_WIDTH: u16 = 10;
 const HISTORY_DATE_WIDTH: u16 = 16;
 const HISTORY_MIN_SCRIPT_WIDTH: u16 = 10;
+const HISTORY_ACTOR_WIDTH: u16 = 8;
 const HISTORY_COLUMN_SPACING: u16 = 1;
 const HISTORY_HIGHLIGHT_WIDTH: u16 = 2;
 const HISTORY_BORDER_WIDTH: u16 = 2;
@@ -153,15 +202,77 @@ fn history_list_width(total_width: u16, app: &App) -> u16 {
         .history
         .entries
         .iter()
-        .map(|entry| app.display_path(&entry.script).len() as u16)
+        .map(|entry| app.display_path(&PathBuf::from(&entry.script_path)).len() as u16)
         .max()
         .unwrap_or(0)
         .max(HISTORY_MIN_SCRIPT_WIDTH);
 
-    let content_width =
-        HISTORY_STATUS_WIDTH + HISTORY_DATE_WIDTH + max_script + HISTORY_COLUMN_SPACING * 2;
+    let content_width = HISTORY_STATE_WIDTH
+        + HISTORY_STATUS_WIDTH
+        + HISTORY_DATE_WIDTH
+        + max_script
+        + HISTORY_ACTOR_WIDTH
+        + HISTORY_COLUMN_SPACING * 4;
     let desired = content_width + HISTORY_BORDER_WIDTH + HISTORY_HIGHLIGHT_WIDTH;
     let min_output = HISTORY_MIN_OUTPUT_WIDTH.min(total_width.saturating_sub(10).max(1));
     let max_list = total_width.saturating_sub(min_output);
     desired.min(max_list).max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runs::RunState;
+
+    fn row(stdout: &str, stderr: &str, error: Option<&str>) -> RunRow {
+        RunRow {
+            run_id: "rid".into(),
+            script_path: "/x/a.sh".into(),
+            script_name: None,
+            args_json: "[]".into(),
+            actor: "human".into(),
+            reason: None,
+            state: RunState::Completed,
+            priority: 0,
+            enqueued_at: 0,
+            worker_id: None,
+            lease_until: None,
+            timeout_ms: None,
+            cron_schedule_id: None,
+            started_at: Some(0),
+            finished_at: Some(0),
+            duration_ms: Some(0),
+            exit_code: Some(0),
+            success: Some(true),
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            error: error.map(|s| s.to_string()),
+            parent_run_id: None,
+            omakure_version: "test".into(),
+        }
+    }
+
+    #[test]
+    fn format_run_output_prefers_error() {
+        let r = row("ignored", "ignored", Some("boom"));
+        assert_eq!(format_run_output(&r), "boom");
+    }
+
+    #[test]
+    fn format_run_output_combines_stdout_and_stderr() {
+        let r = row("hello\n", "warning\n", None);
+        let s = format_run_output(&r);
+        assert!(s.contains("STDOUT:"));
+        assert!(s.contains("hello"));
+        assert!(s.contains("STDERR:"));
+        assert!(s.contains("warning"));
+    }
+
+    #[test]
+    fn format_args_human_handles_empty_and_filled() {
+        assert_eq!(format_args_human("[]"), "-");
+        assert_eq!(format_args_human(r#"["--foo","bar"]"#), "--foo bar");
+        // Garbage falls back to raw string.
+        assert_eq!(format_args_human("not-json"), "not-json");
+    }
 }

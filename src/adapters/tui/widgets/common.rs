@@ -1,8 +1,9 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Color, Modifier, Style};
 
 use super::super::app::ExecutionStatus;
 use super::super::theme::Theme;
+use crate::runs::RunState;
 
 pub(crate) fn status_label_and_style(status: &ExecutionStatus, theme: &Theme) -> (String, Style) {
     match status {
@@ -42,4 +43,35 @@ pub(crate) fn horizontal_split(area: Rect, left_percent: u16) -> [Rect; 2] {
         .split(area);
 
     [chunks[0], chunks[1]]
+}
+
+/// Per-state color used by the History list and the Dashboards charts.
+/// Kept here so the two views never disagree on the palette.
+pub(crate) fn state_style(_theme: &Theme, state: RunState) -> Style {
+    match state {
+        RunState::Queued => Style::default().fg(Color::Gray),
+        RunState::Running => Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+        RunState::Completed => Style::default().fg(Color::Green),
+        RunState::Failed => Style::default().fg(Color::Red),
+        RunState::Cancelled => Style::default().fg(Color::Yellow),
+        RunState::TimedOut => Style::default().fg(Color::Magenta),
+        RunState::DeadLetter => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    }
+}
+
+/// Bare color companion to [`state_style`]. Used by chart widgets that
+/// want only the foreground color (BarChart bars, Canvas slices) and
+/// apply their own modifiers.
+pub(crate) fn state_color(state: RunState) -> Color {
+    match state {
+        RunState::Queued => Color::Gray,
+        RunState::Running => Color::Cyan,
+        RunState::Completed => Color::Green,
+        RunState::Failed => Color::Red,
+        RunState::Cancelled => Color::Yellow,
+        RunState::TimedOut => Color::Magenta,
+        RunState::DeadLetter => Color::LightRed,
+    }
 }

@@ -79,6 +79,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
             envs_dir: self.envs_dir.clone(),
             active,
             defaults,
+            session_conf_path: None,
         })
     }
 
@@ -164,7 +165,7 @@ fn load_active_env_name(envs_dir: &Path) -> AppResult<Option<String>> {
     Ok(None)
 }
 
-fn parse_env_preview(contents: &str) -> Vec<(String, String)> {
+pub(crate) fn parse_env_preview(contents: &str) -> Vec<(String, String)> {
     let mut entries = Vec::new();
 
     for line in contents.lines() {
@@ -192,7 +193,7 @@ fn parse_env_preview(contents: &str) -> Vec<(String, String)> {
     entries
 }
 
-fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
+pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
     let mut defaults = HashMap::new();
 
     for line in contents.lines() {

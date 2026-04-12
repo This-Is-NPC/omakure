@@ -48,14 +48,20 @@ Ports-and-adapters (hexagonal) architecture:
 src/
 ├── cli/                  # CLI subcommands
 │   ├── mod.rs
+│   ├── args.rs           # clap definitions for the whole CLI
 │   ├── common.rs         # Shared help text/constants
 │   ├── completion.rs     # Shell completion generation
-│   ├── config.rs         # Config/env display
+│   ├── config.rs         # Config/env display (+ --json envelope)
+│   ├── describe.rs       # `omakure describe <script>` (AI verb)
 │   ├── doctor.rs         # Runtime checks
-│   ├── init.rs           # Script template generation
-│   ├── list.rs           # scripts command: list workspace scripts
+│   ├── help_ai.rs        # `omakure help-ai` AI capability discovery
+│   ├── history.rs        # `omakure history list|show|tail` (AI verb)
+│   ├── init.rs           # Script template generation (+ --schema-json/--body-stdin/--force)
+│   ├── json.rs           # Single JSON envelope helper + stable error codes
+│   ├── list.rs           # `omakure scripts` (+ --json envelope)
 │   ├── omaken.rs         # Omaken flavor list/install commands
-│   ├── run.rs            # Headless script execution
+│   ├── run.rs            # Headless script execution (+ --actor/--reason/--json/--no-prompt)
+│   ├── search.rs         # `omakure search <query>` (AI verb)
 │   ├── uninstall.rs      # Binary removal
 │   └── update.rs         # Self-update from GitHub
 ├── domain/               # Core types: Schema, Field, normalize_input
@@ -69,7 +75,7 @@ src/
 │   ├── script_runner.rs  # Script execution
 │   ├── system_checks.rs  # Runtime dependency checks
 │   ├── workspace_repository.rs  # Filesystem repository impl
-│   └── tui/              # Terminal UI (ratatui)
+│   └── tui/              # Terminal UI (ratatui) — history screen reads from runs.rs
 │       ├── app.rs        # App state and Screen enum
 │       ├── events.rs     # Keyboard event handlers
 │       ├── mod.rs
@@ -79,7 +85,8 @@ src/
 ├── error.rs              # Custom error types (AppError, AppResult)
 ├── util.rs               # Shared utilities (ps_quote, TempDirGuard, etc.)
 ├── workspace.rs          # Workspace layout helpers
-├── history.rs            # Execution log persistence
+├── runs.rs               # SQLite-backed run state machine + structured trace storage
+├── run_executor.rs       # Shared execution helper used by `omakure run` and `omakure queue worker`
 ├── search_index.rs       # SQLite-backed script search
 ├── lua_widget.rs         # Lua script widget execution
 ├── runtime.rs            # Script kind detection and command building
@@ -88,13 +95,29 @@ src/
 └── main.rs               # CLI routing and TUI entry
 ```
 
+> **Removed in this release:** `src/history.rs` and the `HistoryEntry`
+> JSON-file format. The TUI history screen and the headless `run`
+> command both write through `runs.rs` directly. There is no shim and
+> no compatibility re-export. The destructive upgrade behavior (legacy
+> `.history/*.json` files are deleted on first launch) is documented
+> in `.docs/ai-interface.md`.
+
 ### Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/main.rs` | CLI entry, command routing, scripts dir resolution (with legacy env fallbacks), TUI launch |
 | `src/cli/mod.rs` | CLI module exports and `wants_help` helper |
-| `src/cli/run.rs` | Headless script execution plus history recording |
+| `src/cli/run.rs` | Headless script execution; routes through the state machine via `run_executor::execute_with_heartbeat` |
+| `src/cli/queue.rs` | `omakure queue add | cancel | dead-letter | worker | stats` — producers + worker daemon |
+| `src/cli/trace.rs` | `omakure trace` — script-side structured trace writer (reads `OMAKURE_RUN_ID` from env) |
+| `src/cli/json.rs` | Single JSON envelope writer (`{ ok, data, error, schema_version }`) and stable error codes |
+| `src/cli/describe.rs` | `omakure describe <script>` — full schema for one script |
+| `src/cli/search.rs` | `omakure search <query>` — surfaces the SQLite script index (+ `--tag` AND filter) |
+| `src/cli/history.rs` | `omakure history list/show/tail/stats/traces` — query the run log; `--state` / `--state-set` filters |
+| `src/cli/help_ai.rs` | `omakure help-ai` — single-call AI capability discovery generated from clap |
+| `src/runs.rs` | SQLite-backed run state machine + structured trace storage; exposes `RunState`, `enqueue`, `start_inline`, `claim_next`, `complete`, `fail`, `cancel`, `time_out`, `dead_letter`, `heartbeat`, `insert_trace`, `query_traces`, `stats` |
+| `src/run_executor.rs` | Shared execution helper used by both `omakure run` and the worker; spawns the child with `OMAKURE_RUN_ID`, heartbeats the lease, kills on `--timeout`, reacts to mid-execution cancel |
 | `src/cli/update.rs` | Self-update via GitHub Releases and script sync into scripts dir |
 | `src/cli/omaken.rs` | Omaken flavor listing/install (`list`/`install` commands) |
 | `src/cli/list.rs` | `scripts` subcommand: recursive script listing |
@@ -291,8 +314,9 @@ let output = runner.run(&script_path, &args)?;
 ### History Recording
 
 ```rust
-let entry = history::success_entry(&workspace, &script, &args, output);
-let _ = history::record_entry(&workspace, &entry);
+let conn = runs::open(&workspace)?;
+let row = RunRow { /* run_id, script_path, actor, ... */ };
+let _ = runs::insert_run(&conn, &row);
 ```
 
 ### Using Shared Utilities
@@ -320,7 +344,7 @@ cargo test
 
 Tests are located in:
 - `src/domain/mod.rs` - Schema parsing, input normalization (12 tests)
-- `src/history.rs` - Timestamp formatting, slug generation, output formatting (10 tests)
+- `src/runs.rs` - SQLite run log: schema init, insert/get/query, legacy json cleanup, run id generation, timestamp formatting
 - `src/util.rs` - PowerShell quoting (3 tests)
 - `src/error.rs` - Error type conversions (3 tests)
 
@@ -364,7 +388,7 @@ When making changes, key files to consider:
 | Script execution | `src/adapters/script_runner.rs`, `src/runtime.rs` |
 | Schema parsing | `src/domain/mod.rs` |
 | Workspace layout | `src/workspace.rs` |
-| History | `src/history.rs` |
+| History | `src/runs.rs` (SQLite-backed); TUI rendering in `src/adapters/tui/widgets/history.rs` |
 | Search | `src/search_index.rs` |
 | Themes/colors | `src/adapters/tui/theme.rs` |
 | Shared utilities | `src/util.rs` |

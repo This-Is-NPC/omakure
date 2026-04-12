@@ -19,10 +19,12 @@ use std::error::Error;
 use std::io;
 use std::time::Duration;
 
-use crate::history;
+use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
+use crate::runs::{self, EnqueueOptions, RunFilters, RunRow, RunStateSet};
 use crate::theme_config;
 use app::{App, Screen};
 use events::handle_key_event;
+use std::sync::mpsc::{self, TryRecvError};
 use theme::load_theme;
 use ui::{render_loading, render_ui};
 
@@ -60,9 +62,11 @@ pub fn run_app(
     let theme_name = workspace_theme.or(global_theme);
     let theme = load_theme(theme_name.as_deref(), theme_dir);
     terminal.draw(|frame| render_loading(frame, &theme))?;
-    let entries = service.list_entries(workspace.root())?;
-    let history = history::load_entries(&workspace).unwrap_or_default();
+    let entries = service.list_entries(workspace.scripts_root())?;
+    let history = load_history(&workspace);
     let search_index = SearchIndex::new(workspace.search_db_path());
+    // The search index continues to crawl the **global** workspace root —
+    // it backs the search screen and is part of the global state contract.
     search_index.start_background_rebuild(workspace.root().to_path_buf());
     let mut app = App::new(service, workspace, entries, history, search_index, theme);
 
@@ -71,8 +75,10 @@ pub fn run_app(
             app.refresh_search_status();
         }
         app.poll_widget_load();
+        poll_inline_run(&mut app);
         let theme = app.theme.clone();
         terminal.draw(|frame| render_ui(frame, &mut app, &theme))?;
+        app.tick = app.tick.wrapping_add(1);
 
         if event::poll(Duration::from_millis(200))? {
             match event::read()? {
@@ -87,19 +93,107 @@ pub fn run_app(
             return Ok(());
         }
         if let Some((script, args)) = app.result.take() {
-            app.screen = Screen::Running;
-            let theme = app.theme.clone();
-            terminal.draw(|frame| render_ui(frame, &mut app, &theme))?;
-            let run_result = service.run_script(&script, &args);
-            let entry = match run_result {
-                Ok(output) => history::success_entry(&app.workspace, &script, &args, output),
-                Err(err) => history::error_entry(&app.workspace, &script, &args, err.to_string()),
-            };
-            let _ = history::record_entry(&app.workspace, &entry);
-            app.add_history_entry(entry);
+            start_inline_run(&mut app, script, args);
+        }
+    }
+}
+
+/// Spawn a worker thread that drives an inline script execution
+/// through `run_through_state_machine` and sends the resulting row
+/// back over an mpsc channel. The main loop keeps drawing and
+/// incrementing `app.tick` while the worker runs, so the Sand spinner
+/// on the Running screen animates instead of freezing on a single
+/// frame. Mirrors the existing `App::start_widget_load` pattern.
+fn start_inline_run(app: &mut App, script: std::path::PathBuf, args: Vec<String>) {
+    let workspace = app.workspace.clone_for_executor();
+    let (tx, rx) = mpsc::channel();
+    app.inline_run_receiver = Some(rx);
+    app.screen = Screen::Running;
+    std::thread::spawn(move || {
+        let row = run_through_state_machine(&workspace, &script, &args);
+        let _ = tx.send(row);
+    });
+}
+
+/// Drain a completed inline run from the worker thread, if any. On
+/// success, append the row to history and transition to `RunResult`.
+/// On `Disconnected` (worker panicked or channel dropped), bail out
+/// to `RunResult` so the user is not stranded on the Running screen.
+fn poll_inline_run(app: &mut App) {
+    let Some(receiver) = &app.inline_run_receiver else {
+        return;
+    };
+    match receiver.try_recv() {
+        Ok(row) => {
+            if let Some(row) = row {
+                app.add_history_entry(row);
+            }
             app.back_to_script_select();
             app.reset_run_output_scroll();
             app.screen = Screen::RunResult;
+            app.inline_run_receiver = None;
         }
+        Err(TryRecvError::Empty) => {}
+        Err(TryRecvError::Disconnected) => {
+            app.back_to_script_select();
+            app.reset_run_output_scroll();
+            app.screen = Screen::RunResult;
+            app.inline_run_receiver = None;
+        }
+    }
+}
+
+/// Insert a `running` row, drive the script through the shared executor,
+/// transition to the correct terminal state, and return the final row so
+/// the TUI history view can display it. The TUI does not use a worker
+/// daemon — it always uses the inline fast path, just like `omakure run`.
+fn run_through_state_machine(
+    workspace: &Workspace,
+    script: &std::path::Path,
+    args: &[String],
+) -> Option<RunRow> {
+    let canonical = std::fs::canonicalize(script).unwrap_or_else(|_| script.to_path_buf());
+    let canonical_str = canonical.to_string_lossy().to_string();
+    let conn = runs::open(workspace).ok()?;
+    let row = runs::start_inline(
+        &conn,
+        &canonical_str,
+        args,
+        &format!("inline:{}", std::process::id()),
+        EnqueueOptions {
+            actor: "human".into(),
+            omakure_version: crate::app_meta::APP_VERSION.to_string(),
+            ..Default::default()
+        },
+    )
+    .ok()?;
+    drop(conn);
+
+    let result = execute_with_heartbeat(workspace, &row, vec![], None);
+    let conn = runs::open(workspace).ok()?;
+    let _ = match result.terminal {
+        ExecutionTerminal::Completed => runs::complete(&conn, &row.run_id, result.completion),
+        ExecutionTerminal::Failed | ExecutionTerminal::Errored => {
+            runs::fail(&conn, &row.run_id, result.completion)
+        }
+        ExecutionTerminal::TimedOut => runs::time_out(&conn, &row.run_id, result.completion),
+        ExecutionTerminal::Cancelled => {
+            runs::record_cancelled_output(&conn, &row.run_id, result.completion)
+        }
+    };
+    runs::get_run(&conn, &row.run_id).ok().flatten()
+}
+
+fn load_history(workspace: &Workspace) -> Vec<RunRow> {
+    match runs::open(workspace) {
+        Ok(conn) => runs::query_runs(
+            &conn,
+            &RunFilters {
+                states: RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_default(),
+        Err(_) => Vec::new(),
     }
 }

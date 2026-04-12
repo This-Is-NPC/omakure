@@ -1,0 +1,587 @@
+//! Shared execution helper used by both `omakure run` (synchronous fast
+//! path) and `omakure queue worker` (daemon draining the queue).
+//!
+//! `execute_with_heartbeat` owns the entire lifecycle of a single child
+//! process: spawning it with the supplied environment, refreshing the
+//! lease in `runs.sqlite` periodically, optionally killing it after a
+//! per-job timeout, and reacting to mid-execution cancel by polling the
+//! heartbeat call's return value.
+//!
+//! There is exactly one execution code path; the worker's loop and
+//! `omakure run` both call this function so the two surfaces never drift.
+
+use crate::adapters::script_runner::MultiScriptRunner;
+use crate::adapters::workspace_repository::FsWorkspaceRepository;
+use crate::ports::ScriptRepository;
+use crate::runs::{self, RunCompletion, RunRow, RunState};
+use crate::workspace::Workspace;
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// Outcome of one [`execute_with_heartbeat`] call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionTerminal {
+    /// The script exited cleanly with `success = true`.
+    Completed,
+    /// The script exited with a non-zero code or `success = false`.
+    Failed,
+    /// The watcher killed the script for exceeding `timeout_ms`.
+    TimedOut,
+    /// The script was killed because the row was cancelled externally,
+    /// or the worker was asked to shut down before the script finished.
+    Cancelled,
+    /// The runner failed to spawn the child or hit an unrecoverable error.
+    Errored,
+}
+
+/// Captured output and the terminal classification produced by one run.
+#[derive(Debug, Clone)]
+pub struct ExecutionResult {
+    pub terminal: ExecutionTerminal,
+    pub completion: RunCompletion,
+}
+
+/// Optional cancel flag shared by `omakure queue worker`'s SIGINT handler.
+/// `omakure run` does not use it (it passes `None`).
+pub type CancelFlag = Arc<AtomicBool>;
+
+/// Drive a single script through the state machine: spawn it, heartbeat,
+/// timeout, and react to external cancel. Caller is responsible for
+/// having already inserted the row in `state='running'` (via
+/// [`runs::start_inline`] or [`runs::claim_next`]).
+///
+/// On return, the row is **not yet** transitioned to its terminal state —
+/// the caller maps the [`ExecutionResult::terminal`] into one of
+/// [`runs::complete`], [`runs::fail`], [`runs::time_out`], or the cancel
+/// finalization path.
+pub fn execute_with_heartbeat(
+    workspace: &Workspace,
+    row: &RunRow,
+    extra_env: Vec<(String, String)>,
+    cancel: Option<CancelFlag>,
+) -> ExecutionResult {
+    // Resolve the script path. The row stores an absolute path; if the
+    // file does not exist (e.g. it was deleted between enqueue and
+    // claim), record an Errored result so the worker marks the row
+    // failed instead of crashing the daemon.
+    let script_path = PathBuf::from(&row.script_path);
+    if !script_path.exists() {
+        return ExecutionResult {
+            terminal: ExecutionTerminal::Errored,
+            completion: RunCompletion {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+                success: false,
+                error: Some(format!("script not found: {}", row.script_path)),
+            },
+        };
+    }
+
+    // Validate the schema's required fields are satisfied (mirrors the
+    // pre-PR-#8 `--no-prompt` behavior). The worker is always non-
+    // interactive, so missing-required is a hard fail.
+    if let Err((field, message)) = check_required_fields(workspace, &script_path, &row.args_json) {
+        return ExecutionResult {
+            terminal: ExecutionTerminal::Failed,
+            completion: RunCompletion {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+                success: false,
+                error: Some(format!("required field `{}` missing: {}", field, message)),
+            },
+        };
+    }
+
+    let args = parse_args_json(&row.args_json);
+    let mut env = extra_env;
+    env.push(("OMAKURE_RUN_ID".to_string(), row.run_id.clone()));
+    // Pin the workspace so nested `omakure trace` invocations write to
+    // the same `runs.sqlite` even when the worker was launched against
+    // a non-default scripts dir (or a temp dir under `--scripts-dir`).
+    env.push((
+        "OMAKURE_SCRIPTS_DIR".to_string(),
+        workspace.root().to_string_lossy().to_string(),
+    ));
+
+    let mut command = match MultiScriptRunner::build_command(&script_path, &args, &env) {
+        Ok(cmd) => cmd,
+        Err(err) => {
+            return ExecutionResult {
+                terminal: ExecutionTerminal::Errored,
+                completion: RunCompletion {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    exit_code: None,
+                    success: false,
+                    error: Some(format!("build command failed: {}", err)),
+                },
+            };
+        }
+    };
+
+    let mut child = match command.spawn() {
+        Ok(c) => c,
+        Err(err) => {
+            return ExecutionResult {
+                terminal: ExecutionTerminal::Errored,
+                completion: RunCompletion {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    exit_code: None,
+                    success: false,
+                    error: Some(format!("spawn failed: {}", err)),
+                },
+            };
+        }
+    };
+
+    // Pull stdout/stderr off threads so a child that prints a lot does
+    // not block on its own pipe buffer. We use a channel + timed drain
+    // (instead of join()) so a killed child whose orphaned grandchildren
+    // keep its pipe open does not deadlock the executor.
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let (stdout_tx, stdout_rx) = channel::<String>();
+    let (stderr_tx, stderr_rx) = channel::<String>();
+    if let Some(h) = stdout {
+        spawn_pipe_reader_to_channel(h, stdout_tx);
+    }
+    if let Some(h) = stderr {
+        spawn_pipe_reader_to_channel(h, stderr_tx);
+    }
+
+    // Heartbeat thread: refresh the lease and check for external cancel
+    // every HEARTBEAT_TICK milliseconds. The thread exits when the main
+    // thread flips the local `done` flag.
+    let done = Arc::new(AtomicBool::new(false));
+    let cancelled_externally = Arc::new(AtomicBool::new(false));
+    let stop_heartbeat = Arc::clone(&done);
+    let cancelled_signal = Arc::clone(&cancelled_externally);
+    let workspace_clone = workspace.clone_for_executor();
+    let run_id_clone = row.run_id.clone();
+    let worker_id_clone = row
+        .worker_id
+        .clone()
+        .unwrap_or_else(|| "inline".to_string());
+    let cancel_for_thread = cancel.clone();
+    let heartbeat_handle = thread::spawn(move || {
+        // The heartbeat tick is intentionally short relative to
+        // HEARTBEAT_MS (60_000) so we react to cancel quickly. The
+        // tick controls cancel-detection latency, not lease validity.
+        let tick = Duration::from_millis(HEARTBEAT_TICK_MS);
+        while !stop_heartbeat.load(Ordering::SeqCst) {
+            if let Some(flag) = &cancel_for_thread {
+                if flag.load(Ordering::SeqCst) {
+                    cancelled_signal.store(true, Ordering::SeqCst);
+                    break;
+                }
+            }
+            if let Ok(conn) = runs::open(&workspace_clone) {
+                match runs::heartbeat(&conn, &run_id_clone, &worker_id_clone) {
+                    Ok(Some(RunState::Running)) => {}
+                    Ok(_) => {
+                        // Row is no longer ours (cancelled, or stolen,
+                        // or already terminal). Tell the main thread to
+                        // kill the child.
+                        cancelled_signal.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                    Err(_) => {
+                        // Transient SQLite error: keep going. The lease
+                        // will eventually expire and another worker will
+                        // pick up the row.
+                    }
+                }
+            }
+            thread::sleep(tick);
+        }
+    });
+
+    // Per-job execution timeout watcher. Independent from the heartbeat
+    // because the user-facing `--timeout` governs business-time, not
+    // crash recovery.
+    let started = Instant::now();
+    let timeout = row
+        .timeout_ms
+        .map(|ms| Duration::from_millis(ms.max(0) as u64));
+    let timed_out = Arc::new(AtomicBool::new(false));
+    let mut killed = false;
+
+    // Poll the child periodically. Cannot use `child.wait()` directly
+    // because we need to interleave with the timeout / cancel checks.
+    let outcome_status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) => {
+                if cancelled_externally.load(Ordering::SeqCst) {
+                    let _ = child.kill();
+                    killed = true;
+                    let status = child.wait();
+                    break status.map_err(|e| e.to_string());
+                }
+                if let Some(t) = timeout {
+                    if started.elapsed() >= t {
+                        timed_out.store(true, Ordering::SeqCst);
+                        let _ = child.kill();
+                        killed = true;
+                        let status = child.wait();
+                        break status.map_err(|e| e.to_string());
+                    }
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(err) => break Err(format!("wait failed: {}", err)),
+        }
+    };
+
+    // Stop the heartbeat thread before transitioning state. This
+    // ensures no straggler heartbeat overwrites the terminal state.
+    done.store(true, Ordering::SeqCst);
+    let _ = heartbeat_handle.join();
+
+    // Drain pipe readers with a hard deadline. The reader threads
+    // themselves are not joined: an orphaned grandchild process can
+    // keep the pipe write end open indefinitely after the script's
+    // direct child exits, which would otherwise deadlock the executor.
+    let stdout_text = drain_channel(&stdout_rx, Duration::from_millis(PIPE_DRAIN_BUDGET_MS));
+    let stderr_text = drain_channel(&stderr_rx, Duration::from_millis(PIPE_DRAIN_BUDGET_MS));
+
+    let cancelled = cancelled_externally.load(Ordering::SeqCst);
+    let timed_out = timed_out.load(Ordering::SeqCst);
+
+    let (terminal, completion) = match outcome_status {
+        Ok(status) => {
+            let exit_code = status.code();
+            let success = status.success();
+            let terminal = if timed_out {
+                ExecutionTerminal::TimedOut
+            } else if cancelled {
+                ExecutionTerminal::Cancelled
+            } else if success {
+                ExecutionTerminal::Completed
+            } else {
+                ExecutionTerminal::Failed
+            };
+            (
+                terminal,
+                RunCompletion {
+                    stdout: stdout_text,
+                    stderr: stderr_text,
+                    exit_code,
+                    success,
+                    error: None,
+                },
+            )
+        }
+        Err(err) => (
+            ExecutionTerminal::Errored,
+            RunCompletion {
+                stdout: stdout_text,
+                stderr: stderr_text,
+                exit_code: None,
+                success: false,
+                error: Some(err),
+            },
+        ),
+    };
+
+    // Suppress unused warning when killed branch had no other side
+    // effect besides forcing the wait above.
+    let _ = killed;
+
+    ExecutionResult {
+        terminal,
+        completion,
+    }
+}
+
+/// Heartbeat tick interval. Short enough to detect external cancel
+/// quickly, but long enough not to thrash SQLite.
+const HEARTBEAT_TICK_MS: u64 = 250;
+
+/// Maximum time we wait for a pipe to flush after the child has exited.
+/// Bounded so a leaked grandchild process holding the pipe write end
+/// open cannot deadlock the executor.
+const PIPE_DRAIN_BUDGET_MS: u64 = 200;
+
+fn spawn_pipe_reader_to_channel<R: Read + Send + 'static>(handle: R, tx: Sender<String>) {
+    thread::spawn(move || {
+        let reader = BufReader::new(handle);
+        for line in reader.lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                // Receiver dropped — main path moved on; abandon the
+                // reader. The thread terminates when the pipe closes,
+                // which on a clean exit is immediate and on an orphan
+                // happens whenever the orphan eventually exits.
+                break;
+            }
+        }
+    });
+}
+
+fn drain_channel(rx: &std::sync::mpsc::Receiver<String>, budget: Duration) -> String {
+    let deadline = Instant::now() + budget;
+    let mut out = String::new();
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        match rx.recv_timeout(remaining) {
+            Ok(line) => {
+                out.push_str(&line);
+                out.push('\n');
+            }
+            Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    out
+}
+
+fn parse_args_json(args_json: &str) -> Vec<String> {
+    serde_json::from_str(args_json).unwrap_or_else(|_| Vec::new())
+}
+
+fn check_required_fields(
+    workspace: &Workspace,
+    script: &Path,
+    args_json: &str,
+) -> Result<(), (String, String)> {
+    let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
+    let schema = match repo.read_schema(script) {
+        Ok(s) => s,
+        Err(_) => return Ok(()), // permissive when no schema
+    };
+    let args: Vec<String> = serde_json::from_str(args_json).unwrap_or_default();
+    for field in &schema.fields {
+        if !field.required.unwrap_or(false) {
+            continue;
+        }
+        let arg_flag = field
+            .arg
+            .clone()
+            .unwrap_or_else(|| format!("--{}", field.name));
+        let present = args
+            .iter()
+            .any(|a| a == &arg_flag || a.starts_with(&format!("{}=", arg_flag)));
+        if !present {
+            return Err((
+                field.name.clone(),
+                format!("expected `{}` on the command line", arg_flag),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runs::EnqueueOptions;
+    use std::fs;
+
+    fn make_workspace(label: &str) -> Workspace {
+        let dir = std::env::temp_dir().join(format!(
+            "omakure_executor_test_{}_{}_{}",
+            label,
+            std::process::id(),
+            runs::current_unix_ms()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let ws = Workspace::new(dir);
+        ws.ensure_layout().unwrap();
+        ws
+    }
+
+    fn write_bash_stub(workspace: &Workspace, name: &str, body: &str) -> PathBuf {
+        let p = workspace.root().join(name);
+        fs::write(&p, format!("#!/usr/bin/env bash\n{}\n", body)).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&p).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&p, perms).unwrap();
+        }
+        p
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_completes_simple_script() {
+        let ws = make_workspace("complete_simple");
+        let script = write_bash_stub(&ws, "ok.sh", "echo hello");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert!(result.completion.stdout.contains("hello"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_injects_omakure_scripts_dir_env_var() {
+        let ws = make_workspace("scripts_dir_env");
+        let script = write_bash_stub(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert!(
+            result
+                .completion
+                .stdout
+                .trim()
+                .ends_with(ws.root().to_string_lossy().as_ref()),
+            "expected stdout to end with workspace root, got: {:?}",
+            result.completion.stdout
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_injects_omakure_run_id_env_var() {
+        let ws = make_workspace("env_var");
+        let script = write_bash_stub(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                run_id: Some("rid-fixed".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert!(
+            result.completion.stdout.contains("rid-fixed"),
+            "expected stdout to contain rid-fixed, got: {:?}",
+            result.completion.stdout
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_failed_script_marked_failed() {
+        let ws = make_workspace("failed");
+        let script = write_bash_stub(&ws, "bad.sh", "exit 7");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Failed);
+        assert_eq!(result.completion.exit_code, Some(7));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_timeout_kills_long_script() {
+        let ws = make_workspace("timeout");
+        let script = write_bash_stub(&ws, "sleep.sh", "sleep 5");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                timeout_ms: Some(500),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        let started = Instant::now();
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(3));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_external_cancel_kills_running_script() {
+        let ws = make_workspace("cancel");
+        let script = write_bash_stub(&ws, "sleep.sh", "sleep 10");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        // Spawn a thread that flips the row to cancelled after a delay.
+        let ws_thread = ws.clone_for_executor();
+        let id = row.run_id.clone();
+        let canceller = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(400));
+            let conn = runs::open(&ws_thread).unwrap();
+            runs::cancel(&conn, &id, Some("user".into()), None).unwrap();
+        });
+
+        let started = Instant::now();
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        canceller.join().unwrap();
+        assert_eq!(result.terminal, ExecutionTerminal::Cancelled);
+        assert!(started.elapsed() < Duration::from_secs(8));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+}

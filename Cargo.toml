@@ -1,6 +1,6 @@
 [package]
 name = "omakure"
-version = "0.1.7"
+version = "0.1.8"
 repository = "https://github.com/This-Is-NPC/omakure"
 license = "AGPL-3.0-only"
 edition = "2021"
@@ -25,6 +25,9 @@ clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 toml = "0.8"
 dirs = "5.0"
+humantime = "2.1"
+signal-hook = "0.3"
+rattles = "0.2.2"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

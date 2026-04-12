@@ -40,8 +40,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 2) Run:
 
 ```bash
+# Open the TUI against the global workspace
 omakure
+
+# Or open the TUI against any directory (session-only scripts root)
+omakure .
+omakure ../team-scripts
+omakure /abs/path/to/scripts
 ```
+
+The positional path only changes which directory the TUI browses for the
+current session. History, environments, the search index, and
+`omakure.toml` always stay in the global workspace — Omakure never
+creates `.omaken/`, `.history/`, or `omakure.toml` inside the directory
+you point it at.
 
 3) Put scripts under `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`). Omakure scans this tree (including `.omaken`) for `.bash`, `.sh`, `.ps1`, and `.py` scripts.
 
@@ -53,8 +65,53 @@ omakure
 - Environment documents and defaults: `.docs/environments.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 
+## Using Omakure from an AI agent
+
+Omakure exposes a low-token, machine-readable CLI surface so AI agents
+can list, describe, create, run, and audit scripts as fluently as `git`
+or `gh`. Every AI-relevant verb supports `--json` and emits a stable
+envelope `{ ok, data, error, schema_version }`. Run history is
+persisted in `<workspace>/.history/runs.sqlite` and is queryable via
+`omakure history`.
+
+A queue + worker daemon (`omakure queue add`, `omakure queue worker`)
+and a structured trace stream (`omakure trace` from inside a script,
+`omakure history traces` from outside) make Omakure usable as the
+orchestration core of a fleet of independent AI agents.
+
+```bash
+# One-call discovery
+omakure help-ai
+
+# Create a script and run it under an AI actor
+omakure --json init my-task.sh --schema-json '{"Name":"my_task","Fields":[]}' --body-stdin <<'BODY'
+#!/usr/bin/env bash
+omakure trace "started" --level info
+echo "hi"
+BODY
+omakure --json run my-task --actor ai --reason "smoke test"
+
+# Or push it onto the queue and let a worker drain it
+omakure --json queue add my-task --actor agent-sp --priority 10
+omakure queue worker --concurrency 4 &
+
+# Watch and audit
+omakure --json history list --state running
+omakure --json history traces $RUN_ID
+omakure --json history stats
+```
+
+> **Upgrading from an older release deletes legacy `.history/*.json`
+> files and rebuilds `runs.sqlite` if its schema is older than the
+> state-machine release.** Back up `.history/` first if you care about
+> historical run data. See `.docs/ai-interface.md` for the full
+> contract.
+
+Full reference: `.docs/ai-interface.md`.
+
 ## Documentation
 
+- AI agent interface: `.docs/ai-interface.md`
 - Installation, updates, and uninstall: `.docs/installation.md`
 - Workspace layout and defaults: `.docs/workspace.md`
 - Scripts path overrides: `.docs/scripts-path.md`

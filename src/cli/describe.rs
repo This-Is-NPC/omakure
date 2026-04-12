@@ -1,0 +1,188 @@
+//! `omakure describe <script>` — print the full schema of one script.
+
+use crate::adapters::workspace_repository::FsWorkspaceRepository;
+use crate::cli::args::DescribeArgs;
+use crate::cli::json::{self, codes};
+use crate::cli::run::resolve_script_path;
+use crate::domain::Schema;
+use crate::error::{AppError, SchemaError};
+use crate::ports::ScriptRepository;
+use crate::workspace::Workspace;
+use serde::Serialize;
+use serde_json::json;
+use std::error::Error;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Serialize)]
+pub struct DescribePayload {
+    pub absolute_path: String,
+    pub relative_path: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub tags: Vec<String>,
+    pub fields: Vec<DescribeField>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DescribeField {
+    pub name: String,
+    pub prompt: Option<String>,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub order: u32,
+    pub required: bool,
+    pub arg: Option<String>,
+    pub default: Option<String>,
+    pub choices: Option<Vec<String>>,
+}
+
+pub fn run(
+    scripts_dir: PathBuf,
+    options: DescribeArgs,
+    json_output: bool,
+) -> Result<(), Box<dyn Error>> {
+    let workspace = Workspace::new(scripts_dir);
+    let resolved = match resolve_script_path(&options.script, workspace.root()) {
+        Ok(path) => path,
+        Err(err) => {
+            return emit_error(json_output, codes::NOT_FOUND, err.to_string());
+        }
+    };
+
+    let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
+    let schema = match repo.read_schema(&resolved) {
+        Ok(schema) => schema,
+        Err(AppError::Schema(schema_err)) => {
+            let code = match schema_err {
+                SchemaError::BlockNotFound | SchemaError::JsonNotFound => codes::NOT_FOUND,
+                _ => codes::SCHEMA_INVALID,
+            };
+            return emit_error(json_output, code, schema_err.to_string());
+        }
+        Err(err) => {
+            return emit_error(json_output, codes::INTERNAL, err.to_string());
+        }
+    };
+
+    if json_output {
+        let payload = build_payload(&resolved, workspace.root(), &schema);
+        json::print_ok(payload);
+        return Ok(());
+    }
+
+    print_human(&resolved, workspace.root(), &schema);
+    Ok(())
+}
+
+fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
+    if json_output {
+        json::print_err(code, message.clone());
+        // Returning Err propagates a non-zero exit code, but main.rs's
+        // top-level handler would print "error: <msg>" to stderr — which we
+        // do not want when --json is set. Use process::exit directly.
+        std::process::exit(1);
+    }
+    Err(message.into())
+}
+
+fn build_payload(script_path: &Path, root: &Path, schema: &Schema) -> DescribePayload {
+    let mut fields: Vec<DescribeField> = schema
+        .fields
+        .iter()
+        .map(|f| DescribeField {
+            name: f.name.clone(),
+            prompt: f.prompt.clone(),
+            kind: f.kind.clone(),
+            order: f.order,
+            required: f.required.unwrap_or(false),
+            arg: f.arg.clone(),
+            default: f.default.clone(),
+            choices: f.choices.clone(),
+        })
+        .collect();
+    fields.sort_by_key(|f| f.order);
+
+    let absolute_path = std::fs::canonicalize(script_path)
+        .unwrap_or_else(|_| script_path.to_path_buf())
+        .to_string_lossy()
+        .to_string();
+    let relative_path = script_path
+        .strip_prefix(root)
+        .unwrap_or(script_path)
+        .to_string_lossy()
+        .to_string();
+
+    DescribePayload {
+        absolute_path,
+        relative_path,
+        name: schema.name.clone(),
+        description: schema.description.clone(),
+        tags: schema.tags.clone().unwrap_or_default(),
+        fields,
+    }
+}
+
+fn print_human(script_path: &Path, root: &Path, schema: &Schema) {
+    let payload = build_payload(script_path, root, schema);
+    println!("Script: {}", payload.absolute_path);
+    println!("Name: {}", payload.name);
+    if let Some(desc) = &payload.description {
+        println!("Description: {}", desc);
+    }
+    if !payload.tags.is_empty() {
+        println!("Tags: {}", payload.tags.join(", "));
+    }
+    if payload.fields.is_empty() {
+        println!("Fields: (none)");
+        return;
+    }
+    println!("Fields:");
+    for field in &payload.fields {
+        let required = if field.required { " (required)" } else { "" };
+        let arg = field.arg.as_deref().unwrap_or("");
+        println!(
+            "  - {} [{}]{}{}",
+            field.name,
+            field.kind,
+            if arg.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", arg)
+            },
+            required
+        );
+        if let Some(prompt) = &field.prompt {
+            println!("      prompt: {}", prompt);
+        }
+        if let Some(default) = &field.default {
+            println!("      default: {}", default);
+        }
+        if let Some(choices) = &field.choices {
+            println!("      choices: {}", choices.join(", "));
+        }
+    }
+}
+
+/// Render a sample envelope shape for `omakure help-ai`. Builds a fake
+/// payload so the JSON example does not depend on a real workspace.
+pub fn sample_envelope() -> serde_json::Value {
+    json::ok_envelope(json!({
+        "absolute_path": "/abs/scripts/deploy.sh",
+        "relative_path": "deploy.sh",
+        "name": "deploy",
+        "description": "Deploy the service",
+        "tags": ["ops"],
+        "fields": [
+            {
+                "name": "target",
+                "prompt": "Target environment",
+                "type": "string",
+                "order": 1,
+                "required": true,
+                "arg": "--target",
+                "default": null,
+                "choices": ["dev", "prod"]
+            }
+        ]
+    }))
+}

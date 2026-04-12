@@ -8,6 +8,12 @@ pub struct EnvironmentConfig {
     pub envs_dir: PathBuf,
     pub active: Option<String>,
     pub defaults: HashMap<String, String>,
+    /// When `Some`, the active environment for the current session is the
+    /// `omakure.conf` file at this path (set by the TUI when launched with
+    /// a positional scripts-root override). Repository implementations
+    /// always leave this field `None`; only the application layer fills it.
+    #[allow(dead_code)]
+    pub session_conf_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]

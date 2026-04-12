@@ -64,3 +64,46 @@ fn read_lines_table(table: Table) -> Result<Vec<String>, String> {
     }
     Ok(lines)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn unique_dir(label: &str) -> PathBuf {
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("omakure_lua_widget_{label}_{pid}_{nanos}"))
+    }
+
+    #[test]
+    fn missing_index_lua_returns_none_without_error() {
+        let dir = unique_dir("missing");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        let result = load_widget(&dir).expect("absent index.lua must not error");
+        assert!(result.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn returns_widget_data_from_table_return() {
+        let dir = unique_dir("return_table");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        std::fs::write(
+            dir.join("index.lua"),
+            "return { title = \"Team\", lines = { \"alpha\", \"beta\" } }",
+        )
+        .expect("write index.lua");
+
+        let widget = load_widget(&dir)
+            .expect("widget should load")
+            .expect("widget should be present");
+        assert_eq!(widget.title, "Team");
+        assert_eq!(widget.lines, vec!["alpha".to_string(), "beta".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

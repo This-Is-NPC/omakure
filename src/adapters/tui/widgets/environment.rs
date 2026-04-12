@@ -2,9 +2,12 @@ use crate::app_meta;
 use crate::lua_widget::WidgetData;
 use crate::workspace::Workspace;
 use ratatui::layout::Rect;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
+
+use super::super::theme::Theme;
+use super::spinner::{spinner_span, SpinnerKind};
 
 pub(crate) fn render_environment(
     frame: &mut Frame,
@@ -23,12 +26,17 @@ pub(crate) fn status_info(
     widget: Option<&WidgetData>,
     widget_error: Option<&str>,
     widget_loading: bool,
+    theme: &Theme,
+    tick: u64,
 ) -> (String, Vec<Line<'static>>) {
     if widget_loading {
         return (
             "Loading".to_string(),
             vec![
-                Line::from("Loading environment..."),
+                Line::from(vec![
+                    spinner_span(SpinnerKind::Sand, tick, theme),
+                    Span::raw("Loading environment..."),
+                ]),
                 Line::from("Please wait."),
             ],
         );

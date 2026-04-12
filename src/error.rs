@@ -1,4 +1,5 @@
 use std::io;
+use std::path::PathBuf;
 use thiserror::Error;
 
 /// Application error type covering all error categories.
@@ -15,6 +16,15 @@ pub enum AppError {
 
     #[error("Environment error: {0}")]
     Environment(#[from] EnvironmentError),
+
+    #[error("scripts directory not found: {}", path.display())]
+    ScriptsDirNotFound { path: PathBuf },
+
+    #[error("expected a directory, found a file: {}", path.display())]
+    ScriptsDirNotADirectory { path: PathBuf },
+
+    #[error("failed to resolve scripts directory {}: {message}", path.display())]
+    ScriptsDirResolveFailed { path: PathBuf, message: String },
 
     #[error("{0}")]
     General(String),

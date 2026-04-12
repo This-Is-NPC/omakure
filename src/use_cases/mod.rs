@@ -8,6 +8,11 @@ use std::path::Path;
 
 pub struct ScriptService {
     repo: Box<dyn ScriptRepository>,
+    // Both run paths now invoke `run_executor::execute_with_heartbeat`
+    // directly. The runner is retained on the service so external
+    // consumers (and the schema-discovery loop) can keep their existing
+    // wiring without churn.
+    #[allow(dead_code)]
     runner: Box<dyn ScriptRunner>,
 }
 
@@ -26,6 +31,7 @@ impl ScriptService {
         self.repo.read_schema(script)
     }
 
+    #[allow(dead_code)] // historical port; the new run_executor module is the active path
     pub fn run_script(&self, script: &Path, args: &[String]) -> AppResult<ScriptRunOutput> {
         self.runner.run(script, args)
     }

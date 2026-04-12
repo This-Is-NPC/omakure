@@ -1,11 +1,17 @@
 use ratatui::layout::{Alignment, Rect};
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
-pub(crate) fn render_loading(frame: &mut Frame, area: Rect) {
+use super::super::theme::Theme;
+use super::spinner::{spinner_span, SpinnerKind};
+
+pub(crate) fn render_loading(frame: &mut Frame, area: Rect, theme: &Theme, tick: u64) {
     let lines = vec![
-        Line::from("Loading environment..."),
+        Line::from(vec![
+            spinner_span(SpinnerKind::Sand, tick, theme),
+            Span::raw("Loading environment..."),
+        ]),
         Line::from("Please wait."),
     ];
     let block = Paragraph::new(lines)

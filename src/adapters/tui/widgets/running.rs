@@ -1,11 +1,13 @@
 use ratatui::layout::{Alignment, Rect};
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
 use super::super::app::App;
+use super::super::theme::Theme;
+use super::spinner::{spinner_span, SpinnerKind};
 
-pub(crate) fn render_running(frame: &mut Frame, area: Rect, app: &mut App) {
+pub(crate) fn render_running(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     let script_name = app
         .field_input
         .selected_script
@@ -20,7 +22,10 @@ pub(crate) fn render_running(frame: &mut Frame, area: Rect, app: &mut App) {
     };
 
     let lines = vec![
-        Line::from("Running script..."),
+        Line::from(vec![
+            spinner_span(SpinnerKind::Sand, app.tick, theme),
+            Span::raw("Running script..."),
+        ]),
         Line::from(""),
         Line::from(format!("Script: {}", script_name)),
         Line::from(format!("Args: {}", args)),

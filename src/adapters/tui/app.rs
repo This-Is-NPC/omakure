@@ -14,7 +14,7 @@ use std::sync::mpsc::{self, TryRecvError};
 /// than a file from the global `.omaken/envs/` directory.
 pub(crate) const SESSION_ENV_LABEL: &str = "omakure.conf (session)";
 
-pub(crate) use super::state::HistoryFocus;
+pub(crate) use super::state::{DashboardLayout, HistoryFocus, HistoryView};
 use super::state::{
     EnvironmentState, FieldInputState, HistoryState, NavigationState, SearchState, WidgetLoadResult,
 };
@@ -103,6 +103,20 @@ pub(crate) struct App<'a> {
     pub(crate) should_quit: bool,
     pub(crate) run_output_scroll: u16,
     pub(crate) error_message: Option<String>,
+    /// Frame counter incremented exactly once per main-loop iteration in
+    /// `src/adapters/tui/mod.rs`. Drives spinner animation; wrapping is
+    /// expected and harmless because consumers only use `tick % len`.
+    pub(crate) tick: u64,
+    /// Receiver for the in-flight inline script execution. `Some` while
+    /// a script is running on a background thread; `None` otherwise.
+    /// Polled every iteration of the main TUI loop so the foreground
+    /// keeps drawing (and animating spinners) while the worker runs.
+    pub(crate) inline_run_receiver: Option<mpsc::Receiver<Option<RunRow>>>,
+    /// True while the script-select screen is showing the per-script
+    /// dashboard charts in fullscreen (toggled by `e`). Reset to false
+    /// when leaving the screen, when navigating into a directory, or
+    /// when the user presses `Esc`.
+    pub(crate) script_dashboard_expanded: bool,
 }
 
 impl<'a> App<'a> {
@@ -142,6 +156,9 @@ impl<'a> App<'a> {
             should_quit: false,
             run_output_scroll: 0,
             error_message: None,
+            tick: 0,
+            inline_run_receiver: None,
+            script_dashboard_expanded: false,
         };
         app.start_widget_load();
         app.load_env_config();
@@ -294,6 +311,7 @@ impl<'a> App<'a> {
 
         match entry.kind {
             WorkspaceEntryKind::Directory => {
+                self.script_dashboard_expanded = false;
                 self.navigation.current_dir = entry.path;
                 self.refresh_entries();
             }
@@ -309,6 +327,7 @@ impl<'a> App<'a> {
         if self.navigation.current_dir == self.workspace.scripts_root() {
             return;
         }
+        self.script_dashboard_expanded = false;
         if let Some(parent) = self.navigation.current_dir.parent() {
             self.navigation.current_dir = parent.to_path_buf();
             self.refresh_entries();

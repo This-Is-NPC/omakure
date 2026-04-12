@@ -16,9 +16,7 @@ use crate::cli::args::{
 use crate::cli::json::{self, codes};
 use crate::cli::run::resolve_script_path;
 use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
-use crate::runs::{
-    self, ClaimFilters, EnqueueOptions, RunCompletion, RunRow,
-};
+use crate::runs::{self, ClaimFilters, EnqueueOptions, RunCompletion, RunRow};
 use crate::workspace::Workspace;
 use serde_json::json;
 use std::error::Error;
@@ -31,11 +29,7 @@ use std::time::Duration;
 /// Internal poll interval for an idle worker thread (no eligible jobs).
 const WORKER_IDLE_POLL_MS: u64 = 250;
 
-pub fn run(
-    scripts_dir: PathBuf,
-    args: QueueArgs,
-    json_output: bool,
-) -> Result<(), Box<dyn Error>> {
+pub fn run(scripts_dir: PathBuf, args: QueueArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
     match args.command {
@@ -51,11 +45,7 @@ pub fn run(
 // Producers
 // ---------------------------------------------------------------------------
 
-fn add(
-    workspace: &Workspace,
-    opts: QueueAddArgs,
-    json_output: bool,
-) -> Result<(), Box<dyn Error>> {
+fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     let script_path = match resolve_script_path(&opts.script, workspace.root()) {
         Ok(p) => p,
         Err(err) => return emit_error(json_output, codes::NOT_FOUND, err.to_string()),
@@ -333,11 +323,7 @@ fn open_or_error(
     }
 }
 
-fn emit_error(
-    json_output: bool,
-    code: &str,
-    message: String,
-) -> Result<(), Box<dyn Error>> {
+fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
         std::process::exit(1);
@@ -347,7 +333,12 @@ fn emit_error(
 
 // Used by tests to make captured-output assertions.
 #[allow(dead_code)]
-pub(crate) fn make_completion(stdout: &str, stderr: &str, exit: Option<i32>, ok: bool) -> RunCompletion {
+pub(crate) fn make_completion(
+    stdout: &str,
+    stderr: &str,
+    exit: Option<i32>,
+    ok: bool,
+) -> RunCompletion {
     RunCompletion {
         stdout: stdout.to_string(),
         stderr: stderr.to_string(),
@@ -581,14 +572,7 @@ mod tests {
             let ws = ws.clone_for_executor();
             let cancel_flag = Arc::clone(&cancel_flag);
             handles.push(thread::spawn(move || {
-                worker_loop(
-                    ws,
-                    format!("worker:t{}", i),
-                    cancel_flag,
-                    None,
-                    None,
-                    true,
-                );
+                worker_loop(ws, format!("worker:t{}", i), cancel_flag, None, None, true);
             }));
         }
         for h in handles {

@@ -178,11 +178,7 @@ fn cli_args_contain_flag(args: &[String], flag: &str) -> bool {
         .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
 }
 
-fn emit_error(
-    json_output: bool,
-    code: &str,
-    message: String,
-) -> Result<(), Box<dyn Error>> {
+fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
         std::process::exit(1);

@@ -50,15 +50,7 @@ is recorded in .history/runs.sqlite with actor, optional reason, full \
 argv, exit code, stdout, stderr, start/end timestamps, and a stable run_id.";
 
 const AI_VERBS: &[&str] = &[
-    "scripts",
-    "describe",
-    "search",
-    "run",
-    "init",
-    "history",
-    "queue",
-    "trace",
-    "config",
+    "scripts", "describe", "search", "run", "init", "history", "queue", "trace", "config",
     "help-ai",
 ];
 
@@ -174,10 +166,7 @@ fn collect_verbs(cmd: &clap::Command) -> Vec<VerbInfo> {
         }
         out.push(VerbInfo {
             name: name.clone(),
-            about: sub
-                .get_about()
-                .map(|s| s.to_string())
-                .unwrap_or_default(),
+            about: sub.get_about().map(|s| s.to_string()).unwrap_or_default(),
             flags: collect_flags(sub),
             subcommands: collect_nested(sub),
         });
@@ -191,10 +180,7 @@ fn collect_flags(cmd: &clap::Command) -> Vec<FlagInfo> {
         .map(|a| FlagInfo {
             long: a.get_long().map(|s| s.to_string()),
             short: a.get_short(),
-            help: a
-                .get_help()
-                .map(|s| s.to_string())
-                .unwrap_or_default(),
+            help: a.get_help().map(|s| s.to_string()).unwrap_or_default(),
             takes_value: a.get_action().takes_values(),
             required: a.is_required_set(),
         })
@@ -205,10 +191,7 @@ fn collect_nested(cmd: &clap::Command) -> Vec<SubcommandInfo> {
     cmd.get_subcommands()
         .map(|sub| SubcommandInfo {
             name: sub.get_name().to_string(),
-            about: sub
-                .get_about()
-                .map(|s| s.to_string())
-                .unwrap_or_default(),
+            about: sub.get_about().map(|s| s.to_string()).unwrap_or_default(),
             flags: collect_flags(sub),
         })
         .collect()
@@ -256,7 +239,11 @@ mod tests {
             .iter()
             .find(|v| v.name == "history")
             .expect("history verb present");
-        let nested: Vec<&str> = history.subcommands.iter().map(|s| s.name.as_str()).collect();
+        let nested: Vec<&str> = history
+            .subcommands
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
         assert!(nested.contains(&"list"));
         assert!(nested.contains(&"show"));
         assert!(nested.contains(&"tail"));

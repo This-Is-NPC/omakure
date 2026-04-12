@@ -133,8 +133,7 @@ impl<'a> App<'a> {
         // Filter loaded history entries to those whose script lives under
         // the active scripts root. Run rows always carry absolute paths,
         // so the filter is a simple prefix check.
-        let history =
-            filter_history_for_scripts_root(history, workspace.scripts_root());
+        let history = filter_history_for_scripts_root(history, workspace.scripts_root());
         let history = HistoryState::new(history);
         let search_status = search_index.status();
         let search = SearchState::new(search_status);
@@ -903,10 +902,7 @@ pub(crate) fn history_belongs_to_scripts_root(entry: &RunRow, scripts_root: &Pat
     Path::new(&entry.script_path).starts_with(scripts_root)
 }
 
-fn filter_history_for_scripts_root(
-    entries: Vec<RunRow>,
-    scripts_root: &Path,
-) -> Vec<RunRow> {
+fn filter_history_for_scripts_root(entries: Vec<RunRow>, scripts_root: &Path) -> Vec<RunRow> {
     entries
         .into_iter()
         .filter(|entry| history_belongs_to_scripts_root(entry, scripts_root))

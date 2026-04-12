@@ -275,4 +275,97 @@ mod tests {
         // Garbage falls back to raw string.
         assert_eq!(format_args_human("not-json"), "not-json");
     }
+
+    #[test]
+    fn format_run_output_empty_stdout_stderr() {
+        let r = row("", "", None);
+        assert_eq!(format_run_output(&r), "");
+    }
+
+    #[test]
+    fn format_run_output_only_stdout() {
+        let r = row("output\n", "", None);
+        let s = format_run_output(&r);
+        assert!(s.contains("STDOUT:"));
+        assert!(!s.contains("STDERR:"));
+    }
+
+    // --- Rendering tests ---
+
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tempfile::TempDir;
+
+    fn history_row(tmp: &TempDir, name: &str, state: RunState) -> RunRow {
+        RunRow {
+            run_id: format!("rid-{}", name),
+            script_path: format!("{}/{}", tmp.path().display(), name),
+            script_name: None,
+            args_json: "[]".into(),
+            actor: "human".into(),
+            reason: None,
+            state,
+            priority: 0,
+            enqueued_at: 1000,
+            worker_id: None,
+            lease_until: None,
+            timeout_ms: None,
+            cron_schedule_id: None,
+            started_at: Some(1000),
+            finished_at: Some(1100),
+            duration_ms: Some(100),
+            exit_code: Some(0),
+            success: Some(true),
+            stdout: "ok\n".to_string(),
+            stderr: String::new(),
+            error: None,
+            parent_run_id: None,
+            omakure_version: "test".into(),
+        }
+    }
+
+    #[test]
+    fn snapshot_render_history_list() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![
+            history_row(&tmp, "deploy.sh", RunState::Completed),
+            history_row(&tmp, "setup.sh", RunState::Failed),
+        ];
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], entries);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_render_history_empty() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
 }

@@ -129,3 +129,72 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
     .style(theme.text_secondary());
     frame.render_widget(footer, chunks[2]);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::ports::EnvFile;
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn snapshot_root(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("omakure_envs_snapshot_{label}"))
+    }
+
+    #[test]
+    fn snapshot_render_envs_with_files() {
+        let root = snapshot_root("with_files");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::Environments;
+        app.environment.entries = vec![
+            EnvFile {
+                name: "dev.conf".to_string(),
+            },
+            EnvFile {
+                name: "prod.conf".to_string(),
+            },
+        ];
+        app.environment.list_state.select(Some(0));
+        app.environment.preview_lines = vec![Line::from("HOST=localhost"), Line::from("PORT=3000")];
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_envs(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn snapshot_render_envs_empty() {
+        let root = snapshot_root("empty");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::Environments;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_envs(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

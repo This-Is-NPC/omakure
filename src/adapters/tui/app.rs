@@ -177,8 +177,7 @@ impl<'a> App<'a> {
     ) -> Self {
         let current_dir = workspace.scripts_root().to_path_buf();
         let navigation = NavigationState::new(current_dir, entries);
-        let history_filtered =
-            filter_history_for_scripts_root(history, workspace.scripts_root());
+        let history_filtered = filter_history_for_scripts_root(history, workspace.scripts_root());
         let history_state = HistoryState::new(history_filtered);
         let search = SearchState::new(crate::search_index::SearchStatus::Idle);
         Self {
@@ -1167,6 +1166,7 @@ mod tests {
 
     use crate::adapters::script_runner::MultiScriptRunner;
     use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::ports::{EnvFile, EnvironmentConfig};
     use tempfile::TempDir;
 
     fn make_service(tmp: &TempDir) -> ScriptService {
@@ -1190,6 +1190,30 @@ mod tests {
                 kind: WorkspaceEntryKind::Script,
             },
         ]
+    }
+
+    fn write_file(path: &Path, contents: &str) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, contents).unwrap();
+    }
+
+    fn write_bash_schema_script(tmp: &TempDir, relative: &str, schema_json: &str) -> PathBuf {
+        let script = tmp.path().join(relative);
+        write_file(
+            &script,
+            &format!(
+                "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {}\n# OMAKURE_SCHEMA_END\n",
+                schema_json
+            ),
+        );
+        script
+    }
+
+    fn actual_entries_for_root(tmp: &TempDir) -> Vec<WorkspaceEntry> {
+        let service = make_service(tmp);
+        service.list_entries(tmp.path()).unwrap()
     }
 
     #[test]
@@ -1341,12 +1365,24 @@ mod tests {
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
         app.field_input.fields = vec![
             crate::domain::Field {
-                name: "a".into(), prompt: None, kind: "string".into(),
-                order: 0, required: None, default: None, choices: None, arg: None,
+                name: "a".into(),
+                prompt: None,
+                kind: "string".into(),
+                order: 0,
+                required: None,
+                default: None,
+                choices: None,
+                arg: None,
             },
             crate::domain::Field {
-                name: "b".into(), prompt: None, kind: "string".into(),
-                order: 1, required: None, default: None, choices: None, arg: None,
+                name: "b".into(),
+                prompt: None,
+                kind: "string".into(),
+                order: 1,
+                required: None,
+                default: None,
+                choices: None,
+                arg: None,
             },
         ];
         app.field_input.field_inputs = vec![String::new(), String::new()];
@@ -1365,8 +1401,14 @@ mod tests {
         let ws = Workspace::new(tmp.path().to_path_buf());
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
         app.field_input.fields = vec![crate::domain::Field {
-            name: "x".into(), prompt: None, kind: "string".into(),
-            order: 0, required: None, default: None, choices: None, arg: None,
+            name: "x".into(),
+            prompt: None,
+            kind: "string".into(),
+            order: 0,
+            required: None,
+            default: None,
+            choices: None,
+            arg: None,
         }];
         app.field_input.field_inputs = vec![String::new()];
         app.append_field_char('h');
@@ -1395,8 +1437,14 @@ mod tests {
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
         app.field_input.selected_script = Some(PathBuf::from("/scripts/test.sh"));
         app.field_input.fields = vec![crate::domain::Field {
-            name: "target".into(), prompt: None, kind: "string".into(),
-            order: 0, required: Some(true), default: None, choices: None, arg: None,
+            name: "target".into(),
+            prompt: None,
+            kind: "string".into(),
+            order: 0,
+            required: Some(true),
+            default: None,
+            choices: None,
+            arg: None,
         }];
         app.field_input.field_inputs = vec!["prod".to_string()];
         app.submit_form();
@@ -1414,8 +1462,14 @@ mod tests {
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
         app.field_input.selected_script = Some(PathBuf::from("/scripts/test.sh"));
         app.field_input.fields = vec![crate::domain::Field {
-            name: "target".into(), prompt: None, kind: "string".into(),
-            order: 0, required: Some(true), default: None, choices: None, arg: None,
+            name: "target".into(),
+            prompt: None,
+            kind: "string".into(),
+            order: 0,
+            required: Some(true),
+            default: None,
+            choices: None,
+            arg: None,
         }];
         app.field_input.field_inputs = vec![String::new()];
         app.submit_form();
@@ -1457,15 +1511,24 @@ mod tests {
     fn test_execution_status_from_run() {
         let mut row = entry_with_script("/s.sh");
         row.success = Some(true);
-        assert!(matches!(ExecutionStatus::from_run(&row), ExecutionStatus::Success));
+        assert!(matches!(
+            ExecutionStatus::from_run(&row),
+            ExecutionStatus::Success
+        ));
 
         row.success = Some(false);
         row.exit_code = Some(42);
-        assert!(matches!(ExecutionStatus::from_run(&row), ExecutionStatus::Failed(Some(42))));
+        assert!(matches!(
+            ExecutionStatus::from_run(&row),
+            ExecutionStatus::Failed(Some(42))
+        ));
 
         row.success = Some(true);
         row.error = Some("boom".into());
-        assert!(matches!(ExecutionStatus::from_run(&row), ExecutionStatus::Error));
+        assert!(matches!(
+            ExecutionStatus::from_run(&row),
+            ExecutionStatus::Error
+        ));
     }
 
     #[test]
@@ -1477,5 +1540,294 @@ mod tests {
         let dir_before = app.navigation.current_dir.clone();
         app.navigate_up();
         assert_eq!(app.navigation.current_dir, dir_before);
+    }
+
+    #[test]
+    fn test_load_schema_sorts_fields_and_enters_field_input() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let script = write_bash_schema_script(
+            &tmp,
+            "deploy.sh",
+            r#"{"Name":"Deploy","Description":"Ship it","Fields":[{"Name":"second","Type":"string","Order":2},{"Name":"first","Type":"string","Order":1,"Required":true}]}"#,
+        );
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+
+        app.load_schema(script.clone());
+
+        assert_eq!(app.screen, Screen::FieldInput);
+        assert_eq!(app.field_input.schema_name.as_deref(), Some("Deploy"));
+        assert_eq!(app.field_input.fields.len(), 2);
+        assert_eq!(app.field_input.fields[0].name, "first");
+        assert_eq!(app.field_input.fields[1].name, "second");
+        assert_eq!(app.field_input.selected_script.as_ref(), Some(&script));
+        assert_eq!(
+            app.field_input.field_inputs,
+            vec![String::new(), String::new()]
+        );
+        let (cached_path, cached_schema) = app.navigation.schema_cache.as_ref().unwrap();
+        assert_eq!(cached_path, &script);
+        assert_eq!(cached_schema.fields[0].name, "first");
+    }
+
+    #[test]
+    fn test_load_schema_with_no_fields_sets_result_immediately() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let script = write_bash_schema_script(&tmp, "noop.sh", r#"{"Name":"Noop","Fields":[]}"#);
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+
+        app.load_schema(script.clone());
+
+        assert_eq!(app.screen, Screen::ScriptSelect);
+        assert_eq!(app.result, Some((script, Vec::new())));
+    }
+
+    #[test]
+    fn test_load_schema_error_sets_error_screen() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let script = tmp.path().join("broken.sh");
+        write_file(&script, "#!/usr/bin/env bash\necho hi\n");
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+
+        app.load_schema(script);
+
+        assert_eq!(app.screen, Screen::Error);
+        assert!(app.error_message.is_some());
+    }
+
+    #[test]
+    fn test_enter_selected_directory_refreshes_entries_and_clears_expanded() {
+        let tmp = TempDir::new().unwrap();
+        write_bash_schema_script(&tmp, "alpha/child.sh", r#"{"Name":"Child","Fields":[]}"#);
+        write_bash_schema_script(&tmp, "root.sh", r#"{"Name":"Root","Fields":[]}"#);
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, actual_entries_for_root(&tmp), vec![]);
+        app.script_dashboard_expanded = true;
+
+        app.enter_selected();
+
+        assert!(!app.script_dashboard_expanded);
+        assert_eq!(app.navigation.current_dir, tmp.path().join("alpha"));
+        assert_eq!(app.navigation.entries.len(), 1);
+        assert_eq!(
+            app.navigation.entries[0].path,
+            tmp.path().join("alpha/child.sh")
+        );
+    }
+
+    #[test]
+    fn test_enter_selected_script_loads_schema() {
+        let tmp = TempDir::new().unwrap();
+        write_bash_schema_script(
+            &tmp,
+            "deploy.sh",
+            r#"{"Name":"Deploy","Fields":[{"Name":"target","Type":"string","Order":1}]}"#,
+        );
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut entries = actual_entries_for_root(&tmp);
+        entries.retain(|entry| entry.kind == WorkspaceEntryKind::Script);
+        let mut app = App::test_new(&svc, ws, entries, vec![]);
+
+        app.enter_selected();
+
+        assert_eq!(app.screen, Screen::FieldInput);
+        assert_eq!(app.field_input.schema_name.as_deref(), Some("Deploy"));
+    }
+
+    #[test]
+    fn test_refresh_entries_with_file_path_sets_error_screen() {
+        let tmp = TempDir::new().unwrap();
+        let root_file = tmp.path().join("not_a_directory.sh");
+        write_file(&root_file, "#!/usr/bin/env bash\n");
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.navigation.current_dir = root_file;
+
+        app.refresh_entries();
+
+        assert_eq!(app.screen, Screen::Error);
+        assert!(app.error_message.is_some());
+    }
+
+    #[test]
+    fn test_poll_widget_load_success_updates_state() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        let (tx, rx) = mpsc::channel();
+        app.navigation.widget_loading = true;
+        app.navigation.widget_receiver = Some(rx);
+        tx.send(WidgetLoadResult {
+            widget: Some(WidgetData {
+                title: "Widget".into(),
+                lines: vec!["one".into()],
+            }),
+            error: None,
+        })
+        .unwrap();
+
+        app.poll_widget_load();
+
+        assert!(!app.navigation.widget_loading);
+        assert!(app.navigation.widget_receiver.is_none());
+        assert_eq!(app.navigation.widget.as_ref().unwrap().title, "Widget");
+        assert!(app.navigation.widget_error.is_none());
+    }
+
+    #[test]
+    fn test_poll_widget_load_disconnected_clears_loading_state() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        let (tx, rx) = mpsc::channel::<WidgetLoadResult>();
+        drop(tx);
+        app.navigation.widget_loading = true;
+        app.navigation.widget_receiver = Some(rx);
+
+        app.poll_widget_load();
+
+        assert!(!app.navigation.widget_loading);
+        assert!(app.navigation.widget_receiver.is_none());
+    }
+
+    #[test]
+    fn test_update_env_preview_handles_empty_and_missing_files() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let envs_dir = ws.envs_dir().to_path_buf();
+        let mut app = App::test_new(
+            &svc,
+            Workspace::new(tmp.path().to_path_buf()),
+            vec![],
+            vec![],
+        );
+        std::fs::create_dir_all(&envs_dir).unwrap();
+        write_file(&envs_dir.join("dev.conf"), "");
+        app.environment.config = Some(EnvironmentConfig {
+            envs_dir: envs_dir.clone(),
+            active: None,
+            defaults: std::collections::HashMap::new(),
+            session_conf_path: None,
+        });
+        app.environment.entries = vec![EnvFile {
+            name: "dev.conf".into(),
+        }];
+
+        app.update_env_preview();
+
+        assert!(app.environment.preview_error.is_none());
+        assert_eq!(app.environment.preview_lines.len(), 1);
+
+        app.environment.entries = vec![EnvFile {
+            name: "missing.conf".into(),
+        }];
+        app.update_env_preview();
+
+        assert!(app.environment.preview_lines.is_empty());
+        assert!(app.environment.preview_error.is_some());
+    }
+
+    #[test]
+    fn test_refresh_search_results_success_populates_details() {
+        let tmp = TempDir::new().unwrap();
+        write_bash_schema_script(
+            &tmp,
+            "deploy.sh",
+            r#"{"Name":"Deploy","Description":"Ship it","Tags":["ops"],"Fields":[{"Name":"target","Type":"string","Order":1,"Required":true}]}"#,
+        );
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        let db_path = tmp.path().join("search.sqlite");
+        crate::search_index::rebuild_index(&db_path, tmp.path()).unwrap();
+        app.search_index = SearchIndex::new(db_path);
+        app.search.query = "deploy".into();
+
+        app.refresh_search_results();
+
+        assert_eq!(app.search.results.len(), 1);
+        assert_eq!(app.search.list_state.selected(), Some(0));
+        assert!(app.search.error.is_none());
+        let details = app.search.details.as_ref().unwrap();
+        assert_eq!(details.display_name, "Deploy");
+        assert_eq!(details.fields.len(), 1);
+        assert_eq!(details.fields[0].name, "target");
+    }
+
+    #[test]
+    fn test_refresh_search_results_error_clears_results() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.search.results = vec![crate::search_index::SearchResult {
+            script_path: PathBuf::from("deploy.sh"),
+            display_name: "Deploy".into(),
+            description: None,
+            tags: vec![],
+            schema_error: None,
+        }];
+        app.search_index = SearchIndex::new(tmp.path().to_path_buf());
+
+        app.refresh_search_results();
+
+        assert!(app.search.results.is_empty());
+        assert!(app.search.details.is_none());
+        assert!(app.search.error.is_some());
+        assert_eq!(app.search.list_state.selected(), None);
+    }
+
+    #[test]
+    fn test_schema_to_preview_includes_outputs_and_matrix_queue() {
+        let schema = crate::domain::parse_schema(
+            r#"{"Name":"Deploy","Description":"Ship it","Tags":["ops"],"Fields":[{"Name":"target","Type":"string","Order":1,"Required":true}],"Outputs":[{"Name":"url","Type":"string"}],"Queue":{"Matrix":{"Values":[{"Name":"region","Values":["us","eu"]}]}}}"#,
+        )
+        .unwrap();
+
+        let preview = schema_to_preview(&schema);
+
+        assert_eq!(preview.name, "Deploy");
+        assert_eq!(preview.outputs.len(), 1);
+        assert_eq!(preview.outputs[0].name, "url");
+        match preview.queue.unwrap() {
+            QueuePreview::Matrix { values } => {
+                assert_eq!(values.len(), 1);
+                assert_eq!(values[0].name, "region");
+                assert_eq!(values[0].values, vec!["us", "eu"]);
+            }
+            QueuePreview::Cases { .. } => panic!("expected matrix preview"),
+        }
+    }
+
+    #[test]
+    fn test_schema_to_preview_includes_cases_queue() {
+        let schema = crate::domain::parse_schema(
+            r#"{"Name":"Deploy","Fields":[],"Queue":{"Cases":[{"Name":"prod","Values":[{"Name":"region","Value":"us"}]},{"Values":[{"Name":"region","Value":"eu"}]}]}}"#,
+        )
+        .unwrap();
+
+        let preview = schema_to_preview(&schema);
+
+        match preview.queue.unwrap() {
+            QueuePreview::Cases { cases } => {
+                assert_eq!(cases.len(), 2);
+                assert_eq!(cases[0].name.as_deref(), Some("prod"));
+                assert_eq!(cases[1].name, None);
+                assert_eq!(cases[0].values[0].name, "region");
+                assert_eq!(cases[1].values[0].value, "eu");
+            }
+            QueuePreview::Matrix { .. } => panic!("expected cases preview"),
+        }
     }
 }

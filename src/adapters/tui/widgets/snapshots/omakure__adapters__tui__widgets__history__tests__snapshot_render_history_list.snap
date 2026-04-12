@@ -1,0 +1,19 @@
+---
+source: src/adapters/tui/widgets/history.rs
+expression: terminal.backend()
+---
+"┌History─────────────────────────────────────────┐┌Output──────────────────────┐"
+"│  State    Status   Date     Script     Actor   ││Script: deploy.sh           │"
+"│> complete OK       1970-01- deploy.sh  human   ││Args: -                     │"
+"│  failed   OK       1970-01- setup.sh   human   ││Status: OK                  │"
+"│                                                ││Actor: human                │"
+"│                                                ││Run id: rid-deploy.sh       │"
+"│                                                ││                            │"
+"│                                                ││STDOUT:                     │"
+"│                                                ││ok                          │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"└────────────────────────────────────────────────┘└────────────────────────────┘"
+"Tab dashboards, Up/Down select, Enter view output, Alt+E envs, Esc/q back       "
+"                                                                                "

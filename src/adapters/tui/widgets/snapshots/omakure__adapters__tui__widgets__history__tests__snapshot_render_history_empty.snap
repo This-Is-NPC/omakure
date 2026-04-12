@@ -1,0 +1,16 @@
+---
+source: src/adapters/tui/widgets/history.rs
+expression: terminal.backend()
+---
+"┌History─────────────────────────────────────────┐┌Output──────────────────────┐"
+"│No executions yet.                              ││No history selected.        │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"│                                                ││                            │"
+"└────────────────────────────────────────────────┘└────────────────────────────┘"
+"Tab dashboards, Up/Down select, Enter view output, Alt+E envs, Esc/q back       "
+"                                                                                "

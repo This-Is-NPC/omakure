@@ -74,6 +74,11 @@ envelope `{ ok, data, error, schema_version }`. Run history is
 persisted in `<workspace>/.history/runs.sqlite` and is queryable via
 `omakure history`.
 
+A queue + worker daemon (`omakure queue add`, `omakure queue worker`)
+and a structured trace stream (`omakure trace` from inside a script,
+`omakure history traces` from outside) make Omakure usable as the
+orchestration core of a fleet of independent AI agents.
+
 ```bash
 # One-call discovery
 omakure help-ai
@@ -81,15 +86,26 @@ omakure help-ai
 # Create a script and run it under an AI actor
 omakure --json init my-task.sh --schema-json '{"Name":"my_task","Fields":[]}' --body-stdin <<'BODY'
 #!/usr/bin/env bash
+omakure trace "started" --level info
 echo "hi"
 BODY
 omakure --json run my-task --actor ai --reason "smoke test"
-omakure --json history list --actor ai --since 1h
+
+# Or push it onto the queue and let a worker drain it
+omakure --json queue add my-task --actor agent-sp --priority 10
+omakure queue worker --concurrency 4 &
+
+# Watch and audit
+omakure --json history list --state running
+omakure --json history traces $RUN_ID
+omakure --json history stats
 ```
 
 > **Upgrading from an older release deletes legacy `.history/*.json`
-> files.** Back up `.history/` first if you care about historical run
-> data. See `.docs/ai-interface.md` for the full contract.
+> files and rebuilds `runs.sqlite` if its schema is older than the
+> state-machine release.** Back up `.history/` first if you care about
+> historical run data. See `.docs/ai-interface.md` for the full
+> contract.
 
 Full reference: `.docs/ai-interface.md`.
 

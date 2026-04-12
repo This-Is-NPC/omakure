@@ -23,19 +23,27 @@ does.
 
 ## Destructive upgrade notice
 
-Upgrading to this version of `omakure` **deletes** any pre-existing
-top-level `*.json` files in `<workspace>/.history/`. The legacy per-run
-JSON history layout has been removed; everything now lives in
-`runs.sqlite`. There is no migration path.
+Upgrading to this version of `omakure` triggers **two destructive
+cleanups** on first launch against an existing workspace:
+
+1. Every top-level `*.json` file in `<workspace>/.history/` is deleted
+   (legacy per-run JSON history layout from pre-v0.1 releases).
+2. If `<workspace>/.history/runs.sqlite` exists with the v0.1 schema
+   (i.e. the `runs` table has no `state` column), the table is
+   **dropped and recreated** with the new state-machine schema. Every
+   row in the legacy table is lost.
+
+Both cleanups are intentionally narrow:
+
+- only top-level files in `history_dir()` are touched by the JSON cleanup
+- only files whose extension is exactly `.json`
+- subdirectories, `search-index.sqlite`, and the entire `.omaken/` tree
+  are left untouched
+- the schema rebuild only drops and recreates the `runs` and
+  `run_traces` tables — not the database file or any other table
 
 If you care about historical run data from older releases, **back up
-`<workspace>/.history/` before upgrading**. The cleanup is intentionally
-narrow:
-
-- only top-level files in `history_dir()` are touched
-- only files whose extension is exactly `.json`
-- subdirectories, `runs.sqlite`, `search-index.sqlite`, and the entire
-  `.omaken/` tree are left untouched
+`<workspace>/.history/` before upgrading**.
 
 ## JSON envelope
 
@@ -348,12 +356,269 @@ PRAGMA setup as `search-index.sqlite`). Two `omakure run` invocations
 against the same workspace can write concurrently without corrupting
 the log.
 
+## Run state machine
+
+Every row in `runs.sqlite` carries a `state` column whose value is one of
+the following seven strings. The set is final and small: there is no
+`paused`, `retrying`, `scheduled`, `expired`, `zombie`, or `blocked`
+state.
+
+| State        | Meaning                                                          |
+|--------------|------------------------------------------------------------------|
+| `queued`     | Row exists, waiting for a worker to pick it up                   |
+| `running`    | A worker (or `omakure run`) is executing the script              |
+| `completed`  | Finished with `success = true`                                   |
+| `failed`     | Finished with `success = false` (non-zero exit or runner error)  |
+| `cancelled`  | Caller cancelled before/during execution                         |
+| `timed_out`  | Worker killed the process for exceeding `--timeout`              |
+| `dead_letter`| Promoted from `failed` or `timed_out` for human/agent review     |
+
+Allowed transitions:
+
+```
+queued → running → completed
+                 → failed
+                 → cancelled (mid-execution)
+                 → timed_out
+queued → cancelled (before execution starts)
+failed → dead_letter
+timed_out → dead_letter
+```
+
+Any other transition is rejected by `runs.rs` and surfaces as
+`error.code = "invalid_argument"` to the caller.
+
+`omakure run` is a synchronous fast path: it inserts the row directly
+in `state='running'` (skipping `queued`), drives the script through the
+shared execution helper, and transitions to the right terminal state on
+completion. In-progress `omakure run` invocations are visible to
+`omakure history list --state running` immediately, even when no worker
+daemon is active.
+
+## Queue verbs
+
+```bash
+omakure queue add <script> [--actor X] [--reason Y] [--priority N] \
+                  [--timeout 30m] [--parent-run-id ID] [-- ...args]
+omakure queue cancel <run_id> [--reason Y]
+omakure queue dead-letter <run_id> [--reason Y]
+omakure queue worker [--concurrency N] [--actor-filter X] [--script-filter X]
+omakure queue stats [--json]
+```
+
+### `omakure queue add`
+
+Pushes a `queued` row onto `runs.sqlite` and prints the new run id.
+Default `actor = "human"`, `priority = 0`, no timeout, no reason.
+`--timeout` accepts the [`humantime`](https://docs.rs/humantime/) format
+(`30s`, `5m`, `1h30m`, etc.) and is stored on the row as
+`timeout_ms`. Without `--timeout`, the job has no execution limit.
+
+Errors:
+
+- Missing script → `error.code = "not_found"` (no row written).
+- Bad `--timeout` → `error.code = "invalid_argument"`.
+
+### `omakure queue cancel`
+
+- Against a `queued` row: instant transition to `cancelled`.
+- Against a `running` row: the worker's heartbeat detects the new state
+  on its next tick (250 ms by default) and kills the script.
+- Against any terminal row: `error.code = "invalid_argument"`.
+- Unknown id: `error.code = "not_found"`.
+
+### `omakure queue dead-letter`
+
+Promotes a `failed` or `timed_out` row to `dead_letter`. Used when an
+agent decides "this failure is chronic and needs human / deeper-agent
+attention". Other states are rejected with
+`error.code = "invalid_argument"`.
+
+### `omakure queue worker`
+
+Long-running daemon that drains the queue.
+
+- `--concurrency N` (default 1): N parallel workers in N OS threads.
+  Each thread claims and runs independently.
+- `--actor-filter X` / `--script-filter X`: only claim jobs whose actor
+  / script matches the filter. AND-combined.
+- For each job: claim atomically (`UPDATE … RETURNING`, `queued →
+  running`), spawn the script with `OMAKURE_RUN_ID` injected, refresh
+  the heartbeat lease every 250 ms, kill on `timeout_ms` if set,
+  transition to the right terminal state on exit.
+- SIGINT/SIGTERM finishes the in-flight job and exits cleanly.
+- If a worker dies hard (SIGKILL/OOM/crash), the lease (`HEARTBEAT_MS =
+  60_000`) eventually expires and the next worker that polls steals the
+  job. The stolen job restarts from claim — there is no resumption
+  mid-run.
+- The heartbeat is internal (60 s constant) and is **not** a job
+  timeout. It only governs crash-recovery latency.
+
+### `omakure queue stats`
+
+Returns counts per state and per actor in one envelope.
+
+## Visibility verbs (`history`)
+
+```bash
+omakure history list [--state queued|running|completed|failed|cancelled|timed_out|dead_letter] \
+                     [--state-set in_flight|terminal|all] \
+                     [--script X] [--actor X] [--since 1h] [--until 30m] \
+                     [--success|--failure] [--limit N] [--json]
+omakure history show <run_id> [--json]
+omakure history stats [--json]
+omakure history traces <run_id> [--json] [--level info|warn|error|debug] [--since-sequence N]
+```
+
+`--state` is repeatable (logical OR within the flag). `--state-set` is a
+shorthand: `in_flight = {queued, running}`,
+`terminal = {completed, failed, cancelled, timed_out, dead_letter}`,
+`all = every state`. The two flags are mutually exclusive.
+
+When neither `--state` nor `--state-set` is set, `history list` defaults
+to `--state-set terminal` so v0.1 callers see no behavior change.
+
+`history stats` returns counts per state and per actor in one envelope —
+the same data as `queue stats` but exposed under the visibility surface
+for fleet dashboards.
+
+`history traces` reads the structured trace stream of one run (see
+below). The reader is a snapshot, not a follow stream — agents poll
+incrementally with `--since-sequence` to fetch only new entries.
+
+## Structured traces (`omakure trace`)
+
+Scripts emit structured trace events at known points in their execution
+so agents can reconstruct what happened from a few KB of structured
+records instead of a 500 KB stdout dump.
+
+```bash
+omakure trace "<message>" [--level info|warn|error|debug] [--data '<json>']
+```
+
+Designed to be called **from inside a script** that was launched by
+`omakure run` or `omakure queue worker`. Both inject `OMAKURE_RUN_ID`
+into the child environment so the verb knows which run to attach to.
+
+Behavior:
+
+- Reads `OMAKURE_RUN_ID` from the environment. If unset, exits 0 with a
+  one-line stderr warning so the script can be tested in isolation
+  outside omakure without breaking.
+- Validates `--data` as JSON before writing (`error.code =
+  "invalid_argument"` on bad JSON).
+- Validates `--level` against the allowed set (`error.code =
+  "invalid_argument"` on bad level).
+- Inserts one row in `run_traces` with a monotonic per-run `sequence`,
+  using a SQLite transaction so two concurrent calls cannot collide.
+
+```bash
+# Inside a script launched by omakure:
+omakure trace "starting browser" --level info --data '{"target":"https://example.gov.br"}'
+omakure trace "login submitted"  --level info
+omakure trace "captcha failed"   --level error --data '{"attempt":3}'
+```
+
+Read them back from outside:
+
+```bash
+omakure --json history traces $RUN_ID
+omakure --json history traces $RUN_ID --level warn
+omakure --json history traces $RUN_ID --since-sequence 50
+```
+
+`run_traces` schema:
+
+```sql
+CREATE TABLE run_traces (
+    trace_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    sequence INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    message TEXT NOT NULL,
+    data_json TEXT,
+    FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+);
+```
+
+Deleting a run cascades to its traces (`PRAGMA foreign_keys = ON` is
+set on every connection).
+
+## Tag filtering
+
+`omakure scripts` and `omakure search` accept a repeatable `--tag` flag
+with **AND** semantics. A script must carry every supplied tag in its
+embedded schema's `Tags` field. Matching is case-sensitive on the
+literal string.
+
+```bash
+omakure scripts --json --tag prefeitura --tag sp
+omakure search prefeitura --json --tag production
+```
+
+## Cron producer contract
+
+The future omakure cron scheduler will produce work by calling
+`omakure queue add` with the new `--cron-schedule-id` flag (and
+`--actor cron`). The flag stores its value on the row's
+`cron_schedule_id` column so cron-originated rows can be distinguished
+from agent-originated rows by a `WHERE cron_schedule_id IS NOT NULL`
+query.
+
+**No cron scheduler implementation ships in this release.** Only the
+schema column and the documented producer contract are added now so a
+future cron release does not require a schema migration.
+
+## Worked example: agent fleet pushing work
+
+```bash
+# 1. Agent SP pushes a job onto the queue
+RUN=$(omakure --json queue add extract-curitiba --actor agent-sp \
+       --priority 10 --timeout 30m -- --target https://curitiba.pr.gov.br)
+RUN_ID=$(echo "$RUN" | jq -r .data.run_id)
+
+# 2. A worker on the same machine drains the queue
+omakure queue worker --concurrency 4 &
+
+# 3. The script (called by the worker) emits structured traces
+#    via `omakure trace "..." --data '...'`. OMAKURE_RUN_ID is
+#    already in its environment.
+
+# 4. Agent SP polls the row's state from a sidecar
+omakure --json history show "$RUN_ID"
+
+# 5. While the script runs, agent SP samples its trace stream
+omakure --json history traces "$RUN_ID" --since-sequence 0
+
+# 6. The script fails. Agent SP fetches only error-level traces:
+omakure --json history traces "$RUN_ID" --level error
+
+# 7. Agent SP decides this failure is chronic and promotes it
+#    so a deeper agent (or human) takes a look:
+omakure --json queue dead-letter "$RUN_ID" --reason "captcha solver broken"
+
+# 8. Fleet dashboard pulls counts:
+omakure --json history stats
+```
+
 ## Out of scope (v1)
 
+- The cron scheduler itself (only the schema column and producer
+  contract are added now).
+- Automatic retry policies (`retrying` state, exponential backoff,
+  retry limits). Manual re-enqueue is the only retry mechanism.
+- Job dependencies / DAGs.
+- Multi-host coordination.
 - Embedded MCP server. CLI is the v1 contract; an MCP shim over these
   same verbs may be added later without re-designing the contract.
 - Streaming `run --json` output. Long-running scripts still print live
   output when `--json` is **not** set.
-- `history tail --follow`.
+- `history tail --follow` and trace tail / follow mode. Both are
+  snapshot reads in v1.
+- Helper libraries / SDKs for `omakure trace` in different languages.
+  Scripts call the binary directly.
 - Cross-workspace history aggregation.
 - Localized output. The AI surface is English-only.
+- A `paused`, `scheduled`, `expired`, `zombie`, `retry_pending`, or
+  `blocked` state. The state set is final.

@@ -85,7 +85,8 @@ src/
 ├── error.rs              # Custom error types (AppError, AppResult)
 ├── util.rs               # Shared utilities (ps_quote, TempDirGuard, etc.)
 ├── workspace.rs          # Workspace layout helpers
-├── runs.rs               # SQLite-backed run log (replaces the deleted history.rs)
+├── runs.rs               # SQLite-backed run state machine + structured trace storage
+├── run_executor.rs       # Shared execution helper used by `omakure run` and `omakure queue worker`
 ├── search_index.rs       # SQLite-backed script search
 ├── lua_widget.rs         # Lua script widget execution
 ├── runtime.rs            # Script kind detection and command building
@@ -107,13 +108,16 @@ src/
 |------|---------|
 | `src/main.rs` | CLI entry, command routing, scripts dir resolution (with legacy env fallbacks), TUI launch |
 | `src/cli/mod.rs` | CLI module exports and `wants_help` helper |
-| `src/cli/run.rs` | Headless script execution; writes runs through `runs.rs` and emits a JSON envelope under `--json` |
+| `src/cli/run.rs` | Headless script execution; routes through the state machine via `run_executor::execute_with_heartbeat` |
+| `src/cli/queue.rs` | `omakure queue add | cancel | dead-letter | worker | stats` — producers + worker daemon |
+| `src/cli/trace.rs` | `omakure trace` — script-side structured trace writer (reads `OMAKURE_RUN_ID` from env) |
 | `src/cli/json.rs` | Single JSON envelope writer (`{ ok, data, error, schema_version }`) and stable error codes |
 | `src/cli/describe.rs` | `omakure describe <script>` — full schema for one script |
-| `src/cli/search.rs` | `omakure search <query>` — surfaces the SQLite script index |
-| `src/cli/history.rs` | `omakure history list/show/tail` — queries `.history/runs.sqlite` |
+| `src/cli/search.rs` | `omakure search <query>` — surfaces the SQLite script index (+ `--tag` AND filter) |
+| `src/cli/history.rs` | `omakure history list/show/tail/stats/traces` — query the run log; `--state` / `--state-set` filters |
 | `src/cli/help_ai.rs` | `omakure help-ai` — single-call AI capability discovery generated from clap |
-| `src/runs.rs` | SQLite run log: open, init_schema, insert_run, get_run, query_runs, generate_run_id |
+| `src/runs.rs` | SQLite-backed run state machine + structured trace storage; exposes `RunState`, `enqueue`, `start_inline`, `claim_next`, `complete`, `fail`, `cancel`, `time_out`, `dead_letter`, `heartbeat`, `insert_trace`, `query_traces`, `stats` |
+| `src/run_executor.rs` | Shared execution helper used by both `omakure run` and the worker; spawns the child with `OMAKURE_RUN_ID`, heartbeats the lease, kills on `--timeout`, reacts to mid-execution cancel |
 | `src/cli/update.rs` | Self-update via GitHub Releases and script sync into scripts dir |
 | `src/cli/omaken.rs` | Omaken flavor listing/install (`list`/`install` commands) |
 | `src/cli/list.rs` | `scripts` subcommand: recursive script listing |

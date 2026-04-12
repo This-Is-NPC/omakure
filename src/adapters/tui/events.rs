@@ -206,6 +206,264 @@ fn handle_run_result_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::ports::{WorkspaceEntry, WorkspaceEntryKind};
+    use crate::use_cases::ScriptService;
+    use crate::workspace::Workspace;
+    use tempfile::TempDir;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn key_mod(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, modifiers)
+    }
+
+    fn setup_app<'a>(tmp: &'a TempDir, service: &'a ScriptService) -> App<'a> {
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![
+            WorkspaceEntry {
+                path: tmp.path().join("infra"),
+                kind: WorkspaceEntryKind::Directory,
+            },
+            WorkspaceEntry {
+                path: tmp.path().join("deploy.sh"),
+                kind: WorkspaceEntryKind::Script,
+            },
+        ];
+        App::test_new(service, ws, entries, vec![])
+    }
+
+    fn make_service(tmp: &TempDir) -> ScriptService {
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        ScriptService::new(Box::new(repo), Box::new(runner))
+    }
+
+    #[test]
+    fn test_q_quits_from_script_select() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn test_j_moves_selection_down() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        assert_eq!(app.navigation.selection, 0);
+        handle_key_event(&mut app, key(KeyCode::Char('j')));
+        assert_eq!(app.navigation.selection, 1);
+    }
+
+    #[test]
+    fn test_k_moves_selection_up() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.move_selection(1); // go to index 1
+        handle_key_event(&mut app, key(KeyCode::Char('k')));
+        assert_eq!(app.navigation.selection, 0);
+    }
+
+    #[test]
+    fn test_h_enters_history() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, key(KeyCode::Char('h')));
+        assert_eq!(app.screen, Screen::History);
+    }
+
+    #[test]
+    fn test_ctrl_s_enters_search() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, key_mod(KeyCode::Char('s'), KeyModifiers::CONTROL));
+        assert_eq!(app.screen, Screen::Search);
+    }
+
+    #[test]
+    fn test_esc_from_search_returns_to_scripts() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Search;
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_search_typing_appends_chars() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Search;
+        handle_key_event(&mut app, key(KeyCode::Char('d')));
+        handle_key_event(&mut app, key(KeyCode::Char('e')));
+        assert_eq!(app.search.query, "de");
+    }
+
+    #[test]
+    fn test_search_backspace_pops_char() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Search;
+        app.search.query = "abc".to_string();
+        handle_key_event(&mut app, key(KeyCode::Backspace));
+        assert_eq!(app.search.query, "ab");
+    }
+
+    #[test]
+    fn test_error_enter_returns_to_scripts() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Error;
+        app.error_message = Some("oops".to_string());
+        handle_key_event(&mut app, key(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+        assert!(app.error_message.is_none());
+    }
+
+    #[test]
+    fn test_error_q_quits() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Error;
+        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn test_history_tab_toggles_view() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        assert_eq!(app.history.view, HistoryView::List);
+        handle_key_event(&mut app, key(KeyCode::Tab));
+        assert_eq!(app.history.view, HistoryView::Dashboards);
+        handle_key_event(&mut app, key(KeyCode::Tab));
+        assert_eq!(app.history.view, HistoryView::List);
+    }
+
+    #[test]
+    fn test_history_q_returns_to_scripts() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_history_list_enter_focuses_output() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        app.history.focus = HistoryFocus::List;
+        handle_key_event(&mut app, key(KeyCode::Enter));
+        assert_eq!(app.history.focus, HistoryFocus::Output);
+    }
+
+    #[test]
+    fn test_history_output_esc_returns_to_list() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        app.history.focus = HistoryFocus::Output;
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        assert_eq!(app.history.focus, HistoryFocus::List);
+    }
+
+    #[test]
+    fn test_run_result_esc_returns() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::RunResult;
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_run_result_h_goes_to_history() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::RunResult;
+        handle_key_event(&mut app, key(KeyCode::Char('h')));
+        assert_eq!(app.screen, Screen::History);
+    }
+
+    #[test]
+    fn test_field_input_esc_returns() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::FieldInput;
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_field_input_char_appends() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::FieldInput;
+        app.field_input.fields = vec![crate::domain::Field {
+            name: "target".to_string(),
+            prompt: None,
+            kind: "string".to_string(),
+            order: 0,
+            required: None,
+            default: None,
+            choices: None,
+            arg: None,
+        }];
+        app.field_input.field_inputs = vec![String::new()];
+        handle_key_event(&mut app, key(KeyCode::Char('a')));
+        assert_eq!(app.field_input.field_inputs[0], "a");
+    }
+
+    #[test]
+    fn test_running_key_is_noop() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Running;
+        let screen_before = app.screen;
+        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        assert_eq!(app.screen, screen_before);
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn test_alt_e_enters_envs_from_script_select() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, key_mod(KeyCode::Char('e'), KeyModifiers::ALT));
+        assert_eq!(app.screen, Screen::Environments);
+    }
+}
+
 fn handle_envs_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => app.exit_envs(),

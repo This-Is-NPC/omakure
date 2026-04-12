@@ -187,3 +187,103 @@ fn build_lines(
 
     lines
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::tui::app::SchemaFieldPreview;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn sample_preview() -> SchemaPreview {
+        SchemaPreview {
+            name: "Deploy App".to_string(),
+            description: Some("Deploy to production".to_string()),
+            tags: vec!["ops".to_string(), "deploy".to_string()],
+            fields: vec![
+                SchemaFieldPreview {
+                    name: "target".to_string(),
+                    prompt: Some("Target environment".to_string()),
+                    kind: "string".to_string(),
+                    required: true,
+                },
+                SchemaFieldPreview {
+                    name: "dry_run".to_string(),
+                    prompt: None,
+                    kind: "boolean".to_string(),
+                    required: false,
+                },
+            ],
+            outputs: vec![],
+            queue: None,
+        }
+    }
+
+    #[test]
+    fn snapshot_schema_with_fields() {
+        let backend = TestBackend::new(60, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = sample_preview();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_schema_no_preview() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", None, None, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_schema_error() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_schema_preview(
+                    f,
+                    f.size(),
+                    "Schema",
+                    None,
+                    Some("Invalid JSON at line 5"),
+                    &theme,
+                );
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_schema_no_fields() {
+        let backend = TestBackend::new(60, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Simple".to_string(),
+            description: None,
+            tags: vec![],
+            fields: vec![],
+            outputs: vec![],
+            queue: None,
+        };
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+}

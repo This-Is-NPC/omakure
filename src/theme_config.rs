@@ -92,3 +92,87 @@ fn ensure_builtin_themes(themes_dir: &Path) -> Result<(), Box<dyn Error>> {
 fn config_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join("omakure"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_load_theme_name_valid() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("config.toml");
+        fs::write(&config, "[theme]\nname = \"dracula\"\n").unwrap();
+
+        let name = load_theme_name(&config);
+        assert_eq!(name, Some("dracula".to_string()));
+    }
+
+    #[test]
+    fn test_load_theme_name_no_file() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("nonexistent.toml");
+
+        let name = load_theme_name(&config);
+        assert_eq!(name, None);
+    }
+
+    #[test]
+    fn test_load_theme_name_no_theme_section() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("config.toml");
+        fs::write(&config, "[other]\nkey = \"value\"\n").unwrap();
+
+        let name = load_theme_name(&config);
+        assert_eq!(name, None);
+    }
+
+    #[test]
+    fn test_load_theme_name_invalid_toml() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("config.toml");
+        fs::write(&config, "not valid toml {{{{").unwrap();
+
+        let name = load_theme_name(&config);
+        assert_eq!(name, None);
+    }
+
+    #[test]
+    fn test_write_and_read_roundtrip() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("config.toml");
+
+        write_global_theme(&config, "nord").unwrap();
+        let name = load_theme_name(&config);
+        assert_eq!(name, Some("nord".to_string()));
+    }
+
+    #[test]
+    fn test_write_preserves_other_keys() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("config.toml");
+        fs::write(&config, "[other]\nkey = \"value\"\n").unwrap();
+
+        write_global_theme(&config, "catppuccin-mocha").unwrap();
+
+        let contents = fs::read_to_string(&config).unwrap();
+        assert!(contents.contains("key = \"value\""));
+
+        let name = load_theme_name(&config);
+        assert_eq!(name, Some("catppuccin-mocha".to_string()));
+    }
+
+    #[test]
+    fn test_write_overwrites_existing_theme() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("config.toml");
+
+        write_global_theme(&config, "dracula").unwrap();
+        write_global_theme(&config, "nord").unwrap();
+
+        let name = load_theme_name(&config);
+        assert_eq!(name, Some("nord".to_string()));
+    }
+}

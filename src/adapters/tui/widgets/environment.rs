@@ -72,3 +72,70 @@ pub(crate) fn status_info(
     lines.push(Line::from(format!("Repo: {}", repo)));
     ("Workspace".to_string(), lines)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tempfile::TempDir;
+
+    #[test]
+    fn snapshot_render_environment() {
+        let backend = TestBackend::new(50, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let lines = vec![
+            Line::from("Root: /home/user/scripts"),
+            Line::from("Version: v0.1.8"),
+        ];
+        terminal
+            .draw(|f| {
+                render_environment(f, f.size(), "Workspace", lines);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn test_status_info_default_workspace() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let theme = Theme::default();
+        let (title, lines) = status_info(&ws, None, None, false, &theme, 0);
+        assert_eq!(title, "Workspace");
+        assert!(!lines.is_empty());
+    }
+
+    #[test]
+    fn test_status_info_loading() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let theme = Theme::default();
+        let (title, _) = status_info(&ws, None, None, true, &theme, 0);
+        assert_eq!(title, "Loading");
+    }
+
+    #[test]
+    fn test_status_info_widget_error() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let theme = Theme::default();
+        let (title, lines) = status_info(&ws, None, Some("lua error"), false, &theme, 0);
+        assert_eq!(title, "Widget Error");
+        assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn test_status_info_with_widget() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let theme = Theme::default();
+        let widget = WidgetData {
+            title: "Custom".to_string(),
+            lines: vec!["Line 1".to_string(), "Line 2".to_string()],
+        };
+        let (title, lines) = status_info(&ws, Some(&widget), None, false, &theme, 0);
+        assert_eq!(title, "Custom");
+        assert_eq!(lines.len(), 2);
+    }
+}

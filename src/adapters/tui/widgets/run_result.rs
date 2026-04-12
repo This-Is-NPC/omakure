@@ -72,3 +72,103 @@ fn render_lines(app: &App, theme: &Theme) -> Vec<Line<'static>> {
     }
     lines
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::runs::{RunRow, RunState};
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tempfile::TempDir;
+
+    fn make_run_row(success: bool, stdout: &str, stderr: &str) -> RunRow {
+        RunRow {
+            run_id: "test-run".into(),
+            script_path: "/scripts/deploy.sh".into(),
+            script_name: None,
+            args_json: r#"["--target","prod"]"#.into(),
+            actor: "human".into(),
+            reason: None,
+            state: if success {
+                RunState::Completed
+            } else {
+                RunState::Failed
+            },
+            priority: 0,
+            enqueued_at: 0,
+            worker_id: None,
+            lease_until: None,
+            timeout_ms: None,
+            cron_schedule_id: None,
+            started_at: Some(0),
+            finished_at: Some(100),
+            duration_ms: Some(100),
+            exit_code: if success { Some(0) } else { Some(1) },
+            success: Some(success),
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            error: None,
+            parent_run_id: None,
+            omakure_version: "test".into(),
+        }
+    }
+
+    #[test]
+    fn snapshot_run_result_success() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let row = make_run_row(true, "Deployed successfully\n", "");
+        let mut app = App::test_new(&svc, ws, vec![], vec![row]);
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_run_result(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_run_result_failure() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let row = make_run_row(false, "", "Error: connection refused\n");
+        let mut app = App::test_new(&svc, ws, vec![], vec![row]);
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_run_result(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_run_result_no_history() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_run_result(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+}

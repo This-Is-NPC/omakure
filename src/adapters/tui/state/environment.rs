@@ -26,3 +26,20 @@ impl EnvironmentState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_defaults() {
+        let state = EnvironmentState::new();
+        assert!(state.config.is_none());
+        assert!(state.error.is_none());
+        assert!(state.entries.is_empty());
+        assert_eq!(state.selection, 0);
+        assert!(state.preview_lines.is_empty());
+        assert!(state.preview_error.is_none());
+        assert_eq!(state.preview_scroll, 0);
+    }
+}

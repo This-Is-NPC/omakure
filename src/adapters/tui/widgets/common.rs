@@ -75,3 +75,48 @@ pub(crate) fn state_color(state: RunState) -> Color {
         RunState::DeadLetter => Color::LightRed,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use ratatui::layout::Rect;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::queued(RunState::Queued, Color::Gray)]
+    #[case::running(RunState::Running, Color::Cyan)]
+    #[case::completed(RunState::Completed, Color::Green)]
+    #[case::failed(RunState::Failed, Color::Red)]
+    #[case::cancelled(RunState::Cancelled, Color::Yellow)]
+    #[case::timed_out(RunState::TimedOut, Color::Magenta)]
+    #[case::dead_letter(RunState::DeadLetter, Color::LightRed)]
+    fn test_state_color(#[case] state: RunState, #[case] expected: Color) {
+        assert_eq!(state_color(state), expected);
+    }
+
+    #[test]
+    fn test_standard_screen_layout_splits_correctly() {
+        let area = Rect::new(0, 0, 80, 24);
+        let [header, body, footer] = standard_screen_layout(area, 3, 1);
+        assert_eq!(header.height, 3);
+        assert_eq!(footer.height, 1);
+        assert_eq!(body.height, 24 - 3 - 1);
+        assert_eq!(header.width, 80);
+    }
+
+    #[test]
+    fn test_horizontal_split() {
+        let area = Rect::new(0, 0, 100, 24);
+        let [left, right] = horizontal_split(area, 40);
+        assert_eq!(left.width, 40);
+        assert_eq!(right.width, 60);
+    }
+
+    #[test]
+    fn test_state_style_returns_styled() {
+        let theme = Theme::default();
+        let style = state_style(&theme, RunState::Completed);
+        assert_eq!(style.fg, Some(Color::Green));
+    }
+}

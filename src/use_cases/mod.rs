@@ -36,3 +36,45 @@ impl ScriptService {
         self.runner.run(script, args)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use pretty_assertions::assert_eq;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_script_service_list_entries() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("deploy.sh"), "#!/bin/bash").unwrap();
+        fs::write(tmp.path().join("setup.py"), "print('hi')").unwrap();
+
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let service = ScriptService::new(Box::new(repo), Box::new(runner));
+
+        let entries = service.list_entries(tmp.path()).unwrap();
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn test_script_service_load_schema() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("test.sh");
+        fs::write(
+            &script,
+            "#!/bin/bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"Test\", \"Fields\": []}\n# OMAKURE_SCHEMA_END\n",
+        )
+        .unwrap();
+
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let service = ScriptService::new(Box::new(repo), Box::new(runner));
+
+        let schema = service.load_schema(&script).unwrap();
+        assert_eq!(schema.name, "Test");
+    }
+}

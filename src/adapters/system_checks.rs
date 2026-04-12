@@ -86,3 +86,54 @@ pub(crate) fn ensure_python_installed() -> Result<(), ScriptError> {
         &format!("Install Python and ensure {} is in PATH", program),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ensure_command_success() {
+        let result = ensure_command("echo", &["hello"], "echo should exist");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ensure_command_not_found() {
+        let result = ensure_command(
+            "this_command_does_not_exist_abc123",
+            &[],
+            "should not be found",
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ScriptError::DependencyMissing { name, .. } => {
+                assert_eq!(name, "this_command_does_not_exist_abc123");
+            }
+            other => panic!("expected DependencyMissing, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_ensure_command_check_failed() {
+        let result = ensure_command("false", &[], "should fail");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ScriptError::DependencyCheckFailed { name, .. } => {
+                assert_eq!(name, "false");
+            }
+            other => panic!("expected DependencyCheckFailed, got {:?}", other),
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_ensure_bash_installed() {
+        assert!(ensure_bash_installed().is_ok());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_ensure_git_installed() {
+        assert!(ensure_git_installed().is_ok());
+    }
+}

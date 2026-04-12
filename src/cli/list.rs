@@ -138,14 +138,8 @@ mod tests {
     #[test]
     fn matches_all_tags_multi_required_and_semantics() {
         let e = entry_with_tags(&["prefeitura", "sp", "production"]);
-        assert!(matches_all_tags(
-            &e,
-            &["prefeitura".into(), "sp".into()]
-        ));
-        assert!(!matches_all_tags(
-            &e,
-            &["prefeitura".into(), "rj".into()]
-        ));
+        assert!(matches_all_tags(&e, &["prefeitura".into(), "sp".into()]));
+        assert!(!matches_all_tags(&e, &["prefeitura".into(), "rj".into()]));
     }
 
     #[test]

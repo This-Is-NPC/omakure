@@ -349,8 +349,7 @@ pub struct RunStats {
 ///    and recreated with the new schema.
 pub fn open(workspace: &Workspace) -> Result<Connection, String> {
     let history_dir = workspace.history_dir();
-    fs::create_dir_all(history_dir)
-        .map_err(|err| format!("Create history dir failed: {}", err))?;
+    fs::create_dir_all(history_dir).map_err(|err| format!("Create history dir failed: {}", err))?;
     cleanup_legacy_json_files(history_dir);
     let db_path = runs_db_path(workspace);
     let conn = open_connection(&db_path)?;
@@ -369,8 +368,7 @@ fn open_connection(db_path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Create runs db folder failed: {}", err))?;
     }
-    let conn = Connection::open(db_path)
-        .map_err(|err| format!("Open runs db failed: {}", err))?;
+    let conn = Connection::open(db_path).map_err(|err| format!("Open runs db failed: {}", err))?;
     conn.busy_timeout(std::time::Duration::from_millis(2_000))
         .map_err(|err| format!("Runs db busy timeout failed: {}", err))?;
     let _journal_mode: String = conn
@@ -610,7 +608,10 @@ pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>
         .prepare(&sql)
         .map_err(|err| format!("Prepare query_runs failed: {}", err))?;
     let rows = stmt
-        .query_map(params_from_iter(params.iter().map(|p| p.as_ref())), row_to_run)
+        .query_map(
+            params_from_iter(params.iter().map(|p| p.as_ref())),
+            row_to_run,
+        )
         .map_err(|err| format!("Query query_runs failed: {}", err))?;
     let mut out = Vec::new();
     for row in rows {
@@ -887,8 +888,7 @@ fn finalize(
     let now = current_unix_ms();
     // Look up the row first so we can compute duration_ms relative to its
     // started_at and reject illegal transitions.
-    let row = get_run(conn, run_id)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
     if !matches!(row.state, RunState::Running) {
         return Err(format!(
             "illegal transition: cannot move {} -> {}; row must be in 'running'",
@@ -950,8 +950,7 @@ pub fn cancel(
     reason: Option<String>,
     completion: Option<RunCompletion>,
 ) -> Result<RunRow, String> {
-    let row = get_run(conn, run_id)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
     let now = current_unix_ms();
     match row.state {
         RunState::Queued => {
@@ -1012,8 +1011,7 @@ pub fn record_cancelled_output(
     run_id: &str,
     completion: RunCompletion,
 ) -> Result<(), String> {
-    let row = get_run(conn, run_id)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
     let now = current_unix_ms();
     let started = row.started_at.unwrap_or(now);
     let duration_ms = (now - started).max(0);
@@ -1044,8 +1042,7 @@ pub fn dead_letter(
     run_id: &str,
     reason: Option<String>,
 ) -> Result<RunRow, String> {
-    let row = get_run(conn, run_id)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
     if !matches!(row.state, RunState::Failed | RunState::TimedOut) {
         return Err(format!(
             "cannot promote run in state '{}' to dead_letter; only failed or timed_out rows are eligible",
@@ -1063,8 +1060,7 @@ pub fn dead_letter(
         params![merged_reason, run_id],
     )
     .map_err(|err| format!("Dead-letter run failed: {}", err))?;
-    get_run(conn, run_id)?
-        .ok_or_else(|| format!("run not found after dead_letter: {}", run_id))
+    get_run(conn, run_id)?.ok_or_else(|| format!("run not found after dead_letter: {}", run_id))
 }
 
 /// Aggregate counts per state and per actor.
@@ -1077,7 +1073,9 @@ pub fn stats(conn: &Connection) -> Result<RunStats, String> {
         .prepare("SELECT state, COUNT(*) FROM runs GROUP BY state")
         .map_err(|err| format!("Prepare state stats failed: {}", err))?;
     let state_rows = state_stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|err| format!("Query state stats failed: {}", err))?;
     for entry in state_rows {
         let (state, count) = entry.map_err(|err| format!("Read state row: {}", err))?;
@@ -1087,14 +1085,18 @@ pub fn stats(conn: &Connection) -> Result<RunStats, String> {
     // Make sure every legal state has an entry (zero when absent) so
     // dashboards can render a stable layout.
     for state in RunState::all() {
-        counts_by_state.entry(state.as_str().to_string()).or_insert(0);
+        counts_by_state
+            .entry(state.as_str().to_string())
+            .or_insert(0);
     }
 
     let mut actor_stmt = conn
         .prepare("SELECT actor, COUNT(*) FROM runs GROUP BY actor")
         .map_err(|err| format!("Prepare actor stats failed: {}", err))?;
     let actor_rows = actor_stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|err| format!("Query actor stats failed: {}", err))?;
     for entry in actor_rows {
         let (actor, count) = entry.map_err(|err| format!("Read actor row: {}", err))?;
@@ -1226,20 +1228,17 @@ pub fn query_traces(
         .prepare(&sql)
         .map_err(|err| format!("Prepare query_traces failed: {}", err))?;
     let rows = stmt
-        .query_map(
-            params_from_iter(params.iter().map(|p| p.as_ref())),
-            |row| {
-                Ok(TraceRow {
-                    trace_id: row.get(0)?,
-                    run_id: row.get(1)?,
-                    timestamp: row.get(2)?,
-                    sequence: row.get(3)?,
-                    level: row.get(4)?,
-                    message: row.get(5)?,
-                    data_json: row.get(6)?,
-                })
-            },
-        )
+        .query_map(params_from_iter(params.iter().map(|p| p.as_ref())), |row| {
+            Ok(TraceRow {
+                trace_id: row.get(0)?,
+                run_id: row.get(1)?,
+                timestamp: row.get(2)?,
+                sequence: row.get(3)?,
+                level: row.get(4)?,
+                message: row.get(5)?,
+                data_json: row.get(6)?,
+            })
+        })
         .map_err(|err| format!("Query traces failed: {}", err))?;
     let mut out = Vec::new();
     for row in rows {
@@ -1523,7 +1522,9 @@ mod tests {
         let ws = unique_workspace("fail_path");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
-        let _ = claim_next(&conn, "w", &ClaimFilters::default()).unwrap().unwrap();
+        let _ = claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .unwrap();
         fail(&conn, &row.run_id, fail_completion()).unwrap();
         let loaded = get_run(&conn, &row.run_id).unwrap().unwrap();
         assert_eq!(loaded.state, RunState::Failed);
@@ -1557,7 +1558,9 @@ mod tests {
         let ws = unique_workspace("cancel_running");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
-        let _ = claim_next(&conn, "w", &ClaimFilters::default()).unwrap().unwrap();
+        let _ = claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .unwrap();
         let after = cancel(&conn, &row.run_id, Some("kill".into()), None).unwrap();
         assert_eq!(after.state, RunState::Cancelled);
         assert_eq!(after.success, Some(false));
@@ -1569,7 +1572,9 @@ mod tests {
         let ws = unique_workspace("cancel_terminal");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
-        let _ = claim_next(&conn, "w", &ClaimFilters::default()).unwrap().unwrap();
+        let _ = claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .unwrap();
         complete(&conn, &row.run_id, ok_completion()).unwrap();
         let err = cancel(&conn, &row.run_id, None, None).unwrap_err();
         assert!(err.contains("terminal state"));
@@ -1666,7 +1671,11 @@ mod tests {
         conn.execute(
             "UPDATE runs SET state='running', worker_id='dead', started_at=?, lease_until=?
                 WHERE run_id=?",
-            params![current_unix_ms() - 100_000, current_unix_ms() - 50_000, row.run_id],
+            params![
+                current_unix_ms() - 100_000,
+                current_unix_ms() - 50_000,
+                row.run_id
+            ],
         )
         .unwrap();
         let reclaimed = claim_next(&conn, "fresh", &ClaimFilters::default())
@@ -1960,7 +1969,8 @@ mod tests {
             let run_id = row.run_id.clone();
             handles.push(std::thread::spawn(move || {
                 let mut conn = open_connection(&path).expect("open per-thread");
-                conn.busy_timeout(std::time::Duration::from_secs(15)).unwrap();
+                conn.busy_timeout(std::time::Duration::from_secs(15))
+                    .unwrap();
                 for i in 0..PER_THREAD {
                     insert_trace_with_retry(
                         &mut conn,

@@ -76,14 +76,7 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
         if let Some(script_path) = selected_script_path.as_ref() {
             // Fullscreen per-script charts. The list is hidden until
             // the user presses Esc to collapse the expanded view.
-            dashboards::render_script_charts(
-                frame,
-                entries_area,
-                app,
-                theme,
-                script_path,
-                true,
-            );
+            dashboards::render_script_charts(frame, entries_area, app, theme, script_path, true);
         } else {
             // Fallback: nothing meaningful to expand. Render the
             // normal list (defensive — `e` is gated on script
@@ -130,14 +123,7 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
             app.navigation.schema_preview_error.as_deref(),
             theme,
         );
-        dashboards::render_script_charts(
-            frame,
-            right_chunks[1],
-            app,
-            theme,
-            script_path,
-            false,
-        );
+        dashboards::render_script_charts(frame, right_chunks[1], app, theme, script_path, false);
     } else {
         scripts::render_scripts(
             frame,

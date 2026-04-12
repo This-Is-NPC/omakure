@@ -276,7 +276,10 @@ fn render_top_scripts_panel(frame: &mut Frame, area: Rect, app: &App, theme: &Th
         let cells = cells.clamp(1, bar_max_width);
         let bar: String = "█".repeat(cells as usize);
         lines.push(Line::from(vec![
-            Span::styled(bar, Style::default().fg(bar_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                bar,
+                Style::default().fg(bar_color).add_modifier(Modifier::BOLD),
+            ),
             Span::raw(format!(" {}", count)),
         ]));
         lines.push(Line::from(""));
@@ -308,12 +311,7 @@ fn truncate_for_width(text: &str, max_width: usize) -> String {
 
 // ---------- Global donut by status ----------
 
-fn render_global_status_panel(
-    frame: &mut Frame,
-    area: Rect,
-    theme: &Theme,
-    agg: &Aggregates,
-) {
+fn render_global_status_panel(frame: &mut Frame, area: Rect, theme: &Theme, agg: &Aggregates) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title("Runs by status")
@@ -379,8 +377,7 @@ fn render_state_bars(
         )));
 
         // Bar line.
-        let cells =
-            ((*count as f64 / max_count as f64) * bar_max_width as f64).ceil() as u16;
+        let cells = ((*count as f64 / max_count as f64) * bar_max_width as f64).ceil() as u16;
         let cells = cells.clamp(1, bar_max_width);
         let bar: String = "█".repeat(cells as usize);
         let pct = (*count as f64 / total as f64 * 100.0).round() as u32;
@@ -434,11 +431,7 @@ pub(crate) fn render_script_charts(
     frame.render_widget(block, area);
 
     let canonical = canonical_script_path_string(script_path);
-    let agg = aggregate_for_script(
-        &app.history.entries,
-        &canonical,
-        PER_SCRIPT_DURATION_WINDOW,
-    );
+    let agg = aggregate_for_script(&app.history.entries, &canonical, PER_SCRIPT_DURATION_WINDOW);
 
     if agg.total == 0 {
         let placeholder = Paragraph::new(Line::from(vec![

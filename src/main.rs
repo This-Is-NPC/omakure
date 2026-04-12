@@ -286,8 +286,8 @@ mod tests {
     fn resolve_scripts_root_errors_on_nonexistent_path() {
         let default = PathBuf::from("/tmp");
         let missing = PathBuf::from("/tmp/__omakure_definitely_missing_path__");
-        let err = resolve_scripts_root(Some(&missing), &default)
-            .expect_err("missing path must fail");
+        let err =
+            resolve_scripts_root(Some(&missing), &default).expect_err("missing path must fail");
         assert!(matches!(err, AppError::ScriptsDirNotFound { .. }));
         let msg = format!("{}", err);
         assert!(
@@ -302,8 +302,7 @@ mod tests {
         let _ = fs::remove_file(&tmp);
         fs::write(&tmp, "not a directory").expect("create temp file");
         let default = std::env::temp_dir();
-        let err = resolve_scripts_root(Some(&tmp), &default)
-            .expect_err("file path must fail");
+        let err = resolve_scripts_root(Some(&tmp), &default).expect_err("file path must fail");
         assert!(matches!(err, AppError::ScriptsDirNotADirectory { .. }));
         let msg = format!("{}", err);
         assert!(msg.contains("expected a directory"), "message was: {msg}");
@@ -318,14 +317,14 @@ mod tests {
 
         // Sanity: from /tmp the relative form `__omakure_resolve_root_canon_test__`
         // and the absolute form should canonicalize to the same path.
-        let abs = resolve_scripts_root(Some(&tmp), &PathBuf::from("/"))
-            .expect("absolute path resolves");
+        let abs =
+            resolve_scripts_root(Some(&tmp), &PathBuf::from("/")).expect("absolute path resolves");
 
         let prev = std::env::current_dir().expect("cwd");
         std::env::set_current_dir(std::env::temp_dir()).expect("chdir tmp");
         let rel = PathBuf::from("__omakure_resolve_root_canon_test__");
-        let rel_resolved = resolve_scripts_root(Some(&rel), &PathBuf::from("/"))
-            .expect("relative path resolves");
+        let rel_resolved =
+            resolve_scripts_root(Some(&rel), &PathBuf::from("/")).expect("relative path resolves");
         std::env::set_current_dir(&prev).expect("restore cwd");
 
         assert_eq!(abs, rel_resolved);

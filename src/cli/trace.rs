@@ -19,11 +19,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-pub fn run(
-    scripts_dir: PathBuf,
-    args: TraceArgs,
-    json_output: bool,
-) -> Result<(), Box<dyn Error>> {
+pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     // No run id, no trace. Print a single warning to stderr (not stdout
     // — agents read stdout) and exit 0 so the calling script keeps going.
     let run_id = match env::var("OMAKURE_RUN_ID") {
@@ -88,11 +84,7 @@ pub fn run(
     Ok(())
 }
 
-fn emit_error(
-    json_output: bool,
-    code: &str,
-    message: String,
-) -> Result<(), Box<dyn Error>> {
+fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
         std::process::exit(1);

@@ -6,8 +6,7 @@ use crate::cli::args::{
 };
 use crate::cli::json::{self, codes};
 use crate::runs::{
-    self, format_run_timestamp, query_traces, RunFilters, RunRow, RunState, RunStateSet,
-    TraceLevel,
+    self, format_run_timestamp, query_traces, RunFilters, RunRow, RunState, RunStateSet, TraceLevel,
 };
 use crate::workspace::Workspace;
 use serde::Serialize;
@@ -362,11 +361,7 @@ fn open_or_error(
     }
 }
 
-fn emit_error(
-    json_output: bool,
-    code: &str,
-    message: String,
-) -> Result<(), Box<dyn Error>> {
+fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
         std::process::exit(1);
@@ -435,8 +430,7 @@ mod tests {
 
     #[test]
     fn resolve_state_filter_explicit_states() {
-        let resolved =
-            resolve_state_filter(&["queued".into(), "running".into()], None).unwrap();
+        let resolved = resolve_state_filter(&["queued".into(), "running".into()], None).unwrap();
         assert_eq!(resolved, vec![RunState::Queued, RunState::Running]);
     }
 

@@ -208,7 +208,9 @@ pub fn execute_with_heartbeat(
     // because the user-facing `--timeout` governs business-time, not
     // crash recovery.
     let started = Instant::now();
-    let timeout = row.timeout_ms.map(|ms| Duration::from_millis(ms.max(0) as u64));
+    let timeout = row
+        .timeout_ms
+        .map(|ms| Duration::from_millis(ms.max(0) as u64));
     let timed_out = Arc::new(AtomicBool::new(false));
     let mut killed = false;
 
@@ -294,7 +296,10 @@ pub fn execute_with_heartbeat(
     // effect besides forcing the wait above.
     let _ = killed;
 
-    ExecutionResult { terminal, completion }
+    ExecutionResult {
+        terminal,
+        completion,
+    }
 }
 
 /// Heartbeat tick interval. Short enough to detect external cancel

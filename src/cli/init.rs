@@ -108,11 +108,7 @@ pub fn run_with_format(
     Ok(())
 }
 
-fn emit_error(
-    json_output: bool,
-    code: &str,
-    message: String,
-) -> Result<(), Box<dyn Error>> {
+fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
         std::process::exit(1);
@@ -387,10 +383,8 @@ mod tests {
     fn load_schema_input_inline_and_file() {
         let inline = load_schema_input(r#"{"Name":"x","Fields":[]}"#).unwrap();
         assert!(inline.contains("Name"));
-        let dir = std::env::temp_dir().join(format!(
-            "omakure_init_test_schema_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("omakure_init_test_schema_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let path = dir.join("schema.json");
         fs::write(&path, r#"{"Name":"y","Fields":[]}"#).unwrap();

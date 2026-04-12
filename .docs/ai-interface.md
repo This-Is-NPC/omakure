@@ -21,6 +21,99 @@ The user remains the gatekeeper at the OS level (file permissions, sudo,
 network). Omakure does not attempt to sandbox what the underlying script
 does.
 
+## Storage privacy contract
+
+`<workspace>/.history/runs.sqlite` is **private internal storage of the
+omakure CLI**. Scripts, agents, and orchestrators must never open this
+file directly — neither for reads nor for writes. The only legitimate
+access paths are the documented verbs:
+
+- writes: `omakure run`, `omakure queue add|cancel|dead-letter`,
+  `omakure queue worker`, `omakure trace`
+- reads: `omakure history list|show|stats|traces`, `omakure queue stats`
+
+This is an architectural rule, not a soft convention. Every code path
+in the omakure binary that touches `runs.sqlite` lives in `src/runs.rs`
+and is the only writer in the codebase. Scripts launched by
+`omakure run` or `omakure queue worker` reach the database **only** by
+re-executing the omakure binary (typically via `omakure trace`), which
+gives the omakure CLI full control over what is written and when.
+
+### Why this matters
+
+The trust model declares that the AI is a full user at the OS level.
+The storage privacy contract is the **complementary** rule that bounds
+the AI's audit surface: the AI cannot tamper with its own audit log
+because the audit log is not part of the AI's accessible state.
+
+Concretely:
+
+- An agent cannot rewrite history to hide a failed run.
+- An agent cannot fabricate a run that did not happen.
+- An agent cannot read sibling agents' captured stdout/stderr through
+  raw SQL queries that bypass the documented filters.
+- An agent cannot corrupt the schema or the SQLite WAL pages by
+  partial writes from a buggy script.
+- Tools that wrap the omakure CLI for orchestration purposes (workflow
+  engines, dashboards, custom dispatchers) get a single, stable contract
+  via the verbs — they never have to worry about schema drift in
+  `runs.sqlite`.
+
+### Pipeline state lives elsewhere
+
+If a pipeline needs persistent state of its own — migration history,
+catalogues of visited URLs, intermediate artifacts, queues of work
+local to one pipeline, application data — that state lives in a
+**separate** datastore provisioned by the orchestrator (a
+Postgres/MySQL/SQLite of the orchestrator's choice, exposed via env
+vars or a sidecar). It does **not** live in `runs.sqlite`. The
+omakure database has exactly one purpose: recording omakure's runs and
+traces. Mixing pipeline data into it conflates two ownerships and
+breaks the privacy contract for no benefit.
+
+### Enforcing the contract at the OS level
+
+For deployments where the agent is sandboxed in a container or
+restricted user account (the canonical pattern for orchestrating an
+AI agent fleet), the privacy contract should be backed by
+**kernel-enforced isolation**, not just by documentation. Recommended
+pattern:
+
+1. Mount `<workspace>/.history/` into the sandbox so the omakure
+   binary can reach it, but make it owned by a UID **other than** the
+   sandbox's runtime UID, with mode `700`.
+2. Install the omakure binary inside the sandbox image with the
+   `cap_dac_override+ep` file capability:
+
+   ```dockerfile
+   COPY --chown=root:root --chmod=755 omakure /usr/local/bin/omakure
+   RUN setcap cap_dac_override+ep /usr/local/bin/omakure
+   ```
+
+3. Run the sandbox with `--security-opt no-new-privileges`. File
+   capabilities survive `no-new-privileges`; setuid does not, which
+   is why file capabilities are the recommended mechanism here.
+4. Do **not** include a SQLite client in the sandbox image (`sqlite3`
+   binary, language SQLite bindings reachable from the agent's
+   runtime, etc.). Defense in depth: a buggy or compromised agent has
+   no off-the-shelf tooling to bypass the omakure CLI even if the
+   filesystem isolation has a gap.
+
+With this layout, the sandbox UID has no read or write access to the
+SQLite file. The omakure binary, when invoked, gains
+`CAP_DAC_OVERRIDE` from its file capability and can open the file.
+Children spawned by omakure (the actual script processes) do **not**
+inherit the capability — they run as the sandbox UID, with no DAC
+privilege, and therefore cannot touch `runs.sqlite` directly. The
+script's only path back to omakure is `execve` of the omakure binary,
+typically via `omakure trace`, which gets its own capability from the
+filesystem attribute on each invocation.
+
+This is the trust boundary: anything that wants to write the audit
+log must `execve` the omakure binary, which means it goes through
+clap argument parsing, the typed `runs.rs` helpers, and the JSON
+envelope contract. There is no "write a row directly" path.
+
 ## Destructive upgrade notice
 
 Upgrading to this version of `omakure` triggers **two destructive

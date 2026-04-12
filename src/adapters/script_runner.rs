@@ -95,10 +95,7 @@ mod tests {
         fs::write(&script, "print('hello')").unwrap();
 
         let cmd = MultiScriptRunner::build_command(&script, &[], &[]).unwrap();
-        assert_eq!(
-            cmd.get_program(),
-            crate::runtime::python_program()
-        );
+        assert_eq!(cmd.get_program(), crate::runtime::python_program());
     }
 
     #[test]

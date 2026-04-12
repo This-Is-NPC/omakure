@@ -241,13 +241,9 @@ mod tests {
     use crate::use_cases::ScriptService;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
-    fn make_app<'a>(
-        tmp: &'a TempDir,
-        svc: &'a ScriptService,
-    ) -> App<'a> {
+    fn make_app<'a>(tmp: &'a TempDir, svc: &'a ScriptService) -> App<'a> {
         let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
         let entries = vec![WorkspaceEntry {
             path: tmp.path().join("deploy.sh"),

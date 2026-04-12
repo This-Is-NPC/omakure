@@ -205,7 +205,10 @@ mod tests {
         assert_eq!(payload.fields.len(), 1);
         assert_eq!(payload.fields[0].name, "target");
         assert!(payload.fields[0].required);
-        assert_eq!(payload.fields[0].choices, Some(vec!["dev".to_string(), "prod".to_string()]));
+        assert_eq!(
+            payload.fields[0].choices,
+            Some(vec!["dev".to_string(), "prod".to_string()])
+        );
         assert_eq!(payload.relative_path, "deploy.sh");
     }
 

@@ -605,7 +605,14 @@ mod tests {
 
     #[test]
     fn test_history_state_and_state_set_conflict() {
-        let result = parse(&["history", "list", "--state", "completed", "--state-set", "all"]);
+        let result = parse(&[
+            "history",
+            "list",
+            "--state",
+            "completed",
+            "--state-set",
+            "all",
+        ]);
         assert!(result.is_err());
     }
 }

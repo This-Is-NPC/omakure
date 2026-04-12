@@ -45,7 +45,8 @@ mod tests {
         let backend = TestBackend::new(50, 8);
         let mut terminal = Terminal::new(backend).unwrap();
         let theme = Theme::default();
-        let msg = "A very long error message that should wrap around the available width in the terminal";
+        let msg =
+            "A very long error message that should wrap around the available width in the terminal";
         terminal
             .draw(|f| {
                 render_error(f, f.size(), msg, &theme);

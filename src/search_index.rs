@@ -541,11 +541,7 @@ echo deploying
         )
         .unwrap();
 
-        fs::write(
-            scripts_dir.join("test.sh"),
-            "#!/bin/bash\necho testing",
-        )
-        .unwrap();
+        fs::write(scripts_dir.join("test.sh"), "#!/bin/bash\necho testing").unwrap();
 
         let db = tmp.path().join("search.sqlite");
         let count = rebuild_index(&db, &scripts_dir).unwrap();

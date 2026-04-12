@@ -118,15 +118,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
             .draw(|f| {
-                render_scripts(
-                    f,
-                    f.size(),
-                    &ws,
-                    tmp.path(),
-                    &[],
-                    &mut list_state,
-                    &theme,
-                );
+                render_scripts(f, f.size(), &ws, tmp.path(), &[], &mut list_state, &theme);
             })
             .unwrap();
         insta::assert_snapshot!(terminal.backend());

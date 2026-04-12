@@ -149,9 +149,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_list_entries_sorts_dirs_first_then_alpha(
-        workspace_with_scripts: (TempDir, PathBuf),
-    ) {
+    fn test_list_entries_sorts_dirs_first_then_alpha(workspace_with_scripts: (TempDir, PathBuf)) {
         let (_tmp, root) = workspace_with_scripts;
         let repo = FsWorkspaceRepository::new(&root);
         let entries = repo.list_entries(&root).unwrap();
@@ -166,7 +164,10 @@ mod tests {
             .iter()
             .rposition(|k| *k == WorkspaceEntryKind::Directory)
             .unwrap_or(0);
-        assert!(last_dir_idx < first_script_idx, "dirs must come before scripts");
+        assert!(
+            last_dir_idx < first_script_idx,
+            "dirs must come before scripts"
+        );
     }
 
     #[rstest]
@@ -229,7 +230,10 @@ mod tests {
             let path_str = script.to_string_lossy();
             assert!(!path_str.contains(".history"), "should skip .history");
             assert!(!path_str.contains(".git/"), "should skip .git");
-            assert!(!path_str.contains(".omaken/envs"), "should skip .omaken/envs");
+            assert!(
+                !path_str.contains(".omaken/envs"),
+                "should skip .omaken/envs"
+            );
         }
     }
 

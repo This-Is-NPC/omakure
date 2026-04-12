@@ -485,7 +485,13 @@ mod tests {
         assert_eq!(copied, 1);
         assert_eq!(skipped, 1);
         // existing file not overwritten
-        assert_eq!(fs::read_to_string(dest.path().join("a.sh")).unwrap(), "existing");
-        assert_eq!(fs::read_to_string(dest.path().join("b.sh")).unwrap(), "script b");
+        assert_eq!(
+            fs::read_to_string(dest.path().join("a.sh")).unwrap(),
+            "existing"
+        );
+        assert_eq!(
+            fs::read_to_string(dest.path().join("b.sh")).unwrap(),
+            "script b"
+        );
     }
 }

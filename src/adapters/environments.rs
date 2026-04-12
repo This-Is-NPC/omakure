@@ -407,7 +407,10 @@ mod tests {
         let repo = FsEnvironmentRepository::new(&envs);
         let preview = repo.load_env_preview(&envs.join("prod.conf")).unwrap();
 
-        assert_eq!(preview[0], ("HOST".to_string(), "prod.example.com".to_string()));
+        assert_eq!(
+            preview[0],
+            ("HOST".to_string(), "prod.example.com".to_string())
+        );
         assert_eq!(preview[1], ("API_KEY".to_string(), "***".to_string()));
     }
 }

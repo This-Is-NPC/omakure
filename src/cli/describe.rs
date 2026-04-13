@@ -233,6 +233,71 @@ mod tests {
         assert!(payload.fields.is_empty());
     }
 
+    fn write_schema_script(tmp: &TempDir, name: &str, body: &str) -> PathBuf {
+        let p = tmp.path().join(name);
+        std::fs::write(&p, body).unwrap();
+        p
+    }
+
+    #[test]
+    fn run_human_format_with_full_schema() {
+        let tmp = TempDir::new().unwrap();
+        write_schema_script(
+            &tmp,
+            "deploy.sh",
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"Deploy\",\"Description\":\"Ship\",\"Tags\":[\"ops\"],\"Fields\":[{\"Name\":\"target\",\"Type\":\"string\",\"Order\":1,\"Required\":true,\"Arg\":\"--target\",\"Default\":\"prod\",\"Choices\":[\"dev\",\"prod\"],\"Prompt\":\"Target\"}]}\n# OMAKURE_SCHEMA_END\n",
+        );
+        run(
+            tmp.path().to_path_buf(),
+            DescribeArgs { script: "deploy.sh".into() },
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_json_format_succeeds() {
+        let tmp = TempDir::new().unwrap();
+        write_schema_script(
+            &tmp,
+            "deploy.sh",
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"Deploy\",\"Fields\":[]}\n# OMAKURE_SCHEMA_END\n",
+        );
+        run(
+            tmp.path().to_path_buf(),
+            DescribeArgs { script: "deploy.sh".into() },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_returns_not_found_for_missing_script() {
+        let tmp = TempDir::new().unwrap();
+        let err = run(
+            tmp.path().to_path_buf(),
+            DescribeArgs {
+                script: "ghost.sh".into(),
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn run_returns_not_found_when_script_lacks_schema() {
+        let tmp = TempDir::new().unwrap();
+        write_schema_script(&tmp, "bare.sh", "#!/usr/bin/env bash\necho hi\n");
+        let err = run(
+            tmp.path().to_path_buf(),
+            DescribeArgs { script: "bare.sh".into() },
+            false,
+        )
+        .unwrap_err();
+        assert!(!err.to_string().is_empty());
+    }
+
     #[test]
     fn test_sample_envelope_shape() {
         let envelope = sample_envelope();

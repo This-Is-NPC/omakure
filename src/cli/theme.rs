@@ -261,4 +261,79 @@ mod tests {
         let result = format_color(Color::Rgb(255, 0, 128));
         assert_eq!(result, "#ff0080");
     }
+
+    #[test]
+    fn test_format_color_named_falls_back_to_debug() {
+        let result = format_color(Color::Red);
+        assert!(result.contains("Red"));
+    }
+
+    #[test]
+    fn test_print_theme_preview_for_default_theme() {
+        let theme = Theme::default();
+        // Just exercise the print function — assertion is no panic.
+        print_theme_preview("default", &theme);
+    }
+
+    #[test]
+    fn test_ensure_theme_exists_user_theme_file() {
+        let tmp = TempDir::new().unwrap();
+        let path = theme_file_path(tmp.path(), "custom");
+        fs::write(&path, "[meta]\nname = \"custom\"").unwrap();
+        assert!(ensure_theme_exists("custom", tmp.path()).is_ok());
+    }
+
+    #[test]
+    fn test_run_dispatches_to_subcommands() {
+        // Point XDG_CONFIG_HOME at a temp dir so we don't write to the
+        // user's real config.
+        let tmp = TempDir::new().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        std::env::set_var("XDG_CONFIG_HOME", tmp.path());
+
+        let scripts_dir = tmp.path().to_path_buf();
+        let _ = run(
+            scripts_dir.clone(),
+            ThemeArgs {
+                command: ThemeCommand::List,
+            },
+        );
+        let _ = run(
+            scripts_dir.clone(),
+            ThemeArgs {
+                command: ThemeCommand::Path,
+            },
+        );
+        let _ = run(
+            scripts_dir.clone(),
+            ThemeArgs {
+                command: ThemeCommand::Set(crate::cli::args::ThemeSetArgs {
+                    name: "default".into(),
+                }),
+            },
+        );
+        let _ = run(
+            scripts_dir.clone(),
+            ThemeArgs {
+                command: ThemeCommand::Preview(crate::cli::args::ThemeSetArgs {
+                    name: "default".into(),
+                }),
+            },
+        );
+        // Unknown theme returns an error path.
+        let err = run(
+            scripts_dir,
+            ThemeArgs {
+                command: ThemeCommand::Preview(crate::cli::args::ThemeSetArgs {
+                    name: "__no_such_theme__".into(),
+                }),
+            },
+        );
+        assert!(err.is_err());
+
+        match prev {
+            Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+    }
 }

@@ -259,6 +259,29 @@ echo "hello"
     }
 
     #[test]
+    fn test_read_schema_unsupported_extension_returns_err() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("notes.txt");
+        fs::write(&script, "no schema").unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        assert!(repo.read_schema(&script).is_err());
+    }
+
+    #[test]
+    fn test_read_schema_powershell_uses_hash_or_semicolon_prefix() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("test.ps1");
+        fs::write(
+            &script,
+            "; OMAKURE_SCHEMA_START\n; {\"Name\": \"Ps\", \"Fields\": []}\n; OMAKURE_SCHEMA_END\n",
+        )
+        .unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let schema = repo.read_schema(&script).unwrap();
+        assert_eq!(schema.name, "Ps");
+    }
+
+    #[test]
     fn test_read_schema_no_block() {
         let tmp = TempDir::new().unwrap();
         let script = tmp.path().join("bare.sh");

@@ -90,4 +90,11 @@ mod tests {
         let frame = spinner_glyph(SpinnerKind::Sand, u64::MAX);
         assert!(!frame.is_empty());
     }
+
+    #[test]
+    fn spinner_span_renders_glyph_with_trailing_space() {
+        let theme = Theme::default();
+        let span = spinner_span(SpinnerKind::Sand, 0, &theme);
+        assert!(span.content.ends_with(' '));
+    }
 }

@@ -550,6 +550,131 @@ mod tests {
     }
 
     #[test]
+    fn execute_returns_errored_when_script_missing() {
+        let ws = make_workspace("missing_script");
+        let conn = runs::open(&ws).unwrap();
+        // Enqueue a row pointing at a path that does not exist.
+        let bogus = ws.root().join("does_not_exist.sh");
+        let row = runs::start_inline(
+            &conn,
+            bogus.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Errored);
+        assert!(result
+            .completion
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("script not found"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_returns_errored_for_unsupported_extension() {
+        let ws = make_workspace("unsupported_ext");
+        let script = ws.root().join("plain.txt");
+        fs::write(&script, "not a script").unwrap();
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Errored);
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_fails_when_required_field_missing() {
+        let ws = make_workspace("missing_required");
+        let script = write_bash_stub(
+            &ws,
+            "needs.sh",
+            r#"# placeholder
+echo done"#,
+        );
+        // Inject a schema block at the top of the script declaring a
+        // required `--name` field.
+        let body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"name\", \"Type\": \"string\", \"Order\": 1, \"Required\": true}]}\n# OMAKURE_SCHEMA_END\necho done\n";
+        fs::write(&script, body).unwrap();
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Failed);
+        assert!(result
+            .completion
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("required field"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn check_required_fields_passes_when_arg_present() {
+        let ws = make_workspace("required_present");
+        let script = ws.root().join("ok.sh");
+        let body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"name\", \"Type\": \"string\", \"Order\": 1, \"Required\": true}]}\n# OMAKURE_SCHEMA_END\necho done\n";
+        fs::write(&script, body).unwrap();
+
+        let args_json = serde_json::to_string(&vec!["--name=alice"]).unwrap();
+        let res = check_required_fields(&ws, &script, &args_json);
+        assert!(res.is_ok());
+
+        // Optional field absent — also OK.
+        let opt_body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"opt\", \"Type\": \"string\", \"Order\": 1}]}\n# OMAKURE_SCHEMA_END\n";
+        fs::write(&script, opt_body).unwrap();
+        assert!(check_required_fields(&ws, &script, "[]").is_ok());
+
+        // Schema absent — permissive.
+        let bare = "#!/usr/bin/env bash\necho hi\n";
+        fs::write(&script, bare).unwrap();
+        assert!(check_required_fields(&ws, &script, "[]").is_ok());
+
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn parse_args_json_handles_invalid_input() {
+        assert!(parse_args_json("not valid json").is_empty());
+        assert_eq!(parse_args_json("[\"a\",\"b\"]"), vec!["a", "b"]);
+    }
+
+    #[test]
     #[cfg(unix)]
     fn execute_external_cancel_kills_running_script() {
         let ws = make_workspace("cancel");

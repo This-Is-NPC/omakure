@@ -175,4 +175,61 @@ mod tests {
         let name = load_theme_name(&config);
         assert_eq!(name, Some("nord".to_string()));
     }
+
+    #[test]
+    fn test_write_replaces_scalar_theme_value() {
+        let tmp = TempDir::new().unwrap();
+        let config = tmp.path().join("config.toml");
+        fs::write(&config, "theme = \"legacy\"\n").unwrap();
+
+        write_global_theme(&config, "nord").unwrap();
+
+        let name = load_theme_name(&config);
+        assert_eq!(name, Some("nord".to_string()));
+    }
+
+    #[test]
+    fn test_ensure_builtin_themes_creates_files() {
+        let tmp = TempDir::new().unwrap();
+        ensure_builtin_themes(tmp.path()).unwrap();
+
+        for theme in BUILTIN_THEMES {
+            let path = theme_file_path(tmp.path(), theme.name);
+            assert!(path.exists(), "missing builtin theme: {}", theme.name);
+        }
+    }
+
+    #[test]
+    fn test_ensure_builtin_themes_skips_existing() {
+        let tmp = TempDir::new().unwrap();
+        let first = BUILTIN_THEMES.first().expect("at least one builtin theme");
+        let path = theme_file_path(tmp.path(), first.name);
+        fs::write(&path, "custom").unwrap();
+
+        ensure_builtin_themes(tmp.path()).unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "custom");
+    }
+
+    #[test]
+    fn test_config_dir_returns_some() {
+        assert!(config_dir().is_some());
+    }
+
+    #[test]
+    fn test_ensure_theme_layout_creates_paths() {
+        let tmp = TempDir::new().unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        std::env::set_var("XDG_CONFIG_HOME", tmp.path());
+
+        let layout = ensure_theme_layout().unwrap();
+        assert!(layout.config_dir.exists());
+        assert!(layout.themes_dir.exists());
+        assert!(layout.config_path.exists());
+
+        match prev {
+            Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+    }
 }

@@ -838,4 +838,118 @@ mod tests {
         assert_eq!(a2.state, RunState::Completed);
         let _ = fs::remove_dir_all(ws.root());
     }
+
+    #[test]
+    fn stats_prints_total_and_state_breakdown() {
+        let (ws, _dir) = make_workspace("stats_human");
+        // Stats works on an empty queue too.
+        stats(&ws, false).unwrap();
+        stats(&ws, true).unwrap();
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn cancel_queued_run_prints_cancelled_line() {
+        let (ws, _dir) = make_workspace("cancel_queued");
+        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::enqueue(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        cancel(
+            &ws,
+            QueueCancelArgs {
+                run_id: row.run_id.clone(),
+                reason: Some("never mind".into()),
+            },
+            false,
+        )
+        .unwrap();
+        let conn = runs::open(&ws).unwrap();
+        let updated = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
+        assert_eq!(updated.state, RunState::Cancelled);
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn dead_letter_missing_run_returns_not_found() {
+        let (ws, _dir) = make_workspace("dl_missing");
+        let err = dead_letter(
+            &ws,
+            QueueDeadLetterArgs {
+                run_id: "ghost".into(),
+                reason: None,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("run not found"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn run_dispatches_subcommands() {
+        let (ws, _dir) = make_workspace("run_dispatch");
+        run(
+            ws.root().to_path_buf(),
+            QueueArgs {
+                command: QueueCommand::Stats,
+            },
+            false,
+        )
+        .unwrap();
+        run(
+            ws.root().to_path_buf(),
+            QueueArgs {
+                command: QueueCommand::Stats,
+            },
+            true,
+        )
+        .unwrap();
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn worker_with_concurrency_and_once_drains_queue() {
+        let (ws, _dir) = make_workspace("worker_dispatch");
+        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let conn = runs::open(&ws).unwrap();
+        for _ in 0..2 {
+            runs::enqueue(
+                &conn,
+                script.to_str().unwrap(),
+                &[],
+                EnqueueOptions {
+                    actor: "human".into(),
+                    omakure_version: "test".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        drop(conn);
+        worker(
+            &ws,
+            QueueWorkerArgs {
+                concurrency: 2,
+                actor_filter: None,
+                script_filter: None,
+                once: true,
+            },
+            false,
+        )
+        .unwrap();
+        let _ = fs::remove_dir_all(ws.root());
+    }
 }

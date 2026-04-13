@@ -136,4 +136,36 @@ mod tests {
     fn test_ensure_git_installed() {
         assert!(ensure_git_installed().is_ok());
     }
+
+    #[test]
+    fn test_ensure_command_check_failed_with_non_empty_stderr() {
+        // `bash -c 'echo boom 1>&2; exit 1'` exits non-zero with stderr.
+        let result = ensure_command("bash", &["-c", "echo boom 1>&2; exit 1"], "hint");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ScriptError::DependencyCheckFailed { name, message } => {
+                assert_eq!(name, "bash");
+                assert!(message.contains("boom"));
+            }
+            other => panic!("expected DependencyCheckFailed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_ensure_powershell_installed_returns_result() {
+        // Only assert that the call returns a Result; pwsh may or may not
+        // be installed in the dev environment. The point is to exercise
+        // the wrapper code path.
+        let _ = ensure_powershell_installed();
+    }
+
+    #[test]
+    fn test_ensure_python_installed_returns_result() {
+        let _ = ensure_python_installed();
+    }
+
+    #[test]
+    fn test_ensure_jq_installed_returns_result() {
+        let _ = ensure_jq_installed();
+    }
 }

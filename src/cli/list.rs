@@ -148,4 +148,66 @@ mod tests {
         assert!(!matches_all_tags(&e, &["prefeitura".into()]));
         assert!(matches_all_tags(&e, &["Prefeitura".into()]));
     }
+
+    fn write_script(dir: &std::path::Path, name: &str, schema: Option<&str>) {
+        let body = match schema {
+            Some(s) => format!(
+                "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {}\n# OMAKURE_SCHEMA_END\necho hi\n",
+                s
+            ),
+            None => "#!/usr/bin/env bash\necho hi\n".to_string(),
+        };
+        std::fs::write(dir.join(name), body).unwrap();
+    }
+
+    #[test]
+    fn run_human_format_with_scripts() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        write_script(
+            tmp.path(),
+            "deploy.sh",
+            Some(r#"{"Name":"Deploy","Tags":["ops"],"Fields":[]}"#),
+        );
+        write_script(tmp.path(), "bare.sh", None);
+        run(
+            tmp.path().to_path_buf(),
+            ScriptsArgs { tag: vec![] },
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_json_format_with_tag_filter() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        write_script(
+            tmp.path(),
+            "deploy.sh",
+            Some(r#"{"Name":"Deploy","Tags":["ops"],"Fields":[]}"#),
+        );
+        write_script(
+            tmp.path(),
+            "noise.sh",
+            Some(r#"{"Name":"Noise","Tags":["other"],"Fields":[]}"#),
+        );
+        run(
+            tmp.path().to_path_buf(),
+            ScriptsArgs {
+                tag: vec!["ops".into()],
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_human_format_no_scripts() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        run(
+            tmp.path().to_path_buf(),
+            ScriptsArgs { tag: vec![] },
+            false,
+        )
+        .unwrap();
+    }
 }

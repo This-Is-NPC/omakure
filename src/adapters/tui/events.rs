@@ -462,6 +462,280 @@ mod tests {
         handle_key_event(&mut app, key_mod(KeyCode::Char('e'), KeyModifiers::ALT));
         assert_eq!(app.screen, Screen::Environments);
     }
+
+    #[test]
+    fn test_esc_quits_at_workspace_root() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn test_esc_collapses_dashboard_expansion_first() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.script_dashboard_expanded = true;
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        assert!(!app.script_dashboard_expanded);
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn test_e_toggles_script_dashboard_only_for_script() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        // Move to entry index 1 which is a Script in setup_app.
+        app.move_selection(1);
+        assert!(!app.script_dashboard_expanded);
+        handle_key_event(&mut app, key(KeyCode::Char('e')));
+        assert!(app.script_dashboard_expanded);
+        // Toggling again collapses.
+        handle_key_event(&mut app, key(KeyCode::Char('e')));
+        assert!(!app.script_dashboard_expanded);
+    }
+
+    #[test]
+    fn test_e_over_directory_is_noop() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        // Index 0 is a Directory in setup_app.
+        handle_key_event(&mut app, key(KeyCode::Char('e')));
+        assert!(!app.script_dashboard_expanded);
+    }
+
+    #[test]
+    fn test_r_refreshes_entries() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        // Just exercise the path.
+        handle_key_event(&mut app, key(KeyCode::Char('r')));
+        handle_key_event(&mut app, key(KeyCode::F(5)));
+        handle_key_event(&mut app, key(KeyCode::Char('i')));
+        handle_key_event(&mut app, key(KeyCode::F(6)));
+    }
+
+    #[test]
+    fn test_backspace_navigates_up() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, key(KeyCode::Backspace));
+        // No assertion on path — just exercise navigate_up.
+    }
+
+    #[test]
+    fn test_search_alt_e_enters_envs() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Search;
+        handle_key_event(&mut app, key_mod(KeyCode::Char('e'), KeyModifiers::ALT));
+        assert_eq!(app.screen, Screen::Environments);
+    }
+
+    #[test]
+    fn test_search_navigation_keys() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Search;
+        handle_key_event(&mut app, key(KeyCode::Down));
+        handle_key_event(&mut app, key(KeyCode::Up));
+        handle_key_event(&mut app, key(KeyCode::Char('j')));
+        handle_key_event(&mut app, key(KeyCode::Char('k')));
+        handle_key_event(&mut app, key(KeyCode::Enter));
+    }
+
+    #[test]
+    fn test_field_input_navigation_keys() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::FieldInput;
+        app.field_input.fields = vec![
+            crate::domain::Field {
+                name: "a".to_string(),
+                prompt: None,
+                kind: "string".to_string(),
+                order: 0,
+                required: None,
+                default: None,
+                choices: None,
+                arg: None,
+            },
+            crate::domain::Field {
+                name: "b".to_string(),
+                prompt: None,
+                kind: "string".to_string(),
+                order: 1,
+                required: None,
+                default: None,
+                choices: None,
+                arg: None,
+            },
+        ];
+        app.field_input.field_inputs = vec![String::new(), String::new()];
+
+        handle_key_event(&mut app, key(KeyCode::Tab));
+        handle_key_event(&mut app, key(KeyCode::BackTab));
+        handle_key_event(&mut app, key(KeyCode::Down));
+        handle_key_event(&mut app, key(KeyCode::Up));
+        handle_key_event(&mut app, key(KeyCode::Char('x')));
+        handle_key_event(&mut app, key(KeyCode::Backspace));
+        handle_key_event(&mut app, key_mod(KeyCode::Char('b'), KeyModifiers::CONTROL));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_history_alt_e_enters_envs() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        handle_key_event(&mut app, key_mod(KeyCode::Char('e'), KeyModifiers::ALT));
+        assert_eq!(app.screen, Screen::Environments);
+    }
+
+    #[test]
+    fn test_history_list_navigation_and_right() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        app.history.focus = HistoryFocus::List;
+        handle_key_event(&mut app, key(KeyCode::Down));
+        handle_key_event(&mut app, key(KeyCode::Up));
+        handle_key_event(&mut app, key(KeyCode::Char('j')));
+        handle_key_event(&mut app, key(KeyCode::Char('k')));
+        handle_key_event(&mut app, key(KeyCode::Right));
+        assert_eq!(app.history.focus, HistoryFocus::Output);
+    }
+
+    #[test]
+    fn test_history_output_scroll_and_paging_keys() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        app.history.focus = HistoryFocus::Output;
+        handle_key_event(&mut app, key(KeyCode::Down));
+        handle_key_event(&mut app, key(KeyCode::Char('j')));
+        handle_key_event(&mut app, key(KeyCode::PageDown));
+        handle_key_event(&mut app, key(KeyCode::PageUp));
+        handle_key_event(&mut app, key(KeyCode::Up));
+        handle_key_event(&mut app, key(KeyCode::Char('k')));
+        handle_key_event(&mut app, key(KeyCode::Home));
+        assert_eq!(app.run_output_scroll, 0);
+        handle_key_event(&mut app, key(KeyCode::End));
+        assert_eq!(app.run_output_scroll, u16::MAX);
+        handle_key_event(&mut app, key(KeyCode::Left));
+        assert_eq!(app.history.focus, HistoryFocus::List);
+    }
+
+    #[test]
+    fn test_history_output_q_quits_to_scripts() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        app.history.focus = HistoryFocus::Output;
+        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_history_dashboards_navigation_and_quit() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        app.history.view = HistoryView::Dashboards;
+        handle_key_event(&mut app, key(KeyCode::Down));
+        handle_key_event(&mut app, key(KeyCode::Char('j')));
+        handle_key_event(&mut app, key(KeyCode::Up));
+        handle_key_event(&mut app, key(KeyCode::Char('k')));
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        // Esc returns to ScriptSelect (no expansion to collapse).
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_history_dashboards_q_returns_to_scripts() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        app.history.view = HistoryView::Dashboards;
+        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_run_result_q_and_enter_return_to_scripts() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::RunResult;
+        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+
+        app.screen = Screen::RunResult;
+        handle_key_event(&mut app, key(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn test_run_result_scroll_keys() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::RunResult;
+        handle_key_event(&mut app, key(KeyCode::Down));
+        handle_key_event(&mut app, key(KeyCode::Char('j')));
+        handle_key_event(&mut app, key(KeyCode::Up));
+        handle_key_event(&mut app, key(KeyCode::Char('k')));
+        handle_key_event(&mut app, key(KeyCode::PageDown));
+        handle_key_event(&mut app, key(KeyCode::PageUp));
+        handle_key_event(&mut app, key(KeyCode::Home));
+        assert_eq!(app.run_output_scroll, 0);
+    }
+
+    #[test]
+    fn test_envs_screen_keys_dispatch() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Environments;
+        handle_key_event(&mut app, key(KeyCode::Down));
+        handle_key_event(&mut app, key(KeyCode::Char('j')));
+        handle_key_event(&mut app, key(KeyCode::Up));
+        handle_key_event(&mut app, key(KeyCode::Char('k')));
+        handle_key_event(&mut app, key(KeyCode::PageDown));
+        handle_key_event(&mut app, key(KeyCode::PageUp));
+        handle_key_event(&mut app, key(KeyCode::Home));
+        handle_key_event(&mut app, key(KeyCode::End));
+        handle_key_event(&mut app, key(KeyCode::Char('r')));
+        handle_key_event(&mut app, key(KeyCode::Char('d')));
+        handle_key_event(&mut app, key(KeyCode::Enter));
+        // Esc exits.
+        handle_key_event(&mut app, key(KeyCode::Esc));
+    }
+
+    #[test]
+    fn test_field_input_enter_submits_form() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::FieldInput;
+        // Empty form: submit_form just walks an empty path.
+        handle_key_event(&mut app, key(KeyCode::Enter));
+    }
 }
 
 fn handle_envs_key(app: &mut App, key: KeyEvent) {

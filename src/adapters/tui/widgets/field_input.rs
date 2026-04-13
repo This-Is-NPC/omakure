@@ -201,6 +201,37 @@ mod tests {
     }
 
     #[test]
+    fn render_field_input_paginates_when_many_fields() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.fields = (0..6)
+            .map(|i| Field {
+                name: format!("f{}", i),
+                prompt: None,
+                kind: "string".to_string(),
+                order: i,
+                required: None,
+                default: Some(format!("d{}", i)),
+                choices: None,
+                arg: None,
+            })
+            .collect();
+        app.field_input.field_inputs = vec![String::new(); 6];
+        app.field_input.field_index = 5;
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_field_input(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
     fn snapshot_field_input_with_error() {
         let tmp = TempDir::new().unwrap();
         let repo = FsWorkspaceRepository::new(tmp.path());

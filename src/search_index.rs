@@ -603,4 +603,35 @@ echo setup
         let index = SearchIndex::new(PathBuf::from(":memory:"));
         assert_eq!(index.status(), SearchStatus::Idle);
     }
+
+    #[test]
+    fn test_new_in_memory_constructor() {
+        let index = SearchIndex::new_in_memory();
+        assert_eq!(index.status(), SearchStatus::Idle);
+    }
+
+    #[test]
+    fn test_query_with_multiple_tokens_uses_and() {
+        let tmp = TempDir::new().unwrap();
+        let scripts_dir = tmp.path().join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+        fs::write(
+            scripts_dir.join("a.sh"),
+            r#"#!/bin/bash
+# OMAKURE_SCHEMA_START
+# {"Name": "Alpha Beta", "Description": "double word", "Fields": []}
+# OMAKURE_SCHEMA_END
+"#,
+        )
+        .unwrap();
+        let db = tmp.path().join("search.sqlite");
+        rebuild_index(&db, &scripts_dir).unwrap();
+        let index = SearchIndex::new(db);
+
+        let hit = index.query("alpha beta").unwrap();
+        assert_eq!(hit.len(), 1);
+
+        let miss = index.query("alpha gamma").unwrap();
+        assert!(miss.is_empty());
+    }
 }

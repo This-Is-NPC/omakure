@@ -351,6 +351,71 @@ mod tests {
     }
 
     #[test]
+    fn render_history_dashboards_view_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![history_row(&tmp, "deploy.sh", RunState::Completed)];
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], entries);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        app.history.view = HistoryView::Dashboards;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_history_output_focus_with_reason_and_scroll() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut row = history_row(&tmp, "deploy.sh", RunState::Completed);
+        row.reason = Some("manual retry".into());
+        // Make the output much taller than the rendered area so the scroll
+        // clamp branches fire.
+        row.stdout = (0..50).map(|i| format!("line {}\n", i)).collect();
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![row]);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        app.history.focus = HistoryFocus::Output;
+        app.run_output_scroll = u16::MAX;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_history_empty_output_branch_no_history_entry_fallback() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let row = history_row(&tmp, "deploy.sh", RunState::Completed);
+        // Empty output triggers the "(no output)" branch.
+        let mut row = row;
+        row.stdout.clear();
+        row.stderr.clear();
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![row]);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
     fn snapshot_render_history_empty() {
         let tmp = TempDir::new().unwrap();
         let repo = FsWorkspaceRepository::new(tmp.path());

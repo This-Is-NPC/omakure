@@ -171,6 +171,59 @@ mod tests {
     }
 
     #[test]
+    fn run_human_format_no_matches() {
+        let tmp = TempDir::new().unwrap();
+        run(
+            tmp.path().to_path_buf(),
+            SearchArgs {
+                query: "nothing".into(),
+                tag: vec![],
+            },
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_json_format_with_results() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("deploy.sh"),
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"Deploy\",\"Description\":\"Ship\",\"Tags\":[\"ops\"],\"Fields\":[]}\n# OMAKURE_SCHEMA_END\n",
+        )
+        .unwrap();
+        run(
+            tmp.path().to_path_buf(),
+            SearchArgs {
+                query: "deploy".into(),
+                tag: vec!["ops".into()],
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_human_format_with_results_and_descriptions() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("deploy.sh"),
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"Deploy\",\"Description\":\"Ship\",\"Fields\":[]}\n# OMAKURE_SCHEMA_END\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join("bare.sh"), "#!/usr/bin/env bash\n").unwrap();
+        run(
+            tmp.path().to_path_buf(),
+            SearchArgs {
+                query: String::new(),
+                tag: vec![],
+            },
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn block_until_ready_stops_when_index_reports_error() {
         let tmp = TempDir::new().unwrap();
         let db_path = tmp.path().to_path_buf();

@@ -2123,4 +2123,177 @@ mod tests {
         assert!(get_run(&conn, "missing").unwrap().is_none());
         let _ = fs::remove_dir_all(ws.root());
     }
+
+    #[test]
+    fn run_state_is_terminal_classification() {
+        assert!(!RunState::Queued.is_terminal());
+        assert!(!RunState::Running.is_terminal());
+        for terminal in [
+            RunState::Completed,
+            RunState::Failed,
+            RunState::Cancelled,
+            RunState::TimedOut,
+            RunState::DeadLetter,
+        ] {
+            assert!(terminal.is_terminal(), "{:?}", terminal);
+        }
+    }
+
+    #[test]
+    fn run_state_display_matches_as_str() {
+        for state in RunState::all() {
+            assert_eq!(format!("{}", state), state.as_str());
+        }
+    }
+
+    #[test]
+    fn run_state_serde_roundtrip() {
+        for state in RunState::all() {
+            let json = serde_json::to_string(state).unwrap();
+            let parsed: RunState = serde_json::from_str(&json).unwrap();
+            assert_eq!(*state, parsed);
+        }
+        // Invalid state string deserializes as error.
+        let err: Result<RunState, _> = serde_json::from_str("\"bogus\"");
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn query_runs_applies_all_filters() {
+        let ws = unique_workspace("query_filters");
+        let conn = open(&ws).expect("open");
+        let now = current_unix_ms();
+
+        let r1 = enqueue(&conn, "/scripts/alpha.sh", &[], enqueue_opts()).unwrap();
+        let r2 = enqueue(
+            &conn,
+            "/scripts/beta.sh",
+            &[],
+            EnqueueOptions {
+                actor: "ai".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let claim = ClaimFilters::default();
+        claim_next(&conn, "w1", &claim).unwrap();
+        complete(&conn, &r1.run_id, ok_completion()).unwrap();
+        claim_next(&conn, "w1", &claim).unwrap();
+        fail(&conn, &r2.run_id, fail_completion()).unwrap();
+
+        let by_script = query_runs(
+            &conn,
+            &RunFilters {
+                script: Some("alpha".into()),
+                states: RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(by_script.iter().any(|r| r.script_path.contains("alpha")));
+        assert!(!by_script.iter().any(|r| r.script_path.contains("beta")));
+
+        let by_actor = query_runs(
+            &conn,
+            &RunFilters {
+                actor: Some("ai".into()),
+                states: RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(by_actor.iter().all(|r| r.actor == "ai"));
+
+        let recent = query_runs(
+            &conn,
+            &RunFilters {
+                since_ms: Some(now - 60_000),
+                until_ms: Some(now + 60_000),
+                states: RunStateSet::All.to_states(),
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(!recent.is_empty());
+
+        let only_success = query_runs(
+            &conn,
+            &RunFilters {
+                success: Some(true),
+                states: RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(only_success.iter().all(|r| r.success == Some(true)));
+
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn claim_next_honours_script_filter() {
+        let ws = unique_workspace("claim_script");
+        let conn = open(&ws).expect("open");
+        enqueue(&conn, "/scripts/alpha.sh", &[], enqueue_opts()).unwrap();
+        enqueue(&conn, "/scripts/beta.sh", &[], enqueue_opts()).unwrap();
+
+        let claimed = claim_next(
+            &conn,
+            "w1",
+            &ClaimFilters {
+                script: Some("beta".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert!(claimed.script_path.contains("beta"));
+
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn dead_letter_preserves_existing_reason_when_no_new() {
+        let ws = unique_workspace("dl_keep_reason");
+        let conn = open(&ws).expect("open");
+        let row = enqueue(&conn, "/scripts/x.sh", &[], enqueue_opts()).unwrap();
+        claim_next(&conn, "w1", &ClaimFilters::default()).unwrap();
+        fail(&conn, &row.run_id, fail_completion()).unwrap();
+        // Manually set a reason so the (Some, None) merge branch is exercised.
+        conn.execute(
+            "UPDATE runs SET reason = 'first failure' WHERE run_id = ?",
+            params![&row.run_id],
+        )
+        .unwrap();
+
+        let promoted = dead_letter(&conn, &row.run_id, None).unwrap();
+        assert_eq!(promoted.state, RunState::DeadLetter);
+        assert_eq!(promoted.reason.as_deref(), Some("first failure"));
+
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn row_to_run_rejects_invalid_state_string() {
+        let ws = unique_workspace("invalid_state_row");
+        let conn = open(&ws).expect("open");
+        let row = enqueue(&conn, "/scripts/x.sh", &[], enqueue_opts()).unwrap();
+        // Tamper with the state column to a value RunState::from_str rejects.
+        conn.execute(
+            "UPDATE runs SET state = 'not_a_state' WHERE run_id = ?",
+            params![&row.run_id],
+        )
+        .unwrap();
+
+        let err = query_runs(&conn, &RunFilters {
+            states: vec![],
+            ..Default::default()
+        })
+        .unwrap_err();
+        assert!(err.contains("invalid run state") || err.contains("Row query_runs failed"));
+
+        let _ = fs::remove_dir_all(ws.root());
+    }
 }

@@ -76,4 +76,59 @@ mod tests {
     fn test_ps_quote_empty() {
         assert_eq!(ps_quote(""), "''");
     }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_set_executable_permissions_marks_user_exec_bit() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file = tmp.path().join("script.sh");
+        fs::write(&file, "#!/bin/sh\n").unwrap();
+
+        set_executable_permissions(&file).unwrap();
+
+        let mode = fs::metadata(&file).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755);
+    }
+
+    #[test]
+    fn test_temp_dir_guard_removes_dir_on_drop() {
+        let base = std::env::temp_dir().join(format!(
+            "omakure_temp_guard_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&base).unwrap();
+        assert!(base.exists());
+        {
+            let _guard = TempDirGuard::new(base.clone());
+        }
+        assert!(!base.exists());
+    }
+
+    #[test]
+    fn test_read_dir_or_empty_returns_empty_when_missing() {
+        let path = std::env::temp_dir().join("omakure_definitely_not_a_real_dir_xyz_42");
+        let _ = fs::remove_dir_all(&path);
+        let entries = read_dir_or_empty(&path).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_read_file_if_exists_returns_none_for_missing() {
+        let path = std::env::temp_dir().join("omakure_definitely_not_a_real_file_xyz_42");
+        let _ = fs::remove_file(&path);
+        assert!(read_file_if_exists(&path).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_read_file_if_exists_returns_some_when_present() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("f.txt");
+        fs::write(&path, "hi").unwrap();
+        assert_eq!(read_file_if_exists(&path).unwrap(), Some("hi".to_string()));
+    }
 }

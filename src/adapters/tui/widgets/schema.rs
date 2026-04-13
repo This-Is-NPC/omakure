@@ -267,6 +267,82 @@ mod tests {
     }
 
     #[test]
+    fn build_lines_with_outputs_and_matrix_queue() {
+        use crate::adapters::tui::app::{MatrixPreview, SchemaOutputPreview};
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Build".to_string(),
+            description: Some(" trimmed ".to_string()),
+            tags: vec!["t1".into()],
+            fields: vec![SchemaFieldPreview {
+                name: "x".into(),
+                prompt: Some("  prompt text  ".into()),
+                kind: "string".into(),
+                required: true,
+            }],
+            outputs: vec![SchemaOutputPreview {
+                name: "url".into(),
+                kind: "string".into(),
+            }],
+            queue: Some(QueuePreview::Matrix {
+                values: vec![MatrixPreview {
+                    name: "region".into(),
+                    values: vec!["us".into(), "eu".into()],
+                }],
+            }),
+        };
+        let lines = build_lines(Some(&preview), None, &theme);
+        let joined = lines
+            .iter()
+            .map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("Outputs: 1"));
+        assert!(joined.contains("Queue: Matrix"));
+        assert!(joined.contains("region"));
+        assert!(joined.contains("us"));
+        assert!(joined.contains("prompt text"));
+    }
+
+    #[test]
+    fn build_lines_with_cases_queue() {
+        use crate::adapters::tui::app::{QueueCasePreview, QueueCaseValuePreview};
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Run".to_string(),
+            description: None,
+            tags: vec![],
+            fields: vec![],
+            outputs: vec![],
+            queue: Some(QueuePreview::Cases {
+                cases: vec![
+                    QueueCasePreview {
+                        name: Some("named-case".into()),
+                        values: vec![QueueCaseValuePreview {
+                            name: "k".into(),
+                            value: "v".into(),
+                        }],
+                    },
+                    QueueCasePreview {
+                        name: None,
+                        values: vec![],
+                    },
+                ],
+            }),
+        };
+        let lines = build_lines(Some(&preview), None, &theme);
+        let joined = lines
+            .iter()
+            .map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("Queue: Cases (2)"));
+        assert!(joined.contains("named-case"));
+        assert!(joined.contains("case 2"));
+        assert!(joined.contains("k = v"));
+    }
+
+    #[test]
     fn snapshot_schema_no_fields() {
         let backend = TestBackend::new(60, 10);
         let mut terminal = Terminal::new(backend).unwrap();

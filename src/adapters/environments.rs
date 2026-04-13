@@ -402,6 +402,40 @@ mod tests {
     }
 
     #[rstest]
+    fn test_load_environment_config_active_points_to_missing_file(
+        envs_dir: (TempDir, PathBuf),
+    ) {
+        let (_tmp, envs) = envs_dir;
+        fs::write(envs.join("active"), "ghost.conf\n").unwrap();
+        let repo = FsEnvironmentRepository::new(&envs);
+        let err = repo.load_environment_config().unwrap_err();
+        assert!(format!("{}", err).contains("Environment not found"));
+    }
+
+    #[rstest]
+    fn test_load_active_env_name_skips_comments_only(envs_dir: (TempDir, PathBuf)) {
+        let (_tmp, envs) = envs_dir;
+        fs::write(envs.join("active"), "# just a comment\n; also comment\n").unwrap();
+        let repo = FsEnvironmentRepository::new(&envs);
+        let config = repo.load_environment_config().unwrap();
+        assert!(config.active.is_none());
+    }
+
+    #[test]
+    fn test_parse_env_preview_strips_export_prefix() {
+        let input = "export GREETING=hello";
+        let preview = parse_env_preview(input);
+        assert_eq!(preview, vec![("GREETING".to_string(), "hello".to_string())]);
+    }
+
+    #[test]
+    fn test_parse_env_defaults_strips_export_prefix() {
+        let input = "export FOO=bar";
+        let parsed = parse_env_defaults(input);
+        assert_eq!(parsed.get("foo").map(String::as_str), Some("bar"));
+    }
+
+    #[rstest]
     fn test_load_env_preview(envs_dir: (TempDir, PathBuf)) {
         let (_tmp, envs) = envs_dir;
         let repo = FsEnvironmentRepository::new(&envs);

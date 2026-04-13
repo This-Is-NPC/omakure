@@ -177,6 +177,75 @@ mod tests {
     }
 
     #[test]
+    fn build_preview_lines_handles_error_empty_and_lines() {
+        let root = snapshot_root("preview_branches");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        let theme = app.theme.clone();
+
+        // Error branch.
+        app.environment.preview_error = Some("io error".into());
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 2);
+
+        // No entries branch.
+        app.environment.preview_error = None;
+        app.environment.entries.clear();
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 1);
+
+        // Entries present, but empty preview lines.
+        app.environment.entries = vec![EnvFile {
+            name: "x.conf".into(),
+        }];
+        app.environment.preview_lines.clear();
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 1);
+
+        // Has preview lines.
+        app.environment.preview_lines = vec![Line::from("FOO=bar")];
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn render_envs_with_active_marker_and_error_info() {
+        let root = snapshot_root("active_marker");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.environment.entries = vec![
+            EnvFile { name: "dev.conf".into() },
+            EnvFile { name: "prod.conf".into() },
+        ];
+        app.environment.config = Some(crate::ports::EnvironmentConfig {
+            envs_dir: root.clone(),
+            active: Some("dev.conf".into()),
+            defaults: std::collections::HashMap::new(),
+            session_conf_path: None,
+        });
+        app.environment.error = Some("background failure".into());
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_envs(f, f.size(), &mut app, &theme))
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn snapshot_render_envs_empty() {
         let root = snapshot_root("empty");
         let _ = std::fs::remove_dir_all(&root);

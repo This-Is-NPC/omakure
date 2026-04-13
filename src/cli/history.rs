@@ -674,6 +674,266 @@ mod tests {
         assert!(err.to_string().contains("not implemented"));
     }
 
+    fn enqueue_one(workspace: &Workspace) -> String {
+        use crate::runs::EnqueueOptions;
+        let conn = runs::open(workspace).unwrap();
+        let row = runs::enqueue(
+            &conn,
+            "/scripts/x.sh",
+            &[],
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        row.run_id
+    }
+
+    #[test]
+    fn run_dispatches_to_subcommands() {
+        let workspace = temp_workspace();
+        let _id = enqueue_one(&workspace);
+
+        let scripts_dir = workspace.root().to_path_buf();
+        run(
+            scripts_dir.clone(),
+            HistoryArgs {
+                command: HistoryCommand::List(HistoryListArgs {
+                    script: None,
+                    actor: None,
+                    since: None,
+                    until: None,
+                    success: false,
+                    failure: false,
+                    limit: None,
+                    state: Vec::new(),
+                    state_set: Some("all".into()),
+                }),
+            },
+            false,
+        )
+        .unwrap();
+
+        run(
+            scripts_dir.clone(),
+            HistoryArgs {
+                command: HistoryCommand::Stats,
+            },
+            false,
+        )
+        .unwrap();
+
+        run(
+            scripts_dir.clone(),
+            HistoryArgs {
+                command: HistoryCommand::Tail(HistoryTailArgs { limit: 5, follow: false }),
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn list_human_format_prints_runs_and_no_runs() {
+        let workspace = temp_workspace();
+        // No rows yet — prints "(no runs)".
+        list(
+            &workspace,
+            HistoryListArgs {
+                script: None,
+                actor: None,
+                since: None,
+                until: None,
+                success: false,
+                failure: false,
+                limit: None,
+                state: Vec::new(),
+                state_set: Some("all".into()),
+            },
+            false,
+        )
+        .unwrap();
+
+        let _id = enqueue_one(&workspace);
+        list(
+            &workspace,
+            HistoryListArgs {
+                script: None,
+                actor: None,
+                since: None,
+                until: None,
+                success: false,
+                failure: false,
+                limit: Some(10),
+                state: Vec::new(),
+                state_set: Some("all".into()),
+            },
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn list_with_success_failure_filters() {
+        let workspace = temp_workspace();
+        let _id = enqueue_one(&workspace);
+        list(
+            &workspace,
+            HistoryListArgs {
+                script: None,
+                actor: None,
+                since: Some("1h".into()),
+                until: None,
+                success: true,
+                failure: false,
+                limit: None,
+                state: Vec::new(),
+                state_set: Some("all".into()),
+            },
+            true,
+        )
+        .unwrap();
+        list(
+            &workspace,
+            HistoryListArgs {
+                script: None,
+                actor: None,
+                since: None,
+                until: Some("1h".into()),
+                success: false,
+                failure: true,
+                limit: None,
+                state: Vec::new(),
+                state_set: Some("all".into()),
+            },
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn list_rejects_invalid_until_value() {
+        let workspace = temp_workspace();
+        let err = list(
+            &workspace,
+            HistoryListArgs {
+                script: None,
+                actor: None,
+                since: None,
+                until: Some("nope".into()),
+                success: false,
+                failure: false,
+                limit: None,
+                state: Vec::new(),
+                state_set: None,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("invalid duration"));
+    }
+
+    #[test]
+    fn list_rejects_invalid_state_value() {
+        let workspace = temp_workspace();
+        let err = list(
+            &workspace,
+            HistoryListArgs {
+                script: None,
+                actor: None,
+                since: None,
+                until: None,
+                success: false,
+                failure: false,
+                limit: None,
+                state: vec!["bogus".into()],
+                state_set: None,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("invalid run state"));
+    }
+
+    #[test]
+    fn show_returns_not_found_for_unknown_id() {
+        let workspace = temp_workspace();
+        let err = show(
+            &workspace,
+            HistoryShowArgs {
+                run_id: "nope".into(),
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("run not found"));
+    }
+
+    #[test]
+    fn show_human_and_json_formats_succeed() {
+        let workspace = temp_workspace();
+        let id = enqueue_one(&workspace);
+        show(
+            &workspace,
+            HistoryShowArgs { run_id: id.clone() },
+            false,
+        )
+        .unwrap();
+        show(&workspace, HistoryShowArgs { run_id: id }, true).unwrap();
+    }
+
+    #[test]
+    fn stats_human_and_json() {
+        let workspace = temp_workspace();
+        let _id = enqueue_one(&workspace);
+        stats(&workspace, false).unwrap();
+        stats(&workspace, true).unwrap();
+    }
+
+    #[test]
+    fn traces_for_unknown_run_returns_not_found() {
+        let workspace = temp_workspace();
+        let err = traces(
+            &workspace,
+            HistoryTracesArgs {
+                run_id: "ghost".into(),
+                level: None,
+                since_sequence: None,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("run not found"));
+    }
+
+    #[test]
+    fn traces_returns_empty_for_existing_run() {
+        let workspace = temp_workspace();
+        let id = enqueue_one(&workspace);
+        traces(
+            &workspace,
+            HistoryTracesArgs {
+                run_id: id.clone(),
+                level: None,
+                since_sequence: None,
+            },
+            false,
+        )
+        .unwrap();
+        traces(
+            &workspace,
+            HistoryTracesArgs {
+                run_id: id,
+                level: Some("info".into()),
+                since_sequence: Some(0),
+            },
+            true,
+        )
+        .unwrap();
+    }
+
     #[test]
     fn traces_rejects_invalid_level_before_opening_db() {
         let workspace = temp_workspace();

@@ -163,6 +163,13 @@ mod tests {
     }
 
     #[test]
+    fn test_normalize_input_unknown_kind_passes_through() {
+        let field = make_field("anything", "weird", false);
+        let result = normalize_input(&field, "value").unwrap();
+        assert_eq!(result, Some("value".to_string()));
+    }
+
+    #[test]
     fn test_normalize_input_with_choices() {
         let mut field = make_field("env", "string", false);
         field.choices = Some(vec!["dev".to_string(), "prod".to_string()]);

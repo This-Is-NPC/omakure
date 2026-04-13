@@ -489,6 +489,114 @@ mod tests {
     }
 
     #[test]
+    fn run_with_format_creates_script_with_default_template() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: None,
+                name: Some("deploy".into()),
+                schema_json: None,
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap();
+        assert!(tmp.path().join("deploy.bash").exists());
+    }
+
+    #[test]
+    fn run_with_format_rejects_existing_script_without_force() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("dup.sh"), "old").unwrap();
+        let err = run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("dup.sh".into()),
+                name: None,
+                schema_json: None,
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("Script already exists"));
+    }
+
+    #[test]
+    fn run_with_format_overwrites_with_force() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("ow.sh"), "old").unwrap();
+        run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("ow.sh".into()),
+                name: None,
+                schema_json: None,
+                body_stdin: false,
+                force: true,
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_with_format_writes_schema_when_supplied_inline() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("with_schema.sh".into()),
+                name: None,
+                schema_json: Some(r#"{"Name":"x","Fields":[]}"#.into()),
+                body_stdin: false,
+                force: false,
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_with_format_rejects_invalid_schema_json() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let err = run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("bad.sh".into()),
+                name: None,
+                schema_json: Some("not json".into()),
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("schema-json invalid"));
+    }
+
+    #[test]
+    fn run_with_format_rejects_missing_name() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let err = run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: None,
+                name: None,
+                schema_json: None,
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("Missing script name"));
+    }
+
+    #[test]
     fn build_with_schema_powershell_kind() {
         let schema = r#"{"Name":"x","Fields":[]}"#;
         let out = build_with_schema(schema, None, ScriptKind::PowerShell);

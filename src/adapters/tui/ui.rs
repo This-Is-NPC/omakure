@@ -406,6 +406,96 @@ mod tests {
         assert!(footer.contains("Up/Down"));
         assert!(footer.contains("Enter"));
     }
+
+    #[test]
+    fn test_build_script_select_footer_dashboard_expanded() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.script_dashboard_expanded = true;
+        let footer = build_script_select_footer(&app);
+        assert!(footer.contains("collapse"));
+    }
+
+    #[test]
+    fn test_color_to_tuple_full_palette() {
+        assert_eq!(color_to_tuple(Color::Green), (0, 255, 0));
+        assert_eq!(color_to_tuple(Color::Yellow), (255, 255, 0));
+        assert_eq!(color_to_tuple(Color::Blue), (0, 0, 255));
+        assert_eq!(color_to_tuple(Color::Magenta), (255, 0, 255));
+        assert_eq!(color_to_tuple(Color::Cyan), (0, 255, 255));
+        assert_eq!(color_to_tuple(Color::Gray), (128, 128, 128));
+        assert_eq!(color_to_tuple(Color::DarkGray), (64, 64, 64));
+        assert_eq!(color_to_tuple(Color::LightRed), (255, 128, 128));
+        assert_eq!(color_to_tuple(Color::LightGreen), (128, 255, 128));
+        assert_eq!(color_to_tuple(Color::LightYellow), (255, 255, 128));
+        assert_eq!(color_to_tuple(Color::LightBlue), (128, 128, 255));
+        assert_eq!(color_to_tuple(Color::LightMagenta), (255, 128, 255));
+        assert_eq!(color_to_tuple(Color::LightCyan), (128, 255, 255));
+        assert_eq!(color_to_tuple(Color::Indexed(7)), (7, 7, 7));
+        assert_eq!(color_to_tuple(Color::Reset), (255, 255, 255));
+    }
+
+    #[test]
+    fn test_gradient_line_single_char_uses_zero_t() {
+        let line = gradient_line("x", Color::Red, Color::Blue);
+        assert_eq!(line.spans.len(), 1);
+    }
+
+    #[test]
+    fn test_schema_title_for_none_or_directory() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        assert_eq!(schema_title(&app), "Schema");
+
+        let dir_entry = WorkspaceEntry {
+            path: tmp.path().join("subdir"),
+            kind: WorkspaceEntryKind::Directory,
+        };
+        app.navigation.entries = vec![dir_entry];
+        app.navigation.selection = 0;
+        assert_eq!(schema_title(&app), "Schema");
+    }
+
+    #[test]
+    fn test_schema_title_with_script_includes_filename() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let app = make_app(&tmp, &svc);
+        let title = schema_title(&app);
+        assert!(title.starts_with("Schema:"));
+        assert!(title.contains("deploy.sh"));
+    }
+
+    #[test]
+    fn render_ui_script_select_with_dashboard_expanded() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.script_dashboard_expanded = true;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_script_select_with_no_selected_script() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let dir_entry = WorkspaceEntry {
+            path: tmp.path().join("subdir"),
+            kind: WorkspaceEntryKind::Directory,
+        };
+        let mut app = App::test_new(&svc, ws, vec![dir_entry], vec![]);
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
 }
 
 fn color_to_tuple(color: Color) -> (u8, u8, u8) {

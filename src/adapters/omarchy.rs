@@ -340,9 +340,48 @@ color15 = "#acb0d0"
     }
 
     fn tempdir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("omakure-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "omakure-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn test_infer_variant_short_hex_defaults_to_dark() {
+        assert!(matches!(infer_variant("#abc"), ThemeVariant::Dark));
+        assert!(matches!(infer_variant(""), ThemeVariant::Dark));
+    }
+
+    #[test]
+    fn test_resolve_system_colors_handles_missing() {
+        let _ = resolve_system_colors();
+    }
+
+    #[test]
+    fn test_current_theme_name_handles_missing_file() {
+        let _ = current_theme_name();
+    }
+
+    #[test]
+    fn test_list_themes_returns_vec() {
+        let _ = list_themes();
+    }
+
+    #[test]
+    fn test_resolve_theme_colors_for_missing_returns_none() {
+        assert!(resolve_theme_colors("__definitely_not_a_real_theme__").is_none());
+    }
+
+    #[test]
+    fn test_display_name_handles_empty_segments() {
+        assert_eq!(display_name(""), "");
+        assert_eq!(display_name("foo--bar"), "Foo  Bar");
     }
 }

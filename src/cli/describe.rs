@@ -165,6 +165,28 @@ fn print_human(script_path: &Path, root: &Path, schema: &Schema) {
 
 /// Render a sample envelope shape for `omakure help-ai`. Builds a fake
 /// payload so the JSON example does not depend on a real workspace.
+pub fn sample_envelope() -> serde_json::Value {
+    json::ok_envelope(json!({
+        "absolute_path": "/abs/scripts/deploy.sh",
+        "relative_path": "deploy.sh",
+        "name": "deploy",
+        "description": "Deploy the service",
+        "tags": ["ops"],
+        "fields": [
+            {
+                "name": "target",
+                "prompt": "Target environment",
+                "type": "string",
+                "order": 1,
+                "required": true,
+                "arg": "--target",
+                "default": null,
+                "choices": ["dev", "prod"]
+            }
+        ]
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,7 +271,9 @@ mod tests {
         );
         run(
             tmp.path().to_path_buf(),
-            DescribeArgs { script: "deploy.sh".into() },
+            DescribeArgs {
+                script: "deploy.sh".into(),
+            },
             false,
         )
         .unwrap();
@@ -265,7 +289,9 @@ mod tests {
         );
         run(
             tmp.path().to_path_buf(),
-            DescribeArgs { script: "deploy.sh".into() },
+            DescribeArgs {
+                script: "deploy.sh".into(),
+            },
             true,
         )
         .unwrap();
@@ -291,7 +317,9 @@ mod tests {
         write_schema_script(&tmp, "bare.sh", "#!/usr/bin/env bash\necho hi\n");
         let err = run(
             tmp.path().to_path_buf(),
-            DescribeArgs { script: "bare.sh".into() },
+            DescribeArgs {
+                script: "bare.sh".into(),
+            },
             false,
         )
         .unwrap_err();
@@ -306,26 +334,4 @@ mod tests {
         assert!(envelope["data"]["fields"].is_array());
         assert_eq!(envelope["schema_version"], "1");
     }
-}
-
-pub fn sample_envelope() -> serde_json::Value {
-    json::ok_envelope(json!({
-        "absolute_path": "/abs/scripts/deploy.sh",
-        "relative_path": "deploy.sh",
-        "name": "deploy",
-        "description": "Deploy the service",
-        "tags": ["ops"],
-        "fields": [
-            {
-                "name": "target",
-                "prompt": "Target environment",
-                "type": "string",
-                "order": 1,
-                "required": true,
-                "arg": "--target",
-                "default": null,
-                "choices": ["dev", "prod"]
-            }
-        ]
-    }))
 }

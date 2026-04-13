@@ -402,9 +402,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_load_environment_config_active_points_to_missing_file(
-        envs_dir: (TempDir, PathBuf),
-    ) {
+    fn test_load_environment_config_active_points_to_missing_file(envs_dir: (TempDir, PathBuf)) {
         let (_tmp, envs) = envs_dir;
         fs::write(envs.join("active"), "ghost.conf\n").unwrap();
         let repo = FsEnvironmentRepository::new(&envs);

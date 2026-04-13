@@ -586,11 +586,14 @@ mod tests {
 
     #[test]
     fn format_stats_lines_sorts_state_and_actor_names() {
-        let mut stats = RunStats::default();
-        stats.total = 3;
-        stats.counts_by_state =
-            HashMap::from([("running".to_string(), 1), ("completed".to_string(), 2)]);
-        stats.counts_by_actor = HashMap::from([("human".to_string(), 2), ("ai".to_string(), 1)]);
+        let stats = RunStats {
+            total: 3,
+            counts_by_state: HashMap::from([
+                ("running".to_string(), 1),
+                ("completed".to_string(), 2),
+            ]),
+            counts_by_actor: HashMap::from([("human".to_string(), 2), ("ai".to_string(), 1)]),
+        };
 
         let lines = format_stats_lines(&stats);
 
@@ -728,7 +731,10 @@ mod tests {
         run(
             scripts_dir.clone(),
             HistoryArgs {
-                command: HistoryCommand::Tail(HistoryTailArgs { limit: 5, follow: false }),
+                command: HistoryCommand::Tail(HistoryTailArgs {
+                    limit: 5,
+                    follow: false,
+                }),
             },
             true,
         )
@@ -875,12 +881,7 @@ mod tests {
     fn show_human_and_json_formats_succeed() {
         let workspace = temp_workspace();
         let id = enqueue_one(&workspace);
-        show(
-            &workspace,
-            HistoryShowArgs { run_id: id.clone() },
-            false,
-        )
-        .unwrap();
+        show(&workspace, HistoryShowArgs { run_id: id.clone() }, false).unwrap();
         show(&workspace, HistoryShowArgs { run_id: id }, true).unwrap();
     }
 

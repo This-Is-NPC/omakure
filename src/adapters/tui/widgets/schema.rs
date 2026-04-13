@@ -294,7 +294,12 @@ mod tests {
         let lines = build_lines(Some(&preview), None, &theme);
         let joined = lines
             .iter()
-            .map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>())
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>()
+            })
             .collect::<Vec<_>>()
             .join("\n");
         assert!(joined.contains("Outputs: 1"));
@@ -333,7 +338,12 @@ mod tests {
         let lines = build_lines(Some(&preview), None, &theme);
         let joined = lines
             .iter()
-            .map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>())
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>()
+            })
             .collect::<Vec<_>>()
             .join("\n");
         assert!(joined.contains("Queue: Cases (2)"));

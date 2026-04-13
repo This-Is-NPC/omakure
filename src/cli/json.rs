@@ -124,4 +124,20 @@ mod tests {
         assert_eq!(env["data"][0], 1);
         assert_eq!(env["data"][2], 3);
     }
+
+    #[test]
+    fn print_ok_executes() {
+        print_ok(json!({"unit": "test"}));
+    }
+
+    #[test]
+    fn print_err_executes() {
+        print_err(codes::INTERNAL, "boom");
+    }
+
+    #[test]
+    fn err_envelope_accepts_string_owned() {
+        let env = err_envelope(codes::INVALID_ARGUMENT, String::from("bad"));
+        assert_eq!(env["error"]["message"], "bad");
+    }
 }

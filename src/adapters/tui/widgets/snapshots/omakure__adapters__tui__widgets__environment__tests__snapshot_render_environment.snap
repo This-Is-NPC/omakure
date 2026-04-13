@@ -1,0 +1,12 @@
+---
+source: src/adapters/tui/widgets/environment.rs
+expression: terminal.backend()
+---
+"┌Workspace───────────────────────────────────────┐"
+"│Root: /home/user/scripts                        │"
+"│Version: v0.1.8                                 │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"└────────────────────────────────────────────────┘"

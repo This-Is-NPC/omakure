@@ -187,3 +187,179 @@ fn build_lines(
 
     lines
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::tui::app::SchemaFieldPreview;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn sample_preview() -> SchemaPreview {
+        SchemaPreview {
+            name: "Deploy App".to_string(),
+            description: Some("Deploy to production".to_string()),
+            tags: vec!["ops".to_string(), "deploy".to_string()],
+            fields: vec![
+                SchemaFieldPreview {
+                    name: "target".to_string(),
+                    prompt: Some("Target environment".to_string()),
+                    kind: "string".to_string(),
+                    required: true,
+                },
+                SchemaFieldPreview {
+                    name: "dry_run".to_string(),
+                    prompt: None,
+                    kind: "boolean".to_string(),
+                    required: false,
+                },
+            ],
+            outputs: vec![],
+            queue: None,
+        }
+    }
+
+    #[test]
+    fn snapshot_schema_with_fields() {
+        let backend = TestBackend::new(60, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = sample_preview();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_schema_no_preview() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", None, None, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_schema_error() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_schema_preview(
+                    f,
+                    f.size(),
+                    "Schema",
+                    None,
+                    Some("Invalid JSON at line 5"),
+                    &theme,
+                );
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn build_lines_with_outputs_and_matrix_queue() {
+        use crate::adapters::tui::app::{MatrixPreview, SchemaOutputPreview};
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Build".to_string(),
+            description: Some(" trimmed ".to_string()),
+            tags: vec!["t1".into()],
+            fields: vec![SchemaFieldPreview {
+                name: "x".into(),
+                prompt: Some("  prompt text  ".into()),
+                kind: "string".into(),
+                required: true,
+            }],
+            outputs: vec![SchemaOutputPreview {
+                name: "url".into(),
+                kind: "string".into(),
+            }],
+            queue: Some(QueuePreview::Matrix {
+                values: vec![MatrixPreview {
+                    name: "region".into(),
+                    values: vec!["us".into(), "eu".into()],
+                }],
+            }),
+        };
+        let lines = build_lines(Some(&preview), None, &theme);
+        let joined = lines
+            .iter()
+            .map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("Outputs: 1"));
+        assert!(joined.contains("Queue: Matrix"));
+        assert!(joined.contains("region"));
+        assert!(joined.contains("us"));
+        assert!(joined.contains("prompt text"));
+    }
+
+    #[test]
+    fn build_lines_with_cases_queue() {
+        use crate::adapters::tui::app::{QueueCasePreview, QueueCaseValuePreview};
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Run".to_string(),
+            description: None,
+            tags: vec![],
+            fields: vec![],
+            outputs: vec![],
+            queue: Some(QueuePreview::Cases {
+                cases: vec![
+                    QueueCasePreview {
+                        name: Some("named-case".into()),
+                        values: vec![QueueCaseValuePreview {
+                            name: "k".into(),
+                            value: "v".into(),
+                        }],
+                    },
+                    QueueCasePreview {
+                        name: None,
+                        values: vec![],
+                    },
+                ],
+            }),
+        };
+        let lines = build_lines(Some(&preview), None, &theme);
+        let joined = lines
+            .iter()
+            .map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("Queue: Cases (2)"));
+        assert!(joined.contains("named-case"));
+        assert!(joined.contains("case 2"));
+        assert!(joined.contains("k = v"));
+    }
+
+    #[test]
+    fn snapshot_schema_no_fields() {
+        let backend = TestBackend::new(60, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Simple".to_string(),
+            description: None,
+            tags: vec![],
+            fields: vec![],
+            outputs: vec![],
+            queue: None,
+        };
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+}

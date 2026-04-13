@@ -91,7 +91,7 @@ fn read_active_env(workspace: &Workspace) -> Option<String> {
     repo.load_environment_config().ok().and_then(|c| c.active)
 }
 
-fn collect_env_overrides() -> BTreeMap<String, String> {
+pub(crate) fn collect_env_overrides() -> BTreeMap<String, String> {
     let names = [
         "OMAKURE_SCRIPTS_DIR",
         "OMAKURE_REPO",
@@ -109,4 +109,85 @@ fn collect_env_overrides() -> BTreeMap<String, String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collect_env_overrides_only_known_names() {
+        let overrides = collect_env_overrides();
+        let known = [
+            "OMAKURE_SCRIPTS_DIR",
+            "OMAKURE_REPO",
+            "REPO",
+            "VERSION",
+            "OVERTURE_SCRIPTS_DIR",
+            "OVERTURE_REPO",
+            "CLOUD_MGMT_SCRIPTS_DIR",
+            "CLOUD_MGMT_REPO",
+        ];
+        for key in overrides.keys() {
+            assert!(known.contains(&key.as_str()), "unexpected key: {}", key);
+        }
+    }
+
+    #[test]
+    fn test_collect_env_overrides_picks_up_set_vars() {
+        env::set_var("OMAKURE_SCRIPTS_DIR", "/test/scripts");
+        let overrides = collect_env_overrides();
+        assert_eq!(
+            overrides.get("OMAKURE_SCRIPTS_DIR"),
+            Some(&"/test/scripts".to_string())
+        );
+        env::remove_var("OMAKURE_SCRIPTS_DIR");
+    }
+
+    #[test]
+    fn test_run_human_and_json_modes() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let scripts = tmp.path().to_path_buf();
+        // Set one known env var so the print branch is exercised.
+        env::set_var("REPO", "owner/repo");
+        run(scripts.clone(), false).unwrap();
+        run(scripts, true).unwrap();
+        env::remove_var("REPO");
+    }
+
+    #[test]
+    fn test_print_env_if_set_does_not_panic() {
+        env::set_var("VERSION", "1.2.3");
+        print_env_if_set("VERSION");
+        env::remove_var("VERSION");
+        // Missing var hits the silent branch.
+        print_env_if_set("__omakure_no_such_env_var__");
+    }
+
+    #[test]
+    fn test_read_active_env_returns_none_for_missing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let workspace = Workspace::new(tmp.path().to_path_buf());
+        assert!(read_active_env(&workspace).is_none());
+    }
+
+    #[test]
+    fn test_config_payload_serializes() {
+        let payload = ConfigPayload {
+            version: "0.1.8".to_string(),
+            binary: "/usr/bin/omakure".to_string(),
+            workspace_root: "/home/user/scripts".to_string(),
+            scripts_root: "/home/user/scripts".to_string(),
+            omaken_dir: "/home/user/scripts/.omaken".to_string(),
+            history_dir: "/home/user/scripts/.history".to_string(),
+            workspace_config: "/home/user/scripts/omakure.toml".to_string(),
+            envs_dir: "/home/user/scripts/.omaken/envs".to_string(),
+            envs_active_path: "/home/user/scripts/.omaken/envs/active".to_string(),
+            active_env: None,
+            bootstrap_mode: "plain".to_string(),
+            env_overrides: BTreeMap::new(),
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+        assert!(json.contains("\"version\":\"0.1.8\""));
+    }
 }

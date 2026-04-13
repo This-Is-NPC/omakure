@@ -232,6 +232,272 @@ fn lerp_color(start: (u8, u8, u8), end: (u8, u8, u8), t: f32) -> Color {
     )
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::ports::{WorkspaceEntry, WorkspaceEntryKind};
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tempfile::TempDir;
+
+    fn make_app<'a>(tmp: &'a TempDir, svc: &'a ScriptService) -> App<'a> {
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![WorkspaceEntry {
+            path: tmp.path().join("deploy.sh"),
+            kind: WorkspaceEntryKind::Script,
+        }];
+        App::test_new(svc, ws, entries, vec![])
+    }
+
+    fn make_svc(tmp: &TempDir) -> ScriptService {
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        ScriptService::new(Box::new(repo), Box::new(runner))
+    }
+
+    #[test]
+    fn render_ui_script_select_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_search_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.screen = Screen::Search;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_environments_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.screen = Screen::Environments;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_field_input_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.screen = Screen::FieldInput;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_history_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.screen = Screen::History;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_running_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.screen = Screen::Running;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_run_result_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.screen = Screen::RunResult;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_error_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.screen = Screen::Error;
+        app.error_message = Some("test error".to_string());
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_loading_no_panic() {
+        let theme = Theme::default();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_loading(f, &theme)).unwrap();
+    }
+
+    #[test]
+    fn test_gradient_line_length() {
+        let line = gradient_line("hello", Color::Red, Color::Blue);
+        assert_eq!(line.spans.len(), 5);
+    }
+
+    #[test]
+    fn test_lerp_color_midpoint() {
+        let result = lerp_color((0, 0, 0), (100, 200, 50), 0.5);
+        assert_eq!(result, Color::Rgb(50, 100, 25));
+    }
+
+    #[test]
+    fn test_color_to_tuple_rgb() {
+        assert_eq!(color_to_tuple(Color::Rgb(10, 20, 30)), (10, 20, 30));
+    }
+
+    #[test]
+    fn test_color_to_tuple_named() {
+        assert_eq!(color_to_tuple(Color::Red), (255, 0, 0));
+        assert_eq!(color_to_tuple(Color::Black), (0, 0, 0));
+        assert_eq!(color_to_tuple(Color::White), (255, 255, 255));
+    }
+
+    #[test]
+    fn test_build_script_select_footer_empty() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let app = App::test_new(&svc, ws, vec![], vec![]);
+        let footer = build_script_select_footer(&app);
+        assert!(footer.contains("empty"));
+        assert!(footer.contains("refresh"));
+    }
+
+    #[test]
+    fn test_build_script_select_footer_with_entries() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let app = make_app(&tmp, &svc);
+        let footer = build_script_select_footer(&app);
+        assert!(footer.contains("Up/Down"));
+        assert!(footer.contains("Enter"));
+    }
+
+    #[test]
+    fn test_build_script_select_footer_dashboard_expanded() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.script_dashboard_expanded = true;
+        let footer = build_script_select_footer(&app);
+        assert!(footer.contains("collapse"));
+    }
+
+    #[test]
+    fn test_color_to_tuple_full_palette() {
+        assert_eq!(color_to_tuple(Color::Green), (0, 255, 0));
+        assert_eq!(color_to_tuple(Color::Yellow), (255, 255, 0));
+        assert_eq!(color_to_tuple(Color::Blue), (0, 0, 255));
+        assert_eq!(color_to_tuple(Color::Magenta), (255, 0, 255));
+        assert_eq!(color_to_tuple(Color::Cyan), (0, 255, 255));
+        assert_eq!(color_to_tuple(Color::Gray), (128, 128, 128));
+        assert_eq!(color_to_tuple(Color::DarkGray), (64, 64, 64));
+        assert_eq!(color_to_tuple(Color::LightRed), (255, 128, 128));
+        assert_eq!(color_to_tuple(Color::LightGreen), (128, 255, 128));
+        assert_eq!(color_to_tuple(Color::LightYellow), (255, 255, 128));
+        assert_eq!(color_to_tuple(Color::LightBlue), (128, 128, 255));
+        assert_eq!(color_to_tuple(Color::LightMagenta), (255, 128, 255));
+        assert_eq!(color_to_tuple(Color::LightCyan), (128, 255, 255));
+        assert_eq!(color_to_tuple(Color::Indexed(7)), (7, 7, 7));
+        assert_eq!(color_to_tuple(Color::Reset), (255, 255, 255));
+    }
+
+    #[test]
+    fn test_gradient_line_single_char_uses_zero_t() {
+        let line = gradient_line("x", Color::Red, Color::Blue);
+        assert_eq!(line.spans.len(), 1);
+    }
+
+    #[test]
+    fn test_schema_title_for_none_or_directory() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        assert_eq!(schema_title(&app), "Schema");
+
+        let dir_entry = WorkspaceEntry {
+            path: tmp.path().join("subdir"),
+            kind: WorkspaceEntryKind::Directory,
+        };
+        app.navigation.entries = vec![dir_entry];
+        app.navigation.selection = 0;
+        assert_eq!(schema_title(&app), "Schema");
+    }
+
+    #[test]
+    fn test_schema_title_with_script_includes_filename() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let app = make_app(&tmp, &svc);
+        let title = schema_title(&app);
+        assert!(title.starts_with("Schema:"));
+        assert!(title.contains("deploy.sh"));
+    }
+
+    #[test]
+    fn render_ui_script_select_with_dashboard_expanded() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.script_dashboard_expanded = true;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn render_ui_script_select_with_no_selected_script() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let dir_entry = WorkspaceEntry {
+            path: tmp.path().join("subdir"),
+            kind: WorkspaceEntryKind::Directory,
+        };
+        let mut app = App::test_new(&svc, ws, vec![dir_entry], vec![]);
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+}
+
 fn color_to_tuple(color: Color) -> (u8, u8, u8) {
     match color {
         Color::Rgb(r, g, b) => (r, g, b),

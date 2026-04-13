@@ -58,7 +58,18 @@ fn uninstall_windows(exe: &Path) -> Result<(), Box<dyn Error>> {
         let _ = install_dir;
     }
 
-    let script = format!(
+    let script = build_windows_uninstall_script(exe, install_dir, std::process::id());
+
+    Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .spawn()?;
+
+    println!("Uninstall will finish after this process exits.");
+    Ok(())
+}
+
+fn build_windows_uninstall_script(exe: &Path, install_dir: &Path, pid: u32) -> String {
+    format!(
         r#"$processId = {pid}
 try {{
   $p = Get-Process -Id $processId -ErrorAction SilentlyContinue
@@ -82,17 +93,10 @@ if (Test-Path -LiteralPath $rootDir) {{
   if (-not $items) {{ Remove-Item -LiteralPath $rootDir -Force }}
 }}
 "#,
-        pid = std::process::id(),
+        pid = pid,
         target = ps_quote(&exe.display().to_string()),
         install_dir = ps_quote(&install_dir.display().to_string())
-    );
-
-    Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .spawn()?;
-
-    println!("Uninstall will finish after this process exits.");
-    Ok(())
+    )
 }
 
 #[cfg(windows)]
@@ -190,4 +194,45 @@ fn collapse_backslashes(path: &str) -> String {
     }
 
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn uninstall_unix_removes_existing_binary() {
+        let tmp = TempDir::new().unwrap();
+        let exe = tmp.path().join("omakure");
+        std::fs::write(&exe, "bin").unwrap();
+
+        uninstall_unix(&exe).unwrap();
+
+        assert!(!exe.exists());
+    }
+
+    #[test]
+    fn uninstall_unix_allows_missing_binary() {
+        let tmp = TempDir::new().unwrap();
+        let exe = tmp.path().join("missing-omakure");
+
+        uninstall_unix(&exe).unwrap();
+
+        assert!(!exe.exists());
+    }
+
+    #[test]
+    fn build_windows_uninstall_script_contains_expected_targets() {
+        let exe = PathBuf::from("/tmp/omakure/bin/omakure.exe");
+        let install_dir = exe.parent().unwrap();
+
+        let script = build_windows_uninstall_script(&exe, install_dir, 4242);
+
+        assert!(script.contains("$processId = 4242"));
+        assert!(script.contains("Remove-Item -LiteralPath $target -Force"));
+        assert!(script.contains("$rootDir = Split-Path -Parent $installDir"));
+        assert!(script.contains("omakure.exe"));
+        assert!(script.contains("/tmp/omakure/bin"));
+    }
 }

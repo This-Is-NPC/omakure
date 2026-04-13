@@ -58,3 +58,69 @@ pub(crate) fn render_scripts(
         frame.render_stateful_widget(list, area, list_state);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    #[test]
+    fn snapshot_scripts_list() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/infra"),
+                kind: WorkspaceEntryKind::Directory,
+            },
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/deploy.sh"),
+                kind: WorkspaceEntryKind::Script,
+            },
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/setup.py"),
+                kind: WorkspaceEntryKind::Script,
+            },
+        ];
+        let mut list_state = ListState::default();
+        list_state.select(Some(1));
+        let theme = Theme::default();
+
+        let backend = TestBackend::new(40, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_scripts(
+                    f,
+                    f.size(),
+                    &ws,
+                    tmp.path(),
+                    &entries,
+                    &mut list_state,
+                    &theme,
+                );
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_scripts_empty() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut list_state = ListState::default();
+        let theme = Theme::default();
+
+        let backend = TestBackend::new(50, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_scripts(f, f.size(), &ws, tmp.path(), &[], &mut list_state, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+}

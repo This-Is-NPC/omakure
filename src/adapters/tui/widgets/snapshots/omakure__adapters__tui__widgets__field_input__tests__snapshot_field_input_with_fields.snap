@@ -1,0 +1,19 @@
+---
+source: src/adapters/tui/widgets/field_input.rs
+expression: terminal.backend()
+---
+"┌Schema────────────────────────────────────────────────────┐"
+"│Script: deploy.sh                                         │"
+"│Schema: Deploy                                            │"
+"│Description: -                                            │"
+"└──────────────────────────────────────────────────────────┘"
+"┌Fields────────────────────────────────────────────────────┐"
+"│┌target (string, required)───────────────────────────────┐│"
+"││Prompt: Target environment                              ││"
+"││Value: prod                                             ││"
+"│└────────────────────────────────────────────────────────┘│"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"└──────────────────────────────────────────────────────────┘"
+"Tab/Shift+Tab to move, Enter to run, Ctrl+B back, Esc quit  "

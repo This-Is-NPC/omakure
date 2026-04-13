@@ -81,3 +81,40 @@ fn infer_name_from_url(url: &str) -> String {
     let last = trimmed.rsplit('/').next().unwrap_or(trimmed);
     last.trim_end_matches(".git").to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[rstest]
+    #[case::https_url("https://github.com/user/my-scripts.git", "my-scripts")]
+    #[case::https_no_git("https://github.com/user/my-scripts", "my-scripts")]
+    #[case::trailing_slash("https://github.com/user/repo/", "repo")]
+    #[case::ssh_url("git@github.com:user/scripts.git", "scripts")]
+    fn test_infer_name_from_url(#[case] url: &str, #[case] expected: &str) {
+        assert_eq!(infer_name_from_url(url), expected);
+    }
+
+    #[test]
+    fn test_list_omaken_empty() {
+        let tmp = TempDir::new().unwrap();
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        // Should not error, just print "No Omaken flavors installed"
+        assert!(list_omaken(&ws).is_ok());
+    }
+
+    #[test]
+    fn test_list_omaken_with_flavors() {
+        let tmp = TempDir::new().unwrap();
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        fs::create_dir_all(ws.omaken_dir().join("my-flavor")).unwrap();
+
+        assert!(list_omaken(&ws).is_ok());
+    }
+}

@@ -1,0 +1,14 @@
+---
+source: src/adapters/tui/widgets/scripts.rs
+expression: terminal.backend()
+---
+"┌Entries───────────────────────────────┐"
+"│  infra/                              │"
+"│> deploy.sh                           │"
+"│  setup.py                            │"
+"│                                      │"
+"│                                      │"
+"│                                      │"
+"│                                      │"
+"│                                      │"
+"└──────────────────────────────────────┘"

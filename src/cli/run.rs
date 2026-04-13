@@ -173,11 +173,6 @@ fn check_required_fields(
     Ok(())
 }
 
-fn cli_args_contain_flag(args: &[String], flag: &str) -> bool {
-    args.iter()
-        .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
-}
-
 fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
@@ -204,6 +199,11 @@ pub(crate) fn resolve_script_path(
     resolve_with_extensions(scripts_dir.join(script))
 }
 
+pub(crate) fn cli_args_contain_flag(args: &[String], flag: &str) -> bool {
+    args.iter()
+        .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
+}
+
 fn resolve_with_extensions(path: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
     if path.exists() {
         if path.is_file() {
@@ -222,4 +222,383 @@ fn resolve_with_extensions(path: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
         }
     }
     Err(format!("Script not found: {}", path.display()).into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::run_executor::{ExecutionResult, ExecutionTerminal};
+    use crate::runs::RunState;
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write_file(path: &Path, contents: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, contents).unwrap();
+    }
+
+    fn write_schema_script(tmp: &TempDir, name: &str, schema_json: &str, body: &str) -> PathBuf {
+        let path = tmp.path().join(name);
+        write_file(
+            &path,
+            &format!(
+                "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {}\n# OMAKURE_SCHEMA_END\n{}\n",
+                schema_json, body
+            ),
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms).unwrap();
+        }
+        path
+    }
+
+    fn make_workspace(tmp: &TempDir) -> Workspace {
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        ws
+    }
+
+    fn inline_row(workspace: &Workspace, script: &Path) -> crate::runs::RunRow {
+        let conn = runs::open(workspace).unwrap();
+        runs::start_inline(
+            &conn,
+            script.to_string_lossy().as_ref(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                run_id: Some("rid-inline".into()),
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    #[rstest]
+    #[case::exact_match(&["--target", "prod"], "--target", true)]
+    #[case::equals_syntax(&["--target=prod"], "--target", true)]
+    #[case::not_present(&["--other", "val"], "--target", false)]
+    #[case::empty_args(&[], "--target", false)]
+    fn test_cli_args_contain_flag(
+        #[case] args: &[&str],
+        #[case] flag: &str,
+        #[case] expected: bool,
+    ) {
+        let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        assert_eq!(cli_args_contain_flag(&args, flag), expected);
+    }
+
+    #[test]
+    fn test_resolve_script_path_exact_file() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("deploy.sh");
+        fs::write(&script, "#!/bin/bash").unwrap();
+
+        let result = resolve_script_path("deploy.sh", tmp.path()).unwrap();
+        assert_eq!(result, script);
+    }
+
+    #[test]
+    fn test_resolve_script_path_extension_fallback() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("deploy.sh");
+        fs::write(&script, "#!/bin/bash").unwrap();
+
+        let result = resolve_script_path("deploy", tmp.path()).unwrap();
+        assert_eq!(result, script);
+    }
+
+    #[test]
+    fn test_resolve_script_path_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let result = resolve_script_path("nonexistent", tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_script_path_absolute() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("abs.sh");
+        fs::write(&script, "#!/bin/bash").unwrap();
+
+        let result = resolve_script_path(&script.to_string_lossy(), tmp.path()).unwrap();
+        assert_eq!(result, script);
+    }
+
+    #[test]
+    fn test_resolve_script_path_with_separator() {
+        let tmp = TempDir::new().unwrap();
+        let subdir = tmp.path().join("infra");
+        fs::create_dir_all(&subdir).unwrap();
+        let script = subdir.join("deploy.sh");
+        fs::write(&script, "#!/bin/bash").unwrap();
+
+        let result = resolve_script_path("infra/deploy.sh", tmp.path()).unwrap();
+        assert_eq!(result, script);
+    }
+
+    #[test]
+    fn test_resolve_script_path_directory_not_file() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("deploy.sh");
+        fs::create_dir_all(&dir).unwrap();
+
+        let result = resolve_script_path("deploy.sh", tmp.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not a file"));
+    }
+
+    #[test]
+    fn test_check_required_fields_without_schema_is_permissive() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let script = tmp.path().join("plain.sh");
+        write_file(&script, "#!/usr/bin/env bash\necho hi\n");
+
+        assert!(check_required_fields(&ws, &script, &[]).is_ok());
+    }
+
+    #[test]
+    fn test_check_required_fields_accepts_default_and_override_flags() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let script = write_schema_script(
+            &tmp,
+            "deploy.sh",
+            r#"{"Name":"Deploy","Fields":[{"Name":"target","Type":"string","Order":1,"Required":true},{"Name":"region","Type":"string","Order":2,"Required":true,"Arg":"--azure-region"},{"Name":"optional","Type":"string","Order":3,"Required":false}]}"#,
+            "echo hi",
+        );
+
+        let args = vec![
+            "--target=prod".to_string(),
+            "--azure-region".to_string(),
+            "eastus".to_string(),
+        ];
+
+        assert!(check_required_fields(&ws, &script, &args).is_ok());
+    }
+
+    #[test]
+    fn test_check_required_fields_returns_missing_field_and_message() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let script = write_schema_script(
+            &tmp,
+            "deploy.sh",
+            r#"{"Name":"Deploy","Fields":[{"Name":"target","Type":"string","Order":1,"Required":true}]}"#,
+            "echo hi",
+        );
+
+        let err = check_required_fields(&ws, &script, &[]).unwrap_err();
+
+        assert_eq!(err.0, "target");
+        assert!(err.1.contains("--target"));
+    }
+
+    #[test]
+    fn test_finalize_run_completed_updates_row() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let script = write_schema_script(&tmp, "ok.sh", r#"{"Name":"Ok","Fields":[]}"#, "true");
+        let row = inline_row(&ws, &script);
+        let result = ExecutionResult {
+            terminal: ExecutionTerminal::Completed,
+            completion: crate::runs::RunCompletion {
+                stdout: "done\n".into(),
+                stderr: String::new(),
+                exit_code: Some(0),
+                success: true,
+                error: None,
+            },
+        };
+
+        let final_row = finalize_run(&ws, &row.run_id, &result).unwrap();
+
+        assert_eq!(final_row.state, RunState::Completed);
+        assert_eq!(final_row.success, Some(true));
+        assert_eq!(final_row.stdout, "done\n");
+    }
+
+    #[test]
+    fn test_finalize_run_failed_and_timed_out_update_row() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let fail_script =
+            write_schema_script(&tmp, "fail.sh", r#"{"Name":"Fail","Fields":[]}"#, "false");
+        let fail_row = runs::start_inline(
+            &runs::open(&ws).unwrap(),
+            fail_script.to_string_lossy().as_ref(),
+            &[],
+            "inline:fail",
+            EnqueueOptions {
+                run_id: Some("rid-fail".into()),
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let fail_result = ExecutionResult {
+            terminal: ExecutionTerminal::Failed,
+            completion: crate::runs::RunCompletion {
+                stdout: String::new(),
+                stderr: "boom\n".into(),
+                exit_code: Some(1),
+                success: false,
+                error: None,
+            },
+        };
+        let failed = finalize_run(&ws, &fail_row.run_id, &fail_result).unwrap();
+        assert_eq!(failed.state, RunState::Failed);
+        assert_eq!(failed.exit_code, Some(1));
+
+        let timeout_script = write_schema_script(
+            &tmp,
+            "timeout.sh",
+            r#"{"Name":"Timeout","Fields":[]}"#,
+            "sleep 1",
+        );
+        let timeout_row = runs::start_inline(
+            &runs::open(&ws).unwrap(),
+            timeout_script.to_string_lossy().as_ref(),
+            &[],
+            "inline:timeout",
+            EnqueueOptions {
+                run_id: Some("rid-timeout".into()),
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let timeout_result = ExecutionResult {
+            terminal: ExecutionTerminal::TimedOut,
+            completion: crate::runs::RunCompletion {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: Some(124),
+                success: false,
+                error: Some("timed out".into()),
+            },
+        };
+        let timed_out = finalize_run(&ws, &timeout_row.run_id, &timeout_result).unwrap();
+        assert_eq!(timed_out.state, RunState::TimedOut);
+        assert_eq!(timed_out.error.as_deref(), Some("timed out"));
+    }
+
+    #[test]
+    fn test_finalize_run_cancelled_records_output() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let script = write_schema_script(
+            &tmp,
+            "cancel.sh",
+            r#"{"Name":"Cancel","Fields":[]}"#,
+            "sleep 1",
+        );
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_string_lossy().as_ref(),
+            &[],
+            "inline:cancel",
+            EnqueueOptions {
+                run_id: Some("rid-cancel".into()),
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        runs::cancel(&conn, &row.run_id, Some("stop".into()), None).unwrap();
+        drop(conn);
+
+        let result = ExecutionResult {
+            terminal: ExecutionTerminal::Cancelled,
+            completion: crate::runs::RunCompletion {
+                stdout: "partial\n".into(),
+                stderr: String::new(),
+                exit_code: Some(130),
+                success: false,
+                error: Some("cancelled".into()),
+            },
+        };
+
+        let final_row = finalize_run(&ws, &row.run_id, &result).unwrap();
+
+        assert_eq!(final_row.state, RunState::Cancelled);
+        assert_eq!(final_row.stdout, "partial\n");
+        assert_eq!(final_row.exit_code, Some(130));
+        assert!(final_row
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("cancelled"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_run_executes_script_and_persists_completed_row() {
+        let tmp = TempDir::new().unwrap();
+        let script = write_schema_script(&tmp, "ok.sh", r#"{"Name":"Ok","Fields":[]}"#, "true");
+
+        run(
+            tmp.path().to_path_buf(),
+            RunArgs {
+                script: script.to_string_lossy().to_string(),
+                actor: "ai".into(),
+                reason: Some("ship it".into()),
+                run_id: Some("rid-run-ok".into()),
+                parent_run_id: Some("parent-run".into()),
+                no_prompt: false,
+                args: vec![],
+            },
+            false,
+        )
+        .unwrap();
+
+        let ws = make_workspace(&tmp);
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::get_run(&conn, "rid-run-ok").unwrap().unwrap();
+        assert_eq!(row.state, RunState::Completed);
+        assert_eq!(row.actor, "ai");
+        assert_eq!(row.reason.as_deref(), Some("ship it"));
+        assert_eq!(row.parent_run_id.as_deref(), Some("parent-run"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_run_json_success_returns_ok_and_persists_row() {
+        let tmp = TempDir::new().unwrap();
+        let script = write_schema_script(&tmp, "json.sh", r#"{"Name":"Json","Fields":[]}"#, "true");
+
+        run(
+            tmp.path().to_path_buf(),
+            RunArgs {
+                script: script.to_string_lossy().to_string(),
+                actor: "human".into(),
+                reason: None,
+                run_id: Some("rid-run-json".into()),
+                parent_run_id: None,
+                no_prompt: false,
+                args: vec![],
+            },
+            true,
+        )
+        .unwrap();
+
+        let ws = make_workspace(&tmp);
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::get_run(&conn, "rid-run-json").unwrap().unwrap();
+        assert_eq!(row.state, RunState::Completed);
+    }
 }

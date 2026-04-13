@@ -147,6 +147,14 @@ mod tests {
     }
 
     #[test]
+    fn test_app_error_from_owned_string() {
+        let owned: String = String::from("oops");
+        let err: AppError = owned.into();
+        assert!(matches!(err, AppError::General(_)));
+        assert_eq!(format!("{}", err), "oops");
+    }
+
+    #[test]
     fn test_schema_error_from_serde() {
         let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
         let err = SchemaError::from(json_err);

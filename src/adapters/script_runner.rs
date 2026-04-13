@@ -71,3 +71,95 @@ impl ScriptRunner for MultiScriptRunner {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_build_command_bash() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("test.sh");
+        fs::write(&script, "#!/bin/bash\necho hello").unwrap();
+
+        let cmd = MultiScriptRunner::build_command(&script, &[], &[]).unwrap();
+        assert_eq!(cmd.get_program(), "bash");
+    }
+
+    #[test]
+    fn test_build_command_python() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("test.py");
+        fs::write(&script, "print('hello')").unwrap();
+
+        let cmd = MultiScriptRunner::build_command(&script, &[], &[]).unwrap();
+        assert_eq!(cmd.get_program(), crate::runtime::python_program());
+    }
+
+    #[test]
+    fn test_build_command_with_args_and_env() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("test.sh");
+        fs::write(&script, "#!/bin/bash\necho $1").unwrap();
+
+        let args = vec!["arg1".to_string()];
+        let env = vec![("MY_VAR".to_string(), "my_value".to_string())];
+        let cmd = MultiScriptRunner::build_command(&script, &args, &env).unwrap();
+
+        let cmd_args: Vec<_> = cmd.get_args().collect();
+        assert!(cmd_args.iter().any(|a| *a == "arg1"));
+
+        let envs: Vec<_> = cmd.get_envs().collect();
+        assert!(envs
+            .iter()
+            .any(|(k, v)| *k == "MY_VAR" && *v == Some(std::ffi::OsStr::new("my_value"))));
+    }
+
+    #[test]
+    fn test_build_command_unsupported_type() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("test.txt");
+        fs::write(&script, "hello").unwrap();
+
+        let result = MultiScriptRunner::build_command(&script, &[], &[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_run_simple_bash_script() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("hello.sh");
+        fs::write(&script, "#!/bin/bash\necho hello").unwrap();
+
+        let runner = MultiScriptRunner::new();
+        let output = runner.run(&script, &[]).unwrap();
+        assert!(output.success);
+        assert_eq!(output.stdout.trim(), "hello");
+    }
+
+    #[test]
+    fn test_run_script_nonzero_exit() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("fail.sh");
+        fs::write(&script, "#!/bin/bash\nexit 42").unwrap();
+
+        let runner = MultiScriptRunner::new();
+        let output = runner.run(&script, &[]).unwrap();
+        assert!(!output.success);
+        assert_eq!(output.exit_code, Some(42));
+    }
+
+    #[test]
+    fn test_run_script_with_args() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("echo_arg.sh");
+        fs::write(&script, "#!/bin/bash\necho $1").unwrap();
+
+        let runner = MultiScriptRunner::new();
+        let output = runner.run(&script, &["world".to_string()]).unwrap();
+        assert!(output.success);
+        assert_eq!(output.stdout.trim(), "world");
+    }
+}

@@ -826,4 +826,112 @@ mod tests {
         assert_eq!(truncate_for_width("hello", 0), "");
         assert_eq!(truncate_for_width("hello", 1), "h");
     }
+
+    // --- Rendering tests via TestBackend ---
+
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tempfile::TempDir;
+
+    fn make_svc(tmp: &TempDir) -> ScriptService {
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        ScriptService::new(Box::new(repo), Box::new(runner))
+    }
+
+    fn make_history(tmp: &TempDir) -> Vec<RunRow> {
+        let root = tmp.path().display().to_string();
+        vec![
+            row(
+                &format!("{}/deploy.sh", root),
+                RunState::Completed,
+                1000,
+                Some(150),
+            ),
+            row(
+                &format!("{}/deploy.sh", root),
+                RunState::Failed,
+                2000,
+                Some(200),
+            ),
+            row(
+                &format!("{}/deploy.sh", root),
+                RunState::Completed,
+                3000,
+                Some(100),
+            ),
+            row(
+                &format!("{}/setup.sh", root),
+                RunState::Completed,
+                1500,
+                Some(300),
+            ),
+            row(&format!("{}/setup.sh", root), RunState::Running, 4000, None),
+        ]
+    }
+
+    #[test]
+    fn snapshot_render_dashboards_split() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let history = make_history(&tmp);
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], history);
+        app.history.view = crate::adapters::tui::app::HistoryView::Dashboards;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_dashboards(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_render_dashboards_empty() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![]);
+        app.history.view = crate::adapters::tui::app::HistoryView::Dashboards;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_dashboards(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_render_script_charts() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let history = make_history(&tmp);
+        let script = format!("{}/deploy.sh", tmp.path().display());
+        let app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], history);
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(60, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_script_charts(
+                    f,
+                    f.size(),
+                    &app,
+                    &theme,
+                    std::path::Path::new(&script),
+                    false,
+                )
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
 }

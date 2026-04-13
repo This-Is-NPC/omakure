@@ -392,4 +392,215 @@ mod tests {
         assert!(from_file.contains("\"y\""));
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn normalize_script_id_alphanumeric() {
+        assert_eq!(
+            normalize_script_id(Path::new("deploy-app.sh")),
+            "deploy_app"
+        );
+    }
+
+    #[test]
+    fn normalize_script_id_collapses_special_chars() {
+        assert_eq!(
+            normalize_script_id(Path::new("my--weird___script.py")),
+            "my_weird_script"
+        );
+    }
+
+    #[test]
+    fn normalize_script_id_trims_underscores() {
+        assert_eq!(normalize_script_id(Path::new("_leading_.sh")), "leading");
+    }
+
+    #[test]
+    fn ensure_script_path_adds_bash_extension() {
+        let path = ensure_script_path("deploy").unwrap();
+        assert_eq!(path, PathBuf::from("deploy.bash"));
+    }
+
+    #[test]
+    fn ensure_script_path_preserves_valid_extension() {
+        let path = ensure_script_path("deploy.py").unwrap();
+        assert_eq!(path, PathBuf::from("deploy.py"));
+    }
+
+    #[test]
+    fn ensure_script_path_rejects_absolute() {
+        let result = ensure_script_path("/abs/deploy.sh");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_script_path_rejects_parent_dir() {
+        let result = ensure_script_path("../deploy.sh");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_script_path_rejects_unsupported_extension() {
+        let result = ensure_script_path("deploy.rb");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn build_bash_template_contains_schema() {
+        let t = build_bash_template("deploy");
+        assert!(t.contains("OMAKURE_SCHEMA_START"));
+        assert!(t.contains("OMAKURE_SCHEMA_END"));
+        assert!(t.contains("\"Name\": \"deploy\""));
+        assert!(t.contains("#!/usr/bin/env bash"));
+    }
+
+    #[test]
+    fn build_python_template_contains_schema() {
+        let t = build_python_template("setup");
+        assert!(t.contains("OMAKURE_SCHEMA_START"));
+        assert!(t.contains("\"Name\": \"setup\""));
+        assert!(t.contains("#!/usr/bin/env python3"));
+        assert!(t.contains("argparse"));
+    }
+
+    #[test]
+    fn build_powershell_template_contains_schema() {
+        let t = build_powershell_template("config");
+        assert!(t.contains("OMAKURE_SCHEMA_START"));
+        assert!(t.contains("\"Name\": \"config\""));
+        assert!(t.contains("PowerShell"));
+    }
+
+    #[test]
+    fn build_template_dispatches_correctly() {
+        let bash = build_template("test", ScriptKind::Bash);
+        assert!(bash.contains("#!/usr/bin/env bash"));
+        let py = build_template("test", ScriptKind::Python);
+        assert!(py.contains("#!/usr/bin/env python3"));
+        let ps = build_template("test", ScriptKind::PowerShell);
+        assert!(ps.contains("PowerShell"));
+    }
+
+    #[test]
+    fn build_with_schema_python_kind() {
+        let schema = r#"{"Name":"x","Fields":[]}"#;
+        let out = build_with_schema(schema, None, ScriptKind::Python);
+        assert!(out.starts_with("#!/usr/bin/env python3"));
+        assert!(out.contains("# OMAKURE_SCHEMA_START"));
+    }
+
+    #[test]
+    fn run_with_format_creates_script_with_default_template() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: None,
+                name: Some("deploy".into()),
+                schema_json: None,
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap();
+        assert!(tmp.path().join("deploy.bash").exists());
+    }
+
+    #[test]
+    fn run_with_format_rejects_existing_script_without_force() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("dup.sh"), "old").unwrap();
+        let err = run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("dup.sh".into()),
+                name: None,
+                schema_json: None,
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("Script already exists"));
+    }
+
+    #[test]
+    fn run_with_format_overwrites_with_force() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("ow.sh"), "old").unwrap();
+        run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("ow.sh".into()),
+                name: None,
+                schema_json: None,
+                body_stdin: false,
+                force: true,
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_with_format_writes_schema_when_supplied_inline() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("with_schema.sh".into()),
+                name: None,
+                schema_json: Some(r#"{"Name":"x","Fields":[]}"#.into()),
+                body_stdin: false,
+                force: false,
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_with_format_rejects_invalid_schema_json() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let err = run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: Some("bad.sh".into()),
+                name: None,
+                schema_json: Some("not json".into()),
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("schema-json invalid"));
+    }
+
+    #[test]
+    fn run_with_format_rejects_missing_name() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let err = run_with_format(
+            tmp.path().to_path_buf(),
+            InitArgs {
+                script: None,
+                name: None,
+                schema_json: None,
+                body_stdin: false,
+                force: false,
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("Missing script name"));
+    }
+
+    #[test]
+    fn build_with_schema_powershell_kind() {
+        let schema = r#"{"Name":"x","Fields":[]}"#;
+        let out = build_with_schema(schema, None, ScriptKind::PowerShell);
+        assert!(out.contains("# OMAKURE_SCHEMA_START"));
+        assert!(!out.contains("#!/usr/bin/env bash"));
+    }
 }

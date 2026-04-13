@@ -21,3 +21,7 @@ run = ["cargo clippy -- -D warnings", "cargo fmt --check"]
 [tasks.install]
 description = "Install omakure locally"
 run = "cargo install --path ."
+
+[tasks.coverage]
+description = "Run tests with tarpaulin and generate HTML coverage report"
+run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/adapters/tui/mod.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/omaken.rs' 'src/cli/update.rs' --skip-clean"

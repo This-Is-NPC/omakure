@@ -1,0 +1,16 @@
+---
+source: src/adapters/tui/widgets/run_result.rs
+expression: terminal.backend()
+---
+"┌Last run output───────────────────────────────────────────┐"
+"│No script output yet.                                     │"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"└──────────────────────────────────────────────────────────┘"
+"Up/Down to scroll, PgUp/PgDn, Enter/Esc to return, h for his"
+"                                                            "

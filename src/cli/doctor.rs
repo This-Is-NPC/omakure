@@ -62,3 +62,20 @@ fn print_workspace_path(label: &str, path: &std::path::Path) {
         println!("  {}: WARN - {} (not created yet)", label, path.display());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_print_required_ok() {
+        let result: Result<(), String> = Ok(());
+        assert!(print_required("test", result));
+    }
+
+    #[test]
+    fn test_print_required_err() {
+        let result: Result<(), String> = Err("fail".to_string());
+        assert!(!print_required("test", result));
+    }
+}

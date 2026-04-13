@@ -75,3 +75,82 @@ pub(crate) fn state_color(state: RunState) -> Color {
         RunState::DeadLetter => Color::LightRed,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use ratatui::layout::Rect;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::queued(RunState::Queued, Color::Gray)]
+    #[case::running(RunState::Running, Color::Cyan)]
+    #[case::completed(RunState::Completed, Color::Green)]
+    #[case::failed(RunState::Failed, Color::Red)]
+    #[case::cancelled(RunState::Cancelled, Color::Yellow)]
+    #[case::timed_out(RunState::TimedOut, Color::Magenta)]
+    #[case::dead_letter(RunState::DeadLetter, Color::LightRed)]
+    fn test_state_color(#[case] state: RunState, #[case] expected: Color) {
+        assert_eq!(state_color(state), expected);
+    }
+
+    #[test]
+    fn test_standard_screen_layout_splits_correctly() {
+        let area = Rect::new(0, 0, 80, 24);
+        let [header, body, footer] = standard_screen_layout(area, 3, 1);
+        assert_eq!(header.height, 3);
+        assert_eq!(footer.height, 1);
+        assert_eq!(body.height, 24 - 3 - 1);
+        assert_eq!(header.width, 80);
+    }
+
+    #[test]
+    fn test_horizontal_split() {
+        let area = Rect::new(0, 0, 100, 24);
+        let [left, right] = horizontal_split(area, 40);
+        assert_eq!(left.width, 40);
+        assert_eq!(right.width, 60);
+    }
+
+    #[rstest]
+    #[case::queued(RunState::Queued, Color::Gray)]
+    #[case::running(RunState::Running, Color::Cyan)]
+    #[case::completed(RunState::Completed, Color::Green)]
+    #[case::failed(RunState::Failed, Color::Red)]
+    #[case::cancelled(RunState::Cancelled, Color::Yellow)]
+    #[case::timed_out(RunState::TimedOut, Color::Magenta)]
+    #[case::dead_letter(RunState::DeadLetter, Color::Red)]
+    fn test_state_style_per_state(#[case] state: RunState, #[case] expected_fg: Color) {
+        let theme = Theme::default();
+        assert_eq!(state_style(&theme, state).fg, Some(expected_fg));
+    }
+
+    #[test]
+    fn test_status_label_and_style_success() {
+        let theme = Theme::default();
+        let (label, _style) = status_label_and_style(&ExecutionStatus::Success, &theme);
+        assert_eq!(label, "OK");
+    }
+
+    #[test]
+    fn test_status_label_and_style_failed_with_code() {
+        let theme = Theme::default();
+        let (label, _style) = status_label_and_style(&ExecutionStatus::Failed(Some(42)), &theme);
+        assert_eq!(label, "FAIL (42)");
+    }
+
+    #[test]
+    fn test_status_label_and_style_failed_without_code() {
+        let theme = Theme::default();
+        let (label, _style) = status_label_and_style(&ExecutionStatus::Failed(None), &theme);
+        assert_eq!(label, "FAIL");
+    }
+
+    #[test]
+    fn test_status_label_and_style_error() {
+        let theme = Theme::default();
+        let (label, _style) = status_label_and_style(&ExecutionStatus::Error, &theme);
+        assert_eq!(label, "ERROR");
+    }
+}

@@ -211,6 +211,7 @@ mod tests {
             }],
             outputs: None,
             queue: None,
+            schedule: None,
         }
     }
 
@@ -247,6 +248,7 @@ mod tests {
             fields: vec![],
             outputs: None,
             queue: None,
+            schedule: None,
         };
         let payload = build_payload(&script, tmp.path(), &schema);
         assert_eq!(payload.name, "Simple");

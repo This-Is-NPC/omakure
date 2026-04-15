@@ -63,6 +63,7 @@ pub fn run(
             cron_schedule_id: None,
             script_name: None,
             omakure_version: app_meta::APP_VERSION.to_string(),
+            trigger: crate::runs::RunTrigger::Manual,
         },
     )
     .map_err(|err| -> Box<dyn Error> { err.into() })?;

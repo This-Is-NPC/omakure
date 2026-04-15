@@ -75,6 +75,7 @@ fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(
             cron_schedule_id: opts.cron_schedule_id,
             script_name: None,
             omakure_version: app_meta::APP_VERSION.to_string(),
+            trigger: crate::runs::RunTrigger::Manual,
         },
     ) {
         Ok(row) => row,
@@ -216,7 +217,7 @@ fn worker(
     Ok(())
 }
 
-fn install_signal_handlers(flag: Arc<AtomicBool>) {
+pub(crate) fn install_signal_handlers(flag: Arc<AtomicBool>) {
     use signal_hook::consts::{SIGINT, SIGTERM};
     let _ = signal_hook::flag::register(SIGINT, Arc::clone(&flag));
     let _ = signal_hook::flag::register(SIGTERM, flag);
@@ -224,7 +225,7 @@ fn install_signal_handlers(flag: Arc<AtomicBool>) {
 
 /// One worker thread's main loop. Claim, execute, finalize, repeat.
 /// Exits when `cancel_flag` flips, or after one cycle when `once = true`.
-fn worker_loop(
+pub(crate) fn worker_loop(
     workspace: Workspace,
     worker_id: String,
     cancel_flag: Arc<AtomicBool>,

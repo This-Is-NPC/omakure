@@ -30,6 +30,29 @@ pub(crate) enum Screen {
     Running,
     RunResult,
     Error,
+    Schedules,
+}
+
+/// One row in the TUI Schedules screen. Built by [`App::enter_schedules`]
+/// by scanning the workspace for scripts whose embedded schema declares a
+/// `Schedule` block.
+#[derive(Debug, Clone)]
+pub(crate) struct ScheduleEntry {
+    pub(crate) script_path: PathBuf,
+    pub(crate) display_name: String,
+    pub(crate) cron: String,
+    pub(crate) enabled: bool,
+    pub(crate) next_run: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct SchedulesState {
+    pub(crate) entries: Vec<ScheduleEntry>,
+    pub(crate) selection: usize,
+    pub(crate) list_state: ratatui::widgets::ListState,
+    /// Message surfaced at the bottom of the screen after a toggle, parse
+    /// error, etc. Cleared on re-enter.
+    pub(crate) flash: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -117,6 +140,10 @@ pub(crate) struct App<'a> {
     /// when leaving the screen, when navigating into a directory, or
     /// when the user presses `Esc`.
     pub(crate) script_dashboard_expanded: bool,
+    pub(crate) schedules: SchedulesState,
+    /// Current activity-grid period, shared across every screen that
+    /// renders the activity grid. Cycled with Tab.
+    pub(crate) activity_period: super::widgets::activity_grid::ActivityPeriod,
 }
 
 impl<'a> App<'a> {
@@ -158,6 +185,8 @@ impl<'a> App<'a> {
             tick: 0,
             inline_run_receiver: None,
             script_dashboard_expanded: false,
+            schedules: SchedulesState::default(),
+            activity_period: super::widgets::activity_grid::ActivityPeriod::default(),
         };
         app.start_widget_load();
         app.load_env_config();
@@ -199,6 +228,8 @@ impl<'a> App<'a> {
             tick: 0,
             inline_run_receiver: None,
             script_dashboard_expanded: false,
+            schedules: SchedulesState::default(),
+            activity_period: super::widgets::activity_grid::ActivityPeriod::default(),
         }
     }
 
@@ -222,6 +253,127 @@ impl<'a> App<'a> {
             .list_state
             .select(Some(self.navigation.selection));
         self.update_schema_preview();
+    }
+
+    /// Refresh the in-memory run history from `runs.sqlite`. Used when
+    /// entering views that show recent runs (Schedules, History) so
+    /// rows the cron scheduler added after TUI launch show up.
+    pub(crate) fn refresh_history(&mut self) {
+        let entries = match crate::runs::open(&self.workspace) {
+            Ok(conn) => crate::runs::query_runs(
+                &conn,
+                &crate::runs::RunFilters {
+                    states: crate::runs::RunStateSet::All.to_states(),
+                    ..Default::default()
+                },
+            )
+            .unwrap_or_default(),
+            Err(_) => Vec::new(),
+        };
+        let entries = filter_history_for_scripts_root(entries, self.workspace.scripts_root());
+        self.history = HistoryState::new(entries);
+    }
+
+    /// Apply an auto-refresh payload produced by the background poller.
+    /// Unlike `refresh_history`, this preserves the current view/focus/
+    /// selection so the user is not disrupted while the grid ticks.
+    pub(crate) fn apply_history_refresh(&mut self, entries: Vec<RunRow>) {
+        let entries = filter_history_for_scripts_root(entries, self.workspace.scripts_root());
+        self.history.replace_entries(entries);
+    }
+
+    /// Scan the current scripts root for scripts whose schema declares a
+    /// `Schedule` block and switch to the Schedules screen.
+    pub(crate) fn enter_schedules(&mut self) {
+        self.refresh_history();
+        let repo = crate::adapters::workspace_repository::FsWorkspaceRepository::new(
+            self.workspace.scripts_root().to_path_buf(),
+        );
+        let mut entries: Vec<ScheduleEntry> = Vec::new();
+        if let Ok(scripts) = crate::ports::ScriptRepository::list_scripts_recursive(&repo) {
+            let now = chrono::Utc::now();
+            for script in scripts {
+                let Ok(schema) = crate::ports::ScriptRepository::read_schema(&repo, &script) else {
+                    continue;
+                };
+                let Some(schedule) = schema.schedule.as_ref() else {
+                    continue;
+                };
+                let next_run = crate::domain::parse_cron(&schedule.cron)
+                    .ok()
+                    .and_then(|cron| crate::domain::next_fire_after(&cron, now));
+                let display_name = script
+                    .strip_prefix(self.workspace.scripts_root())
+                    .unwrap_or(&script)
+                    .to_string_lossy()
+                    .to_string();
+                entries.push(ScheduleEntry {
+                    script_path: script,
+                    display_name,
+                    cron: schedule.cron.clone(),
+                    enabled: schedule.enabled,
+                    next_run,
+                });
+            }
+        }
+        entries.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+        let mut list_state = ratatui::widgets::ListState::default();
+        if !entries.is_empty() {
+            list_state.select(Some(0));
+        }
+        self.schedules = SchedulesState {
+            entries,
+            selection: 0,
+            list_state,
+            flash: None,
+        };
+        self.screen = Screen::Schedules;
+    }
+
+    pub(crate) fn move_schedules_selection(&mut self, delta: isize) {
+        if self.schedules.entries.is_empty() {
+            return;
+        }
+        let len = self.schedules.entries.len() as isize;
+        let mut new_index = self.schedules.selection as isize + delta;
+        if new_index < 0 {
+            new_index = 0;
+        } else if new_index >= len {
+            new_index = len - 1;
+        }
+        self.schedules.selection = new_index as usize;
+        self.schedules
+            .list_state
+            .select(Some(self.schedules.selection));
+    }
+
+    /// Flip the `Enabled` flag of the currently selected schedule by doing
+    /// a byte-scoped edit on the script file (the JSON block is *not*
+    /// reserialised so the user's exact formatting is preserved). If the
+    /// resulting file fails to re-parse, the edit is reverted.
+    pub(crate) fn toggle_selected_schedule(&mut self) {
+        let Some(entry) = self
+            .schedules
+            .entries
+            .get(self.schedules.selection)
+            .cloned()
+        else {
+            return;
+        };
+        match toggle_schedule_enabled_in_file(&entry.script_path, !entry.enabled) {
+            Ok(()) => {
+                if let Some(row) = self.schedules.entries.get_mut(self.schedules.selection) {
+                    row.enabled = !entry.enabled;
+                }
+                self.schedules.flash = Some(format!(
+                    "{} -> Enabled = {}",
+                    entry.display_name, !entry.enabled
+                ));
+            }
+            Err(err) => {
+                self.schedules.flash = Some(format!("toggle failed: {err}"));
+            }
+        }
     }
 
     pub(crate) fn enter_search(&mut self) {
@@ -425,6 +577,7 @@ impl<'a> App<'a> {
                         fields: self.field_input.fields.clone(),
                         outputs,
                         queue,
+                        schedule: None,
                     },
                 ));
                 if self.field_input.fields.is_empty() {
@@ -936,7 +1089,115 @@ pub(crate) fn history_belongs_to_scripts_root(entry: &RunRow, scripts_root: &Pat
     Path::new(&entry.script_path).starts_with(scripts_root)
 }
 
-fn filter_history_for_scripts_root(entries: Vec<RunRow>, scripts_root: &Path) -> Vec<RunRow> {
+/// Flip the `"Enabled"` boolean inside the `Schedule` block of a script
+/// file in place. Preserves all bytes outside of the value substitution
+/// (comments, whitespace, field order, the rest of the JSON) and verifies
+/// the result still parses — on failure the original file is restored.
+pub(crate) fn toggle_schedule_enabled_in_file(
+    script: &Path,
+    new_value: bool,
+) -> Result<(), String> {
+    let original = std::fs::read_to_string(script).map_err(|e| e.to_string())?;
+    let edited = rewrite_schedule_enabled(&original, new_value)?;
+    if edited == original {
+        return Ok(());
+    }
+    std::fs::write(script, &edited).map_err(|e| e.to_string())?;
+    // Verify the result still parses; if it doesn't, revert.
+    match crate::domain::parse_schema(&edited) {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            let _ = std::fs::write(script, &original);
+            Err(format!("result would not parse; reverted: {err}"))
+        }
+    }
+}
+
+/// Byte-scoped rewrite of the `"Enabled"` value inside the embedded
+/// schema block. Looks for the first `"Enabled"` occurrence after a
+/// `"Schedule"` marker; replaces the following `true`/`false`. If the
+/// block does not already contain `"Enabled"`, synthesize one by
+/// inserting `, "Enabled": <new>` after the `"Cron": "<...>"` value.
+pub(crate) fn rewrite_schedule_enabled(content: &str, new_value: bool) -> Result<String, String> {
+    let schedule_idx = content
+        .find("\"Schedule\"")
+        .ok_or_else(|| "no Schedule block found".to_string())?;
+    let tail = &content[schedule_idx..];
+    if let Some(enabled_off) = tail.find("\"Enabled\"") {
+        let abs = schedule_idx + enabled_off;
+        let after_key = abs + "\"Enabled\"".len();
+        // Skip whitespace, optional ':', whitespace.
+        let bytes = content.as_bytes();
+        let mut i = after_key;
+        while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b':' {
+            i += 1;
+        }
+        while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+            i += 1;
+        }
+        let (literal, literal_len) = if content[i..].starts_with("true") {
+            ("true", 4)
+        } else if content[i..].starts_with("false") {
+            ("false", 5)
+        } else {
+            return Err("Enabled value is not a literal true/false".to_string());
+        };
+        let _ = literal;
+        let replacement = if new_value { "true" } else { "false" };
+        let mut out = String::with_capacity(content.len());
+        out.push_str(&content[..i]);
+        out.push_str(replacement);
+        out.push_str(&content[i + literal_len..]);
+        return Ok(out);
+    }
+    // Synthesize: insert `, "Enabled": <bool>` after the Cron value.
+    let cron_off = tail
+        .find("\"Cron\"")
+        .ok_or_else(|| "Schedule block has no Cron field".to_string())?;
+    let abs_cron = schedule_idx + cron_off;
+    // Skip past `"Cron"`, optional `:` and whitespace, then the string value.
+    let bytes = content.as_bytes();
+    let mut i = abs_cron + "\"Cron\"".len();
+    while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+        i += 1;
+    }
+    if i < bytes.len() && bytes[i] == b':' {
+        i += 1;
+    }
+    while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+        i += 1;
+    }
+    if i >= bytes.len() || bytes[i] != b'"' {
+        return Err("Cron value is not a string literal".to_string());
+    }
+    // Advance to the closing quote.
+    i += 1;
+    while i < bytes.len() && bytes[i] != b'"' {
+        if bytes[i] == b'\\' {
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    if i >= bytes.len() {
+        return Err("Cron value has no closing quote".to_string());
+    }
+    i += 1; // past the closing quote
+    let insertion = format!(", \"Enabled\": {}", new_value);
+    let mut out = String::with_capacity(content.len() + insertion.len());
+    out.push_str(&content[..i]);
+    out.push_str(&insertion);
+    out.push_str(&content[i..]);
+    Ok(out)
+}
+
+pub(crate) fn filter_history_for_scripts_root(
+    entries: Vec<RunRow>,
+    scripts_root: &Path,
+) -> Vec<RunRow> {
     entries
         .into_iter()
         .filter(|entry| history_belongs_to_scripts_root(entry, scripts_root))
@@ -1017,6 +1278,52 @@ fn schema_to_preview(schema: &Schema) -> SchemaPreview {
 mod tests {
     use super::*;
 
+    #[test]
+    fn rewrite_toggles_enabled_true_to_false_preserving_surroundings() {
+        let input = r#"prefix
+# OMAKURE_SCHEMA_START
+# { "Name": "s", "Schedule": { "Cron": "@hourly", "Enabled": true }, "Fields": [] }
+# OMAKURE_SCHEMA_END
+suffix"#;
+        let out = rewrite_schedule_enabled(input, false).unwrap();
+        assert!(out.contains("\"Enabled\": false"));
+        assert!(out.starts_with("prefix"));
+        assert!(out.ends_with("suffix"));
+        // Length difference is exactly `true` -> `false` (one extra byte).
+        assert_eq!(out.len(), input.len() + 1);
+        // And changing only the value, not the key or formatting.
+        assert!(out.contains("\"Schedule\": { \"Cron\": \"@hourly\", \"Enabled\": false }"));
+    }
+
+    #[test]
+    fn rewrite_synthesizes_enabled_when_missing() {
+        let input = r#"{ "Name": "s", "Schedule": { "Cron": "@daily" }, "Fields": [] }"#;
+        let out = rewrite_schedule_enabled(input, false).unwrap();
+        assert!(out.contains("\"Cron\": \"@daily\""));
+        assert!(out.contains("\"Enabled\": false"));
+    }
+
+    #[test]
+    fn rewrite_errors_when_no_schedule_block() {
+        let input = r#"{ "Name": "s", "Fields": [] }"#;
+        assert!(rewrite_schedule_enabled(input, true).is_err());
+    }
+
+    #[test]
+    fn toggle_enabled_round_trips_through_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let script = tmp.path().join("a.sh");
+        let original = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# { \"Name\": \"s\", \"Schedule\": { \"Cron\": \"@hourly\", \"Enabled\": true }, \"Fields\": [] }\n# OMAKURE_SCHEMA_END\n";
+        std::fs::write(&script, original).unwrap();
+        toggle_schedule_enabled_in_file(&script, false).unwrap();
+        let after = std::fs::read_to_string(&script).unwrap();
+        assert!(after.contains("\"Enabled\": false"));
+        // Round-trip should still parse via extract_schema_block + parse_schema.
+        let block = crate::domain::extract_schema_block(&after, &["#"]).unwrap();
+        let schema = crate::domain::parse_schema(&block).unwrap();
+        assert!(!schema.schedule.unwrap().enabled);
+    }
+
     fn entry_with_script(script: &str) -> RunRow {
         RunRow {
             run_id: "rid".into(),
@@ -1032,6 +1339,7 @@ mod tests {
             lease_until: None,
             timeout_ms: None,
             cron_schedule_id: None,
+            trigger: crate::runs::RunTrigger::Manual,
             started_at: Some(0),
             finished_at: Some(0),
             duration_ms: Some(0),

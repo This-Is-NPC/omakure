@@ -52,6 +52,24 @@ impl HistoryState {
         }
     }
 
+    /// Replace `entries` in place while preserving view, focus, layout,
+    /// and — when possible — the user's current selection. Used by the
+    /// TUI's background auto-refresh so a refresh tick doesn't kick the
+    /// user out of Dashboards view or scroll them back to row 0.
+    pub(crate) fn replace_entries(&mut self, entries: Vec<RunRow>) {
+        let new_len = entries.len();
+        self.entries = entries;
+        if new_len == 0 {
+            self.selection = 0;
+            self.table_state.select(None);
+        } else {
+            if self.selection >= new_len {
+                self.selection = new_len - 1;
+            }
+            self.table_state.select(Some(self.selection));
+        }
+    }
+
     /// `Tab`: cycle between the table view and the dashboards view.
     /// Switching views never resets the selection so the per-script
     /// dashboard panel always tracks the highlighted row.

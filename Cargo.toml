@@ -28,6 +28,11 @@ dirs = "5.0"
 humantime = "2.1"
 signal-hook = "0.3"
 rattles = "0.2.2"
+cron = "0.12"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[target.'cfg(unix)'.dependencies]
+daemonize = "0.5"
 
 [dev-dependencies]
 rstest = "0.23"

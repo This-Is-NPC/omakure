@@ -103,6 +103,7 @@ mod tests {
             lease_until: None,
             timeout_ms: None,
             cron_schedule_id: None,
+            trigger: crate::runs::RunTrigger::Manual,
             started_at: Some(0),
             finished_at: Some(100),
             duration_ms: Some(100),

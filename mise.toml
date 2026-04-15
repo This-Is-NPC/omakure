@@ -6,6 +6,22 @@ rust = "latest"
 description = "Start the TUI interface"
 run = "cargo run --bin omakure"
 
+[tasks.dev]
+description = "Build, start the daemon, tail its log, and open the TUI (stops the daemon on exit)"
+run = "./scripts/dev-daemon.sh"
+
+[tasks.daemon-start]
+description = "Build and start the scheduler daemon in the background"
+run = ["cargo build --bin omakure", "./target/debug/omakure serve -d"]
+
+[tasks.daemon-stop]
+description = "Stop the scheduler daemon"
+run = "./target/debug/omakure serve --stop"
+
+[tasks.daemon-log]
+description = "Tail the daemon log"
+run = "tail -f .omaken/daemon.log"
+
 [tasks.build]
 description = "Build the project in debug mode"
 run = "cargo build"

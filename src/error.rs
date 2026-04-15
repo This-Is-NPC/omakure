@@ -59,6 +59,9 @@ pub enum SchemaError {
 
     #[error("Allowed values: {choices}")]
     InvalidChoice { choices: String },
+
+    #[error("Invalid cron expression `{expr}`: {reason}")]
+    InvalidCron { expr: String, reason: String },
 }
 
 /// Errors related to script execution.

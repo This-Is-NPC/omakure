@@ -12,6 +12,19 @@ pub(crate) fn handle_key_event(app: &mut App, key: KeyEvent) {
         Screen::Running => {}
         Screen::RunResult => handle_run_result_key(app, key),
         Screen::Error => handle_error_key(app, key),
+        Screen::Schedules => handle_schedules_key(app, key),
+    }
+}
+
+fn handle_schedules_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => app.screen = Screen::ScriptSelect,
+        KeyCode::Char(' ') => app.toggle_selected_schedule(),
+        KeyCode::Char('r') | KeyCode::Char('R') | KeyCode::F(5) => app.enter_schedules(),
+        KeyCode::Tab => app.activity_period = app.activity_period.next(),
+        KeyCode::Down | KeyCode::Char('j') => app.move_schedules_selection(1),
+        KeyCode::Up | KeyCode::Char('k') => app.move_schedules_selection(-1),
+        _ => {}
     }
 }
 
@@ -48,6 +61,8 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
             app.history.focus = HistoryFocus::List;
             app.reset_run_output_scroll();
         }
+        KeyCode::Char('c') | KeyCode::Char('C') => app.enter_schedules(),
+        KeyCode::Tab => app.activity_period = app.activity_period.next(),
         KeyCode::Char('e') | KeyCode::Char('E') => {
             // `e` toggles the per-script dashboard expansion, but only
             // when a script (not a directory) is highlighted. Pressing

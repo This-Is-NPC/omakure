@@ -20,11 +20,81 @@ pub struct Field {
     pub prompt: Option<String>,
     #[serde(rename = "Type")]
     pub kind: String,
-    pub order: u32,
+    #[serde(default)]
+    pub order: Option<u32>,
     pub required: Option<bool>,
     pub default: Option<String>,
     pub choices: Option<Vec<String>>,
     pub arg: Option<String>,
+}
+
+impl Schema {
+    /// Fill any `Field.order` left as `None` with its 1-based declaration
+    /// index, leaving explicit orders untouched. Idempotent.
+    pub fn normalize_field_orders(&mut self) {
+        for (index, field) in self.fields.iter_mut().enumerate() {
+            if field.order.is_none() {
+                field.order = Some((index as u32) + 1);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::domain::parse_schema;
+
+    #[test]
+    fn normalize_fills_missing_orders_with_declaration_index() {
+        let json = r#"{
+            "Name": "no_order",
+            "Fields": [
+                { "Name": "a", "Type": "string" },
+                { "Name": "b", "Type": "string" },
+                { "Name": "c", "Type": "string" }
+            ]
+        }"#;
+        let mut schema = parse_schema(json).unwrap();
+        assert!(schema.fields.iter().all(|f| f.order.is_none()));
+        schema.normalize_field_orders();
+        assert_eq!(
+            schema.fields.iter().map(|f| f.order).collect::<Vec<_>>(),
+            vec![Some(1), Some(2), Some(3)]
+        );
+    }
+
+    #[test]
+    fn normalize_preserves_explicit_orders_and_fills_gaps() {
+        let json = r#"{
+            "Name": "mixed",
+            "Fields": [
+                { "Name": "a", "Type": "string", "Order": 10 },
+                { "Name": "b", "Type": "string" },
+                { "Name": "c", "Type": "string", "Order": 30 }
+            ]
+        }"#;
+        let mut schema = parse_schema(json).unwrap();
+        schema.normalize_field_orders();
+        assert_eq!(
+            schema.fields.iter().map(|f| f.order).collect::<Vec<_>>(),
+            vec![Some(10), Some(2), Some(30)]
+        );
+    }
+
+    #[test]
+    fn normalize_is_idempotent() {
+        let json = r#"{
+            "Name": "idem",
+            "Fields": [
+                { "Name": "a", "Type": "string" }
+            ]
+        }"#;
+        let mut schema = parse_schema(json).unwrap();
+        schema.normalize_field_orders();
+        let first = schema.fields[0].order;
+        schema.normalize_field_orders();
+        assert_eq!(schema.fields[0].order, first);
+    }
 }
 
 /// Script output field definition.

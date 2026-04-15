@@ -402,7 +402,9 @@ impl<'a> App<'a> {
         match schema_result {
             Ok(mut schema) => {
                 self.load_env_config();
-                schema.fields.sort_by_key(|field| field.order);
+                schema
+                    .fields
+                    .sort_by_key(|field| field.order.unwrap_or(u32::MAX));
                 let tags = schema.tags.clone();
                 let outputs = schema.outputs.clone();
                 let queue = schema.queue.clone();
@@ -806,7 +808,9 @@ impl<'a> App<'a> {
 
         match self.service.load_schema(&entry_path) {
             Ok(mut schema) => {
-                schema.fields.sort_by_key(|field| field.order);
+                schema
+                    .fields
+                    .sort_by_key(|field| field.order.unwrap_or(u32::MAX));
                 self.navigation.schema_preview = Some(schema_to_preview(&schema));
                 self.navigation.schema_preview_error = None;
                 self.navigation.preview_script = Some(entry_path.clone());
@@ -1406,7 +1410,7 @@ mod tests {
                 name: "a".into(),
                 prompt: None,
                 kind: "string".into(),
-                order: 0,
+                order: Some(0),
                 required: None,
                 default: None,
                 choices: None,
@@ -1416,7 +1420,7 @@ mod tests {
                 name: "b".into(),
                 prompt: None,
                 kind: "string".into(),
-                order: 1,
+                order: Some(1),
                 required: None,
                 default: None,
                 choices: None,
@@ -1442,7 +1446,7 @@ mod tests {
             name: "x".into(),
             prompt: None,
             kind: "string".into(),
-            order: 0,
+            order: Some(0),
             required: None,
             default: None,
             choices: None,
@@ -1478,7 +1482,7 @@ mod tests {
             name: "target".into(),
             prompt: None,
             kind: "string".into(),
-            order: 0,
+            order: Some(0),
             required: Some(true),
             default: None,
             choices: None,
@@ -1503,7 +1507,7 @@ mod tests {
             name: "target".into(),
             prompt: None,
             kind: "string".into(),
-            order: 0,
+            order: Some(0),
             required: Some(true),
             default: None,
             choices: None,

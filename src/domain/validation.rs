@@ -62,7 +62,7 @@ mod tests {
             name: name.to_string(),
             prompt: None,
             kind: kind.to_string(),
-            order: 1,
+            order: Some(1),
             required: Some(required),
             default: None,
             choices: None,

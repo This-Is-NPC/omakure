@@ -243,13 +243,9 @@ impl<'a> App<'a> {
     }
 
     pub(crate) fn scroll_env_preview(&mut self, delta: i16) {
-        let mut next = self.environment.preview_scroll as i16 + delta;
-        if next < 0 {
-            next = 0;
-        }
-        if next > u16::MAX as i16 {
-            next = u16::MAX as i16;
-        }
+        let next = i32::from(self.environment.preview_scroll)
+            .saturating_add(i32::from(delta))
+            .clamp(0, i32::from(u16::MAX));
         self.environment.preview_scroll = next as u16;
     }
 
@@ -571,12 +567,10 @@ impl<'a> App<'a> {
     }
 
     pub(crate) fn scroll_run_output(&mut self, delta: i16) {
-        if delta > 0 {
-            self.run_output_scroll = self.run_output_scroll.saturating_add(delta as u16);
-        } else if delta < 0 {
-            let amount = (-delta) as u16;
-            self.run_output_scroll = self.run_output_scroll.saturating_sub(amount);
-        }
+        let next = i32::from(self.run_output_scroll)
+            .saturating_add(i32::from(delta))
+            .clamp(0, i32::from(u16::MAX));
+        self.run_output_scroll = next as u16;
     }
 
     pub(crate) fn display_path(&self, path: &Path) -> String {
@@ -1285,6 +1279,30 @@ mod tests {
     }
 
     #[test]
+    fn test_scroll_run_output_handles_i16_min_without_panic() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.run_output_scroll = 100;
+        // i16::MIN cannot be negated in i16 (overflow), so the pre-fix
+        // `(-delta) as u16` was UB-adjacent. Post-fix: saturating clamp to 0.
+        app.scroll_run_output(i16::MIN);
+        assert_eq!(app.run_output_scroll, 0);
+    }
+
+    #[test]
+    fn test_scroll_run_output_saturates_at_u16_max() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.run_output_scroll = u16::MAX - 5;
+        app.scroll_run_output(i16::MAX);
+        assert_eq!(app.run_output_scroll, u16::MAX);
+    }
+
+    #[test]
     fn test_reset_run_output_scroll() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
@@ -1345,16 +1363,36 @@ mod tests {
     }
 
     #[test]
-    fn test_scroll_env_preview_accepts_positive_delta() {
+    fn test_scroll_env_preview_advances_positive_delta_in_range() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let ws = Workspace::new(tmp.path().to_path_buf());
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
-        // The function has a known i16 overflow: u16::MAX as i16 == -1,
-        // so the `next > u16::MAX as i16` guard always triggers for
-        // non-negative results. This test documents the current behavior.
+        app.environment.preview_scroll = 100;
         app.scroll_env_preview(10);
+        assert_eq!(app.environment.preview_scroll, 110);
+    }
+
+    #[test]
+    fn test_scroll_env_preview_saturates_at_u16_max() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.environment.preview_scroll = u16::MAX - 5;
+        app.scroll_env_preview(i16::MAX);
         assert_eq!(app.environment.preview_scroll, u16::MAX);
+    }
+
+    #[test]
+    fn test_scroll_env_preview_saturates_at_zero() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.environment.preview_scroll = 3;
+        app.scroll_env_preview(-100);
+        assert_eq!(app.environment.preview_scroll, 0);
     }
 
     #[test]
@@ -1834,8 +1872,12 @@ mod tests {
         assert_eq!(app.environment.selection, 0);
 
         app.environment.entries = vec![
-            EnvFile { name: "a.conf".into() },
-            EnvFile { name: "b.conf".into() },
+            EnvFile {
+                name: "a.conf".into(),
+            },
+            EnvFile {
+                name: "b.conf".into(),
+            },
         ];
         app.move_env_selection(1);
         assert_eq!(app.environment.selection, 1);
@@ -1854,7 +1896,9 @@ mod tests {
         std::fs::create_dir_all(&envs).unwrap();
         std::fs::write(envs.join("dev.conf"), "FOO=bar").unwrap();
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
-        app.environment.entries = vec![EnvFile { name: "dev.conf".into() }];
+        app.environment.entries = vec![EnvFile {
+            name: "dev.conf".into(),
+        }];
         app.environment.selection = 0;
 
         app.activate_selected_env();
@@ -1880,7 +1924,9 @@ mod tests {
         let ws = Workspace::new(tmp.path().to_path_buf());
         std::fs::create_dir_all(ws.envs_dir()).unwrap();
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
-        app.environment.entries = vec![EnvFile { name: "ghost.conf".into() }];
+        app.environment.entries = vec![EnvFile {
+            name: "ghost.conf".into(),
+        }];
         app.environment.selection = 0;
         app.activate_selected_env();
         assert!(app.environment.error.is_some());
@@ -2011,7 +2057,10 @@ mod tests {
         app.search.status = crate::search_index::SearchStatus::Indexing;
         app.refresh_search_status();
         // Replaces with the in-memory index status (Idle).
-        assert!(matches!(app.search.status, crate::search_index::SearchStatus::Idle));
+        assert!(matches!(
+            app.search.status,
+            crate::search_index::SearchStatus::Idle
+        ));
     }
 
     #[test]
@@ -2061,10 +2110,7 @@ mod tests {
     #[test]
     fn test_schema_to_preview_queue_empty_falls_back_to_cases() {
         // A queue with neither matrix nor cases falls into the empty Cases arm.
-        let schema = crate::domain::parse_schema(
-            r#"{"Name":"X","Fields":[],"Queue":{}}"#,
-        )
-        .unwrap();
+        let schema = crate::domain::parse_schema(r#"{"Name":"X","Fields":[],"Queue":{}}"#).unwrap();
         let preview = schema_to_preview(&schema);
         match preview.queue.unwrap() {
             QueuePreview::Cases { cases } => assert!(cases.is_empty()),

@@ -349,6 +349,10 @@ fn parse_hex_color(value: &str) -> Result<Color, ThemeParseError> {
     Ok(Color::Rgb(red, green, blue))
 }
 
+pub(crate) fn selection_symbol_str() -> &'static str {
+    "> "
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -403,7 +407,10 @@ error = "#ffff00"
 
     #[test]
     fn parse_hex_color_accepts_full_form_without_prefix() {
-        assert_eq!(parse_hex_color("ffffff").unwrap(), Color::Rgb(255, 255, 255));
+        assert_eq!(
+            parse_hex_color("ffffff").unwrap(),
+            Color::Rgb(255, 255, 255)
+        );
     }
 
     #[test]
@@ -422,10 +429,8 @@ error = "#ffff00"
 
     #[test]
     fn theme_load_error_displays_io_and_parse() {
-        let io_err = ThemeLoadError::from(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "missing",
-        ));
+        let io_err =
+            ThemeLoadError::from(std::io::Error::new(std::io::ErrorKind::NotFound, "missing"));
         assert!(format!("{}", io_err).contains("io error"));
 
         let parse_err: toml::de::Error = toml::from_str::<i32>("not a number").unwrap_err();
@@ -560,8 +565,4 @@ error = "#ffff00"
 "##;
         assert!(load_theme_from_str(toml).is_err());
     }
-}
-
-pub(crate) fn selection_symbol_str() -> &'static str {
-    "> "
 }

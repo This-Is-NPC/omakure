@@ -1906,11 +1906,10 @@ mod tests {
                 let conn = open_connection(&path).expect("open per-thread");
                 let mut claimed = Vec::new();
                 let worker_id = format!("worker-{}", w);
-                loop {
-                    match claim_next(&conn, &worker_id, &ClaimFilters::default()).unwrap() {
-                        Some(row) => claimed.push(row.run_id),
-                        None => break,
-                    }
+                while let Some(row) =
+                    claim_next(&conn, &worker_id, &ClaimFilters::default()).unwrap()
+                {
+                    claimed.push(row.run_id);
                 }
                 claimed
             }));
@@ -2287,10 +2286,13 @@ mod tests {
         )
         .unwrap();
 
-        let err = query_runs(&conn, &RunFilters {
-            states: vec![],
-            ..Default::default()
-        })
+        let err = query_runs(
+            &conn,
+            &RunFilters {
+                states: vec![],
+                ..Default::default()
+            },
+        )
         .unwrap_err();
         assert!(err.contains("invalid run state") || err.contains("Row query_runs failed"));
 

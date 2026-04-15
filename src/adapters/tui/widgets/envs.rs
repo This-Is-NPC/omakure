@@ -226,8 +226,12 @@ mod tests {
         let ws = crate::workspace::Workspace::new(root.clone());
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
         app.environment.entries = vec![
-            EnvFile { name: "dev.conf".into() },
-            EnvFile { name: "prod.conf".into() },
+            EnvFile {
+                name: "dev.conf".into(),
+            },
+            EnvFile {
+                name: "prod.conf".into(),
+            },
         ];
         app.environment.config = Some(crate::ports::EnvironmentConfig {
             envs_dir: root.clone(),

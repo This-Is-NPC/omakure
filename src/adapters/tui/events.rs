@@ -206,6 +206,22 @@ fn handle_run_result_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+fn handle_envs_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => app.exit_envs(),
+        KeyCode::Char('r') | KeyCode::Char('R') => app.refresh_status(),
+        KeyCode::Down | KeyCode::Char('j') => app.move_env_selection(1),
+        KeyCode::Up | KeyCode::Char('k') => app.move_env_selection(-1),
+        KeyCode::PageDown => app.scroll_env_preview(10),
+        KeyCode::PageUp => app.scroll_env_preview(-10),
+        KeyCode::Home => app.environment.preview_scroll = 0,
+        KeyCode::End => app.environment.preview_scroll = u16::MAX,
+        KeyCode::Enter => app.activate_selected_env(),
+        KeyCode::Char('d') | KeyCode::Char('D') => app.deactivate_env(),
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -735,21 +751,5 @@ mod tests {
         app.screen = Screen::FieldInput;
         // Empty form: submit_form just walks an empty path.
         handle_key_event(&mut app, key(KeyCode::Enter));
-    }
-}
-
-fn handle_envs_key(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Char('q') | KeyCode::Esc => app.exit_envs(),
-        KeyCode::Char('r') | KeyCode::Char('R') => app.refresh_status(),
-        KeyCode::Down | KeyCode::Char('j') => app.move_env_selection(1),
-        KeyCode::Up | KeyCode::Char('k') => app.move_env_selection(-1),
-        KeyCode::PageDown => app.scroll_env_preview(10),
-        KeyCode::PageUp => app.scroll_env_preview(-10),
-        KeyCode::Home => app.environment.preview_scroll = 0,
-        KeyCode::End => app.environment.preview_scroll = u16::MAX,
-        KeyCode::Enter => app.activate_selected_env(),
-        KeyCode::Char('d') | KeyCode::Char('D') => app.deactivate_env(),
-        _ => {}
     }
 }

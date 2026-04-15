@@ -169,12 +169,7 @@ mod tests {
             Some(r#"{"Name":"Deploy","Tags":["ops"],"Fields":[]}"#),
         );
         write_script(tmp.path(), "bare.sh", None);
-        run(
-            tmp.path().to_path_buf(),
-            ScriptsArgs { tag: vec![] },
-            false,
-        )
-        .unwrap();
+        run(tmp.path().to_path_buf(), ScriptsArgs { tag: vec![] }, false).unwrap();
     }
 
     #[test]
@@ -203,11 +198,6 @@ mod tests {
     #[test]
     fn run_human_format_no_scripts() {
         let tmp = tempfile::TempDir::new().unwrap();
-        run(
-            tmp.path().to_path_buf(),
-            ScriptsArgs { tag: vec![] },
-            false,
-        )
-        .unwrap();
+        run(tmp.path().to_path_buf(), ScriptsArgs { tag: vec![] }, false).unwrap();
     }
 }

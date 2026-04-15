@@ -70,7 +70,9 @@ impl ScriptRepository for FsWorkspaceRepository {
 
         let contents = fs::read_to_string(script)?;
         let block = extract_schema_block(&contents, &prefixes)?;
-        Ok(parse_schema(&block)?)
+        let mut schema = parse_schema(&block)?;
+        schema.normalize_field_orders();
+        Ok(schema)
     }
 }
 

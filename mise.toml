@@ -8,7 +8,7 @@ run = "cargo run --bin omakure"
 
 [tasks.dev]
 description = "Build, start the daemon, tail its log, and open the TUI (stops the daemon on exit)"
-run = "./scripts/dev-daemon.sh"
+run = "./.scripts/dev-daemon.sh"
 
 [tasks.daemon-start]
 description = "Build and start the scheduler daemon in the background"

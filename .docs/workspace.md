@@ -1,20 +1,24 @@
 # Workspace layout
 
-Omakure treats the workspace as a filesystem score:
+Omakure treats the workspace as a filesystem store:
 
 ```
 omakure-scripts/
-├── .omaken/        # Curated flavors managed by Omakure
-│   └── azure/
-│       ├── index.lua   # Optional folder widget
-│       ├── rg-list-all.bash
-│       ├── rg-details.bash
-│       └── rg-delete.bash
-│   └── envs/       # Environment defaults (active file listed in .omaken/envs/active)
-│       ├── active
-│       └── env_template.conf
-├── .history/       # Execution logs
-└── omakure.toml    # Optional workspace config
+├── .omaken/               # Curated flavors managed by Omakure
+│   ├── azure/
+│   │   ├── index.lua          # Optional folder widget
+│   │   ├── rg-list-all.bash
+│   │   ├── rg-details.bash
+│   │   └── rg-delete.bash
+│   ├── envs/              # Environment defaults (active file listed in .omaken/envs/active)
+│   │   ├── active
+│   │   └── env_template.conf
+│   ├── daemon.pid         # `omakure serve` PID lock (present when the scheduler is running)
+│   └── daemon.log         # Structured scheduler log (RFC3339 lines)
+├── .history/              # Runtime state (SQLite)
+│   ├── runs.sqlite            # Run state machine + structured traces
+│   └── search-index.sqlite    # Script search index
+└── omakure.toml           # Optional workspace config
 ```
 
 If a folder includes `index.lua`, Omakure renders it in the TUI header panel. See `lua-widgets.md`.

@@ -182,6 +182,61 @@ impl FromStr for RunStateSet {
 }
 
 // ---------------------------------------------------------------------------
+// RunTrigger
+// ---------------------------------------------------------------------------
+
+/// Provenance of a run row: did a human launch it, or did the scheduler?
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RunTrigger {
+    #[default]
+    Manual,
+    Scheduled,
+}
+
+impl RunTrigger {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RunTrigger::Manual => "Manual",
+            RunTrigger::Scheduled => "Scheduled",
+        }
+    }
+}
+
+impl fmt::Display for RunTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for RunTrigger {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Manual" => Ok(RunTrigger::Manual),
+            "Scheduled" => Ok(RunTrigger::Scheduled),
+            other => Err(format!(
+                "invalid run trigger '{}': expected Manual or Scheduled",
+                other
+            )),
+        }
+    }
+}
+
+impl Serialize for RunTrigger {
+    fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        ser.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for RunTrigger {
+    fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(de)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // RunRow
 // ---------------------------------------------------------------------------
 
@@ -212,10 +267,13 @@ pub struct RunRow {
     pub lease_until: Option<i64>,
     /// Per-row execution timeout in ms; null means no timeout.
     pub timeout_ms: Option<i64>,
-    /// Provenance tag for rows enqueued by the future omakure cron
-    /// scheduler. Never written by current code; present so the cron
-    /// scheduler can encode its identity without a schema migration.
+    /// Provenance tag for rows enqueued by the omakure cron scheduler.
+    /// Format: `<canonical-script-path>@<cron-expr>`.
     pub cron_schedule_id: Option<String>,
+    /// Origin of the run: `Manual` when a human enqueued it, `Scheduled`
+    /// when the cron scheduler did. Defaults to `Manual` for pre-scheduler rows.
+    #[serde(default)]
+    pub trigger: RunTrigger,
 
     /// Unix ms when execution began. Null while `state = 'queued'`.
     pub started_at: Option<i64>,
@@ -402,20 +460,22 @@ fn rebuild_legacy_schema_if_needed(conn: &Connection) -> Result<(), String> {
         .prepare("PRAGMA table_info(runs)")
         .map_err(|err| format!("Inspect runs schema failed: {}", err))?;
     let mut has_state_column = false;
+    let mut has_trigger_column = false;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(1))
         .map_err(|err| format!("Read runs schema rows failed: {}", err))?;
     for col in rows {
         let name = col.map_err(|err| format!("Read schema row failed: {}", err))?;
-        if name == "state" {
-            has_state_column = true;
-            break;
+        match name.as_str() {
+            "state" => has_state_column = true,
+            "trigger" => has_trigger_column = true,
+            _ => {}
         }
     }
     drop(stmt);
-    if !has_state_column {
+    if !has_state_column || !has_trigger_column {
         eprintln!(
-            "omakure: rebuilding runs.sqlite schema (legacy v0.1 layout detected; existing rows will be dropped)"
+            "omakure: rebuilding runs.sqlite schema (legacy layout detected; existing rows will be dropped)"
         );
         conn.execute_batch("DROP TABLE IF EXISTS run_traces; DROP TABLE IF EXISTS runs;")
             .map_err(|err| format!("Drop legacy runs table failed: {}", err))?;
@@ -441,6 +501,7 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             lease_until INTEGER,
             timeout_ms INTEGER,
             cron_schedule_id TEXT,
+            trigger TEXT NOT NULL DEFAULT 'Manual',
             started_at INTEGER,
             finished_at INTEGER,
             duration_ms INTEGER,
@@ -458,6 +519,8 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_runs_state ON runs(state);
         CREATE INDEX IF NOT EXISTS idx_runs_state_priority_enqueued
             ON runs(state, priority DESC, enqueued_at ASC);
+        CREATE INDEX IF NOT EXISTS idx_runs_cron_schedule
+            ON runs(cron_schedule_id, enqueued_at DESC);
 
         CREATE TABLE IF NOT EXISTS run_traces (
             trace_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -487,10 +550,10 @@ pub fn insert_run(conn: &Connection, row: &RunRow) -> Result<(), String> {
         "INSERT INTO runs (
             run_id, script_path, script_name, args_json, actor, reason,
             state, priority, enqueued_at, worker_id, lease_until, timeout_ms,
-            cron_schedule_id,
+            cron_schedule_id, trigger,
             started_at, finished_at, duration_ms, exit_code, success,
             stdout, stderr, error, parent_run_id, omakure_version
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         params![
             row.run_id,
             row.script_path,
@@ -505,6 +568,7 @@ pub fn insert_run(conn: &Connection, row: &RunRow) -> Result<(), String> {
             row.lease_until,
             row.timeout_ms,
             row.cron_schedule_id,
+            row.trigger.as_str(),
             row.started_at,
             row.finished_at,
             row.duration_ms,
@@ -527,7 +591,7 @@ pub fn get_run(conn: &Connection, run_id: &str) -> Result<Option<RunRow>, String
         .prepare(
             "SELECT run_id, script_path, script_name, args_json, actor, reason,
                     state, priority, enqueued_at, worker_id, lease_until, timeout_ms,
-                    cron_schedule_id,
+                    cron_schedule_id, trigger,
                     started_at, finished_at, duration_ms, exit_code, success,
                     stdout, stderr, error, parent_run_id, omakure_version
              FROM runs WHERE run_id = ?",
@@ -547,7 +611,7 @@ pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>
     let mut sql = String::from(
         "SELECT run_id, script_path, script_name, args_json, actor, reason,
                 state, priority, enqueued_at, worker_id, lease_until, timeout_ms,
-                cron_schedule_id,
+                cron_schedule_id, trigger,
                 started_at, finished_at, duration_ms, exit_code, success,
                 stdout, stderr, error, parent_run_id, omakure_version
          FROM runs",
@@ -629,7 +693,15 @@ fn row_to_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<RunRow> {
             Box::<dyn std::error::Error + Send + Sync>::from(err),
         )
     })?;
-    let success_int: Option<i64> = row.get(17)?;
+    let trigger_str: String = row.get(13)?;
+    let trigger = trigger_str.parse::<RunTrigger>().map_err(|err| {
+        rusqlite::Error::FromSqlConversionFailure(
+            13,
+            rusqlite::types::Type::Text,
+            Box::<dyn std::error::Error + Send + Sync>::from(err),
+        )
+    })?;
+    let success_int: Option<i64> = row.get(18)?;
     Ok(RunRow {
         run_id: row.get(0)?,
         script_path: row.get(1)?,
@@ -644,16 +716,17 @@ fn row_to_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<RunRow> {
         lease_until: row.get(10)?,
         timeout_ms: row.get(11)?,
         cron_schedule_id: row.get(12)?,
-        started_at: row.get(13)?,
-        finished_at: row.get(14)?,
-        duration_ms: row.get(15)?,
-        exit_code: row.get(16)?,
+        trigger,
+        started_at: row.get(14)?,
+        finished_at: row.get(15)?,
+        duration_ms: row.get(16)?,
+        exit_code: row.get(17)?,
         success: success_int.map(|v| v != 0),
-        stdout: row.get(18)?,
-        stderr: row.get(19)?,
-        error: row.get(20)?,
-        parent_run_id: row.get(21)?,
-        omakure_version: row.get(22)?,
+        stdout: row.get(19)?,
+        stderr: row.get(20)?,
+        error: row.get(21)?,
+        parent_run_id: row.get(22)?,
+        omakure_version: row.get(23)?,
     })
 }
 
@@ -673,6 +746,7 @@ pub struct EnqueueOptions {
     pub cron_schedule_id: Option<String>,
     pub script_name: Option<String>,
     pub omakure_version: String,
+    pub trigger: RunTrigger,
 }
 
 /// Insert a fresh `state='queued'` row. Returns the inserted [`RunRow`].
@@ -701,6 +775,7 @@ pub fn enqueue(
         lease_until: None,
         timeout_ms: opts.timeout_ms,
         cron_schedule_id: opts.cron_schedule_id,
+        trigger: opts.trigger,
         started_at: None,
         finished_at: None,
         duration_ms: None,
@@ -745,6 +820,7 @@ pub fn start_inline(
         lease_until: Some(now + HEARTBEAT_MS),
         timeout_ms: opts.timeout_ms,
         cron_schedule_id: opts.cron_schedule_id,
+        trigger: opts.trigger,
         started_at: Some(now),
         finished_at: None,
         duration_ms: None,

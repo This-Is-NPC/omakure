@@ -8,7 +8,7 @@ use super::app::{App, Screen};
 use super::theme::Theme;
 use super::widgets::{
     dashboards, environment, envs, error as error_widget, field_input, history,
-    loading as loading_widget, run_result, running, schema, scripts, search,
+    loading as loading_widget, run_result, running, schedules, schema, scripts, search,
 };
 
 pub(crate) fn render_ui(frame: &mut Frame, app: &mut App, theme: &Theme) {
@@ -21,6 +21,7 @@ pub(crate) fn render_ui(frame: &mut Frame, app: &mut App, theme: &Theme) {
         Screen::Running => running::render_running(frame, frame.size(), app, theme),
         Screen::RunResult => run_result::render_run_result(frame, frame.size(), app, theme),
         Screen::Error => render_error(frame, app, theme),
+        Screen::Schedules => schedules::render_schedules(frame, frame.size(), app, theme),
     }
 }
 
@@ -143,7 +144,8 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
 
 fn build_script_select_footer(app: &App) -> String {
     if app.script_dashboard_expanded {
-        return "Esc collapse, e collapse, Enter run, h history, Alt+E envs, q quit".to_string();
+        return "Esc collapse, e collapse, Enter run, h history, c schedules, Alt+E envs, q quit"
+            .to_string();
     }
     let has_script = matches!(
         app.selected_entry(),
@@ -157,12 +159,12 @@ fn build_script_select_footer(app: &App) -> String {
     };
     if app.navigation.entries.is_empty() {
         format!(
-            "Folder is empty{}, r refresh, h history, Ctrl+S search, Alt+E envs, q quit",
+            "Folder is empty{}, r refresh, h history, c schedules, Ctrl+S search, Alt+E envs, q quit",
             nav_hint
         )
     } else {
         format!(
-            "Up/Down move, Enter open/run{}{}, r refresh, h history, Ctrl+S search, Alt+E envs, q quit",
+            "Up/Down move, Enter open/run{}{}, r refresh, h history, c schedules, Ctrl+S search, Alt+E envs, q quit",
             nav_hint, expand_hint
         )
     }

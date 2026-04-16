@@ -63,6 +63,11 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
         .iter()
         .map(|entry| {
             let name = app.display_path(&PathBuf::from(&entry.script_path));
+            let name = if matches!(entry.trigger, crate::runs::RunTrigger::Scheduled) {
+                format!("⏰ {name}")
+            } else {
+                name
+            };
             let date = format_run_timestamp(entry.started_at.unwrap_or(entry.enqueued_at));
             let state_label = entry.state.as_str();
             let state_text_style = state_style(theme, entry.state);
@@ -239,6 +244,7 @@ mod tests {
             lease_until: None,
             timeout_ms: None,
             cron_schedule_id: None,
+            trigger: crate::runs::RunTrigger::Manual,
             started_at: Some(0),
             finished_at: Some(0),
             duration_ms: Some(0),
@@ -314,6 +320,7 @@ mod tests {
             lease_until: None,
             timeout_ms: None,
             cron_schedule_id: None,
+            trigger: crate::runs::RunTrigger::Manual,
             started_at: Some(1000),
             finished_at: Some(1100),
             duration_ms: Some(100),

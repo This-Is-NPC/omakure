@@ -34,6 +34,7 @@ A script needs 4 clear blocks:
 - `Fields`: list of fields for the TUI.
 - `Outputs`: values the script produces (optional).
 - `Queue`: queue configuration for batch runs (optional).
+- `Schedule`: cron schedule for automatic runs via `omakure serve` (optional).
 
 Outputs and Queue details render in the schema preview panel in the TUI.
 
@@ -54,6 +55,30 @@ Each output uses:
 
 - `Name`: output name.
 - `Type`: output type (`string`, `number`, `bool`).
+
+### Schedule (optional)
+
+Promotes the script to a self-contained automation unit. The `omakure serve`
+daemon scans scripts at start and enqueues runs at the declared times with
+`trigger = Scheduled`.
+
+```json
+"Schedule": {
+  "Cron": "*/15 * * * *",
+  "Enabled": true
+}
+```
+
+- `Cron`: 5-field (`min hour dom mon dow`), 6-field (seconds prefix), or
+  a macro (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`). `@reboot`
+  is rejected. Invalid expressions fail script load.
+- `Enabled`: defaults to `true` when omitted. Toggle it from the TUI
+  Schedules screen (press `c` from the main screen, then `Space`).
+
+Scheduled fires build `--<arg> <default>` from each field's declared
+default. Fields without a default are skipped. If the previous run for a
+schedule is still queued or running, the next fire is skipped to avoid
+overlap.
 
 ### Queue (optional)
 

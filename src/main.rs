@@ -190,6 +190,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Commands::Init(args)) => cli::init::run_with_format(global_root, args, json_output)?,
         Some(Commands::Config) => cli::config::run(global_root, json_output)?,
         Some(Commands::Theme(args)) => cli::theme::run(global_root, args)?,
+        Some(Commands::Serve(args)) => cli::serve::run(global_root, args, json_output)?,
         Some(Commands::Completion(args)) => generate_completions(args.shell),
         None => {
             let scripts_root = resolve_scripts_root(cli.path.as_deref(), &global_root)?;

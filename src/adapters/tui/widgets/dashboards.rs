@@ -418,44 +418,74 @@ pub(crate) fn render_script_charts(
     script_path: &std::path::Path,
     expanded: bool,
 ) {
-    let title = if expanded {
-        format!("Charts: {}", app.display_path(script_path))
-    } else {
-        "Charts".to_string()
-    };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(title)
-        .title_style(theme.text_secondary());
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
     let canonical = canonical_script_path_string(script_path);
+    let matching: Vec<&_> = app
+        .history
+        .entries
+        .iter()
+        .filter(|r| r.script_path == canonical)
+        .collect();
+
+    let title = if expanded {
+        format!("Activity: {}", app.display_path(script_path))
+    } else {
+        "Activity".to_string()
+    };
+
+    // Split vertically: activity grid on top (fixed height per period),
+    // classic bar + duration dashboards on the bottom. When the area is
+    // too short to fit the grid plus 5 rows for dashboards, keep only
+    // the grid.
+    let grid_h = super::activity_grid::widget_height(app.activity_period);
+    if area.height < grid_h + 5 {
+        super::activity_grid::render_activity_grid(
+            frame,
+            area,
+            &matching,
+            app.activity_period,
+            theme,
+            &title,
+        );
+        return;
+    }
+
+    let split = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(grid_h), Constraint::Min(5)])
+        .split(area);
+
+    super::activity_grid::render_activity_grid(
+        frame,
+        split[0],
+        &matching,
+        app.activity_period,
+        theme,
+        &title,
+    );
+
     let agg = aggregate_for_script(&app.history.entries, &canonical, PER_SCRIPT_DURATION_WINDOW);
+    let lower_block = Block::default()
+        .borders(Borders::ALL)
+        .title("State & duration")
+        .title_style(theme.text_secondary());
+    let lower_inner = lower_block.inner(split[1]);
+    frame.render_widget(lower_block, split[1]);
 
     if agg.total == 0 {
         let placeholder = Paragraph::new(Line::from(vec![
-            Span::raw("No runs yet for this script. "),
+            Span::raw("No runs yet. "),
             Span::styled("Press Enter to run it.", theme.text_secondary()),
         ]))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-        frame.render_widget(placeholder, inner);
+        frame.render_widget(placeholder, lower_inner);
         return;
     }
 
-    let cols = if expanded {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .split(inner)
-    } else {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(inner)
-    };
-
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(lower_inner);
     render_state_bars(frame, cols[0], theme, &agg.state_counts, agg.total);
     render_duration_panel(frame, cols[1], theme, &agg);
 }
@@ -611,6 +641,7 @@ mod tests {
             lease_until: None,
             timeout_ms: None,
             cron_schedule_id: None,
+            trigger: crate::runs::RunTrigger::Manual,
             started_at: Some(started_ms),
             finished_at: duration_ms.map(|d| started_ms + d),
             duration_ms,

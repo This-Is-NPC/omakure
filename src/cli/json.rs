@@ -35,6 +35,8 @@ pub mod codes {
     pub const INVALID_ARGUMENT: &str = "invalid_argument";
     pub const NOT_IMPLEMENTED: &str = "not_implemented";
     pub const INTERNAL: &str = "internal";
+    pub const DAEMON_ALREADY_RUNNING: &str = "daemon_already_running";
+    pub const DAEMON_NOT_RUNNING: &str = "daemon_not_running";
 }
 
 /// Build an `ok: true` envelope around a serializable payload.
@@ -115,6 +117,8 @@ mod tests {
         assert_eq!(codes::INVALID_ARGUMENT, "invalid_argument");
         assert_eq!(codes::NOT_IMPLEMENTED, "not_implemented");
         assert_eq!(codes::INTERNAL, "internal");
+        assert_eq!(codes::DAEMON_ALREADY_RUNNING, "daemon_already_running");
+        assert_eq!(codes::DAEMON_NOT_RUNNING, "daemon_not_running");
     }
 
     #[test]

@@ -94,6 +94,29 @@ omakure install <git-url>
 omakure install <git-url> --name my-flavor
 ```
 
+## Scheduler (`omakure serve`)
+
+Runs scripts declaring a `Schedule` block automatically.
+
+```bash
+# Foreground (stops with Ctrl+C)
+omakure serve
+
+# Detached background daemon (Unix only)
+omakure serve --detach
+omakure serve --stop   # send SIGTERM + wait up to 5s
+
+# Run scheduler only; workers are started elsewhere
+omakure serve --no-worker
+```
+
+- PID file: `<workspace>/.omaken/daemon.pid` (prevents concurrent daemons).
+- Log: `<workspace>/.omaken/daemon.log` (RFC3339 timestamped lines).
+- Scheduled runs appear in history with `trigger = Scheduled`, `actor = scheduler`,
+  and `cron_schedule_id = <absolute-script-path>@<cron-expression>`.
+- If a previous run for a given schedule is still queued/running, the next
+  fire is skipped. Failures of individual scripts never crash the daemon.
+
 ## Shell completion
 
 ```bash

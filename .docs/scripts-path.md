@@ -5,6 +5,22 @@ By default, Omakure reads scripts from:
 - `~/Documents/omakure-scripts` (Linux/macOS)
 - `%USERPROFILE%\Documents\omakure-scripts` (Windows)
 
+## Resolution precedence
+
+The scripts directory is resolved in this order (first match wins):
+
+1. `--scripts-dir <PATH>` CLI flag.
+2. `OMAKURE_SCRIPTS_DIR` environment variable.
+3. Legacy `OVERTURE_SCRIPTS_DIR` (accepted for backward compatibility).
+4. Legacy `CLOUD_MGMT_SCRIPTS_DIR` (accepted for backward compatibility).
+5. The repo `scripts/` folder **in debug builds only** (so `cargo run` uses it automatically during development).
+6. `~/Documents/omakure-scripts` if it exists.
+7. Legacy `~/Documents/overture-scripts` / `~/Documents/cloud-mgmt-scripts` if they exist.
+8. Fallback: `~/Documents/omakure-scripts` (created on first launch).
+
+The Windows Documents path is resolved via the registry, so a
+relocated user-profile Documents folder is honored.
+
 ## Change the default path
 
 Set `OMAKURE_SCRIPTS_DIR` before running `omakure`.

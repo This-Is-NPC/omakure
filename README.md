@@ -1,8 +1,12 @@
 # omakure
 
-Rust TUI to navigate a curated automation workspace, render optional folder widgets, and run
-scripts that describe their parameters with a JSON schema. You organize folders, Omakure builds
-the navigation, and the engine collects required values in a guided flow with execution history.
+Rust TUI and CLI for navigating, running, **scheduling**, and auditing automation scripts.
+You organize folders, Omakure builds the navigation, collects required values via a JSON
+schema each script embeds, and records every run in a SQLite-backed state machine.
+
+Scripts can opt into a `Schedule` block to become self-contained automation units driven
+by the built-in `omakure serve` cron daemon (`trigger = Scheduled`); everything still flows
+through the same queue/worker/history pipeline as manual runs.
 
 ## Requirements
 
@@ -118,6 +122,7 @@ Full reference: `.docs/ai-interface.md`.
 - Environment documents: `.docs/environments.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 - CLI usage: `.docs/usage.md`
+- Scheduled tasks (cron daemon): `.docs/scheduling.md`
 - How to create a script: `.docs/how-to-create-a-script.md`
 - How it works (overview + examples): `.docs/how-it-works.md`
 - Development guide: `.docs/development.md`

@@ -36,6 +36,16 @@ When prefix mode is active, the footer shows `-- PREFIX --`. Any
 unrecognized key cancels the prefix silently. `Esc` remains a direct
 key for "go back" on every screen.
 
+**Terminal compatibility:** `Ctrl+/` produces different key events
+depending on the terminal emulator and keyboard layout. The handler
+accepts all known variants:
+
+| Terminal / layout | Key event received |
+|---|---|
+| Legacy xterm / VTE | ASCII `0x1F` (`Char('\x1f')`, no modifiers) |
+| ABNT2 keyboards (where `/` shares the `7` key) | `Char('7')` + `CONTROL` |
+| Kitty / enhanced keyboard protocol | `Char('/')` + `CONTROL` |
+
 ```mermaid
 flowchart LR
     Launch([Launch]) --> ScriptSelect

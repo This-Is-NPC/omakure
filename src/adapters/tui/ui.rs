@@ -110,12 +110,34 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
             theme,
         );
 
+        // Dynamic right pane:
+        //   • Schema grows with its content up to half the pane height.
+        //   • Any remaining space goes to the per-script charts.
+        // When the schema overflows its cap it renders with an internal
+        // scroll offset (see `schema_preview_scroll` on NavigationState,
+        // driven by events.rs).
+        let right_h = body_chunks[1].height;
+        let schema_content_h = schema::schema_preview_height(
+            app.navigation.schema_preview.as_ref(),
+            app.navigation.schema_preview_error.as_deref(),
+            theme,
+        )
+        .saturating_add(2); // +2 for block borders
+        let schema_cap = right_h / 2;
+        let schema_h = schema_content_h.min(schema_cap).max(3);
+        let rest_h = right_h.saturating_sub(schema_h);
+
         let right_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints([Constraint::Length(schema_h), Constraint::Length(rest_h)])
             .split(body_chunks[1]);
 
         let schema_title = schema_title(app);
+        let schema_scroll = if schema_content_h > schema_cap {
+            app.navigation.schema_preview_scroll
+        } else {
+            0
+        };
         schema::render_schema_preview(
             frame,
             right_chunks[0],
@@ -123,6 +145,7 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
             app.navigation.schema_preview.as_ref(),
             app.navigation.schema_preview_error.as_deref(),
             theme,
+            schema_scroll,
         );
         dashboards::render_script_charts(frame, right_chunks[1], app, theme, script_path, false);
     } else {
@@ -138,14 +161,48 @@ fn render_script_select(frame: &mut Frame, app: &mut App, theme: &Theme) {
     }
 
     let footer_text = build_script_select_footer(app);
-    let footer = Paragraph::new(footer_text).style(theme.text_secondary());
-    frame.render_widget(footer, chunks[2]);
+    let env_label = build_env_label(app);
+    let env_label_width = env_label.chars().count() as u16;
+
+    if env_label_width == 0 {
+        let footer = Paragraph::new(footer_text).style(theme.text_secondary());
+        frame.render_widget(footer, chunks[2]);
+    } else {
+        let footer_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(0), Constraint::Length(env_label_width)])
+            .split(chunks[2]);
+        let footer = Paragraph::new(footer_text).style(theme.text_secondary());
+        frame.render_widget(footer, footer_chunks[0]);
+        let env = Paragraph::new(env_label)
+            .style(theme.text_secondary())
+            .alignment(ratatui::layout::Alignment::Right);
+        frame.render_widget(env, footer_chunks[1]);
+    }
 }
 
+fn build_env_label(app: &App) -> String {
+    let active = app
+        .environment
+        .config
+        .as_ref()
+        .and_then(|c| c.active.clone());
+    match active {
+        Some(name) => format!("env: {}", name),
+        None => "env: —".to_string(),
+    }
+}
+
+const PREFIX_HINT: &str = "Ctrl+/ [s]earch [e]nvs [h]istory [c]schedules [q]uit";
+const PREFIX_PENDING_LABEL: &str =
+    "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit";
+
 fn build_script_select_footer(app: &App) -> String {
+    if app.prefix_pending {
+        return PREFIX_PENDING_LABEL.to_string();
+    }
     if app.script_dashboard_expanded {
-        return "Esc collapse, e collapse, Enter run, h history, c schedules, Alt+E envs, q quit"
-            .to_string();
+        return format!("Esc collapse, e collapse, Enter run, {PREFIX_HINT}");
     }
     let has_script = matches!(
         app.selected_entry(),
@@ -158,15 +215,9 @@ fn build_script_select_footer(app: &App) -> String {
         ""
     };
     if app.navigation.entries.is_empty() {
-        format!(
-            "Folder is empty{}, r refresh, h history, c schedules, Ctrl+S search, Alt+E envs, q quit",
-            nav_hint
-        )
+        format!("Folder is empty{nav_hint}, r refresh, {PREFIX_HINT}")
     } else {
-        format!(
-            "Up/Down move, Enter open/run{}{}, r refresh, h history, c schedules, Ctrl+S search, Alt+E envs, q quit",
-            nav_hint, expand_hint
-        )
+        format!("Up/Down move, Enter open/run{nav_hint}{expand_hint}, r refresh, {PREFIX_HINT}")
     }
 }
 
@@ -521,5 +572,32 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|f| render_ui(f, &mut app, &theme)).unwrap();
+    }
+
+    #[test]
+    fn env_label_shows_placeholder_when_no_active_env() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let app = make_app(&tmp, &svc);
+        let label = build_env_label(&app);
+        assert_eq!(label, "env: —");
+    }
+
+    #[test]
+    fn env_label_shows_active_env_name() {
+        use crate::ports::EnvironmentConfig;
+        use std::collections::HashMap;
+
+        let tmp = TempDir::new().unwrap();
+        let svc = make_svc(&tmp);
+        let mut app = make_app(&tmp, &svc);
+        app.environment.config = Some(EnvironmentConfig {
+            envs_dir: tmp.path().join("envs"),
+            active: Some("dev.conf".to_string()),
+            defaults: HashMap::new(),
+            session_conf_path: None,
+        });
+        let label = build_env_label(&app);
+        assert_eq!(label, "env: dev.conf");
     }
 }

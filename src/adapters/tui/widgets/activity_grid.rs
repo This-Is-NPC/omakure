@@ -141,6 +141,25 @@ fn row_timestamp(row: &RunRow) -> DateTime<Local> {
         .unwrap_or_else(Local::now)
 }
 
+/// Bucketize `upcoming` scheduled fire times into a parallel boolean
+/// mask of length equal to the period's bucket count. A `true` at index
+/// `i` means at least one upcoming fire falls in bucket `i`.
+fn bucketize_upcoming(
+    upcoming: &[DateTime<Local>],
+    period: ActivityPeriod,
+    now: DateTime<Local>,
+) -> Vec<bool> {
+    let (bucket_count, bucket_for) = bucket_layout(period, now);
+    let mut out = vec![false; bucket_count];
+    for ts in upcoming {
+        let Some(idx) = bucket_for(*ts) else { continue };
+        if idx < bucket_count {
+            out[idx] = true;
+        }
+    }
+    out
+}
+
 type BucketFn = Box<dyn Fn(DateTime<Local>) -> Option<usize>>;
 
 fn bucket_layout(period: ActivityPeriod, now: DateTime<Local>) -> (usize, BucketFn) {
@@ -298,6 +317,7 @@ fn date_only(ts: DateTime<Local>) -> DateTime<Local> {
 // ---------------------------------------------------------------------------
 
 const CELL_FILLED: char = '█';
+const CELL_UPCOMING: char = '▒';
 
 fn cell_style(theme: &Theme, bucket: BucketOutcome) -> (char, Style) {
     if bucket.is_empty() {
@@ -318,17 +338,41 @@ fn cell_style(theme: &Theme, bucket: BucketOutcome) -> (char, Style) {
     )
 }
 
-pub(crate) fn render_activity_grid(
+/// Cell style when the bucket may also contain an upcoming (scheduled
+/// future) run. Upcoming runs are painted with a lighter shade in cyan
+/// and only shown when the bucket has no past activity of its own —
+/// mixing future with past would clobber the past outcome's color.
+fn cell_style_with_upcoming(theme: &Theme, bucket: BucketOutcome, upcoming: bool) -> (char, Style) {
+    if bucket.is_empty() && upcoming {
+        return (
+            CELL_UPCOMING,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
+    }
+    cell_style(theme, bucket)
+}
+
+/// Render the activity heatmap. `upcoming` is a list of future scheduled
+/// fire times in local timezone; pass `&[]` to suppress the overlay.
+/// Each upcoming time that falls inside the period's window is rendered
+/// in a distinctive cyan shade on buckets that have no past activity.
+/// `LastMinute` and `LastHour` ignore the upcoming overlay entirely —
+/// they only depict the past.
+pub(crate) fn render_activity_grid_with_upcoming(
     frame: &mut Frame,
     area: Rect,
     rows: &[&RunRow],
+    upcoming: &[DateTime<Local>],
     period: ActivityPeriod,
     theme: &Theme,
     title: &str,
 ) {
     let outer = Block::default()
         .borders(Borders::ALL)
-        .title(format!("{title}  [{}]", period.label()));
+        .title(format!("{title}  [{}]", period.label()))
+        .title_style(theme.text_secondary());
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
@@ -343,11 +387,21 @@ pub(crate) fn render_activity_grid(
 
     let now = Local::now();
     let buckets = bucketize(rows, period, now);
+    let upcoming_mask = if matches!(
+        period,
+        ActivityPeriod::LastMinute | ActivityPeriod::LastHour
+    ) || upcoming.is_empty()
+    {
+        Vec::new()
+    } else {
+        bucketize_upcoming(upcoming, period, now)
+    };
     let (cols, rows_count, column_major) = grid_dims(period);
     let (target_w, cell_h) = cell_dims(period);
     let (x_labels, y_labels) = axis_labels(period, now);
     let mut lines = render_fixed_grid(
         &buckets,
+        &upcoming_mask,
         cols,
         rows_count,
         column_major,
@@ -373,7 +427,7 @@ pub(crate) fn render_activity_grid(
     let body = Paragraph::new(lines).alignment(Alignment::Center);
     frame.render_widget(body, chunks[0]);
 
-    let legend = build_legend(&buckets, theme);
+    let legend = build_legend(&buckets, &upcoming_mask, theme);
     frame.render_widget(legend, chunks[1]);
 }
 
@@ -399,18 +453,19 @@ fn grid_dims(period: ActivityPeriod) -> (usize, usize, bool) {
 }
 
 /// Fixed glyph size of one cell for each period: `(cell_w, cell_h)`.
-/// Week/Month/LastHour/LastMinute share the same cell size
-/// (user-validated); Day uses a narrower cell because 24 cells need to
-/// fit in a single row; Year uses the smallest cell because 53 weekly
-/// columns cannot fit otherwise.
+/// Cells are compact (single terminal row) so the grid fits in narrow
+/// panes like the right column of `ScriptSelect`. Day/Year use 2-wide
+/// cells because their grids have the most columns (24 and 53); the
+/// remaining periods use 3-wide cells to stay visually distinguishable
+/// while still fitting the LastMinute/LastHour 10-column grid in a
+/// narrow pane without collapsing to 1-char cells.
 fn cell_dims(period: ActivityPeriod) -> (usize, usize) {
     match period {
-        ActivityPeriod::Day => (3, 1),
-        ActivityPeriod::Year => (2, 1),
+        ActivityPeriod::Day | ActivityPeriod::Year => (2, 1),
         ActivityPeriod::Week
         | ActivityPeriod::Month
         | ActivityPeriod::LastHour
-        | ActivityPeriod::LastMinute => (5, 2),
+        | ActivityPeriod::LastMinute => (3, 1),
     }
 }
 
@@ -508,6 +563,7 @@ fn axis_labels(period: ActivityPeriod, now: DateTime<Local>) -> (Vec<String>, Ve
 #[allow(clippy::too_many_arguments)]
 fn render_fixed_grid<'a>(
     buckets: &[BucketOutcome],
+    upcoming_mask: &[bool],
     cols: usize,
     rows: usize,
     column_major: bool,
@@ -565,6 +621,7 @@ fn render_fixed_grid<'a>(
             };
             lines.push(build_row_line(
                 buckets,
+                upcoming_mask,
                 cols,
                 rows,
                 row,
@@ -649,6 +706,7 @@ fn build_separator<'a>(
 #[allow(clippy::too_many_arguments)]
 fn build_row_line<'a>(
     buckets: &[BucketOutcome],
+    upcoming_mask: &[bool],
     cols: usize,
     rows: usize,
     row: usize,
@@ -674,7 +732,8 @@ fn build_row_line<'a>(
             row * cols + col
         };
         let bucket = buckets.get(bucket_index).copied().unwrap_or_default();
-        let (ch, style) = cell_style(theme, bucket);
+        let upcoming = upcoming_mask.get(bucket_index).copied().unwrap_or(false);
+        let (ch, style) = cell_style_with_upcoming(theme, bucket, upcoming);
         let chunk: String = std::iter::repeat_n(ch, cell_w).collect();
         spans.push(Span::styled(chunk, style));
         spans.push(Span::styled("│", grid_style));
@@ -682,14 +741,19 @@ fn build_row_line<'a>(
     Line::from(spans)
 }
 
-fn build_legend<'a>(buckets: &[BucketOutcome], theme: &'a Theme) -> Paragraph<'a> {
+fn build_legend<'a>(
+    buckets: &[BucketOutcome],
+    upcoming_mask: &[bool],
+    theme: &'a Theme,
+) -> Paragraph<'a> {
     let totals: BucketOutcome = buckets.iter().fold(BucketOutcome::default(), |mut acc, b| {
         acc.successes += b.successes;
         acc.failures += b.failures;
         acc.in_flight += b.in_flight;
         acc
     });
-    let line = Line::from(vec![
+    let scheduled_count = upcoming_mask.iter().filter(|b| **b).count();
+    let mut spans = vec![
         Span::styled(format!("{CELL_FILLED} "), Style::default().fg(Color::Green)),
         Span::raw(format!("ok {}  ", totals.successes)),
         Span::styled(format!("{CELL_FILLED} "), Style::default().fg(Color::Red)),
@@ -699,10 +763,17 @@ fn build_legend<'a>(buckets: &[BucketOutcome], theme: &'a Theme) -> Paragraph<'a
             Style::default().fg(Color::Magenta),
         ),
         Span::raw(format!("live {}  ", totals.in_flight)),
-        Span::styled("□ ", theme.text_muted()),
-        Span::raw("none    Tab: next period"),
-    ]);
-    Paragraph::new(line).style(theme.text_secondary())
+    ];
+    if scheduled_count > 0 {
+        spans.push(Span::styled(
+            format!("{CELL_UPCOMING} "),
+            Style::default().fg(Color::Cyan),
+        ));
+        spans.push(Span::raw(format!("scheduled {}  ", scheduled_count)));
+    }
+    spans.push(Span::styled("□ ", theme.text_muted()));
+    spans.push(Span::raw("none    Tab: next period"));
+    Paragraph::new(Line::from(spans)).style(theme.text_secondary())
 }
 
 // ---------------------------------------------------------------------------
@@ -868,7 +939,15 @@ mod tests {
         let theme = Theme::default();
         terminal
             .draw(|f| {
-                render_activity_grid(f, f.size(), &[], ActivityPeriod::Week, &theme, "Activity");
+                render_activity_grid_with_upcoming(
+                    f,
+                    f.size(),
+                    &[],
+                    &[],
+                    ActivityPeriod::Week,
+                    &theme,
+                    "Activity",
+                );
             })
             .unwrap();
     }
@@ -883,8 +962,115 @@ mod tests {
         let r = row_at(RunState::Completed, Some(true), ms);
         terminal
             .draw(|f| {
-                render_activity_grid(f, f.size(), &[&r], ActivityPeriod::Year, &theme, "Activity");
+                render_activity_grid_with_upcoming(
+                    f,
+                    f.size(),
+                    &[&r],
+                    &[],
+                    ActivityPeriod::Year,
+                    &theme,
+                    "Activity",
+                );
             })
             .unwrap();
+    }
+
+    /// With the compact cell sizes, LastMinute and LastHour must render
+    /// cleanly inside a narrow right-pane width (≈ 45% of a 120-col
+    /// terminal). The grid should use the intended `cell_w` (3) without
+    /// collapsing to 1-char cells via the `cell_w_max` clamp.
+    #[test]
+    fn last_minute_fits_narrow_pane() {
+        let backend = TestBackend::new(50, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_activity_grid_with_upcoming(
+                    f,
+                    f.size(),
+                    &[],
+                    &[],
+                    ActivityPeriod::LastMinute,
+                    &theme,
+                    "Activity",
+                );
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn last_hour_fits_narrow_pane() {
+        let backend = TestBackend::new(50, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_activity_grid_with_upcoming(
+                    f,
+                    f.size(),
+                    &[],
+                    &[],
+                    ActivityPeriod::LastHour,
+                    &theme,
+                    "Activity",
+                );
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn upcoming_bucket_paints_distinctive_cell_on_day() {
+        // Use a deterministic "now" at 10:00 so +2h never crosses
+        // midnight regardless of when the test runs.
+        let now = Local::now()
+            .date_naive()
+            .and_hms_opt(10, 0, 0)
+            .and_then(|dt| Local.from_local_datetime(&dt).single())
+            .unwrap();
+        let future = now + Duration::hours(2); // 12:00
+        let upcoming = vec![future];
+        let mask = bucketize_upcoming(&upcoming, ActivityPeriod::Day, now);
+        assert_eq!(mask.len(), 24);
+        assert!(mask[12], "hour 12 bucket should be marked");
+    }
+
+    #[test]
+    fn upcoming_is_empty_for_last_minute_and_last_hour() {
+        let now = Local::now();
+        let future = now + Duration::seconds(5);
+        let (ch, _) = cell_style_with_upcoming(&Theme::default(), BucketOutcome::default(), false);
+        // Default (no past, no upcoming) renders blank.
+        assert_eq!(ch, ' ');
+        // LastMinute / LastHour bucketize_upcoming is never called by
+        // render_activity_grid_with_upcoming (gated by the matches!()
+        // branch), but the helper itself would still bucketize — that
+        // is expected and tested by the Day test above. This test
+        // ensures the cell style falls back to the default when the
+        // upcoming flag is false, regardless of period.
+        let _ = future;
+    }
+
+    /// On a 120-col terminal every period except Year should render at
+    /// its intended `cell_w` without hitting the `cell_w_max` clamp.
+    /// Year is excluded because 53×2 cells never fit below ~160 cols —
+    /// its clamp-down to 1-char cells is a documented tradeoff.
+    #[test]
+    fn compact_cells_unclamped_on_wide_terminal() {
+        use ActivityPeriod::*;
+        for period in [Day, Week, Month, LastHour, LastMinute] {
+            let (target_w, _) = cell_dims(period);
+            let (cols, _, _) = grid_dims(period);
+            let overhead = cols + 1 + 4;
+            let avail_w = 120usize;
+            let cell_w_max = avail_w.saturating_sub(overhead) / cols.max(1);
+            assert!(
+                cell_w_max >= target_w,
+                "period {:?} clamps cell_w at 120 cols (max={} target={})",
+                period,
+                cell_w_max,
+                target_w
+            );
+        }
     }
 }

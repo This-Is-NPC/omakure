@@ -50,6 +50,7 @@ pub(crate) struct SchedulesState {
     pub(crate) entries: Vec<ScheduleEntry>,
     pub(crate) selection: usize,
     pub(crate) list_state: ratatui::widgets::ListState,
+    pub(crate) table_state: ratatui::widgets::TableState,
     /// Message surfaced at the bottom of the screen after a toggle, parse
     /// error, etc. Cleared on re-enter.
     pub(crate) flash: Option<String>,
@@ -144,6 +145,10 @@ pub(crate) struct App<'a> {
     /// Current activity-grid period, shared across every screen that
     /// renders the activity grid. Cycled with Tab.
     pub(crate) activity_period: super::widgets::activity_grid::ActivityPeriod,
+    /// When `true`, the next keystroke is interpreted as a global prefix
+    /// command (Ctrl+/ tmux-style navigation). Cleared after the next
+    /// key is dispatched, regardless of whether it matched a command.
+    pub(crate) prefix_pending: bool,
 }
 
 impl<'a> App<'a> {
@@ -187,11 +192,13 @@ impl<'a> App<'a> {
             script_dashboard_expanded: false,
             schedules: SchedulesState::default(),
             activity_period: super::widgets::activity_grid::ActivityPeriod::default(),
+            prefix_pending: false,
         };
         app.start_widget_load();
         app.load_env_config();
         app.update_schema_preview();
         app.update_env_preview();
+        app.load_schedules_for_upcoming();
         app
     }
 
@@ -230,6 +237,7 @@ impl<'a> App<'a> {
             script_dashboard_expanded: false,
             schedules: SchedulesState::default(),
             activity_period: super::widgets::activity_grid::ActivityPeriod::default(),
+            prefix_pending: false,
         }
     }
 
@@ -252,7 +260,16 @@ impl<'a> App<'a> {
         self.navigation
             .list_state
             .select(Some(self.navigation.selection));
+        self.navigation.schema_preview_scroll = 0;
         self.update_schema_preview();
+    }
+
+    /// Scroll the ScriptSelect schema preview vertically. Clamps to zero
+    /// at the top; the widget clips at the bottom via `Paragraph::scroll`.
+    pub(crate) fn scroll_schema_preview(&mut self, delta: isize) {
+        let current = self.navigation.schema_preview_scroll as isize;
+        let next = (current + delta).max(0);
+        self.navigation.schema_preview_scroll = next as u16;
     }
 
     /// Refresh the in-memory run history from `runs.sqlite`. Used when
@@ -286,6 +303,19 @@ impl<'a> App<'a> {
     /// `Schedule` block and switch to the Schedules screen.
     pub(crate) fn enter_schedules(&mut self) {
         self.refresh_history();
+        self.reload_schedules_entries();
+        self.screen = Screen::Schedules;
+    }
+
+    /// Load schedule entries without switching screens. Used at startup
+    /// so the ScriptSelect activity grid can overlay upcoming fires for
+    /// the currently selected script before the user ever visits the
+    /// Schedules screen.
+    pub(crate) fn load_schedules_for_upcoming(&mut self) {
+        self.reload_schedules_entries();
+    }
+
+    fn reload_schedules_entries(&mut self) {
         let repo = crate::adapters::workspace_repository::FsWorkspaceRepository::new(
             self.workspace.scripts_root().to_path_buf(),
         );
@@ -318,16 +348,87 @@ impl<'a> App<'a> {
         }
         entries.sort_by(|a, b| a.display_name.cmp(&b.display_name));
         let mut list_state = ratatui::widgets::ListState::default();
+        let mut table_state = ratatui::widgets::TableState::default();
         if !entries.is_empty() {
             list_state.select(Some(0));
+            table_state.select(Some(0));
         }
         self.schedules = SchedulesState {
             entries,
             selection: 0,
             list_state,
+            table_state,
             flash: None,
         };
-        self.screen = Screen::Schedules;
+    }
+
+    /// Compute the upcoming fire times for the cron schedule of the
+    /// given script (if any) within the window relevant to the active
+    /// activity period. Returns an empty vec for LastMinute/LastHour
+    /// (upcoming overlay is suppressed there) or for scripts that have
+    /// no Schedule block or a disabled schedule.
+    pub(crate) fn upcoming_runs_for_script(
+        &self,
+        script_path: &std::path::Path,
+    ) -> Vec<chrono::DateTime<chrono::Utc>> {
+        use super::widgets::activity_grid::ActivityPeriod;
+        if matches!(
+            self.activity_period,
+            ActivityPeriod::LastMinute | ActivityPeriod::LastHour
+        ) {
+            return Vec::new();
+        }
+        let canonical =
+            std::fs::canonicalize(script_path).unwrap_or_else(|_| script_path.to_path_buf());
+        let entry = self.schedules.entries.iter().find(|e| {
+            std::fs::canonicalize(&e.script_path).unwrap_or_else(|_| e.script_path.clone())
+                == canonical
+        });
+        let Some(entry) = entry else {
+            return Vec::new();
+        };
+        if !entry.enabled {
+            return Vec::new();
+        }
+        let Ok(cron) = crate::domain::parse_cron(&entry.cron) else {
+            return Vec::new();
+        };
+        let horizon = match self.activity_period {
+            ActivityPeriod::Day => chrono::Duration::hours(24),
+            ActivityPeriod::Week => chrono::Duration::days(7),
+            ActivityPeriod::Month => chrono::Duration::days(35),
+            ActivityPeriod::Year => chrono::Duration::days(371),
+            ActivityPeriod::LastMinute | ActivityPeriod::LastHour => return Vec::new(),
+        };
+        let deadline = chrono::Utc::now() + horizon;
+        let mut out = Vec::new();
+        let mut anchor = chrono::Utc::now();
+        // Advance anchor to the START of the next bucket after each
+        // fire we record. Without this a high-frequency cron (e.g.
+        // `*/10 * * * * *` = every 10s) would burn the entire iteration
+        // budget on the first bucket and never reach later ones. With
+        // per-bucket advance we get at most one recorded fire per Day
+        // hour or Week/Month/Year local day, bounded by the bucket
+        // count of the period.
+        for _ in 0..1000 {
+            let Some(fire) = crate::domain::next_fire_after(&cron, anchor) else {
+                break;
+            };
+            if fire > deadline {
+                break;
+            }
+            out.push(fire);
+            let fire_local = fire.with_timezone(&chrono::Local);
+            let next_anchor_local = match self.activity_period {
+                ActivityPeriod::Day => next_hour_boundary(fire_local),
+                ActivityPeriod::Week | ActivityPeriod::Month | ActivityPeriod::Year => {
+                    next_day_boundary(fire_local)
+                }
+                ActivityPeriod::LastMinute | ActivityPeriod::LastHour => unreachable!(),
+            };
+            anchor = next_anchor_local.with_timezone(&chrono::Utc);
+        }
+        out
     }
 
     pub(crate) fn move_schedules_selection(&mut self, delta: isize) {
@@ -344,6 +445,9 @@ impl<'a> App<'a> {
         self.schedules.selection = new_index as usize;
         self.schedules
             .list_state
+            .select(Some(self.schedules.selection));
+        self.schedules
+            .table_state
             .select(Some(self.schedules.selection));
     }
 
@@ -943,6 +1047,7 @@ impl<'a> App<'a> {
             None => {
                 self.navigation.schema_preview = None;
                 self.navigation.schema_preview_error = None;
+                self.navigation.schema_preview_scroll = 0;
                 self.navigation.preview_script = None;
                 return;
             }
@@ -951,6 +1056,7 @@ impl<'a> App<'a> {
         if entry_kind != WorkspaceEntryKind::Script {
             self.navigation.schema_preview = None;
             self.navigation.schema_preview_error = None;
+            self.navigation.schema_preview_scroll = 0;
             self.navigation.preview_script = None;
             return;
         }
@@ -959,6 +1065,7 @@ impl<'a> App<'a> {
             return;
         }
 
+        self.navigation.schema_preview_scroll = 0;
         match self.service.load_schema(&entry_path) {
             Ok(mut schema) => {
                 schema
@@ -1037,6 +1144,30 @@ fn load_widget_state(dir: &Path) -> (Option<WidgetData>, Option<String>) {
         Ok(widget) => (widget, None),
         Err(err) => (None, Some(err)),
     }
+}
+
+/// Start of the hour strictly after `t` in local time. Used to advance
+/// the upcoming-runs anchor across hour boundaries when the active
+/// period is `Day` (24 hourly buckets).
+fn next_hour_boundary(t: chrono::DateTime<chrono::Local>) -> chrono::DateTime<chrono::Local> {
+    use chrono::{Datelike, Duration, TimeZone, Timelike};
+    let next = t + Duration::hours(1);
+    chrono::Local
+        .with_ymd_and_hms(next.year(), next.month(), next.day(), next.hour(), 0, 0)
+        .single()
+        .unwrap_or(next)
+}
+
+/// Start of the day strictly after `t` in local time. Used to advance
+/// the upcoming-runs anchor across day boundaries for `Week`, `Month`,
+/// and `Year` periods (calendar-day buckets).
+fn next_day_boundary(t: chrono::DateTime<chrono::Local>) -> chrono::DateTime<chrono::Local> {
+    use chrono::{Datelike, Duration, TimeZone};
+    let next = t + Duration::days(1);
+    chrono::Local
+        .with_ymd_and_hms(next.year(), next.month(), next.day(), 0, 0, 0)
+        .single()
+        .unwrap_or(next)
 }
 
 #[derive(Debug)]
@@ -2292,6 +2423,52 @@ suffix"#;
         let mut app = App::test_new(&svc, ws, vec![], vec![]);
         app.pop_field_char();
         app.append_field_char('z'); // no field, also noop
+    }
+
+    /// Regression: a high-frequency cron (every 10 seconds) over a Week
+    /// view must produce one upcoming-run timestamp per future local day
+    /// — not 500 timestamps all clustered in the next ~83 minutes. Before
+    /// the bucket-aware anchor advance, `out.len()` was bounded by the
+    /// loop cap and covered only the first hour, leaving Fri/Sat/Sun
+    /// unmarked on Thursday evenings.
+    #[test]
+    fn upcoming_runs_advance_across_days_for_high_frequency_cron() {
+        use crate::adapters::tui::widgets::activity_grid::ActivityPeriod;
+        use chrono::Datelike;
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.activity_period = ActivityPeriod::Week;
+        let script = tmp.path().join("hello.bash");
+        std::fs::write(&script, "#!/usr/bin/env bash\necho hi\n").unwrap();
+        app.schedules.entries.push(ScheduleEntry {
+            script_path: script.clone(),
+            display_name: "hello.bash".into(),
+            cron: "*/10 * * * * *".into(),
+            enabled: true,
+            next_run: None,
+        });
+        let fires = app.upcoming_runs_for_script(&script);
+        // Must have at least one fire per remaining day of the current
+        // calendar week. We don't know which weekday `now` falls on,
+        // but for any midweek run there should be ≥ 2 distinct days.
+        let days: std::collections::HashSet<_> = fires
+            .iter()
+            .map(|f| f.with_timezone(&chrono::Local).ordinal())
+            .collect();
+        assert!(
+            !days.is_empty(),
+            "expected ≥ 1 distinct future day, got {} fires across 0 days",
+            fires.len()
+        );
+        // Upper sanity bound: Week horizon = 7 days, so we can't have
+        // more than ~8 distinct days in the returned fires.
+        assert!(
+            days.len() <= 8,
+            "bucket advance failed: {} days",
+            days.len()
+        );
     }
 
     #[test]

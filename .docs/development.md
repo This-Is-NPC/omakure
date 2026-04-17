@@ -8,12 +8,13 @@ mise run dev                # Build, start scheduler daemon, tail log, open TUI
 mise run tui                # Open the TUI only
 ```
 
-Common TUI shortcuts:
+Common TUI shortcuts (all cross-screen navigation uses `Ctrl+/` prefix):
 
-- `Ctrl+S` — search scripts (background-indexed)
-- `Alt+E` — environment selector
-- `H` — run history (List / Dashboards / Activity grid)
-- `c` — schedules screen; `Space` toggles `Schedule.Enabled` in place
+- `Ctrl+/` then `s` — search scripts (background-indexed)
+- `Ctrl+/` then `e` — environment selector
+- `Ctrl+/` then `h` — run history (List / Dashboards / Activity grid)
+- `Ctrl+/` then `c` — schedules screen; `Space` toggles `Schedule.Enabled` in place
+- `Ctrl+/` then `q` — quit
 
 In debug builds, the app uses the repo `scripts/` folder as the workspace
 root if it exists. To override the scripts location, set

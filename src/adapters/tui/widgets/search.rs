@@ -8,6 +8,7 @@ use super::super::theme::{self, Theme};
 use super::common::{horizontal_split, standard_screen_layout};
 use super::schema;
 use super::spinner::{spinner_span, SpinnerKind};
+use super::table_style;
 use crate::search_index::{SearchDetails, SearchResult, SearchStatus};
 
 pub(crate) fn render_search(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
@@ -58,7 +59,7 @@ fn render_search_body(frame: &mut Frame, area: Rect, app: &mut App, theme: &Them
             vec![Line::from("No scripts found for this search.")]
         };
         let empty = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL).title("Results"))
+            .block(table_style::block("Results", theme))
             .wrap(Wrap { trim: true });
         frame.render_widget(empty, area);
         return;
@@ -79,8 +80,8 @@ fn render_search_results(frame: &mut Frame, area: Rect, app: &mut App, theme: &T
         .collect();
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Results"))
-        .highlight_style(theme.selection_style())
+        .block(table_style::block("Results", theme))
+        .highlight_style(table_style::selection_style(theme))
         .highlight_symbol(theme::selection_symbol_str());
 
     frame.render_stateful_widget(list, area, &mut app.search.list_state);
@@ -103,7 +104,7 @@ fn render_search_schema(frame: &mut Frame, area: Rect, app: &App, theme: &Theme)
         ),
         _ => (None, None),
     };
-    schema::render_schema_preview(frame, area, &title, preview.as_ref(), error, theme);
+    schema::render_schema_preview(frame, area, &title, preview.as_ref(), error, theme, 0);
 }
 
 fn render_search_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {

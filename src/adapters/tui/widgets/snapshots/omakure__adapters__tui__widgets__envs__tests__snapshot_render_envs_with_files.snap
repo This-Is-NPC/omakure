@@ -1,5 +1,6 @@
 ---
 source: src/adapters/tui/widgets/envs.rs
+assertion_line: 178
 expression: terminal.backend()
 ---
 "┌Environments──────────────────────────────────────────────────────────────────┐"
@@ -14,6 +15,6 @@ expression: terminal.backend()
 "││                                     ││                                     ││"
 "││                                     ││                                     ││"
 "│└─────────────────────────────────────┘└─────────────────────────────────────┘│"
-"│Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc/q │"
+"│Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc ba│"
 "│                                                                              │"
 "└──────────────────────────────────────────────────────────────────────────────┘"

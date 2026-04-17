@@ -18,8 +18,8 @@ Omakure state stays in the global workspace:
   workspace and never under `PATH`.
 - `.omaken/`, `.omaken/envs/`, and `omakure.toml` are never created
   inside `PATH` as a side effect of opening it.
-- The Environments screen (`Alt+E`) continues to list and modify the
-  global `.omaken/envs/` directory only.
+- The Environments screen (`Ctrl+/` then `e`) continues to list and
+  modify the global `.omaken/envs/` directory only.
 
 The positional path is mutually exclusive with `--scripts-dir`. If both
 are supplied, Omakure exits before launching the TUI with a clear error.

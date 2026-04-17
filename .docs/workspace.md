@@ -23,7 +23,7 @@ omakure-scripts/
 
 If a folder includes `index.lua`, Omakure renders it in the TUI header panel. See `lua-widgets.md`.
 
-Environment defaults live in `.omaken/envs/*.conf`. Use the TUI (Alt+E) to switch the active file.
+Environment defaults live in `.omaken/envs/*.conf`. Use the TUI (`Ctrl+/` then `e`) to switch the active file.
 Defaults are applied by matching field names (case-insensitive) to `key=value` pairs.
 See `environments.md` for usage details.
 

@@ -1,5 +1,6 @@
 ---
 source: src/adapters/tui/widgets/history.rs
+assertion_line: 471
 expression: terminal.backend()
 ---
 "┌History─────────────────────────────────────────┐┌Output──────────────────────┐"
@@ -12,5 +13,5 @@ expression: terminal.backend()
 "│                                                ││                            │"
 "│                                                ││                            │"
 "└────────────────────────────────────────────────┘└────────────────────────────┘"
-"Tab dashboards, Up/Down select, Enter view output, Alt+E envs, Esc/q back       "
+"Tab dashboards, Up/Down select, Enter view output, Esc back, Ctrl+/ nav         "
 "                                                                                "

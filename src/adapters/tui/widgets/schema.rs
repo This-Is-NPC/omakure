@@ -1,11 +1,12 @@
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 
 use super::super::app::{QueuePreview, SchemaPreview};
 use super::super::theme::Theme;
+use super::table_style;
 
 pub(crate) fn render_schema_preview(
     frame: &mut Frame,
@@ -14,12 +15,25 @@ pub(crate) fn render_schema_preview(
     preview: Option<&SchemaPreview>,
     error: Option<&str>,
     theme: &Theme,
+    scroll_offset: u16,
 ) {
     let lines = build_lines(preview, error, theme);
     let panel = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(title))
-        .wrap(Wrap { trim: false });
+        .block(table_style::block(title, theme))
+        .wrap(Wrap { trim: false })
+        .scroll((scroll_offset, 0));
     frame.render_widget(panel, area);
+}
+
+/// Total number of logical lines the schema preview would render for
+/// this preview (or fallback placeholders). Used by callers to decide
+/// whether to cap the panel height and enable internal scroll.
+pub(crate) fn schema_preview_height(
+    preview: Option<&SchemaPreview>,
+    error: Option<&str>,
+    theme: &Theme,
+) -> u16 {
+    build_lines(preview, error, theme).len() as u16
 }
 
 fn build_lines(
@@ -227,7 +241,7 @@ mod tests {
         let preview = sample_preview();
         terminal
             .draw(|f| {
-                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme);
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme, 0);
             })
             .unwrap();
         insta::assert_snapshot!(terminal.backend());
@@ -240,7 +254,7 @@ mod tests {
         let theme = Theme::default();
         terminal
             .draw(|f| {
-                render_schema_preview(f, f.size(), "Schema", None, None, &theme);
+                render_schema_preview(f, f.size(), "Schema", None, None, &theme, 0);
             })
             .unwrap();
         insta::assert_snapshot!(terminal.backend());
@@ -260,6 +274,7 @@ mod tests {
                     None,
                     Some("Invalid JSON at line 5"),
                     &theme,
+                    0,
                 );
             })
             .unwrap();
@@ -367,9 +382,31 @@ mod tests {
         };
         terminal
             .draw(|f| {
-                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme);
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme, 0);
             })
             .unwrap();
         insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn schema_preview_height_matches_build_lines_count() {
+        let theme = Theme::default();
+        let preview = sample_preview();
+        let n = schema_preview_height(Some(&preview), None, &theme);
+        let expected = build_lines(Some(&preview), None, &theme).len() as u16;
+        assert_eq!(n, expected);
+    }
+
+    #[test]
+    fn render_respects_scroll_offset() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = sample_preview();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme, 3);
+            })
+            .unwrap();
     }
 }

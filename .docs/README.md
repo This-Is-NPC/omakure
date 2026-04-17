@@ -24,3 +24,4 @@ Start here if you want a map of the docs. For quick start and requirements, see 
 - `architecture.md`: stack, patterns, code metrics, infrastructure.
 - `requirements.md`: implemented functional/non-functional/business rules (file-referenced).
 - `release-artifacts.md`: release archive naming requirements.
+- `tui-screens-and-widgets.md`: TUI screen flow, per-screen keybindings, and widget inventory.

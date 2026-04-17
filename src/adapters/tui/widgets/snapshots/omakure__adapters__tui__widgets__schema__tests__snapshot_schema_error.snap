@@ -1,0 +1,12 @@
+---
+source: src/adapters/tui/widgets/schema.rs
+expression: terminal.backend()
+---
+"┌Schema────────────────────────────────────────────────────┐"
+"│Failed to load schema.                                    │"
+"│Invalid JSON at line 5                                    │"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"│                                                          │"
+"└──────────────────────────────────────────────────────────┘"

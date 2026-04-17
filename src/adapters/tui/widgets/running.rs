@@ -38,3 +38,36 @@ pub(crate) fn render_running(frame: &mut Frame, area: Rect, app: &mut App, theme
         .wrap(Wrap { trim: true });
     frame.render_widget(block, area);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    #[test]
+    fn snapshot_running_with_script() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.selected_script = Some(PathBuf::from("/scripts/deploy.sh"));
+        app.field_input.args = vec!["--target".to_string(), "prod".to_string()];
+        app.tick = 3;
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(50, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_running(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+}

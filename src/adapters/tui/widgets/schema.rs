@@ -1,11 +1,12 @@
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 
 use super::super::app::{QueuePreview, SchemaPreview};
 use super::super::theme::Theme;
+use super::table_style;
 
 pub(crate) fn render_schema_preview(
     frame: &mut Frame,
@@ -14,12 +15,25 @@ pub(crate) fn render_schema_preview(
     preview: Option<&SchemaPreview>,
     error: Option<&str>,
     theme: &Theme,
+    scroll_offset: u16,
 ) {
     let lines = build_lines(preview, error, theme);
     let panel = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(title))
-        .wrap(Wrap { trim: false });
+        .block(table_style::block(title, theme))
+        .wrap(Wrap { trim: false })
+        .scroll((scroll_offset, 0));
     frame.render_widget(panel, area);
+}
+
+/// Total number of logical lines the schema preview would render for
+/// this preview (or fallback placeholders). Used by callers to decide
+/// whether to cap the panel height and enable internal scroll.
+pub(crate) fn schema_preview_height(
+    preview: Option<&SchemaPreview>,
+    error: Option<&str>,
+    theme: &Theme,
+) -> u16 {
+    build_lines(preview, error, theme).len() as u16
 }
 
 fn build_lines(
@@ -186,4 +200,213 @@ fn build_lines(
     }
 
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::tui::app::SchemaFieldPreview;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn sample_preview() -> SchemaPreview {
+        SchemaPreview {
+            name: "Deploy App".to_string(),
+            description: Some("Deploy to production".to_string()),
+            tags: vec!["ops".to_string(), "deploy".to_string()],
+            fields: vec![
+                SchemaFieldPreview {
+                    name: "target".to_string(),
+                    prompt: Some("Target environment".to_string()),
+                    kind: "string".to_string(),
+                    required: true,
+                },
+                SchemaFieldPreview {
+                    name: "dry_run".to_string(),
+                    prompt: None,
+                    kind: "boolean".to_string(),
+                    required: false,
+                },
+            ],
+            outputs: vec![],
+            queue: None,
+        }
+    }
+
+    #[test]
+    fn snapshot_schema_with_fields() {
+        let backend = TestBackend::new(60, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = sample_preview();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme, 0);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_schema_no_preview() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", None, None, &theme, 0);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_schema_error() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        terminal
+            .draw(|f| {
+                render_schema_preview(
+                    f,
+                    f.size(),
+                    "Schema",
+                    None,
+                    Some("Invalid JSON at line 5"),
+                    &theme,
+                    0,
+                );
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn build_lines_with_outputs_and_matrix_queue() {
+        use crate::adapters::tui::app::{MatrixPreview, SchemaOutputPreview};
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Build".to_string(),
+            description: Some(" trimmed ".to_string()),
+            tags: vec!["t1".into()],
+            fields: vec![SchemaFieldPreview {
+                name: "x".into(),
+                prompt: Some("  prompt text  ".into()),
+                kind: "string".into(),
+                required: true,
+            }],
+            outputs: vec![SchemaOutputPreview {
+                name: "url".into(),
+                kind: "string".into(),
+            }],
+            queue: Some(QueuePreview::Matrix {
+                values: vec![MatrixPreview {
+                    name: "region".into(),
+                    values: vec!["us".into(), "eu".into()],
+                }],
+            }),
+        };
+        let lines = build_lines(Some(&preview), None, &theme);
+        let joined = lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("Outputs: 1"));
+        assert!(joined.contains("Queue: Matrix"));
+        assert!(joined.contains("region"));
+        assert!(joined.contains("us"));
+        assert!(joined.contains("prompt text"));
+    }
+
+    #[test]
+    fn build_lines_with_cases_queue() {
+        use crate::adapters::tui::app::{QueueCasePreview, QueueCaseValuePreview};
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Run".to_string(),
+            description: None,
+            tags: vec![],
+            fields: vec![],
+            outputs: vec![],
+            queue: Some(QueuePreview::Cases {
+                cases: vec![
+                    QueueCasePreview {
+                        name: Some("named-case".into()),
+                        values: vec![QueueCaseValuePreview {
+                            name: "k".into(),
+                            value: "v".into(),
+                        }],
+                    },
+                    QueueCasePreview {
+                        name: None,
+                        values: vec![],
+                    },
+                ],
+            }),
+        };
+        let lines = build_lines(Some(&preview), None, &theme);
+        let joined = lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("Queue: Cases (2)"));
+        assert!(joined.contains("named-case"));
+        assert!(joined.contains("case 2"));
+        assert!(joined.contains("k = v"));
+    }
+
+    #[test]
+    fn snapshot_schema_no_fields() {
+        let backend = TestBackend::new(60, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = SchemaPreview {
+            name: "Simple".to_string(),
+            description: None,
+            tags: vec![],
+            fields: vec![],
+            outputs: vec![],
+            queue: None,
+        };
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme, 0);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn schema_preview_height_matches_build_lines_count() {
+        let theme = Theme::default();
+        let preview = sample_preview();
+        let n = schema_preview_height(Some(&preview), None, &theme);
+        let expected = build_lines(Some(&preview), None, &theme).len() as u16;
+        assert_eq!(n, expected);
+    }
+
+    #[test]
+    fn render_respects_scroll_offset() {
+        let backend = TestBackend::new(60, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::default();
+        let preview = sample_preview();
+        terminal
+            .draw(|f| {
+                render_schema_preview(f, f.size(), "Schema", Some(&preview), None, &theme, 3);
+            })
+            .unwrap();
+    }
 }

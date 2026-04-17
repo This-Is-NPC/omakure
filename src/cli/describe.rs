@@ -85,7 +85,7 @@ fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<
     Err(message.into())
 }
 
-fn build_payload(script_path: &Path, root: &Path, schema: &Schema) -> DescribePayload {
+pub(crate) fn build_payload(script_path: &Path, root: &Path, schema: &Schema) -> DescribePayload {
     let mut fields: Vec<DescribeField> = schema
         .fields
         .iter()
@@ -93,7 +93,7 @@ fn build_payload(script_path: &Path, root: &Path, schema: &Schema) -> DescribePa
             name: f.name.clone(),
             prompt: f.prompt.clone(),
             kind: f.kind.clone(),
-            order: f.order,
+            order: f.order.unwrap_or(0),
             required: f.required.unwrap_or(false),
             arg: f.arg.clone(),
             default: f.default.clone(),
@@ -185,4 +185,155 @@ pub fn sample_envelope() -> serde_json::Value {
             }
         ]
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::{Field, Schema};
+    use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
+
+    fn test_schema() -> Schema {
+        Schema {
+            name: "Deploy".to_string(),
+            description: Some("Deploy the app".to_string()),
+            tags: Some(vec!["ops".to_string()]),
+            fields: vec![Field {
+                name: "target".to_string(),
+                prompt: Some("Target env".to_string()),
+                kind: "string".to_string(),
+                order: Some(1),
+                required: Some(true),
+                default: None,
+                choices: Some(vec!["dev".to_string(), "prod".to_string()]),
+                arg: Some("--target".to_string()),
+            }],
+            outputs: None,
+            queue: None,
+            schedule: None,
+        }
+    }
+
+    #[test]
+    fn test_build_payload_structure() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("deploy.sh");
+        std::fs::write(&script, "#!/bin/bash").unwrap();
+
+        let payload = build_payload(&script, tmp.path(), &test_schema());
+        assert_eq!(payload.name, "Deploy");
+        assert_eq!(payload.description, Some("Deploy the app".to_string()));
+        assert_eq!(payload.tags, vec!["ops"]);
+        assert_eq!(payload.fields.len(), 1);
+        assert_eq!(payload.fields[0].name, "target");
+        assert!(payload.fields[0].required);
+        assert_eq!(
+            payload.fields[0].choices,
+            Some(vec!["dev".to_string(), "prod".to_string()])
+        );
+        assert_eq!(payload.relative_path, "deploy.sh");
+    }
+
+    #[test]
+    fn test_build_payload_no_fields() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("simple.sh");
+        std::fs::write(&script, "#!/bin/bash").unwrap();
+
+        let schema = Schema {
+            name: "Simple".to_string(),
+            description: None,
+            tags: None,
+            fields: vec![],
+            outputs: None,
+            queue: None,
+            schedule: None,
+        };
+        let payload = build_payload(&script, tmp.path(), &schema);
+        assert_eq!(payload.name, "Simple");
+        assert!(payload.description.is_none());
+        assert!(payload.tags.is_empty());
+        assert!(payload.fields.is_empty());
+    }
+
+    fn write_schema_script(tmp: &TempDir, name: &str, body: &str) -> PathBuf {
+        let p = tmp.path().join(name);
+        std::fs::write(&p, body).unwrap();
+        p
+    }
+
+    #[test]
+    fn run_human_format_with_full_schema() {
+        let tmp = TempDir::new().unwrap();
+        write_schema_script(
+            &tmp,
+            "deploy.sh",
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"Deploy\",\"Description\":\"Ship\",\"Tags\":[\"ops\"],\"Fields\":[{\"Name\":\"target\",\"Type\":\"string\",\"Order\":1,\"Required\":true,\"Arg\":\"--target\",\"Default\":\"prod\",\"Choices\":[\"dev\",\"prod\"],\"Prompt\":\"Target\"}]}\n# OMAKURE_SCHEMA_END\n",
+        );
+        run(
+            tmp.path().to_path_buf(),
+            DescribeArgs {
+                script: "deploy.sh".into(),
+            },
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_json_format_succeeds() {
+        let tmp = TempDir::new().unwrap();
+        write_schema_script(
+            &tmp,
+            "deploy.sh",
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"Deploy\",\"Fields\":[]}\n# OMAKURE_SCHEMA_END\n",
+        );
+        run(
+            tmp.path().to_path_buf(),
+            DescribeArgs {
+                script: "deploy.sh".into(),
+            },
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_returns_not_found_for_missing_script() {
+        let tmp = TempDir::new().unwrap();
+        let err = run(
+            tmp.path().to_path_buf(),
+            DescribeArgs {
+                script: "ghost.sh".into(),
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn run_returns_not_found_when_script_lacks_schema() {
+        let tmp = TempDir::new().unwrap();
+        write_schema_script(&tmp, "bare.sh", "#!/usr/bin/env bash\necho hi\n");
+        let err = run(
+            tmp.path().to_path_buf(),
+            DescribeArgs {
+                script: "bare.sh".into(),
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_sample_envelope_shape() {
+        let envelope = sample_envelope();
+        assert_eq!(envelope["ok"], true);
+        assert!(envelope["data"]["name"].is_string());
+        assert!(envelope["data"]["fields"].is_array());
+        assert_eq!(envelope["schema_version"], "1");
+    }
 }

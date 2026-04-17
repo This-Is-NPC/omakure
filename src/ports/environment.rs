@@ -29,3 +29,35 @@ pub trait EnvironmentRepository {
     fn set_active_env(&self, name: Option<&str>) -> AppResult<()>;
     fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_environment_config_construction() {
+        let config = EnvironmentConfig {
+            envs_dir: PathBuf::from("/tmp/envs"),
+            active: Some("dev.conf".to_string()),
+            defaults: HashMap::from([("host".to_string(), "localhost".to_string())]),
+            session_conf_path: None,
+        };
+        assert_eq!(config.active, Some("dev.conf".to_string()));
+        assert_eq!(config.defaults.get("host").unwrap(), "localhost");
+        assert!(config.session_conf_path.is_none());
+    }
+
+    #[test]
+    fn test_environment_repository_is_object_safe() {
+        fn _assert_object_safe(_: &dyn EnvironmentRepository) {}
+    }
+
+    #[test]
+    fn test_env_file_clone() {
+        let file = EnvFile {
+            name: "dev.conf".to_string(),
+        };
+        let cloned = file.clone();
+        assert_eq!(cloned.name, "dev.conf");
+    }
+}

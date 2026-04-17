@@ -11,6 +11,8 @@ pub mod omaken;
 pub mod queue;
 pub mod run;
 pub mod search;
+pub mod serve;
+pub mod serve_autostart;
 pub mod theme;
 pub mod trace;
 pub mod uninstall;

@@ -1,14 +1,25 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-/// Omakure - TUI for navigating and running automation scripts.
+/// Omakure - TUI and CLI for navigating, running, and scheduling automation scripts.
 ///
-/// Run `omakure` to open the TUI against the global workspace, or
-/// `omakure <PATH>` (e.g. `omakure .`) to open the TUI against any
-/// directory while keeping history, environments, and config global.
+/// Run `omakure` with no arguments to open the TUI against the global
+/// workspace. Pass a path (e.g. `omakure .`) to open the TUI against any
+/// directory without touching global history or environments.
+///
+/// Non-TUI surfaces:{n}
+///   run <SCRIPT>          execute a script directly{n}
+///   queue add <SCRIPT>    push a job; `queue worker` drains it{n}
+///   serve                 run the cron scheduler daemon{n}
+///   history list|show     query past runs (SQLite-backed){n}
+///   scripts|describe|search   inspect the script catalogue
+///
+/// AI integration: pass `--json` on supported subcommands to emit a
+/// `{ ok, data, error, schema_version }` envelope; run `omakure help-ai`
+/// for the full machine-readable capability surface.
 #[derive(Parser, Debug)]
 #[command(name = "omakure")]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about)]
 #[command(propagate_version = true)]
 pub struct Cli {
     /// Scripts directory override
@@ -42,6 +53,12 @@ pub enum Commands {
     Run(RunArgs),
 
     /// Check runtime dependencies and workspace
+    ///
+    /// Verifies required interpreters (`git`, `bash`, `jq`), optional ones
+    /// (`powershell`, `python`), workspace layout (`.omaken/`, history dir,
+    /// workspace config), and that every script's embedded schema parses.
+    /// Exits 1 if any required check fails. `--json` is currently ignored
+    /// by this subcommand.
     #[command(visible_alias = "check")]
     Doctor,
 
@@ -70,26 +87,98 @@ pub enum Commands {
     Trace(TraceArgs),
 
     /// Print the AI capability surface as JSON
+    ///
+    /// Always emits JSON (regardless of `--json`). The envelope uses the
+    /// standard `{ ok, data, error, schema_version }` shape.{n}
+    /// {n}
+    /// `data` contains:{n}
+    ///   trust_model   — how omakure treats AI callers{n}
+    ///   error_codes   — the registered stable error code strings{n}
+    ///   envelope      — a self-describing shape hint{n}
+    ///   verbs         — AI-relevant subcommands with flags and nested
+    ///                   subcommands (pulled from clap metadata, so it
+    ///                   cannot drift from `--help`){n}
+    ///   data_shapes   — concrete examples for `run`, `history_list`,
+    ///                   `history_show`, and `config`
+    ///
+    /// Agents can cache the payload per binary version (`--version`).
     HelpAi,
 
     /// Create a new script template
     Init(InitArgs),
 
-    /// Show resolved paths and env
+    /// Show resolved paths and environment
+    ///
+    /// Prints the resolved binary path, omakure version, workspace root,
+    /// scripts root, `.omaken/` directory, history directory, workspace
+    /// config file, environments directory, active environment, and any
+    /// known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`,
+    /// `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `--json`
+    /// for the machine-readable envelope.
     #[command(visible_alias = "env")]
     Config,
 
     /// Update omakure from GitHub releases
+    ///
+    /// Downloads the release archive for the current OS/arch and
+    /// replaces the running binary in place. Also copies any scripts
+    /// missing from your local scripts directory from the source
+    /// archive of the target version — existing files are never
+    /// overwritten. `--repo` defaults to `$OMAKURE_REPO` /
+    /// `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` /
+    /// `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the
+    /// latest GitHub release.
     Update(UpdateArgs),
 
-    /// Remove the omakure binary
+    /// Remove the omakure binary (optionally wipe the scripts workspace)
+    ///
+    /// Deletes the currently running binary from its install directory
+    /// (on Windows also strips the install path from the user `PATH`).
+    /// With `--scripts`, PERMANENTLY deletes the entire scripts
+    /// workspace, including `.omaken/` (runs.sqlite, history traces,
+    /// schedules) and every script file — use with care and have
+    /// backups.
     Uninstall(UninstallArgs),
 
-    /// Generate shell completion
+    /// Generate shell completion script for the given shell
+    ///
+    /// Writes the completion script to stdout. Quick install examples:{n}
+    ///   bash: `omakure completion bash >> ~/.bashrc`{n}
+    ///   zsh:  `omakure completion zsh  > ~/.zfunc/_omakure` (ensure `~/.zfunc` is on `$fpath`){n}
+    ///   fish: `omakure completion fish > ~/.config/fish/completions/omakure.fish`{n}
+    ///   pwsh: `omakure completion pwsh | Out-String | Invoke-Expression`
+    ///
+    /// For a one-shot session pipe into your current shell:
+    /// `eval "$(omakure completion zsh)"`.
     Completion(CompletionArgs),
 
     /// Manage themes
     Theme(ThemeArgs),
+
+    /// Run the cron scheduler daemon for scripts declaring a `Schedule` block
+    ///
+    /// Running `omakure serve` with no flags starts the scheduler in the
+    /// foreground with an in-process worker; `-d`/`--detach` daemonizes
+    /// (Unix) and `--stop` terminates a running daemon.
+    ///
+    /// The scheduler rescans the workspace every 5 seconds, parses each
+    /// script's `Schedule` block, and enqueues a run when the cron
+    /// expression is due. Fires are SKIPPED when a previous run with the
+    /// same `cron_schedule_id` is still `queued` or `running`, so
+    /// long-lived overlapping jobs never stack up.
+    ///
+    /// Paths (per workspace):{n}
+    ///   PID file: `<workspace>/.omaken/daemon.pid`{n}
+    ///   Log:      `<workspace>/.omaken/daemon.log`
+    ///
+    /// `--install`/`--uninstall`/`--status` manage a per-workspace
+    /// systemd user unit so the daemon survives reboots (Linux only);
+    /// after install tail with `journalctl --user -u <unit> -f`.
+    ///
+    /// By default an in-process worker is spawned so scheduled rows
+    /// execute without a separate process. Pass `--no-worker` when you
+    /// run `omakure queue worker` elsewhere.
+    Serve(ServeArgs),
 }
 
 #[derive(Args, Debug)]
@@ -284,19 +373,24 @@ pub struct InitArgs {
 }
 
 #[derive(Args, Debug)]
+#[command(disable_version_flag = true)]
 pub struct UpdateArgs {
-    /// GitHub repository (owner/name)
+    /// GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` /
+    /// `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` /
+    /// `This-Is-NPC/omakure`.
     #[arg(long)]
     pub repo: Option<String>,
 
-    /// Release tag (vX.Y.Z)
+    /// Release tag to install (e.g. `v0.1.9`). Defaults to `$VERSION`
+    /// or the latest GitHub release for the configured repo.
     #[arg(long)]
     pub version: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct UninstallArgs {
-    /// Remove the scripts directory as well
+    /// Also delete the scripts workspace directory (runs.sqlite,
+    /// history, schedules, and every user script). Destructive.
     #[arg(long)]
     pub scripts: bool,
 }
@@ -414,14 +508,208 @@ pub struct QueueAddArgs {
     #[arg(long = "run-id")]
     pub run_id: Option<String>,
 
-    /// Provenance id for the future omakure cron scheduler. Stored
-    /// in the row but never written by current code.
+    /// Provenance id tying this row to a named cron schedule. Populated
+    /// automatically by `omakure serve`; set manually only to replay or
+    /// simulate a scheduled run.
     #[arg(long = "cron-schedule-id")]
     pub cron_schedule_id: Option<String>,
 
     /// Arguments forwarded to the script (after `--`)
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("omakure").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn test_parse_no_args_opens_tui() {
+        let cli = parse(&[]).unwrap();
+        assert!(cli.command.is_none());
+        assert!(cli.path.is_none());
+    }
+
+    #[test]
+    fn test_parse_positional_path() {
+        let cli = parse(&["/some/path"]).unwrap();
+        assert_eq!(cli.path, Some(PathBuf::from("/some/path")));
+        assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn test_parse_run_subcommand() {
+        let cli = parse(&["run", "deploy.sh"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Run(args) => {
+                assert_eq!(args.script, "deploy.sh");
+                assert_eq!(args.actor, "human");
+                assert!(!args.no_prompt);
+            }
+            _ => panic!("expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_run_with_flags() {
+        let cli = parse(&["run", "deploy.sh", "--json", "--no-prompt", "--actor", "ai"]).unwrap();
+        assert!(cli.json);
+        match cli.command.unwrap() {
+            Commands::Run(args) => {
+                assert_eq!(args.actor, "ai");
+                assert!(args.no_prompt);
+            }
+            _ => panic!("expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_global_json_flag() {
+        let cli = parse(&["--json", "scripts"]).unwrap();
+        assert!(cli.json);
+    }
+
+    #[test]
+    fn test_parse_queue_add() {
+        let cli = parse(&["queue", "add", "deploy.sh", "--priority", "10"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Queue(q) => match q.command {
+                QueueCommand::Add(args) => {
+                    assert_eq!(args.script, "deploy.sh");
+                    assert_eq!(args.priority, 10);
+                }
+                _ => panic!("expected Add"),
+            },
+            _ => panic!("expected Queue"),
+        }
+    }
+
+    #[test]
+    fn test_parse_queue_worker() {
+        let cli = parse(&["queue", "worker", "--concurrency", "4"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Queue(q) => match q.command {
+                QueueCommand::Worker(args) => assert_eq!(args.concurrency, 4),
+                _ => panic!("expected Worker"),
+            },
+            _ => panic!("expected Queue"),
+        }
+    }
+
+    #[test]
+    fn test_parse_history_list_with_state() {
+        let cli = parse(&["history", "list", "--state", "completed", "--since", "1h"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::History(h) => match h.command {
+                HistoryCommand::List(args) => {
+                    assert_eq!(args.state, vec!["completed"]);
+                    assert_eq!(args.since, Some("1h".to_string()));
+                }
+                _ => panic!("expected List"),
+            },
+            _ => panic!("expected History"),
+        }
+    }
+
+    #[test]
+    fn test_parse_history_show() {
+        let cli = parse(&["history", "show", "abc123"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::History(h) => match h.command {
+                HistoryCommand::Show(args) => assert_eq!(args.run_id, "abc123"),
+                _ => panic!("expected Show"),
+            },
+            _ => panic!("expected History"),
+        }
+    }
+
+    #[test]
+    fn test_conflicting_scripts_dir_and_path() {
+        let result = parse(&["--scripts-dir", "/a", "/b"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_describe() {
+        let cli = parse(&["describe", "deploy.sh"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Describe(args) => assert_eq!(args.script, "deploy.sh"),
+            _ => panic!("expected Describe"),
+        }
+    }
+
+    #[test]
+    fn test_parse_search() {
+        let cli = parse(&["search", "deploy", "--tag", "infra"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Search(args) => {
+                assert_eq!(args.query, "deploy");
+                assert_eq!(args.tag, vec!["infra"]);
+            }
+            _ => panic!("expected Search"),
+        }
+    }
+
+    #[test]
+    fn test_parse_init_with_schema() {
+        let cli = parse(&["init", "new.sh", "--schema-json", "{}"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Init(args) => {
+                assert_eq!(args.script, Some("new.sh".to_string()));
+                assert_eq!(args.schema_json, Some("{}".to_string()));
+            }
+            _ => panic!("expected Init"),
+        }
+    }
+
+    #[test]
+    fn test_parse_theme_set() {
+        let cli = parse(&["theme", "set", "dracula"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Theme(t) => match t.command {
+                ThemeCommand::Set(args) => assert_eq!(args.name, "dracula"),
+                _ => panic!("expected Set"),
+            },
+            _ => panic!("expected Theme"),
+        }
+    }
+
+    #[test]
+    fn test_parse_trace() {
+        let cli = parse(&["trace", "hello", "--level", "warn", "--data", "{\"k\":1}"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Trace(args) => {
+                assert_eq!(args.message, "hello");
+                assert_eq!(args.level, "warn");
+                assert_eq!(args.data, Some("{\"k\":1}".to_string()));
+            }
+            _ => panic!("expected Trace"),
+        }
+    }
+
+    #[test]
+    fn test_history_success_failure_conflict() {
+        let result = parse(&["history", "list", "--success", "--failure"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_history_state_and_state_set_conflict() {
+        let result = parse(&[
+            "history",
+            "list",
+            "--state",
+            "completed",
+            "--state-set",
+            "all",
+        ]);
+        assert!(result.is_err());
+    }
 }
 
 #[derive(Args, Debug)]
@@ -463,6 +751,46 @@ pub struct QueueWorkerArgs {
     /// Test convenience: drain at most one job per worker thread, then
     /// exit. Hidden from --help and help-ai. Used by integration tests
     /// so the daemon does not block the test harness.
+    #[arg(long, hide = true)]
+    pub once: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct ServeArgs {
+    /// Run the scheduler as a detached background daemon (Unix only).
+    #[arg(long, short = 'd', conflicts_with_all = ["stop", "install", "uninstall", "status"])]
+    pub detach: bool,
+
+    /// Stop a running daemon (reads `.omaken/daemon.pid` and sends SIGTERM).
+    #[arg(long, conflicts_with_all = ["install", "uninstall", "status"])]
+    pub stop: bool,
+
+    /// Install a systemd user service that runs `omakure serve` for the
+    /// current workspace and survives reboots (Linux only).
+    #[arg(long, conflicts_with_all = ["uninstall", "status"])]
+    pub install: bool,
+
+    /// Disable and remove the systemd user service for the current
+    /// workspace (Linux only).
+    #[arg(long, conflicts_with_all = ["status"])]
+    pub uninstall: bool,
+
+    /// Print the systemd user service status for the current workspace
+    /// (Linux only).
+    #[arg(long)]
+    pub status: bool,
+
+    /// Do not spawn the in-process worker. Use when you already run
+    /// `omakure queue worker` elsewhere.
+    #[arg(long = "no-worker")]
+    pub no_worker: bool,
+
+    /// Number of worker threads for the in-process worker (default 1).
+    #[arg(long, default_value_t = 1)]
+    pub concurrency: u32,
+
+    /// Test convenience: run a single scheduler tick, enqueue whatever is
+    /// due, then exit. Hidden from --help. Used by integration tests.
     #[arg(long, hide = true)]
     pub once: bool,
 }

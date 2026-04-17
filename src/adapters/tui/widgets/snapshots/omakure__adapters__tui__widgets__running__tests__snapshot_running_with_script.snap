@@ -1,0 +1,14 @@
+---
+source: src/adapters/tui/widgets/running.rs
+expression: terminal.backend()
+---
+"┌Executing───────────────────────────────────────┐"
+"│               ⡀ Running script...              │"
+"│                                                │"
+"│                Script: deploy.sh               │"
+"│               Args: --target prod              │"
+"│                                                │"
+"│                  Please wait.                  │"
+"│                                                │"
+"│                                                │"
+"└────────────────────────────────────────────────┘"

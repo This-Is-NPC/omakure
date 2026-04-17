@@ -1,0 +1,17 @@
+---
+source: src/adapters/tui/widgets/envs.rs
+assertion_line: 273
+expression: terminal.backend()
+---
+"┌Environments──────────────────────────────────────────────────────────────────┐"
+"│┌Status──────────────────────────────────────────────────────────────────────┐│"
+"││Dir: /tmp/omakure_envs_snapshot_empty/.omaken/envs                          ││"
+"││Active: <none>                                                              ││"
+"││Defaults: 0                                                                 ││"
+"│└────────────────────────────────────────────────────────────────────────────┘│"
+"│┌Files────────────────────────────────┐┌Preview──────────────────────────────┐│"
+"││No environment files found.          ││No environment files found.          ││"
+"│└─────────────────────────────────────┘└─────────────────────────────────────┘│"
+"│Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc ba│"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"

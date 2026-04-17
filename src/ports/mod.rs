@@ -38,3 +38,25 @@ pub struct ScriptRunOutput {
 pub trait ScriptRunner {
     fn run(&self, script: &Path, args: &[String]) -> AppResult<ScriptRunOutput>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_script_repository_is_object_safe() {
+        fn _assert_object_safe(_: &dyn ScriptRepository) {}
+    }
+
+    #[test]
+    fn test_script_runner_is_object_safe() {
+        fn _assert_object_safe(_: &dyn ScriptRunner) {}
+    }
+
+    #[test]
+    fn test_workspace_entry_kind_equality() {
+        assert_eq!(WorkspaceEntryKind::Directory, WorkspaceEntryKind::Directory);
+        assert_eq!(WorkspaceEntryKind::Script, WorkspaceEntryKind::Script);
+        assert_ne!(WorkspaceEntryKind::Directory, WorkspaceEntryKind::Script);
+    }
+}

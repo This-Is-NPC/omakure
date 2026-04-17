@@ -143,3 +143,110 @@ fn render_field_boxes(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         y = y.saturating_add(box_height);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::domain::Field;
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    #[test]
+    fn snapshot_field_input_with_fields() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.selected_script = Some(PathBuf::from("/scripts/deploy.sh"));
+        app.field_input.schema_name = Some("Deploy".to_string());
+        app.field_input.fields = vec![
+            Field {
+                name: "target".to_string(),
+                prompt: Some("Target environment".to_string()),
+                kind: "string".to_string(),
+                order: Some(0),
+                required: Some(true),
+                default: None,
+                choices: None,
+                arg: None,
+            },
+            Field {
+                name: "dry_run".to_string(),
+                prompt: Some("Dry run?".to_string()),
+                kind: "boolean".to_string(),
+                order: Some(1),
+                required: None,
+                default: Some("false".to_string()),
+                choices: None,
+                arg: None,
+            },
+        ];
+        app.field_input.field_inputs = vec!["prod".to_string(), String::new()];
+        app.field_input.field_index = 0;
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_field_input(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn render_field_input_paginates_when_many_fields() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.fields = (0..6)
+            .map(|i| Field {
+                name: format!("f{}", i),
+                prompt: None,
+                kind: "string".to_string(),
+                order: Some(i),
+                required: None,
+                default: Some(format!("d{}", i)),
+                choices: None,
+                arg: None,
+            })
+            .collect();
+        app.field_input.field_inputs = vec![String::new(); 6];
+        app.field_input.field_index = 5;
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_field_input(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn snapshot_field_input_with_error() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.error = Some("Validation failed: target is required".to_string());
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_field_input(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+}

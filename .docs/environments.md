@@ -10,7 +10,7 @@ Environment defaults live in `.omaken/envs/*.conf`. The active file name is stor
 
 ## Switch environments
 
-Use the TUI (Alt+E) to select the active file.
+Use the TUI (`Ctrl+/` then `e`) to select the active file.
 
 ## Environments UI
 
@@ -57,7 +57,7 @@ The session env override is **read-only**:
 - It is never copied into `.omaken/envs/`.
 - It never updates `.omaken/envs/active`.
 - It never creates or deletes any file inside the scripts root.
-- The Environments screen (`Alt+E`) keeps showing the global
+- The Environments screen (`Ctrl+/` then `e`) keeps showing the global
   `.omaken/envs/` list. `omakure.conf` is not listed there and cannot be
   edited from the TUI.
 - The session override always wins for the duration of the session, so

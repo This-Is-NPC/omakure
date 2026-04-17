@@ -86,3 +86,86 @@ pub(crate) fn ensure_python_installed() -> Result<(), ScriptError> {
         &format!("Install Python and ensure {} is in PATH", program),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ensure_command_success() {
+        let result = ensure_command("echo", &["hello"], "echo should exist");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ensure_command_not_found() {
+        let result = ensure_command(
+            "this_command_does_not_exist_abc123",
+            &[],
+            "should not be found",
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ScriptError::DependencyMissing { name, .. } => {
+                assert_eq!(name, "this_command_does_not_exist_abc123");
+            }
+            other => panic!("expected DependencyMissing, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_ensure_command_check_failed() {
+        let result = ensure_command("false", &[], "should fail");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ScriptError::DependencyCheckFailed { name, .. } => {
+                assert_eq!(name, "false");
+            }
+            other => panic!("expected DependencyCheckFailed, got {:?}", other),
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_ensure_bash_installed() {
+        assert!(ensure_bash_installed().is_ok());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_ensure_git_installed() {
+        assert!(ensure_git_installed().is_ok());
+    }
+
+    #[test]
+    fn test_ensure_command_check_failed_with_non_empty_stderr() {
+        // `bash -c 'echo boom 1>&2; exit 1'` exits non-zero with stderr.
+        let result = ensure_command("bash", &["-c", "echo boom 1>&2; exit 1"], "hint");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ScriptError::DependencyCheckFailed { name, message } => {
+                assert_eq!(name, "bash");
+                assert!(message.contains("boom"));
+            }
+            other => panic!("expected DependencyCheckFailed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_ensure_powershell_installed_returns_result() {
+        // Only assert that the call returns a Result; pwsh may or may not
+        // be installed in the dev environment. The point is to exercise
+        // the wrapper code path.
+        let _ = ensure_powershell_installed();
+    }
+
+    #[test]
+    fn test_ensure_python_installed_returns_result() {
+        let _ = ensure_python_installed();
+    }
+
+    #[test]
+    fn test_ensure_jq_installed_returns_result() {
+        let _ = ensure_jq_installed();
+    }
+}

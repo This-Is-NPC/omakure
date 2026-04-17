@@ -106,4 +106,91 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn returns_widget_data_from_global_widget_table() {
+        let dir = unique_dir("global_widget");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        std::fs::write(
+            dir.join("index.lua"),
+            r#"
+widget = {
+  title = "Global Widget",
+  lines = { "one", "two" }
+}
+"#,
+        )
+        .expect("write index.lua");
+
+        let widget = load_widget(&dir)
+            .expect("widget should load")
+            .expect("widget should be present");
+        assert_eq!(widget.title, "Global Widget");
+        assert_eq!(widget.lines, vec!["one".to_string(), "two".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn returns_widget_data_from_global_title_and_lines() {
+        let dir = unique_dir("global_fields");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        std::fs::write(
+            dir.join("index.lua"),
+            r#"
+title = "Top Level"
+lines = { "alpha", "beta", "gamma" }
+"#,
+        )
+        .expect("write index.lua");
+
+        let widget = load_widget(&dir)
+            .expect("widget should load")
+            .expect("widget should be present");
+        assert_eq!(widget.title, "Top Level");
+        assert_eq!(widget.lines.len(), 3);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn invalid_widget_without_required_fields_returns_error() {
+        let dir = unique_dir("missing_fields");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        std::fs::write(dir.join("index.lua"), "return { title = 'Oops' }")
+            .expect("write index.lua");
+
+        let err = load_widget(&dir).unwrap_err();
+        assert!(err.contains("missing `lines`"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn non_table_result_without_globals_returns_contract_error() {
+        let dir = unique_dir("wrong_shape");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        std::fs::write(dir.join("index.lua"), "return 42").expect("write index.lua");
+
+        let err = load_widget(&dir).unwrap_err();
+        assert!(err.contains("must return a table"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn invalid_lines_table_returns_sequence_error() {
+        let dir = unique_dir("bad_lines");
+        std::fs::create_dir_all(&dir).expect("create dir");
+        std::fs::write(
+            dir.join("index.lua"),
+            "return { title = 'Oops', lines = { 'ok', { nested = true } } }",
+        )
+        .expect("write index.lua");
+
+        let err = load_widget(&dir).unwrap_err();
+        assert!(err.to_lowercase().contains("string"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

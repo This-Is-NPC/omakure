@@ -7,6 +7,7 @@ use ratatui::Frame;
 use super::super::app::App;
 use super::super::theme::{self, Theme};
 use super::common::{horizontal_split, standard_screen_layout};
+use super::table_style;
 
 fn build_preview_lines(app: &App, theme: &Theme) -> Vec<Line<'static>> {
     if let Some(err) = app.environment.preview_error.as_deref() {
@@ -76,7 +77,7 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
     let chunks = standard_screen_layout(inner, info_height, 2);
 
     let info = Paragraph::new(info_lines)
-        .block(Block::default().borders(Borders::ALL).title("Status"))
+        .block(table_style::block("Status", theme))
         .wrap(Wrap { trim: true });
     frame.render_widget(info, chunks[0]);
 
@@ -84,7 +85,7 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
 
     if app.environment.entries.is_empty() {
         let empty = Paragraph::new("No environment files found.")
-            .block(Block::default().borders(Borders::ALL).title("Files"))
+            .block(table_style::block("Files", theme))
             .wrap(Wrap { trim: true });
         frame.render_widget(empty, files_chunks[0]);
     } else {
@@ -110,22 +111,166 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Files"))
-            .highlight_style(theme.selection_style())
+            .block(table_style::block("Files", theme))
+            .highlight_style(table_style::selection_style(theme))
             .highlight_symbol(theme::selection_symbol_str());
         frame.render_stateful_widget(list, files_chunks[0], &mut app.environment.list_state);
     }
 
     let preview_lines = build_preview_lines(app, theme);
     let preview = Paragraph::new(preview_lines)
-        .block(Block::default().borders(Borders::ALL).title("Preview"))
+        .block(table_style::block("Preview", theme))
         .wrap(Wrap { trim: false })
         .scroll((app.environment.preview_scroll, 0));
     frame.render_widget(preview, files_chunks[1]);
 
-    let footer = Paragraph::new(
-        "Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc/q back",
-    )
-    .style(theme.text_secondary());
+    let footer_text = if app.prefix_pending {
+        "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit"
+    } else {
+        "Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc back, Ctrl+/ nav"
+    };
+    let footer = Paragraph::new(footer_text).style(theme.text_secondary());
     frame.render_widget(footer, chunks[2]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::ports::EnvFile;
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn snapshot_root(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("omakure_envs_snapshot_{label}"))
+    }
+
+    #[test]
+    fn snapshot_render_envs_with_files() {
+        let root = snapshot_root("with_files");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::Environments;
+        app.environment.entries = vec![
+            EnvFile {
+                name: "dev.conf".to_string(),
+            },
+            EnvFile {
+                name: "prod.conf".to_string(),
+            },
+        ];
+        app.environment.list_state.select(Some(0));
+        app.environment.preview_lines = vec![Line::from("HOST=localhost"), Line::from("PORT=3000")];
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_envs(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn build_preview_lines_handles_error_empty_and_lines() {
+        let root = snapshot_root("preview_branches");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        let theme = app.theme.clone();
+
+        // Error branch.
+        app.environment.preview_error = Some("io error".into());
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 2);
+
+        // No entries branch.
+        app.environment.preview_error = None;
+        app.environment.entries.clear();
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 1);
+
+        // Entries present, but empty preview lines.
+        app.environment.entries = vec![EnvFile {
+            name: "x.conf".into(),
+        }];
+        app.environment.preview_lines.clear();
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 1);
+
+        // Has preview lines.
+        app.environment.preview_lines = vec![Line::from("FOO=bar")];
+        let lines = build_preview_lines(&app, &theme);
+        assert_eq!(lines.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn render_envs_with_active_marker_and_error_info() {
+        let root = snapshot_root("active_marker");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.environment.entries = vec![
+            EnvFile {
+                name: "dev.conf".into(),
+            },
+            EnvFile {
+                name: "prod.conf".into(),
+            },
+        ];
+        app.environment.config = Some(crate::ports::EnvironmentConfig {
+            envs_dir: root.clone(),
+            active: Some("dev.conf".into()),
+            defaults: std::collections::HashMap::new(),
+            session_conf_path: None,
+        });
+        app.environment.error = Some("background failure".into());
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_envs(f, f.size(), &mut app, &theme))
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn snapshot_render_envs_empty() {
+        let root = snapshot_root("empty");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(root.clone());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::Environments;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_envs(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

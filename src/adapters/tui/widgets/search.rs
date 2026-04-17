@@ -8,6 +8,7 @@ use super::super::theme::{self, Theme};
 use super::common::{horizontal_split, standard_screen_layout};
 use super::schema;
 use super::spinner::{spinner_span, SpinnerKind};
+use super::table_style;
 use crate::search_index::{SearchDetails, SearchResult, SearchStatus};
 
 pub(crate) fn render_search(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
@@ -58,7 +59,7 @@ fn render_search_body(frame: &mut Frame, area: Rect, app: &mut App, theme: &Them
             vec![Line::from("No scripts found for this search.")]
         };
         let empty = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL).title("Results"))
+            .block(table_style::block("Results", theme))
             .wrap(Wrap { trim: true });
         frame.render_widget(empty, area);
         return;
@@ -79,8 +80,8 @@ fn render_search_results(frame: &mut Frame, area: Rect, app: &mut App, theme: &T
         .collect();
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Results"))
-        .highlight_style(theme.selection_style())
+        .block(table_style::block("Results", theme))
+        .highlight_style(table_style::selection_style(theme))
         .highlight_symbol(theme::selection_symbol_str());
 
     frame.render_stateful_widget(list, area, &mut app.search.list_state);
@@ -103,7 +104,7 @@ fn render_search_schema(frame: &mut Frame, area: Rect, app: &App, theme: &Theme)
         ),
         _ => (None, None),
     };
-    schema::render_schema_preview(frame, area, &title, preview.as_ref(), error, theme);
+    schema::render_schema_preview(frame, area, &title, preview.as_ref(), error, theme, 0);
 }
 
 fn render_search_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -168,5 +169,229 @@ fn build_schema_preview_from_result(result: &SearchResult) -> SchemaPreview {
         fields: Vec::new(),
         outputs: Vec::new(),
         queue: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::search_index::{SearchDetails, SearchField};
+    use crate::use_cases::ScriptService;
+    use pretty_assertions::assert_eq;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_result_label_same_name_and_path() {
+        let r = SearchResult {
+            script_path: PathBuf::from("deploy.sh"),
+            display_name: "deploy.sh".to_string(),
+            description: None,
+            tags: vec![],
+            schema_error: None,
+        };
+        assert_eq!(result_label(&r), "deploy.sh");
+    }
+
+    #[test]
+    fn test_result_label_different_name() {
+        let r = SearchResult {
+            script_path: PathBuf::from("deploy.sh"),
+            display_name: "Deploy App".to_string(),
+            description: None,
+            tags: vec![],
+            schema_error: None,
+        };
+        assert_eq!(result_label(&r), "Deploy App (deploy.sh)");
+    }
+
+    #[test]
+    fn test_schema_title_none() {
+        assert_eq!(schema_title(None), "Schema");
+    }
+
+    #[test]
+    fn test_schema_title_with_result() {
+        let r = SearchResult {
+            script_path: PathBuf::from("infra/deploy.sh"),
+            display_name: "Deploy".to_string(),
+            description: None,
+            tags: vec![],
+            schema_error: None,
+        };
+        assert_eq!(schema_title(Some(&r)), "Schema: deploy.sh");
+    }
+
+    #[test]
+    fn test_build_schema_preview_from_details() {
+        let details = SearchDetails {
+            display_name: "Deploy".to_string(),
+            description: Some("Deploy app".to_string()),
+            tags: vec!["ops".to_string()],
+            fields: vec![SearchField {
+                name: "target".to_string(),
+                prompt: Some("Target".to_string()),
+                kind: "string".to_string(),
+                required: true,
+            }],
+            schema_error: None,
+        };
+        let preview = build_schema_preview_from_details(&details);
+        assert_eq!(preview.name, "Deploy");
+        assert_eq!(preview.fields.len(), 1);
+        assert!(preview.fields[0].required);
+    }
+
+    #[test]
+    fn test_build_schema_preview_from_result() {
+        let r = SearchResult {
+            script_path: PathBuf::from("deploy.sh"),
+            display_name: "Deploy".to_string(),
+            description: Some("desc".to_string()),
+            tags: vec!["ops".to_string()],
+            schema_error: None,
+        };
+        let preview = build_schema_preview_from_result(&r);
+        assert_eq!(preview.name, "Deploy");
+        assert!(preview.fields.is_empty()); // result has no field details
+    }
+
+    #[test]
+    fn snapshot_render_search_empty() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::Search;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_search(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn render_search_with_indexing_status() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.search.status = SearchStatus::Indexing;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_search(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_search_with_ready_status() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.search.status = SearchStatus::Ready { script_count: 7 };
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_search(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_search_with_error_status_and_search_error() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.search.status = SearchStatus::Error("io fail".into());
+        app.search.error = Some("query failed".into());
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_search(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_search_with_details_renders_full_schema_panel() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.search.results = vec![SearchResult {
+            script_path: PathBuf::from("deploy.sh"),
+            display_name: "Deploy".to_string(),
+            description: None,
+            tags: vec![],
+            schema_error: None,
+        }];
+        app.search.list_state.select(Some(0));
+        app.search.details = Some(SearchDetails {
+            display_name: "Deploy".into(),
+            description: Some("Ship".into()),
+            tags: vec!["ops".into()],
+            fields: vec![SearchField {
+                name: "target".into(),
+                prompt: None,
+                kind: "string".into(),
+                required: true,
+            }],
+            schema_error: None,
+        });
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_search(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn snapshot_render_search_with_results() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::Search;
+        app.search.query = "deploy".to_string();
+        app.search.results = vec![SearchResult {
+            script_path: PathBuf::from("deploy.sh"),
+            display_name: "Deploy App".to_string(),
+            description: Some("Deploy to production".to_string()),
+            tags: vec!["ops".to_string()],
+            schema_error: None,
+        }];
+        app.search.list_state.select(Some(0));
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_search(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
     }
 }

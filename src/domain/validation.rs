@@ -62,7 +62,7 @@ mod tests {
             name: name.to_string(),
             prompt: None,
             kind: kind.to_string(),
-            order: 1,
+            order: Some(1),
             required: Some(required),
             default: None,
             choices: None,
@@ -160,6 +160,13 @@ mod tests {
         let field = make_field("flag", "bool", false);
         let result = normalize_input(&field, "maybe");
         assert!(matches!(result.unwrap_err(), SchemaError::InvalidBoolean));
+    }
+
+    #[test]
+    fn test_normalize_input_unknown_kind_passes_through() {
+        let field = make_field("anything", "weird", false);
+        let result = normalize_input(&field, "value").unwrap();
+        assert_eq!(result, Some("value".to_string()));
     }
 
     #[test]

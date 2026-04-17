@@ -1,9 +1,26 @@
 [tools]
+powershell = "latest"
 rust = "latest"
 
 [tasks.tui]
 description = "Start the TUI interface"
 run = "cargo run --bin omakure"
+
+[tasks.dev]
+description = "Build, start the daemon, tail its log, and open the TUI (stops the daemon on exit)"
+run = "./.scripts/dev-daemon.sh"
+
+[tasks.daemon-start]
+description = "Build and start the scheduler daemon in the background"
+run = ["cargo build --bin omakure", "./target/debug/omakure serve -d"]
+
+[tasks.daemon-stop]
+description = "Stop the scheduler daemon"
+run = "./target/debug/omakure serve --stop"
+
+[tasks.daemon-log]
+description = "Tail the daemon log"
+run = "tail -f .omaken/daemon.log"
 
 [tasks.build]
 description = "Build the project in debug mode"
@@ -15,8 +32,12 @@ run = "cargo test"
 
 [tasks.lint]
 description = "Run clippy and check formatting"
-run = ["cargo clippy -- -D warnings", "cargo fmt --check"]
+run = ["cargo clippy --all-targets -- -D warnings", "cargo fmt --check"]
 
 [tasks.install]
 description = "Install omakure locally"
 run = "cargo install --path ."
+
+[tasks.coverage]
+description = "Run tests with tarpaulin and generate HTML coverage report"
+run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/adapters/tui/mod.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/omaken.rs' 'src/cli/update.rs' --skip-clean"

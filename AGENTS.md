@@ -19,8 +19,16 @@ Omakure is a Rust TUI application for navigating and executing automation script
 ```bash
 cargo build               # Build debug
 cargo build --release     # Build release
-cargo run                 # Run TUI (uses repo scripts/ in debug mode)
-cargo test                # Run all tests (28 tests)
+cargo run                 # Run TUI (uses repo scripts/ as workspace in debug mode)
+cargo test                # Run all tests (~730 inline + 6 integration)
+
+# Task runner shortcuts (see mise.toml)
+mise run dev              # Build, start scheduler daemon, tail log, open TUI
+mise run daemon-start     # Background `omakure serve -d`
+mise run daemon-stop      # `omakure serve --stop`
+mise run daemon-log       # Tail .omaken/daemon.log
+mise run coverage         # cargo tarpaulin HTML report
+mise run lint             # clippy -D warnings + fmt --check
 ```
 
 ### Environment Variables
@@ -46,53 +54,66 @@ Ports-and-adapters (hexagonal) architecture:
 
 ```
 src/
-├── cli/                  # CLI subcommands
+├── cli/                      # CLI subcommands
 │   ├── mod.rs
-│   ├── args.rs           # clap definitions for the whole CLI
-│   ├── common.rs         # Shared help text/constants
-│   ├── completion.rs     # Shell completion generation
-│   ├── config.rs         # Config/env display (+ --json envelope)
-│   ├── describe.rs       # `omakure describe <script>` (AI verb)
-│   ├── doctor.rs         # Runtime checks
-│   ├── help_ai.rs        # `omakure help-ai` AI capability discovery
-│   ├── history.rs        # `omakure history list|show|tail` (AI verb)
-│   ├── init.rs           # Script template generation (+ --schema-json/--body-stdin/--force)
-│   ├── json.rs           # Single JSON envelope helper + stable error codes
-│   ├── list.rs           # `omakure scripts` (+ --json envelope)
-│   ├── omaken.rs         # Omaken flavor list/install commands
-│   ├── run.rs            # Headless script execution (+ --actor/--reason/--json/--no-prompt)
-│   ├── search.rs         # `omakure search <query>` (AI verb)
-│   ├── uninstall.rs      # Binary removal
-│   └── update.rs         # Self-update from GitHub
-├── domain/               # Core types: Schema, Field, normalize_input
-│   └── mod.rs
-├── ports/                # Traits: ScriptRepository, ScriptRunner
-│   └── mod.rs
-├── use_cases/            # ScriptService orchestration
-│   └── mod.rs
+│   ├── args.rs               # clap definitions for the whole CLI (long_about docs)
+│   ├── json.rs               # Single JSON envelope helper + stable error codes
+│   ├── run.rs                # `omakure run` — headless execution
+│   ├── queue.rs              # `omakure queue add|cancel|dead-letter|worker|stats`
+│   ├── serve.rs              # `omakure serve` — cron scheduler daemon
+│   ├── serve_autostart.rs    # systemd user service install/uninstall/status (Linux)
+│   ├── trace.rs              # `omakure trace` — in-script structured event writer
+│   ├── history.rs            # `omakure history list|show|tail|stats|traces`
+│   ├── describe.rs           # `omakure describe <script>` (AI verb)
+│   ├── search.rs             # `omakure search <query>` (AI verb, --tag AND filter)
+│   ├── list.rs               # `omakure scripts` listing (+ --json, --tag)
+│   ├── init.rs               # Script template generation (+ --schema-json/--body-stdin/--force)
+│   ├── help_ai.rs            # `omakure help-ai` — capability discovery from clap metadata
+│   ├── config.rs             # `omakure config` — resolved paths (+ --json)
+│   ├── doctor.rs             # `omakure doctor` — runtime + schema checks
+│   ├── theme.rs              # `omakure theme list|set|preview|path`
+│   ├── omaken.rs             # `omakure list`/`omakure install` — Omaken flavor management
+│   ├── update.rs             # Self-update from GitHub releases
+│   └── uninstall.rs          # Binary removal (+ optional --scripts wipe)
+├── domain/                   # Core types, no I/O
+│   ├── mod.rs
+│   ├── schema.rs             # Schema, Field, Schedule, OutputField, QueueSpec
+│   ├── parsing.rs            # Extract schema block + JSON parse
+│   ├── validation.rs         # Field input normalization
+│   └── schedule.rs           # Cron normalize/parse + next_fire_after
+├── ports/
+│   ├── mod.rs                # ScriptRepository, ScriptRunner
+│   └── environment.rs        # EnvironmentRepository, EnvironmentConfig
+├── use_cases/
+│   ├── mod.rs                # ScriptService orchestration
+│   └── environment.rs        # EnvironmentService
 ├── adapters/
-│   ├── environments.rs   # Environment config loading
-│   ├── script_runner.rs  # Script execution
-│   ├── system_checks.rs  # Runtime dependency checks
-│   ├── workspace_repository.rs  # Filesystem repository impl
-│   └── tui/              # Terminal UI (ratatui) — history screen reads from runs.rs
-│       ├── app.rs        # App state and Screen enum
-│       ├── events.rs     # Keyboard event handlers
+│   ├── environments.rs       # Environment config loading + sensitive-key masking
+│   ├── omarchy.rs            # Omarchy theme detection + import
+│   ├── script_runner.rs      # MultiScriptRunner (bash/ps1/py command builder)
+│   ├── system_checks.rs      # Runtime dependency checks (git, bash, jq, pwsh, python)
+│   ├── workspace_repository.rs  # Filesystem-backed ScriptRepository
+│   └── tui/                  # Terminal UI (ratatui)
+│       ├── app.rs            # App state + Screen enum + in-place schedule toggle
+│       ├── events.rs         # Keyboard event handlers
 │       ├── mod.rs
-│       ├── theme.rs      # Colors and styles
-│       ├── ui.rs         # Render functions
-│       └── widgets/      # UI widget components
-├── error.rs              # Custom error types (AppError, AppResult)
-├── util.rs               # Shared utilities (ps_quote, TempDirGuard, etc.)
-├── workspace.rs          # Workspace layout helpers
-├── runs.rs               # SQLite-backed run state machine + structured trace storage
-├── run_executor.rs       # Shared execution helper used by `omakure run` and `omakure queue worker`
-├── search_index.rs       # SQLite-backed script search
-├── lua_widget.rs         # Lua script widget execution
-├── runtime.rs            # Script kind detection and command building
-├── installer.rs          # Windows installer entrypoint (copies binary, updates PATH)
-├── app_meta.rs           # App version constant
-└── main.rs               # CLI routing and TUI entry
+│       ├── theme.rs          # Colors and styles
+│       ├── ui.rs             # Render dispatch
+│       ├── state/            # Per-screen state (navigation, search, history, …)
+│       └── widgets/          # Stateless renderers incl. schedules.rs, activity_grid.rs,
+│                              # dashboards.rs, history.rs, scripts.rs, schema.rs, …
+├── error.rs                  # AppError / SchemaError / ScriptError / EnvironmentError
+├── util.rs                   # Shared helpers (ps_quote, TempDirGuard, set_executable_permissions)
+├── workspace.rs              # Workspace layout (global root vs. session scripts root)
+├── runs.rs                   # SQLite run state machine + structured trace storage
+├── run_executor.rs           # Shared child-process lifecycle (run + worker + scheduler)
+├── search_index.rs           # SQLite-backed script search + background rebuild
+├── lua_widget.rs             # Lua 5.4 widget loader for directory widgets
+├── runtime.rs                # Script kind detection and command building
+├── theme_config.rs           # Global ~/.config/omakure/config.toml handling
+├── installer.rs              # Standalone installer binary (omakure-installer)
+├── app_meta.rs               # App version + repo URL constants
+└── main.rs                   # CLI routing, scripts-dir resolution, TUI entry
 ```
 
 > **Removed in this release:** `src/history.rs` and the `HistoryEntry`
@@ -139,7 +160,8 @@ pub(crate) enum Screen {
     Search,         // Ctrl+S fuzzy search
     Environments,   // Alt+E environment selector
     FieldInput,     // Script parameter form
-    History,        // H key execution history
+    History,        // H key — execution history (List / Dashboards / Activity grid views)
+    Schedules,      // c key — cron schedules; Space toggles Enabled in place
     Running,        // Script executing
     RunResult,      // Execution output display
     Error,          // Error display
@@ -153,7 +175,7 @@ pub(crate) enum Screen {
 - **Structs**: PascalCase (`WorkspaceEntry`, `ScriptService`)
 - **Functions**: snake_case (`load_schema`, `run_script`)
 - **Modules**: snake_case (`script_runner`, `workspace_repository`)
-- **Constants**: SCREAMING_SNAKE_CASE (`BRAND_GRADIENT_START`, `ENV_HELP`)
+- **Constants**: SCREAMING_SNAKE_CASE (`BRAND_GRADIENT_START` in `tui/theme.rs`, `SCHEMA_VERSION` in `cli/json.rs`)
 
 ### Visibility
 
@@ -211,11 +233,13 @@ Scripts directory structure:
 │   │   ├── active            # Current env name
 │   │   ├── dev.conf          # KEY=value defaults
 │   │   └── env_template.conf
+│   ├── daemon.pid            # `omakure serve` PID lock (created by the daemon)
+│   ├── daemon.log            # Structured scheduler log (RFC3339 lines)
 │   └── <folder>/
 │       └── index.lua         # Optional Lua widget
 ├── .history/
-│   ├── search-index.sqlite   # Script search DB
-│   └── *.json                # Execution logs
+│   ├── runs.sqlite           # Run state machine + structured traces
+│   └── search-index.sqlite   # Script search DB
 └── <scripts and folders>
 ```
 
@@ -267,23 +291,18 @@ Widgets load asynchronously in background threads.
 
 ## Adding a New CLI Subcommand
 
-1. Create `src/cli/mycommand.rs`
-2. Add `pub mod mycommand;` to `src/cli/mod.rs`
-3. Add match arm in `main()` for the command string
-4. Implement:
-   - `pub struct MyCommandOptions { ... }`
-   - `pub fn print_help() { ... }` - use `super::ENV_HELP` constant
-   - `pub fn parse_args(...) -> Result<MyCommandOptions, Box<dyn Error>>`
-   - `pub fn run(options: MyCommandOptions) -> Result<(), Box<dyn Error>>`
+Commands are driven by clap (derive). Steps:
 
-Example pattern from `src/cli/doctor.rs`:
-```rust
-use super::ENV_HELP;
+1. Declare the subcommand in `src/cli/args.rs`:
+   - Add a variant to the `Commands` enum with `/// Short about` and an optional `long_about` via doc comment (blank line after the short line).
+   - If the subcommand takes flags, add a `#[derive(Args, Debug)]` struct and attach it to the variant (e.g. `MyCmd(MyCmdArgs)`).
+2. Create `src/cli/mycmd.rs` with `pub fn run(scripts_dir: PathBuf, args: MyCmdArgs, json_output: bool) -> Result<(), Box<dyn Error>>`.
+3. Register the module in `src/cli/mod.rs` (`pub mod mycmd;`).
+4. Wire the dispatch arm in `src/main.rs` under `match cli.command { ... }`.
+5. If the subcommand emits JSON, honor the `json_output` flag and use helpers in `src/cli/json.rs` (`json::print_ok(...)` / `json::print_err(code, msg)`). Use a stable code from `cli::json::codes`.
+6. If it targets an AI agent, add the verb name to `AI_VERBS` in `src/cli/help_ai.rs` so it surfaces in `omakure help-ai`.
 
-pub fn print_help() {
-    println!("Usage: omakure mycommand\n\n{ENV_HELP}");
-}
-```
+Reference patterns: `src/cli/serve.rs` (long-running daemon, lock file, signal handling), `src/cli/run.rs` (synchronous fast path), `src/cli/history.rs` (subcommands-within-subcommands with JSON envelope).
 
 ## Adding a New TUI Screen
 
@@ -342,11 +361,18 @@ Run all tests:
 cargo test
 ```
 
-Tests are located in:
-- `src/domain/mod.rs` - Schema parsing, input normalization (12 tests)
-- `src/runs.rs` - SQLite run log: schema init, insert/get/query, legacy json cleanup, run id generation, timestamp formatting
-- `src/util.rs` - PowerShell quoting (3 tests)
-- `src/error.rs` - Error type conversions (3 tests)
+Tests are inline (`#[cfg(test)] mod tests`) in most source files. Highlights:
+
+- `src/domain/schema.rs`, `src/domain/parsing.rs`, `src/domain/validation.rs`, `src/domain/schedule.rs` — schema + cron parsing, input normalization
+- `src/runs.rs` — state machine transitions, legacy json cleanup, rebuild-legacy-schema, traces, queries (45+ tests)
+- `src/cli/serve.rs` — `scheduler_tick`, lock acquire/reclaim, overlap skip
+- `src/cli/serve_autostart.rs` — systemd unit naming + rendering
+- `src/cli/queue.rs`, `src/cli/history.rs`, `src/cli/init.rs`, `src/cli/run.rs` — subcommand surface
+- `src/adapters/tui/app.rs` — state machine, in-place schedule toggle
+- `src/adapters/tui/widgets/activity_grid.rs`, `widgets/schedules.rs`, `widgets/dashboards.rs` — rendering
+- `tests/cli_positional_path.rs` — 6 integration tests for the positional-path mode
+
+Coverage is measured via `mise run coverage` (cargo-tarpaulin). Full test run: `mise run test`.
 
 ## Gotchas
 
@@ -370,12 +396,19 @@ Tests are located in:
 
 Detailed docs in `.docs/`:
 
-- `development.md` - Dev setup and architecture overview
-- `how-to-create-a-script.md` - Script template and schema guide
-- `environments.md` - Environment defaults system
-- `lua-widgets.md` - Widget format and examples
-- `workspace.md` - Workspace structure
-- `usage.md` - CLI usage
+- `architecture.md` — tech stack, patterns, code metrics, infrastructure
+- `requirements.md` — implemented FRs, NFRs, and business rules (file-referenced)
+- `ai-interface.md` — JSON envelope contract and AI-facing verbs
+- `usage.md` — CLI usage (incl. `omakure serve` scheduler)
+- `installation.md` — install/update/uninstall flows
+- `workspace.md` — workspace structure (global vs. session)
+- `scripts-path.md` — scripts directory precedence
+- `environments.md` — environment defaults system
+- `how-to-create-a-script.md` — script template + schema guide (incl. `Schedule` block)
+- `how-it-works.md` — high-level overview
+- `lua-widgets.md` — widget format
+- `development.md` — dev workflow + mise tasks
+- `release-artifacts.md` — release archive naming
 
 ## File References
 

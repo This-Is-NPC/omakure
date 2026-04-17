@@ -349,6 +349,10 @@ fn parse_hex_color(value: &str) -> Result<Color, ThemeParseError> {
     Ok(Color::Rgb(red, green, blue))
 }
 
+pub(crate) fn selection_symbol_str() -> &'static str {
+    "> "
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,6 +400,140 @@ error = "#ffff00"
     }
 
     #[test]
+    fn parse_hex_color_accepts_short_form() {
+        let color = parse_hex_color("#abc").unwrap();
+        assert_eq!(color, Color::Rgb(0xaa, 0xbb, 0xcc));
+    }
+
+    #[test]
+    fn parse_hex_color_accepts_full_form_without_prefix() {
+        assert_eq!(
+            parse_hex_color("ffffff").unwrap(),
+            Color::Rgb(255, 255, 255)
+        );
+    }
+
+    #[test]
+    fn parse_hex_color_rejects_bad_length() {
+        let err = parse_hex_color("#ffff").unwrap_err();
+        assert!(matches!(err, ThemeParseError::InvalidHexLength(_)));
+        assert!(format!("{}", err).contains("invalid hex length"));
+    }
+
+    #[test]
+    fn parse_hex_color_rejects_invalid_value() {
+        let err = parse_hex_color("#zzzzzz").unwrap_err();
+        assert!(matches!(err, ThemeParseError::InvalidHexValue(_)));
+        assert!(format!("{}", err).contains("invalid hex value"));
+    }
+
+    #[test]
+    fn theme_load_error_displays_io_and_parse() {
+        let io_err =
+            ThemeLoadError::from(std::io::Error::new(std::io::ErrorKind::NotFound, "missing"));
+        assert!(format!("{}", io_err).contains("io error"));
+
+        let parse_err: toml::de::Error = toml::from_str::<i32>("not a number").unwrap_err();
+        let wrapped = ThemeLoadError::from(parse_err);
+        assert!(format!("{}", wrapped).contains("parse error"));
+    }
+
+    #[test]
+    fn fallback_default_theme_has_known_name() {
+        let theme = fallback_default_theme();
+        assert_eq!(theme.meta.name, "Omakure Default");
+    }
+
+    #[test]
+    fn theme_helpers_produce_styles_for_default() {
+        let theme = Theme::default();
+        let _ = theme.selection_style();
+        let _ = theme.selection_border_style();
+        let _ = theme.selection_symbol();
+        let _ = theme.text_secondary();
+        let _ = theme.text_muted();
+        let _ = theme.status_ok_style();
+        let _ = theme.status_fail_style();
+        let _ = theme.status_error_style();
+    }
+
+    #[test]
+    fn load_theme_from_path_reports_io_error_for_missing() {
+        let err = load_theme_from_path(Path::new("/definitely/not/a/theme.toml"));
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn load_theme_from_name_returns_some_for_existing_file() {
+        let tmp = std::env::temp_dir().join(format!(
+            "omakure_theme_load_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let path = tmp.join("custom.toml");
+        let body = builtin_theme_contents("default").unwrap();
+        std::fs::write(&path, body).unwrap();
+        let theme = load_theme_from_name("custom", &tmp).unwrap();
+        assert!(!theme.meta.name.is_empty());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn load_theme_with_dir_prefers_dir_over_builtin() {
+        let tmp = std::env::temp_dir().join(format!(
+            "omakure_theme_load_dir_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let path = tmp.join("nord.toml");
+        let body = builtin_theme_contents("default").unwrap();
+        std::fs::write(&path, body).unwrap();
+        let theme = load_theme(Some("nord"), Some(&tmp));
+        assert!(!theme.meta.name.is_empty());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn load_theme_falls_back_to_builtin_when_dir_missing() {
+        let theme = load_theme(Some("default"), None);
+        assert!(!theme.meta.name.is_empty());
+    }
+
+    #[test]
+    fn load_theme_system_falls_back_to_default_when_omarchy_missing() {
+        let theme = load_theme(Some("system"), None);
+        assert!(!theme.meta.name.is_empty());
+    }
+
+    #[test]
+    fn theme_file_path_appends_toml_extension() {
+        let p = theme_file_path(Path::new("/themes"), "nord");
+        assert_eq!(p, std::path::PathBuf::from("/themes/nord.toml"));
+    }
+
+    #[test]
+    fn hex_color_new_and_color_round_trip() {
+        let h = HexColor::new(Color::Rgb(1, 2, 3));
+        assert_eq!(h.color(), Color::Rgb(1, 2, 3));
+    }
+
+    #[test]
+    fn builtin_theme_lists_at_least_default() {
+        let names = builtin_theme_names();
+        assert!(names.contains(&"default"));
+        assert!(builtin_theme_contents("default").is_some());
+        assert!(builtin_theme_contents("__no_such_theme__").is_none());
+    }
+
+    #[test]
     fn load_theme_from_str_rejects_invalid_hex() {
         let toml = r##"
 [meta]
@@ -427,8 +565,4 @@ error = "#ffff00"
 "##;
         assert!(load_theme_from_str(toml).is_err());
     }
-}
-
-pub(crate) fn selection_symbol_str() -> &'static str {
-    "> "
 }

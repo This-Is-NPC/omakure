@@ -10,6 +10,7 @@ pub fn parse_schema(output: &str) -> Result<Schema, SchemaError> {
         let json = &output[start..];
         let mut deserializer = serde_json::Deserializer::from_str(json);
         if let Ok(schema) = Schema::deserialize(&mut deserializer) {
+            schema.validate()?;
             return Ok(schema);
         }
     }

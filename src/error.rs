@@ -59,6 +59,9 @@ pub enum SchemaError {
 
     #[error("Allowed values: {choices}")]
     InvalidChoice { choices: String },
+
+    #[error("Invalid cron expression `{expr}`: {reason}")]
+    InvalidCron { expr: String, reason: String },
 }
 
 /// Errors related to script execution.
@@ -144,6 +147,14 @@ mod tests {
         let err = AppError::from(io_err);
         assert!(matches!(err, AppError::Io(_)));
         assert!(format!("{}", err).contains("file not found"));
+    }
+
+    #[test]
+    fn test_app_error_from_owned_string() {
+        let owned: String = String::from("oops");
+        let err: AppError = owned.into();
+        assert!(matches!(err, AppError::General(_)));
+        assert_eq!(format!("{}", err), "oops");
     }
 
     #[test]

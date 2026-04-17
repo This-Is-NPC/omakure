@@ -9,6 +9,7 @@ use super::super::app::{App, ExecutionStatus, HistoryFocus, HistoryView};
 use super::super::theme::Theme;
 use super::common::{state_style, status_label_and_style};
 use super::dashboards::render_dashboards;
+use super::table_style;
 use crate::runs::{format_run_timestamp, RunRow};
 
 pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
@@ -33,15 +34,22 @@ pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme
         }
     }
 
-    let footer_text = match app.history.view {
-        HistoryView::List => match app.history.focus {
-            HistoryFocus::List => {
-                "Tab dashboards, Up/Down select, Enter view output, Alt+E envs, Esc/q back"
+    let footer_text = if app.prefix_pending {
+        "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit".to_string()
+    } else {
+        match app.history.view {
+            HistoryView::List => match app.history.focus {
+                HistoryFocus::List => {
+                    "Tab dashboards, Up/Down select, Enter view output, Esc back, Ctrl+/ nav"
+                        .to_string()
+                }
+                HistoryFocus::Output => {
+                    "Tab dashboards, Up/Down scroll, PgUp/PgDn, Esc return, Ctrl+/ nav".to_string()
+                }
+            },
+            HistoryView::Dashboards => {
+                "Tab list, Up/Down select script, e/Enter expand, Esc back, Ctrl+/ nav".to_string()
             }
-            HistoryFocus::Output => "Tab dashboards, Up/Down scroll, PgUp/PgDn, Esc return, q back",
-        },
-        HistoryView::Dashboards => {
-            "Tab list, Up/Down select script, e/Enter expand, Alt+E envs, Esc/q back"
         }
     };
     let footer = Paragraph::new(footer_text).style(theme.text_secondary());
@@ -57,57 +65,84 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
         return;
     }
 
-    let rows: Vec<Row> = app
+    // Resolve display names once so we can size the Script column to
+    // the widest row (clamped between a header-size floor and a cap
+    // that keeps the table from dominating very wide terminals).
+    let names: Vec<String> = app
         .history
         .entries
         .iter()
         .map(|entry| {
             let name = app.display_path(&PathBuf::from(&entry.script_path));
+            if matches!(entry.trigger, crate::runs::RunTrigger::Scheduled) {
+                format!("⏰ {name}")
+            } else {
+                name
+            }
+        })
+        .collect();
+
+    let rows: Vec<Row> = app
+        .history
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
             let date = format_run_timestamp(entry.started_at.unwrap_or(entry.enqueued_at));
             let state_label = entry.state.as_str();
             let state_text_style = state_style(theme, entry.state);
             let status = ExecutionStatus::from_run(entry);
             let (status_label, status_style) = status_label_and_style(&status, theme);
-            Row::new(vec![
+            let cells = vec![
                 Cell::from(Span::styled(state_label, state_text_style)),
                 Cell::from(Span::styled(status_label, status_style)),
                 Cell::from(Span::raw(date)),
-                Cell::from(Span::raw(name)),
+                Cell::from(Span::raw(names[i].clone())),
                 Cell::from(Span::raw(entry.actor.clone())),
-            ])
+            ];
+            Row::new(table_style::interleave_row_cells(cells, theme))
         })
         .collect();
 
-    let header = Row::new(vec![
-        Cell::from(Span::styled("State", theme.text_secondary())),
-        Cell::from(Span::styled("Status", theme.text_secondary())),
-        Cell::from(Span::styled("Date", theme.text_secondary())),
-        Cell::from(Span::styled("Script", theme.text_secondary())),
-        Cell::from(Span::styled("Actor", theme.text_secondary())),
-    ]);
+    let header = table_style::header_row_with_separators(
+        &["State", "Status", "Date", "Script", "Actor"],
+        area.width,
+        theme,
+    );
     let highlight_style = match app.history.focus {
-        HistoryFocus::List => theme.selection_style(),
+        HistoryFocus::List => table_style::selection_style(theme),
         HistoryFocus::Output => theme.text_muted(),
     };
     let highlight_symbol = if app.history.focus == HistoryFocus::List {
-        theme.selection_symbol()
+        table_style::selection_symbol(theme)
     } else {
         Span::styled("> ", highlight_style)
     };
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Length(HISTORY_STATE_WIDTH),
-            Constraint::Length(HISTORY_STATUS_WIDTH),
-            Constraint::Length(HISTORY_DATE_WIDTH),
-            Constraint::Min(HISTORY_MIN_SCRIPT_WIDTH),
-            Constraint::Length(HISTORY_ACTOR_WIDTH),
-        ],
-    )
-    .header(header)
-    .block(Block::default().borders(Borders::ALL).title("History"))
-    .highlight_style(highlight_style)
-    .highlight_symbol(highlight_symbol);
+    // Script column grows to fill remaining width so the table is
+    // responsive to the pane size. Min floor is the longest display
+    // name (with a sane lower bound so the header stays readable when
+    // history is empty) — content never truncates unless the pane is
+    // narrower than the data.
+    let script_min = names
+        .iter()
+        .map(|n| n.chars().count())
+        .max()
+        .unwrap_or(HISTORY_MIN_SCRIPT_WIDTH as usize)
+        .max(HISTORY_MIN_SCRIPT_WIDTH as usize) as u16;
+
+    let constraints = table_style::interleave_column_constraints(&[
+        Constraint::Length(HISTORY_STATE_WIDTH),
+        Constraint::Length(HISTORY_STATUS_WIDTH),
+        Constraint::Length(HISTORY_DATE_WIDTH),
+        Constraint::Min(script_min),
+        Constraint::Length(HISTORY_ACTOR_WIDTH),
+    ]);
+    let table = Table::new(rows, constraints)
+        .header(header)
+        .block(table_style::padded_block("History", theme))
+        .column_spacing(table_style::COLUMN_SPACING)
+        .highlight_style(highlight_style)
+        .highlight_symbol(highlight_symbol);
 
     frame.render_stateful_widget(table, area, &mut app.history.table_state);
 }
@@ -239,6 +274,7 @@ mod tests {
             lease_until: None,
             timeout_ms: None,
             cron_schedule_id: None,
+            trigger: crate::runs::RunTrigger::Manual,
             started_at: Some(0),
             finished_at: Some(0),
             duration_ms: Some(0),
@@ -274,5 +310,164 @@ mod tests {
         assert_eq!(format_args_human(r#"["--foo","bar"]"#), "--foo bar");
         // Garbage falls back to raw string.
         assert_eq!(format_args_human("not-json"), "not-json");
+    }
+
+    #[test]
+    fn format_run_output_empty_stdout_stderr() {
+        let r = row("", "", None);
+        assert_eq!(format_run_output(&r), "");
+    }
+
+    #[test]
+    fn format_run_output_only_stdout() {
+        let r = row("output\n", "", None);
+        let s = format_run_output(&r);
+        assert!(s.contains("STDOUT:"));
+        assert!(!s.contains("STDERR:"));
+    }
+
+    // --- Rendering tests ---
+
+    use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::workspace_repository::FsWorkspaceRepository;
+    use crate::use_cases::ScriptService;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tempfile::TempDir;
+
+    fn history_row(tmp: &TempDir, name: &str, state: RunState) -> RunRow {
+        RunRow {
+            run_id: format!("rid-{}", name),
+            script_path: format!("{}/{}", tmp.path().display(), name),
+            script_name: None,
+            args_json: "[]".into(),
+            actor: "human".into(),
+            reason: None,
+            state,
+            priority: 0,
+            enqueued_at: 1000,
+            worker_id: None,
+            lease_until: None,
+            timeout_ms: None,
+            cron_schedule_id: None,
+            trigger: crate::runs::RunTrigger::Manual,
+            started_at: Some(1000),
+            finished_at: Some(1100),
+            duration_ms: Some(100),
+            exit_code: Some(0),
+            success: Some(true),
+            stdout: "ok\n".to_string(),
+            stderr: String::new(),
+            error: None,
+            parent_run_id: None,
+            omakure_version: "test".into(),
+        }
+    }
+
+    #[test]
+    fn snapshot_render_history_list() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![
+            history_row(&tmp, "deploy.sh", RunState::Completed),
+            history_row(&tmp, "setup.sh", RunState::Failed),
+        ];
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], entries);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 15);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn render_history_dashboards_view_no_panic() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![history_row(&tmp, "deploy.sh", RunState::Completed)];
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], entries);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        app.history.view = HistoryView::Dashboards;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_history_output_focus_with_reason_and_scroll() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut row = history_row(&tmp, "deploy.sh", RunState::Completed);
+        row.reason = Some("manual retry".into());
+        // Make the output much taller than the rendered area so the scroll
+        // clamp branches fire.
+        row.stdout = (0..50).map(|i| format!("line {}\n", i)).collect();
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![row]);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        app.history.focus = HistoryFocus::Output;
+        app.run_output_scroll = u16::MAX;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_history_empty_output_branch_no_history_entry_fallback() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let row = history_row(&tmp, "deploy.sh", RunState::Completed);
+        // Empty output triggers the "(no output)" branch.
+        let mut row = row;
+        row.stdout.clear();
+        row.stderr.clear();
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![row]);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+    }
+
+    #[test]
+    fn snapshot_render_history_empty() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![]);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        let theme = app.theme.clone();
+
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
     }
 }

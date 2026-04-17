@@ -26,3 +26,20 @@ impl FieldInputState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_defaults() {
+        let state = FieldInputState::new();
+        assert!(state.schema_name.is_none());
+        assert!(state.fields.is_empty());
+        assert_eq!(state.field_index, 0);
+        assert!(state.field_inputs.is_empty());
+        assert!(state.args.is_empty());
+        assert!(state.error.is_none());
+        assert!(state.selected_script.is_none());
+    }
+}

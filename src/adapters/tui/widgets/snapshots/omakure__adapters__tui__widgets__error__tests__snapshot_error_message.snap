@@ -1,0 +1,12 @@
+---
+source: src/adapters/tui/widgets/error.rs
+expression: terminal.backend()
+---
+"┌Error───────────────────────────────────────────┐"
+"│Something went wrong!                           │"
+"│                                                │"
+"│Press Enter to return, Esc to quit              │"
+"│                                                │"
+"│                                                │"
+"│                                                │"
+"└────────────────────────────────────────────────┘"

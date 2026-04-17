@@ -182,6 +182,33 @@ mod tests {
     }
 
     #[test]
+    fn workspace_path_accessors_derive_from_global_root() {
+        let root = PathBuf::from("/tmp/omakure-paths");
+        let ws = Workspace::new(root.clone());
+        assert_eq!(
+            ws.search_db_path(),
+            root.join(".history").join("search-index.sqlite")
+        );
+        assert_eq!(
+            ws.envs_active_path(),
+            root.join(".omaken").join("envs").join("active")
+        );
+    }
+
+    #[test]
+    fn workspace_clone_for_executor_preserves_paths() {
+        let root = PathBuf::from("/tmp/omakure-clone");
+        let original = Workspace::with_scripts_root(root.clone(), root.clone(), false);
+        let cloned = original.clone_for_executor();
+        assert_eq!(cloned.root(), original.root());
+        assert_eq!(cloned.scripts_root(), original.scripts_root());
+        assert_eq!(
+            cloned.has_scripts_root_override(),
+            original.has_scripts_root_override()
+        );
+    }
+
+    #[test]
     fn ensure_layout_creates_only_global_root_metadata() {
         let dir = std::env::temp_dir().join("__omakure_ensure_layout_split_test__");
         let global = dir.join("global");

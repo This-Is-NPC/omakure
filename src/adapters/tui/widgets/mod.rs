@@ -1,3 +1,4 @@
+pub(crate) mod activity_grid;
 pub(crate) mod common;
 pub(crate) mod dashboards;
 pub(crate) mod environment;
@@ -8,7 +9,9 @@ pub(crate) mod history;
 pub(crate) mod loading;
 pub(crate) mod run_result;
 pub(crate) mod running;
+pub(crate) mod schedules;
 pub(crate) mod schema;
 pub(crate) mod scripts;
 pub(crate) mod search;
 pub(crate) mod spinner;
+pub(crate) mod table_style;

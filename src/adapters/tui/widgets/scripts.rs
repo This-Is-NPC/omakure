@@ -1,11 +1,12 @@
 use ratatui::layout::Rect;
 
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 use std::path::Path;
 
 use super::super::theme::Theme;
+use super::table_style;
 use crate::ports::{WorkspaceEntry, WorkspaceEntryKind};
 use crate::workspace::Workspace;
 
@@ -30,7 +31,7 @@ pub(crate) fn render_scripts(
             Line::from("Add scripts or folders and press r to refresh."),
         ];
         let empty = Paragraph::new(empty_lines)
-            .block(Block::default().borders(Borders::ALL).title("Entries"))
+            .block(table_style::block("Entries", theme))
             .wrap(Wrap { trim: true });
         frame.render_widget(empty, area);
     } else {
@@ -51,10 +52,76 @@ pub(crate) fn render_scripts(
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Entries"))
-            .highlight_style(theme.selection_style())
+            .block(table_style::block("Entries", theme))
+            .highlight_style(table_style::selection_style(theme))
             .highlight_symbol(super::super::theme::selection_symbol_str());
 
         frame.render_stateful_widget(list, area, list_state);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    #[test]
+    fn snapshot_scripts_list() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let entries = vec![
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/infra"),
+                kind: WorkspaceEntryKind::Directory,
+            },
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/deploy.sh"),
+                kind: WorkspaceEntryKind::Script,
+            },
+            WorkspaceEntry {
+                path: PathBuf::from("/scripts/setup.py"),
+                kind: WorkspaceEntryKind::Script,
+            },
+        ];
+        let mut list_state = ListState::default();
+        list_state.select(Some(1));
+        let theme = Theme::default();
+
+        let backend = TestBackend::new(40, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_scripts(
+                    f,
+                    f.size(),
+                    &ws,
+                    tmp.path(),
+                    &entries,
+                    &mut list_state,
+                    &theme,
+                );
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn snapshot_scripts_empty() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        let mut list_state = ListState::default();
+        let theme = Theme::default();
+
+        let backend = TestBackend::new(50, 8);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_scripts(f, f.size(), &ws, tmp.path(), &[], &mut list_state, &theme);
+            })
+            .unwrap();
+        insta::assert_snapshot!(terminal.backend());
     }
 }

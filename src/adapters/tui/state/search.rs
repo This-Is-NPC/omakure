@@ -24,3 +24,19 @@ impl SearchState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_defaults() {
+        let state = SearchState::new(SearchStatus::Idle);
+        assert!(state.query.is_empty());
+        assert!(state.results.is_empty());
+        assert_eq!(state.selection, 0);
+        assert!(state.details.is_none());
+        assert_eq!(state.status, SearchStatus::Idle);
+        assert!(state.error.is_none());
+    }
+}

@@ -28,6 +28,11 @@ use std::sync::mpsc::{self, TryRecvError};
 use theme::load_theme;
 use ui::{render_loading, render_ui};
 
+/// How often the background poller re-reads the runs DB. Small enough
+/// to feel live (scheduled runs show up within ~1s), large enough that
+/// we never hammer SQLite even if the TUI is left idle for hours.
+const HISTORY_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+
 pub fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>, Box<dyn Error>> {
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
@@ -69,6 +74,7 @@ pub fn run_app(
     // it backs the search screen and is part of the global state contract.
     search_index.start_background_rebuild(workspace.root().to_path_buf());
     let mut app = App::new(service, workspace, entries, history, search_index, theme);
+    let history_rx = spawn_history_poller(app.workspace.clone_for_executor());
 
     loop {
         if app.screen == Screen::Search {
@@ -76,6 +82,7 @@ pub fn run_app(
         }
         app.poll_widget_load();
         poll_inline_run(&mut app);
+        poll_history_refresh(&mut app, &history_rx);
         let theme = app.theme.clone();
         terminal.draw(|frame| render_ui(frame, &mut app, &theme))?;
         app.tick = app.tick.wrapping_add(1);
@@ -182,6 +189,38 @@ fn run_through_state_machine(
         }
     };
     runs::get_run(&conn, &row.run_id).ok().flatten()
+}
+
+/// Spawn a background thread that re-reads the runs DB once per
+/// `HISTORY_REFRESH_INTERVAL` and streams fresh `Vec<RunRow>` snapshots
+/// back to the main loop over an mpsc channel. Keeps the TUI reactive
+/// to scheduled runs without blocking `terminal.draw` or `event::poll`.
+///
+/// When the receiver is dropped at shutdown, `send` fails and the thread
+/// exits on its own — no join handle needed.
+fn spawn_history_poller(workspace: Workspace) -> mpsc::Receiver<Vec<RunRow>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || loop {
+        let entries = load_history(&workspace);
+        if tx.send(entries).is_err() {
+            break;
+        }
+        std::thread::sleep(HISTORY_REFRESH_INTERVAL);
+    });
+    rx
+}
+
+/// Drain any pending history snapshots from the background poller. We
+/// only apply the most recent one — intermediate snapshots are stale by
+/// the time we see them, and applying them would waste work.
+fn poll_history_refresh(app: &mut App, rx: &mpsc::Receiver<Vec<RunRow>>) {
+    let mut latest: Option<Vec<RunRow>> = None;
+    while let Ok(entries) = rx.try_recv() {
+        latest = Some(entries);
+    }
+    if let Some(entries) = latest {
+        app.apply_history_refresh(entries);
+    }
 }
 
 fn load_history(workspace: &Workspace) -> Vec<RunRow> {

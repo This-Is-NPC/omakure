@@ -109,5 +109,7 @@ Before starting a new workflow cycle, check if the upstream repository has newer
 
 ## Code Standards
 
-- {Language-specific conventions, linting rules, test framework, etc.}
-- {Add project-specific patterns here}
+- `mise run lint` must exit 0 before opening a PR. It runs
+  `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`.
+- Any new `#[allow(clippy::…)]` requires a one-line comment justifying the
+  suppression (pointing at the bug, audit note, or rationale).

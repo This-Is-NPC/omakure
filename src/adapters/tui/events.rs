@@ -3,6 +3,28 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::app::{App, HistoryFocus, HistoryView, Screen};
 
 pub(crate) fn handle_key_event(app: &mut App, key: KeyEvent) {
+    // ── Prefix handling (Ctrl+/ tmux-style) ──────────────────────
+    // Ctrl+/ sets prefix_pending; the NEXT key is dispatched as a
+    // global navigation command regardless of which screen is active.
+    if app.prefix_pending {
+        app.prefix_pending = false;
+        handle_prefix_command(app, key);
+        return;
+    }
+    // Ctrl+/ produces different key events depending on the terminal
+    // and keyboard layout:
+    //   • Legacy xterm/VTE: ASCII 0x1F → Char('\x1f'), no modifiers
+    //   • ABNT2 / layouts where / shares the 7 key: Char('7') + CONTROL
+    //   • Enhanced keyboard protocol (kitty): Char('/') + CONTROL
+    let is_prefix = matches!(key.code, KeyCode::Char('\x1f'))
+        || (matches!(key.code, KeyCode::Char('7') | KeyCode::Char('/'))
+            && key.modifiers.contains(KeyModifiers::CONTROL));
+    if is_prefix {
+        app.prefix_pending = true;
+        return;
+    }
+
+    // ── Per-screen direct keys ───────────────────────────────────
     match app.screen {
         Screen::ScriptSelect => handle_list_key(app, key),
         Screen::Search => handle_search_key(app, key),
@@ -16,36 +38,27 @@ pub(crate) fn handle_key_event(app: &mut App, key: KeyEvent) {
     }
 }
 
-fn handle_schedules_key(app: &mut App, key: KeyEvent) {
+/// Global commands dispatched after the prefix key (Ctrl+/).
+fn handle_prefix_command(app: &mut App, key: KeyEvent) {
     match key.code {
-        KeyCode::Char('q') | KeyCode::Esc => app.screen = Screen::ScriptSelect,
-        KeyCode::Char(' ') => app.toggle_selected_schedule(),
-        KeyCode::Char('r') | KeyCode::Char('R') | KeyCode::F(5) => app.enter_schedules(),
-        KeyCode::Tab => app.activity_period = app.activity_period.next(),
-        KeyCode::Down | KeyCode::Char('j') => app.move_schedules_selection(1),
-        KeyCode::Up | KeyCode::Char('k') => app.move_schedules_selection(-1),
+        KeyCode::Char('q') | KeyCode::Char('Q') => app.should_quit = true,
+        KeyCode::Char('s') | KeyCode::Char('S') => app.enter_search(),
+        KeyCode::Char('e') | KeyCode::Char('E') => app.enter_envs(),
+        KeyCode::Char('h') | KeyCode::Char('H') => {
+            app.screen = Screen::History;
+            app.history.focus = HistoryFocus::List;
+            app.reset_run_output_scroll();
+        }
+        KeyCode::Char('c') | KeyCode::Char('C') => app.enter_schedules(),
         _ => {}
     }
 }
 
+// ── ScriptSelect ─────────────────────────────────────────────────
+
 fn handle_list_key(app: &mut App, key: KeyEvent) {
-    // `Alt+E` (envs) is checked before any non-modified `e` shortcut so
-    // the modifier branch always wins.
-    if matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))
-        && key.modifiers.contains(KeyModifiers::ALT)
-    {
-        app.enter_envs();
-        return;
-    }
     match key.code {
-        KeyCode::Char('s') | KeyCode::Char('S')
-            if key.modifiers.contains(KeyModifiers::CONTROL) =>
-        {
-            app.enter_search()
-        }
-        KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Esc => {
-            // Esc collapses the per-script dashboard expansion first.
             if app.script_dashboard_expanded {
                 app.script_dashboard_expanded = false;
             } else if app.navigation.current_dir == app.workspace.root() {
@@ -56,17 +69,10 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
         }
         KeyCode::Char('r') | KeyCode::Char('R') | KeyCode::F(5) => app.refresh_entries(),
         KeyCode::Char('i') | KeyCode::Char('I') | KeyCode::F(6) => app.refresh_status(),
-        KeyCode::Char('h') | KeyCode::Char('H') => {
-            app.screen = Screen::History;
-            app.history.focus = HistoryFocus::List;
-            app.reset_run_output_scroll();
-        }
-        KeyCode::Char('c') | KeyCode::Char('C') => app.enter_schedules(),
         KeyCode::Tab => app.activity_period = app.activity_period.next(),
+        KeyCode::PageDown => app.scroll_schema_preview(5),
+        KeyCode::PageUp => app.scroll_schema_preview(-5),
         KeyCode::Char('e') | KeyCode::Char('E') => {
-            // `e` toggles the per-script dashboard expansion, but only
-            // when a script (not a directory) is highlighted. Pressing
-            // `e` over a directory is a no-op.
             if matches!(
                 app.selected_entry(),
                 Some(entry) if entry.kind == crate::ports::WorkspaceEntryKind::Script
@@ -83,12 +89,11 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+// ── Search ───────────────────────────────────────────────────────
+
 fn handle_search_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => app.screen = Screen::ScriptSelect,
-        KeyCode::Char('e') | KeyCode::Char('E') if key.modifiers.contains(KeyModifiers::ALT) => {
-            app.enter_envs()
-        }
         KeyCode::Down | KeyCode::Char('j') => app.move_search_selection(1),
         KeyCode::Up | KeyCode::Char('k') => app.move_search_selection(-1),
         KeyCode::Enter => app.open_selected_search(),
@@ -102,6 +107,8 @@ fn handle_search_key(app: &mut App, key: KeyEvent) {
         _ => {}
     }
 }
+
+// ── FieldInput ───────────────────────────────────────────────────
 
 fn handle_input_key(app: &mut App, key: KeyEvent) {
     match key.code {
@@ -122,9 +129,11 @@ fn handle_input_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+// ── Error ────────────────────────────────────────────────────────
+
 fn handle_error_key(app: &mut App, key: KeyEvent) {
     match key.code {
-        KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
+        KeyCode::Esc => app.should_quit = true,
         KeyCode::Enter => {
             app.error_message = None;
             app.screen = Screen::ScriptSelect;
@@ -133,18 +142,9 @@ fn handle_error_key(app: &mut App, key: KeyEvent) {
     }
 }
 
-fn handle_history_key(app: &mut App, key: KeyEvent) {
-    // `Alt+E` always routes to the envs screen, regardless of view, so
-    // it must be checked before any non-modified `e` shortcut below.
-    if matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))
-        && key.modifiers.contains(KeyModifiers::ALT)
-    {
-        app.enter_envs();
-        return;
-    }
+// ── History ──────────────────────────────────────────────────────
 
-    // `Tab` toggles List <-> Dashboards in either view, regardless of
-    // the inner `HistoryFocus` of the List view.
+fn handle_history_key(app: &mut App, key: KeyEvent) {
     if matches!(key.code, KeyCode::Tab) {
         app.history.toggle_view();
         return;
@@ -159,7 +159,7 @@ fn handle_history_key(app: &mut App, key: KeyEvent) {
 fn handle_history_list_key(app: &mut App, key: KeyEvent) {
     match app.history.focus {
         HistoryFocus::List => match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => app.screen = Screen::ScriptSelect,
+            KeyCode::Esc => app.screen = Screen::ScriptSelect,
             KeyCode::Down | KeyCode::Char('j') => app.move_history_selection(1),
             KeyCode::Up | KeyCode::Char('k') => app.move_history_selection(-1),
             KeyCode::Enter | KeyCode::Right => {
@@ -169,7 +169,6 @@ fn handle_history_list_key(app: &mut App, key: KeyEvent) {
             _ => {}
         },
         HistoryFocus::Output => match key.code {
-            KeyCode::Char('q') => app.screen = Screen::ScriptSelect,
             KeyCode::Esc | KeyCode::Left | KeyCode::Backspace => {
                 app.history.focus = HistoryFocus::List
             }
@@ -187,10 +186,7 @@ fn handle_history_list_key(app: &mut App, key: KeyEvent) {
 fn handle_history_dashboards_key(app: &mut App, key: KeyEvent) {
     let has_selection = !app.history.entries.is_empty();
     match key.code {
-        KeyCode::Char('q') => app.screen = Screen::ScriptSelect,
         KeyCode::Esc => {
-            // Esc collapses an expanded per-script panel first; only
-            // when already in the split layout does it leave History.
             if app.history.dashboards_escape() {
                 app.screen = Screen::ScriptSelect;
             }
@@ -204,14 +200,11 @@ fn handle_history_dashboards_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+// ── RunResult ────────────────────────────────────────────────────
+
 fn handle_run_result_key(app: &mut App, key: KeyEvent) {
     match key.code {
-        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Enter => app.screen = Screen::ScriptSelect,
-        KeyCode::Char('h') | KeyCode::Char('H') => {
-            app.screen = Screen::History;
-            app.history.focus = HistoryFocus::List;
-            app.reset_run_output_scroll();
-        }
+        KeyCode::Esc | KeyCode::Enter => app.screen = Screen::ScriptSelect,
         KeyCode::Down | KeyCode::Char('j') => app.scroll_run_output(1),
         KeyCode::Up | KeyCode::Char('k') => app.scroll_run_output(-1),
         KeyCode::PageDown => app.scroll_run_output(10),
@@ -221,9 +214,11 @@ fn handle_run_result_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+// ── Environments ─────────────────────────────────────────────────
+
 fn handle_envs_key(app: &mut App, key: KeyEvent) {
     match key.code {
-        KeyCode::Char('q') | KeyCode::Esc => app.exit_envs(),
+        KeyCode::Esc => app.exit_envs(),
         KeyCode::Char('r') | KeyCode::Char('R') => app.refresh_status(),
         KeyCode::Down | KeyCode::Char('j') => app.move_env_selection(1),
         KeyCode::Up | KeyCode::Char('k') => app.move_env_selection(-1),
@@ -233,6 +228,20 @@ fn handle_envs_key(app: &mut App, key: KeyEvent) {
         KeyCode::End => app.environment.preview_scroll = u16::MAX,
         KeyCode::Enter => app.activate_selected_env(),
         KeyCode::Char('d') | KeyCode::Char('D') => app.deactivate_env(),
+        _ => {}
+    }
+}
+
+// ── Schedules ────────────────────────────────────────────────────
+
+fn handle_schedules_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => app.screen = Screen::ScriptSelect,
+        KeyCode::Char(' ') => app.toggle_selected_schedule(),
+        KeyCode::Char('r') | KeyCode::Char('R') | KeyCode::F(5) => app.enter_schedules(),
+        KeyCode::Tab => app.activity_period = app.activity_period.next(),
+        KeyCode::Down | KeyCode::Char('j') => app.move_schedules_selection(1),
+        KeyCode::Up | KeyCode::Char('k') => app.move_schedules_selection(-1),
         _ => {}
     }
 }
@@ -253,6 +262,11 @@ mod tests {
 
     fn key_mod(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
         KeyEvent::new(code, modifiers)
+    }
+
+    fn prefix() -> KeyEvent {
+        // Ctrl+/ sends ASCII 0x1F under the legacy terminal protocol.
+        key(KeyCode::Char('\x1f'))
     }
 
     fn setup_app<'a>(tmp: &'a TempDir, service: &'a ScriptService) -> App<'a> {
@@ -276,17 +290,86 @@ mod tests {
         ScriptService::new(Box::new(repo), Box::new(runner))
     }
 
+    // ── Prefix key tests ─────────────────────────────────────────
+
     #[test]
-    fn test_q_quits_from_script_select() {
+    fn prefix_q_quits() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, prefix());
+        assert!(app.prefix_pending);
         handle_key_event(&mut app, key(KeyCode::Char('q')));
         assert!(app.should_quit);
+        assert!(!app.prefix_pending);
     }
 
     #[test]
-    fn test_j_moves_selection_down() {
+    fn prefix_s_enters_search() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, prefix());
+        handle_key_event(&mut app, key(KeyCode::Char('s')));
+        assert_eq!(app.screen, Screen::Search);
+    }
+
+    #[test]
+    fn prefix_e_enters_envs() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, prefix());
+        handle_key_event(&mut app, key(KeyCode::Char('e')));
+        assert_eq!(app.screen, Screen::Environments);
+    }
+
+    #[test]
+    fn prefix_h_enters_history() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, prefix());
+        handle_key_event(&mut app, key(KeyCode::Char('h')));
+        assert_eq!(app.screen, Screen::History);
+    }
+
+    #[test]
+    fn prefix_c_enters_schedules() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, prefix());
+        handle_key_event(&mut app, key(KeyCode::Char('c')));
+        assert_eq!(app.screen, Screen::Schedules);
+    }
+
+    #[test]
+    fn unknown_prefix_key_cancels_silently() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        handle_key_event(&mut app, prefix());
+        handle_key_event(&mut app, key(KeyCode::Char('z')));
+        assert!(!app.prefix_pending);
+        assert_eq!(app.screen, Screen::ScriptSelect);
+    }
+
+    #[test]
+    fn prefix_works_from_any_screen() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::History;
+        handle_key_event(&mut app, prefix());
+        handle_key_event(&mut app, key(KeyCode::Char('s')));
+        assert_eq!(app.screen, Screen::Search);
+    }
+
+    // ── Direct key tests (within-screen) ─────────────────────────
+
+    #[test]
+    fn j_moves_selection_down() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -296,35 +379,17 @@ mod tests {
     }
 
     #[test]
-    fn test_k_moves_selection_up() {
+    fn k_moves_selection_up() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
-        app.move_selection(1); // go to index 1
+        app.move_selection(1);
         handle_key_event(&mut app, key(KeyCode::Char('k')));
         assert_eq!(app.navigation.selection, 0);
     }
 
     #[test]
-    fn test_h_enters_history() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        handle_key_event(&mut app, key(KeyCode::Char('h')));
-        assert_eq!(app.screen, Screen::History);
-    }
-
-    #[test]
-    fn test_ctrl_s_enters_search() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        handle_key_event(&mut app, key_mod(KeyCode::Char('s'), KeyModifiers::CONTROL));
-        assert_eq!(app.screen, Screen::Search);
-    }
-
-    #[test]
-    fn test_esc_from_search_returns_to_scripts() {
+    fn esc_from_search_returns_to_scripts() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -334,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn test_search_typing_appends_chars() {
+    fn search_typing_appends_chars() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -345,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn test_search_backspace_pops_char() {
+    fn search_backspace_pops_char() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -356,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn test_error_enter_returns_to_scripts() {
+    fn error_enter_returns_to_scripts() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -368,17 +433,17 @@ mod tests {
     }
 
     #[test]
-    fn test_error_q_quits() {
+    fn error_esc_quits() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
         app.screen = Screen::Error;
-        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        handle_key_event(&mut app, key(KeyCode::Esc));
         assert!(app.should_quit);
     }
 
     #[test]
-    fn test_history_tab_toggles_view() {
+    fn history_tab_toggles_view() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -391,17 +456,17 @@ mod tests {
     }
 
     #[test]
-    fn test_history_q_returns_to_scripts() {
+    fn history_esc_returns_to_scripts() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
         app.screen = Screen::History;
-        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        handle_key_event(&mut app, key(KeyCode::Esc));
         assert_eq!(app.screen, Screen::ScriptSelect);
     }
 
     #[test]
-    fn test_history_list_enter_focuses_output() {
+    fn history_list_enter_focuses_output() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -412,7 +477,7 @@ mod tests {
     }
 
     #[test]
-    fn test_history_output_esc_returns_to_list() {
+    fn history_output_esc_returns_to_list() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -423,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn test_run_result_esc_returns() {
+    fn run_result_esc_returns() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -433,17 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn test_run_result_h_goes_to_history() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        app.screen = Screen::RunResult;
-        handle_key_event(&mut app, key(KeyCode::Char('h')));
-        assert_eq!(app.screen, Screen::History);
-    }
-
-    #[test]
-    fn test_field_input_esc_returns() {
+    fn field_input_esc_returns() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -453,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn test_field_input_char_appends() {
+    fn field_input_char_appends() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -474,28 +529,19 @@ mod tests {
     }
 
     #[test]
-    fn test_running_key_is_noop() {
+    fn running_key_is_noop() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
         app.screen = Screen::Running;
         let screen_before = app.screen;
-        handle_key_event(&mut app, key(KeyCode::Char('q')));
+        handle_key_event(&mut app, key(KeyCode::Char('x')));
         assert_eq!(app.screen, screen_before);
         assert!(!app.should_quit);
     }
 
     #[test]
-    fn test_alt_e_enters_envs_from_script_select() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        handle_key_event(&mut app, key_mod(KeyCode::Char('e'), KeyModifiers::ALT));
-        assert_eq!(app.screen, Screen::Environments);
-    }
-
-    #[test]
-    fn test_esc_quits_at_workspace_root() {
+    fn esc_quits_at_workspace_root() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -504,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn test_esc_collapses_dashboard_expansion_first() {
+    fn esc_collapses_dashboard_expansion_first() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -515,36 +561,32 @@ mod tests {
     }
 
     #[test]
-    fn test_e_toggles_script_dashboard_only_for_script() {
+    fn e_toggles_script_dashboard_only_for_script() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
-        // Move to entry index 1 which is a Script in setup_app.
         app.move_selection(1);
         assert!(!app.script_dashboard_expanded);
         handle_key_event(&mut app, key(KeyCode::Char('e')));
         assert!(app.script_dashboard_expanded);
-        // Toggling again collapses.
         handle_key_event(&mut app, key(KeyCode::Char('e')));
         assert!(!app.script_dashboard_expanded);
     }
 
     #[test]
-    fn test_e_over_directory_is_noop() {
+    fn e_over_directory_is_noop() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
-        // Index 0 is a Directory in setup_app.
         handle_key_event(&mut app, key(KeyCode::Char('e')));
         assert!(!app.script_dashboard_expanded);
     }
 
     #[test]
-    fn test_r_refreshes_entries() {
+    fn r_refreshes_entries() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
-        // Just exercise the path.
         handle_key_event(&mut app, key(KeyCode::Char('r')));
         handle_key_event(&mut app, key(KeyCode::F(5)));
         handle_key_event(&mut app, key(KeyCode::Char('i')));
@@ -552,26 +594,15 @@ mod tests {
     }
 
     #[test]
-    fn test_backspace_navigates_up() {
+    fn backspace_navigates_up() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
         handle_key_event(&mut app, key(KeyCode::Backspace));
-        // No assertion on path — just exercise navigate_up.
     }
 
     #[test]
-    fn test_search_alt_e_enters_envs() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        app.screen = Screen::Search;
-        handle_key_event(&mut app, key_mod(KeyCode::Char('e'), KeyModifiers::ALT));
-        assert_eq!(app.screen, Screen::Environments);
-    }
-
-    #[test]
-    fn test_search_navigation_keys() {
+    fn search_navigation_keys() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -584,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn test_field_input_navigation_keys() {
+    fn field_input_navigation_keys() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -624,17 +655,7 @@ mod tests {
     }
 
     #[test]
-    fn test_history_alt_e_enters_envs() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        app.screen = Screen::History;
-        handle_key_event(&mut app, key_mod(KeyCode::Char('e'), KeyModifiers::ALT));
-        assert_eq!(app.screen, Screen::Environments);
-    }
-
-    #[test]
-    fn test_history_list_navigation_and_right() {
+    fn history_list_navigation_and_right() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -649,7 +670,7 @@ mod tests {
     }
 
     #[test]
-    fn test_history_output_scroll_and_paging_keys() {
+    fn history_output_scroll_and_paging_keys() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -670,18 +691,7 @@ mod tests {
     }
 
     #[test]
-    fn test_history_output_q_quits_to_scripts() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        app.screen = Screen::History;
-        app.history.focus = HistoryFocus::Output;
-        handle_key_event(&mut app, key(KeyCode::Char('q')));
-        assert_eq!(app.screen, Screen::ScriptSelect);
-    }
-
-    #[test]
-    fn test_history_dashboards_navigation_and_quit() {
+    fn history_dashboards_navigation_and_esc() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -692,37 +702,21 @@ mod tests {
         handle_key_event(&mut app, key(KeyCode::Up));
         handle_key_event(&mut app, key(KeyCode::Char('k')));
         handle_key_event(&mut app, key(KeyCode::Esc));
-        // Esc returns to ScriptSelect (no expansion to collapse).
         assert_eq!(app.screen, Screen::ScriptSelect);
     }
 
     #[test]
-    fn test_history_dashboards_q_returns_to_scripts() {
+    fn run_result_enter_returns_to_scripts() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
-        app.screen = Screen::History;
-        app.history.view = HistoryView::Dashboards;
-        handle_key_event(&mut app, key(KeyCode::Char('q')));
-        assert_eq!(app.screen, Screen::ScriptSelect);
-    }
-
-    #[test]
-    fn test_run_result_q_and_enter_return_to_scripts() {
-        let tmp = TempDir::new().unwrap();
-        let svc = make_service(&tmp);
-        let mut app = setup_app(&tmp, &svc);
-        app.screen = Screen::RunResult;
-        handle_key_event(&mut app, key(KeyCode::Char('q')));
-        assert_eq!(app.screen, Screen::ScriptSelect);
-
         app.screen = Screen::RunResult;
         handle_key_event(&mut app, key(KeyCode::Enter));
         assert_eq!(app.screen, Screen::ScriptSelect);
     }
 
     #[test]
-    fn test_run_result_scroll_keys() {
+    fn run_result_scroll_keys() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -738,7 +732,7 @@ mod tests {
     }
 
     #[test]
-    fn test_envs_screen_keys_dispatch() {
+    fn envs_screen_keys_dispatch() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
@@ -754,17 +748,15 @@ mod tests {
         handle_key_event(&mut app, key(KeyCode::Char('r')));
         handle_key_event(&mut app, key(KeyCode::Char('d')));
         handle_key_event(&mut app, key(KeyCode::Enter));
-        // Esc exits.
         handle_key_event(&mut app, key(KeyCode::Esc));
     }
 
     #[test]
-    fn test_field_input_enter_submits_form() {
+    fn field_input_enter_submits_form() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
         let mut app = setup_app(&tmp, &svc);
         app.screen = Screen::FieldInput;
-        // Empty form: submit_form just walks an empty path.
         handle_key_event(&mut app, key(KeyCode::Enter));
     }
 }

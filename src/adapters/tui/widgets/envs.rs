@@ -7,6 +7,7 @@ use ratatui::Frame;
 use super::super::app::App;
 use super::super::theme::{self, Theme};
 use super::common::{horizontal_split, standard_screen_layout};
+use super::table_style;
 
 fn build_preview_lines(app: &App, theme: &Theme) -> Vec<Line<'static>> {
     if let Some(err) = app.environment.preview_error.as_deref() {
@@ -76,7 +77,7 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
     let chunks = standard_screen_layout(inner, info_height, 2);
 
     let info = Paragraph::new(info_lines)
-        .block(Block::default().borders(Borders::ALL).title("Status"))
+        .block(table_style::block("Status", theme))
         .wrap(Wrap { trim: true });
     frame.render_widget(info, chunks[0]);
 
@@ -84,7 +85,7 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
 
     if app.environment.entries.is_empty() {
         let empty = Paragraph::new("No environment files found.")
-            .block(Block::default().borders(Borders::ALL).title("Files"))
+            .block(table_style::block("Files", theme))
             .wrap(Wrap { trim: true });
         frame.render_widget(empty, files_chunks[0]);
     } else {
@@ -110,23 +111,25 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Files"))
-            .highlight_style(theme.selection_style())
+            .block(table_style::block("Files", theme))
+            .highlight_style(table_style::selection_style(theme))
             .highlight_symbol(theme::selection_symbol_str());
         frame.render_stateful_widget(list, files_chunks[0], &mut app.environment.list_state);
     }
 
     let preview_lines = build_preview_lines(app, theme);
     let preview = Paragraph::new(preview_lines)
-        .block(Block::default().borders(Borders::ALL).title("Preview"))
+        .block(table_style::block("Preview", theme))
         .wrap(Wrap { trim: false })
         .scroll((app.environment.preview_scroll, 0));
     frame.render_widget(preview, files_chunks[1]);
 
-    let footer = Paragraph::new(
-        "Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc/q back",
-    )
-    .style(theme.text_secondary());
+    let footer_text = if app.prefix_pending {
+        "-- PREFIX --"
+    } else {
+        "Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc back, Ctrl+/ nav"
+    };
+    let footer = Paragraph::new(footer_text).style(theme.text_secondary());
     frame.render_widget(footer, chunks[2]);
 }
 

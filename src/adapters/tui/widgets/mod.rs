@@ -14,3 +14,4 @@ pub(crate) mod schema;
 pub(crate) mod scripts;
 pub(crate) mod search;
 pub(crate) mod spinner;
+pub(crate) mod table_style;

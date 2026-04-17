@@ -24,6 +24,7 @@ pub(crate) struct NavigationState {
     pub(crate) widget_receiver: Option<Receiver<WidgetLoadResult>>,
     pub(crate) schema_preview: Option<SchemaPreview>,
     pub(crate) schema_preview_error: Option<String>,
+    pub(crate) schema_preview_scroll: u16,
     pub(crate) preview_script: Option<PathBuf>,
     pub(crate) schema_cache: Option<(PathBuf, Schema)>,
 }
@@ -45,6 +46,7 @@ impl NavigationState {
             widget_receiver: None,
             schema_preview: None,
             schema_preview_error: None,
+            schema_preview_scroll: 0,
             preview_script: None,
             schema_cache: None,
         }

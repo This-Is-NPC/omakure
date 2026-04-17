@@ -86,8 +86,8 @@ fn path_hash(path: &Path) -> u64 {
 }
 
 pub(crate) fn unit_name(workspace: &Workspace) -> String {
-    let canonical = std::fs::canonicalize(workspace.root())
-        .unwrap_or_else(|_| workspace.root().to_path_buf());
+    let canonical =
+        std::fs::canonicalize(workspace.root()).unwrap_or_else(|_| workspace.root().to_path_buf());
     format!("omakure-{:016x}.service", path_hash(&canonical))
 }
 

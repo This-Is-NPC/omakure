@@ -6,7 +6,8 @@ use ratatui::Frame;
 
 use super::super::app::App;
 use super::super::theme::Theme;
-use super::activity_grid::render_activity_grid;
+use super::activity_grid::render_activity_grid_with_upcoming;
+use super::table_style;
 
 /// Width of the list column on the Schedules screen. Mirrors the
 /// history screen's "list on the left / details on the right" layout.
@@ -34,10 +35,12 @@ pub(crate) fn render_schedules(frame: &mut Frame, area: Rect, app: &mut App, the
     render_right(frame, body[1], app, theme);
 
     let flash = app.schedules.flash.as_deref().unwrap_or("");
-    let footer = Paragraph::new(format!(
-        "Up/Down move, Space toggle, Tab cycle period, r refresh, Esc back    {flash}"
-    ))
-    .style(theme.text_secondary());
+    let footer_text = if app.prefix_pending {
+        "-- PREFIX --".to_string()
+    } else {
+        format!("Up/Down move, Space toggle, Tab cycle period, r refresh, Esc back, Ctrl+/ nav    {flash}")
+    };
+    let footer = Paragraph::new(footer_text).style(theme.text_secondary());
     frame.render_widget(footer, chunks[1]);
 }
 
@@ -54,53 +57,58 @@ fn render_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
             "No scheduled scripts. Add a \"Schedule\" block to a script's embedded schema to see it here.",
         )
         .style(theme.text_secondary())
-        .block(Block::default().borders(Borders::ALL).title("Scripts"));
+        .block(table_style::block("Scripts", theme));
         frame.render_widget(msg, area);
         return;
     }
 
-    let header = Row::new(vec![
-        Cell::from("Script"),
-        Cell::from("Cron"),
-        Cell::from("On"),
-    ])
-    .style(Style::default().add_modifier(Modifier::BOLD));
+    let header =
+        table_style::header_row_with_separators(&["Script", "Cron", "On"], area.width, theme);
 
     let rows: Vec<Row> = app
         .schedules
         .entries
         .iter()
-        .enumerate()
-        .map(|(i, entry)| {
+        .map(|entry| {
             let enabled_span = if entry.enabled {
                 Span::styled("●", Style::default().add_modifier(Modifier::BOLD))
             } else {
                 Span::styled("○", theme.text_secondary())
             };
-            let row = Row::new(vec![
+            let cells = vec![
                 Cell::from(entry.display_name.clone()),
                 Cell::from(entry.cron.clone()),
                 Cell::from(Line::from(enabled_span)),
-            ]);
-            if i == app.schedules.selection {
-                row.style(Style::default().add_modifier(Modifier::REVERSED))
-            } else {
-                row
-            }
+            ];
+            Row::new(table_style::interleave_row_cells(cells, theme))
         })
         .collect();
 
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Min(20),
-            Constraint::Length(14),
-            Constraint::Length(3),
-        ],
-    )
-    .header(header)
-    .block(Block::default().borders(Borders::ALL).title("Scripts"));
-    frame.render_widget(table, area);
+    // The Script column grows to fill remaining width after Cron/On so
+    // the table is always responsive to the pane size. The Min floor
+    // is the longest display_name so content never truncates until the
+    // pane itself is narrower than the data.
+    let longest_name = app
+        .schedules
+        .entries
+        .iter()
+        .map(|e| e.display_name.chars().count())
+        .max()
+        .unwrap_or(0);
+    let script_min = longest_name.max("Script".len()) as u16;
+
+    let constraints = table_style::interleave_column_constraints(&[
+        Constraint::Min(script_min),
+        Constraint::Length(14),
+        Constraint::Length(3),
+    ]);
+    let table = Table::new(rows, constraints)
+        .header(header)
+        .block(table_style::padded_block("Scripts", theme))
+        .column_spacing(table_style::COLUMN_SPACING)
+        .highlight_style(table_style::selection_style(theme))
+        .highlight_symbol(table_style::selection_symbol(theme));
+    frame.render_stateful_widget(table, area, &mut app.schedules.table_state);
 }
 
 fn render_right(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
@@ -173,10 +181,16 @@ fn render_right(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
         Paragraph::new(info_lines).block(Block::default().borders(Borders::ALL).title("Overview"));
     frame.render_widget(info, chunks[0]);
 
-    render_activity_grid(
+    let upcoming_utc = app.upcoming_runs_for_script(&entry.script_path);
+    let upcoming_local: Vec<chrono::DateTime<chrono::Local>> = upcoming_utc
+        .iter()
+        .map(|dt| dt.with_timezone(&chrono::Local))
+        .collect();
+    render_activity_grid_with_upcoming(
         frame,
         chunks[1],
         &matching,
+        &upcoming_local,
         app.activity_period,
         theme,
         "Activity",
@@ -238,6 +252,7 @@ mod tests {
             ],
             selection: 0,
             list_state: ratatui::widgets::ListState::default(),
+            table_state: ratatui::widgets::TableState::default(),
             flash: Some("toggled".into()),
         };
         let theme = app.theme.clone();

@@ -9,6 +9,7 @@ use super::super::app::{App, ExecutionStatus, HistoryFocus, HistoryView};
 use super::super::theme::Theme;
 use super::common::{state_style, status_label_and_style};
 use super::dashboards::render_dashboards;
+use super::table_style;
 use crate::runs::{format_run_timestamp, RunRow};
 
 pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
@@ -33,15 +34,22 @@ pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme
         }
     }
 
-    let footer_text = match app.history.view {
-        HistoryView::List => match app.history.focus {
-            HistoryFocus::List => {
-                "Tab dashboards, Up/Down select, Enter view output, Alt+E envs, Esc/q back"
+    let footer_text = if app.prefix_pending {
+        "-- PREFIX --".to_string()
+    } else {
+        match app.history.view {
+            HistoryView::List => match app.history.focus {
+                HistoryFocus::List => {
+                    "Tab dashboards, Up/Down select, Enter view output, Esc back, Ctrl+/ nav"
+                        .to_string()
+                }
+                HistoryFocus::Output => {
+                    "Tab dashboards, Up/Down scroll, PgUp/PgDn, Esc return, Ctrl+/ nav".to_string()
+                }
+            },
+            HistoryView::Dashboards => {
+                "Tab list, Up/Down select script, e/Enter expand, Esc back, Ctrl+/ nav".to_string()
             }
-            HistoryFocus::Output => "Tab dashboards, Up/Down scroll, PgUp/PgDn, Esc return, q back",
-        },
-        HistoryView::Dashboards => {
-            "Tab list, Up/Down select script, e/Enter expand, Alt+E envs, Esc/q back"
         }
     };
     let footer = Paragraph::new(footer_text).style(theme.text_secondary());
@@ -57,62 +65,84 @@ fn render_history_list(frame: &mut Frame, area: Rect, app: &mut App, theme: &The
         return;
     }
 
-    let rows: Vec<Row> = app
+    // Resolve display names once so we can size the Script column to
+    // the widest row (clamped between a header-size floor and a cap
+    // that keeps the table from dominating very wide terminals).
+    let names: Vec<String> = app
         .history
         .entries
         .iter()
         .map(|entry| {
             let name = app.display_path(&PathBuf::from(&entry.script_path));
-            let name = if matches!(entry.trigger, crate::runs::RunTrigger::Scheduled) {
+            if matches!(entry.trigger, crate::runs::RunTrigger::Scheduled) {
                 format!("⏰ {name}")
             } else {
                 name
-            };
+            }
+        })
+        .collect();
+
+    let rows: Vec<Row> = app
+        .history
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
             let date = format_run_timestamp(entry.started_at.unwrap_or(entry.enqueued_at));
             let state_label = entry.state.as_str();
             let state_text_style = state_style(theme, entry.state);
             let status = ExecutionStatus::from_run(entry);
             let (status_label, status_style) = status_label_and_style(&status, theme);
-            Row::new(vec![
+            let cells = vec![
                 Cell::from(Span::styled(state_label, state_text_style)),
                 Cell::from(Span::styled(status_label, status_style)),
                 Cell::from(Span::raw(date)),
-                Cell::from(Span::raw(name)),
+                Cell::from(Span::raw(names[i].clone())),
                 Cell::from(Span::raw(entry.actor.clone())),
-            ])
+            ];
+            Row::new(table_style::interleave_row_cells(cells, theme))
         })
         .collect();
 
-    let header = Row::new(vec![
-        Cell::from(Span::styled("State", theme.text_secondary())),
-        Cell::from(Span::styled("Status", theme.text_secondary())),
-        Cell::from(Span::styled("Date", theme.text_secondary())),
-        Cell::from(Span::styled("Script", theme.text_secondary())),
-        Cell::from(Span::styled("Actor", theme.text_secondary())),
-    ]);
+    let header = table_style::header_row_with_separators(
+        &["State", "Status", "Date", "Script", "Actor"],
+        area.width,
+        theme,
+    );
     let highlight_style = match app.history.focus {
-        HistoryFocus::List => theme.selection_style(),
+        HistoryFocus::List => table_style::selection_style(theme),
         HistoryFocus::Output => theme.text_muted(),
     };
     let highlight_symbol = if app.history.focus == HistoryFocus::List {
-        theme.selection_symbol()
+        table_style::selection_symbol(theme)
     } else {
         Span::styled("> ", highlight_style)
     };
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Length(HISTORY_STATE_WIDTH),
-            Constraint::Length(HISTORY_STATUS_WIDTH),
-            Constraint::Length(HISTORY_DATE_WIDTH),
-            Constraint::Min(HISTORY_MIN_SCRIPT_WIDTH),
-            Constraint::Length(HISTORY_ACTOR_WIDTH),
-        ],
-    )
-    .header(header)
-    .block(Block::default().borders(Borders::ALL).title("History"))
-    .highlight_style(highlight_style)
-    .highlight_symbol(highlight_symbol);
+    // Script column grows to fill remaining width so the table is
+    // responsive to the pane size. Min floor is the longest display
+    // name (with a sane lower bound so the header stays readable when
+    // history is empty) — content never truncates unless the pane is
+    // narrower than the data.
+    let script_min = names
+        .iter()
+        .map(|n| n.chars().count())
+        .max()
+        .unwrap_or(HISTORY_MIN_SCRIPT_WIDTH as usize)
+        .max(HISTORY_MIN_SCRIPT_WIDTH as usize) as u16;
+
+    let constraints = table_style::interleave_column_constraints(&[
+        Constraint::Length(HISTORY_STATE_WIDTH),
+        Constraint::Length(HISTORY_STATUS_WIDTH),
+        Constraint::Length(HISTORY_DATE_WIDTH),
+        Constraint::Min(script_min),
+        Constraint::Length(HISTORY_ACTOR_WIDTH),
+    ]);
+    let table = Table::new(rows, constraints)
+        .header(header)
+        .block(table_style::padded_block("History", theme))
+        .column_spacing(table_style::COLUMN_SPACING)
+        .highlight_style(highlight_style)
+        .highlight_symbol(highlight_symbol);
 
     frame.render_stateful_widget(table, area, &mut app.history.table_state);
 }

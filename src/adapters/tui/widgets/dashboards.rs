@@ -437,11 +437,17 @@ pub(crate) fn render_script_charts(
     // too short to fit the grid plus 5 rows for dashboards, keep only
     // the grid.
     let grid_h = super::activity_grid::widget_height(app.activity_period);
+    let upcoming_utc = app.upcoming_runs_for_script(script_path);
+    let upcoming_local: Vec<chrono::DateTime<chrono::Local>> = upcoming_utc
+        .iter()
+        .map(|dt| dt.with_timezone(&chrono::Local))
+        .collect();
     if area.height < grid_h + 5 {
-        super::activity_grid::render_activity_grid(
+        super::activity_grid::render_activity_grid_with_upcoming(
             frame,
             area,
             &matching,
+            &upcoming_local,
             app.activity_period,
             theme,
             &title,
@@ -454,10 +460,11 @@ pub(crate) fn render_script_charts(
         .constraints([Constraint::Length(grid_h), Constraint::Min(5)])
         .split(area);
 
-    super::activity_grid::render_activity_grid(
+    super::activity_grid::render_activity_grid_with_upcoming(
         frame,
         split[0],
         &matching,
+        &upcoming_local,
         app.activity_period,
         theme,
         &title,

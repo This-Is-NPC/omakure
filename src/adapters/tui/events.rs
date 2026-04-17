@@ -186,10 +186,8 @@ fn handle_history_list_key(app: &mut App, key: KeyEvent) {
 fn handle_history_dashboards_key(app: &mut App, key: KeyEvent) {
     let has_selection = !app.history.entries.is_empty();
     match key.code {
-        KeyCode::Esc => {
-            if app.history.dashboards_escape() {
-                app.screen = Screen::ScriptSelect;
-            }
+        KeyCode::Esc if app.history.dashboards_escape() => {
+            app.screen = Screen::ScriptSelect;
         }
         KeyCode::Char('e') | KeyCode::Char('E') | KeyCode::Enter if has_selection => {
             app.history.toggle_dashboard_expand();

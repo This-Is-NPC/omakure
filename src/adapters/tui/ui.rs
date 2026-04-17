@@ -194,7 +194,8 @@ fn build_env_label(app: &App) -> String {
 }
 
 const PREFIX_HINT: &str = "Ctrl+/ [s]earch [e]nvs [h]istory [c]schedules [q]uit";
-const PREFIX_PENDING_LABEL: &str = "-- PREFIX --";
+const PREFIX_PENDING_LABEL: &str =
+    "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit";
 
 fn build_script_select_footer(app: &App) -> String {
     if app.prefix_pending {

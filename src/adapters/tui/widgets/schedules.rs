@@ -36,7 +36,7 @@ pub(crate) fn render_schedules(frame: &mut Frame, area: Rect, app: &mut App, the
 
     let flash = app.schedules.flash.as_deref().unwrap_or("");
     let footer_text = if app.prefix_pending {
-        "-- PREFIX --".to_string()
+        "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit".to_string()
     } else {
         format!("Up/Down move, Space toggle, Tab cycle period, r refresh, Esc back, Ctrl+/ nav    {flash}")
     };

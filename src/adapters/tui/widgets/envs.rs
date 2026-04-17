@@ -125,7 +125,7 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
     frame.render_widget(preview, files_chunks[1]);
 
     let footer_text = if app.prefix_pending {
-        "-- PREFIX --"
+        "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit"
     } else {
         "Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc back, Ctrl+/ nav"
     };

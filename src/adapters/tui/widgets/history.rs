@@ -35,7 +35,7 @@ pub(crate) fn render_history(frame: &mut Frame, area: Rect, app: &mut App, theme
     }
 
     let footer_text = if app.prefix_pending {
-        "-- PREFIX --".to_string()
+        "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit".to_string()
     } else {
         match app.history.view {
             HistoryView::List => match app.history.focus {

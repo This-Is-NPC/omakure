@@ -733,7 +733,7 @@ mod tests {
 
         let (ws, _dir) = make_workspace("e2e_trace");
         let script_body = format!(
-            "{} trace 'first' --level info\n{} trace 'second' --level warn --data '{{\"k\":1}}'",
+            "{} trace 'first' --level info\nsleep 0.2\n{} trace 'second' --level warn --data '{{\"k\":1}}'",
             bin.display(),
             bin.display()
         );

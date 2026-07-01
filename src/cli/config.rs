@@ -1,5 +1,6 @@
 use crate::adapters::environments::{
-    is_sensitive_key, resolve_active_env, FsEnvironmentRepository,
+    is_sensitive_key, resolve_active_env, should_mask_env_value, FsEnvironmentRepository,
+    MASKED_ENV_VALUE,
 };
 use crate::app_meta;
 use crate::cli::json;
@@ -112,7 +113,7 @@ pub fn run(scripts_dir: PathBuf, json_output: bool) -> Result<(), Box<dyn Error>
 
 fn print_env_if_set(name: &str) {
     if let Ok(value) = env::var(name) {
-        println!("{}: {}", name, value);
+        println!("{}: {}", name, mask_env_display_value(name, value));
     }
 }
 
@@ -124,21 +125,23 @@ fn read_active_env(workspace: &Workspace) -> Option<String> {
 /// Resolve the active env into masked `KEY=value` views plus the interpreter
 /// that would actually run `.py` scripts.
 ///
-/// Values for sensitive keys (see [`is_sensitive_key`]) are masked with
-/// `****`; the raw value never leaves [`resolve_active_env`]. The interpreter
+/// Values for sensitive keys, credential-bearing URLs, and values that match a
+/// sensitive parent-env value are masked with `****`; the raw value never
+/// leaves [`resolve_active_env`]. The interpreter
 /// path is resolved against the active env's `PATH` exactly as a real run
 /// would (see [`resolve_interpreter`]), so users can confirm *which* python
 /// omakure spawns and debug env/interpreter collisions.
 pub(crate) fn resolve_env_diagnostics(envs_dir: &Path) -> (Vec<EnvVarView>, InterpreterView) {
     let pairs = resolve_active_env(envs_dir);
+    let sensitive_parent_values = sensitive_parent_values();
     let program = python_program();
     let path = resolve_interpreter(program, &pairs).map(|p| p.display().to_string());
 
     let keys = pairs
         .into_iter()
         .map(|(key, value)| {
-            let value = if is_sensitive_key(&key) && !value.is_empty() {
-                "****".to_string()
+            let value = if should_mask_resolved_env_value(&key, &value, &sensitive_parent_values) {
+                MASKED_ENV_VALUE.to_string()
             } else {
                 value
             };
@@ -153,6 +156,35 @@ pub(crate) fn resolve_env_diagnostics(envs_dir: &Path) -> (Vec<EnvVarView>, Inte
             path,
         },
     )
+}
+
+fn mask_env_display_value(key: &str, value: String) -> String {
+    if should_mask_env_value(key, &value) {
+        MASKED_ENV_VALUE.to_string()
+    } else {
+        value
+    }
+}
+
+fn sensitive_parent_values() -> Vec<String> {
+    env::vars()
+        .filter_map(|(key, value)| {
+            if is_sensitive_key(&key) && !value.is_empty() {
+                Some(value)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn should_mask_resolved_env_value(
+    key: &str,
+    value: &str,
+    sensitive_parent_values: &[String],
+) -> bool {
+    should_mask_env_value(key, value)
+        || (!value.is_empty() && sensitive_parent_values.iter().any(|secret| secret == value))
 }
 
 /// Render the human-readable env/interpreter diagnostics block for
@@ -322,6 +354,55 @@ mod tests {
         assert_eq!(keys[1].key, "API_KEY");
         assert_eq!(keys[1].value, "****");
         assert!(keys.iter().all(|kv| kv.value != "supersecret123"));
+    }
+
+    #[test]
+    fn test_resolve_env_diagnostics_masks_parent_sourced_secret_value() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        env::set_var("AWS_SECRET_ACCESS_KEY", "parent-secret-value");
+        write_active_env(&envs, "dev.conf", "PLAIN=$AWS_SECRET_ACCESS_KEY\n");
+
+        let (keys, _interp) = resolve_env_diagnostics(&envs);
+
+        env::remove_var("AWS_SECRET_ACCESS_KEY");
+        assert_eq!(keys[0].key, "PLAIN");
+        assert_eq!(keys[0].value, "****");
+    }
+
+    #[test]
+    fn test_resolve_env_diagnostics_masks_credential_url_value() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        write_active_env(
+            &envs,
+            "dev.conf",
+            "DATABASE_URL=postgres://user:pass@localhost/db\n",
+        );
+
+        let (keys, _interp) = resolve_env_diagnostics(&envs);
+
+        assert_eq!(keys[0].key, "DATABASE_URL");
+        assert_eq!(keys[0].value, "****");
+    }
+
+    #[test]
+    fn test_mask_env_display_value_masks_sensitive_and_credential_values() {
+        assert_eq!(
+            mask_env_display_value("MYSQL_PWD", "secret".to_string()),
+            "****"
+        );
+        assert_eq!(
+            mask_env_display_value(
+                "DATABASE_URL",
+                "postgres://user:pass@localhost/db".to_string()
+            ),
+            "****"
+        );
+        assert_eq!(
+            mask_env_display_value("VERSION", "1.2.3".to_string()),
+            "1.2.3"
+        );
     }
 
     #[test]

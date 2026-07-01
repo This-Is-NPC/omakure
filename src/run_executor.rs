@@ -104,6 +104,8 @@ pub fn execute_with_heartbeat(
     // caller-supplied `extra_env` (parent shell env is inherited by the
     // child; layer 2 active managed env; future layer 3 `--env-file`) is
     // seeded FIRST, then the reserved layer-4 vars are pushed AFTER it.
+    // Because reserved vars are applied here, after env-file resolution, they
+    // are not visible to `$VAR` expansion inside `.conf` / `--env-file` values.
     // `build_command` applies pairs in order via `cmd.env`, so the last
     // write of a key wins — the reserved keys below are therefore
     // NON-OVERRIDABLE: a user var of the same name in `extra_env` cannot
@@ -388,6 +390,7 @@ fn check_required_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::environments::resolve_run_env;
     use crate::runs::EnqueueOptions;
     use std::fs;
 
@@ -543,6 +546,76 @@ mod tests {
             !result.completion.stdout.contains("HIJACKED"),
             "injected value must not override reserved var"
         );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_reserved_scripts_dir_wins_over_injected_extra_env() {
+        // Precedence spec §1 layer 4: OMAKURE_SCRIPTS_DIR is reserved just
+        // like OMAKURE_RUN_ID and must be the final value observed by the
+        // child, even if extra_env tries to hijack it.
+        let ws = make_workspace("reserved_scripts_dir_wins");
+        let script = write_bash_stub(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let extra_env = vec![(
+            "OMAKURE_SCRIPTS_DIR".to_string(),
+            "/tmp/hijacked-omakure".to_string(),
+        )];
+        let result = execute_with_heartbeat(&ws, &row, extra_env, None);
+
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert_eq!(result.completion.stdout.trim(), ws.root().to_string_lossy());
+        assert!(!result.completion.stdout.contains("hijacked"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_reserved_vars_are_not_expandable_in_resolved_env() {
+        // Reserved vars are applied by execute_with_heartbeat after
+        // resolve_run_env has expanded user layers, so references to them in
+        // active env files expand as undefined. The reserved var itself is
+        // still injected afterward and visible to the child.
+        let ws = make_workspace("reserved_not_expandable");
+        let envs = ws.envs_dir();
+        fs::create_dir_all(envs).unwrap();
+        fs::write(envs.join("dev.conf"), "PLAIN=$OMAKURE_RUN_ID\n").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+        let script = write_bash_stub(&ws, "echoenv.sh", "echo \"${PLAIN}|${OMAKURE_RUN_ID}\"");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                run_id: Some("rid-real-pipeline".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let extra_env = resolve_run_env(envs, None).unwrap();
+        let result = execute_with_heartbeat(&ws, &row, extra_env, None);
+
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert_eq!(result.completion.stdout.trim(), "|rid-real-pipeline");
         let _ = fs::remove_dir_all(ws.root());
     }
 

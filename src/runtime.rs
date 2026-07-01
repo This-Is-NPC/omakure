@@ -79,16 +79,23 @@ pub fn command_for_script_with_env(
     Ok(command)
 }
 
-/// Return the injected `PATH` value from `env` (last write wins, matching
-/// `cmd.env` semantics), then resolve `program` against it. Returns `None`
-/// when there is no injected `PATH` or the program is not found there.
+/// Return the injected `PATH` value from `env`, then resolve `program` against
+/// it. An exact `PATH` key is preferred because that is what Unix exec lookup
+/// uses; if absent, fall back to a case-insensitive match so Windows-style
+/// `Path` remains useful. Within each key class, last write wins, matching
+/// `cmd.env` semantics.
 pub(crate) fn resolve_interpreter(program: &str, env: &[(String, String)]) -> Option<PathBuf> {
-    // Match `PATH` case-insensitively so a Windows `Path` key is honored too.
-    let injected_path = env
+    let exact_path = env
         .iter()
         .rev()
-        .find(|(k, _)| k.eq_ignore_ascii_case("PATH"))
-        .map(|(_, v)| v.as_str())?;
+        .find(|(k, _)| k == "PATH")
+        .map(|(_, v)| v.as_str());
+    let injected_path = exact_path.or_else(|| {
+        env.iter()
+            .rev()
+            .find(|(k, _)| k.eq_ignore_ascii_case("PATH"))
+            .map(|(_, v)| v.as_str())
+    })?;
     resolve_program_in_path(program, injected_path)
 }
 
@@ -321,5 +328,32 @@ mod tests {
         let env = vec![("PATH".to_string(), empty.path().display().to_string())];
         let cmd = command_for_script_with_env(&script, &env).unwrap();
         assert_eq!(cmd.get_program(), python_program());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_interpreter_prefers_exact_path_over_case_variant() {
+        let exact_dir = tempfile::tempdir().unwrap();
+        let exact_shim = write_shim(exact_dir.path(), "python3");
+        let variant_dir = tempfile::tempdir().unwrap();
+        let _variant_shim = write_shim(variant_dir.path(), "python3");
+        let env = vec![
+            ("Path".to_string(), variant_dir.path().display().to_string()),
+            ("PATH".to_string(), exact_dir.path().display().to_string()),
+        ];
+
+        let resolved = resolve_interpreter("python3", &env).expect("exact PATH shim found");
+        assert_eq!(resolved, exact_shim);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_interpreter_falls_back_to_case_insensitive_path() {
+        let variant_dir = tempfile::tempdir().unwrap();
+        let variant_shim = write_shim(variant_dir.path(), "python3");
+        let env = vec![("Path".to_string(), variant_dir.path().display().to_string())];
+
+        let resolved = resolve_interpreter("python3", &env).expect("Path shim found");
+        assert_eq!(resolved, variant_shim);
     }
 }

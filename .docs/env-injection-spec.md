@@ -91,15 +91,22 @@ After the merged env is produced (post-precedence, section 1), each
   once. Substituted output is **not re-scanned** — there is **no
   recursion**. If an expansion produces text that itself looks like
   `$FOO`, that text is emitted literally.
-- **Source of values.** References resolve against the **already-merged
-  env** (the full map from section 1), not against a partial or
-  pre-merge view. Crucially this **includes the parent shell env
-  (layer 1)**: a reference like `$PATH` resolves to the inherited parent
-  value, so a self-referencing value such as `PATH=/x/bin:$PATH` prepends
-  to the existing PATH rather than referencing the file's own raw value
-  (which would double the prefix and leave a literal `$PATH`). References
-  MUST NOT be expanded against only the current file's own keys.
-- **Layer order within expansion.** Values are expanded as each layer is
+- **Source of values.** References resolve against the accumulated map
+  available while user-provided layers are folded: the parent shell env
+  (layer 1), then managed active env (layer 2), then optional `--env-file`
+  (layer 3). Crucially this **includes the parent shell env (layer 1)**: a
+  reference like `$PATH` resolves to the inherited parent value, so a
+  self-referencing value such as `PATH=/x/bin:$PATH` prepends to the
+  existing PATH rather than referencing the file's own raw value (which
+  would double the prefix and leave a literal `$PATH`). References MUST NOT
+  be expanded against only the current file's own keys.
+- **Reserved vars are not expansion sources.** `OMAKURE_RUN_ID` and
+  `OMAKURE_SCRIPTS_DIR` are injected last by `execute_with_heartbeat` after
+  layer-2/layer-3 expansion has already completed. A `.conf` or
+  `--env-file` value such as `id=$OMAKURE_RUN_ID` therefore expands the
+  reference as undefined (`id=`). The reserved key itself is still injected
+  afterward and remains non-overridable at process spawn time.
+- **Layer order within expansion.** Values are expanded as each user layer is
   folded in (1 → 2 → 3), against the accumulator built so far. A value in
   a higher-priority layer therefore sees the already-expanded value from a
   lower layer for the same key (e.g. an `--env-file` `PATH=/a:$PATH` sees
@@ -148,12 +155,11 @@ letters, digits, or underscores). The braced form `${...}` accepts the
   verbatim** — there are no other escape sequences. `\n`, `\\`, `\t`,
   etc. are passed through unchanged as the two (or more) literal
   characters they are.
-  - Example: `a\b` → `a\b`; `\\` → `\\`; `\\$X` → `\` followed by the
-    expansion of `$X` (the first `\` is literal because it is not
-    directly before `$`; the second char is `\`… — see note). To avoid
-    ambiguity, implement escaping as: scan for `\$` as a two-character
-    unit first; any other `\` is a literal character with no special
-    meaning.
+  - Example: `a\b` → `a\b`; `\\` → `\\`; `\\$X` → `\$X` (the first
+    `\` is literal, then `\$` emits a literal `$`; the `X` is not
+    re-scanned as a reference). To avoid ambiguity, implement escaping as:
+    scan for `\$` as a two-character unit first; any other `\` is a
+    literal character with no special meaning.
 
 ### 2.5 Explicitly forbidden / out of scope
 
@@ -179,8 +185,8 @@ active behavior by task 1755:
 
 ### 2.6 Worked examples
 
-Given merged env `FOO=bar`, `EMPTY=` (absent), `OMAKURE_RUN_ID=r-1`,
-and inherited parent `PATH=/usr/bin:/bin`:
+Given user-layer env `FOO=bar`, `EMPTY=` (absent), no expandable reserved
+vars, and inherited parent `PATH=/usr/bin:/bin`:
 
 | Input value | Expanded output |
 |-------------|-----------------|
@@ -195,7 +201,7 @@ and inherited parent `PATH=/usr/bin:/bin`:
 | `$(echo hi)` | `$(echo hi)` |
 | `` `date` `` | `` `date` `` (backticks literal) |
 | `${FOO:-x}` | `` (empty — `FOO:-x` is not a valid name) |
-| `id=$OMAKURE_RUN_ID` | `id=r-1` |
+| `id=$OMAKURE_RUN_ID` | `id=` (reserved vars are injected after expansion) |
 | `$1abc` | `$1abc` (`$1` literal, then `abc`) |
 | `${FOO` | `${FOO` (unterminated, literal) |
 

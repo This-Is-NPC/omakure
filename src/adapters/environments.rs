@@ -7,6 +7,8 @@ pub use crate::ports::{EnvFile, EnvironmentConfig};
 use crate::ports::{EnvPreview, EnvironmentRepository};
 use crate::util::{read_dir_or_empty, read_file_if_exists};
 
+pub(crate) const MASKED_ENV_VALUE: &str = "****";
+
 pub struct FsEnvironmentRepository {
     envs_dir: PathBuf,
 }
@@ -184,8 +186,8 @@ pub(crate) fn parse_env_preview(contents: &str) -> Vec<(String, String)> {
             continue;
         }
         let mut value = strip_quotes(raw_value).trim().to_string();
-        if is_sensitive_key(key) && !value.is_empty() {
-            value = "***".to_string();
+        if should_mask_env_value(key, &value) {
+            value = MASKED_ENV_VALUE.to_string();
         }
         entries.push((key.to_string(), value));
     }
@@ -232,8 +234,9 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
 /// Line handling (comments, `export ` prefix, quote stripping, empty-value
 /// skipping) mirrors [`parse_env_defaults`]. Values are returned **raw** —
 /// `$VAR` / `${VAR}` expansion is deferred to [`merge_env_layers`], which
-/// sources references from the fully merged env (parent shell + all layers),
-/// per `.docs/env-injection-spec.md` §2.
+/// sources references from the parent shell plus prior user-provided layers,
+/// per `.docs/env-injection-spec.md` §2. Reserved vars are injected later by
+/// the executor and are not visible to this expansion step.
 fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)> {
     let mut pairs: Vec<(String, String)> = Vec::new();
 
@@ -335,15 +338,15 @@ fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)> {
 /// `.omaken/envs/active`, read from `.omaken/envs/<name>.conf` and parsed
 /// case-sensitively via [`parse_env_pairs_raw`], then expanded and merged by
 /// [`merge_env_layers`] on top of the parent shell env (layer 1). The
-/// remaining layers are applied by the caller *around* these pairs so a later
-/// layer always wins per key:
+/// remaining layers are handled by the run path so later layers always win per
+/// key:
 ///
 /// - **Layer 1** (parent shell env) is inherited by the child automatically
 ///   and is overridden by any key returned here. It is **also** the base
 ///   expansion source, so a value like `PATH=/x/bin:$PATH` prepends to the
 ///   inherited PATH (and does not leak parent keys into the returned pairs).
-/// - **Layer 3** (CLI `--env-file`) is a future input owned by another task;
-///   when added it is appended after these pairs (higher priority).
+/// - **Layer 3** (CLI `--env-file`) is composed by [`resolve_run_env`], which
+///   re-reads the active env and folds the env-file layer on top in one merge.
 /// - **Layer 4** (`OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR`) is pushed onto
 ///   `extra_env` *after* these pairs in
 ///   [`crate::run_executor::execute_with_heartbeat`], and is therefore
@@ -511,9 +514,44 @@ fn strip_quotes(value: &str) -> &str {
 pub(crate) fn is_sensitive_key(key: &str) -> bool {
     let lower = key.to_ascii_lowercase();
     let tokens = [
-        "password", "secret", "token", "key", "api", "private", "cred",
+        "password",
+        "passwd",
+        "pwd",
+        "secret",
+        "token",
+        "key",
+        "api",
+        "private",
+        "cred",
+        "passphrase",
+        "auth",
+        "bearer",
     ];
     tokens.iter().any(|token| lower.contains(token))
+}
+
+pub(crate) fn value_contains_credentials(value: &str) -> bool {
+    let Some(scheme_end) = value.find("://") else {
+        return false;
+    };
+    if scheme_end == 0 {
+        return false;
+    }
+    let authority = &value[scheme_end + 3..];
+    let authority_end = authority.find(['/', '?', '#']).unwrap_or(authority.len());
+    let authority = &authority[..authority_end];
+    let Some(at) = authority.rfind('@') else {
+        return false;
+    };
+    let userinfo = &authority[..at];
+    let Some(colon) = userinfo.find(':') else {
+        return false;
+    };
+    colon > 0 && colon + 1 < userinfo.len()
+}
+
+pub(crate) fn should_mask_env_value(key: &str, value: &str) -> bool {
+    !value.is_empty() && (is_sensitive_key(key) || value_contains_credentials(value))
 }
 
 #[cfg(test)]
@@ -534,6 +572,12 @@ mod tests {
     #[case::private("PRIVATE_KEY", true)]
     #[case::cred("CREDENTIALS", true)]
     #[case::key("SSH_KEY", true)]
+    #[case::passwd("MYSQL_PASSWD", true)]
+    #[case::pwd("MYSQL_PWD", true)]
+    #[case::passphrase("SSH_PASSPHRASE", true)]
+    #[case::basic_auth("BASIC_AUTH", true)]
+    #[case::authorization("AUTHORIZATION", true)]
+    #[case::bearer("BEARER_HEADER", true)]
     #[case::url_not_sensitive("DATABASE_URL", false)]
     #[case::name_not_sensitive("APP_NAME", false)]
     #[case::port_not_sensitive("PORT", false)]
@@ -609,8 +653,9 @@ mod tests {
 
     #[rstest]
     #[case::simple_pair("HOST=localhost", vec![("HOST", "localhost")])]
-    #[case::sensitive_masked("DB_PASSWORD=secret123", vec![("DB_PASSWORD", "***")])]
-    #[case::api_key_masked("API_KEY=abc", vec![("API_KEY", "***")])]
+    #[case::sensitive_masked("DB_PASSWORD=secret123", vec![("DB_PASSWORD", "****")])]
+    #[case::api_key_masked("API_KEY=abc", vec![("API_KEY", "****")])]
+    #[case::credential_url_masked("DATABASE_URL=postgres://user:pass@localhost/db", vec![("DATABASE_URL", "****")])]
     #[case::comment_skipped("# comment\nNAME=test", vec![("NAME", "test")])]
     fn test_parse_env_preview(#[case] input: &str, #[case] expected: Vec<(&str, &str)>) {
         let result = parse_env_preview(input);
@@ -873,10 +918,10 @@ mod tests {
     #[case::undefined_bare("a$BAZ", "a")]
     #[case::undefined_braced("x${BAZ}y", "xy")]
     #[case::escaped_dollar("\\$FOO", "$FOO")]
+    #[case::literal_backslash_then_escaped_dollar("\\\\$FOO", "\\$FOO")]
     #[case::command_sub_literal("$(echo hi)", "$(echo hi)")]
     #[case::backtick_literal("`date`", "`date`")]
     #[case::rich_form_empty("${FOO:-x}", "")]
-    #[case::reserved_visible("id=$OMAKURE_RUN_ID", "id=r-1")]
     #[case::digit_literal("$1abc", "$1abc")]
     #[case::unterminated_brace("${FOO", "${FOO")]
     #[case::bare_no_name("$ ", "$ ")]
@@ -1040,6 +1085,16 @@ mod tests {
             preview[0],
             ("HOST".to_string(), "prod.example.com".to_string())
         );
-        assert_eq!(preview[1], ("API_KEY".to_string(), "***".to_string()));
+        assert_eq!(preview[1], ("API_KEY".to_string(), "****".to_string()));
+    }
+
+    #[rstest]
+    #[case::postgres_password("postgres://user:pass@localhost/db", true)]
+    #[case::https_basic_auth("https://user:pass@example.com/path", true)]
+    #[case::no_password("postgres://user@localhost/db", false)]
+    #[case::no_user("postgres://localhost/db", false)]
+    #[case::not_url("user:pass@localhost", false)]
+    fn test_value_contains_credentials(#[case] value: &str, #[case] expected: bool) {
+        assert_eq!(value_contains_credentials(value), expected);
     }
 }

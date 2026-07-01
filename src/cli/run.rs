@@ -73,8 +73,10 @@ pub fn run(
     // (`.docs/env-injection-spec.md` §1): the active managed env, with the
     // optional CLI `--env-file` folded on top (env-file wins per key). The
     // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
-    // pushed after this inside `execute_with_heartbeat` and stay
-    // non-overridable. A missing/unreadable `--env-file` is a hard error.
+    // pushed after this inside `execute_with_heartbeat`, stay
+    // non-overridable, and are therefore not visible to `$VAR` expansion in
+    // `.conf` / `--env-file` values. A missing/unreadable `--env-file` is a
+    // hard error.
     let extra_env = match crate::adapters::environments::resolve_run_env(
         workspace.envs_dir(),
         options.env_file.as_deref(),

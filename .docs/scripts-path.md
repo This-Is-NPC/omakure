@@ -90,8 +90,8 @@ Supported pattern subset:
 - A trailing `/` means directory-only and prunes the whole subtree, for
   example `helpers/` skips `helpers` and everything below it.
 - `*` matches any sequence of characters.
-- Patterns containing `/` match the root-relative path, for example
-  `fixtures/*.sh`.
+- Patterns containing `/` match paths relative to the directory containing
+  that `.omakureignore`, for example `fixtures/*.sh`.
 - Patterns without `/` match any path component, for example `scratch.py`
   or `*.tmp.py` at any depth.
 

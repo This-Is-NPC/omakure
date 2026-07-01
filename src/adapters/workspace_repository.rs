@@ -57,8 +57,8 @@ impl ScriptRepository for FsWorkspaceRepository {
 
     fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>> {
         let mut scripts = Vec::new();
-        let ignore = IgnoreContext::load_for_dir(&self.root, &self.root);
-        collect_scripts(&self.root, &ignore, &mut scripts)?;
+        let mut ignore = IgnoreContext::load_for_dir(&self.root, &self.root);
+        collect_scripts(&self.root, &mut ignore, &mut scripts)?;
         Ok(scripts)
     }
 
@@ -80,7 +80,7 @@ impl ScriptRepository for FsWorkspaceRepository {
 
 fn collect_scripts(
     dir: &Path,
-    ignore: &IgnoreContext,
+    ignore: &mut IgnoreContext,
     scripts: &mut Vec<PathBuf>,
 ) -> io::Result<()> {
     let entries = read_dir_or_empty(dir)?;
@@ -91,8 +91,12 @@ fn collect_scripts(
             if should_skip_dir(&path) || ignore.matches(&path, true) {
                 continue;
             }
-            let child_ignore = ignore.with_dir(&path);
-            collect_scripts(&path, &child_ignore, scripts)?;
+            let pushed = ignore.push_dir(&path);
+            let result = collect_scripts(&path, ignore, scripts);
+            if pushed {
+                ignore.pop_dir();
+            }
+            result?;
         } else if path.is_file() && script_kind(&path).is_some() && !ignore.matches(&path, false) {
             scripts.push(path);
         }
@@ -101,7 +105,7 @@ fn collect_scripts(
     Ok(())
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 struct IgnoreContext {
     files: Vec<OmakureIgnore>,
 }
@@ -110,28 +114,33 @@ impl IgnoreContext {
     fn load_for_dir(root: &Path, dir: &Path) -> Self {
         let mut context = Self::default();
         let Ok(rel) = dir.strip_prefix(root) else {
-            return context.with_dir(root);
+            context.push_dir(root);
+            return context;
         };
 
-        context = context.with_dir(root);
+        context.push_dir(root);
         let mut cursor = root.to_path_buf();
         for component in rel.components() {
             let std::path::Component::Normal(part) = component else {
                 continue;
             };
             cursor.push(part);
-            context = context.with_dir(&cursor);
+            context.push_dir(&cursor);
         }
         context
     }
 
-    fn with_dir(&self, dir: &Path) -> Self {
-        let mut next = self.clone();
+    fn push_dir(&mut self, dir: &Path) -> bool {
         let ignore = OmakureIgnore::load(dir);
         if !ignore.patterns.is_empty() {
-            next.files.push(ignore);
+            self.files.push(ignore);
+            return true;
         }
-        next
+        false
+    }
+
+    fn pop_dir(&mut self) {
+        self.files.pop();
     }
 
     fn matches(&self, path: &Path, is_dir: bool) -> bool {
@@ -139,13 +148,13 @@ impl IgnoreContext {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 struct OmakureIgnore {
     root: PathBuf,
     patterns: Vec<IgnorePattern>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct IgnorePattern {
     pattern: String,
     anchored: bool,

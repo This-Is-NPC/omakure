@@ -82,7 +82,7 @@ pub fn command_for_script_with_env(
 /// Return the injected `PATH` value from `env` (last write wins, matching
 /// `cmd.env` semantics), then resolve `program` against it. Returns `None`
 /// when there is no injected `PATH` or the program is not found there.
-fn resolve_interpreter(program: &str, env: &[(String, String)]) -> Option<PathBuf> {
+pub(crate) fn resolve_interpreter(program: &str, env: &[(String, String)]) -> Option<PathBuf> {
     // Match `PATH` case-insensitively so a Windows `Path` key is honored too.
     let injected_path = env
         .iter()

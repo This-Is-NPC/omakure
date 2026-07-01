@@ -8,6 +8,52 @@ Environment defaults live in `.omaken/envs/*.conf`. The active file name is stor
 - Keys are matched (case-insensitive) to schema field names.
 - When a match exists, the value is used as the default in the TUI.
 
+## Runtime injection into scripts
+
+Beyond prefilling TUI field defaults, the **active** env file is injected
+into the environment of the spawned script process (its `os.environ`) at
+every run entry point — the TUI, the queue worker, and `omakure run`. So
+`.omaken/envs/<active>.conf` is where you put secrets and config that a
+script reads from the environment at runtime.
+
+- **Key case is preserved** for injected vars (unlike the TUI-prefill
+  match, which is case-insensitive). `PATH` stays `PATH` — it is not
+  lowercased — so case-sensitive vars like `PATH`/`VIRTUAL_ENV` work on
+  Linux/macOS.
+- **Variable expansion**: values support single-pass `$VAR` and
+  `${VAR}` substitution sourced from the merged env. Undefined vars
+  expand to empty; `\$` is a literal `$`. No command substitution
+  (`$(...)`/backticks) and no recursion. See
+  `env-injection-spec.md` §2 for the full grammar.
+- **Precedence** (lowest → highest): parent shell env < managed active
+  env (`.omaken/envs/*.conf`) < CLI `--env-file` < Omakure-reserved
+  (`OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR` always win and cannot be
+  overridden).
+- **Secrets are not persisted**: injected values reach the child process
+  at spawn only. They are never written to `runs.sqlite`, logs, or the
+  trace. (Residual exposure: readable via `/proc/<pid>/environ` and
+  inherited by grandchild processes — an accepted tradeoff.) See
+  `env-injection-spec.md` §3.
+
+## Selecting an interpreter / virtual env (venv-via-PATH)
+
+Interpreter selection is just env injection — there is no separate
+`python=` setting. Prepend a virtual-env `bin` directory to `PATH` (and
+optionally set `VIRTUAL_ENV`) in the active env file, and Omakure runs
+that interpreter. The interpreter is resolved to an **absolute path** by
+a which-style lookup against the injected `PATH`, so the venv's `python`
+runs instead of the system one. The same mechanism is language-agnostic
+— it works for Node (`nvm`, `node_modules/.bin`), Ruby (`rbenv`), etc.
+
+```
+VIRTUAL_ENV=/home/me/project/.venv
+PATH=/home/me/project/.venv/bin:$PATH
+```
+
+Run `omakure config` (or `omakure env`) to see the resolved active-env
+keys (sensitive values masked) and the absolute interpreter path Omakure
+will actually execute — useful for debugging env collisions.
+
 ## Switch environments
 
 Use the TUI (`Ctrl+/` then `e`) to select the active file.

@@ -22,11 +22,12 @@ impl ScriptRepository for FsWorkspaceRepository {
     fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>> {
         let mut entries_out = Vec::new();
         let entries = read_dir_or_empty(dir)?;
+        let ignore = OmakureIgnore::load(&self.root);
 
         for entry in entries {
             let path = entry.path();
             if path.is_dir() {
-                if should_skip_dir(&path) {
+                if should_skip_dir(&path) || ignore.matches(&path, true) {
                     continue;
                 }
                 entries_out.push(WorkspaceEntry {
@@ -35,7 +36,7 @@ impl ScriptRepository for FsWorkspaceRepository {
                 });
                 continue;
             }
-            if path.is_file() && script_kind(&path).is_some() {
+            if path.is_file() && script_kind(&path).is_some() && !ignore.matches(&path, false) {
                 entries_out.push(WorkspaceEntry {
                     path,
                     kind: WorkspaceEntryKind::Script,
@@ -56,7 +57,8 @@ impl ScriptRepository for FsWorkspaceRepository {
 
     fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>> {
         let mut scripts = Vec::new();
-        collect_scripts(&self.root, &mut scripts)?;
+        let ignore = OmakureIgnore::load(&self.root);
+        collect_scripts(&self.root, &ignore, &mut scripts)?;
         Ok(scripts)
     }
 
@@ -76,22 +78,175 @@ impl ScriptRepository for FsWorkspaceRepository {
     }
 }
 
-fn collect_scripts(dir: &Path, scripts: &mut Vec<PathBuf>) -> io::Result<()> {
+fn collect_scripts(
+    dir: &Path,
+    ignore: &OmakureIgnore,
+    scripts: &mut Vec<PathBuf>,
+) -> io::Result<()> {
     let entries = read_dir_or_empty(dir)?;
 
     for entry in entries {
         let path = entry.path();
         if path.is_dir() {
-            if should_skip_dir(&path) {
+            if should_skip_dir(&path) || ignore.matches(&path, true) {
                 continue;
             }
-            collect_scripts(&path, scripts)?;
-        } else if path.is_file() && script_kind(&path).is_some() {
+            collect_scripts(&path, ignore, scripts)?;
+        } else if path.is_file() && script_kind(&path).is_some() && !ignore.matches(&path, false) {
             scripts.push(path);
         }
     }
 
     Ok(())
+}
+
+#[derive(Debug, Default)]
+struct OmakureIgnore {
+    root: PathBuf,
+    patterns: Vec<IgnorePattern>,
+}
+
+#[derive(Debug)]
+struct IgnorePattern {
+    pattern: String,
+    anchored: bool,
+    dir_only: bool,
+    has_slash: bool,
+}
+
+impl OmakureIgnore {
+    fn load(root: &Path) -> Self {
+        let path = root.join(".omakureignore");
+        let contents = match fs::read_to_string(&path) {
+            Ok(contents) => contents,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                return Self {
+                    root: root.to_path_buf(),
+                    patterns: Vec::new(),
+                };
+            }
+            Err(err) => {
+                eprintln!(
+                    "warning: failed to read {}: {}; continuing without .omakureignore",
+                    path.display(),
+                    err
+                );
+                return Self {
+                    root: root.to_path_buf(),
+                    patterns: Vec::new(),
+                };
+            }
+        };
+
+        let patterns = contents
+            .lines()
+            .filter_map(|line| IgnorePattern::parse(line, &path))
+            .collect();
+
+        Self {
+            root: root.to_path_buf(),
+            patterns,
+        }
+    }
+
+    fn matches(&self, path: &Path, is_dir: bool) -> bool {
+        if self.patterns.is_empty() {
+            return false;
+        }
+        let Ok(rel) = path.strip_prefix(&self.root) else {
+            return false;
+        };
+        let rel = normalize_relative_path(rel);
+        if rel.is_empty() {
+            return false;
+        }
+        self.patterns
+            .iter()
+            .any(|pattern| pattern.matches(&rel, is_dir))
+    }
+}
+
+impl IgnorePattern {
+    fn parse(line: &str, source: &Path) -> Option<Self> {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            return None;
+        }
+        if trimmed.contains('\0') {
+            eprintln!(
+                "warning: ignoring malformed .omakureignore pattern in {}",
+                source.display()
+            );
+            return None;
+        }
+        let anchored = trimmed.starts_with('/');
+        let dir_only = trimmed.ends_with('/');
+        let pattern = trimmed
+            .trim_start_matches('/')
+            .trim_end_matches('/')
+            .replace('\\', "/");
+        if pattern.is_empty() {
+            return None;
+        }
+        Some(Self {
+            anchored,
+            has_slash: pattern.contains('/'),
+            pattern,
+            dir_only,
+        })
+    }
+
+    fn matches(&self, rel: &str, is_dir: bool) -> bool {
+        if self.dir_only && !is_dir {
+            return false;
+        }
+        if self.anchored || self.has_slash {
+            wildcard_match(&self.pattern, rel)
+        } else {
+            rel.split('/')
+                .any(|component| wildcard_match(&self.pattern, component))
+        }
+    }
+}
+
+fn normalize_relative_path(path: &Path) -> String {
+    path.components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(part) => Some(part.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn wildcard_match(pattern: &str, value: &str) -> bool {
+    let pattern = pattern.as_bytes();
+    let value = value.as_bytes();
+    let (mut p, mut v) = (0, 0);
+    let mut star = None;
+    let mut star_value = 0;
+
+    while v < value.len() {
+        if p < pattern.len() && pattern[p] == value[v] {
+            p += 1;
+            v += 1;
+        } else if p < pattern.len() && pattern[p] == b'*' {
+            star = Some(p);
+            p += 1;
+            star_value = v;
+        } else if let Some(star_pos) = star {
+            p = star_pos + 1;
+            star_value += 1;
+            v = star_value;
+        } else {
+            return false;
+        }
+    }
+
+    while p < pattern.len() && pattern[p] == b'*' {
+        p += 1;
+    }
+    p == pattern.len()
 }
 
 fn should_skip_dir(path: &Path) -> bool {
@@ -237,6 +392,145 @@ mod tests {
                 "should skip .omaken/envs"
             );
         }
+    }
+
+    #[rstest]
+    fn test_omakureignore_excludes_matching_file(workspace_with_scripts: (TempDir, PathBuf)) {
+        let (_tmp, root) = workspace_with_scripts;
+        fs::write(root.join(".omakureignore"), "setup.py\n").unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+
+        let scripts = repo.list_scripts_recursive().unwrap();
+        let names: Vec<String> = scripts
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+
+        assert!(!names.contains(&"setup.py".to_string()));
+        assert!(names.contains(&"deploy.sh".to_string()));
+    }
+
+    #[rstest]
+    fn test_omakureignore_prunes_directory_subtree(workspace_with_scripts: (TempDir, PathBuf)) {
+        let (_tmp, root) = workspace_with_scripts;
+        fs::write(root.join(".omakureignore"), "infra/\n").unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+
+        let scripts = repo.list_scripts_recursive().unwrap();
+        let paths: Vec<String> = scripts
+            .iter()
+            .map(|p| {
+                p.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert!(!paths.iter().any(|path| path.starts_with("infra/")));
+        assert!(paths.contains(&"deploy.sh".to_string()));
+    }
+
+    #[rstest]
+    fn test_omakureignore_comments_blank_lines_and_globs(
+        workspace_with_scripts: (TempDir, PathBuf),
+    ) {
+        let (_tmp, root) = workspace_with_scripts;
+        fs::write(
+            root.join(".omakureignore"),
+            "# ignored patterns\n\ninfra/*.ps1\n*.py\n",
+        )
+        .unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+
+        let scripts = repo.list_scripts_recursive().unwrap();
+        let paths: Vec<String> = scripts
+            .iter()
+            .map(|p| {
+                p.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert!(!paths.contains(&"setup.py".to_string()));
+        assert!(!paths.contains(&"infra/config.ps1".to_string()));
+        assert!(paths.contains(&"infra/provision.bash".to_string()));
+    }
+
+    #[rstest]
+    fn test_omakureignore_leading_slash_matches_root_relative(
+        workspace_with_scripts: (TempDir, PathBuf),
+    ) {
+        let (_tmp, root) = workspace_with_scripts;
+        fs::create_dir_all(root.join("nested")).unwrap();
+        fs::write(root.join("nested/setup.py"), "print('nested')").unwrap();
+        fs::write(root.join(".omakureignore"), "/setup.py\n").unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+
+        let scripts = repo.list_scripts_recursive().unwrap();
+        let paths: Vec<String> = scripts
+            .iter()
+            .map(|p| {
+                p.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert!(!paths.contains(&"setup.py".to_string()));
+        assert!(paths.contains(&"nested/setup.py".to_string()));
+    }
+
+    #[rstest]
+    fn test_absent_omakureignore_keeps_existing_behavior(
+        workspace_with_scripts: (TempDir, PathBuf),
+    ) {
+        let (_tmp, root) = workspace_with_scripts;
+        let repo = FsWorkspaceRepository::new(&root);
+
+        let scripts = repo.list_scripts_recursive().unwrap();
+
+        assert_eq!(scripts.len(), 4);
+    }
+
+    #[rstest]
+    fn test_unreadable_omakureignore_degrades_gracefully(
+        workspace_with_scripts: (TempDir, PathBuf),
+    ) {
+        let (_tmp, root) = workspace_with_scripts;
+        fs::write(root.join(".omakureignore"), [0xff, 0xfe, 0xfd]).unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+
+        let scripts = repo.list_scripts_recursive().unwrap();
+
+        assert_eq!(scripts.len(), 4);
+    }
+
+    #[rstest]
+    fn test_list_entries_honors_omakureignore(workspace_with_scripts: (TempDir, PathBuf)) {
+        let (_tmp, root) = workspace_with_scripts;
+        fs::write(root.join(".omakureignore"), "infra/\nsetup.py\n").unwrap();
+        let repo = FsWorkspaceRepository::new(&root);
+
+        let entries = repo.list_entries(&root).unwrap();
+        let names: Vec<String> = entries
+            .iter()
+            .map(|entry| {
+                entry
+                    .path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+
+        assert!(!names.contains(&"infra".to_string()));
+        assert!(!names.contains(&"setup.py".to_string()));
+        assert!(names.contains(&"deploy.sh".to_string()));
     }
 
     #[test]

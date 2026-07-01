@@ -60,6 +60,43 @@ See `usage.md` for the full description of the global-vs-session split
 and `environments.md` for the optional `<PATH>/omakure.conf` session
 env.
 
+## Exclude paths from scanning
+
+Create a `.omakureignore` file at the scripts root to keep matching files
+and directories out of Omakure's script scan. Ignored scripts do not appear
+in the TUI, `omakure scripts`, the search index, or the scheduler because
+all of those surfaces use the same recursive scanner.
+
+Example:
+
+```gitignore
+# Helpers and generated files
+helpers/
+fixtures/*.sh
+*.tmp.py
+scratch.py
+```
+
+Supported pattern subset:
+
+- Blank lines and lines starting with `#` are ignored.
+- Patterns are evaluated relative to the scripts root.
+- A leading `/` anchors the same root-relative path (`/scratch.py` matches
+  `scratch.py`).
+- A trailing `/` means directory-only and prunes the whole subtree, for
+  example `helpers/` skips `helpers` and everything below it.
+- `*` matches any sequence of characters.
+- Patterns containing `/` match the root-relative path, for example
+  `fixtures/*.sh`.
+- Patterns without `/` match any path component, for example `scratch.py`
+  or `*.tmp.py` at any depth.
+
+Unsupported gitignore features are not implemented: nested `.omakureignore`
+files, negation with `!`, `**` special semantics, character classes, and
+escaped `#` comments. If `.omakureignore` cannot be read or decoded, Omakure
+prints a warning and continues scanning with only the built-in skips
+(`.history`, `.git`, and `.omaken/envs`).
+
 ## Development note
 
 In debug builds, the app will use the repo `scripts/` folder if it exists. You can still override it with `OMAKURE_SCRIPTS_DIR`.

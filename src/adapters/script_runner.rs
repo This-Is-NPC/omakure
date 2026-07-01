@@ -4,7 +4,7 @@ use crate::adapters::system_checks::{
 };
 use crate::error::{AppResult, ScriptError};
 use crate::ports::{ScriptRunOutput, ScriptRunner};
-use crate::runtime::{command_for_script, script_kind, ScriptKind};
+use crate::runtime::{command_for_script, command_for_script_with_env, script_kind, ScriptKind};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -30,7 +30,9 @@ impl MultiScriptRunner {
         env: &[(String, String)],
     ) -> AppResult<Command> {
         ensure_runtime_for(script)?;
-        let mut cmd = command_for_script(script)?;
+        // Resolve the interpreter against the injected PATH (if any) so a
+        // venv-prepended PATH runs the venv interpreter, not the system one.
+        let mut cmd = command_for_script_with_env(script, env)?;
         cmd.args(args);
         for (k, v) in env {
             cmd.env(k, v);
@@ -125,6 +127,32 @@ mod tests {
 
         let result = MultiScriptRunner::build_command(&script, &[], &[]);
         assert!(result.is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_build_command_resolves_python_against_injected_path() {
+        use std::os::unix::fs::PermissionsExt;
+        // Shim `python3` on an injected PATH must become the command program
+        // as an absolute path, proving build_command threads env into
+        // interpreter resolution (task 1755 wiring).
+        let shim_dir = TempDir::new().unwrap();
+        let shim = shim_dir.path().join("python3");
+        fs::write(&shim, "#!/bin/sh\necho SHIM\n").unwrap();
+        let mut perms = fs::metadata(&shim).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&shim, perms).unwrap();
+
+        let script_dir = TempDir::new().unwrap();
+        let script = script_dir.path().join("job.py");
+        fs::write(&script, "print('x')").unwrap();
+
+        let inherited = std::env::var("PATH").unwrap_or_default();
+        let injected = format!("{}:{}", shim_dir.path().display(), inherited);
+        let env = vec![("PATH".to_string(), injected)];
+
+        let cmd = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
+        assert_eq!(cmd.get_program(), shim.as_os_str());
     }
 
     #[test]

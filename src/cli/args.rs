@@ -339,6 +339,16 @@ pub struct RunArgs {
     #[arg(long = "no-prompt")]
     pub no_prompt: bool,
 
+    /// Path to an env file whose `KEY=value` pairs are injected into the
+    /// script process for this run only. Values override the managed
+    /// active env for the same key, but omakure-reserved vars
+    /// (`OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR`) always win. A missing or
+    /// unreadable path is a hard error.
+    ///
+    /// Example: `omakure run deploy --env-file ./.venv.env -- --target prod`
+    #[arg(long = "env-file", value_name = "PATH")]
+    pub env_file: Option<PathBuf>,
+
     /// Arguments forwarded to the script
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,

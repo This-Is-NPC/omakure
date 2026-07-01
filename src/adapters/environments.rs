@@ -322,6 +322,46 @@ pub(crate) fn resolve_active_env(envs_dir: &Path) -> Vec<(String, String)> {
     }
 }
 
+/// Resolve the full per-run `extra_env` for a `omakure run` invocation:
+/// layer 2 (managed active env) with an optional layer 3 (CLI `--env-file`)
+/// folded **on top** (`.docs/env-injection-spec.md` §1).
+///
+/// This is the single composition root for the layer-2 + layer-3 merge so the
+/// precedence logic lives in exactly one place, not inline at the call site.
+/// Per key (compared case-sensitively) the `--env-file` value **overrides**
+/// the active-env value; a key present in only one source is kept. The
+/// reserved layer-4 vars (`OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR`) are pushed
+/// *after* this vec in [`crate::run_executor::execute_with_heartbeat`] and so
+/// remain non-overridable by either layer here.
+///
+/// Unlike [`resolve_active_env`] (best-effort — an absent active env yields an
+/// empty vec), an `env_file` path the caller **explicitly** passed that cannot
+/// be read is a hard error: silently ignoring a user-supplied path would hide
+/// typos and stale references.
+pub(crate) fn resolve_run_env(
+    envs_dir: &Path,
+    env_file: Option<&Path>,
+) -> Result<Vec<(String, String)>, EnvironmentError> {
+    let mut merged = resolve_active_env(envs_dir);
+    if let Some(path) = env_file {
+        let contents = fs::read_to_string(path).map_err(|err| {
+            EnvironmentError::ReadFailed(format!(
+                "Failed to read --env-file {}: {}",
+                path.display(),
+                err
+            ))
+        })?;
+        for (key, value) in parse_env_injectable(&contents) {
+            match merged.iter_mut().find(|(k, _)| *k == key) {
+                // Override in place, preserving the active-env key's position.
+                Some(existing) => existing.1 = value,
+                None => merged.push((key, value)),
+            }
+        }
+    }
+    Ok(merged)
+}
+
 fn is_name_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_'
 }
@@ -633,6 +673,82 @@ mod tests {
         fs::write(envs.join("active"), "ghost.conf\n").unwrap();
         // Unreadable/missing target must not fail the run — resolves empty.
         assert!(resolve_active_env(&envs).is_empty());
+    }
+
+    // --- resolve_run_env (layers 2 + 3 composition root, spec section 1) ---
+
+    #[test]
+    fn test_resolve_run_env_no_env_file_equals_active_env() {
+        // With no --env-file, resolve_run_env is exactly the active env.
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+        fs::write(envs.join("dev.conf"), "HOST=localhost\nPORT=8080").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        assert_eq!(
+            resolve_run_env(&envs, None).unwrap(),
+            resolve_active_env(&envs)
+        );
+    }
+
+    #[test]
+    fn test_resolve_run_env_env_file_overrides_active_env() {
+        // Layer 3 (--env-file) wins over layer 2 (active env) for the same
+        // case-sensitive key; a key only in the env-file is appended; a key
+        // only in the active env is preserved.
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+        fs::write(envs.join("dev.conf"), "HOST=active\nONLY_ACTIVE=keep").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let env_file = tmp.path().join("run.env");
+        fs::write(&env_file, "HOST=fromfile\nONLY_FILE=added").unwrap();
+
+        let merged = resolve_run_env(&envs, Some(&env_file)).unwrap();
+        // HOST overridden in place; active-only preserved; file-only appended.
+        assert_eq!(
+            merged,
+            vec![
+                ("HOST".to_string(), "fromfile".to_string()),
+                ("ONLY_ACTIVE".to_string(), "keep".to_string()),
+                ("ONLY_FILE".to_string(), "added".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_resolve_run_env_env_file_only_no_active() {
+        // No active env: the env-file pairs are the whole result.
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+
+        let env_file = tmp.path().join("run.env");
+        fs::write(&env_file, "TOKEN=abc").unwrap();
+
+        assert_eq!(
+            resolve_run_env(&envs, Some(&env_file)).unwrap(),
+            vec![("TOKEN".to_string(), "abc".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_resolve_run_env_missing_env_file_is_error() {
+        // An explicit --env-file path the user passed that does not exist
+        // must be a hard error, not a silent skip.
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+
+        let ghost = tmp.path().join("does-not-exist.env");
+        let err = resolve_run_env(&envs, Some(&ghost)).unwrap_err();
+        assert!(
+            err.to_string().contains("does-not-exist.env"),
+            "error should name the offending path, got: {}",
+            err
+        );
     }
 
     // --- expand_env_value grammar (spec section 2.6 worked examples) ---

@@ -69,12 +69,19 @@ pub fn run(
     .map_err(|err| -> Box<dyn Error> { err.into() })?;
     drop(conn);
 
-    // Layer 2 of the env-injection precedence table
-    // (`.docs/env-injection-spec.md` §1): the active managed env. The
+    // Layers 2 + 3 of the env-injection precedence table
+    // (`.docs/env-injection-spec.md` §1): the active managed env, with the
+    // optional CLI `--env-file` folded on top (env-file wins per key). The
     // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
     // pushed after this inside `execute_with_heartbeat` and stay
-    // non-overridable.
-    let extra_env = crate::adapters::environments::resolve_active_env(workspace.envs_dir());
+    // non-overridable. A missing/unreadable `--env-file` is a hard error.
+    let extra_env = match crate::adapters::environments::resolve_run_env(
+        workspace.envs_dir(),
+        options.env_file.as_deref(),
+    ) {
+        Ok(env) => env,
+        Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
+    };
     let result = execute_with_heartbeat(&workspace, &row, extra_env, None);
 
     let final_row = finalize_run(&workspace, &row.run_id, &result);
@@ -567,6 +574,7 @@ mod tests {
                 run_id: Some("rid-run-ok".into()),
                 parent_run_id: Some("parent-run".into()),
                 no_prompt: false,
+                env_file: None,
                 args: vec![],
             },
             false,
@@ -597,6 +605,7 @@ mod tests {
                 run_id: Some("rid-run-json".into()),
                 parent_run_id: None,
                 no_prompt: false,
+                env_file: None,
                 args: vec![],
             },
             true,
@@ -658,6 +667,7 @@ mod tests {
                 run_id: Some("rid-inject-cli".into()),
                 parent_run_id: None,
                 no_prompt: false,
+                env_file: None,
                 args: vec![],
             },
             false,
@@ -710,6 +720,7 @@ mod tests {
                 run_id: Some("rid-redact".into()),
                 parent_run_id: None,
                 no_prompt: false,
+                env_file: None,
                 args: vec![],
             },
             false,
@@ -729,6 +740,133 @@ mod tests {
         assert!(
             !contains_subslice(&bytes, b"supersecret_do_not_persist"),
             "injected secret value leaked into persistent storage"
+        );
+    }
+
+    // CALL SITE: `omakure run --env-file` (layer 3, spec §1). A var defined
+    // only in the passed env-file must reach the spawned process and land in
+    // the persisted stdout.
+    #[test]
+    #[cfg(unix)]
+    fn test_run_env_file_var_reaches_script() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let env_file = tmp.path().join("run.env");
+        fs::write(&env_file, "FROM_FILE=file_value_99").unwrap();
+
+        let script = write_schema_script(
+            &tmp,
+            "echo.sh",
+            r#"{"Name":"Echo","Fields":[]}"#,
+            "echo \"$FROM_FILE\"",
+        );
+
+        run(
+            tmp.path().to_path_buf(),
+            RunArgs {
+                script: script.to_string_lossy().to_string(),
+                actor: "human".into(),
+                reason: None,
+                run_id: Some("rid-envfile".into()),
+                parent_run_id: None,
+                no_prompt: false,
+                env_file: Some(env_file),
+                args: vec![],
+            },
+            false,
+        )
+        .unwrap();
+
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::get_run(&conn, "rid-envfile").unwrap().unwrap();
+        assert_eq!(row.state, RunState::Completed);
+        assert!(
+            row.stdout.contains("file_value_99"),
+            "expected env-file var in stdout, got: {:?}",
+            row.stdout
+        );
+    }
+
+    // PRECEDENCE (spec §1): a key set in BOTH the managed active env AND the
+    // --env-file resolves to the --env-file value in the spawned process.
+    #[test]
+    #[cfg(unix)]
+    fn test_run_env_file_overrides_active_env() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let envs = ws.envs_dir();
+        fs::write(envs.join("dev.conf"), "SHARED=from_active").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let env_file = tmp.path().join("run.env");
+        fs::write(&env_file, "SHARED=from_file").unwrap();
+
+        let script = write_schema_script(
+            &tmp,
+            "echo.sh",
+            r#"{"Name":"Echo","Fields":[]}"#,
+            "echo \"$SHARED\"",
+        );
+
+        run(
+            tmp.path().to_path_buf(),
+            RunArgs {
+                script: script.to_string_lossy().to_string(),
+                actor: "human".into(),
+                reason: None,
+                run_id: Some("rid-precedence".into()),
+                parent_run_id: None,
+                no_prompt: false,
+                env_file: Some(env_file),
+                args: vec![],
+            },
+            false,
+        )
+        .unwrap();
+
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::get_run(&conn, "rid-precedence").unwrap().unwrap();
+        assert_eq!(row.state, RunState::Completed);
+        assert!(
+            row.stdout.contains("from_file"),
+            "env-file must override active env, got: {:?}",
+            row.stdout
+        );
+        assert!(
+            !row.stdout.contains("from_active"),
+            "active-env value must be shadowed by the env-file, got: {:?}",
+            row.stdout
+        );
+    }
+
+    // A --env-file path the user passed that does not exist is a hard error
+    // (not silently ignored). The non-JSON surface returns an Err.
+    #[test]
+    #[cfg(unix)]
+    fn test_run_missing_env_file_is_error() {
+        let tmp = TempDir::new().unwrap();
+        let script = write_schema_script(&tmp, "ok.sh", r#"{"Name":"Ok","Fields":[]}"#, "true");
+
+        let result = run(
+            tmp.path().to_path_buf(),
+            RunArgs {
+                script: script.to_string_lossy().to_string(),
+                actor: "human".into(),
+                reason: None,
+                run_id: Some("rid-missing-envfile".into()),
+                parent_run_id: None,
+                no_prompt: false,
+                env_file: Some(tmp.path().join("nope.env")),
+                args: vec![],
+            },
+            false,
+        );
+
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("nope.env"),
+            "error should name the missing env-file path, got: {}",
+            err
         );
     }
 }

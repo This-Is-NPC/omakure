@@ -22,7 +22,7 @@ impl ScriptRepository for FsWorkspaceRepository {
     fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>> {
         let mut entries_out = Vec::new();
         let entries = read_dir_or_empty(dir)?;
-        let ignore = OmakureIgnore::load(&self.root);
+        let ignore = IgnoreContext::load_for_dir(&self.root, dir);
 
         for entry in entries {
             let path = entry.path();
@@ -57,7 +57,7 @@ impl ScriptRepository for FsWorkspaceRepository {
 
     fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>> {
         let mut scripts = Vec::new();
-        let ignore = OmakureIgnore::load(&self.root);
+        let ignore = IgnoreContext::load_for_dir(&self.root, &self.root);
         collect_scripts(&self.root, &ignore, &mut scripts)?;
         Ok(scripts)
     }
@@ -80,7 +80,7 @@ impl ScriptRepository for FsWorkspaceRepository {
 
 fn collect_scripts(
     dir: &Path,
-    ignore: &OmakureIgnore,
+    ignore: &IgnoreContext,
     scripts: &mut Vec<PathBuf>,
 ) -> io::Result<()> {
     let entries = read_dir_or_empty(dir)?;
@@ -91,7 +91,8 @@ fn collect_scripts(
             if should_skip_dir(&path) || ignore.matches(&path, true) {
                 continue;
             }
-            collect_scripts(&path, ignore, scripts)?;
+            let child_ignore = ignore.with_dir(&path);
+            collect_scripts(&path, &child_ignore, scripts)?;
         } else if path.is_file() && script_kind(&path).is_some() && !ignore.matches(&path, false) {
             scripts.push(path);
         }
@@ -100,13 +101,51 @@ fn collect_scripts(
     Ok(())
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
+struct IgnoreContext {
+    files: Vec<OmakureIgnore>,
+}
+
+impl IgnoreContext {
+    fn load_for_dir(root: &Path, dir: &Path) -> Self {
+        let mut context = Self::default();
+        let Ok(rel) = dir.strip_prefix(root) else {
+            return context.with_dir(root);
+        };
+
+        context = context.with_dir(root);
+        let mut cursor = root.to_path_buf();
+        for component in rel.components() {
+            let std::path::Component::Normal(part) = component else {
+                continue;
+            };
+            cursor.push(part);
+            context = context.with_dir(&cursor);
+        }
+        context
+    }
+
+    fn with_dir(&self, dir: &Path) -> Self {
+        let mut next = self.clone();
+        let ignore = OmakureIgnore::load(dir);
+        if !ignore.patterns.is_empty() {
+            next.files.push(ignore);
+        }
+        next
+    }
+
+    fn matches(&self, path: &Path, is_dir: bool) -> bool {
+        self.files.iter().any(|ignore| ignore.matches(path, is_dir))
+    }
+}
+
+#[derive(Debug, Default, Clone)]
 struct OmakureIgnore {
     root: PathBuf,
     patterns: Vec<IgnorePattern>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct IgnorePattern {
     pattern: String,
     anchored: bool,
@@ -531,6 +570,141 @@ mod tests {
         assert!(!names.contains(&"infra".to_string()));
         assert!(!names.contains(&"setup.py".to_string()));
         assert!(names.contains(&"deploy.sh".to_string()));
+    }
+
+    #[test]
+    fn test_list_entries_honors_nested_omakureignore_from_parent_root() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let scripts = root.join("scripts");
+        fs::create_dir_all(scripts.join("helpers")).unwrap();
+        fs::write(scripts.join("deploy.sh"), "#!/bin/bash").unwrap();
+        fs::write(scripts.join("scratch.py"), "print('scratch')").unwrap();
+        fs::write(scripts.join("helpers/internal.sh"), "#!/bin/bash").unwrap();
+        fs::write(scripts.join(".omakureignore"), "helpers/\nscratch.py\n").unwrap();
+
+        let repo = FsWorkspaceRepository::new(root);
+        let entries = repo.list_entries(&scripts).unwrap();
+        let names: Vec<String> = entries
+            .iter()
+            .map(|entry| {
+                entry
+                    .path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+
+        assert!(names.contains(&"deploy.sh".to_string()));
+        assert!(!names.contains(&"scratch.py".to_string()));
+        assert!(!names.contains(&"helpers".to_string()));
+    }
+
+    #[test]
+    fn test_recursive_scan_honors_nested_omakureignore_from_parent_root() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let scripts = root.join("scripts");
+        fs::create_dir_all(scripts.join("helpers")).unwrap();
+        fs::write(scripts.join("deploy.sh"), "#!/bin/bash").unwrap();
+        fs::write(scripts.join("scratch.py"), "print('scratch')").unwrap();
+        fs::write(scripts.join("helpers/internal.sh"), "#!/bin/bash").unwrap();
+        fs::write(scripts.join(".omakureignore"), "helpers/\nscratch.py\n").unwrap();
+
+        let repo = FsWorkspaceRepository::new(root);
+        let found: Vec<String> = repo
+            .list_scripts_recursive()
+            .unwrap()
+            .iter()
+            .map(|path| {
+                path.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert!(found.contains(&"scripts/deploy.sh".to_string()));
+        assert!(!found.contains(&"scripts/scratch.py".to_string()));
+        assert!(!found.contains(&"scripts/helpers/internal.sh".to_string()));
+    }
+
+    #[test]
+    fn test_nested_omakureignore_combines_parent_and_child_rules() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let scripts = root.join("scripts");
+        fs::create_dir_all(&scripts).unwrap();
+        fs::write(root.join("keep.sh"), "#!/bin/bash").unwrap();
+        fs::write(scripts.join("visible.sh"), "#!/bin/bash").unwrap();
+        fs::write(scripts.join("local.py"), "print('local')").unwrap();
+        fs::write(scripts.join("global.tmp.sh"), "#!/bin/bash").unwrap();
+        fs::write(root.join(".omakureignore"), "*.tmp.sh\n").unwrap();
+        fs::write(scripts.join(".omakureignore"), "local.py\n").unwrap();
+
+        let repo = FsWorkspaceRepository::new(root);
+        let found: Vec<String> = repo
+            .list_scripts_recursive()
+            .unwrap()
+            .iter()
+            .map(|path| {
+                path.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert!(found.contains(&"keep.sh".to_string()));
+        assert!(found.contains(&"scripts/visible.sh".to_string()));
+        assert!(!found.contains(&"scripts/local.py".to_string()));
+        assert!(!found.contains(&"scripts/global.tmp.sh".to_string()));
+    }
+
+    #[test]
+    fn test_nested_omakureignore_leading_slash_anchors_to_local_file_dir() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let scripts = root.join("scripts");
+        fs::create_dir_all(scripts.join("nested")).unwrap();
+        fs::write(scripts.join("scratch.py"), "print('scratch')").unwrap();
+        fs::write(scripts.join("nested/scratch.py"), "print('nested')").unwrap();
+        fs::write(scripts.join(".omakureignore"), "/scratch.py\n").unwrap();
+
+        let repo = FsWorkspaceRepository::new(root);
+        let found: Vec<String> = repo
+            .list_scripts_recursive()
+            .unwrap()
+            .iter()
+            .map(|path| {
+                path.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+
+        assert!(!found.contains(&"scripts/scratch.py".to_string()));
+        assert!(found.contains(&"scripts/nested/scratch.py".to_string()));
+    }
+
+    #[test]
+    fn test_list_entries_outside_root_still_uses_root_ignore_only() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("root");
+        let outside = tmp.path().join("outside");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(root.join(".omakureignore"), "hidden.sh\n").unwrap();
+        fs::write(outside.join("hidden.sh"), "#!/bin/bash").unwrap();
+
+        let repo = FsWorkspaceRepository::new(&root);
+        let entries = repo.list_entries(&outside).unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, outside.join("hidden.sh"));
     }
 
     #[test]

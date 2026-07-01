@@ -62,10 +62,11 @@ env.
 
 ## Exclude paths from scanning
 
-Create a `.omakureignore` file at the scripts root to keep matching files
-and directories out of Omakure's script scan. Ignored scripts do not appear
-in the TUI, `omakure scripts`, the search index, or the scheduler because
-all of those surfaces use the same recursive scanner.
+Create a `.omakureignore` file at the scripts root, or inside any child
+directory, to keep matching files and directories out of Omakure's script
+scan. Ignored scripts do not appear in the TUI, `omakure scripts`, the
+search index, or the scheduler because all of those surfaces use the same
+recursive scanner.
 
 Example:
 
@@ -80,9 +81,12 @@ scratch.py
 Supported pattern subset:
 
 - Blank lines and lines starting with `#` are ignored.
-- Patterns are evaluated relative to the scripts root.
-- A leading `/` anchors the same root-relative path (`/scratch.py` matches
-  `scratch.py`).
+- Patterns are evaluated relative to the directory containing that
+  `.omakureignore` file. When multiple files apply while Omakure descends a
+  tree, parent rules and child rules are both active.
+- A leading `/` anchors to the directory containing that `.omakureignore`
+  (`/scratch.py` in `scripts/.omakureignore` matches `scripts/scratch.py`,
+  not `other/scratch.py`).
 - A trailing `/` means directory-only and prunes the whole subtree, for
   example `helpers/` skips `helpers` and everything below it.
 - `*` matches any sequence of characters.
@@ -91,11 +95,11 @@ Supported pattern subset:
 - Patterns without `/` match any path component, for example `scratch.py`
   or `*.tmp.py` at any depth.
 
-Unsupported gitignore features are not implemented: nested `.omakureignore`
-files, negation with `!`, `**` special semantics, character classes, and
-escaped `#` comments. If `.omakureignore` cannot be read or decoded, Omakure
-prints a warning and continues scanning with only the built-in skips
-(`.history`, `.git`, and `.omaken/envs`).
+Nested `.omakureignore` files are supported. Unsupported gitignore features
+are not implemented: negation with `!`, `**` special semantics, character
+classes, and escaped `#` comments. If `.omakureignore` cannot be read or
+decoded, Omakure prints a warning and continues scanning with the remaining
+ignore rules plus the built-in skips (`.history`, `.git`, and `.omaken/envs`).
 
 ## Development note
 

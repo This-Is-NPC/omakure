@@ -221,6 +221,159 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
     defaults
 }
 
+/// Parse env-file `contents` into ordered, **case-preserving** key/value
+/// pairs suitable for process injection as `extra_env`.
+///
+/// This is a deliberately separate path from [`parse_env_defaults`] (which
+/// lowercases keys for TUI schema-field prefill). Real environment variables
+/// such as `PATH` and `VIRTUAL_ENV` are case-sensitive on Linux, so keys are
+/// preserved verbatim here.
+///
+/// Line handling (comments, `export ` prefix, quote stripping, empty-value
+/// skipping) mirrors [`parse_env_defaults`]. Each parsed value then goes
+/// through single-pass `$VAR` / `${VAR}` expansion (see [`expand_env_value`])
+/// sourced from the map of already-parsed pairs.
+// Wired into the env injector by the downstream task (merge/apply precedence);
+// exposed here as the isolated, independently-tested parser.
+#[allow(dead_code)]
+pub(crate) fn parse_env_injectable(contents: &str) -> Vec<(String, String)> {
+    let mut pairs: Vec<(String, String)> = Vec::new();
+
+    for line in contents.lines() {
+        let mut trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
+            continue;
+        }
+        if let Some(stripped) = trimmed.strip_prefix("export ") {
+            trimmed = stripped.trim();
+        }
+
+        let mut parts = trimmed.splitn(2, '=');
+        let key = parts.next().unwrap_or("").trim();
+        let raw_value = parts.next().unwrap_or("").trim();
+        if key.is_empty() {
+            continue;
+        }
+        let value = strip_quotes(raw_value).trim();
+        if value.is_empty() {
+            continue;
+        }
+        // Preserve original key case verbatim.
+        pairs.push((key.to_string(), value.to_string()));
+    }
+
+    // Expansion source: the already-parsed map (last write wins per key).
+    let mut vars: HashMap<String, String> = HashMap::new();
+    for (key, value) in &pairs {
+        vars.insert(key.clone(), value.clone());
+    }
+
+    pairs
+        .into_iter()
+        .map(|(key, value)| {
+            let expanded = expand_env_value(&value, &vars);
+            (key, expanded)
+        })
+        .collect()
+}
+
+#[allow(dead_code)]
+fn is_name_start(c: char) -> bool {
+    c.is_ascii_alphabetic() || c == '_'
+}
+
+#[allow(dead_code)]
+fn is_name_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+/// Valid variable name: `[A-Za-z_][A-Za-z0-9_]*`.
+#[allow(dead_code)]
+fn is_valid_var_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if is_name_start(first) => chars.all(is_name_char),
+        _ => false,
+    }
+}
+
+/// Single-pass, non-recursive `$VAR` / `${VAR}` expansion per the
+/// env-injection grammar (`.docs/env-injection-spec.md` section 2).
+///
+/// - The input is scanned left-to-right exactly once; substituted output is
+///   never re-scanned (no recursion).
+/// - `$VAR` bare form: the name is the longest run of `[A-Za-z0-9_]` after a
+///   name-start (`[A-Za-z_]`).
+/// - `${VAR}` braced form: the body between `{` and the next `}`. A body that
+///   is not a valid name resolves as undefined. An unterminated `${...` is
+///   emitted literally.
+/// - Undefined references expand to the empty string.
+/// - The only escape is `\$` -> literal `$`; any other `\` is literal.
+/// - No command substitution: `$(...)` and backticks are emitted literally.
+#[allow(dead_code)]
+fn expand_env_value(input: &str, vars: &HashMap<String, String>) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut out = String::with_capacity(input.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+
+        if c == '\\' {
+            // `\$` is the only escape unit; anything else is a literal `\`.
+            if i + 1 < chars.len() && chars[i + 1] == '$' {
+                out.push('$');
+                i += 2;
+            } else {
+                out.push('\\');
+                i += 1;
+            }
+            continue;
+        }
+
+        if c == '$' {
+            // Braced form `${...}`.
+            if i + 1 < chars.len() && chars[i + 1] == '{' {
+                if let Some(close) = (i + 2..chars.len()).find(|&j| chars[j] == '}') {
+                    let name: String = chars[i + 2..close].iter().collect();
+                    if is_valid_var_name(&name) {
+                        out.push_str(vars.get(&name).map(String::as_str).unwrap_or(""));
+                    }
+                    // Invalid name -> undefined -> empty string (push nothing).
+                    i = close + 1;
+                } else {
+                    // Unterminated `${...` -> literal passthrough to end.
+                    out.extend(chars[i..].iter());
+                    break;
+                }
+                continue;
+            }
+
+            // Bare form `$VAR`.
+            if i + 1 < chars.len() && is_name_start(chars[i + 1]) {
+                let mut j = i + 1;
+                while j < chars.len() && is_name_char(chars[j]) {
+                    j += 1;
+                }
+                let name: String = chars[i + 1..j].iter().collect();
+                out.push_str(vars.get(&name).map(String::as_str).unwrap_or(""));
+                i = j;
+                continue;
+            }
+
+            // `$` not followed by a name-start or `{` -> literal `$`.
+            out.push('$');
+            i += 1;
+            continue;
+        }
+
+        out.push(c);
+        i += 1;
+    }
+
+    out
+}
+
 fn strip_quotes(value: &str) -> &str {
     let trimmed = value.trim();
     if trimmed.len() >= 2 {
@@ -286,6 +439,42 @@ mod tests {
         assert_eq!(result, expected_map);
     }
 
+    // CHARACTERIZATION: pins the CURRENT behavior of `parse_env_defaults`
+    // (TUI schema-field prefill). Keys are LOWERCASED, quotes/`export ` are
+    // stripped, and empty values are skipped. This guards the prefill path
+    // against silent regression when the case-preserving parser is added.
+    #[test]
+    fn test_parse_env_defaults_characterization_lowercases_and_strips() {
+        let input = concat!(
+            "PATH=/usr/bin\n",
+            "export VIRTUAL_ENV=\"/opt/venv\"\n",
+            "Mixed_Case='value'\n",
+            "# comment\n",
+            "; also comment\n",
+            "EMPTY=\n",
+            "  SPACED  =  spaced value  \n",
+        );
+        let result = parse_env_defaults(input);
+
+        // Keys are lowercased verbatim (the behavior injection must NOT use).
+        assert_eq!(result.get("path").map(String::as_str), Some("/usr/bin"));
+        assert_eq!(
+            result.get("virtual_env").map(String::as_str),
+            Some("/opt/venv")
+        );
+        assert_eq!(result.get("mixed_case").map(String::as_str), Some("value"));
+        assert_eq!(
+            result.get("spaced").map(String::as_str),
+            Some("spaced value")
+        );
+        // Original-case keys are absent (proves lowercasing).
+        assert!(!result.contains_key("PATH"));
+        assert!(!result.contains_key("VIRTUAL_ENV"));
+        // Comments and empty values are dropped.
+        assert!(!result.contains_key("empty"));
+        assert_eq!(result.len(), 4);
+    }
+
     #[test]
     fn test_parse_env_defaults_multiline() {
         let input = "HOST=localhost\nPORT=8080\n# comment\nDEBUG=true";
@@ -308,6 +497,111 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
         assert_eq!(result, expected_vec);
+    }
+
+    // --- Case-preserving injectable parser + var expansion ---
+
+    #[test]
+    fn test_parse_env_injectable_preserves_key_case() {
+        let input = "PATH=/usr/bin\nVIRTUAL_ENV=/opt/venv\nMixed_Case=v";
+        let result = parse_env_injectable(input);
+        assert_eq!(
+            result,
+            vec![
+                ("PATH".to_string(), "/usr/bin".to_string()),
+                ("VIRTUAL_ENV".to_string(), "/opt/venv".to_string()),
+                ("Mixed_Case".to_string(), "v".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_env_injectable_line_handling_matches_defaults() {
+        // export prefix, quotes, comments, empty-value skipping — but ordered
+        // and case-preserved.
+        let input = concat!(
+            "export FOO=\"bar\"\n",
+            "# comment\n",
+            "; comment\n",
+            "EMPTY=\n",
+            "  SP  =  spaced value  \n",
+            "SINGLE='q'\n",
+        );
+        let result = parse_env_injectable(input);
+        assert_eq!(
+            result,
+            vec![
+                ("FOO".to_string(), "bar".to_string()),
+                ("SP".to_string(), "spaced value".to_string()),
+                ("SINGLE".to_string(), "q".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_env_injectable_expands_bare_and_braced() {
+        // BASE defined first; later values reference it in both forms.
+        let input = concat!("BASE=/opt\n", "BARE=$BASE/bin\n", "BRACED=${BASE}/lib\n",);
+        let result = parse_env_injectable(input);
+        assert_eq!(
+            result,
+            vec![
+                ("BASE".to_string(), "/opt".to_string()),
+                ("BARE".to_string(), "/opt/bin".to_string()),
+                ("BRACED".to_string(), "/opt/lib".to_string()),
+            ]
+        );
+    }
+
+    // --- expand_env_value grammar (spec section 2.6 worked examples) ---
+
+    fn vars(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[rstest]
+    #[case::bare("$FOO", "bar")]
+    #[case::braced("${FOO}", "bar")]
+    #[case::bare_suffix("$FOO/baz", "bar/baz")]
+    #[case::braced_suffix("${FOO}baz", "barbaz")]
+    #[case::undefined_bare("a$BAZ", "a")]
+    #[case::undefined_braced("x${BAZ}y", "xy")]
+    #[case::escaped_dollar("\\$FOO", "$FOO")]
+    #[case::command_sub_literal("$(echo hi)", "$(echo hi)")]
+    #[case::backtick_literal("`date`", "`date`")]
+    #[case::rich_form_empty("${FOO:-x}", "")]
+    #[case::reserved_visible("id=$OMAKURE_RUN_ID", "id=r-1")]
+    #[case::digit_literal("$1abc", "$1abc")]
+    #[case::unterminated_brace("${FOO", "${FOO")]
+    #[case::bare_no_name("$ ", "$ ")]
+    #[case::backslash_literal("a\\b", "a\\b")]
+    fn test_expand_env_value_grammar(#[case] input: &str, #[case] expected: &str) {
+        let env = vars(&[("FOO", "bar"), ("OMAKURE_RUN_ID", "r-1")]);
+        assert_eq!(expand_env_value(input, &env), expected);
+    }
+
+    #[test]
+    fn test_expand_env_value_no_recursion() {
+        // FOO expands to a literal that itself looks like a reference; the
+        // output must NOT be re-scanned.
+        let env = vars(&[("FOO", "$BAR"), ("BAR", "deep")]);
+        assert_eq!(expand_env_value("$FOO", &env), "$BAR");
+    }
+
+    #[test]
+    fn test_parse_env_injectable_command_substitution_not_executed() {
+        let input = "CMD=$(rm -rf /)\nTICK=`date`";
+        let result = parse_env_injectable(input);
+        assert_eq!(
+            result,
+            vec![
+                ("CMD".to_string(), "$(rm -rf /)".to_string()),
+                ("TICK".to_string(), "`date`".to_string()),
+            ]
+        );
     }
 
     // --- Filesystem-based tests ---

@@ -233,9 +233,8 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
 /// skipping) mirrors [`parse_env_defaults`]. Each parsed value then goes
 /// through single-pass `$VAR` / `${VAR}` expansion (see [`expand_env_value`])
 /// sourced from the map of already-parsed pairs.
-// Wired into the env injector by the downstream task (merge/apply precedence);
-// exposed here as the isolated, independently-tested parser.
-#[allow(dead_code)]
+// Wired into the env injector via [`resolve_active_env`]; exposed here as the
+// isolated, independently-tested parser.
 pub(crate) fn parse_env_injectable(contents: &str) -> Vec<(String, String)> {
     let mut pairs: Vec<(String, String)> = Vec::new();
 
@@ -277,18 +276,61 @@ pub(crate) fn parse_env_injectable(contents: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-#[allow(dead_code)]
+/// Resolve the active managed environment into ordered, case-preserving
+/// `KEY=value` pairs for injection as `extra_env` into a spawned script
+/// process.
+///
+/// This is the single composition root for env injection: all three run
+/// call sites (CLI `omakure run`, the queue worker, and the TUI inline run)
+/// call this function to build their `extra_env`, so there is one merge
+/// implementation, not three.
+///
+/// It implements **layer 2** of the env-injection precedence table
+/// (`.docs/env-injection-spec.md` §1): the managed active env selected by
+/// `.omaken/envs/active`, read from `.omaken/envs/<name>.conf` and parsed
+/// case-sensitively via [`parse_env_injectable`]. The remaining layers are
+/// applied by the caller *around* these pairs so a later layer always wins
+/// per key:
+///
+/// - **Layer 1** (parent shell env) is inherited by the child automatically
+///   and is overridden by any key returned here.
+/// - **Layer 3** (CLI `--env-file`) is a future input owned by another task;
+///   when added it is appended after these pairs (higher priority).
+/// - **Layer 4** (`OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR`) is pushed onto
+///   `extra_env` *after* these pairs in
+///   [`crate::run_executor::execute_with_heartbeat`], and is therefore
+///   **non-overridable**: a user key of the same name from this env file
+///   cannot clobber the reserved value.
+///
+/// Behavior change (was: prefill-only): prior to this, `.omaken/envs/*.conf`
+/// only prefilled TUI schema-field defaults and never reached the spawned
+/// process. Those files now inject into the child's `os.environ`. There is
+/// no CHANGELOG file in this repo, so this doc-comment records the change.
+///
+/// Injection is best-effort: an absent `active` pointer or an unreadable env
+/// file yields an empty vec rather than failing the run. Per spec §3 the
+/// returned pairs reach only the spawned process env (`cmd.env`); they are
+/// never persisted to `runs.sqlite`, logs, or the trace.
+pub(crate) fn resolve_active_env(envs_dir: &Path) -> Vec<(String, String)> {
+    let Ok(Some(name)) = load_active_env_name(envs_dir) else {
+        return Vec::new();
+    };
+    let path = envs_dir.join(&name);
+    match fs::read_to_string(&path) {
+        Ok(contents) => parse_env_injectable(&contents),
+        Err(_) => Vec::new(),
+    }
+}
+
 fn is_name_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_'
 }
 
-#[allow(dead_code)]
 fn is_name_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
 /// Valid variable name: `[A-Za-z_][A-Za-z0-9_]*`.
-#[allow(dead_code)]
 fn is_valid_var_name(name: &str) -> bool {
     let mut chars = name.chars();
     match chars.next() {
@@ -310,7 +352,6 @@ fn is_valid_var_name(name: &str) -> bool {
 /// - Undefined references expand to the empty string.
 /// - The only escape is `\$` -> literal `$`; any other `\` is literal.
 /// - No command substitution: `$(...)` and backticks are emitted literally.
-#[allow(dead_code)]
 fn expand_env_value(input: &str, vars: &HashMap<String, String>) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut out = String::with_capacity(input.len());
@@ -551,6 +592,47 @@ mod tests {
                 ("BRACED".to_string(), "/opt/lib".to_string()),
             ]
         );
+    }
+
+    // --- resolve_active_env (layer 2 injector, spec section 1) ---
+
+    #[test]
+    fn test_resolve_active_env_none_when_no_active_pointer() {
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+        fs::write(envs.join("dev.conf"), "HOST=localhost").unwrap();
+        // No `active` pointer => nothing to inject.
+        assert!(resolve_active_env(&envs).is_empty());
+    }
+
+    #[test]
+    fn test_resolve_active_env_reads_active_conf_case_preserving() {
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+        fs::write(envs.join("dev.conf"), "PATH=/usr/bin\nMY_VAR=hello").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        // Keys are preserved verbatim (unlike the lowercasing prefill path)
+        // and order is stable.
+        assert_eq!(
+            resolve_active_env(&envs),
+            vec![
+                ("PATH".to_string(), "/usr/bin".to_string()),
+                ("MY_VAR".to_string(), "hello".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_resolve_active_env_missing_conf_is_best_effort_empty() {
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+        fs::write(envs.join("active"), "ghost.conf\n").unwrap();
+        // Unreadable/missing target must not fail the run — resolves empty.
+        assert!(resolve_active_env(&envs).is_empty());
     }
 
     // --- expand_env_value grammar (spec section 2.6 worked examples) ---

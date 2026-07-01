@@ -69,7 +69,13 @@ pub fn run(
     .map_err(|err| -> Box<dyn Error> { err.into() })?;
     drop(conn);
 
-    let result = execute_with_heartbeat(&workspace, &row, vec![], None);
+    // Layer 2 of the env-injection precedence table
+    // (`.docs/env-injection-spec.md` §1): the active managed env. The
+    // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
+    // pushed after this inside `execute_with_heartbeat` and stay
+    // non-overridable.
+    let extra_env = crate::adapters::environments::resolve_active_env(workspace.envs_dir());
+    let result = execute_with_heartbeat(&workspace, &row, extra_env, None);
 
     let final_row = finalize_run(&workspace, &row.run_id, &result);
 
@@ -601,5 +607,128 @@ mod tests {
         let conn = runs::open(&ws).unwrap();
         let row = runs::get_run(&conn, "rid-run-json").unwrap().unwrap();
         assert_eq!(row.state, RunState::Completed);
+    }
+
+    fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
+        !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
+    }
+
+    fn read_all_bytes_under(dir: &Path) -> Vec<u8> {
+        let mut buf = Vec::new();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Ok(bytes) = fs::read(&path) {
+                        buf.extend_from_slice(&bytes);
+                    }
+                } else if path.is_dir() {
+                    buf.extend_from_slice(&read_all_bytes_under(&path));
+                }
+            }
+        }
+        buf
+    }
+
+    // CALL SITE: `omakure run` (cli/run.rs). The active managed env must
+    // reach the spawned process; the script echoes an injected var and the
+    // value must land in the persisted run record's stdout.
+    #[test]
+    #[cfg(unix)]
+    fn test_run_injects_active_env_into_script_and_persists_output() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let envs = ws.envs_dir();
+        fs::write(envs.join("dev.conf"), "INJECTED_VAR=cli_injected_42").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let script = write_schema_script(
+            &tmp,
+            "echo.sh",
+            r#"{"Name":"Echo","Fields":[]}"#,
+            "echo \"$INJECTED_VAR\"",
+        );
+
+        run(
+            tmp.path().to_path_buf(),
+            RunArgs {
+                script: script.to_string_lossy().to_string(),
+                actor: "human".into(),
+                reason: None,
+                run_id: Some("rid-inject-cli".into()),
+                parent_run_id: None,
+                no_prompt: false,
+                args: vec![],
+            },
+            false,
+        )
+        .unwrap();
+
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::get_run(&conn, "rid-inject-cli").unwrap().unwrap();
+        assert_eq!(row.state, RunState::Completed);
+        assert!(
+            row.stdout.contains("cli_injected_42"),
+            "expected injected var in stdout, got: {:?}",
+            row.stdout
+        );
+    }
+
+    // REDACTION (secret-non-persistence gate, spec §3): an injected
+    // secret-looking var must NEVER be written to runs.sqlite / its WAL /
+    // logs / the trace. The env's sole consumer is `cmd.env` in
+    // `MultiScriptRunner::build_command`; the persistence writers
+    // (`runs::insert_run`, `run_traces`) never receive it. The script does
+    // NOT echo the secret (echoing would legitimately place it in stdout,
+    // which is persisted).
+    #[test]
+    #[cfg(unix)]
+    fn test_injected_secret_not_persisted_to_storage() {
+        let tmp = TempDir::new().unwrap();
+        let ws = make_workspace(&tmp);
+        let envs = ws.envs_dir();
+        fs::write(
+            envs.join("dev.conf"),
+            "MY_SECRET_TOKEN=supersecret_do_not_persist",
+        )
+        .unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let script = write_schema_script(
+            &tmp,
+            "quiet.sh",
+            r#"{"Name":"Quiet","Fields":[]}"#,
+            "echo ok",
+        );
+
+        run(
+            tmp.path().to_path_buf(),
+            RunArgs {
+                script: script.to_string_lossy().to_string(),
+                actor: "human".into(),
+                reason: None,
+                run_id: Some("rid-redact".into()),
+                parent_run_id: None,
+                no_prompt: false,
+                args: vec![],
+            },
+            false,
+        )
+        .unwrap();
+
+        // Sanity: the run really executed and persisted.
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::get_run(&conn, "rid-redact").unwrap().unwrap();
+        assert_eq!(row.state, RunState::Completed);
+        assert!(row.stdout.contains("ok"));
+        drop(conn);
+
+        // Scan every persisted file (runs.sqlite + WAL/shm + search index)
+        // for the secret value. It must be absent everywhere.
+        let bytes = read_all_bytes_under(ws.history_dir());
+        assert!(
+            !contains_subslice(&bytes, b"supersecret_do_not_persist"),
+            "injected secret value leaked into persistent storage"
+        );
     }
 }

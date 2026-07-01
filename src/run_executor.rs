@@ -100,6 +100,14 @@ pub fn execute_with_heartbeat(
     }
 
     let args = parse_args_json(&row.args_json);
+    // Env-injection precedence (`.docs/env-injection-spec.md` §1): the
+    // caller-supplied `extra_env` (parent shell env is inherited by the
+    // child; layer 2 active managed env; future layer 3 `--env-file`) is
+    // seeded FIRST, then the reserved layer-4 vars are pushed AFTER it.
+    // `build_command` applies pairs in order via `cmd.env`, so the last
+    // write of a key wins — the reserved keys below are therefore
+    // NON-OVERRIDABLE: a user var of the same name in `extra_env` cannot
+    // clobber them.
     let mut env = extra_env;
     env.push(("OMAKURE_RUN_ID".to_string(), row.run_id.clone()));
     // Pin the workspace so nested `omakure trace` invocations write to
@@ -495,6 +503,45 @@ mod tests {
             result.completion.stdout.contains("rid-fixed"),
             "expected stdout to contain rid-fixed, got: {:?}",
             result.completion.stdout
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_reserved_vars_win_over_injected_extra_env() {
+        // Precedence spec §1 layer 4: reserved vars are pushed AFTER
+        // extra_env, so a user attempt to override OMAKURE_RUN_ID via the
+        // injected env must lose (non-overridable).
+        let ws = make_workspace("reserved_wins");
+        let script = write_bash_stub(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                run_id: Some("rid-reserved".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let extra_env = vec![("OMAKURE_RUN_ID".to_string(), "HIJACKED".to_string())];
+        let result = execute_with_heartbeat(&ws, &row, extra_env, None);
+
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert!(
+            result.completion.stdout.contains("rid-reserved"),
+            "reserved run id should survive, got: {:?}",
+            result.completion.stdout
+        );
+        assert!(
+            !result.completion.stdout.contains("HIJACKED"),
+            "injected value must not override reserved var"
         );
         let _ = fs::remove_dir_all(ws.root());
     }

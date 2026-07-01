@@ -59,13 +59,14 @@ current session. History, environments, the search index, and
 creates `.omaken/`, `.history/`, or `omakure.toml` inside the directory
 you point it at.
 
-3) Put scripts under `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`). Omakure scans this tree (including `.omaken`) for `.bash`, `.sh`, `.ps1`, and `.py` scripts.
+3) Put scripts under `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`). Omakure scans this tree (including `.omaken`) for `.bash`, `.sh`, `.ps1`, and `.py` scripts. To hide helpers, fixtures, or vendored folders from the TUI, `omakure scripts`, search, and the scheduler, add `.omakureignore` files at the scripts root or inside child folders.
 
 4) Make the script visible to Omakure by embedding a schema JSON block between `OMAKURE_SCHEMA_START` and `OMAKURE_SCHEMA_END`. The `omakure init my-script` command generates a template with the schema block.
 
 ## Advanced
 
 - Change the default scripts path: `.docs/scripts-path.md`
+- Exclude files from scanning with `.omakureignore`: `.docs/scripts-path.md`
 - Environment documents and defaults: `.docs/environments.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 

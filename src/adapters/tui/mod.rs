@@ -176,7 +176,12 @@ fn run_through_state_machine(
     .ok()?;
     drop(conn);
 
-    let result = execute_with_heartbeat(workspace, &row, vec![], None);
+    // Layer 2 of the env-injection precedence table
+    // (`.docs/env-injection-spec.md` §1): the active managed env. Reserved
+    // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
+    // and remain non-overridable.
+    let extra_env = crate::adapters::environments::resolve_active_env(workspace.envs_dir());
+    let result = execute_with_heartbeat(workspace, &row, extra_env, None);
     let conn = runs::open(workspace).ok()?;
     let _ = match result.terminal {
         ExecutionTerminal::Completed => runs::complete(&conn, &row.run_id, result.completion),
@@ -234,5 +239,56 @@ fn load_history(workspace: &Workspace) -> Vec<RunRow> {
         )
         .unwrap_or_default(),
         Err(_) => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runs::RunState;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    #[cfg(unix)]
+    fn write_bash_stub(root: &Path, name: &str, body: &str) -> PathBuf {
+        let p = root.join(name);
+        fs::write(&p, format!("#!/usr/bin/env bash\n{}\n", body)).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&p).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&p, perms).unwrap();
+        p
+    }
+
+    // CALL SITE: TUI inline run (adapters/tui/mod.rs
+    // `run_through_state_machine`). The active managed env must reach the
+    // TUI-spawned script; the injected var must appear in the returned
+    // run record's stdout.
+    #[test]
+    #[cfg(unix)]
+    fn tui_run_injects_active_env_into_script() {
+        let dir = std::env::temp_dir().join(format!(
+            "omakure_tui_inject_{}_{}",
+            std::process::id(),
+            runs::current_unix_ms()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let ws = Workspace::new(dir.clone());
+        ws.ensure_layout().unwrap();
+
+        let envs = ws.envs_dir();
+        fs::write(envs.join("dev.conf"), "INJECTED_VAR=tui_injected_7").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let script = write_bash_stub(ws.root(), "echo.sh", "echo \"$INJECTED_VAR\"");
+        let row = run_through_state_machine(&ws, &script, &[]).unwrap();
+
+        assert_eq!(row.state, RunState::Completed);
+        assert!(
+            row.stdout.contains("tui_injected_7"),
+            "expected injected var in stdout, got: {:?}",
+            row.stdout
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }

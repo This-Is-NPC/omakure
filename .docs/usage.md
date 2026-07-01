@@ -51,6 +51,21 @@ omakure run tools/cleanup
 omakure run scripts/cleanup.py -- --force
 ```
 
+### Per-run env injection (`--env-file`)
+
+Pass an extra env file for a single run without touching the managed
+active env:
+
+```bash
+omakure run scripts/deploy.py --env-file ./prod.env
+```
+
+The file is parsed with the case-preserving injector and merged on top of
+the managed active env, so its keys override the active env for that run
+(precedence: active env < `--env-file` < Omakure-reserved). A path that
+cannot be read is a hard error. See `environments.md` for the injection
+model and `env-injection-spec.md` for the full precedence table.
+
 ## Init a new script template
 
 ```bash
@@ -66,6 +81,12 @@ See `how-to-create-a-script.md` for the step-by-step guide and templates.
 omakure config
 omakure env
 ```
+
+`config` (alias `env`) prints resolved workspace paths, the active
+environment's injected keys (sensitive values masked with `****`), and
+the **absolute interpreter path** Omakure will execute against the active
+env's `PATH` — so you can confirm which `python` actually runs. `--json`
+includes `active_env_keys` and `interpreter`.
 
 TUI notes:
 

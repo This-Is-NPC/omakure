@@ -561,6 +561,41 @@ echo deploying
     }
 
     #[test]
+    fn test_rebuild_honors_omakureignore() {
+        let tmp = TempDir::new().unwrap();
+        let scripts_dir = tmp.path().join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+
+        fs::write(
+            scripts_dir.join("visible.sh"),
+            r#"#!/bin/bash
+# OMAKURE_SCHEMA_START
+# {"Name": "Visible Script", "Description": "shown", "Fields": []}
+# OMAKURE_SCHEMA_END
+"#,
+        )
+        .unwrap();
+        fs::write(
+            scripts_dir.join("hidden.sh"),
+            r#"#!/bin/bash
+# OMAKURE_SCHEMA_START
+# {"Name": "Hidden Script", "Description": "ignored", "Fields": []}
+# OMAKURE_SCHEMA_END
+"#,
+        )
+        .unwrap();
+        fs::write(scripts_dir.join(".omakureignore"), "hidden.sh\n").unwrap();
+
+        let db = tmp.path().join("search.sqlite");
+        let count = rebuild_index(&db, &scripts_dir).unwrap();
+        assert_eq!(count, 1);
+
+        let index = SearchIndex::new(db);
+        assert_eq!(index.query("visible").unwrap().len(), 1);
+        assert!(index.query("hidden").unwrap().is_empty());
+    }
+
+    #[test]
     fn test_load_details() {
         let tmp = TempDir::new().unwrap();
         let scripts_dir = tmp.path().join("scripts");

@@ -274,7 +274,12 @@ pub(crate) fn worker_loop(
 /// Execute one claimed row through the shared executor and write the
 /// terminal transition.
 fn execute_and_finalize(workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>) {
-    let result = execute_with_heartbeat(workspace, row, vec![], Some(cancel_flag));
+    // Layer 2 of the env-injection precedence table
+    // (`.docs/env-injection-spec.md` §1): the active managed env. Reserved
+    // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
+    // and remain non-overridable.
+    let extra_env = crate::adapters::environments::resolve_active_env(workspace.envs_dir());
+    let result = execute_with_heartbeat(workspace, row, extra_env, Some(cancel_flag));
     let conn = match runs::open(workspace) {
         Ok(c) => c,
         Err(_) => return,
@@ -678,6 +683,53 @@ mod tests {
         let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
         assert_eq!(after.state, RunState::Completed);
         assert_eq!(after.success, Some(true));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    // CALL SITE: queue worker (cli/queue.rs `execute_and_finalize`). The
+    // active managed env must reach the worker-spawned script; the injected
+    // var must appear in the persisted run record's stdout.
+    #[test]
+    #[cfg(unix)]
+    fn worker_injects_active_env_into_script() {
+        let (ws, _dir) = make_workspace("inject_env");
+        let envs = ws.envs_dir();
+        fs::write(envs.join("dev.conf"), "INJECTED_VAR=queue_injected_9").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let script = write_bash_stub(&ws, "echo.sh", "echo \"$INJECTED_VAR\"");
+        let conn = runs::open(&ws).unwrap();
+        let row = enqueue(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            EnqueueOptions {
+                actor: "test".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        worker_loop(
+            ws.clone_for_executor(),
+            "worker:test".into(),
+            cancel_flag,
+            None,
+            None,
+            true,
+        );
+
+        let conn = runs::open(&ws).unwrap();
+        let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
+        assert_eq!(after.state, RunState::Completed);
+        assert!(
+            after.stdout.contains("queue_injected_9"),
+            "expected injected var in stdout, got: {:?}",
+            after.stdout
+        );
         let _ = fs::remove_dir_all(ws.root());
     }
 

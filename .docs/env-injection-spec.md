@@ -93,7 +93,18 @@ After the merged env is produced (post-precedence, section 1), each
   `$FOO`, that text is emitted literally.
 - **Source of values.** References resolve against the **already-merged
   env** (the full map from section 1), not against a partial or
-  pre-merge view. Reserved vars are therefore visible to expansion.
+  pre-merge view. Crucially this **includes the parent shell env
+  (layer 1)**: a reference like `$PATH` resolves to the inherited parent
+  value, so a self-referencing value such as `PATH=/x/bin:$PATH` prepends
+  to the existing PATH rather than referencing the file's own raw value
+  (which would double the prefix and leave a literal `$PATH`). References
+  MUST NOT be expanded against only the current file's own keys.
+- **Layer order within expansion.** Values are expanded as each layer is
+  folded in (1 → 2 → 3), against the accumulator built so far. A value in
+  a higher-priority layer therefore sees the already-expanded value from a
+  lower layer for the same key (e.g. an `--env-file` `PATH=/a:$PATH` sees
+  the active env's expanded PATH). Undefined references still expand to
+  empty (section 2.3).
 - Expansion applies to **values only**, never to keys.
 
 ### 2.2 Reference forms
@@ -168,11 +179,13 @@ active behavior by task 1755:
 
 ### 2.6 Worked examples
 
-Given merged env `FOO=bar`, `EMPTY=` (absent), `OMAKURE_RUN_ID=r-1`:
+Given merged env `FOO=bar`, `EMPTY=` (absent), `OMAKURE_RUN_ID=r-1`,
+and inherited parent `PATH=/usr/bin:/bin`:
 
 | Input value | Expanded output |
 |-------------|-----------------|
 | `$FOO` | `bar` |
+| `PATH=/x/bin:$PATH` | `/x/bin:/usr/bin:/bin` (parent PATH preserved, no doubling) |
 | `${FOO}` | `bar` |
 | `$FOO/baz` | `bar/baz` |
 | `${FOO}baz` | `barbaz` |

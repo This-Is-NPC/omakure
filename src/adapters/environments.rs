@@ -221,8 +221,8 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
     defaults
 }
 
-/// Parse env-file `contents` into ordered, **case-preserving** key/value
-/// pairs suitable for process injection as `extra_env`.
+/// Parse env-file `contents` into ordered, **case-preserving**, *unexpanded*
+/// key/value pairs.
 ///
 /// This is a deliberately separate path from [`parse_env_defaults`] (which
 /// lowercases keys for TUI schema-field prefill). Real environment variables
@@ -230,12 +230,11 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
 /// preserved verbatim here.
 ///
 /// Line handling (comments, `export ` prefix, quote stripping, empty-value
-/// skipping) mirrors [`parse_env_defaults`]. Each parsed value then goes
-/// through single-pass `$VAR` / `${VAR}` expansion (see [`expand_env_value`])
-/// sourced from the map of already-parsed pairs.
-// Wired into the env injector via [`resolve_active_env`]; exposed here as the
-// isolated, independently-tested parser.
-pub(crate) fn parse_env_injectable(contents: &str) -> Vec<(String, String)> {
+/// skipping) mirrors [`parse_env_defaults`]. Values are returned **raw** —
+/// `$VAR` / `${VAR}` expansion is deferred to [`merge_env_layers`], which
+/// sources references from the fully merged env (parent shell + all layers),
+/// per `.docs/env-injection-spec.md` §2.
+fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)> {
     let mut pairs: Vec<(String, String)> = Vec::new();
 
     for line in contents.lines() {
@@ -261,19 +260,65 @@ pub(crate) fn parse_env_injectable(contents: &str) -> Vec<(String, String)> {
         pairs.push((key.to_string(), value.to_string()));
     }
 
-    // Expansion source: the already-parsed map (last write wins per key).
-    let mut vars: HashMap<String, String> = HashMap::new();
-    for (key, value) in &pairs {
-        vars.insert(key.clone(), value.clone());
+    pairs
+}
+
+/// The parent shell environment, used **only** as a lower-precedence
+/// expansion source (`.docs/env-injection-spec.md` §1 layer 1). It is never
+/// emitted as an injected pair — see [`merge_env_layers`].
+fn parent_env() -> HashMap<String, String> {
+    std::env::vars().collect()
+}
+
+/// Expand and merge raw env `layers` (ordered lowest → highest precedence) on
+/// top of `base`, applying the single-pass `$VAR` / `${VAR}` grammar
+/// (`.docs/env-injection-spec.md` §2).
+///
+/// `base` carries lower-precedence env used **only** as an expansion source
+/// (the parent shell env; see [`parent_env`]). Each value is expanded against
+/// the accumulator *before* its key is written back, so a self-referencing
+/// value like `PATH=/x/bin:$PATH` prepends to the inherited PATH instead of
+/// referencing the file's own raw value (which would double the prefix and
+/// leave a literal `$PATH`). A later layer's value therefore also sees the
+/// already-expanded value from an earlier layer.
+///
+/// The returned vec contains **only** keys drawn from `layers` (never `base`),
+/// in first-seen order; a later layer overrides an earlier key **in place**.
+/// This keeps the parent shell env out of `extra_env` — the child inherits it
+/// automatically — while still using it to resolve references.
+fn merge_env_layers(
+    base: &HashMap<String, String>,
+    layers: &[&[(String, String)]],
+) -> Vec<(String, String)> {
+    let mut env = base.clone();
+    let mut out: Vec<(String, String)> = Vec::new();
+
+    for layer in layers {
+        for (key, raw) in *layer {
+            let expanded = expand_env_value(raw, &env);
+            env.insert(key.clone(), expanded.clone());
+            match out.iter_mut().find(|(k, _)| k == key) {
+                Some(existing) => existing.1 = expanded,
+                None => out.push((key.clone(), expanded)),
+            }
+        }
     }
 
-    pairs
-        .into_iter()
-        .map(|(key, value)| {
-            let expanded = expand_env_value(&value, &vars);
-            (key, expanded)
-        })
-        .collect()
+    out
+}
+
+/// Read the managed active env into raw, unexpanded pairs (best-effort: an
+/// absent `active` pointer or unreadable target yields an empty vec). Shared
+/// by [`resolve_active_env`] and [`resolve_run_env`] so the active-read path
+/// has a single implementation.
+fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)> {
+    let Ok(Some(name)) = load_active_env_name(envs_dir) else {
+        return Vec::new();
+    };
+    match fs::read_to_string(envs_dir.join(&name)) {
+        Ok(contents) => parse_env_pairs_raw(&contents),
+        Err(_) => Vec::new(),
+    }
 }
 
 /// Resolve the active managed environment into ordered, case-preserving
@@ -288,12 +333,15 @@ pub(crate) fn parse_env_injectable(contents: &str) -> Vec<(String, String)> {
 /// It implements **layer 2** of the env-injection precedence table
 /// (`.docs/env-injection-spec.md` §1): the managed active env selected by
 /// `.omaken/envs/active`, read from `.omaken/envs/<name>.conf` and parsed
-/// case-sensitively via [`parse_env_injectable`]. The remaining layers are
-/// applied by the caller *around* these pairs so a later layer always wins
-/// per key:
+/// case-sensitively via [`parse_env_pairs_raw`], then expanded and merged by
+/// [`merge_env_layers`] on top of the parent shell env (layer 1). The
+/// remaining layers are applied by the caller *around* these pairs so a later
+/// layer always wins per key:
 ///
 /// - **Layer 1** (parent shell env) is inherited by the child automatically
-///   and is overridden by any key returned here.
+///   and is overridden by any key returned here. It is **also** the base
+///   expansion source, so a value like `PATH=/x/bin:$PATH` prepends to the
+///   inherited PATH (and does not leak parent keys into the returned pairs).
 /// - **Layer 3** (CLI `--env-file`) is a future input owned by another task;
 ///   when added it is appended after these pairs (higher priority).
 /// - **Layer 4** (`OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR`) is pushed onto
@@ -312,14 +360,7 @@ pub(crate) fn parse_env_injectable(contents: &str) -> Vec<(String, String)> {
 /// returned pairs reach only the spawned process env (`cmd.env`); they are
 /// never persisted to `runs.sqlite`, logs, or the trace.
 pub(crate) fn resolve_active_env(envs_dir: &Path) -> Vec<(String, String)> {
-    let Ok(Some(name)) = load_active_env_name(envs_dir) else {
-        return Vec::new();
-    };
-    let path = envs_dir.join(&name);
-    match fs::read_to_string(&path) {
-        Ok(contents) => parse_env_injectable(&contents),
-        Err(_) => Vec::new(),
-    }
+    merge_env_layers(&parent_env(), &[&active_env_raw(envs_dir)])
 }
 
 /// Resolve the full per-run `extra_env` for a `omakure run` invocation:
@@ -342,24 +383,24 @@ pub(crate) fn resolve_run_env(
     envs_dir: &Path,
     env_file: Option<&Path>,
 ) -> Result<Vec<(String, String)>, EnvironmentError> {
-    let mut merged = resolve_active_env(envs_dir);
-    if let Some(path) = env_file {
-        let contents = fs::read_to_string(path).map_err(|err| {
-            EnvironmentError::ReadFailed(format!(
-                "Failed to read --env-file {}: {}",
-                path.display(),
-                err
-            ))
-        })?;
-        for (key, value) in parse_env_injectable(&contents) {
-            match merged.iter_mut().find(|(k, _)| *k == key) {
-                // Override in place, preserving the active-env key's position.
-                Some(existing) => existing.1 = value,
-                None => merged.push((key, value)),
-            }
+    let active = active_env_raw(envs_dir);
+    let env_file_pairs = match env_file {
+        Some(path) => {
+            let contents = fs::read_to_string(path).map_err(|err| {
+                EnvironmentError::ReadFailed(format!(
+                    "Failed to read --env-file {}: {}",
+                    path.display(),
+                    err
+                ))
+            })?;
+            parse_env_pairs_raw(&contents)
         }
-    }
-    Ok(merged)
+        None => Vec::new(),
+    };
+    // Expand both layers against one growing map seeded with the parent env so
+    // `$VAR` (incl. self-references) resolves against the merged env, and the
+    // env-file layer sees the active layer's already-expanded values.
+    Ok(merge_env_layers(&parent_env(), &[&active, &env_file_pairs]))
 }
 
 fn is_name_start(c: char) -> bool {
@@ -583,9 +624,9 @@ mod tests {
     // --- Case-preserving injectable parser + var expansion ---
 
     #[test]
-    fn test_parse_env_injectable_preserves_key_case() {
+    fn test_parse_env_pairs_raw_preserves_key_case() {
         let input = "PATH=/usr/bin\nVIRTUAL_ENV=/opt/venv\nMixed_Case=v";
-        let result = parse_env_injectable(input);
+        let result = parse_env_pairs_raw(input);
         assert_eq!(
             result,
             vec![
@@ -597,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_env_injectable_line_handling_matches_defaults() {
+    fn test_parse_env_pairs_raw_line_handling_matches_defaults() {
         // export prefix, quotes, comments, empty-value skipping — but ordered
         // and case-preserved.
         let input = concat!(
@@ -608,7 +649,7 @@ mod tests {
             "  SP  =  spaced value  \n",
             "SINGLE='q'\n",
         );
-        let result = parse_env_injectable(input);
+        let result = parse_env_pairs_raw(input);
         assert_eq!(
             result,
             vec![
@@ -620,10 +661,10 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_env_injectable_expands_bare_and_braced() {
+    fn test_merge_env_layers_expands_bare_and_braced_within_layer() {
         // BASE defined first; later values reference it in both forms.
         let input = concat!("BASE=/opt\n", "BARE=$BASE/bin\n", "BRACED=${BASE}/lib\n",);
-        let result = parse_env_injectable(input);
+        let result = merge_env_layers(&HashMap::new(), &[&parse_env_pairs_raw(input)]);
         assert_eq!(
             result,
             vec![
@@ -631,6 +672,70 @@ mod tests {
                 ("BARE".to_string(), "/opt/bin".to_string()),
                 ("BRACED".to_string(), "/opt/lib".to_string()),
             ]
+        );
+    }
+
+    // --- merge_env_layers: expansion sources the merged env incl. parent ---
+    // (regression coverage for task 1758)
+
+    #[test]
+    fn test_merge_env_layers_self_reference_prepends_to_base_path() {
+        // `PATH=/x/bin:$PATH` must prepend to the base (parent) PATH, not
+        // self-reference the file's own raw value. No doubled prefix, no
+        // literal `$PATH` residue, system PATH preserved.
+        let base = vars(&[("PATH", "/usr/bin:/bin")]);
+        let layer = vec![("PATH".to_string(), "/x/bin:$PATH".to_string())];
+        assert_eq!(
+            merge_env_layers(&base, &[&layer]),
+            vec![("PATH".to_string(), "/x/bin:/usr/bin:/bin".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_merge_env_layers_returns_only_layer_keys_not_base() {
+        // The base (parent shell env) is an expansion SOURCE only; it must
+        // never leak into the emitted pairs.
+        let base = vars(&[("PATH", "/usr/bin"), ("SECRET_TOKEN", "shh")]);
+        let layer = vec![("MY_VAR".to_string(), "hello".to_string())];
+        assert_eq!(
+            merge_env_layers(&base, &[&layer]),
+            vec![("MY_VAR".to_string(), "hello".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_merge_env_layers_undefined_in_file_and_base_is_empty() {
+        // A var absent from both the file layers AND the base expands empty.
+        let base = vars(&[("PATH", "/usr/bin")]);
+        let layer = vec![("X".to_string(), "a${MISSING}b".to_string())];
+        assert_eq!(
+            merge_env_layers(&base, &[&layer]),
+            vec![("X".to_string(), "ab".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_merge_env_layers_later_layer_expands_against_earlier() {
+        // The env-file layer (higher precedence) sees the active layer's
+        // already-expanded value and overrides the key in place.
+        let base = vars(&[("PATH", "/sys")]);
+        let active = vec![("PATH".to_string(), "/active:$PATH".to_string())];
+        let file = vec![("PATH".to_string(), "/file:$PATH".to_string())];
+        assert_eq!(
+            merge_env_layers(&base, &[&active, &file]),
+            vec![("PATH".to_string(), "/file:/active:/sys".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_merge_env_layers_file_key_overrides_base_no_ref() {
+        // A file key with no `$` reference simply overrides the base value and
+        // is emitted verbatim (base value is not carried through).
+        let base = vars(&[("HOST", "parent")]);
+        let layer = vec![("HOST".to_string(), "fromfile".to_string())];
+        assert_eq!(
+            merge_env_layers(&base, &[&layer]),
+            vec![("HOST".to_string(), "fromfile".to_string())]
         );
     }
 
@@ -790,9 +895,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_env_injectable_command_substitution_not_executed() {
+    fn test_merge_env_layers_command_substitution_not_executed() {
         let input = "CMD=$(rm -rf /)\nTICK=`date`";
-        let result = parse_env_injectable(input);
+        let result = merge_env_layers(&HashMap::new(), &[&parse_env_pairs_raw(input)]);
         assert_eq!(
             result,
             vec![

@@ -12,6 +12,15 @@ Omakure is a Rust TUI application for navigating and executing automation script
 - **Omaken**: Hidden `.omaken/` folder for config, environments, and widgets
 - **Environments**: `.conf` files in `.omaken/envs/` providing default field values
 
+## Task & Plan Management
+
+Shaping, planning, and task tracking use the **Omakiten** MCP (this replaces the
+former assisted-workflow). Shape ideas into ready tasks and waved plans with
+`okt-shape`; drive a plan with `okt-run`, or build one task with
+`okt-task-continue <id>`. Tasks, plans, waves, and dependencies are
+project-scoped — inspect with `project.overview`, `tasks.list`, and `plans.show`.
+GitHub issue/board tracking is unchanged (see `CONTRIBUTING.md` → Project Management).
+
 ## Commands
 
 ### Build & Run

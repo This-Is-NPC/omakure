@@ -814,6 +814,7 @@ dependencies = [
  "dirs",
  "humantime",
  "insta",
+ "libc",
  "mlua",
  "pretty_assertions",
  "ratatui",

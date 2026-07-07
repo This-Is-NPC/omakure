@@ -50,8 +50,8 @@ is recorded in .history/runs.sqlite with actor, optional reason, full \
 argv, exit code, stdout, stderr, start/end timestamps, and a stable run_id.";
 
 const AI_VERBS: &[&str] = &[
-    "scripts", "describe", "search", "run", "init", "history", "queue", "trace", "config",
-    "help-ai",
+    "scripts", "describe", "search", "run", "init", "history", "queue", "battery", "trace",
+    "config", "help-ai",
 ];
 
 pub fn run() -> Result<(), Box<dyn Error>> {
@@ -84,6 +84,15 @@ fn build_payload() -> HelpAiPayload {
             "invalid_argument",
             "not_implemented",
             "internal",
+            "already_exists",
+            "not_synced",
+            "manifest_invalid",
+            "unsafe_path",
+            "unsupported_script",
+            "conflict",
+            "git_failed",
+            "io_failed",
+            "registry_invalid",
         ],
         verbs,
         data_shapes: json!({

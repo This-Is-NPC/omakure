@@ -68,6 +68,7 @@ you point it at.
 - Change the default scripts path: `.docs/scripts-path.md`
 - Exclude files from scanning with `.omakureignore`: `.docs/scripts-path.md`
 - Environment documents and defaults: `.docs/environments.md`
+- Attach reusable script repositories with Batteries: `.docs/batteries.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 
 ## Using Omakure from an AI agent
@@ -106,6 +107,29 @@ omakure --json history traces $RUN_ID
 omakure --json history stats
 ```
 
+## Batteries
+
+Batteries attach reusable Omakure-compatible script repositories without
+executing them directly from a Git clone. A Battery is registered, synced into
+`.omakure/batteries/cache/`, inspected as untrusted input, and only selected
+scripts are copied into the trusted scripts workspace with provenance metadata.
+
+```bash
+omakure --json battery list
+omakure --json battery add https://example.invalid/azure.git --name azure --ref main
+omakure --json battery sync azure
+omakure --json battery inspect azure
+omakure --json battery scripts azure
+omakure --json battery install azure azure.rg-list-all
+omakure --json battery install azure azure.rg-list-all --force
+omakure --json battery remove azure --remove-cache
+```
+
+Battery clones are not executable workspace content. Omakure validates manifest
+paths, script extensions, schema blocks, symlinks, and traversal before install.
+Future HTTP endpoints should call the same Battery operations used by the CLI.
+Full contract: `.docs/batteries.md`.
+
 > **Upgrading from an older release deletes legacy `.history/*.json`
 > files and rebuilds `runs.sqlite` if its schema is older than the
 > state-machine release.** Back up `.history/` first if you care about
@@ -121,6 +145,7 @@ Full reference: `.docs/ai-interface.md`.
 - Workspace layout and defaults: `.docs/workspace.md`
 - Scripts path overrides: `.docs/scripts-path.md`
 - Environment documents: `.docs/environments.md`
+- Batteries: `.docs/batteries.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 - CLI usage: `.docs/usage.md`
 - Scheduled tasks (cron daemon): `.docs/scheduling.md`

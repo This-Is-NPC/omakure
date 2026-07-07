@@ -75,6 +75,51 @@ omakure init tools/cleanup.py
 
 See `how-to-create-a-script.md` for the step-by-step guide and templates.
 
+## Batteries
+
+Batteries register reusable Omakure-compatible automation repositories. The Git
+checkout is cached under `.omakure/batteries/cache/` and treated as untrusted;
+Omakure never runs scripts directly from that cache. Install copies one
+validated script into the trusted scripts workspace and records source
+provenance under `.omakure/batteries/installed/`.
+
+```bash
+omakure battery list
+omakure battery add https://example.invalid/azure.git --name azure --ref main
+omakure battery sync azure
+omakure battery inspect azure
+omakure battery scripts azure
+omakure battery install azure azure.rg-list-all
+omakure battery install azure azure.rg-list-all --force
+omakure battery remove azure --remove-cache
+```
+
+All Battery commands honor the global `--json` flag:
+
+```bash
+omakure --json battery scripts azure
+```
+
+Lifecycle:
+
+- `add` records the source URL/ref/name; it does not execute repo content.
+- `sync` clones/fetches, checks out a detached commit, validates the manifest,
+  and records the resolved commit SHA.
+- `inspect` reads and validates the synced manifest.
+- `scripts` lists installable manifest entries that pass safety validation.
+- `install` copies one script into the scripts workspace; existing targets are
+  refused unless `--force` is set.
+- `remove` unregisters the Battery; `--remove-cache` also deletes the cached
+  clone. Installed scripts are left in the trusted workspace.
+
+HTTP handoff: future endpoints should wrap the same operations backing these
+commands (`list_batteries`, `add_battery`, `sync_battery`, `inspect_battery`,
+`list_battery_scripts`, `install_battery_script`, `remove_battery`) rather than
+shelling out or duplicating safety logic.
+
+See `batteries.md` for repository format, safety rules, install provenance, and
+validation expectations.
+
 ## Config / env
 
 ```bash
@@ -110,8 +155,8 @@ omakure theme path
 ## Removed Omaken flavors
 
 The old Omaken flavor surface was removed. `omakure list` and
-`omakure install <git-url>` no longer manage script packs. Future reusable
-script packs are tracked under the Battery plan, not this legacy surface.
+`omakure install <git-url>` no longer manage script packs. Reusable script
+repositories are managed by the `omakure battery ...` command family instead.
 
 ## Scheduler (`omakure serve`)
 

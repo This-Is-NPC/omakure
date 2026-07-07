@@ -1,4 +1,5 @@
 pub mod args;
+pub mod battery;
 pub mod config;
 pub mod describe;
 pub mod doctor;

@@ -236,6 +236,21 @@ pub fn sync_battery(
     workspace: &Workspace,
     request: SyncBatteryRequest,
 ) -> OperationResult<BatterySummary> {
+    sync_battery_with_policy(workspace, request, GitTransportPolicy::Default)
+}
+
+pub fn sync_battery_https_only(
+    workspace: &Workspace,
+    request: SyncBatteryRequest,
+) -> OperationResult<BatterySummary> {
+    sync_battery_with_policy(workspace, request, GitTransportPolicy::HttpsOnly)
+}
+
+fn sync_battery_with_policy(
+    workspace: &Workspace,
+    request: SyncBatteryRequest,
+    policy: GitTransportPolicy,
+) -> OperationResult<BatterySummary> {
     let paths = BatteryPaths::for_workspace(workspace);
     let mut registry = read_registry(&paths.registry_path)?;
     validate_battery_name(&request.name)?;
@@ -261,40 +276,46 @@ pub fn sync_battery(
                 )
             })?;
         }
-        run_git(git_clone_spec(
-            &registry.batteries[index].git_url,
-            &cache_path,
-        ))?;
+        run_git_with_policy(
+            git_clone_spec(&registry.batteries[index].git_url, &cache_path),
+            policy,
+        )?;
         reject_unsafe_local_git_config(&cache_path)?;
     } else {
-        verify_cache_origin(&cache_path, &registry.batteries[index].git_url)?;
+        verify_cache_origin_with_policy(&cache_path, &registry.batteries[index].git_url, policy)?;
     }
-    run_git(git_fetch_spec(
-        &cache_path,
-        &registry.batteries[index].requested_ref,
-    ))?;
-    let fetched_commit = run_git_capture(GitCommandSpec {
-        program: "git".into(),
-        args: vec![
-            "-C".into(),
-            cache_path.display().to_string(),
-            "rev-parse".into(),
-            "FETCH_HEAD^{commit}".into(),
-        ],
-    })?;
-    run_git(git_checkout_detached_spec(
-        &cache_path,
-        fetched_commit.trim(),
-    ))?;
-    let resolved_commit = run_git_capture(GitCommandSpec {
-        program: "git".into(),
-        args: vec![
-            "-C".into(),
-            cache_path.display().to_string(),
-            "rev-parse".into(),
-            "HEAD".into(),
-        ],
-    })?
+    run_git_with_policy(
+        git_fetch_spec(&cache_path, &registry.batteries[index].requested_ref),
+        policy,
+    )?;
+    let fetched_commit = run_git_capture_with_policy(
+        GitCommandSpec {
+            program: "git".into(),
+            args: vec![
+                "-C".into(),
+                cache_path.display().to_string(),
+                "rev-parse".into(),
+                "FETCH_HEAD^{commit}".into(),
+            ],
+        },
+        policy,
+    )?;
+    run_git_with_policy(
+        git_checkout_detached_spec(&cache_path, fetched_commit.trim()),
+        policy,
+    )?;
+    let resolved_commit = run_git_capture_with_policy(
+        GitCommandSpec {
+            program: "git".into(),
+            args: vec![
+                "-C".into(),
+                cache_path.display().to_string(),
+                "rev-parse".into(),
+                "HEAD".into(),
+            ],
+        },
+        policy,
+    )?
     .trim()
     .to_string();
     let manifest = load_manifest(&cache_path)?;
@@ -645,18 +666,25 @@ fn validate_git_ref(value: &str) -> OperationResult<()> {
     Ok(())
 }
 
-fn verify_cache_origin(cache_path: &Path, expected_url: &str) -> OperationResult<()> {
+fn verify_cache_origin_with_policy(
+    cache_path: &Path,
+    expected_url: &str,
+    policy: GitTransportPolicy,
+) -> OperationResult<()> {
     reject_unsafe_local_git_config(cache_path)?;
-    let actual = run_git_capture(GitCommandSpec {
-        program: "git".into(),
-        args: vec![
-            "-C".into(),
-            cache_path.display().to_string(),
-            "remote".into(),
-            "get-url".into(),
-            "origin".into(),
-        ],
-    })?
+    let actual = run_git_capture_with_policy(
+        GitCommandSpec {
+            program: "git".into(),
+            args: vec![
+                "-C".into(),
+                cache_path.display().to_string(),
+                "remote".into(),
+                "get-url".into(),
+                "origin".into(),
+            ],
+        },
+        policy,
+    )?
     .trim()
     .to_string();
     if actual != expected_url {
@@ -703,8 +731,8 @@ fn sanitize_file_component(value: &str) -> String {
         .collect()
 }
 
-fn run_git(spec: GitCommandSpec) -> OperationResult<()> {
-    let output = git_command(&spec).output().map_err(|err| {
+fn run_git_with_policy(spec: GitCommandSpec, policy: GitTransportPolicy) -> OperationResult<()> {
+    let output = git_command(&spec, policy).output().map_err(|err| {
         OperationError::new(
             OperationErrorCode::GitFailed,
             format!("failed to spawn git: {err}"),
@@ -721,7 +749,14 @@ fn run_git(spec: GitCommandSpec) -> OperationResult<()> {
 }
 
 fn run_git_capture(spec: GitCommandSpec) -> OperationResult<String> {
-    let output = git_command(&spec).output().map_err(|err| {
+    run_git_capture_with_policy(spec, GitTransportPolicy::Default)
+}
+
+fn run_git_capture_with_policy(
+    spec: GitCommandSpec,
+    policy: GitTransportPolicy,
+) -> OperationResult<String> {
+    let output = git_command(&spec, policy).output().map_err(|err| {
         OperationError::new(
             OperationErrorCode::GitFailed,
             format!("failed to spawn git: {err}"),
@@ -737,7 +772,7 @@ fn run_git_capture(spec: GitCommandSpec) -> OperationResult<String> {
     }
 }
 
-fn git_command(spec: &GitCommandSpec) -> Command {
+fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> Command {
     let mut command = Command::new(&spec.program);
     command
         .args(&spec.args)
@@ -745,7 +780,7 @@ fn git_command(spec: &GitCommandSpec) -> Command {
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", git_null_config_path())
         .env("GIT_CONFIG_SYSTEM", git_null_config_path())
-        .env("GIT_ALLOW_PROTOCOL", "file:https:http")
+        .env("GIT_ALLOW_PROTOCOL", policy.allowed_protocols())
         .env_remove("GIT_ASKPASS")
         .env_remove("SSH_ASKPASS")
         .env_remove("GIT_SSH")
@@ -757,7 +792,8 @@ fn git_command(spec: &GitCommandSpec) -> Command {
         .env_remove("XDG_CONFIG_DIRS")
         .env_remove("GIT_CONFIG")
         .env_remove("GIT_CONFIG_COUNT")
-        .env_remove("GIT_CONFIG_PARAMETERS");
+        .env_remove("GIT_CONFIG_PARAMETERS")
+        .env_remove("OMAKURE_API_TOKEN");
     command
 }
 
@@ -948,6 +984,21 @@ impl BatteryPaths {
 pub struct GitCommandSpec {
     pub program: String,
     pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GitTransportPolicy {
+    Default,
+    HttpsOnly,
+}
+
+impl GitTransportPolicy {
+    fn allowed_protocols(self) -> &'static str {
+        match self {
+            Self::Default => "file:https:http",
+            Self::HttpsOnly => "https",
+        }
+    }
 }
 
 pub fn read_registry(path: &Path) -> OperationResult<BatteryRegistry> {
@@ -2137,6 +2188,21 @@ echo ok
     }
 
     #[test]
+    fn git_command_removes_api_token() {
+        let command = git_command(
+            &GitCommandSpec {
+                program: "git".into(),
+                args: vec!["status".into()],
+            },
+            GitTransportPolicy::Default,
+        );
+
+        assert!(command
+            .get_envs()
+            .any(|(k, v)| k == "OMAKURE_API_TOKEN" && v.is_none()));
+    }
+
+    #[test]
     fn missing_registry_reads_as_empty_versioned_registry() {
         let dir = TempDir::new().unwrap();
         let registry = read_registry(&dir.path().join(".omakure/batteries.json")).unwrap();
@@ -2427,11 +2493,14 @@ path = "scripts/ignored.sh"
             program: "git".into(),
             args: vec!["status".into()],
         };
-        let command = git_command(&spec);
+        let command = git_command(&spec, GitTransportPolicy::Default);
         let envs: Vec<_> = command.get_envs().collect();
 
         assert!(envs.iter().any(|(key, value)| {
             *key == "GIT_TERMINAL_PROMPT" && value.map(|v| v == "0").unwrap_or(false)
+        }));
+        assert!(envs.iter().any(|(key, value)| {
+            *key == "GIT_ALLOW_PROTOCOL" && value.map(|v| v == "file:https:http").unwrap_or(false)
         }));
         assert!(envs
             .iter()
@@ -2477,6 +2546,20 @@ path = "scripts/ignored.sh"
         assert!(envs
             .iter()
             .any(|(key, value)| *key == "GIT_CONFIG_PARAMETERS" && value.is_none()));
+    }
+
+    #[test]
+    fn git_command_can_restrict_protocols_to_https() {
+        let spec = GitCommandSpec {
+            program: "git".into(),
+            args: vec!["status".into()],
+        };
+        let command = git_command(&spec, GitTransportPolicy::HttpsOnly);
+        let envs: Vec<_> = command.get_envs().collect();
+
+        assert!(envs.iter().any(|(key, value)| {
+            *key == "GIT_ALLOW_PROTOCOL" && value.map(|v| v == "https").unwrap_or(false)
+        }));
     }
 
     #[cfg(unix)]

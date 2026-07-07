@@ -4,9 +4,10 @@ A Battery is an external Omakure-compatible automation repository registered
 with a local Omakure workspace. Battery repositories are untrusted input until a
 user explicitly installs selected scripts into the trusted scripts workspace.
 
-This document defines the Battery v1 contract. HTTP management endpoints are
-out of scope for v1; the Battery operations are designed so a future HTTP layer
-can call the same operation functions as the CLI.
+This document defines the Battery v1 contract. The HTTP management API is a
+transport adapter over the same Battery operations as the CLI, with the extra
+restriction that HTTP Battery registration and HTTP-triggered Battery use are
+limited to `https://` sources.
 
 ## Scope
 
@@ -24,7 +25,6 @@ All commands support the global `--json` flag.
 
 ## Non-Goals
 
-- No HTTP endpoint, API server, authentication middleware, or route handler.
 - No Omaken compatibility layer, migration, alias, or fallback behavior.
 - No direct execution from a Battery cache checkout.
 - No submodule checkout by default.
@@ -175,11 +175,13 @@ The initial operation error taxonomy is intentionally small:
 CLI JSON output uses the existing envelope shape where practical:
 
 ```json
-{ "ok": true, "data": {}, "error": null, "schema_version": 1 }
+{ "ok": true, "data": {}, "error": null, "schema_version": "1" }
 ```
 
-## Future HTTP Handoff
+## HTTP Adapter
 
-The future HTTP layer should be a transport adapter over these same operations.
-It should not shell out to `omakure` and should not reimplement Battery safety
-logic in route handlers.
+The HTTP layer is a transport adapter over these same operations. It does not
+shell out to `omakure` and does not reimplement Battery safety logic in route
+handlers. HTTP applies a narrower source policy than the local CLI: Batteries
+created or used through HTTP must have `https://` Git URLs. Local paths,
+`file://`, and plaintext `http://` sources remain CLI-only.

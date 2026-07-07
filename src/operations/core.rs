@@ -1,0 +1,769 @@
+use crate::adapters::workspace_repository::FsWorkspaceRepository;
+use crate::app_meta;
+use crate::ports::ScriptRepository;
+use crate::runs::{
+    self, EnqueueOptions, RunFilters, RunRow, RunState, RunStateSet, RunStats, TraceLevel, TraceRow,
+};
+use crate::runtime::script_extensions;
+use crate::workspace::Workspace;
+use serde::{Deserialize, Serialize};
+use std::path::{Component, Path, PathBuf};
+use std::str::FromStr;
+
+use super::{OperationError, OperationErrorCode, OperationResult};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceSummary {
+    pub version: String,
+    pub workspace_root: PathBuf,
+    pub scripts_root: PathBuf,
+    pub omakure_dir: PathBuf,
+    pub history_dir: PathBuf,
+    pub workspace_config: PathBuf,
+    pub envs_dir: PathBuf,
+    pub envs_active_path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ListScriptsRequest {
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScriptSummary {
+    pub absolute_path: String,
+    pub relative_path: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub tags: Vec<String>,
+    pub field_count: usize,
+    pub schema_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DescribeScriptRequest {
+    pub script: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScriptDescription {
+    pub absolute_path: String,
+    pub relative_path: String,
+    pub schema: ScriptSchema,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScriptSchema {
+    pub name: String,
+    pub description: Option<String>,
+    pub tags: Vec<String>,
+    pub fields: Vec<ScriptField>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScriptField {
+    pub name: String,
+    pub prompt: Option<String>,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub order: u32,
+    pub required: bool,
+    pub arg: Option<String>,
+    pub default: Option<String>,
+    pub choices: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ListRunsRequest {
+    pub script: Option<String>,
+    pub actor: Option<String>,
+    pub since_ms: Option<i64>,
+    pub until_ms: Option<i64>,
+    pub success: Option<bool>,
+    pub limit: Option<i64>,
+    pub states: Vec<String>,
+    pub state_set: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShowRunRequest {
+    pub run_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListTracesRequest {
+    pub run_id: String,
+    pub level: Option<String>,
+    pub since_sequence: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnqueueRunRequest {
+    pub script: String,
+    pub args: Vec<String>,
+    pub run_id: Option<String>,
+    pub actor: String,
+    pub reason: Option<String>,
+    pub priority: i64,
+    pub timeout_ms: Option<i64>,
+    pub parent_run_id: Option<String>,
+    pub cron_schedule_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CancelRunRequest {
+    pub run_id: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeadLetterRunRequest {
+    pub run_id: String,
+    pub reason: Option<String>,
+}
+
+pub fn workspace_summary(workspace: &Workspace) -> OperationResult<WorkspaceSummary> {
+    Ok(WorkspaceSummary {
+        version: app_meta::APP_VERSION.to_string(),
+        workspace_root: workspace.root().to_path_buf(),
+        scripts_root: workspace.scripts_root().to_path_buf(),
+        omakure_dir: workspace.omakure_dir().to_path_buf(),
+        history_dir: workspace.history_dir().to_path_buf(),
+        workspace_config: workspace.config_path().to_path_buf(),
+        envs_dir: workspace.envs_dir().to_path_buf(),
+        envs_active_path: workspace.envs_active_path().to_path_buf(),
+    })
+}
+
+pub fn list_scripts(
+    workspace: &Workspace,
+    request: ListScriptsRequest,
+) -> OperationResult<Vec<ScriptSummary>> {
+    let repo = FsWorkspaceRepository::new(workspace.scripts_root().to_path_buf());
+    let mut scripts = repo.list_scripts_recursive().map_err(io_error)?;
+    scripts.sort();
+    Ok(scripts
+        .into_iter()
+        .map(|script| build_script_summary(&repo, workspace.scripts_root(), script))
+        .filter(|entry| matches_all_tags(entry, &request.tags))
+        .collect())
+}
+
+pub fn describe_script(
+    workspace: &Workspace,
+    request: DescribeScriptRequest,
+) -> OperationResult<ScriptDescription> {
+    let path = resolve_script_path(&request.script, workspace.scripts_root())?;
+    let repo = FsWorkspaceRepository::new(workspace.scripts_root().to_path_buf());
+    let schema = repo
+        .read_schema(&path)
+        .map_err(|err| OperationError::new(OperationErrorCode::InvalidInput, err.to_string()))?;
+    let absolute_path = std::fs::canonicalize(&path)
+        .unwrap_or_else(|_| path.clone())
+        .to_string_lossy()
+        .to_string();
+    let relative_path = path
+        .strip_prefix(workspace.scripts_root())
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .to_string();
+    Ok(ScriptDescription {
+        absolute_path,
+        relative_path,
+        schema: script_schema_from_domain(schema),
+    })
+}
+
+fn script_schema_from_domain(schema: crate::domain::Schema) -> ScriptSchema {
+    let mut fields: Vec<ScriptField> = schema
+        .fields
+        .into_iter()
+        .map(|field| ScriptField {
+            name: field.name,
+            prompt: field.prompt,
+            kind: field.kind,
+            order: field.order.unwrap_or(0),
+            required: field.required.unwrap_or(false),
+            arg: field.arg,
+            default: field.default,
+            choices: field.choices,
+        })
+        .collect();
+    fields.sort_by_key(|field| field.order);
+    ScriptSchema {
+        name: schema.name,
+        description: schema.description,
+        tags: schema.tags.unwrap_or_default(),
+        fields,
+    }
+}
+
+pub fn list_runs(workspace: &Workspace, request: ListRunsRequest) -> OperationResult<Vec<RunRow>> {
+    let states = resolve_states(&request.states, request.state_set.as_deref())?;
+    let filters = RunFilters {
+        script: request.script,
+        actor: request.actor,
+        since_ms: request.since_ms,
+        until_ms: request.until_ms,
+        success: request.success,
+        limit: request.limit,
+        states,
+    };
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    runs::query_runs(&conn, &filters).map_err(io_error_string)
+}
+
+pub fn show_run(workspace: &Workspace, request: ShowRunRequest) -> OperationResult<RunRow> {
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    match runs::get_run(&conn, &request.run_id).map_err(io_error_string)? {
+        Some(row) => Ok(row),
+        None => Err(OperationError::new(
+            OperationErrorCode::NotFound,
+            format!("run not found: {}", request.run_id),
+        )),
+    }
+}
+
+pub fn list_traces(
+    workspace: &Workspace,
+    request: ListTracesRequest,
+) -> OperationResult<Vec<TraceRow>> {
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    let level = match request.level.as_deref() {
+        Some(level) => Some(TraceLevel::from_str(level).map_err(invalid_input)?),
+        None => None,
+    };
+    runs::query_traces(&conn, &request.run_id, level, request.since_sequence)
+        .map_err(map_not_found_string)
+}
+
+pub fn queue_stats(workspace: &Workspace) -> OperationResult<RunStats> {
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    runs::stats(&conn).map_err(io_error_string)
+}
+
+pub fn enqueue_run(workspace: &Workspace, request: EnqueueRunRequest) -> OperationResult<RunRow> {
+    let path = resolve_script_path(&request.script, workspace.scripts_root())?;
+    let canonical = std::fs::canonicalize(&path).unwrap_or(path);
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    runs::enqueue(
+        &conn,
+        canonical.to_string_lossy().as_ref(),
+        &request.args,
+        EnqueueOptions {
+            run_id: request.run_id,
+            actor: request.actor,
+            reason: request.reason,
+            priority: request.priority,
+            timeout_ms: request.timeout_ms,
+            parent_run_id: request.parent_run_id,
+            cron_schedule_id: request.cron_schedule_id,
+            script_name: None,
+            omakure_version: app_meta::APP_VERSION.to_string(),
+            trigger: runs::RunTrigger::Manual,
+        },
+    )
+    .map_err(io_error_string)
+}
+
+pub fn cancel_run(workspace: &Workspace, request: CancelRunRequest) -> OperationResult<RunRow> {
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    require_run(&conn, &request.run_id)?;
+    runs::cancel(&conn, &request.run_id, request.reason, None).map_err(map_transition_error)
+}
+
+pub fn dead_letter_run(
+    workspace: &Workspace,
+    request: DeadLetterRunRequest,
+) -> OperationResult<RunRow> {
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    require_run(&conn, &request.run_id)?;
+    runs::dead_letter(&conn, &request.run_id, request.reason).map_err(map_transition_error)
+}
+
+fn build_script_summary(
+    repo: &FsWorkspaceRepository,
+    root: &Path,
+    script: PathBuf,
+) -> ScriptSummary {
+    let relative_path = script
+        .strip_prefix(root)
+        .unwrap_or(&script)
+        .to_string_lossy()
+        .to_string();
+    let absolute_path = std::fs::canonicalize(&script)
+        .unwrap_or_else(|_| script.clone())
+        .to_string_lossy()
+        .to_string();
+    match repo.read_schema(&script) {
+        Ok(schema) => ScriptSummary {
+            absolute_path,
+            relative_path,
+            name: Some(schema.name),
+            description: schema.description,
+            tags: schema.tags.unwrap_or_default(),
+            field_count: schema.fields.len(),
+            schema_error: None,
+        },
+        Err(err) => ScriptSummary {
+            absolute_path,
+            relative_path,
+            name: None,
+            description: None,
+            tags: Vec::new(),
+            field_count: 0,
+            schema_error: Some(err.to_string()),
+        },
+    }
+}
+
+fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
+    required
+        .iter()
+        .all(|tag| entry.tags.iter().any(|entry_tag| entry_tag == tag))
+}
+
+fn resolve_script_path(script: &str, scripts_root: &Path) -> OperationResult<PathBuf> {
+    if script.trim().is_empty() {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "script is required",
+        ));
+    }
+
+    let root = scripts_root.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    let has_separator = script.contains('/') || script.contains('\\');
+    let path = PathBuf::from(script);
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err(OperationError::new(
+            OperationErrorCode::UnsafePath,
+            format!("script path escapes scripts root: {script}"),
+        ));
+    }
+    if path.is_absolute() && !path.starts_with(&root) {
+        return Err(OperationError::new(
+            OperationErrorCode::UnsafePath,
+            format!("script path escapes scripts root: {script}"),
+        ));
+    }
+    let candidate = if path.is_absolute() {
+        path
+    } else if has_separator {
+        root.join(path)
+    } else {
+        root.join(script)
+    };
+    resolve_with_extensions(candidate, &root)
+}
+
+fn resolve_with_extensions(path: PathBuf, scripts_root: &Path) -> OperationResult<PathBuf> {
+    if path.exists() {
+        if path.is_file() {
+            return canonical_script_path(&path, scripts_root);
+        }
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("script is not a file: {}", path.display()),
+        ));
+    }
+    if path.extension().is_some() {
+        return Err(OperationError::new(
+            OperationErrorCode::NotFound,
+            format!("script not found: {}", path.display()),
+        ));
+    }
+    for ext in script_extensions() {
+        let mut candidate = path.clone();
+        candidate.set_extension(ext);
+        if candidate.is_file() {
+            return canonical_script_path(&candidate, scripts_root);
+        }
+    }
+    Err(OperationError::new(
+        OperationErrorCode::NotFound,
+        format!("script not found: {}", path.display()),
+    ))
+}
+
+fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<PathBuf> {
+    let canonical = path.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize script path: {err}"),
+        )
+    })?;
+    if canonical.starts_with(scripts_root) {
+        Ok(canonical)
+    } else {
+        Err(OperationError::new(
+            OperationErrorCode::UnsafePath,
+            format!("script path escapes scripts root: {}", path.display()),
+        ))
+    }
+}
+
+fn resolve_states(states: &[String], state_set: Option<&str>) -> OperationResult<Vec<RunState>> {
+    if !states.is_empty() && state_set.is_some() {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "state and state_set are mutually exclusive",
+        ));
+    }
+    if let Some(set) = state_set {
+        return RunStateSet::from_str(set)
+            .map(|set| set.to_states())
+            .map_err(invalid_input);
+    }
+    if !states.is_empty() {
+        return states
+            .iter()
+            .map(|state| RunState::from_str(state).map_err(invalid_input))
+            .collect();
+    }
+    Ok(RunStateSet::Terminal.to_states())
+}
+
+fn require_run(conn: &rusqlite::Connection, run_id: &str) -> OperationResult<()> {
+    match runs::get_run(conn, run_id).map_err(io_error_string)? {
+        Some(_) => Ok(()),
+        None => Err(OperationError::new(
+            OperationErrorCode::NotFound,
+            format!("run not found: {run_id}"),
+        )),
+    }
+}
+
+fn map_transition_error(message: String) -> OperationError {
+    if message.contains("terminal state") || message.contains("only failed or timed_out") {
+        OperationError::new(OperationErrorCode::Conflict, message)
+    } else {
+        OperationError::new(OperationErrorCode::IoFailed, message)
+    }
+}
+
+fn map_not_found_string(message: String) -> OperationError {
+    if message.starts_with("not_found") {
+        OperationError::new(OperationErrorCode::NotFound, message)
+    } else {
+        OperationError::new(OperationErrorCode::IoFailed, message)
+    }
+}
+
+fn invalid_input(message: String) -> OperationError {
+    OperationError::new(OperationErrorCode::InvalidInput, message)
+}
+
+fn io_error(err: impl std::error::Error) -> OperationError {
+    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
+}
+
+fn io_error_string(message: String) -> OperationError {
+    OperationError::new(OperationErrorCode::IoFailed, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runs::{RunCompletion, RunState};
+    use tempfile::TempDir;
+
+    fn workspace_in(dir: &TempDir) -> Workspace {
+        let ws = Workspace::new(dir.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        ws
+    }
+
+    fn write_script(root: &Path, path: &str, tags: &[&str]) {
+        let tags_json = if tags.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ",\"Tags\":[{}]",
+                tags.iter()
+                    .map(|tag| format!("\"{tag}\""))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        let script = root.join(path);
+        std::fs::create_dir_all(script.parent().unwrap()).unwrap();
+        std::fs::write(
+            script,
+            format!(
+                "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {{\"Name\":\"{path}\",\"Fields\":[]{tags_json}}}\n# OMAKURE_SCHEMA_END\necho ok\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn workspace_summary_returns_operation_ready_paths() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+
+        let summary = workspace_summary(&ws).unwrap();
+
+        assert_eq!(summary.workspace_root, ws.root());
+        assert_eq!(summary.omakure_dir, ws.omakure_dir());
+        assert_eq!(summary.history_dir, ws.history_dir());
+    }
+
+    #[test]
+    fn list_scripts_filters_by_tags_and_preserves_schema_errors() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "deploy.sh", &["ops"]);
+        write_script(ws.scripts_root(), "other.sh", &["misc"]);
+        std::fs::write(ws.scripts_root().join("broken.sh"), "#!/usr/bin/env bash\n").unwrap();
+
+        let entries = list_scripts(
+            &ws,
+            ListScriptsRequest {
+                tags: vec!["ops".into()],
+            },
+        )
+        .unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].relative_path, "deploy.sh");
+    }
+
+    #[test]
+    fn describe_script_returns_schema_payload() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "deploy.sh", &["ops"]);
+
+        let desc = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: "deploy".into(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(desc.relative_path, "deploy.sh");
+        assert_eq!(desc.schema.tags, vec!["ops"]);
+    }
+
+    #[test]
+    fn script_resolution_rejects_absolute_paths_outside_workspace() {
+        let dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(outside.path(), "outside.sh", &[]);
+
+        let err = enqueue_run(
+            &ws,
+            EnqueueRunRequest {
+                script: outside
+                    .path()
+                    .join("outside.sh")
+                    .to_string_lossy()
+                    .to_string(),
+                args: Vec::new(),
+                run_id: None,
+                actor: "agent".into(),
+                reason: None,
+                priority: 0,
+                timeout_ms: None,
+                parent_run_id: None,
+                cron_schedule_id: None,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[test]
+    fn script_resolution_rejects_parent_traversal() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+
+        let err = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: "../outside.sh".into(),
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn script_resolution_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(outside.path(), "outside.sh", &[]);
+        symlink(
+            outside.path().join("outside.sh"),
+            ws.scripts_root().join("escape.sh"),
+        )
+        .unwrap();
+
+        let err = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: "escape.sh".into(),
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[test]
+    fn enqueue_list_show_cancel_and_stats_share_runs_state_machine() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "job.sh", &[]);
+
+        let row = enqueue_run(
+            &ws,
+            EnqueueRunRequest {
+                script: "job".into(),
+                args: vec!["--x".into()],
+                run_id: Some("rid-op".into()),
+                actor: "agent".into(),
+                reason: Some("test".into()),
+                priority: 5,
+                timeout_ms: Some(1000),
+                parent_run_id: None,
+                cron_schedule_id: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(row.state, RunState::Queued);
+
+        let rows = list_runs(
+            &ws,
+            ListRunsRequest {
+                state_set: Some("all".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+
+        let shown = show_run(
+            &ws,
+            ShowRunRequest {
+                run_id: "rid-op".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(shown.actor, "agent");
+
+        let cancelled = cancel_run(
+            &ws,
+            CancelRunRequest {
+                run_id: "rid-op".into(),
+                reason: Some("stop".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(cancelled.state, RunState::Cancelled);
+
+        let stats = queue_stats(&ws).unwrap();
+        assert_eq!(stats.total, 1);
+    }
+
+    #[test]
+    fn dead_letter_requires_existing_failed_run() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "job.sh", &[]);
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            ws.scripts_root().join("job.sh").to_string_lossy().as_ref(),
+            &[],
+            "worker:test",
+            EnqueueOptions {
+                run_id: Some("rid-fail".into()),
+                actor: "agent".into(),
+                reason: None,
+                priority: 0,
+                timeout_ms: None,
+                parent_run_id: None,
+                cron_schedule_id: None,
+                script_name: None,
+                omakure_version: app_meta::APP_VERSION.to_string(),
+                trigger: runs::RunTrigger::Manual,
+            },
+        )
+        .unwrap();
+        runs::fail(
+            &conn,
+            &row.run_id,
+            RunCompletion {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: Some(1),
+                success: false,
+                error: Some("boom".into()),
+            },
+        )
+        .unwrap();
+
+        let dead = dead_letter_run(
+            &ws,
+            DeadLetterRunRequest {
+                run_id: "rid-fail".into(),
+                reason: Some("triaged".into()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(dead.state, RunState::DeadLetter);
+    }
+
+    #[test]
+    fn list_traces_reports_missing_run_as_not_found() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+
+        let err = list_traces(
+            &ws,
+            ListTracesRequest {
+                run_id: "missing".into(),
+                level: Some("debug".into()),
+                since_sequence: None,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::NotFound);
+    }
+
+    #[test]
+    fn invalid_state_filter_is_operation_error() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+
+        let err = list_runs(
+            &ws,
+            ListRunsRequest {
+                states: vec!["bad".into()],
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::InvalidInput);
+    }
+}

@@ -50,7 +50,7 @@ is recorded in .history/runs.sqlite with actor, optional reason, full \
 argv, exit code, stdout, stderr, start/end timestamps, and a stable run_id.";
 
 const AI_VERBS: &[&str] = &[
-    "scripts", "describe", "search", "run", "init", "history", "queue", "battery", "trace",
+    "scripts", "describe", "search", "run", "init", "history", "queue", "battery", "api", "trace",
     "config", "help-ai",
 ];
 
@@ -82,6 +82,8 @@ fn build_payload() -> HelpAiPayload {
             "script_exists",
             "missing_required_field",
             "invalid_argument",
+            "invalid_input",
+            "unauthorized",
             "not_implemented",
             "internal",
             "already_exists",
@@ -93,6 +95,7 @@ fn build_payload() -> HelpAiPayload {
             "git_failed",
             "io_failed",
             "registry_invalid",
+            "payload_too_large",
         ],
         verbs,
         data_shapes: json!({
@@ -146,6 +149,13 @@ fn build_payload() -> HelpAiPayload {
                 "schema_version": SCHEMA_VERSION,
             }),
             "history_show": "Same shape as `run` data above (full RunRow including stdout/stderr).",
+            "api": json!({
+                "transport": "HTTP loopback/internal management API",
+                "auth": "Authorization: Bearer <OMAKURE_API_TOKEN>; /v1/health is unauthenticated",
+                "envelope": "Same { ok, data, error, schema_version } shape as CLI JSON.",
+                "body_limit": "1 MiB",
+                "reference": ".docs/http-api.md",
+            }),
             "config": json!({
                 "ok": true,
                 "data": {
@@ -238,6 +248,7 @@ mod tests {
         assert!(payload.error_codes.contains(&"schema_invalid"));
         assert!(payload.error_codes.contains(&"script_exists"));
         assert!(payload.error_codes.contains(&"missing_required_field"));
+        assert!(payload.error_codes.contains(&"payload_too_large"));
     }
 
     #[test]

@@ -8,6 +8,8 @@ use crate::runtime::{command_for_script, command_for_script_with_env, script_kin
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+const API_TOKEN_ENV: &str = "OMAKURE_API_TOKEN";
+
 pub struct MultiScriptRunner;
 
 impl MultiScriptRunner {
@@ -34,8 +36,11 @@ impl MultiScriptRunner {
         // venv-prepended PATH runs the venv interpreter, not the system one.
         let mut cmd = command_for_script_with_env(script, env)?;
         cmd.args(args);
+        cmd.env_remove(API_TOKEN_ENV);
         for (k, v) in env {
-            cmd.env(k, v);
+            if k != API_TOKEN_ENV {
+                cmd.env(k, v);
+            }
         }
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
@@ -64,7 +69,10 @@ impl ScriptRunner for MultiScriptRunner {
     fn run(&self, script: &Path, args: &[String]) -> AppResult<ScriptRunOutput> {
         ensure_runtime_for(script)?;
 
-        let output = command_for_script(script)?.args(args).output()?;
+        let output = command_for_script(script)?
+            .args(args)
+            .env_remove(API_TOKEN_ENV)
+            .output()?;
         Ok(ScriptRunOutput {
             stdout: String::from_utf8_lossy(&output.stdout).to_string(),
             stderr: String::from_utf8_lossy(&output.stderr).to_string(),
@@ -117,6 +125,20 @@ mod tests {
         assert!(envs
             .iter()
             .any(|(k, v)| *k == "MY_VAR" && *v == Some(std::ffi::OsStr::new("my_value"))));
+    }
+
+    #[test]
+    fn test_build_command_removes_api_token() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("test.sh");
+        fs::write(&script, "#!/bin/bash\necho ok").unwrap();
+
+        let env = vec![(API_TOKEN_ENV.to_string(), "secret".to_string())];
+        let cmd = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
+
+        assert!(cmd
+            .get_envs()
+            .any(|(k, v)| k == API_TOKEN_ENV && v.is_none()));
     }
 
     #[test]

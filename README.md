@@ -56,10 +56,10 @@ omakure /abs/path/to/scripts
 The positional path only changes which directory the TUI browses for the
 current session. History, environments, the search index, and
 `omakure.toml` always stay in the global workspace — Omakure never
-creates `.omaken/`, `.history/`, or `omakure.toml` inside the directory
+creates `.omakure/`, `.history/`, or `omakure.toml` inside the directory
 you point it at.
 
-3) Put scripts under `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`). Omakure scans this tree (including `.omaken`) for `.bash`, `.sh`, `.ps1`, and `.py` scripts. To hide helpers, fixtures, or vendored folders from the TUI, `omakure scripts`, search, and the scheduler, add `.omakureignore` files at the scripts root or inside child folders.
+3) Put scripts under `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`). Omakure scans this tree for `.bash`, `.sh`, `.ps1`, and `.py` scripts, while skipping Omakure-owned metadata under `.omakure/`. To hide helpers, fixtures, or vendored folders from the TUI, `omakure scripts`, search, and the scheduler, add `.omakureignore` files at the scripts root or inside child folders.
 
 4) Make the script visible to Omakure by embedding a schema JSON block between `OMAKURE_SCHEMA_START` and `OMAKURE_SCHEMA_END`. The `omakure init my-script` command generates a template with the schema block.
 

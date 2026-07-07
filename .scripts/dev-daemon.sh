@@ -8,7 +8,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 WORKSPACE="${OMAKURE_DEV_WORKSPACE:-$REPO_DIR/scripts}"
 
 BIN="$REPO_DIR/target/debug/omakure"
-LOG="$WORKSPACE/.omaken/daemon.log"
+LOG="$WORKSPACE/.omakure/daemon.log"
 
 (cd "$REPO_DIR" && cargo build --bin omakure)
 
@@ -16,7 +16,7 @@ cd "$WORKSPACE"
 
 "$BIN" serve --stop >/dev/null 2>&1 || true
 
-mkdir -p .omaken
+mkdir -p .omakure
 : > "$LOG"
 
 "$BIN" serve -d

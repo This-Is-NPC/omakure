@@ -55,18 +55,12 @@ pub enum Commands {
     /// Check runtime dependencies and workspace
     ///
     /// Verifies required interpreters (`git`, `bash`, `jq`), optional ones
-    /// (`powershell`, `python`), workspace layout (`.omaken/`, history dir,
+    /// (`powershell`, `python`), workspace layout (`.omakure/`, history dir,
     /// workspace config), and that every script's embedded schema parses.
     /// Exits 1 if any required check fails. `--json` is currently ignored
     /// by this subcommand.
     #[command(visible_alias = "check")]
     Doctor,
-
-    /// List Omaken flavors
-    List,
-
-    /// Install an Omaken flavor
-    Install(OmakenInstallArgs),
 
     /// List available scripts
     Scripts(ScriptsArgs),
@@ -110,7 +104,7 @@ pub enum Commands {
     /// Show resolved paths and environment
     ///
     /// Prints the resolved binary path, omakure version, workspace root,
-    /// scripts root, `.omaken/` directory, history directory, workspace
+    /// scripts root, `.omakure/` directory, history directory, workspace
     /// config file, environments directory, active environment, and any
     /// known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`,
     /// `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `--json`
@@ -135,7 +129,7 @@ pub enum Commands {
     /// Deletes the currently running binary from its install directory
     /// (on Windows also strips the install path from the user `PATH`).
     /// With `--scripts`, PERMANENTLY deletes the entire scripts
-    /// workspace, including `.omaken/` (runs.sqlite, history traces,
+    /// workspace, including `.omakure/` (envs, daemon files), `.history/`,
     /// schedules) and every script file — use with care and have
     /// backups.
     Uninstall(UninstallArgs),
@@ -168,8 +162,8 @@ pub enum Commands {
     /// long-lived overlapping jobs never stack up.
     ///
     /// Paths (per workspace):{n}
-    ///   PID file: `<workspace>/.omaken/daemon.pid`{n}
-    ///   Log:      `<workspace>/.omaken/daemon.log`
+    ///   PID file: `<workspace>/.omakure/daemon.pid`{n}
+    ///   Log:      `<workspace>/.omakure/daemon.log`
     ///
     /// `--install`/`--uninstall`/`--status` manage a per-workspace
     /// systemd user unit so the daemon survives reboots (Linux only);
@@ -448,17 +442,6 @@ pub enum Shell {
     Pwsh,
 }
 
-#[derive(Args, Debug)]
-pub struct OmakenInstallArgs {
-    /// Git URL of the flavor repository
-    #[arg(value_name = "GIT_URL")]
-    pub url: String,
-
-    /// Override the install folder name
-    #[arg(long)]
-    pub name: Option<String>,
-}
-
 // ---------------------------------------------------------------------------
 // Queue subcommand
 // ---------------------------------------------------------------------------
@@ -582,6 +565,19 @@ mod tests {
     fn test_parse_global_json_flag() {
         let cli = parse(&["--json", "scripts"]).unwrap();
         assert!(cli.json);
+    }
+
+    #[test]
+    fn test_omaken_list_command_is_removed() {
+        let cli = parse(&["list"]).unwrap();
+        assert!(cli.command.is_none());
+        assert_eq!(cli.path, Some(PathBuf::from("list")));
+    }
+
+    #[test]
+    fn test_omaken_install_command_is_removed() {
+        let result = parse(&["install", "https://example.com/scripts.git"]);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -771,7 +767,7 @@ pub struct ServeArgs {
     #[arg(long, short = 'd', conflicts_with_all = ["stop", "install", "uninstall", "status"])]
     pub detach: bool,
 
-    /// Stop a running daemon (reads `.omaken/daemon.pid` and sends SIGTERM).
+    /// Stop a running daemon (reads `.omakure/daemon.pid` and sends SIGTERM).
     #[arg(long, conflicts_with_all = ["install", "uninstall", "status"])]
     pub stop: bool,
 

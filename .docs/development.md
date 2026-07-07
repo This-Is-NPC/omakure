@@ -62,8 +62,8 @@ Ports-and-adapters (hexagonal):
 `Schedule` block, and enqueues runs through the same state machine as
 manual runs (`trigger = Scheduled`). Overlap protection skips fires when
 a prior run with the same `cron_schedule_id` is still `queued`/`running`.
-PID file at `<workspace>/.omaken/daemon.pid`, structured log at
-`<workspace>/.omaken/daemon.log`. See `usage.md` and
+PID file at `<workspace>/.omakure/daemon.pid`, structured log at
+`<workspace>/.omakure/daemon.log`. See `usage.md` and
 `how-to-create-a-script.md#schedule-optional` for usage.
 
 ## Testing

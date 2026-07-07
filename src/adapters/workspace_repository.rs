@@ -299,15 +299,8 @@ fn wildcard_match(pattern: &str, value: &str) -> bool {
 
 fn should_skip_dir(path: &Path) -> bool {
     let name = path.file_name().and_then(|name| name.to_str());
-    if matches!(name, Some(".history") | Some(".git")) {
+    if matches!(name, Some(".history") | Some(".git") | Some(".omakure")) {
         return true;
-    }
-    if matches!(name, Some("envs")) {
-        if let Some(parent) = path.parent().and_then(|parent| parent.file_name()) {
-            if parent == ".omaken" {
-                return true;
-            }
-        }
     }
     false
 }
@@ -347,8 +340,8 @@ mod tests {
         fs::write(root.join(".history/old.sh"), "#!/bin/bash").unwrap();
         fs::create_dir_all(root.join(".git")).unwrap();
         fs::write(root.join(".git/hook.sh"), "#!/bin/bash").unwrap();
-        fs::create_dir_all(root.join(".omaken/envs")).unwrap();
-        fs::write(root.join(".omaken/envs/dev.conf"), "KEY=val").unwrap();
+        fs::create_dir_all(root.join(".omakure/envs")).unwrap();
+        fs::write(root.join(".omakure/envs/dev.conf"), "KEY=val").unwrap();
 
         (tmp, root)
     }
@@ -435,10 +428,7 @@ mod tests {
             let path_str = script.to_string_lossy();
             assert!(!path_str.contains(".history"), "should skip .history");
             assert!(!path_str.contains(".git/"), "should skip .git");
-            assert!(
-                !path_str.contains(".omaken/envs"),
-                "should skip .omaken/envs"
-            );
+            assert!(!path_str.contains(".omakure"), "should skip .omakure");
         }
     }
 
@@ -780,12 +770,19 @@ echo "hello"
     }
 
     #[test]
-    fn test_should_skip_dir_omaken_envs() {
+    fn test_should_skip_dir_omakure_metadata() {
         let tmp = TempDir::new().unwrap();
-        let omaken = tmp.path().join(".omaken");
-        let envs = omaken.join("envs");
+        let omakure = tmp.path().join(".omakure");
+        fs::create_dir_all(&omakure).unwrap();
+        assert!(should_skip_dir(&omakure));
+    }
+
+    #[test]
+    fn test_should_not_skip_omaken_envs_as_special_case() {
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join(".omaken").join("envs");
         fs::create_dir_all(&envs).unwrap();
-        assert!(should_skip_dir(&envs));
+        assert!(!should_skip_dir(&envs));
     }
 
     #[test]

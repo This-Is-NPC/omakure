@@ -9,7 +9,7 @@ Start here if you want a map of the docs. For quick start and requirements, see 
 - `scheduling.md`: cron scheduler (`omakure serve`) — lifecycle, overlap protection, systemd autostart, observability.
 - `workspace.md`: workspace layout, runtime state (`runs.sqlite`), daemon artifacts.
 - `scripts-path.md`: default scripts path and the full resolution precedence.
-- `environments.md`: environment documents (`.omaken/envs/`) and session `omakure.conf`.
+- `environments.md`: environment documents (`.omakure/envs/`) and session `omakure.conf`.
 - `lua-widgets.md`: how to render `index.lua` widgets in the TUI.
 - `how-it-works.md`: overview of the manual / queued / scheduled execution paths.
 - `how-to-create-a-script.md`: step-by-step script guide incl. the `Schedule` block.

@@ -4,13 +4,8 @@ Omakure treats the workspace as a filesystem store:
 
 ```
 omakure-scripts/
-├── .omaken/               # Curated flavors managed by Omakure
-│   ├── azure/
-│   │   ├── index.lua          # Optional folder widget
-│   │   ├── rg-list-all.bash
-│   │   ├── rg-details.bash
-│   │   └── rg-delete.bash
-│   ├── envs/              # Environment defaults (active file listed in .omaken/envs/active)
+├── .omakure/              # Omakure-owned runtime metadata
+│   ├── envs/              # Environment defaults (active file listed in .omakure/envs/active)
 │   │   ├── active
 │   │   └── env_template.conf
 │   ├── daemon.pid         # `omakure serve` PID lock (present when the scheduler is running)
@@ -23,7 +18,7 @@ omakure-scripts/
 
 If a folder includes `index.lua`, Omakure renders it in the TUI header panel. See `lua-widgets.md`.
 
-Environment defaults live in `.omaken/envs/*.conf`. Use the TUI (`Ctrl+/` then `e`) to switch the active file.
+Environment defaults live in `.omakure/envs/*.conf`. Use the TUI (`Ctrl+/` then `e`) to switch the active file.
 Defaults are applied by matching field names (case-insensitive) to `key=value` pairs.
 See `environments.md` for usage details.
 
@@ -36,7 +31,7 @@ regardless of which directory the run was launched from.
 
 Omakure tracks two distinct path anchors:
 
-- **Global workspace** — owns `.history/`, `.omaken/`, `.omaken/envs/`,
+- **Global workspace** — owns `.history/`, `.omakure/`, `.omakure/envs/`,
   the SQLite search index, and `omakure.toml`. Resolved by the
   `scripts_dir()` precedence chain (`--scripts-dir` >
   `OMAKURE_SCRIPTS_DIR` > legacy env vars > debug `scripts/` fallback >
@@ -46,7 +41,7 @@ Omakure tracks two distinct path anchors:
   positional path (`omakure .`, `omakure ../team-scripts`, `omakure
   /abs/path`), only the scripts root is overridden for that session.
 
-Launching `omakure <PATH>` never creates `.omaken/`, `.history/`, or
+Launching `omakure <PATH>` never creates `.omakure/`, `.history/`, or
 `omakure.toml` inside `<PATH>`. The `Workspace` type has an internal
 invariant that `ensure_layout()` is strictly bound to the global root,
 so the positional target stays untouched.
@@ -65,3 +60,9 @@ absolute path lies within the active scripts root, so:
 Legacy history entries (which stored workspace-relative paths) continue
 to load and display; the filter resolves them against the global
 workspace root so they remain visible in the plain-`omakure` case.
+
+## Removed Omaken layout
+
+The old Omaken flavor concept and `.omaken/` directory are removed from the
+active workspace contract. Omakure does not read, create, or migrate
+`.omaken/`; reusable script packs are covered by the separate Battery plan.

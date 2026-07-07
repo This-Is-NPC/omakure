@@ -20,7 +20,7 @@ run = "./target/debug/omakure serve --stop"
 
 [tasks.daemon-log]
 description = "Tail the daemon log"
-run = "tail -f .omaken/daemon.log"
+run = "tail -f .omakure/daemon.log"
 
 [tasks.build]
 description = "Build the project in debug mode"
@@ -40,4 +40,4 @@ run = "cargo install --path ."
 
 [tasks.coverage]
 description = "Run tests with tarpaulin and generate HTML coverage report"
-run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/adapters/tui/mod.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/omaken.rs' 'src/cli/update.rs' --skip-clean"
+run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/adapters/tui/mod.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/update.rs' --skip-clean"

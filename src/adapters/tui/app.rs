@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, TryRecvError};
 
 /// Display label used in `EnvironmentConfig.active` when the active env
 /// for the session is the per-directory `omakure.conf` override rather
-/// than a file from the global `.omaken/envs/` directory.
+/// than a file from the global `.omakure/envs/` directory.
 pub(crate) const SESSION_ENV_LABEL: &str = "omakure.conf (session)";
 
 pub(crate) use super::state::{DashboardLayout, HistoryFocus, HistoryView};
@@ -899,7 +899,7 @@ impl<'a> App<'a> {
         // If the TUI was launched with a positional scripts-root override
         // and `<scripts-root>/omakure.conf` exists, prefer it as the
         // session-active environment over the globally active env. The
-        // override is read-only: nothing is written to `.omaken/envs/`
+        // override is read-only: nothing is written to `.omakure/envs/`
         // and the file is never copied. On parse error we surface the
         // message but fall back to the global config so the TUI keeps
         // launching.
@@ -1184,7 +1184,7 @@ pub(crate) struct SessionEnvLoad {
 /// - `Some(Ok(load))` when the file exists and parses cleanly.
 /// - `Some(Err(message))` when the file exists but cannot be read.
 ///
-/// This function never writes to disk and never touches `.omaken/envs/`.
+/// This function never writes to disk and never touches `.omakure/envs/`.
 /// Parse failures from the underlying KEY=value parser are non-fatal:
 /// the parser silently skips malformed lines, so a literally unreadable
 /// file (I/O error) is the only branch that surfaces an error here.
@@ -1568,6 +1568,7 @@ suffix"#;
 
         // Critically: nothing was written into the global envs dir or
         // touched the scripts root layout.
+        assert!(!global.join(".omakure").exists());
         assert!(!global.join(".omaken").exists());
         assert!(!global.join(".history").exists());
         assert!(!global.join("omakure.toml").exists());

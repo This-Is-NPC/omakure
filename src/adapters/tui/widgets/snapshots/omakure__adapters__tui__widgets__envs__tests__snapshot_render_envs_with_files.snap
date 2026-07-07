@@ -5,7 +5,7 @@ expression: terminal.backend()
 ---
 "┌Environments──────────────────────────────────────────────────────────────────┐"
 "│┌Status──────────────────────────────────────────────────────────────────────┐│"
-"││Dir: /tmp/omakure_envs_snapshot_with_files/.omaken/envs                     ││"
+"││Dir: /tmp/omakure_envs_snapshot_with_files/.omakure/envs                    ││"
 "││Active: <none>                                                              ││"
 "││Defaults: 0                                                                 ││"
 "│└────────────────────────────────────────────────────────────────────────────┘│"

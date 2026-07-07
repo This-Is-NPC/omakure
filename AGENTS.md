@@ -9,8 +9,17 @@ Omakure is a Rust TUI application for navigating and executing automation script
 **Key concepts:**
 - **Workspace**: Root directory containing scripts (default: `~/Documents/omakure-scripts`)
 - **Schema**: JSON metadata scripts embed in a commented block between `OMAKURE_SCHEMA_START` and `OMAKURE_SCHEMA_END`
-- **Omaken**: Hidden `.omaken/` folder for config, environments, and widgets
-- **Environments**: `.conf` files in `.omaken/envs/` providing default field values
+- **Omakure metadata**: Hidden `.omakure/` folder for runtime metadata such as environments and scheduler files
+- **Environments**: `.conf` files in `.omakure/envs/` providing default field values
+
+## Task & Plan Management
+
+Shaping, planning, and task tracking use the **Omakiten** MCP (this replaces the
+former assisted-workflow). Shape ideas into ready tasks and waved plans with
+`okt-shape`; drive a plan with `okt-run`, or build one task with
+`okt-task-continue <id>`. Tasks, plans, waves, and dependencies are
+project-scoped — inspect with `project.overview`, `tasks.list`, and `plans.show`.
+GitHub issue/board tracking is unchanged (see `CONTRIBUTING.md` → Project Management).
 
 ## Task & Plan Management
 
@@ -35,7 +44,7 @@ cargo test                # Run all tests (~730 inline + 6 integration)
 mise run dev              # Build, start scheduler daemon, tail log, open TUI
 mise run daemon-start     # Background `omakure serve -d`
 mise run daemon-stop      # `omakure serve --stop`
-mise run daemon-log       # Tail .omaken/daemon.log
+mise run daemon-log       # Tail .omakure/daemon.log
 mise run coverage         # cargo tarpaulin HTML report
 mise run lint             # clippy -D warnings + fmt --check
 ```
@@ -81,7 +90,6 @@ src/
 │   ├── config.rs             # `omakure config` — resolved paths (+ --json)
 │   ├── doctor.rs             # `omakure doctor` — runtime + schema checks
 │   ├── theme.rs              # `omakure theme list|set|preview|path`
-│   ├── omaken.rs             # `omakure list`/`omakure install` — Omaken flavor management
 │   ├── update.rs             # Self-update from GitHub releases
 │   └── uninstall.rs          # Binary removal (+ optional --scripts wipe)
 ├── domain/                   # Core types, no I/O
@@ -149,7 +157,6 @@ src/
 | `src/runs.rs` | SQLite-backed run state machine + structured trace storage; exposes `RunState`, `enqueue`, `start_inline`, `claim_next`, `complete`, `fail`, `cancel`, `time_out`, `dead_letter`, `heartbeat`, `insert_trace`, `query_traces`, `stats` |
 | `src/run_executor.rs` | Shared execution helper used by both `omakure run` and the worker; spawns the child with `OMAKURE_RUN_ID`, heartbeats the lease, kills on `--timeout`, reacts to mid-execution cancel |
 | `src/cli/update.rs` | Self-update via GitHub Releases and script sync into scripts dir |
-| `src/cli/omaken.rs` | Omaken flavor listing/install (`list`/`install` commands) |
 | `src/cli/list.rs` | `scripts` subcommand: recursive script listing |
 | `src/adapters/environments.rs` | Environment config loading and active env management |
 | `src/adapters/system_checks.rs` | Runtime dependency availability checks |
@@ -237,15 +244,13 @@ Scripts directory structure:
 ```
 ~/Documents/omakure-scripts/
 ├── omakure.toml              # Workspace version config
-├── .omaken/
+├── .omakure/
 │   ├── envs/
 │   │   ├── active            # Current env name
 │   │   ├── dev.conf          # KEY=value defaults
 │   │   └── env_template.conf
 │   ├── daemon.pid            # `omakure serve` PID lock (created by the daemon)
 │   ├── daemon.log            # Structured scheduler log (RFC3339 lines)
-│   └── <folder>/
-│       └── index.lua         # Optional Lua widget
 ├── .history/
 │   ├── runs.sqlite           # Run state machine + structured traces
 │   └── search-index.sqlite   # Script search DB
@@ -391,15 +396,13 @@ Coverage is measured via `mise run coverage` (cargo-tarpaulin). Full test run: `
 
 3. **Scripts dir resolution** - Order: env overrides (including legacy `OVERTURE_`/`CLOUD_MGMT_`), repo `scripts/` in debug builds, `~/Documents/omakure-scripts` if present, legacy `overture-scripts`/`cloud-mgmt-scripts`, then `~/Documents/omakure-scripts` fallback (Windows Documents path comes from the registry).
 
-4. **Omaken vs scripts commands** - `list`/`install` manage `.omaken` flavors; use `scripts` command to enumerate runnable scripts.
+4. **Widget loading is async** - `start_widget_load()` spawns a thread, `poll_widget_load()` checks completion
 
-5. **Widget loading is async** - `start_widget_load()` spawns a thread, `poll_widget_load()` checks completion
+5. **Search index background rebuild** - `SearchIndex::start_background_rebuild()` runs in a background thread on startup
 
-6. **Search index background rebuild** - `SearchIndex::start_background_rebuild()` runs in a background thread on startup
+6. **Script types by extension** - `.bash`/`.sh` → bash, `.ps1` → PowerShell (`pwsh` on non-Windows), `.py` → Python3 (determined in `runtime.rs`); schema blocks must use extension-specific comment prefixes
 
-7. **Script types by extension** - `.bash`/`.sh` → bash, `.ps1` → PowerShell (`pwsh` on non-Windows), `.py` → Python3 (determined in `runtime.rs`); schema blocks must use extension-specific comment prefixes
-
-8. **Update dependencies** - `update` uses curl/wget/PowerShell to fetch releases and copies missing scripts from the tag into the workspace; ensure those tools are present.
+7. **Update dependencies** - `update` uses curl/wget/PowerShell to fetch releases and copies missing scripts from the tag into the workspace; ensure those tools are present.
 
 ## Documentation
 

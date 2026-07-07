@@ -177,8 +177,6 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Commands::Update(args)) => cli::update::run(global_root, args)?,
         Some(Commands::Uninstall(args)) => cli::uninstall::run(global_root, args)?,
         Some(Commands::Doctor) => cli::doctor::run(global_root)?,
-        Some(Commands::List) => cli::omaken::run_list(global_root)?,
-        Some(Commands::Install(args)) => cli::omaken::run_install(global_root, args)?,
         Some(Commands::Scripts(args)) => cli::list::run(global_root, args, json_output)?,
         Some(Commands::Describe(args)) => cli::describe::run(global_root, args, json_output)?,
         Some(Commands::Search(args)) => cli::search::run(global_root, args, json_output)?,

@@ -116,12 +116,41 @@ pub fn resolve_program_in_path(program: &str, path_var: &str) -> Option<PathBuf>
         if !dir.is_absolute() {
             continue;
         }
-        let candidate = dir.join(program);
-        if is_executable_file(&candidate) {
-            return Some(candidate);
+        for candidate_name in executable_candidate_names(program) {
+            let candidate = dir.join(candidate_name);
+            if is_executable_file(&candidate) {
+                return Some(candidate);
+            }
         }
     }
     None
+}
+
+#[cfg(windows)]
+fn executable_candidate_names(program: &str) -> Vec<String> {
+    if Path::new(program).extension().is_some() {
+        return vec![program.to_string()];
+    }
+    let mut names = vec![program.to_string()];
+    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+    for ext in pathext.split(';') {
+        let ext = ext.trim();
+        if ext.is_empty() {
+            continue;
+        }
+        let ext = if ext.starts_with('.') {
+            ext.to_string()
+        } else {
+            format!(".{ext}")
+        };
+        names.push(format!("{program}{ext}"));
+    }
+    names
+}
+
+#[cfg(not(windows))]
+fn executable_candidate_names(program: &str) -> Vec<String> {
+    vec![program.to_string()]
 }
 
 #[cfg(unix)]
@@ -258,6 +287,33 @@ mod tests {
         let dir = tempfile::tempdir().unwrap(); // empty dir, no python3
         let path_var = dir.path().display().to_string();
         assert!(resolve_program_in_path("python3", &path_var).is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_program_in_path_finds_windows_exe_suffix() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("python.exe");
+        std::fs::write(&exe, "shim").unwrap();
+        let path_var = dir.path().display().to_string();
+
+        let resolved = resolve_program_in_path("python", &path_var).expect("python.exe found");
+
+        assert_eq!(resolved, exe);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_program_in_path_finds_windows_powershell_suffix() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("powershell.exe");
+        std::fs::write(&exe, "shim").unwrap();
+        let path_var = dir.path().display().to_string();
+
+        let resolved =
+            resolve_program_in_path("powershell", &path_var).expect("powershell.exe found");
+
+        assert_eq!(resolved, exe);
     }
 
     #[cfg(unix)]

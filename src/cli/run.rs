@@ -45,6 +45,22 @@ pub fn run(
         }
     }
 
+    // Layers 2 + 3 of the env-injection precedence table
+    // (`.docs/env-injection-spec.md` §1): the active managed env, with the
+    // optional CLI `--env-file` folded on top (env-file wins per key). The
+    // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
+    // pushed after this inside `execute_with_heartbeat`, stay
+    // non-overridable, and are therefore not visible to `$VAR` expansion in
+    // `.conf` / `--env-file` values. A missing/unreadable `--env-file` is a
+    // hard error.
+    let extra_env = match crate::adapters::environments::resolve_run_env(
+        workspace.envs_dir(),
+        options.env_file.as_deref(),
+    ) {
+        Ok(env) => env,
+        Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
+    };
+
     let canonical = std::fs::canonicalize(&script_path).unwrap_or_else(|_| script_path.clone());
     let canonical_str = canonical.to_string_lossy().to_string();
     let conn = runs::open(&workspace).map_err(|err| -> Box<dyn Error> { err.into() })?;
@@ -68,22 +84,6 @@ pub fn run(
     )
     .map_err(|err| -> Box<dyn Error> { err.into() })?;
     drop(conn);
-
-    // Layers 2 + 3 of the env-injection precedence table
-    // (`.docs/env-injection-spec.md` §1): the active managed env, with the
-    // optional CLI `--env-file` folded on top (env-file wins per key). The
-    // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
-    // pushed after this inside `execute_with_heartbeat`, stay
-    // non-overridable, and are therefore not visible to `$VAR` expansion in
-    // `.conf` / `--env-file` values. A missing/unreadable `--env-file` is a
-    // hard error.
-    let extra_env = match crate::adapters::environments::resolve_run_env(
-        workspace.envs_dir(),
-        options.env_file.as_deref(),
-    ) {
-        Ok(env) => env,
-        Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
-    };
     let result = execute_with_heartbeat(&workspace, &row, extra_env, None);
 
     let final_row = finalize_run(&workspace, &row.run_id, &result);
@@ -870,5 +870,10 @@ mod tests {
             "error should name the missing env-file path, got: {}",
             err
         );
+        let ws = make_workspace(&tmp);
+        let conn = runs::open(&ws).unwrap();
+        assert!(runs::get_run(&conn, "rid-missing-envfile")
+            .unwrap()
+            .is_none());
     }
 }

@@ -33,6 +33,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5"
+libc = "0.2"
 
 [dev-dependencies]
 rstest = "0.23"

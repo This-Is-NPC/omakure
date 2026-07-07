@@ -4,6 +4,7 @@ mod cli;
 mod domain;
 mod error;
 mod lua_widget;
+pub mod operations;
 mod ports;
 mod run_executor;
 mod runs;
@@ -182,6 +183,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Commands::Search(args)) => cli::search::run(global_root, args, json_output)?,
         Some(Commands::History(args)) => cli::history::run(global_root, args, json_output)?,
         Some(Commands::Queue(args)) => cli::queue::run(global_root, args, json_output)?,
+        Some(Commands::Battery(args)) => cli::battery::run(global_root, args, json_output)?,
         Some(Commands::Trace(args)) => cli::trace::run(global_root, args, json_output)?,
         Some(Commands::HelpAi) => cli::help_ai::run()?,
         Some(Commands::Run(args)) => cli::run::run(global_root, args, json_output)?,

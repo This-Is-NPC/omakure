@@ -72,6 +72,13 @@ src/
 ├── ports/                      Trait definitions (interfaces)
 │   ├── mod.rs                  ScriptRepository, ScriptRunner
 │   └── environment.rs          EnvironmentRepository, EnvironmentConfig
+├── operations/                 Protocol-neutral use-case operations shared by CLI/HTTP
+│   ├── core.rs                 Workspace, scripts, runs, queue state operations
+│   ├── config.rs               Full config/env/interpreter diagnostics contract
+│   ├── search.rs               Shared script search operation
+│   ├── scripts.rs              Safe tree/content browsing operations
+│   ├── doctor.rs               Structured diagnostics report
+│   └── battery.rs              Battery registry/sync/install/remove operations
 ├── adapters/                   Concrete implementations
 │   ├── workspace_repository.rs Filesystem-based ScriptRepository
 │   ├── script_runner.rs        MultiScriptRunner (bash/ps1/py command construction)
@@ -117,6 +124,7 @@ tests/                          Integration tests (cli_positional_path.rs)
 ## Architectural Patterns
 
 - **Hexagonal (Ports & Adapters):** `domain/` has no I/O; `ports/` defines traits (`ScriptRepository`, `ScriptRunner`, `EnvironmentRepository`); `adapters/` holds concrete impls. Composition happens in `use_cases/` and `cli/`.
+- **Operations as Protocol Boundary:** `src/operations/*` is the canonical behavior layer for CLI, HTTP, and future protocols. Operations own validation, path confinement, state-machine calls, and stable operation errors. CLI modules render human/JSON output; HTTP handlers handle auth, query/body parsing, status mapping, and envelopes. New protocol surfaces should call operations rather than CLI modules or direct storage adapters.
 - **SQLite as Runtime Source of Truth:** Every runtime fact (queue, history, traces, schedules) lives in `<workspace>/.history/runs.sqlite`. Config stays on disk; state stays in SQLite.
 - **Run State Machine:** `runs.rs` gates transitions between `queued`, `running`, `completed`, `failed`, `cancelled`, `timed_out`, `dead_letter` via typed helpers (`enqueue`, `start_inline`, `claim_next`, `complete`, `fail`, `cancel`, `time_out`, `dead_letter`, `heartbeat`). Illegal moves return `invalid_argument`. `claim_next` uses a single atomic `UPDATE … RETURNING`.
 - **Single Execution Code Path:** `omakure run`, `omakure queue worker`, and the scheduler-enqueued rows all flow through `run_executor::execute_with_heartbeat`. The helper spawns the child with `OMAKURE_RUN_ID`, refreshes the 60 s lease every 250 ms, reacts to mid-run cancel/timeout, and drains stdout/stderr via bounded mpsc channels so orphan grandchildren never deadlock the executor.

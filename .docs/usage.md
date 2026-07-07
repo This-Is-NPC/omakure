@@ -165,10 +165,16 @@ Implemented endpoints:
 
 ```text
 GET    /v1/health
+GET    /v1/config
+GET    /v1/doctor
 GET    /v1/workspace
+GET    /v1/search
+GET    /v1/tree
+GET    /v1/tree/{path}
 GET    /v1/scripts
 GET    /v1/scripts/{script_id}
 GET    /v1/scripts/{script_id}/schema
+GET    /v1/scripts/{script_id}/content
 GET    /v1/runs
 GET    /v1/runs/{run_id}
 GET    /v1/runs/{run_id}/traces

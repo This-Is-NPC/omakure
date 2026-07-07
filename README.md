@@ -153,6 +153,10 @@ no browser CORS support, OAuth/RBAC, or public-internet threat model. HTTP
 Battery registration accepts `https://` sources only; local Battery sources are
 CLI-only.
 
+The API exposes config, doctor, search, safe tree/content browsing, scripts,
+runs/queue, and Battery management through `src/operations/*`; route handlers
+must stay adapters, not second implementations.
+
 > **Upgrading from an older release deletes legacy `.history/*.json`
 > files and rebuilds `runs.sqlite` if its schema is older than the
 > state-machine release.** Back up `.history/` first if you care about

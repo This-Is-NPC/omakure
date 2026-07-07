@@ -119,6 +119,7 @@ Error mapping:
 | invalid input / validation | 400 |
 | not found | 404 |
 | conflict / invalid transition / unsynced Battery | 409 |
+| unsupported script/content media | 415 |
 | payload too large | 413 |
 | unsupported operation | 501 |
 | internal I/O or unexpected error | 500 |
@@ -141,10 +142,16 @@ GET /v1/health
 Read endpoints require auth:
 
 ```http
+GET /v1/config
+GET /v1/doctor
 GET /v1/workspace
+GET /v1/search
+GET /v1/tree
+GET /v1/tree/{path}
 GET /v1/scripts
 GET /v1/scripts/{script_id}
 GET /v1/scripts/{script_id}/schema
+GET /v1/scripts/{script_id}/content
 GET /v1/runs
 GET /v1/runs/{run_id}
 GET /v1/runs/{run_id}/traces
@@ -213,13 +220,35 @@ HTTP Battery registration accepts `https://` Git URLs only. Local paths,
 `file://`, and plaintext `http://` sources remain outside the HTTP API trust
 boundary; use the local CLI for local development sources.
 
+Read query parameters and safety policy:
+
+- `GET /v1/config` returns the full config shape, but HTTP masks every active
+  environment value. Plaintext env diagnostics are CLI-only.
+- `GET /v1/search?q=<query>&tag=<tag>` searches scripts using the existing
+  SQLite index. HTTP does not rebuild the index per request. `query` is accepted
+  as an alias for `q`; repeated `tag` parameters are AND-filtered. Empty queries
+  are rejected. Query length is capped at 256 bytes; tags are capped at 16 total
+  and 64 bytes each.
+- `GET /v1/tree/{path}` lists directories/scripts under the scripts root. It
+  honors nested `.omakureignore` files through the shared workspace repository.
+  Listings are capped at 1000 entries.
+- `GET /v1/scripts/{script_id}/content` returns UTF-8 script content only.
+  Content is capped at 1 MiB, must be a supported script type, and cannot escape
+  the scripts root through `..`, absolute paths, or symlinks.
+- Tree/content routes reject `.omakure`, `.history`, and `.git` metadata paths.
+
 ## CLI / HTTP Parity Matrix
 
 | CLI | HTTP | Shared operation |
 |---|---|---|
-| `omakure config --json` | `GET /v1/workspace` | `workspace_summary` |
+| `omakure config --json` | `GET /v1/config` | `config_summary` |
+| workspace summary | `GET /v1/workspace` | `workspace_summary` |
 | `omakure scripts --json` | `GET /v1/scripts` | `list_scripts` |
+| `omakure search <query> --json` | `GET /v1/search?q=...` | `search_scripts` |
 | `omakure describe <script> --json` | `GET /v1/scripts/{script_id}` | `describe_script` |
+| script browser | `GET /v1/tree`, `GET /v1/tree/{path}` | `list_tree` |
+| script content | `GET /v1/scripts/{script_id}/content` | `read_script_content` |
+| `omakure doctor` | `GET /v1/doctor` | `doctor_report` |
 | `omakure history list --json` | `GET /v1/runs` | `list_runs` |
 | `omakure history show <run_id> --json` | `GET /v1/runs/{run_id}` | `show_run` |
 | `omakure history traces <run_id> --json` | `GET /v1/runs/{run_id}/traces` | `list_traces` |
@@ -239,7 +268,12 @@ boundary; use the local CLI for local development sources.
 
 HTTP routes call shared operations for these core resources:
 
+- `config_summary`
+- `doctor_report`
 - `workspace_summary`
+- `search_scripts`
+- `list_tree`
+- `read_script_content`
 - `list_scripts`
 - `describe_script`
 - `script_schema` via the `describe_script` operation output
@@ -253,6 +287,17 @@ HTTP routes call shared operations for these core resources:
 
 These operations own validation and stable errors. HTTP route handlers must not
 call CLI modules and must not open SQLite directly.
+
+The following surfaces are intentionally deferred from HTTP until a separate
+security/lifecycle design exists:
+
+- `omakure update`: mutates binary/scripts from a remote release.
+- `omakure uninstall`: destructive local operation.
+- `omakure serve`: daemon lifecycle management.
+- `omakure queue worker`: long-running process lifecycle.
+- inline `omakure run`: synchronous execution surface; use `POST /v1/runs` to
+  enqueue instead.
+- HTTP trace ingestion: changes the trust model for script-authored telemetry.
 
 ## Write Audit Expectations
 

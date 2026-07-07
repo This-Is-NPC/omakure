@@ -1,7 +1,7 @@
 # TUI screens and widgets
 
 Inventory of every screen and widget in the TUI layer. Use it to navigate the
-code, plan refactors, or map user-visible behavior to its source.
+code or map user-visible behavior to its source.
 
 Source locations:
 

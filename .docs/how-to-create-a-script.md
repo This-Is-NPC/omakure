@@ -73,7 +73,7 @@ daemon scans scripts at start and enqueues runs at the declared times with
   a macro (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`). `@reboot`
   is rejected. Invalid expressions fail script load.
 - `Enabled`: defaults to `true` when omitted. Toggle it from the TUI
-  Schedules screen (press `c` from the main screen, then `Space`).
+  Schedules screen (press `Ctrl+/` then `c`, then `Space`).
 
 Scheduled fires build `--<arg> <default>` from each field's declared
 default. Fields without a default are skipped. If the previous run for a
@@ -149,4 +149,3 @@ prompt_if_empty TARGET "Target (optional)"
 # 4) Main
 printf "Running with target=%s\n" "${TARGET}"
 ```
-

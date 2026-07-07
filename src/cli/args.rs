@@ -80,6 +80,15 @@ pub enum Commands {
     /// Manage reusable Battery automation repositories
     Battery(BatteryArgs),
 
+    /// Run the internal HTTP management API
+    ///
+    /// Starts a loopback-only HTTP API by default at `127.0.0.1:7878`.
+    /// All endpoints except `/v1/health` require `Authorization: Bearer <token>`
+    /// using `OMAKURE_API_TOKEN`. Binding to non-loopback addresses requires
+    /// `--allow-non-loopback` and should only be used behind trusted network
+    /// controls.
+    Api(ApiArgs),
+
     /// Append a structured trace event from inside a running script
     Trace(TraceArgs),
 
@@ -191,6 +200,17 @@ pub struct DescribeArgs {
     /// Script name or path
     #[arg(value_name = "SCRIPT")]
     pub script: String,
+}
+
+#[derive(Args, Debug)]
+pub struct ApiArgs {
+    /// Address to bind the HTTP API server to
+    #[arg(long, default_value = "127.0.0.1:7878")]
+    pub bind: std::net::SocketAddr,
+
+    /// Explicitly allow binding to non-loopback addresses
+    #[arg(long)]
+    pub allow_non_loopback: bool,
 }
 
 #[derive(Args, Debug)]
@@ -596,6 +616,7 @@ pub struct QueueAddArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::CommandFactory;
     use clap::Parser;
 
     fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
@@ -730,6 +751,42 @@ mod tests {
             },
             _ => panic!("expected Battery"),
         }
+    }
+
+    #[test]
+    fn test_parse_api_defaults() {
+        let cli = parse(&["api"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Api(args) => {
+                assert_eq!(args.bind.to_string(), "127.0.0.1:7878");
+                assert!(!args.allow_non_loopback);
+            }
+            _ => panic!("expected Api"),
+        }
+    }
+
+    #[test]
+    fn test_parse_api_bind_flags() {
+        let cli = parse(&["api", "--bind", "0.0.0.0:7878", "--allow-non-loopback"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Api(args) => {
+                assert_eq!(args.bind.to_string(), "0.0.0.0:7878");
+                assert!(args.allow_non_loopback);
+            }
+            _ => panic!("expected Api"),
+        }
+    }
+
+    #[test]
+    fn test_api_help_surface_exists() {
+        let command = Cli::command();
+        let api = command
+            .find_subcommand("api")
+            .expect("api subcommand should be registered");
+        assert!(api.get_arguments().any(|arg| arg.get_id() == "bind"));
+        assert!(api
+            .get_arguments()
+            .any(|arg| arg.get_id() == "allow_non_loopback"));
     }
 
     #[test]

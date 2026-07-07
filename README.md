@@ -69,6 +69,7 @@ you point it at.
 - Exclude files from scanning with `.omakureignore`: `.docs/scripts-path.md`
 - Environment documents and defaults: `.docs/environments.md`
 - Attach reusable script repositories with Batteries: `.docs/batteries.md`
+- Internal HTTP management API contract: `.docs/http-api.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 
 ## Using Omakure from an AI agent
@@ -127,8 +128,34 @@ omakure --json battery remove azure --remove-cache
 
 Battery clones are not executable workspace content. Omakure validates manifest
 paths, script extensions, schema blocks, symlinks, and traversal before install.
-Future HTTP endpoints should call the same Battery operations used by the CLI.
-Full contract: `.docs/batteries.md`.
+HTTP Battery endpoints call the same Battery operations used by the CLI, with
+HTTP registration restricted to `https://` sources. Full contract:
+`.docs/batteries.md`.
+
+## HTTP API
+
+The internal HTTP management API is available with `omakure api` and specified
+in `.docs/http-api.md`. It wraps the same shared operations as the CLI and is
+not a public internet API: default bind is loopback, non-loopback requires
+explicit opt-in, and every endpoint except health requires a Bearer token.
+
+```bash
+export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
+omakure api
+
+curl http://127.0.0.1:7878/v1/health
+curl -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
+  http://127.0.0.1:7878/v1/scripts
+```
+
+Use `--allow-non-loopback` only for trusted internal/container networks. V1 has
+no browser CORS support, OAuth/RBAC, or public-internet threat model. HTTP
+Battery registration accepts `https://` sources only; local Battery sources are
+CLI-only.
+
+The API exposes config, doctor, search, safe tree/content browsing, scripts,
+runs/queue, and Battery management through `src/operations/*`; route handlers
+must stay adapters, not second implementations.
 
 > **Upgrading from an older release deletes legacy `.history/*.json`
 > files and rebuilds `runs.sqlite` if its schema is older than the
@@ -146,6 +173,7 @@ Full reference: `.docs/ai-interface.md`.
 - Scripts path overrides: `.docs/scripts-path.md`
 - Environment documents: `.docs/environments.md`
 - Batteries: `.docs/batteries.md`
+- HTTP API contract: `.docs/http-api.md`
 - Lua widgets (`index.lua`): `.docs/lua-widgets.md`
 - CLI usage: `.docs/usage.md`
 - Scheduled tasks (cron daemon): `.docs/scheduling.md`

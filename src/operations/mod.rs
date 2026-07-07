@@ -1,4 +1,9 @@
 pub mod battery;
+pub mod config;
+pub mod core;
+pub mod doctor;
+pub mod scripts;
+pub mod search;
 
 use serde::Serialize;
 use std::fmt;
@@ -19,6 +24,7 @@ pub enum OperationErrorCode {
     GitFailed,
     IoFailed,
     RegistryInvalid,
+    PayloadTooLarge,
 }
 
 impl OperationErrorCode {
@@ -35,6 +41,7 @@ impl OperationErrorCode {
             Self::GitFailed => "git_failed",
             Self::IoFailed => "io_failed",
             Self::RegistryInvalid => "registry_invalid",
+            Self::PayloadTooLarge => "payload_too_large",
         }
     }
 }
@@ -80,6 +87,7 @@ mod tests {
             (OperationErrorCode::GitFailed, "git_failed"),
             (OperationErrorCode::IoFailed, "io_failed"),
             (OperationErrorCode::RegistryInvalid, "registry_invalid"),
+            (OperationErrorCode::PayloadTooLarge, "payload_too_large"),
         ];
 
         for (code, expected) in cases {

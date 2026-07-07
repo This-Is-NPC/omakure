@@ -184,6 +184,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Commands::History(args)) => cli::history::run(global_root, args, json_output)?,
         Some(Commands::Queue(args)) => cli::queue::run(global_root, args, json_output)?,
         Some(Commands::Battery(args)) => cli::battery::run(global_root, args, json_output)?,
+        Some(Commands::Api(args)) => cli::api::run(global_root, args)?,
         Some(Commands::Trace(args)) => cli::trace::run(global_root, args, json_output)?,
         Some(Commands::HelpAi) => cli::help_ai::run()?,
         Some(Commands::Run(args)) => cli::run::run(global_root, args, json_output)?,

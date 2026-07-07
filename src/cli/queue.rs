@@ -9,14 +9,14 @@
 //! with the synchronous `omakure run` fast path via
 //! [`crate::run_executor::execute_with_heartbeat`].
 
-use crate::app_meta;
 use crate::cli::args::{
     QueueAddArgs, QueueArgs, QueueCancelArgs, QueueCommand, QueueDeadLetterArgs, QueueWorkerArgs,
 };
 use crate::cli::json::{self, codes};
-use crate::cli::run::resolve_script_path;
+use crate::operations::core::{self, CancelRunRequest, DeadLetterRunRequest, EnqueueRunRequest};
+use crate::operations::{OperationError, OperationErrorCode};
 use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
-use crate::runs::{self, ClaimFilters, EnqueueOptions, RunCompletion, RunRow};
+use crate::runs::{self, ClaimFilters, RunCompletion, RunRow};
 use crate::workspace::Workspace;
 use serde_json::json;
 use std::error::Error;
@@ -46,11 +46,6 @@ pub fn run(scripts_dir: PathBuf, args: QueueArgs, json_output: bool) -> Result<(
 // ---------------------------------------------------------------------------
 
 fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
-    let script_path = match resolve_script_path(&opts.script, workspace.root()) {
-        Ok(p) => p,
-        Err(err) => return emit_error(json_output, codes::NOT_FOUND, err.to_string()),
-    };
-
     let timeout_ms = match opts.timeout.as_deref() {
         None => None,
         Some(s) => match parse_duration_ms(s) {
@@ -59,13 +54,11 @@ fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(
         },
     };
 
-    let conn = open_or_error(workspace, json_output)?;
-    let canonical = std::fs::canonicalize(&script_path).unwrap_or(script_path.clone());
-    let row = match runs::enqueue(
-        &conn,
-        canonical.to_string_lossy().as_ref(),
-        &opts.args,
-        EnqueueOptions {
+    let row = match core::enqueue_run(
+        workspace,
+        EnqueueRunRequest {
+            script: opts.script,
+            args: opts.args,
             run_id: opts.run_id,
             actor: opts.actor,
             reason: opts.reason,
@@ -73,13 +66,10 @@ fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(
             timeout_ms,
             parent_run_id: opts.parent_run_id,
             cron_schedule_id: opts.cron_schedule_id,
-            script_name: None,
-            omakure_version: app_meta::APP_VERSION.to_string(),
-            trigger: crate::runs::RunTrigger::Manual,
         },
     ) {
         Ok(row) => row,
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_operation_error(json_output, err),
     };
     if json_output {
         json::print_ok(row);
@@ -94,18 +84,13 @@ fn cancel(
     opts: QueueCancelArgs,
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let conn = open_or_error(workspace, json_output)?;
-    if runs::get_run(&conn, &opts.run_id)
-        .map_err(Box::<dyn Error>::from)?
-        .is_none()
-    {
-        return emit_error(
-            json_output,
-            codes::NOT_FOUND,
-            format!("run not found: {}", opts.run_id),
-        );
-    }
-    match runs::cancel(&conn, &opts.run_id, opts.reason, None) {
+    match core::cancel_run(
+        workspace,
+        CancelRunRequest {
+            run_id: opts.run_id,
+            reason: opts.reason,
+        },
+    ) {
         Ok(row) => {
             if json_output {
                 json::print_ok(row);
@@ -114,10 +99,7 @@ fn cancel(
             }
             Ok(())
         }
-        Err(err) if err.contains("terminal state") => {
-            emit_error(json_output, codes::INVALID_ARGUMENT, err)
-        }
-        Err(err) => emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => emit_operation_error(json_output, err),
     }
 }
 
@@ -126,18 +108,13 @@ fn dead_letter(
     opts: QueueDeadLetterArgs,
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let conn = open_or_error(workspace, json_output)?;
-    if runs::get_run(&conn, &opts.run_id)
-        .map_err(Box::<dyn Error>::from)?
-        .is_none()
-    {
-        return emit_error(
-            json_output,
-            codes::NOT_FOUND,
-            format!("run not found: {}", opts.run_id),
-        );
-    }
-    match runs::dead_letter(&conn, &opts.run_id, opts.reason) {
+    match core::dead_letter_run(
+        workspace,
+        DeadLetterRunRequest {
+            run_id: opts.run_id,
+            reason: opts.reason,
+        },
+    ) {
         Ok(row) => {
             if json_output {
                 json::print_ok(row);
@@ -146,18 +123,14 @@ fn dead_letter(
             }
             Ok(())
         }
-        Err(err) if err.contains("only failed or timed_out") => {
-            emit_error(json_output, codes::INVALID_ARGUMENT, err)
-        }
-        Err(err) => emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => emit_operation_error(json_output, err),
     }
 }
 
 fn stats(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
-    let conn = open_or_error(workspace, json_output)?;
-    let stats = match runs::stats(&conn) {
+    let stats = match core::queue_stats(workspace) {
         Ok(s) => s,
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_operation_error(json_output, err),
     };
     if json_output {
         json::print_ok(stats);
@@ -319,22 +292,23 @@ fn parse_duration_ms(s: &str) -> Result<i64, String> {
     Ok(ms as i64)
 }
 
-fn open_or_error(
-    workspace: &Workspace,
-    json_output: bool,
-) -> Result<rusqlite::Connection, Box<dyn Error>> {
-    match runs::open(workspace) {
-        Ok(conn) => Ok(conn),
-        Err(err) => Err(emit_error(json_output, codes::INTERNAL, err).unwrap_err()),
-    }
-}
-
 fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
         std::process::exit(1);
     }
     Err(message.into())
+}
+
+fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
+    let code = match err.code {
+        OperationErrorCode::InvalidInput
+        | OperationErrorCode::UnsafePath
+        | OperationErrorCode::Conflict => codes::INVALID_ARGUMENT,
+        OperationErrorCode::NotFound => codes::NOT_FOUND,
+        _ => codes::INTERNAL,
+    };
+    emit_error(json_output, code, err.message)
 }
 
 // Used by tests to make captured-output assertions.
@@ -357,7 +331,7 @@ pub(crate) fn make_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runs::{enqueue, RunState};
+    use crate::runs::{enqueue, EnqueueOptions, RunState};
     use std::fs;
     use std::path::PathBuf;
 

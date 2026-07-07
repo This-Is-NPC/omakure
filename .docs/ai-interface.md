@@ -75,9 +75,9 @@ breaks the privacy contract for no benefit.
 
 For deployments where the agent is sandboxed in a container or
 restricted user account (the canonical pattern for orchestrating an
-AI agent fleet), the privacy contract should be backed by
-**kernel-enforced isolation**, not just by documentation. Recommended
-pattern:
+AI agent fleet), the privacy contract can be backed by
+**kernel-enforced isolation**, not just by documentation. Hardened
+deployment pattern:
 
 1. Mount `<workspace>/.history/` into the sandbox so the omakure
    binary can reach it, but make it owned by a UID **other than** the
@@ -177,13 +177,13 @@ On failure:
 | `script_exists`            | `omakure init` would overwrite without `--force`          |
 | `missing_required_field`   | `run --no-prompt` and a required field has no `--<flag>`  |
 | `invalid_argument`         | Argument value cannot be parsed (e.g. bad `--since`)      |
-| `not_implemented`          | Reserved feature not available in this version            |
+| `not_implemented`          | Existing flag or platform path is intentionally unsupported |
 | `internal`                 | Catch-all for I/O / SQLite / unexpected errors            |
 
 ## Verbs
 
-The AI surface is intentionally small. Five commands cover the discover →
-describe → create → run → audit loop.
+The AI surface is the set of CLI commands that emit the stable JSON envelope
+through `--json`, plus `help-ai` which is always JSON.
 
 ### `omakure help-ai`
 
@@ -381,14 +381,14 @@ omakure --json history show 1700000000000-12345-0
 omakure --json history tail --limit 5
 ```
 
-`history tail --follow` is reserved for a future release and currently
-returns `error.code = "not_implemented"`.
+`history tail --follow` is accepted as a flag but currently returns
+`error.code = "not_implemented"`; `tail` is a snapshot command.
 
 ### `omakure config --json`
 
 Returns the resolved workspace root, scripts root, history dir, envs
 dir, active environment, and bootstrap mode in one envelope. Useful for
-agents that need to find `.history/runs.sqlite` directly.
+agents that need to understand which workspace a command will operate on.
 
 ## `run_id` format
 
@@ -650,18 +650,17 @@ omakure scripts --json --tag prefeitura --tag sp
 omakure search prefeitura --json --tag production
 ```
 
-## Cron producer contract
+## Scheduler producer contract
 
-The future omakure cron scheduler will produce work by calling
-`omakure queue add` with the new `--cron-schedule-id` flag (and
-`--actor cron`). The flag stores its value on the row's
-`cron_schedule_id` column so cron-originated rows can be distinguished
-from agent-originated rows by a `WHERE cron_schedule_id IS NOT NULL`
-query.
+`omakure serve` scans enabled script `Schedule` blocks and enqueues due runs
+through the same run state machine used by `omakure queue add`. Scheduled rows
+use `trigger = Scheduled`, `actor = scheduler`, `reason = "cron: <expr>"`, and
+`cron_schedule_id = <canonical_path>@<cron_expr>`.
 
-**No cron scheduler implementation ships in this release.** Only the
-schema column and the documented producer contract are added now so a
-future cron release does not require a schema migration.
+The `--cron-schedule-id` flag on `omakure queue add` records the same
+provenance field for manual replay or external producers. Rows with a non-null
+`cron_schedule_id` participate in the scheduler overlap check when the id
+matches the scheduler's `<canonical_path>@<cron_expr>` format.
 
 ## Worked example: agent fleet pushing work
 
@@ -695,16 +694,13 @@ omakure --json queue dead-letter "$RUN_ID" --reason "captcha solver broken"
 omakure --json history stats
 ```
 
-## Out of scope (v1)
+## Current boundaries
 
-- The cron scheduler itself (only the schema column and producer
-  contract are added now).
 - Automatic retry policies (`retrying` state, exponential backoff,
   retry limits). Manual re-enqueue is the only retry mechanism.
 - Job dependencies / DAGs.
 - Multi-host coordination.
-- Embedded MCP server. CLI is the v1 contract; an MCP shim over these
-  same verbs may be added later without re-designing the contract.
+- Embedded MCP server. CLI and HTTP are the implemented integration surfaces.
 - Streaming `run --json` output. Long-running scripts still print live
   output when `--json` is **not** set.
 - `history tail --follow` and trace tail / follow mode. Both are

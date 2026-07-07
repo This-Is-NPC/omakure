@@ -4,9 +4,10 @@ A Battery is an external Omakure-compatible automation repository registered
 with a local Omakure workspace. Battery repositories are untrusted input until a
 user explicitly installs selected scripts into the trusted scripts workspace.
 
-This document defines the Battery v1 contract. HTTP management endpoints are
-out of scope for v1; the Battery operations are designed so a future HTTP layer
-can call the same operation functions as the CLI.
+This document defines the Battery v1 contract. The HTTP management API is a
+transport adapter over the same Battery operations as the CLI, with the extra
+restriction that HTTP Battery registration and HTTP-triggered Battery use are
+limited to `https://` sources.
 
 ## Scope
 
@@ -24,7 +25,6 @@ All commands support the global `--json` flag.
 
 ## Non-Goals
 
-- No HTTP endpoint, API server, authentication middleware, or route handler.
 - No Omaken compatibility layer, migration, alias, or fallback behavior.
 - No direct execution from a Battery cache checkout.
 - No submodule checkout by default.
@@ -46,8 +46,8 @@ Battery metadata is Omakure-owned runtime state and lives under `.omakure/`.
 └── omakure.toml
 ```
 
-`batteries.json` is the registry. It is versioned so future schema changes can
-be migrated deliberately.
+`batteries.json` is the registry. The current registry format has
+`"version": 1`.
 
 ```json
 {
@@ -70,7 +70,7 @@ Rules:
 - `name` is the stable Battery id used by CLI and operation requests.
 - `cache_path` is stored relative to the workspace root.
 - `resolved_commit` is empty until the first successful sync.
-- Writes to the registry should be atomic where practical.
+- Writes to the registry are performed through the Battery operations layer.
 - A malformed registry is an operation error, not a silent reset.
 
 ## Repository Format
@@ -129,8 +129,8 @@ Rules:
   `.omakure/batteries/installed/`, keyed by Battery name and script id.
 - A failed install must not leave a partial target file when the target did not
   previously exist.
-- A forced overwrite should write through a temporary file and rename into
-  place where practical.
+- A forced overwrite replaces the existing target only after the selected
+  Battery script has passed validation.
 
 ## Remove Contract
 
@@ -142,7 +142,7 @@ Rules:
 
 - Registry entry removal is required.
 - Cache deletion happens only with `--remove-cache`.
-- Installed script deletion is out of scope for v1.
+- Removing a Battery does not delete installed scripts.
 - Removing an unknown Battery returns a stable not-found operation error.
 
 ## Operation Boundary
@@ -175,11 +175,13 @@ The initial operation error taxonomy is intentionally small:
 CLI JSON output uses the existing envelope shape where practical:
 
 ```json
-{ "ok": true, "data": {}, "error": null, "schema_version": 1 }
+{ "ok": true, "data": {}, "error": null, "schema_version": "1" }
 ```
 
-## Future HTTP Handoff
+## HTTP Adapter
 
-The future HTTP layer should be a transport adapter over these same operations.
-It should not shell out to `omakure` and should not reimplement Battery safety
-logic in route handlers.
+The HTTP layer is a transport adapter over these same operations. It does not
+shell out to `omakure` and does not reimplement Battery safety logic in route
+handlers. HTTP applies a narrower source policy than the local CLI: Batteries
+created or used through HTTP must have `https://` Git URLs. Local paths,
+`file://`, and plaintext `http://` sources remain CLI-only.

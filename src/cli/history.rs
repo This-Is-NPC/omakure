@@ -5,15 +5,13 @@ use crate::cli::args::{
     HistoryTracesArgs,
 };
 use crate::cli::json::{self, codes};
-use crate::runs::{
-    self, format_run_timestamp, query_traces, RunFilters, RunRow, RunState, RunStateSet, RunStats,
-    TraceLevel, TraceRow,
-};
+use crate::operations::core::{self, ListRunsRequest, ListTracesRequest, ShowRunRequest};
+use crate::operations::{OperationError, OperationErrorCode};
+use crate::runs::{self, format_run_timestamp, RunRow, RunStats, TraceRow};
 use crate::workspace::Workspace;
 use serde::Serialize;
 use std::error::Error;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 /// Compact run row used by `history list --json`. Stdout/stderr are
 /// omitted to keep payloads small; agents that need them call
@@ -103,11 +101,6 @@ fn list(
         None
     };
 
-    let states = match resolve_state_filter(&opts.state, opts.state_set.as_deref()) {
-        Ok(states) => states,
-        Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
-    };
-
     let now = runs::current_unix_ms();
     let since_ms = match opts.since.as_deref().map(parse_duration_to_ms) {
         Some(Ok(d)) => Some(now - d),
@@ -120,20 +113,20 @@ fn list(
         None => None,
     };
 
-    let filters = RunFilters {
+    let request = ListRunsRequest {
         script: opts.script,
         actor: opts.actor,
         since_ms,
         until_ms,
         success,
         limit: opts.limit,
-        states,
+        states: opts.state,
+        state_set: opts.state_set,
     };
 
-    let conn = open_or_error(workspace, json_output)?;
-    let rows = match runs::query_runs(&conn, &filters) {
+    let rows = match core::list_runs(workspace, request) {
         Ok(rows) => rows,
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_operation_error(json_output, err),
     };
 
     if json_output {
@@ -164,30 +157,32 @@ fn format_list_row(row: &RunRow) -> String {
     )
 }
 
-/// Resolve the user-supplied `--state` and `--state-set` flags into a
-/// concrete list of [`RunState`] values for [`RunFilters::states`].
+/// Resolve the user-supplied `--state` and `--state-set` flags into concrete
+/// run states. Retained as characterization coverage for the operation-backed
+/// adapter migration.
 ///
-/// Default (neither flag): the [`RunStateSet::Terminal`] set, so v0.1
-/// callers see no behavior change.
+/// Default (neither flag): the terminal set, so v0.1 callers see no behavior
+/// change.
+#[cfg(test)]
 fn resolve_state_filter(
     states: &[String],
     state_set: Option<&str>,
-) -> Result<Vec<RunState>, String> {
+) -> Result<Vec<crate::runs::RunState>, String> {
     if !states.is_empty() && state_set.is_some() {
         return Err("--state and --state-set are mutually exclusive".to_string());
     }
     if let Some(set) = state_set {
-        let parsed: RunStateSet = set.parse()?;
+        let parsed: crate::runs::RunStateSet = set.parse()?;
         return Ok(parsed.to_states());
     }
     if !states.is_empty() {
         let mut out = Vec::with_capacity(states.len());
         for s in states {
-            out.push(s.parse::<RunState>()?);
+            out.push(s.parse::<crate::runs::RunState>()?);
         }
         return Ok(out);
     }
-    Ok(RunStateSet::Terminal.to_states())
+    Ok(crate::runs::RunStateSet::Terminal.to_states())
 }
 
 fn show(
@@ -195,17 +190,14 @@ fn show(
     opts: HistoryShowArgs,
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let conn = open_or_error(workspace, json_output)?;
-    let row = match runs::get_run(&conn, &opts.run_id) {
-        Ok(Some(row)) => row,
-        Ok(None) => {
-            return emit_error(
-                json_output,
-                codes::NOT_FOUND,
-                format!("run not found: {}", opts.run_id),
-            );
-        }
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+    let row = match core::show_run(
+        workspace,
+        ShowRunRequest {
+            run_id: opts.run_id,
+        },
+    ) {
+        Ok(row) => row,
+        Err(err) => return emit_operation_error(json_output, err),
     };
 
     if json_output {
@@ -298,10 +290,9 @@ fn tail(
 }
 
 fn stats(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
-    let conn = open_or_error(workspace, json_output)?;
-    let stats = match runs::stats(&conn) {
+    let stats = match core::run_stats(workspace) {
         Ok(s) => s,
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_operation_error(json_output, err),
     };
     if json_output {
         json::print_ok(stats);
@@ -337,25 +328,24 @@ fn traces(
     opts: HistoryTracesArgs,
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let level_min = match opts.level.as_deref() {
-        None => None,
-        Some(s) => match TraceLevel::from_str(s) {
-            Ok(l) => Some(l),
-            Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
+    let run_id = opts.run_id;
+    let traces = match core::list_traces(
+        workspace,
+        ListTracesRequest {
+            run_id: run_id.clone(),
+            level: opts.level,
+            since_sequence: opts.since_sequence,
         },
-    };
-
-    let conn = open_or_error(workspace, json_output)?;
-    let traces = match query_traces(&conn, &opts.run_id, level_min, opts.since_sequence) {
+    ) {
         Ok(rows) => rows,
-        Err(err) if err.starts_with("not_found") => {
+        Err(err) if err.code == OperationErrorCode::NotFound => {
             return emit_error(
                 json_output,
                 codes::NOT_FOUND,
-                format!("run not found: {}", opts.run_id),
+                format!("run not found: {}", run_id),
             );
         }
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_operation_error(json_output, err),
     };
 
     if json_output {
@@ -389,22 +379,21 @@ fn format_trace_row(trace: &TraceRow) -> String {
     }
 }
 
-fn open_or_error(
-    workspace: &Workspace,
-    json_output: bool,
-) -> Result<rusqlite::Connection, Box<dyn Error>> {
-    match runs::open(workspace) {
-        Ok(conn) => Ok(conn),
-        Err(err) => Err(emit_error(json_output, codes::INTERNAL, err).unwrap_err()),
-    }
-}
-
 fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
     if json_output {
         json::print_err(code, message);
         std::process::exit(1);
     }
     Err(message.into())
+}
+
+fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
+    let code = match err.code {
+        OperationErrorCode::InvalidInput => codes::INVALID_ARGUMENT,
+        OperationErrorCode::NotFound => codes::NOT_FOUND,
+        _ => codes::INTERNAL,
+    };
+    emit_error(json_output, code, err.message)
 }
 
 /// Parse a relative-duration string like `30s`, `15m`, `2h`, `7d` into
@@ -434,6 +423,7 @@ pub fn parse_duration_to_ms(s: &str) -> Result<i64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runs::{RunState, RunStateSet};
     use std::collections::HashMap;
     use tempfile::TempDir;
 

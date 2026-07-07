@@ -14,6 +14,6 @@ cobertura.xml
 scripts/.history/search-index.sqlite*
 scripts/.history/*
 !scripts/.history/.gitkeep
-scripts/.omaken/envs/*
-!scripts/.omaken/envs/env_template.conf
+scripts/.omakure/envs/*
+!scripts/.omakure/envs/env_template.conf
 .temp/

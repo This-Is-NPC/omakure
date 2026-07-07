@@ -21,6 +21,15 @@ former assisted-workflow). Shape ideas into ready tasks and waved plans with
 project-scoped — inspect with `project.overview`, `tasks.list`, and `plans.show`.
 GitHub issue/board tracking is unchanged (see `CONTRIBUTING.md` → Project Management).
 
+## Task & Plan Management
+
+Shaping, planning, and task tracking use the **Omakiten** MCP (this replaces the
+former assisted-workflow). Shape ideas into ready tasks and waved plans with
+`okt-shape`; drive a plan with `okt-run`, or build one task with
+`okt-task-continue <id>`. Tasks, plans, waves, and dependencies are
+project-scoped — inspect with `project.overview`, `tasks.list`, and `plans.show`.
+GitHub issue/board tracking is unchanged (see `CONTRIBUTING.md` → Project Management).
+
 ## Commands
 
 ### Build & Run

@@ -16,10 +16,10 @@ Omakure state stays in the global workspace:
 
 - `.history/` and the SQLite search index always live in the global
   workspace and never under `PATH`.
-- `.omaken/`, `.omaken/envs/`, and `omakure.toml` are never created
+- `.omakure/`, `.omakure/envs/`, and `omakure.toml` are never created
   inside `PATH` as a side effect of opening it.
 - The Environments screen (`Ctrl+/` then `e`) continues to list and
-  modify the global `.omaken/envs/` directory only.
+  modify the global `.omakure/envs/` directory only.
 
 The positional path is mutually exclusive with `--scripts-dir`. If both
 are supplied, Omakure exits before launching the TUI with a clear error.
@@ -41,12 +41,12 @@ Alias: `omakure check`
 omakure scripts
 ```
 
-Lists scripts recursively across the workspace (including `.omaken`).
+Lists scripts recursively across the workspace, skipping Omakure-owned metadata under `.omakure/`.
 
 ## Run a script without the TUI
 
 ```bash
-omakure run .omaken/azure/rg-list-all
+omakure run azure/rg-list-all
 omakure run tools/cleanup
 omakure run scripts/cleanup.py -- --force
 ```
@@ -107,13 +107,11 @@ omakure theme path
 - Built-in themes are copied to `~/.config/omakure/themes/` on first use.
 - Workspace override: add `[theme] name = "..."` to `omakure.toml`.
 
-## Omaken flavors
+## Removed Omaken flavors
 
-```bash
-omakure list
-omakure install <git-url>
-omakure install <git-url> --name my-flavor
-```
+The old Omaken flavor surface was removed. `omakure list` and
+`omakure install <git-url>` no longer manage script packs. Future reusable
+script packs are tracked under the Battery plan, not this legacy surface.
 
 ## Scheduler (`omakure serve`)
 

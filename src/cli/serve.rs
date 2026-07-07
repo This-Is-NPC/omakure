@@ -9,9 +9,9 @@
 //! pass `--no-worker` when a dedicated `omakure queue worker` is already
 //! running.
 //!
-//! A single PID file at `<workspace>/.omaken/daemon.pid` guards against
+//! A single PID file at `<workspace>/.omakure/daemon.pid` guards against
 //! concurrent daemons. Structured events are appended to
-//! `<workspace>/.omaken/daemon.log`.
+//! `<workspace>/.omakure/daemon.log`.
 
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::app_meta;
@@ -62,11 +62,11 @@ pub fn run(scripts_dir: PathBuf, args: ServeArgs, json_output: bool) -> Result<(
 }
 
 fn pid_file(workspace: &Workspace) -> PathBuf {
-    workspace.omaken_dir().join("daemon.pid")
+    workspace.omakure_dir().join("daemon.pid")
 }
 
 fn log_file(workspace: &Workspace) -> PathBuf {
-    workspace.omaken_dir().join("daemon.log")
+    workspace.omakure_dir().join("daemon.log")
 }
 
 // ---------------------------------------------------------------------------

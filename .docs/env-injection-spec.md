@@ -37,7 +37,7 @@ key survives*.
 | # | Source | Priority | Overridable by later layers? |
 |---|--------|----------|------------------------------|
 | 1 | Parent shell env (inherited by the omakure process) | lowest | yes |
-| 2 | Managed active env — `.omaken/envs/<name>.conf`, selected via the `active` pointer (`.omaken/envs/active`) | low | yes |
+| 2 | Managed active env — `.omakure/envs/<name>.conf`, selected via the `active` pointer (`.omakure/envs/active`) | low | yes |
 | 3 | CLI `--env-file <path>` | high | yes |
 | 4 | Omakure-reserved vars — `OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR` | highest | **no — non-overridable** |
 
@@ -213,7 +213,7 @@ vars, and inherited parent `PATH=/usr/bin:/bin`:
 
 > Injected env reaches the spawned process's `os.environ` (the child
 > process environment) **at spawn time ONLY**. It is **never** written to
-> `.omaken/runs.sqlite`, to logs, or to the run trace.
+> `runs.sqlite`, daemon logs, or the run trace.
 
 Concretely: the merged env / `extra_env` is passed to
 `std::process::Command::env` and then discarded when the child is

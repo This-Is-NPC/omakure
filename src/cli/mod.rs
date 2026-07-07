@@ -7,7 +7,6 @@ pub mod history;
 pub mod init;
 pub mod json;
 pub mod list;
-pub mod omaken;
 pub mod queue;
 pub mod run;
 pub mod search;

@@ -99,7 +99,7 @@ Nested `.omakureignore` files are supported. Unsupported gitignore features
 are not implemented: negation with `!`, `**` special semantics, character
 classes, and escaped `#` comments. If `.omakureignore` cannot be read or
 decoded, Omakure prints a warning and continues scanning with the remaining
-ignore rules plus the built-in skips (`.history`, `.git`, and `.omaken/envs`).
+ignore rules plus the built-in skips (`.history`, `.git`, and `.omakure`).
 
 ## Development note
 

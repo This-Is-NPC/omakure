@@ -20,7 +20,7 @@ pub fn run(scripts_dir: PathBuf) -> Result<(), Box<dyn Error>> {
     print_optional("python", ensure_python_installed());
 
     print_workspace_path("workspace_root", workspace.root());
-    print_workspace_path("omaken_dir", workspace.omaken_dir());
+    print_workspace_path("omakure_dir", workspace.omakure_dir());
     print_workspace_path("history_dir", workspace.history_dir());
     print_workspace_path("workspace_config", workspace.config_path());
 

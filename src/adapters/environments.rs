@@ -335,7 +335,7 @@ fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)> {
 ///
 /// It implements **layer 2** of the env-injection precedence table
 /// (`.docs/env-injection-spec.md` §1): the managed active env selected by
-/// `.omaken/envs/active`, read from `.omaken/envs/<name>.conf` and parsed
+/// `.omakure/envs/active`, read from `.omakure/envs/<name>.conf` and parsed
 /// case-sensitively via [`parse_env_pairs_raw`], then expanded and merged by
 /// [`merge_env_layers`] on top of the parent shell env (layer 1). The
 /// remaining layers are handled by the run path so later layers always win per
@@ -353,7 +353,7 @@ fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)> {
 ///   **non-overridable**: a user key of the same name from this env file
 ///   cannot clobber the reserved value.
 ///
-/// Behavior change (was: prefill-only): prior to this, `.omaken/envs/*.conf`
+/// Behavior change (was: prefill-only): prior to this, `.omakure/envs/*.conf`
 /// only prefilled TUI schema-field defaults and never reached the spawned
 /// process. Those files now inject into the child's `os.environ`. There is
 /// no CHANGELOG file in this repo, so this doc-comment records the change.

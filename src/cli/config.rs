@@ -20,7 +20,7 @@ pub struct ConfigPayload {
     pub binary: String,
     pub workspace_root: String,
     pub scripts_root: String,
-    pub omaken_dir: String,
+    pub omakure_dir: String,
     pub history_dir: String,
     pub workspace_config: String,
     pub envs_dir: String,
@@ -65,7 +65,7 @@ pub fn run(scripts_dir: PathBuf, json_output: bool) -> Result<(), Box<dyn Error>
             binary: exe.display().to_string(),
             workspace_root: workspace.root().display().to_string(),
             scripts_root: workspace.scripts_root().display().to_string(),
-            omaken_dir: workspace.omaken_dir().display().to_string(),
+            omakure_dir: workspace.omakure_dir().display().to_string(),
             history_dir: workspace.history_dir().display().to_string(),
             workspace_config: workspace.config_path().display().to_string(),
             envs_dir: workspace.envs_dir().display().to_string(),
@@ -86,7 +86,7 @@ pub fn run(scripts_dir: PathBuf, json_output: bool) -> Result<(), Box<dyn Error>
     println!("Version: {}", app_meta::APP_VERSION);
     println!("Binary: {}", exe.display());
     println!("Workspace root: {}", workspace.root().display());
-    println!("Omaken dir: {}", workspace.omaken_dir().display());
+    println!("Omakure dir: {}", workspace.omakure_dir().display());
     println!("History dir: {}", workspace.history_dir().display());
     println!("Workspace config: {}", workspace.config_path().display());
     println!("Environments dir: {}", workspace.envs_dir().display());
@@ -307,11 +307,11 @@ mod tests {
             binary: "/usr/bin/omakure".to_string(),
             workspace_root: "/home/user/scripts".to_string(),
             scripts_root: "/home/user/scripts".to_string(),
-            omaken_dir: "/home/user/scripts/.omaken".to_string(),
+            omakure_dir: "/home/user/scripts/.omakure".to_string(),
             history_dir: "/home/user/scripts/.history".to_string(),
             workspace_config: "/home/user/scripts/omakure.toml".to_string(),
-            envs_dir: "/home/user/scripts/.omaken/envs".to_string(),
-            envs_active_path: "/home/user/scripts/.omaken/envs/active".to_string(),
+            envs_dir: "/home/user/scripts/.omakure/envs".to_string(),
+            envs_active_path: "/home/user/scripts/.omakure/envs/active".to_string(),
             active_env: None,
             bootstrap_mode: "plain".to_string(),
             env_overrides: BTreeMap::new(),

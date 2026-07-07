@@ -1,6 +1,6 @@
 # Environment documents
 
-Environment defaults live in `.omaken/envs/*.conf`. The active file name is stored in `.omaken/envs/active`.
+Environment defaults live in `.omakure/envs/*.conf`. The active file name is stored in `.omakure/envs/active`.
 
 ## How it works
 
@@ -13,7 +13,7 @@ Environment defaults live in `.omaken/envs/*.conf`. The active file name is stor
 Beyond prefilling TUI field defaults, the **active** env file is injected
 into the environment of the spawned script process (its `os.environ`) at
 every run entry point — the TUI, the queue worker, and `omakure run`. So
-`.omaken/envs/<active>.conf` is where you put secrets and config that a
+`.omakure/envs/<active>.conf` is where you put secrets and config that a
 script reads from the environment at runtime.
 
 - **Key case is preserved** for injected vars (unlike the TUI-prefill
@@ -26,7 +26,7 @@ script reads from the environment at runtime.
   (`$(...)`/backticks) and no recursion. See
   `env-injection-spec.md` §2 for the full grammar.
 - **Precedence** (lowest → highest): parent shell env < managed active
-  env (`.omaken/envs/*.conf`) < CLI `--env-file` < Omakure-reserved
+  env (`.omakure/envs/*.conf`) < CLI `--env-file` < Omakure-reserved
   (`OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR` always win and cannot be
   overridden).
 - **Secrets are not persisted**: injected values reach the child process
@@ -86,7 +86,7 @@ REGION=eastus
 
 ## Start from the template
 
-Copy `.omaken/envs/env_template.conf` to a new `.conf` file and edit the values.
+Copy `.omakure/envs/env_template.conf` to a new `.conf` file and edit the values.
 
 ## Per-directory session env (`omakure.conf`)
 
@@ -94,31 +94,31 @@ When you launch the TUI with a positional path (`omakure .`,
 `omakure ../team-scripts`, etc.) and the target directory contains an
 `omakure.conf` file at its root, that file becomes the **session-active
 environment** for the duration of the TUI session. It uses the same
-`KEY=value` format as `.omaken/envs/*.conf` and is parsed with the same
+`KEY=value` format as `.omakure/envs/*.conf` and is parsed with the same
 parser. Schema field defaults are populated from it exactly as they
 would be from a globally active env file.
 
 The session env override is **read-only**:
 
-- It is never copied into `.omaken/envs/`.
-- It never updates `.omaken/envs/active`.
+- It is never copied into `.omakure/envs/`.
+- It never updates `.omakure/envs/active`.
 - It never creates or deletes any file inside the scripts root.
 - The Environments screen (`Ctrl+/` then `e`) keeps showing the global
-  `.omaken/envs/` list. `omakure.conf` is not listed there and cannot be
+  `.omakure/envs/` list. `omakure.conf` is not listed there and cannot be
   edited from the TUI.
 - The session override always wins for the duration of the session, so
   activating or deactivating a global env via the Environments screen
   while a session `omakure.conf` is in effect will update the global
-  `.omaken/envs/active` file but the defaults shown for schema fields
+  `.omakure/envs/active` file but the defaults shown for schema fields
   continue to come from `omakure.conf`. The change to the global active
   file takes effect on the next plain `omakure` invocation.
 
 If `omakure.conf` is **absent**, the session falls back to the file
-currently pointed to by `.omaken/envs/active` in the global workspace
+currently pointed to by `.omakure/envs/active` in the global workspace
 — exactly the same behavior as launching `omakure` with no positional
 path. If neither is present, no environment defaults are applied.
 
-The parser is the same lenient one used for `.omaken/envs/*.conf`:
+The parser is the same lenient one used for `.omakure/envs/*.conf`:
 blank lines, comments (`#`, `;`), and lines without an `=` sign are
 silently skipped, so a `omakure.conf` containing partially malformed
 content still applies the valid `KEY=value` pairs as defaults. If the

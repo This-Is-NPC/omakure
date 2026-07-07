@@ -62,7 +62,7 @@ src/
 ├── search_index.rs             SQLite-backed full-text search index
 ├── lua_widget.rs               Lua widget loader for directory-level widgets
 ├── theme_config.rs             Global theme config (~/.config/omakure/config.toml)
-├── workspace.rs                Workspace layout: global root, .omaken, .history, envs
+├── workspace.rs                Workspace layout: global root, .omakure, .history, envs
 ├── util.rs                     Shared filesystem helpers
 ├── domain/                     Pure domain (no I/O)
 │   ├── schema.rs               Schema, Field, Schedule, QueueSpec structs
@@ -106,7 +106,6 @@ src/
     ├── theme.rs                omakure theme list|set|preview|path
     ├── update.rs               omakure update (GitHub releases self-update)
     ├── uninstall.rs            omakure uninstall [--scripts]
-    └── omaken.rs               omakure list / omakure install (flavor management)
 themes/                         Built-in TOML themes (default, dracula,
                                 catppuccin-mocha, nord, solarized-dark)
 scripts/                        Omakure workspace used as root in debug builds
@@ -121,7 +120,7 @@ tests/                          Integration tests (cli_positional_path.rs)
 - **SQLite as Runtime Source of Truth:** Every runtime fact (queue, history, traces, schedules) lives in `<workspace>/.history/runs.sqlite`. Config stays on disk; state stays in SQLite.
 - **Run State Machine:** `runs.rs` gates transitions between `queued`, `running`, `completed`, `failed`, `cancelled`, `timed_out`, `dead_letter` via typed helpers (`enqueue`, `start_inline`, `claim_next`, `complete`, `fail`, `cancel`, `time_out`, `dead_letter`, `heartbeat`). Illegal moves return `invalid_argument`. `claim_next` uses a single atomic `UPDATE … RETURNING`.
 - **Single Execution Code Path:** `omakure run`, `omakure queue worker`, and the scheduler-enqueued rows all flow through `run_executor::execute_with_heartbeat`. The helper spawns the child with `OMAKURE_RUN_ID`, refreshes the 60 s lease every 250 ms, reacts to mid-run cancel/timeout, and drains stdout/stderr via bounded mpsc channels so orphan grandchildren never deadlock the executor.
-- **Native Cron Scheduler:** `cli/serve.rs` hosts a per-workspace daemon that rescans the workspace every 5 s, parses `Schedule` blocks, computes the next fire time with `domain/schedule.rs`, and enqueues runs through the same state machine (`trigger = Scheduled`, `cron_schedule_id = <canonical_path>@<cron_expr>`). Overlap protection: fires are skipped when a prior run with the same `cron_schedule_id` is still `queued`/`running`. Lock file at `.omaken/daemon.pid`; structured log at `.omaken/daemon.log`.
+- **Native Cron Scheduler:** `cli/serve.rs` hosts a per-workspace daemon that rescans the workspace every 5 s, parses `Schedule` blocks, computes the next fire time with `domain/schedule.rs`, and enqueues runs through the same state machine (`trigger = Scheduled`, `cron_schedule_id = <canonical_path>@<cron_expr>`). Overlap protection: fires are skipped when a prior run with the same `cron_schedule_id` is still `queued`/`running`. Lock file at `.omakure/daemon.pid`; structured log at `.omakure/daemon.log`.
 - **Per-Workspace Autostart:** `cli/serve_autostart.rs` renders a systemd user unit named `omakure-<fnv1a-hash-of-canonical-path>.service` so multiple workspaces coexist without collision (Linux-only).
 - **Structured Trace Stream:** `cli/trace.rs` reads `OMAKURE_RUN_ID` from env and inserts into `run_traces` with monotonic per-run `sequence` computed inside a SQLite transaction. Reader is `history traces <run_id>` with `--level` + `--since-sequence` for incremental fetches. `PRAGMA foreign_keys = ON` cascades trace deletes when the parent run row is removed.
 - **AI JSON Envelope:** All AI-facing verbs route through `cli/json.rs` emitting `{ ok, data, error, schema_version }`. Stable codes (`not_found`, `schema_invalid`, `script_exists`, `missing_required_field`, `invalid_argument`, `not_implemented`, `internal`) live in one place.
@@ -131,7 +130,7 @@ tests/                          Integration tests (cli_positional_path.rs)
 - **History Dashboards + Activity Grid:** History screen switches between `List`, `Dashboards` (BarChart of states, Sparkline over 14 days, per-script pie + duration sparkline), and an `ActivityGrid` heatmap aggregating run density over time. All views are pure functions of `app.history.entries` — no extra SQL.
 - **Background Indexing:** `SearchIndex` rebuilds on a background thread using `Arc<Mutex<SearchStatus>>` polled by the TUI.
 - **Theme System:** TOML themes loaded from `themes/` (bundled with `include_str!`) or `~/.config/omakure/themes/`. Omarchy system theme detected and imported via `adapters/omarchy.rs`.
-- **Global Workspace vs. Session Scripts Root:** `Workspace` tracks a global root (owns `.history/`, `.omaken/`, `.omaken/envs/`, search-index, `omakure.toml`) and a separate scripts root. `omakure <PATH>` overrides only the scripts root; global state stays anchored to the platform default. History rows are keyed by absolute canonical script path so runs are addressable across both modes.
+- **Global Workspace vs. Session Scripts Root:** `Workspace` tracks a global root (owns `.history/`, `.omakure/`, `.omakure/envs/`, search-index, `omakure.toml`) and a separate scripts root. `omakure <PATH>` overrides only the scripts root; global state stays anchored to the platform default. History rows are keyed by absolute canonical script path so runs are addressable across both modes.
 - **Themed Loading Spinners:** Single `App.tick` counter in `adapters/tui/mod.rs` drives braille frames from `rattles`. `Scan` theme for indexing; `Sand` theme for bootstrap/Lua/Running screens.
 
 ## Infrastructure
@@ -150,7 +149,7 @@ tests/                          Integration tests (cli_positional_path.rs)
 | Metric | Status | Value / Finding | Source (tool + command) or Recommendation |
 |--------|--------|-----------------|-------------------------------------------|
 | Test structure | measured | `#[cfg(test)] mod tests` inline per source file; 638 test fns across 67 files; 1 integration file in `tests/cli_positional_path.rs`; frameworks: stdlib `#[test]`, `rstest 0.23`, `insta 1.39`, `pretty_assertions 1.4`, `tempfile 3.10`. | `cargo test` / `mise run test` |
-| Test coverage | measured | 81.36% (4693/5768 lines) | `mise run coverage` → `cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/adapters/tui/mod.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/omaken.rs' 'src/cli/update.rs' --skip-clean` |
+| Test coverage | measured | 81.36% (4693/5768 lines) | `mise run coverage` → `cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/adapters/tui/mod.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/update.rs' --skip-clean` |
 | Module sizes (LOC) | measured | 25,322 total across `src/`. Top-5 files: `adapters/tui/app.rs` 2,464 · `runs.rs` 2,377 · `adapters/tui/widgets/dashboards.rs` 968 · `cli/history.rs` 957 · `cli/queue.rs` 956. | `find src -name '*.rs' \| xargs wc -l` |
 | Cyclomatic complexity | recommended | — | No tool configured. For Rust, install `lizard` (polyglot, fast, supports `.rs`) — `pipx install lizard && lizard src/ -l rust -C 15` — or enable Clippy's complexity lints: `cargo clippy -- -W clippy::cognitive_complexity -W clippy::cyclomatic_complexity`. Lizard gives numeric hotspots; Clippy is zero-install but per-function only. |
 | Internal dependency structure | recommended | — | No tool configured. For Rust, install `cargo-modules` (`cargo install cargo-modules`) and run `cargo modules structure --bin omakure` for a tree view, or `cargo modules dependencies --bin omakure --layout dot \| dot -Tsvg -o deps.svg` for a graph. Alternative: `cargo-depgraph` for crate-level only. |

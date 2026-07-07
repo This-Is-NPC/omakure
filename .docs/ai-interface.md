@@ -130,7 +130,7 @@ Both cleanups are intentionally narrow:
 
 - only top-level files in `history_dir()` are touched by the JSON cleanup
 - only files whose extension is exactly `.json`
-- subdirectories, `search-index.sqlite`, and the entire `.omaken/` tree
+- subdirectories and `search-index.sqlite`
   are left untouched
 - the schema rebuild only drops and recreates the `runs` and
   `run_traces` tables — not the database file or any other table

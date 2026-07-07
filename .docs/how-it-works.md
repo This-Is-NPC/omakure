@@ -14,6 +14,6 @@
 
 | Script | Description |
 | --- | --- |
-| `scripts/.omaken/azure/rg-list-all.bash` | List resource groups with CreatedAt, LastModified, and CreatedBy. |
-| `scripts/.omaken/azure/rg-details.bash` | Show resource group details and list resources with CreatedAt, LastModified, and CreatedBy. |
-| `scripts/.omaken/azure/rg-delete.bash` | Delete a resource group and all resources inside it. |
+| `scripts/azure/rg-list-all.bash` | List resource groups with CreatedAt, LastModified, and CreatedBy. |
+| `scripts/azure/rg-details.bash` | Show resource group details and list resources with CreatedAt, LastModified, and CreatedBy. |
+| `scripts/azure/rg-delete.bash` | Delete a resource group and all resources inside it. |

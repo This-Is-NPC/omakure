@@ -145,7 +145,7 @@ fn build_payload() -> HelpAiPayload {
                     "workspace_root": "/home/me/Documents/omakure-scripts",
                     "scripts_root": "/home/me/Documents/omakure-scripts",
                     "history_dir": "/home/me/Documents/omakure-scripts/.history",
-                    "envs_dir": "/home/me/Documents/omakure-scripts/.omaken/envs",
+                    "envs_dir": "/home/me/Documents/omakure-scripts/.omakure/envs",
                     "active_env": null,
                     "bootstrap_mode": "plain",
                     "env_overrides": {}

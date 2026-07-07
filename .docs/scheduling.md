@@ -93,11 +93,11 @@ Per tick (5 s), for each script with an enabled `Schedule`:
 
 Per workspace:
 
-- **PID file** — `<workspace>/.omaken/daemon.pid`. Created atomically via
+- **PID file** — `<workspace>/.omakure/daemon.pid`. Created atomically via
   `OpenOptions::create_new`. On collision, a live PID returns
   `error.code = "daemon_already_running"`; a dead PID is silently
   reclaimed.
-- **Log** — `<workspace>/.omaken/daemon.log`. Line-buffered; each line
+- **Log** — `<workspace>/.omakure/daemon.log`. Line-buffered; each line
   is `<RFC3339-UTC> [LEVEL] <message>`. Events include daemon
   start/stop, `tick fired=N`, `enqueued run_id=…`, `previous run still
   in flight, skipping fire`, and `invalid cron` parse errors.

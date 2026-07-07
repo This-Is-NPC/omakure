@@ -238,6 +238,10 @@ pub fn list_traces(
 }
 
 pub fn queue_stats(workspace: &Workspace) -> OperationResult<RunStats> {
+    run_stats(workspace)
+}
+
+pub fn run_stats(workspace: &Workspace) -> OperationResult<RunStats> {
     let conn = runs::open(workspace).map_err(io_error_string)?;
     runs::stats(&conn).map_err(io_error_string)
 }

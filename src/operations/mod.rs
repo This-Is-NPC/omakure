@@ -1,5 +1,9 @@
 pub mod battery;
+pub mod config;
 pub mod core;
+pub mod doctor;
+pub mod scripts;
+pub mod search;
 
 use serde::Serialize;
 use std::fmt;

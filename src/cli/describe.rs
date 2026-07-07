@@ -1,17 +1,14 @@
 //! `omakure describe <script>` — print the full schema of one script.
 
-use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::cli::args::DescribeArgs;
 use crate::cli::json::{self, codes};
-use crate::cli::run::resolve_script_path;
-use crate::domain::Schema;
-use crate::error::{AppError, SchemaError};
-use crate::ports::ScriptRepository;
+use crate::operations::core::{self, DescribeScriptRequest, ScriptDescription};
+use crate::operations::{OperationError, OperationErrorCode};
 use crate::workspace::Workspace;
 use serde::Serialize;
 use serde_json::json;
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize)]
 pub struct DescribePayload {
@@ -42,36 +39,40 @@ pub fn run(
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
     let workspace = Workspace::new(scripts_dir);
-    let resolved = match resolve_script_path(&options.script, workspace.root()) {
-        Ok(path) => path,
-        Err(err) => {
-            return emit_error(json_output, codes::NOT_FOUND, err.to_string());
-        }
-    };
-
-    let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
-    let schema = match repo.read_schema(&resolved) {
-        Ok(schema) => schema,
-        Err(AppError::Schema(schema_err)) => {
-            let code = match schema_err {
-                SchemaError::BlockNotFound | SchemaError::JsonNotFound => codes::NOT_FOUND,
-                _ => codes::SCHEMA_INVALID,
-            };
-            return emit_error(json_output, code, schema_err.to_string());
-        }
-        Err(err) => {
-            return emit_error(json_output, codes::INTERNAL, err.to_string());
-        }
+    let description = match core::describe_script(
+        &workspace,
+        DescribeScriptRequest {
+            script: options.script,
+        },
+    ) {
+        Ok(description) => description,
+        Err(err) => return emit_operation_error(json_output, err),
     };
 
     if json_output {
-        let payload = build_payload(&resolved, workspace.root(), &schema);
-        json::print_ok(payload);
+        json::print_ok(payload_from_description(description));
         return Ok(());
     }
 
-    print_human(&resolved, workspace.root(), &schema);
+    print_human_payload(&payload_from_description(description));
     Ok(())
+}
+
+fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
+    let code = match err.code {
+        OperationErrorCode::NotFound => codes::NOT_FOUND,
+        OperationErrorCode::InvalidInput if is_missing_schema_message(&err.message) => {
+            codes::NOT_FOUND
+        }
+        OperationErrorCode::UnsafePath => codes::INVALID_ARGUMENT,
+        OperationErrorCode::InvalidInput => codes::SCHEMA_INVALID,
+        _ => codes::INTERNAL,
+    };
+    emit_error(json_output, code, err.message)
+}
+
+fn is_missing_schema_message(message: &str) -> bool {
+    message.contains("Schema block not found") || message.contains("Schema JSON object not found")
 }
 
 fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
@@ -85,7 +86,12 @@ fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<
     Err(message.into())
 }
 
-pub(crate) fn build_payload(script_path: &Path, root: &Path, schema: &Schema) -> DescribePayload {
+#[cfg(test)]
+pub(crate) fn build_payload(
+    script_path: &std::path::Path,
+    root: &std::path::Path,
+    schema: &crate::domain::Schema,
+) -> DescribePayload {
     let mut fields: Vec<DescribeField> = schema
         .fields
         .iter()
@@ -122,8 +128,32 @@ pub(crate) fn build_payload(script_path: &Path, root: &Path, schema: &Schema) ->
     }
 }
 
-fn print_human(script_path: &Path, root: &Path, schema: &Schema) {
-    let payload = build_payload(script_path, root, schema);
+fn payload_from_description(description: ScriptDescription) -> DescribePayload {
+    DescribePayload {
+        absolute_path: description.absolute_path,
+        relative_path: description.relative_path,
+        name: description.schema.name,
+        description: description.schema.description,
+        tags: description.schema.tags,
+        fields: description
+            .schema
+            .fields
+            .into_iter()
+            .map(|field| DescribeField {
+                name: field.name,
+                prompt: field.prompt,
+                kind: field.kind,
+                order: field.order,
+                required: field.required,
+                arg: field.arg,
+                default: field.default,
+                choices: field.choices,
+            })
+            .collect(),
+    }
+}
+
+fn print_human_payload(payload: &DescribePayload) {
     println!("Script: {}", payload.absolute_path);
     println!("Name: {}", payload.name);
     if let Some(desc) = &payload.description {

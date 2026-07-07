@@ -1,7 +1,11 @@
 use crate::cli::args::ApiArgs;
 use crate::cli::json;
 use crate::operations::battery as battery_ops;
+use crate::operations::config as config_ops;
 use crate::operations::core;
+use crate::operations::doctor as doctor_ops;
+use crate::operations::scripts as scripts_ops;
+use crate::operations::search as search_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::workspace::Workspace;
 use axum::body::{to_bytes, Body};
@@ -21,6 +25,9 @@ use subtle::ConstantTimeEq;
 
 const MIN_TOKEN_LEN: usize = 32;
 const BODY_LIMIT_BYTES: usize = 1024 * 1024;
+const MAX_SEARCH_QUERY_LEN: usize = 256;
+const MAX_SEARCH_TAGS: usize = 16;
+const MAX_SEARCH_TAG_LEN: usize = 64;
 
 struct ApiState {
     token_digest: [u8; 32],
@@ -127,7 +134,12 @@ fn router(token: String, workspace: Workspace) -> Router {
     };
     Router::new()
         .route("/v1/health", get(health))
+        .route("/v1/config", get(config_handler))
+        .route("/v1/doctor", get(doctor_handler))
         .route("/v1/workspace", get(workspace_handler))
+        .route("/v1/search", get(search_handler))
+        .route("/v1/tree", get(tree_root_handler))
+        .route("/v1/tree/*path", get(tree_path_handler))
         .route("/v1/scripts", get(list_scripts_handler))
         .route("/v1/scripts/*script_id", get(script_path_handler))
         .route("/v1/runs", get(list_runs_handler).post(enqueue_run_handler))
@@ -173,6 +185,54 @@ async fn workspace_handler(State(state): State<ApiState>) -> Response {
     operation_response(core::workspace_summary(&state.workspace))
 }
 
+async fn config_handler(State(state): State<ApiState>) -> Response {
+    operation_response(config_ops::redacted_config_summary(&state.workspace))
+}
+
+async fn doctor_handler(State(state): State<ApiState>) -> Response {
+    operation_response(doctor_ops::doctor_report(&state.workspace))
+}
+
+async fn search_handler(State(state): State<ApiState>, RawQuery(raw_query): RawQuery) -> Response {
+    let request = query_pairs(raw_query.as_deref()).and_then(|pairs| {
+        let query = query_value(&pairs, "q")
+            .or_else(|| query_value(&pairs, "query"))
+            .ok_or_else(|| {
+                OperationError::new(
+                    OperationErrorCode::InvalidInput,
+                    "q query parameter is required",
+                )
+            })?;
+        if query.trim().is_empty() {
+            return Err(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                "q query parameter must not be empty",
+            ));
+        }
+        if query.len() > MAX_SEARCH_QUERY_LEN {
+            return Err(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                "q query parameter is too long",
+            ));
+        }
+        let tags = query_values(&pairs, "tag");
+        if tags.len() > MAX_SEARCH_TAGS || tags.iter().any(|tag| tag.len() > MAX_SEARCH_TAG_LEN) {
+            return Err(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                "tag query parameters exceed limits",
+            ));
+        }
+        Ok(search_ops::SearchScriptsRequest {
+            query,
+            tags,
+            refresh: false,
+        })
+    });
+    operation_response(
+        request.and_then(|request| search_ops::search_scripts(&state.workspace, request)),
+    )
+}
+
 async fn list_scripts_handler(
     State(state): State<ApiState>,
     RawQuery(raw_query): RawQuery,
@@ -204,12 +264,41 @@ async fn script_path_handler(
     State(state): State<ApiState>,
     AxumPath(script_id): AxumPath<String>,
 ) -> Response {
+    if let Some(script_id) = script_id.strip_suffix("/content") {
+        if !script_id.is_empty() {
+            return script_content_handler(State(state), script_id.to_string()).await;
+        }
+    }
     match script_id.strip_suffix("/schema") {
         Some(script_id) if !script_id.is_empty() => {
             script_schema_handler(State(state), script_id.to_string()).await
         }
         _ => describe_script_handler(State(state), script_id).await,
     }
+}
+
+async fn script_content_handler(State(state): State<ApiState>, script_id: String) -> Response {
+    operation_response(scripts_ops::read_script_content(
+        &state.workspace,
+        scripts_ops::ReadScriptContentRequest { script: script_id },
+    ))
+}
+
+async fn tree_root_handler(State(state): State<ApiState>) -> Response {
+    operation_response(scripts_ops::list_tree(
+        &state.workspace,
+        scripts_ops::ListTreeRequest { path: None },
+    ))
+}
+
+async fn tree_path_handler(
+    State(state): State<ApiState>,
+    AxumPath(path): AxumPath<String>,
+) -> Response {
+    operation_response(scripts_ops::list_tree(
+        &state.workspace,
+        scripts_ops::ListTreeRequest { path: Some(path) },
+    ))
 }
 
 async fn list_runs_handler(
@@ -480,7 +569,7 @@ fn operation_error_response(err: OperationError) -> Response {
         OperationErrorCode::AlreadyExists
         | OperationErrorCode::Conflict
         | OperationErrorCode::NotSynced => StatusCode::CONFLICT,
-        OperationErrorCode::UnsupportedScript => StatusCode::NOT_IMPLEMENTED,
+        OperationErrorCode::UnsupportedScript => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         OperationErrorCode::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         OperationErrorCode::GitFailed
         | OperationErrorCode::IoFailed
@@ -903,6 +992,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn config_endpoint_returns_full_masked_config() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(workspace.envs_dir().join("dev.conf"), "HOST=localhost\n").unwrap();
+        std::fs::write(workspace.envs_active_path(), "dev.conf\n").unwrap();
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/config"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["ok"], true);
+        assert_eq!(body["data"]["version"], app_meta::APP_VERSION);
+        assert_eq!(body["data"]["active_env"], "dev.conf");
+        assert_eq!(body["data"]["active_env_keys"][0]["key"], "HOST");
+        assert_eq!(body["data"]["active_env_keys"][0]["value"], "****");
+        assert!(!body.to_string().contains("localhost"));
+    }
+
+    #[tokio::test]
+    async fn doctor_endpoint_returns_structured_report() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_script(workspace.scripts_root(), "job.sh");
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/doctor"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["ok"], true);
+        assert!(body["data"]["dependencies"].is_array());
+        assert!(body["data"]["workspace_paths"].is_array());
+        assert_eq!(body["data"]["schemas"]["total"], 1);
+    }
+
+    #[tokio::test]
     async fn scripts_and_schema_endpoints_return_operation_data() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
@@ -937,6 +1067,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_endpoint_returns_operation_data() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_script(workspace.scripts_root(), "deploy.sh");
+        search_ops::search_scripts(
+            &workspace,
+            search_ops::SearchScriptsRequest {
+                query: "deploy".into(),
+                tags: vec!["ops".into()],
+                refresh: true,
+            },
+        )
+        .unwrap();
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/search?q=deploy&tag=ops"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["ok"], true);
+        assert_eq!(body["data"][0]["relative_path"], "deploy.sh");
+    }
+
+    #[tokio::test]
+    async fn search_endpoint_requires_query() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/search"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "invalid_input");
+    }
+
+    #[tokio::test]
+    async fn search_endpoint_rejects_empty_and_oversized_query() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let app = router(TOKEN.to_string(), workspace);
+
+        let empty = app
+            .clone()
+            .oneshot(authed_request("/v1/search?q="))
+            .await
+            .unwrap();
+        assert_eq!(empty.status(), StatusCode::BAD_REQUEST);
+
+        let too_long = "x".repeat(MAX_SEARCH_QUERY_LEN + 1);
+        let long = app
+            .oneshot(authed_request(&format!("/v1/search?q={too_long}")))
+            .await
+            .unwrap();
+        assert_eq!(long.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
     async fn script_routes_support_nested_paths() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
@@ -959,6 +1151,91 @@ mod tests {
         assert_eq!(schema.status(), StatusCode::OK);
         let schema_body = response_json(schema).await;
         assert_eq!(schema_body["data"]["name"], "tools/job.sh");
+    }
+
+    #[tokio::test]
+    async fn tree_and_content_endpoints_return_safe_browsing_data() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_script(workspace.scripts_root(), "tools/job.sh");
+
+        let app = router(TOKEN.to_string(), workspace);
+        let tree = app
+            .clone()
+            .oneshot(authed_request("/v1/tree"))
+            .await
+            .unwrap();
+        assert_eq!(tree.status(), StatusCode::OK);
+        let tree_body = response_json(tree).await;
+        assert_eq!(tree_body["data"][0]["kind"], "directory");
+        assert_eq!(tree_body["data"][0]["relative_path"], "tools");
+
+        let nested = app
+            .clone()
+            .oneshot(authed_request("/v1/tree/tools"))
+            .await
+            .unwrap();
+        assert_eq!(nested.status(), StatusCode::OK);
+        let nested_body = response_json(nested).await;
+        assert_eq!(nested_body["data"][0]["relative_path"], "tools/job.sh");
+
+        let content = app
+            .oneshot(authed_request("/v1/scripts/tools/job.sh/content"))
+            .await
+            .unwrap();
+        assert_eq!(content.status(), StatusCode::OK);
+        let content_body = response_json(content).await;
+        assert_eq!(content_body["data"]["relative_path"], "tools/job.sh");
+        assert!(content_body["data"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("echo ok"));
+    }
+
+    #[tokio::test]
+    async fn content_endpoint_rejects_path_traversal() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/scripts/../secret.sh/content"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "unsafe_path");
+    }
+
+    #[tokio::test]
+    async fn content_endpoint_rejects_absolute_encoded_path() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/scripts/%2Ftmp%2Fsecret.sh/content"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "unsafe_path");
+    }
+
+    #[tokio::test]
+    async fn content_endpoint_maps_unsupported_script_to_415() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(workspace.scripts_root().join("note.txt"), "hello\n").unwrap();
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/scripts/note.txt/content"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "unsupported_script");
     }
 
     #[tokio::test]

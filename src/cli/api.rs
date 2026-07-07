@@ -1129,6 +1129,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_endpoint_rejects_excessive_tags() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let app = router(TOKEN.to_string(), workspace);
+
+        let too_many_tags = (0..=MAX_SEARCH_TAGS)
+            .map(|idx| format!("tag=t{idx}"))
+            .collect::<Vec<_>>()
+            .join("&");
+        let too_many = app
+            .clone()
+            .oneshot(authed_request(&format!(
+                "/v1/search?q=deploy&{too_many_tags}"
+            )))
+            .await
+            .unwrap();
+        assert_eq!(too_many.status(), StatusCode::BAD_REQUEST);
+
+        let too_long_tag = "x".repeat(MAX_SEARCH_TAG_LEN + 1);
+        let long = app
+            .oneshot(authed_request(&format!(
+                "/v1/search?q=deploy&tag={too_long_tag}"
+            )))
+            .await
+            .unwrap();
+        assert_eq!(long.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
     async fn script_routes_support_nested_paths() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
@@ -1220,6 +1249,43 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = response_json(response).await;
         assert_eq!(body["error"]["code"], "unsafe_path");
+    }
+
+    #[tokio::test]
+    async fn tree_and_content_endpoints_reject_metadata_paths() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let app = router(TOKEN.to_string(), workspace);
+
+        for uri in [
+            "/v1/tree/.omakure",
+            "/v1/tree/.history",
+            "/v1/tree/.git",
+            "/v1/scripts/.omakure/secret.sh/content",
+            "/v1/scripts/.history/secret.sh/content",
+            "/v1/scripts/.git/secret.sh/content",
+        ] {
+            let response = app.clone().oneshot(authed_request(uri)).await.unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let body = response_json(response).await;
+            assert_eq!(body["error"]["code"], "unsafe_path");
+        }
+    }
+
+    #[tokio::test]
+    async fn content_endpoint_error_hides_local_paths() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let root = workspace.root().display().to_string();
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_request("/v1/scripts/../secret.sh/content"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert!(!body.to_string().contains(&root));
     }
 
     #[tokio::test]

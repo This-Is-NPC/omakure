@@ -335,6 +335,83 @@ mod tests {
         assert_eq!(err.code, OperationErrorCode::PayloadTooLarge);
     }
 
+    #[test]
+    fn tree_and_content_reject_hidden_metadata_paths() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+
+        for path in [".omakure", ".history", ".git"] {
+            let tree_err = list_tree(
+                &workspace,
+                ListTreeRequest {
+                    path: Some(path.into()),
+                },
+            )
+            .unwrap_err();
+            assert_eq!(tree_err.code, OperationErrorCode::UnsafePath);
+
+            let content_err = read_script_content(
+                &workspace,
+                ReadScriptContentRequest {
+                    script: format!("{path}/secret.sh"),
+                },
+            )
+            .unwrap_err();
+            assert_eq!(content_err.code, OperationErrorCode::UnsafePath);
+        }
+    }
+
+    #[test]
+    fn read_script_content_rejects_oversized_scripts() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(
+            workspace.scripts_root().join("big.sh"),
+            vec![b'a'; MAX_SCRIPT_CONTENT_BYTES as usize + 1],
+        )
+        .unwrap();
+
+        let err = read_script_content(
+            &workspace,
+            ReadScriptContentRequest {
+                script: "big.sh".into(),
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::PayloadTooLarge);
+    }
+
+    #[test]
+    fn read_script_content_rejects_binary_and_invalid_utf8() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(
+            workspace.scripts_root().join("binary.sh"),
+            b"#!/bin/sh\n\0\n",
+        )
+        .unwrap();
+        std::fs::write(workspace.scripts_root().join("bad-utf8.sh"), [0xff, 0xfe]).unwrap();
+
+        let binary_err = read_script_content(
+            &workspace,
+            ReadScriptContentRequest {
+                script: "binary.sh".into(),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(binary_err.code, OperationErrorCode::UnsupportedScript);
+
+        let utf8_err = read_script_content(
+            &workspace,
+            ReadScriptContentRequest {
+                script: "bad-utf8.sh".into(),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(utf8_err.code, OperationErrorCode::UnsupportedScript);
+    }
+
     #[cfg(unix)]
     #[test]
     fn read_script_content_rejects_symlink_escape() {

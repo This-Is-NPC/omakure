@@ -77,4 +77,4 @@ PID file at `<workspace>/.omakure/daemon.pid`, structured log at
 
 - `.github/workflows/ci.yml` runs on every PR to `master`: `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check`, release-readiness gate.
 - `.github/workflows/release.yml` builds the cross-platform matrix and attaches release archives.
-- `.github/workflows/auto-release.yml` bumps patch + tags on merge to `main`, triggering the release workflow.
+- `.github/workflows/auto-release.yml` runs when a PR is merged into `master`, reads the current `Cargo.toml` version, requires matching release notes, creates the tag, and triggers the release workflow.

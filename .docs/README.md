@@ -17,6 +17,7 @@ Start here if you want a map of the docs. For quick start and requirements, see 
 ## For AI integrators
 
 - `ai-interface.md`: JSON envelope contract, AI-facing verbs, error codes, data shapes.
+- `cli-http-parity.md`: implemented CLI, operations, and HTTP parity matrix.
 
 ## For contributors
 
@@ -25,4 +26,4 @@ Start here if you want a map of the docs. For quick start and requirements, see 
 - `requirements.md`: implemented functional/non-functional/business rules (file-referenced).
 - `release-artifacts.md`: release archive naming requirements.
 - `tui-screens-and-widgets.md`: TUI screen flow, per-screen keybindings, and widget inventory.
-- `env-injection-spec.md`: env precedence table, var-expansion grammar, and the secret-non-persistence invariant (gates injection/parser work).
+- `env-injection-spec.md`: implemented env precedence table, var-expansion grammar, and the secret-non-persistence invariant.

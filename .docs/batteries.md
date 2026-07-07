@@ -46,8 +46,8 @@ Battery metadata is Omakure-owned runtime state and lives under `.omakure/`.
 └── omakure.toml
 ```
 
-`batteries.json` is the registry. It is versioned so future schema changes can
-be migrated deliberately.
+`batteries.json` is the registry. The current registry format has
+`"version": 1`.
 
 ```json
 {
@@ -70,7 +70,7 @@ Rules:
 - `name` is the stable Battery id used by CLI and operation requests.
 - `cache_path` is stored relative to the workspace root.
 - `resolved_commit` is empty until the first successful sync.
-- Writes to the registry should be atomic where practical.
+- Writes to the registry are performed through the Battery operations layer.
 - A malformed registry is an operation error, not a silent reset.
 
 ## Repository Format
@@ -129,8 +129,8 @@ Rules:
   `.omakure/batteries/installed/`, keyed by Battery name and script id.
 - A failed install must not leave a partial target file when the target did not
   previously exist.
-- A forced overwrite should write through a temporary file and rename into
-  place where practical.
+- A forced overwrite replaces the existing target only after the selected
+  Battery script has passed validation.
 
 ## Remove Contract
 
@@ -142,7 +142,7 @@ Rules:
 
 - Registry entry removal is required.
 - Cache deletion happens only with `--remove-cache`.
-- Installed script deletion is out of scope for v1.
+- Removing a Battery does not delete installed scripts.
 - Removing an unknown Battery returns a stable not-found operation error.
 
 ## Operation Boundary

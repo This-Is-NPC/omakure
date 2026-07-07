@@ -66,6 +66,10 @@
 | FR-061 | TUI Activity Grid widget renders a time-bucketed heatmap of run density (per-script or per-workspace) from `app.history.entries` | `src/adapters/tui/widgets/activity_grid.rs` |
 | FR-062 | History Dashboards view (`Tab` on History) renders a BarChart of runs by state, a 14-day Sparkline of runs per day, and a per-script panel with a Canvas pie chart + duration sparkline (avg/p50/p95). `e`/`Enter` expands the per-script panel; narrow panels fall back to a horizontal stacked "ribbon" bar | `src/adapters/tui/widgets/dashboards.rs`, `src/adapters/tui/state/history.rs` (`HistoryView`) |
 | FR-063 | `update --version <TAG>` flag is preserved against clap's auto-generated `--version` by disabling the auto flag on `UpdateArgs`; `--repo` defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release | `src/cli/args.rs` (`UpdateArgs` with `disable_version_flag`), `src/cli/update.rs` (`resolve_repo`, `resolve_version`) |
+| FR-064 | Per-run environment injection: `omakure run --env-file <PATH>` parses case-preserving `KEY=value` pairs, expands `$VAR`/`${VAR}` single-pass, overlays the managed active env, and injects the merged env into the spawned process only | `src/cli/run.rs`, `src/cli/args.rs` (`RunArgs.env_file`), `src/adapters/environments.rs` (`resolve_run_env`, `parse_env_file`, `expand_env_value`) |
+| FR-065 | Omakure-reserved runtime env vars `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` are injected last by the shared executor and cannot be overridden by active env or `--env-file` values | `src/run_executor.rs` (`execute_with_heartbeat`), `src/adapters/script_runner.rs` (`MultiScriptRunner::build_command`) |
+| FR-066 | Battery CLI registers, syncs, inspects, lists, installs, and removes reusable Omakure-compatible automation repositories through shared Battery operations; cached checkouts remain untrusted and scripts are copied into the trusted workspace only through `battery install` | `src/cli/battery.rs`, `src/operations/battery.rs` |
+| FR-067 | Internal HTTP management API: `omakure api` starts an Axum server with `/v1/health`, config/doctor/workspace/search/tree/scripts/runs/queue-stats/Battery endpoints, CLI-compatible JSON envelopes, shared operation calls, bearer auth, and loopback-by-default binding | `src/cli/api.rs`, `src/cli/args.rs` (`ApiArgs`), `src/operations/*` |
 
 ## Non-Functional Requirements
 
@@ -77,10 +81,12 @@
 | NFR-004 | Graceful terminal restore on TUI exit (raw-mode cleanup) | `src/main.rs` (`run_tui`), `src/adapters/tui/mod.rs` |
 | NFR-005 | Schema cache to avoid re-parsing on repeated selection | `src/adapters/tui/app.rs` (`load_schema`, `schema_cache`) |
 | NFR-006 | Centralized error hierarchy with typed errors (`AppError`, `SchemaError`, `ScriptError`, `EnvironmentError`) mapped to stable JSON codes | `src/error.rs`, `src/cli/json.rs` |
-| NFR-007 | Automated release pipeline: PR merge triggers version bump, tag, cross-platform build, and GitHub Release | `.github/workflows/auto-release.yml`, `.github/workflows/release.yml` |
+| NFR-007 | Automated release pipeline: PR merge to `master` reads the current `Cargo.toml` version, requires matching release notes, creates the version tag, builds cross-platform release artifacts, and publishes a GitHub Release | `.github/workflows/auto-release.yml`, `.github/workflows/release.yml` |
 | NFR-008 | PR-gate CI (`ci.yml`) runs `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check`, and a release-readiness check on every pull request | `.github/workflows/ci.yml` |
 | NFR-009 | Scheduler never fork-bombs the queue: all fires go through the same `runs::enqueue` state machine as manual runs, so worker concurrency, cancel semantics, and lease reclamation are shared | `src/cli/serve.rs`, `src/runs.rs` |
 | NFR-010 | In-process worker pool within `omakure serve` is opt-in via `--no-worker = false` (default); pool size is `--concurrency` (default 1). Workers cooperate with the same SIGINT/SIGTERM handler as `queue worker` so the daemon drains in-flight work on shutdown | `src/cli/serve.rs` (`run_scheduler`), `src/cli/queue.rs` (`worker_loop`, `install_signal_handlers`) |
+| NFR-011 | HTTP API management access requires `Authorization: Bearer <token>` for every endpoint except `/v1/health`; `OMAKURE_API_TOKEN` must be present, at least 32 bytes, and not a known default; comparisons use a token digest and constant-time equality | `src/cli/api.rs` (`token_from_env`, `require_bearer`, `token_digest_for`) |
+| NFR-012 | HTTP request bodies are capped at 1 MiB and Battery registration through HTTP accepts `https://` sources only | `src/cli/api.rs` (`BODY_LIMIT_BYTES`, `add_battery_handler`, `sanitize_battery_for_http`) |
 
 ## Business Rules
 
@@ -99,3 +105,5 @@
 | BR-011 | Systemd autostart unit name is FNV-1a hash of the canonical workspace path, ensuring multiple workspaces don't collide on the same machine; deterministic across invocations | `src/cli/serve_autostart.rs` (`path_hash`, `unit_name`) |
 | BR-012 | TUI in-place `Schedule.Enabled` toggle never reserializes the user's JSON block; only the `"Enabled"` value inside the `OMAKURE_SCHEMA_START`/`END` span is rewritten, and the round-trip through `parse_schema` is verified before the write is persisted | `src/adapters/tui/app.rs` (`rewrite_schedule_enabled`, `toggle_schedule_enabled_in_file`) |
 | BR-013 | `runs.trigger` defaults to `Manual` for legacy rows written before the column existed (migration backfills with `DEFAULT 'Manual'` on rebuild) | `src/runs.rs` (`rebuild_legacy_schema_if_needed`, `init_schema`) |
+| BR-014 | Injected env values are never persisted in `runs.sqlite`, daemon logs, or run traces; the merged env is passed only to `Command::env` at spawn time | `src/run_executor.rs`, `src/adapters/script_runner.rs`, `src/runs.rs` |
+| BR-015 | Battery operations reject unsafe manifest paths, unsupported script extensions, invalid schemas, and symlinks before exposing or installing scripts | `src/operations/battery.rs` |

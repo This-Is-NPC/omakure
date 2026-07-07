@@ -1,9 +1,6 @@
 # HTTP API Contract
 
-This is the v1 contract for Omakure's internal HTTP management API. It is
-the implementation source for the `http-management-api` plan and reconciles
-the older `.temp/plan.md` brief with the current codebase: Omaken is gone,
-and Battery CLI/operations already exist.
+This is the v1 contract for Omakure's internal HTTP management API.
 
 ## Goal
 
@@ -34,7 +31,7 @@ Why:
 - Middleware and extractors keep auth, body limits, and route state testable.
 - `tower` service testing lets endpoint tests run without binding real ports.
 - The async runtime is contained behind `omakure api`; existing CLI/TUI code
-  remains synchronous unless an operation already needs async in a later task.
+  remains synchronous.
 
 ## Command Contract
 
@@ -284,12 +281,18 @@ HTTP routes call shared operations for these core resources:
 - `enqueue_run`
 - `cancel_run`
 - `dead_letter_run`
+- `list_batteries`
+- `add_battery`
+- `sync_battery`
+- `inspect_battery`
+- `list_battery_scripts`
+- `install_battery_script`
+- `remove_battery`
 
-These operations own validation and stable errors. HTTP route handlers must not
-call CLI modules and must not open SQLite directly.
+These operations own validation and stable errors. HTTP route handlers do not
+call CLI modules and do not open SQLite directly.
 
-The following surfaces are intentionally deferred from HTTP until a separate
-security/lifecycle design exists:
+The current HTTP API does not expose these CLI surfaces:
 
 - `omakure update`: mutates binary/scripts from a remote release.
 - `omakure uninstall`: destructive local operation.
@@ -297,14 +300,14 @@ security/lifecycle design exists:
 - `omakure queue worker`: long-running process lifecycle.
 - inline `omakure run`: synchronous execution surface; use `POST /v1/runs` to
   enqueue instead.
-- HTTP trace ingestion: changes the trust model for script-authored telemetry.
+- HTTP trace ingestion.
 
 ## Write Audit Expectations
 
-V1 write endpoints must leave an audit trail equivalent to their CLI
+V1 write endpoints leave an audit trail equivalent to their CLI
 operation path. At minimum, writes must create or transition rows through the
-existing run state machine or Battery registry/provenance records. Future
-structured HTTP request logs may be added, but they must redact bearer tokens.
+existing run state machine or Battery registry/provenance records. HTTP errors
+and responses redact bearer tokens.
 
 ## Deployment Model
 
@@ -349,15 +352,11 @@ Operational safety notes:
 - Queue/run writes use the existing SQLite run state machine; invalid state
   transitions return `conflict` instead of bypassing the workflow.
 
-## Validation Gates
+## Validation
 
-Every HTTP implementation task must pass:
+Use the normal repository checks after changing the HTTP API:
 
 ```bash
-rtk cargo test
-rtk mise run lint
+cargo test
+mise run lint
 ```
-
-Before shipping the full API plan, run an assurance pass that includes at
-least auth bypass, bind guard, token leakage, request-size, operation parity,
-and Battery trust-boundary checks.

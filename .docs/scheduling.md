@@ -51,7 +51,7 @@ attach it to. Unknown macros and malformed expressions fail script load
 with `error.code = "schema_invalid"`.
 
 `Enabled` defaults to `true` when omitted. Toggle in place from the TUI
-Schedules screen (`c` from the main menu, `Space` on the row).
+Schedules screen (`Ctrl+/` then `c`, `Space` on the row).
 
 ## Running the scheduler
 

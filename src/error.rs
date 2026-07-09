@@ -62,6 +62,12 @@ pub enum SchemaError {
 
     #[error("Invalid cron expression `{expr}`: {reason}")]
     InvalidCron { expr: String, reason: String },
+
+    #[error("Unsupported secret field construct for `{field}`: {construct}")]
+    UnsupportedSecretFieldConstruct {
+        field: String,
+        construct: &'static str,
+    },
 }
 
 /// Errors related to script execution.
@@ -82,6 +88,12 @@ pub enum ScriptError {
 pub enum EnvironmentError {
     #[error("Environment not found: {name}")]
     NotFound { name: String },
+
+    #[error("Invalid environment name: {name}")]
+    InvalidName { name: String },
+
+    #[error("Unsafe environment path: {path}")]
+    UnsafePath { path: String },
 
     #[error("Failed to read environment: {0}")]
     ReadFailed(String),

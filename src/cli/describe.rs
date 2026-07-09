@@ -102,7 +102,11 @@ pub(crate) fn build_payload(
             order: f.order.unwrap_or(0),
             required: f.required.unwrap_or(false),
             arg: f.arg.clone(),
-            default: f.default.clone(),
+            default: if f.is_secret() {
+                None
+            } else {
+                f.default.clone()
+            },
             choices: f.choices.clone(),
         })
         .collect();
@@ -142,11 +146,15 @@ fn payload_from_description(description: ScriptDescription) -> DescribePayload {
             .map(|field| DescribeField {
                 name: field.name,
                 prompt: field.prompt,
-                kind: field.kind,
+                kind: field.kind.clone(),
                 order: field.order,
                 required: field.required,
                 arg: field.arg,
-                default: field.default,
+                default: if field.kind.eq_ignore_ascii_case("secret") {
+                    None
+                } else {
+                    field.default
+                },
                 choices: field.choices,
             })
             .collect(),
@@ -263,6 +271,21 @@ mod tests {
             Some(vec!["dev".to_string(), "prod".to_string()])
         );
         assert_eq!(payload.relative_path, "deploy.sh");
+    }
+
+    #[test]
+    fn build_payload_marks_secret_fields_without_returning_values() {
+        let tmp = TempDir::new().unwrap();
+        let script = tmp.path().join("deploy.sh");
+        std::fs::write(&script, "#!/bin/bash").unwrap();
+
+        let mut schema = test_schema();
+        schema.fields[0].kind = "secret".to_string();
+        schema.fields[0].default = Some("supersecret".to_string());
+
+        let payload = build_payload(&script, tmp.path(), &schema);
+        assert_eq!(payload.fields[0].kind, "secret");
+        assert_eq!(payload.fields[0].default, None);
     }
 
     #[test]

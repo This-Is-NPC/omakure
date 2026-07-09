@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{AppResult, EnvironmentError};
 pub use crate::ports::{EnvFile, EnvironmentConfig};
@@ -8,6 +11,7 @@ use crate::ports::{EnvPreview, EnvironmentRepository};
 use crate::util::{read_dir_or_empty, read_file_if_exists};
 
 pub(crate) const MASKED_ENV_VALUE: &str = "****";
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub struct FsEnvironmentRepository {
     envs_dir: PathBuf,
@@ -30,6 +34,21 @@ impl FsEnvironmentRepository {
         })?;
         Ok(parse_env_defaults(&contents))
     }
+
+    pub(crate) fn env_path_for_name(&self, name: &str, must_exist: bool) -> AppResult<PathBuf> {
+        validate_env_name(name)?;
+        fs::create_dir_all(&self.envs_dir).map_err(|err| {
+            EnvironmentError::WriteFailed(format!(
+                "Failed to create environments dir {}: {}",
+                self.envs_dir.display(),
+                err
+            ))
+        })?;
+
+        let path = self.envs_dir.join(format!("{name}.conf"));
+        ensure_env_path_safe(&self.envs_dir, &path, must_exist)?;
+        Ok(path)
+    }
 }
 
 impl EnvironmentRepository for FsEnvironmentRepository {
@@ -45,6 +64,13 @@ impl EnvironmentRepository for FsEnvironmentRepository {
 
         for entry in dir {
             let path = entry.path();
+            if path
+                .symlink_metadata()
+                .map(|metadata| metadata.file_type().is_symlink())
+                .unwrap_or(true)
+            {
+                continue;
+            }
             if !path.is_file() {
                 continue;
             }
@@ -104,13 +130,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
                     }
                     .into());
                 }
-                fs::write(&active_path, format!("{}\n", name)).map_err(|err| {
-                    EnvironmentError::WriteFailed(format!(
-                        "Failed to write active environment {}: {}",
-                        active_path.display(),
-                        err
-                    ))
-                })?;
+                write_active_atomic(&active_path, name)?;
             }
             None => {
                 if active_path.exists() {
@@ -137,6 +157,98 @@ impl EnvironmentRepository for FsEnvironmentRepository {
             ))
         })?;
         Ok(parse_env_preview(&contents))
+    }
+
+    fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
+        let path = self.env_path_for_name(name, false)?;
+        if path.exists() {
+            return Err(EnvironmentError::WriteFailed(format!(
+                "Environment already exists: {}",
+                path.display()
+            ))
+            .into());
+        }
+        write_env_params_atomic(&path, params)
+    }
+
+    fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview> {
+        let path = self.env_path_for_name(name, true)?;
+        self.load_env_preview(&path)
+    }
+
+    fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
+        let path = self.env_path_for_name(name, true)?;
+        write_env_params_atomic(&path, params)
+    }
+
+    fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()> {
+        validate_env_key(key)?;
+        let path = self.env_path_for_name(name, true)?;
+        let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {
+            EnvironmentError::ReadFailed(format!(
+                "Failed to read environment file {}: {}",
+                path.display(),
+                err
+            ))
+        })?);
+        match params.iter_mut().find(|(existing, _)| existing == key) {
+            Some((_, existing_value)) => *existing_value = value.to_string(),
+            None => params.push((key.to_string(), value.to_string())),
+        }
+        let refs: Vec<(&str, &str)> = params
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        write_env_params_atomic(&path, &refs)
+    }
+
+    fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()> {
+        validate_env_key(key)?;
+        let path = self.env_path_for_name(name, true)?;
+        let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {
+            EnvironmentError::ReadFailed(format!(
+                "Failed to read environment file {}: {}",
+                path.display(),
+                err
+            ))
+        })?);
+        params.retain(|(existing, _)| existing != key);
+        let refs: Vec<(&str, &str)> = params
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        write_env_params_atomic(&path, &refs)
+    }
+
+    fn activate_env(&self, name: &str) -> AppResult<()> {
+        let path = self.env_path_for_name(name, true)?;
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| EnvironmentError::UnsafePath {
+                path: path.display().to_string(),
+            })?;
+        write_active_atomic(&self.envs_dir.join("active"), file_name)
+    }
+
+    fn deactivate_env(&self) -> AppResult<()> {
+        self.set_active_env(None)
+    }
+
+    fn delete_env(&self, name: &str) -> AppResult<()> {
+        let path = self.env_path_for_name(name, true)?;
+        fs::remove_file(&path).map_err(|err| {
+            EnvironmentError::WriteFailed(format!(
+                "Failed to delete environment file {}: {}",
+                path.display(),
+                err
+            ))
+        })?;
+
+        if load_active_env_name(&self.envs_dir)? == Some(format!("{name}.conf")) {
+            self.set_active_env(None)?;
+        }
+        Ok(())
     }
 }
 
@@ -165,6 +277,170 @@ fn load_active_env_name(envs_dir: &Path) -> AppResult<Option<String>> {
     }
 
     Ok(None)
+}
+
+fn validate_env_name(name: &str) -> Result<(), EnvironmentError> {
+    let invalid = name.is_empty()
+        || name == "active"
+        || name.starts_with('.')
+        || name.ends_with(".conf")
+        || name.contains("..")
+        || name.contains('/')
+        || name.contains('\\')
+        || Path::new(name).components().count() != 1;
+    if invalid {
+        return Err(EnvironmentError::InvalidName {
+            name: name.to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_env_key(key: &str) -> Result<(), EnvironmentError> {
+    if is_valid_var_name(key) {
+        Ok(())
+    } else {
+        Err(EnvironmentError::WriteFailed(format!(
+            "Invalid environment variable name: {key}"
+        )))
+    }
+}
+
+fn ensure_env_path_safe(envs_dir: &Path, path: &Path, must_exist: bool) -> AppResult<()> {
+    let envs = envs_dir.canonicalize().map_err(|err| {
+        EnvironmentError::ReadFailed(format!(
+            "Failed to resolve environments dir {}: {}",
+            envs_dir.display(),
+            err
+        ))
+    })?;
+
+    if must_exist && !path.is_file() {
+        return Err(EnvironmentError::NotFound {
+            name: path.display().to_string(),
+        }
+        .into());
+    }
+
+    if let Ok(metadata) = fs::symlink_metadata(path) {
+        if metadata.file_type().is_symlink() {
+            return Err(EnvironmentError::UnsafePath {
+                path: path.display().to_string(),
+            }
+            .into());
+        }
+    }
+
+    let parent = path
+        .parent()
+        .unwrap_or(envs_dir)
+        .canonicalize()
+        .map_err(|err| {
+            EnvironmentError::ReadFailed(format!(
+                "Failed to resolve environment parent {}: {}",
+                path.display(),
+                err
+            ))
+        })?;
+    if parent != envs {
+        return Err(EnvironmentError::UnsafePath {
+            path: path.display().to_string(),
+        }
+        .into());
+    }
+
+    Ok(())
+}
+
+fn write_env_params_atomic(path: &Path, params: &[(&str, &str)]) -> AppResult<()> {
+    let mut contents = String::new();
+    for (key, value) in params {
+        validate_env_key(key)?;
+        if value.contains('\n') || value.contains('\r') {
+            return Err(EnvironmentError::WriteFailed(format!(
+                "Environment value for {key} must be single-line"
+            ))
+            .into());
+        }
+        contents.push_str(key);
+        contents.push('=');
+        contents.push_str(value);
+        contents.push('\n');
+    }
+    write_file_atomic(path, contents.as_bytes())
+}
+
+fn write_active_atomic(path: &Path, name: &str) -> AppResult<()> {
+    write_file_atomic(path, format!("{name}\n").as_bytes())
+}
+
+fn write_file_atomic(path: &Path, contents: &[u8]) -> AppResult<()> {
+    let parent = path.parent().ok_or_else(|| EnvironmentError::UnsafePath {
+        path: path.display().to_string(),
+    })?;
+    fs::create_dir_all(parent).map_err(|err| {
+        EnvironmentError::WriteFailed(format!(
+            "Failed to create environments dir {}: {}",
+            parent.display(),
+            err
+        ))
+    })?;
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("env");
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let tmp = parent.join(format!(
+        ".{file_name}.{}.{}.{}.tmp",
+        std::process::id(),
+        TMP_COUNTER.fetch_add(1, Ordering::Relaxed),
+        nonce
+    ));
+
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut file = options.open(&tmp).map_err(|err| {
+        EnvironmentError::WriteFailed(format!(
+            "Failed to write temporary environment file {}: {}",
+            tmp.display(),
+            err
+        ))
+    })?;
+    file.write_all(contents).map_err(|err| {
+        EnvironmentError::WriteFailed(format!(
+            "Failed to write temporary environment file {}: {}",
+            tmp.display(),
+            err
+        ))
+    })?;
+    file.sync_all().map_err(|err| {
+        EnvironmentError::WriteFailed(format!(
+            "Failed to sync temporary environment file {}: {}",
+            tmp.display(),
+            err
+        ))
+    })?;
+    drop(file);
+
+    fs::rename(&tmp, path).map_err(|err| {
+        let _ = fs::remove_file(&tmp);
+        EnvironmentError::WriteFailed(format!(
+            "Failed to replace environment file {}: {}",
+            path.display(),
+            err
+        ))
+    })?;
+    Ok(())
 }
 
 pub(crate) fn parse_env_preview(contents: &str) -> Vec<(String, String)> {
@@ -318,10 +594,24 @@ fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)> {
     let Ok(Some(name)) = load_active_env_name(envs_dir) else {
         return Vec::new();
     };
-    match fs::read_to_string(envs_dir.join(&name)) {
+    let logical = name.strip_suffix(".conf").unwrap_or(&name);
+    let repo = FsEnvironmentRepository::new(envs_dir.to_path_buf());
+    let Ok(path) = repo.env_path_for_name(logical, true) else {
+        return Vec::new();
+    };
+    match fs::read_to_string(path) {
         Ok(contents) => parse_env_pairs_raw(&contents),
         Err(_) => Vec::new(),
     }
+}
+
+pub(crate) fn read_managed_env_defaults(
+    envs_dir: &Path,
+    name: &str,
+) -> AppResult<HashMap<String, String>> {
+    let repo = FsEnvironmentRepository::new(envs_dir.to_path_buf());
+    let path = repo.env_path_for_name(name, true)?;
+    repo.read_env_defaults(&path)
 }
 
 /// Resolve the active managed environment into ordered, case-preserving
@@ -649,6 +939,31 @@ mod tests {
         assert_eq!(result.get("host").unwrap(), "localhost");
         assert_eq!(result.get("port").unwrap(), "8080");
         assert_eq!(result.get("debug").unwrap(), "true");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn write_file_atomic_does_not_follow_predictable_temp_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+        let target = envs.join("prod.conf");
+        let outside = tmp.path().join("outside.conf");
+        fs::write(&outside, "outside=original\n").unwrap();
+        let old_predictable_tmp = envs.join(format!(".prod.conf.{}.tmp", std::process::id()));
+        symlink(&outside, &old_predictable_tmp).unwrap();
+
+        write_file_atomic(&target, b"TOKEN=secret\n").unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "TOKEN=secret\n");
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "outside=original\n");
+        assert!(old_predictable_tmp
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 
     #[rstest]
@@ -1014,6 +1329,24 @@ mod tests {
         assert_eq!(config.defaults.get("port").unwrap(), "3000");
     }
 
+    #[test]
+    #[cfg(unix)]
+    fn resolve_active_env_ignores_symlink_target() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = TempDir::new().unwrap();
+        let envs = tmp.path().join("envs");
+        fs::create_dir_all(&envs).unwrap();
+        let outside = tmp.path().join("outside.conf");
+        fs::write(&outside, "TOKEN=outside_secret").unwrap();
+        symlink(&outside, envs.join("prod.conf")).unwrap();
+        fs::write(envs.join("active"), "prod.conf\n").unwrap();
+
+        let resolved = resolve_active_env(&envs);
+
+        assert!(resolved.is_empty());
+    }
+
     #[rstest]
     fn test_set_active_env(envs_dir: (TempDir, PathBuf)) {
         let (_tmp, envs) = envs_dir;
@@ -1086,6 +1419,104 @@ mod tests {
             ("HOST".to_string(), "prod.example.com".to_string())
         );
         assert_eq!(preview[1], ("API_KEY".to_string(), "****".to_string()));
+    }
+
+    #[rstest]
+    fn test_create_show_replace_set_remove_and_delete_env_by_logical_name(
+        envs_dir: (TempDir, PathBuf),
+    ) {
+        let (_tmp, envs) = envs_dir;
+        let repo = FsEnvironmentRepository::new(&envs);
+
+        repo.create_env("qa", &[("HOST", "qa.example.com"), ("API_KEY", "secret")])
+            .unwrap();
+        assert!(envs.join("qa.conf").is_file());
+
+        assert_eq!(
+            repo.load_env_preview_by_name("qa").unwrap(),
+            vec![
+                ("HOST".to_string(), "qa.example.com".to_string()),
+                ("API_KEY".to_string(), "****".to_string()),
+            ]
+        );
+
+        repo.set_env_param("qa", "PORT", "443").unwrap();
+        repo.set_env_param("qa", "HOST", "qa.internal").unwrap();
+        assert_eq!(
+            fs::read_to_string(envs.join("qa.conf")).unwrap(),
+            "HOST=qa.internal\nAPI_KEY=secret\nPORT=443\n"
+        );
+
+        repo.remove_env_param("qa", "API_KEY").unwrap();
+        assert_eq!(
+            fs::read_to_string(envs.join("qa.conf")).unwrap(),
+            "HOST=qa.internal\nPORT=443\n"
+        );
+
+        repo.replace_env("qa", &[("HOST", "replacement")]).unwrap();
+        assert_eq!(
+            fs::read_to_string(envs.join("qa.conf")).unwrap(),
+            "HOST=replacement\n"
+        );
+
+        repo.delete_env("qa").unwrap();
+        assert!(!envs.join("qa.conf").exists());
+    }
+
+    #[rstest]
+    #[case::empty("")]
+    #[case::suffix("prod.conf")]
+    #[case::traversal("../prod")]
+    #[case::slash("team/prod")]
+    #[case::backslash("team\\prod")]
+    #[case::leading_dot(".prod")]
+    #[case::reserved_active("active")]
+    fn test_env_management_rejects_unsafe_logical_names(
+        envs_dir: (TempDir, PathBuf),
+        #[case] name: &str,
+    ) {
+        let (_tmp, envs) = envs_dir;
+        let repo = FsEnvironmentRepository::new(&envs);
+
+        let err = repo.create_env(name, &[("HOST", "example")]).unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid environment name"),
+            "unexpected error for {name:?}: {err}"
+        );
+    }
+
+    #[rstest]
+    fn test_env_management_rejects_symlink_escape(envs_dir: (TempDir, PathBuf)) {
+        let (tmp, envs) = envs_dir;
+        let outside = tmp.path().join("outside.conf");
+        fs::write(&outside, "HOST=outside\n").unwrap();
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, envs.join("escape.conf")).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(&outside, envs.join("escape.conf")).unwrap();
+
+        let repo = FsEnvironmentRepository::new(&envs);
+        let err = repo.load_env_preview_by_name("escape").unwrap_err();
+        assert!(
+            err.to_string().contains("Unsafe environment path"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[rstest]
+    fn test_env_management_activate_deactivate_uses_logical_name(envs_dir: (TempDir, PathBuf)) {
+        let (_tmp, envs) = envs_dir;
+        let repo = FsEnvironmentRepository::new(&envs);
+
+        repo.activate_env("prod").unwrap();
+        assert_eq!(
+            fs::read_to_string(envs.join("active")).unwrap(),
+            "prod.conf\n"
+        );
+
+        repo.deactivate_env().unwrap();
+        assert!(!envs.join("active").exists());
     }
 
     #[rstest]

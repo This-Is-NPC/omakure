@@ -7,7 +7,7 @@
 | FR-001 | Interactive TUI for browsing and selecting scripts from a workspace directory | `src/adapters/tui/app.rs`, `src/adapters/tui/widgets/scripts.rs` |
 | FR-002 | Hierarchical directory navigation with parent traversal in script browser | `src/adapters/tui/app.rs` (`enter_selected`, `navigate_up`) |
 | FR-003 | Script schema parsing from embedded JSON blocks delimited by `OMAKURE_SCHEMA_START`/`OMAKURE_SCHEMA_END` comment markers | `src/domain/parsing.rs`, `src/adapters/workspace_repository.rs` |
-| FR-004 | Dynamic form generation from schema fields with type validation (string, number, boolean) | `src/domain/validation.rs`, `src/adapters/tui/app.rs` (`submit_form`) |
+| FR-004 | Dynamic form generation from schema fields with type validation (string, number, boolean, secret) | `src/domain/validation.rs`, `src/domain/schema.rs`, `src/adapters/tui/app.rs` (`submit_form`) |
 | FR-005 | Choice-constrained fields with validation against allowed values | `src/domain/validation.rs` |
 | FR-006 | Default values for fields, overridable by environment configuration | `src/adapters/tui/app.rs` (`build_field_inputs`) |
 | FR-007 | Multi-runtime script execution: Bash (`.bash`/`.sh`), PowerShell (`.ps1`), Python (`.py`) | `src/runtime.rs`, `src/adapters/script_runner.rs` |
@@ -16,7 +16,7 @@
 | FR-010 | History browsing in TUI with output preview, scroll, and Actor column, sourced from `runs.sqlite` | `src/adapters/tui/app.rs`, `src/adapters/tui/widgets/history.rs`, `src/adapters/tui/state/history.rs` |
 | FR-011 | Full-text search index backed by SQLite with background rebuild | `src/search_index.rs` |
 | FR-012 | Search screen with live query filtering and script detail preview | `src/adapters/tui/app.rs` (`enter_search`, `refresh_search_results`), `src/adapters/tui/widgets/search.rs` |
-| FR-013 | Environment management: list, activate, deactivate env files | `src/adapters/environments.rs`, `src/use_cases/environment.rs` |
+| FR-013 | Environment management: list, create, show, set, remove, replace, activate, deactivate, and delete managed `.omakure/envs/*.conf` files through shared operations | `src/adapters/environments.rs`, `src/use_cases/environment.rs`, `src/operations/envs.rs`, `src/cli/env.rs` |
 | FR-014 | Environment preview with sensitive value masking (password, secret, token, key, api, private, cred) | `src/adapters/environments.rs` (`is_sensitive_key`) |
 | FR-015 | CLI `run` command for headless script execution | `src/cli/run.rs` |
 | FR-016 | CLI `doctor` command for runtime health checks + embedded-schema parse verification | `src/cli/doctor.rs` |
@@ -69,7 +69,9 @@
 | FR-064 | Per-run environment injection: `omakure run --env-file <PATH>` parses case-preserving `KEY=value` pairs, expands `$VAR`/`${VAR}` single-pass, overlays the managed active env, and injects the merged env into the spawned process only | `src/cli/run.rs`, `src/cli/args.rs` (`RunArgs.env_file`), `src/adapters/environments.rs` (`resolve_run_env`, `parse_env_file`, `expand_env_value`) |
 | FR-065 | Omakure-reserved runtime env vars `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` are injected last by the shared executor and cannot be overridden by active env or `--env-file` values | `src/run_executor.rs` (`execute_with_heartbeat`), `src/adapters/script_runner.rs` (`MultiScriptRunner::build_command`) |
 | FR-066 | Battery CLI registers, syncs, inspects, lists, installs, and removes reusable Omakure-compatible automation repositories through shared Battery operations; cached checkouts remain untrusted and scripts are copied into the trusted workspace only through `battery install` | `src/cli/battery.rs`, `src/operations/battery.rs` |
-| FR-067 | Internal HTTP management API: `omakure api` starts an Axum server with `/v1/health`, config/doctor/workspace/search/tree/scripts/runs/queue-stats/Battery endpoints, CLI-compatible JSON envelopes, shared operation calls, bearer auth, and loopback-by-default binding | `src/cli/api.rs`, `src/cli/args.rs` (`ApiArgs`), `src/operations/*` |
+| FR-067 | Internal HTTP management API: `omakure api` starts an Axum server with `/v1/health`, config/doctor/workspace/search/tree/scripts/envs/runs/queue-stats/Battery endpoints, CLI-compatible JSON envelopes, shared operation calls, bearer auth, and loopback-by-default binding | `src/cli/api.rs`, `src/cli/args.rs` (`ApiArgs`), `src/operations/*` |
+| FR-068 | Secret schema fields (`Type: "secret"`) resolve from direct secret inputs, forwarded args, run env, or defaults; choices are rejected; plaintext secret args are redacted in stored run args while provider references are retained | `src/domain/schema.rs`, `src/secrets.rs`, `src/cli/run.rs`, `src/operations/core.rs` |
+| FR-069 | HTTP env and secret run inputs are capability-gated: API capabilities are denied by default unless granted through `omakure api --capability`; read endpoints require config/script/run/Battery read capabilities; env endpoints require env read/write/activate capabilities; Battery write endpoints require `batteries:write`; `POST /v1/runs` with `env` or implicit secret values from env requires `EnvUse`; secret defaults and provider refs require `SecretProviderUse`; queued `secret_fields` and secret-field args must be reconstructable `secret://` refs; provider refs require `--secret-ref` ACL allowance sealed with the queued run | `src/cli/api.rs` (`ApiCapability`, `ApiPolicy`, `require_capability`, `enqueue_run_handler`), `src/runs.rs` (`run_secret_refs`) |
 
 ## Non-Functional Requirements
 
@@ -95,7 +97,7 @@
 | BR-001 | Hidden directories `.history`, `.git`, and Omakure-owned `.omakure/` metadata are excluded from script listing | `src/adapters/workspace_repository.rs` (`should_skip_dir`) |
 | BR-002 | Only files with extensions `.bash`, `.sh`, `.ps1`, `.py` are recognized as scripts | `src/runtime.rs` (`script_extensions`, `script_kind`) |
 | BR-003 | Boolean inputs accept: `true`/`t`/`yes`/`y`/`1` and `false`/`f`/`no`/`n`/`0` (case-insensitive) | `src/domain/validation.rs` (`parse_bool`) |
-| BR-004 | Environment variable keys containing `password`, `secret`, `token`, `key`, `api`, `private`, or `cred` are masked as `***` in preview | `src/adapters/environments.rs` (`is_sensitive_key`) |
+| BR-004 | Environment variable keys containing `password`, `secret`, `token`, `key`, `api`, `private`, or `cred` are masked as `****` in preview | `src/adapters/environments.rs` (`is_sensitive_key`) |
 | BR-005 | Scripts directory resolution priority: `--scripts-dir` CLI flag > `OMAKURE_SCRIPTS_DIR` > `OVERTURE_SCRIPTS_DIR` > `CLOUD_MGMT_SCRIPTS_DIR` > dev `scripts/` (debug only) > `~/Documents/omakure-scripts` > legacy `overture-scripts`/`cloud-mgmt-scripts` directories | `src/main.rs` (`scripts_dir`) |
 | BR-006 | Directory entries are sorted with directories first, then scripts, both alphabetically (case-insensitive) | `src/adapters/workspace_repository.rs` (`list_entries` sort) |
 | BR-007 | Workspace config (`<workspace>/omakure.toml`) is auto-created with the current app version on first run | `src/workspace.rs` (`ensure_layout`, `default_config`) |

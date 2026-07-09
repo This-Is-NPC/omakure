@@ -15,7 +15,8 @@ use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::ports::ScriptRepository;
 use crate::runs::{self, RunCompletion, RunRow, RunState};
 use crate::workspace::Workspace;
-use std::io::{BufRead, BufReader, Read};
+use std::fs;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
@@ -86,7 +87,49 @@ pub fn execute_with_heartbeat(
     // Validate the schema's required fields are satisfied (mirrors the
     // pre-PR-#8 `--no-prompt` behavior). The worker is always non-
     // interactive, so missing-required is a hard fail.
-    if let Err((field, message)) = check_required_fields(workspace, &script_path, &row.args_json) {
+    let row_args = parse_args_json(&row.args_json);
+    let secret_access = match secret_access_for_row(workspace, row, &row_args) {
+        Ok(access) => access,
+        Err(err) => {
+            return ExecutionResult {
+                terminal: ExecutionTerminal::Failed,
+                completion: RunCompletion {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    exit_code: None,
+                    success: false,
+                    error: Some(err),
+                },
+            };
+        }
+    };
+    let resolved_args = match crate::secrets::resolve_args_with_access(
+        workspace,
+        &script_path,
+        &row_args,
+        &extra_env,
+        &[],
+        &secret_access,
+    ) {
+        Ok(resolved) => resolved,
+        Err((field, message)) => {
+            return ExecutionResult {
+                terminal: ExecutionTerminal::Failed,
+                completion: RunCompletion {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    exit_code: None,
+                    success: false,
+                    error: Some(format!("required field `{}` missing: {}", field, message)),
+                },
+            };
+        }
+    };
+    let persisted_args_json = serde_json::to_string(&resolved_args.persisted_args)
+        .unwrap_or_else(|_| row.args_json.clone());
+    if let Err((field, message)) =
+        check_required_fields(workspace, &script_path, &persisted_args_json)
+    {
         return ExecutionResult {
             terminal: ExecutionTerminal::Failed,
             completion: RunCompletion {
@@ -99,7 +142,7 @@ pub fn execute_with_heartbeat(
         };
     }
 
-    let args = parse_args_json(&row.args_json);
+    let args = resolved_args.execution_args.clone();
     // Env-injection precedence (`.docs/env-injection-spec.md` §1): the
     // caller-supplied `extra_env` (parent shell env is inherited by the
     // child; layer 2 active managed env; future layer 3 `--env-file`) is
@@ -111,6 +154,28 @@ pub fn execute_with_heartbeat(
     // NON-OVERRIDABLE: a user var of the same name in `extra_env` cannot
     // clobber them.
     let mut env = extra_env;
+    let redaction_file = match write_redaction_file(workspace, &row.run_id, &resolved_args.secrets)
+    {
+        Ok(file) => file,
+        Err(err) => {
+            return ExecutionResult {
+                terminal: ExecutionTerminal::Errored,
+                completion: RunCompletion {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    exit_code: None,
+                    success: false,
+                    error: Some(err),
+                },
+            };
+        }
+    };
+    if let Some(file) = &redaction_file {
+        env.push((
+            crate::secrets::REDACT_FILE_ENV.to_string(),
+            file.path.to_string_lossy().to_string(),
+        ));
+    }
     env.push(("OMAKURE_RUN_ID".to_string(), row.run_id.clone()));
     // Pin the workspace so nested `omakure trace` invocations write to
     // the same `runs.sqlite` even when the worker was launched against
@@ -282,8 +347,8 @@ pub fn execute_with_heartbeat(
             (
                 terminal,
                 RunCompletion {
-                    stdout: stdout_text,
-                    stderr: stderr_text,
+                    stdout: crate::secrets::redact_text(&stdout_text, &resolved_args.secrets),
+                    stderr: crate::secrets::redact_text(&stderr_text, &resolved_args.secrets),
                     exit_code,
                     success,
                     error: None,
@@ -293,11 +358,11 @@ pub fn execute_with_heartbeat(
         Err(err) => (
             ExecutionTerminal::Errored,
             RunCompletion {
-                stdout: stdout_text,
-                stderr: stderr_text,
+                stdout: crate::secrets::redact_text(&stdout_text, &resolved_args.secrets),
+                stderr: crate::secrets::redact_text(&stderr_text, &resolved_args.secrets),
                 exit_code: None,
                 success: false,
-                error: Some(err),
+                error: Some(crate::secrets::redact_text(&err, &resolved_args.secrets)),
             },
         ),
     };
@@ -310,6 +375,89 @@ pub fn execute_with_heartbeat(
         terminal,
         completion,
     }
+}
+
+fn secret_access_for_row(
+    workspace: &Workspace,
+    row: &RunRow,
+    args: &[String],
+) -> Result<crate::secrets::SecretAccess, String> {
+    let has_provider_ref = args.iter().any(|arg| {
+        arg.starts_with("secret://")
+            || arg
+                .split_once('=')
+                .map(|(_, value)| value.starts_with("secret://"))
+                .unwrap_or(false)
+    });
+    let refs = match runs::open(workspace)
+        .and_then(|conn| runs::get_run_secret_refs(&conn, &row.run_id))
+    {
+        Ok(Some(refs)) => refs,
+        Ok(None) if has_provider_ref => {
+            return Err("secret provider policy missing for queued run".to_string())
+        }
+        Ok(None) => return Ok(crate::secrets::SecretAccess::allow_all()),
+        Err(err) if has_provider_ref => {
+            return Err(format!("secret provider policy lookup failed: {err}"))
+        }
+        Err(_) => return Ok(crate::secrets::SecretAccess::allow_all()),
+    };
+    if refs
+        .iter()
+        .any(|secret_ref| secret_ref == runs::ALLOW_ALL_SECRET_REFS_POLICY)
+    {
+        Ok(crate::secrets::SecretAccess::allow_all())
+    } else {
+        Ok(crate::secrets::SecretAccess::new(["secrets:use"], refs))
+    }
+}
+
+struct RedactionFile {
+    path: PathBuf,
+}
+
+impl Drop for RedactionFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn write_redaction_file(
+    workspace: &Workspace,
+    run_id: &str,
+    secrets: &[String],
+) -> Result<Option<RedactionFile>, String> {
+    let Some(value) = crate::secrets::secrets_env_value(secrets) else {
+        return Ok(None);
+    };
+    fs::create_dir_all(workspace.history_dir())
+        .map_err(|err| format!("create redaction dir failed: {err}"))?;
+    let path = workspace.history_dir().join(format!(
+        ".redact.{}.{}.tmp",
+        sanitize_run_id_for_filename(run_id),
+        runs::current_unix_ms()
+    ));
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut file = options
+        .open(&path)
+        .map_err(|err| format!("open redaction file failed: {err}"))?;
+    file.write_all(value.as_bytes())
+        .map_err(|err| format!("write redaction file failed: {err}"))?;
+    Ok(Some(RedactionFile { path }))
+}
+
+fn sanitize_run_id_for_filename(run_id: &str) -> String {
+    run_id
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect()
 }
 
 /// Heartbeat tick interval. Short enough to detect external cancel
@@ -477,6 +625,55 @@ mod tests {
             "expected stdout to end with workspace root, got: {:?}",
             result.completion.stdout
         );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_uses_redaction_file_instead_of_plaintext_secret_env() {
+        let ws = make_workspace("redaction_file_env");
+        let script = write_bash_stub(
+            &ws,
+            "redact-env.sh",
+            r#"# OMAKURE_SCHEMA_START
+# {"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}
+# OMAKURE_SCHEMA_END
+if [ -n "$OMAKURE_REDACT_SECRETS" ]; then
+  echo raw-redaction-env-present
+  exit 2
+fi
+test -n "$OMAKURE_REDACT_SECRETS_FILE"
+test -f "$OMAKURE_REDACT_SECRETS_FILE"
+printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
+"#,
+        );
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = execute_with_heartbeat(
+            &ws,
+            &row,
+            vec![("TOKEN".into(), "redaction-file-secret".into())],
+            None,
+        );
+
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert!(!result.completion.stdout.contains("redaction-file-secret"));
+        let redaction_file = result.completion.stdout.trim();
+        assert!(!redaction_file.is_empty());
+        assert!(!PathBuf::from(redaction_file).exists());
         let _ = fs::remove_dir_all(ws.root());
     }
 
@@ -785,6 +982,46 @@ echo done"#,
         fs::write(&script, bare).unwrap();
         assert!(check_required_fields(&ws, &script, "[]").is_ok());
 
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output() {
+        let ws = make_workspace("secret_ref_runtime");
+        fs::write(
+            ws.envs_dir().join("prod.conf"),
+            "TOKEN=from_file_provider\n",
+        )
+        .unwrap();
+        let script = write_bash_stub(&ws, "secret_ref.sh", "");
+        let body = r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"SecretRef","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}
+# OMAKURE_SCHEMA_END
+if [ "$1" = "--token=from_file_provider" ]; then echo "matched from_file_provider"; else echo "leaked:$1"; exit 7; fi
+"#;
+        fs::write(&script, body).unwrap();
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &["--token=secret://prod/token".to_string()],
+            "inline:test",
+            EnqueueOptions {
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert!(result.completion.stdout.contains("matched <redacted>"));
+        assert!(!result.completion.stdout.contains("from_file_provider"));
+        assert!(!result.completion.stderr.contains("from_file_provider"));
         let _ = fs::remove_dir_all(ws.root());
     }
 

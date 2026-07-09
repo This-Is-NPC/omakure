@@ -4,6 +4,7 @@ pub mod battery;
 pub mod config;
 pub mod describe;
 pub mod doctor;
+pub mod env;
 pub mod help_ai;
 pub mod history;
 pub mod init;

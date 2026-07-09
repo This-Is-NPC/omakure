@@ -1,9 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::SchemaError;
 
 /// Schema definition for a script.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct Schema {
     pub name: String,
@@ -16,7 +16,7 @@ pub struct Schema {
 }
 
 /// Optional scheduling block that promotes a script to a scheduled automation unit.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct Schedule {
     pub cron: String,
@@ -36,7 +36,7 @@ impl Schedule {
 }
 
 /// Script input field definition.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct Field {
     pub name: String,
@@ -49,6 +49,12 @@ pub struct Field {
     pub default: Option<String>,
     pub choices: Option<Vec<String>>,
     pub arg: Option<String>,
+}
+
+impl Field {
+    pub fn is_secret(&self) -> bool {
+        self.kind.eq_ignore_ascii_case("secret")
+    }
 }
 
 impl Schema {
@@ -66,6 +72,14 @@ impl Schema {
     pub fn validate(&self) -> Result<(), SchemaError> {
         if let Some(schedule) = &self.schedule {
             schedule.validate()?;
+        }
+        for field in &self.fields {
+            if field.is_secret() && field.choices.is_some() {
+                return Err(SchemaError::UnsupportedSecretFieldConstruct {
+                    field: field.name.clone(),
+                    construct: "Choices",
+                });
+            }
         }
         Ok(())
     }
@@ -155,6 +169,36 @@ mod tests {
     }
 
     #[test]
+    fn secret_field_parses_and_serializes_as_schema_type() {
+        let json = r#"{
+            "Name": "secrets",
+            "Fields": [
+                { "Name": "token", "Type": "secret", "Required": true }
+            ]
+        }"#;
+        let schema = parse_schema(json).unwrap();
+        assert_eq!(schema.fields[0].kind, "secret");
+
+        let serialized = serde_json::to_value(&schema).unwrap();
+        assert_eq!(serialized["Fields"][0]["Type"], "secret");
+    }
+
+    #[test]
+    fn secret_field_rejects_plaintext_choices() {
+        let json = r#"{
+            "Name": "secrets",
+            "Fields": [
+                { "Name": "token", "Type": "secret", "Choices": ["one", "two"] }
+            ]
+        }"#;
+        let err = parse_schema(json).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::SchemaError::UnsupportedSecretFieldConstruct { .. }
+        ));
+    }
+
+    #[test]
     fn normalize_is_idempotent() {
         let json = r#"{
             "Name": "idem",
@@ -171,7 +215,7 @@ mod tests {
 }
 
 /// Script output field definition.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct OutputField {
     pub name: String,
@@ -180,7 +224,7 @@ pub struct OutputField {
 }
 
 /// Optional queue specification for batch execution.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct QueueSpec {
     pub matrix: Option<MatrixSpec>,
@@ -188,14 +232,14 @@ pub struct QueueSpec {
 }
 
 /// Matrix specification for batch execution.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct MatrixSpec {
     pub values: Vec<MatrixValue>,
 }
 
 /// Matrix value.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct MatrixValue {
     pub name: String,
@@ -203,7 +247,7 @@ pub struct MatrixValue {
 }
 
 /// Queue case entry.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct QueueCase {
     pub name: Option<String>,
@@ -211,7 +255,7 @@ pub struct QueueCase {
 }
 
 /// Queue case value.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct CaseValue {
     pub name: String,

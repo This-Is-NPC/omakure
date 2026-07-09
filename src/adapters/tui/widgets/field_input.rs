@@ -103,11 +103,13 @@ fn render_field_boxes(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             .map(String::as_str)
             .unwrap_or("");
         let value_text = if value.trim().is_empty() {
-            field
-                .default
-                .as_deref()
-                .map(|default| format!("<default: {}>", default))
-                .unwrap_or_else(|| "<empty>".to_string())
+            match field.default.as_deref() {
+                Some(_) if field.is_secret() => "<default: ****>".to_string(),
+                Some(default) => format!("<default: {}>", default),
+                None => "<empty>".to_string(),
+            }
+        } else if field.is_secret() {
+            "****".to_string()
         } else {
             value.to_string()
         };
@@ -155,6 +157,15 @@ mod tests {
     use ratatui::Terminal;
     use std::path::PathBuf;
     use tempfile::TempDir;
+
+    fn rendered(backend: &TestBackend) -> String {
+        backend
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    }
 
     #[test]
     fn snapshot_field_input_with_fields() {
@@ -229,6 +240,38 @@ mod tests {
         terminal
             .draw(|f| render_field_input(f, f.size(), &mut app, &theme))
             .unwrap();
+    }
+
+    #[test]
+    fn render_field_input_masks_secret_values() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.fields = vec![Field {
+            name: "token".to_string(),
+            prompt: Some("API token".to_string()),
+            kind: "secret".to_string(),
+            order: Some(1),
+            required: Some(true),
+            default: None,
+            choices: None,
+            arg: Some("--token".to_string()),
+        }];
+        app.field_input.field_inputs = vec!["plain-secret-value".to_string()];
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(60, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_field_input(f, f.size(), &mut app, &theme))
+            .unwrap();
+        let output = rendered(terminal.backend());
+
+        assert!(!output.contains("plain-secret-value"));
+        assert!(output.contains("****"));
     }
 
     #[test]

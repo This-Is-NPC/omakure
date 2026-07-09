@@ -15,11 +15,7 @@ pub(crate) fn render_running(frame: &mut Frame, area: Rect, app: &mut App, theme
         .and_then(|path| path.file_name())
         .and_then(|name| name.to_str())
         .unwrap_or("<unknown>");
-    let args = if app.field_input.args.is_empty() {
-        "-".to_string()
-    } else {
-        app.field_input.args.join(" ")
-    };
+    let args = format_running_args(app);
 
     let lines = vec![
         Line::from(vec![
@@ -37,6 +33,38 @@ pub(crate) fn render_running(frame: &mut Frame, area: Rect, app: &mut App, theme
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
     frame.render_widget(block, area);
+}
+
+fn format_running_args(app: &App) -> String {
+    if app.field_input.args.is_empty() {
+        return "-".to_string();
+    }
+    let mut args = app.field_input.args.clone();
+    for field in app
+        .field_input
+        .fields
+        .iter()
+        .filter(|field| field.is_secret())
+    {
+        let flag = field
+            .arg
+            .clone()
+            .unwrap_or_else(|| format!("--{}", field.name));
+        for idx in 0..args.len() {
+            if args[idx] == flag {
+                if let Some(value) = args.get_mut(idx + 1) {
+                    *value = crate::adapters::environments::MASKED_ENV_VALUE.to_string();
+                }
+            } else if args[idx].starts_with(&format!("{}=", flag)) {
+                args[idx] = format!(
+                    "{}={}",
+                    flag,
+                    crate::adapters::environments::MASKED_ENV_VALUE
+                );
+            }
+        }
+    }
+    args.join(" ")
 }
 
 #[cfg(test)]
@@ -69,5 +97,31 @@ mod tests {
             .draw(|f| render_running(f, f.size(), &mut app, &theme))
             .unwrap();
         insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn running_args_mask_secret_fields() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+        app.field_input.fields = vec![crate::domain::Field {
+            name: "TOKEN".into(),
+            prompt: None,
+            kind: "secret".into(),
+            order: None,
+            required: None,
+            arg: Some("--token".into()),
+            default: None,
+            choices: None,
+        }];
+        app.field_input.args = vec!["--token".into(), "plain_secret".into()];
+
+        let rendered = format_running_args(&app);
+
+        assert!(rendered.contains("****"));
+        assert!(!rendered.contains("plain_secret"));
     }
 }

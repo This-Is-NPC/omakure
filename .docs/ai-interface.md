@@ -14,12 +14,49 @@ queryable SQLite database.
 - No interactive prompts when invoked in AI mode.
 - Every invocation is recorded in `<workspace>/.history/runs.sqlite`
   with `actor`, optional `reason`, the resolved script path, full
-  argv, exit code, stdout, stderr, start/end timestamps, and a stable
-  `run_id` the agent can quote back later.
+  argv with secret field values redacted, exit code, redacted stdout/stderr,
+  start/end timestamps, and a stable `run_id` the agent can quote back later.
 
 The user remains the gatekeeper at the OS level (file permissions, sudo,
 network). Omakure does not attempt to sandbox what the underlying script
 does.
+
+## Secret handling
+
+Script schemas may declare `Type: "secret"` fields. Secret fields are accepted
+by `omakure describe`, `omakure init --schema-json`, TUI forms, CLI runs, queue
+runs, and HTTP enqueue. `Choices` is not supported on secret fields.
+
+Secret value resolution for a run checks, in order:
+
+1. Direct secret field input (`omakure run --secret FIELD=VALUE`, or HTTP
+   `POST /v1/runs` `secret_fields` when the value is a reconstructable
+   `secret://...` reference for the queued worker).
+2. Forwarded script args using the field's `Arg` or `--<Name>` flag. For HTTP
+   queued runs, secret-field args must be reconstructable `secret://...` refs.
+3. The merged run environment, including the active managed env and any
+   per-run env selection.
+4. The schema field `Default`.
+
+Plain secret values are passed to the child process so the script can use them,
+but stored run args use `<redacted>`. HTTP queued `secret_fields` and forwarded
+secret-field args reject plaintext values because queued workers cannot
+reconstruct them without storing the plaintext. If the supplied value is a `secret://...`
+reference, Omakure resolves it before execution and stores the provider
+reference rather than the resolved plaintext. Supported reference forms are
+`secret://env/NAME`, legacy `secret://env:NAME`, and `secret://provider/key`;
+non-`env` providers read `<workspace>/.omakure/envs/<provider>.conf` and resolve
+`key` from that file.
+
+During execution, Omakure writes resolved plaintext secrets to a short-lived
+0600 redaction file and injects only `OMAKURE_REDACT_SECRETS_FILE` into the
+child. `omakure trace` reads that file so script-emitted trace messages are
+redacted before persistence; `OMAKURE_REDACT_SECRETS` is retained only as a
+legacy trace fallback. Run output redaction removes secret values from captured
+stdout/stderr in plain, JSON-escaped, slash-escaped, and URL-encoded forms.
+Environment values and direct secret values are not persisted as separate
+records in `runs.sqlite`; residual OS exposure remains for explicit process
+argv/env values while the child is running.
 
 ## Storage privacy contract
 
@@ -309,6 +346,10 @@ Flags:
 - `--run-id <id>` — caller-provided id, otherwise one is generated
 - `--parent-run-id <id>` — for chained agent workflows
 - `--no-prompt` — fail fast on missing required fields. Implied by `--json`
+- `--secret FIELD=VALUE` — direct input for schema fields with `Type: "secret"`;
+  prefer provider refs where possible because shell history and process
+  inspection can expose plaintext command-line arguments;
+  stored args redact plaintext values
 - `--json` — always print exactly one envelope on completion
 
 ```bash

@@ -101,6 +101,8 @@ pub struct ListTracesRequest {
 pub struct EnqueueRunRequest {
     pub script: String,
     pub args: Vec<String>,
+    pub env: Option<String>,
+    pub secret_fields: Vec<(String, String)>,
     pub run_id: Option<String>,
     pub actor: String,
     pub reason: Option<String>,
@@ -178,15 +180,18 @@ fn script_schema_from_domain(schema: crate::domain::Schema) -> ScriptSchema {
     let mut fields: Vec<ScriptField> = schema
         .fields
         .into_iter()
-        .map(|field| ScriptField {
-            name: field.name,
-            prompt: field.prompt,
-            kind: field.kind,
-            order: field.order.unwrap_or(0),
-            required: field.required.unwrap_or(false),
-            arg: field.arg,
-            default: field.default,
-            choices: field.choices,
+        .map(|field| {
+            let is_secret = field.is_secret();
+            ScriptField {
+                name: field.name,
+                prompt: field.prompt,
+                kind: field.kind,
+                order: field.order.unwrap_or(0),
+                required: field.required.unwrap_or(false),
+                arg: field.arg,
+                default: (!is_secret).then_some(field.default).flatten(),
+                choices: field.choices,
+            }
         })
         .collect();
     fields.sort_by_key(|field| field.order);
@@ -247,13 +252,63 @@ pub fn run_stats(workspace: &Workspace) -> OperationResult<RunStats> {
 }
 
 pub fn enqueue_run(workspace: &Workspace, request: EnqueueRunRequest) -> OperationResult<RunRow> {
+    enqueue_run_with_access(
+        workspace,
+        request,
+        &crate::secrets::SecretAccess::allow_all(),
+    )
+}
+
+pub fn enqueue_run_with_access(
+    workspace: &Workspace,
+    request: EnqueueRunRequest,
+    secret_access: &crate::secrets::SecretAccess,
+) -> OperationResult<RunRow> {
     let path = resolve_script_path(&request.script, workspace.scripts_root())?;
     let canonical = std::fs::canonicalize(&path).unwrap_or(path);
+    let env_file = request
+        .env
+        .as_deref()
+        .map(|name| crate::operations::envs::env_file_path(workspace, name))
+        .transpose()?;
+    let extra_env =
+        crate::adapters::environments::resolve_run_env(workspace.envs_dir(), env_file.as_deref())
+            .map_err(|err| OperationError::new(OperationErrorCode::InvalidInput, err.to_string()))?;
+    crate::secrets::validate_queued_secret_args_reconstructable(
+        workspace,
+        &canonical,
+        &request.args,
+    )
+    .map_err(|(field, message)| {
+        OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("required field `{}` is missing: {}", field, message),
+        )
+    })?;
+    let resolved_args = crate::secrets::resolve_args_with_access(
+        workspace,
+        &canonical,
+        &request.args,
+        &extra_env,
+        &request.secret_fields,
+        secret_access,
+    )
+    .map_err(|(field, message)| {
+        let code = if message.contains("secrets:use") || message.contains("not allowed") {
+            OperationErrorCode::Forbidden
+        } else {
+            OperationErrorCode::InvalidInput
+        };
+        OperationError::new(
+            code,
+            format!("required field `{}` is missing: {}", field, message),
+        )
+    })?;
     let conn = runs::open(workspace).map_err(io_error_string)?;
     runs::enqueue(
         &conn,
         canonical.to_string_lossy().as_ref(),
-        &request.args,
+        &resolved_args.persisted_args,
         EnqueueOptions {
             run_id: request.run_id,
             actor: request.actor,
@@ -265,6 +320,8 @@ pub fn enqueue_run(workspace: &Workspace, request: EnqueueRunRequest) -> Operati
             script_name: None,
             omakure_version: app_meta::APP_VERSION.to_string(),
             trigger: runs::RunTrigger::Manual,
+            env_name: request.env,
+            allowed_secret_refs: Some(resolved_args.provider_refs),
         },
     )
     .map_err(io_error_string)
@@ -574,6 +631,8 @@ mod tests {
                     .to_string_lossy()
                     .to_string(),
                 args: Vec::new(),
+                env: None,
+                secret_fields: Vec::new(),
                 run_id: None,
                 actor: "agent".into(),
                 reason: None,
@@ -641,6 +700,8 @@ mod tests {
             EnqueueRunRequest {
                 script: "job".into(),
                 args: vec!["--x".into()],
+                env: None,
+                secret_fields: Vec::new(),
                 run_id: Some("rid-op".into()),
                 actor: "agent".into(),
                 reason: Some("test".into()),
@@ -708,6 +769,8 @@ mod tests {
                 script_name: None,
                 omakure_version: app_meta::APP_VERSION.to_string(),
                 trigger: runs::RunTrigger::Manual,
+                env_name: None,
+                allowed_secret_refs: None,
             },
         )
         .unwrap();

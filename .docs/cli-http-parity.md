@@ -32,6 +32,15 @@ through shared operations and the HTTP management API.
 | `omakure queue add <script> --json` | `enqueue_run` | `POST /v1/runs` | Full | HTTP exposes enqueue, not inline run. |
 | `omakure queue cancel <run_id> --json` | `cancel_run` | `POST /v1/runs/{run_id}/cancel` | Full | Shared state transition. |
 | `omakure queue dead-letter <run_id> --json` | `dead_letter_run` | `POST /v1/runs/{run_id}/dead-letter` | Full | Shared state transition. |
+| `omakure env list --json` | `list_envs` | `GET /v1/envs` | Full | Lists managed `.omakure/envs/*.conf` files. |
+| `omakure env create <name> ... --json` | `create_env` | `POST /v1/envs` | Full | Shared env name/key validation. |
+| `omakure env show <name> --json` | `show_env` | `GET /v1/envs/{name}` | Full | Values are redacted by sensitive key. |
+| `omakure env replace <name> ... --json` | `replace_env` | `PUT /v1/envs/{name}` | Full | Rewrites the managed file atomically. |
+| `omakure env set <name> KEY=VALUE --json` | `set_param` | `PATCH /v1/envs/{name}`, `PUT /v1/envs/{name}/params/{key}` | Full | Updates or adds a key. |
+| `omakure env remove <name> <key> --json` | `remove_param` | `DELETE /v1/envs/{name}/params/{key}` | Full | Removes one key. |
+| `omakure env activate <name> --json` | `activate_env` | `POST /v1/envs/{name}/activate` | Full | Writes `.omakure/envs/active`. |
+| `omakure env deactivate --json` | `deactivate_env` | `DELETE /v1/envs/active` | Full | Clears active env. |
+| `omakure env delete <name> --json` | `delete_env` | `DELETE /v1/envs/{name}` | Full | Deletes the managed file and clears active if needed. |
 | `omakure battery list --json` | `list_batteries` | `GET /v1/batteries` | Full | Shared Battery operation. |
 | `omakure battery add <url> --json` | `add_battery` | `POST /v1/batteries` | Partial | HTTP accepts HTTPS sources only. |
 | `omakure battery sync <name> --json` | `sync_battery` | `POST /v1/batteries/{battery_id}/sync` | Full | Shared operation. |

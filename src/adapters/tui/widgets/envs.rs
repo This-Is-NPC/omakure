@@ -5,6 +5,7 @@ use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
 
 use super::super::app::App;
+use super::super::state::EnvEditorMode;
 use super::super::theme::{self, Theme};
 use super::common::{horizontal_split, standard_screen_layout};
 use super::table_style;
@@ -72,6 +73,17 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
             Span::raw(err),
         ]));
     }
+    if let Some(mode) = app.environment.editor_mode {
+        let prompt = match mode {
+            EnvEditorMode::Create => "Create: name KEY=value ...",
+            EnvEditorMode::Edit => "Edit selected: KEY=value ...",
+        };
+        info_lines.push(Line::from(vec![
+            Span::styled(prompt, Style::default().fg(theme.semantic.warning.color())),
+            Span::raw(" "),
+            Span::raw(mask_editor_input(&app.environment.editor_input)),
+        ]));
+    }
     let info_height = info_lines.len() as u16 + 2;
 
     let chunks = standard_screen_layout(inner, info_height, 2);
@@ -127,10 +139,31 @@ pub(crate) fn render_envs(frame: &mut Frame, area: Rect, app: &mut App, theme: &
     let footer_text = if app.prefix_pending {
         "-- PREFIX --  [s]earch  [e]nvs  [h]istory  [c]schedules  [q]uit"
     } else {
-        "Up/Down move, PgUp/PgDn scroll, Enter activate, d deactivate, r reload, Esc back, Ctrl+/ nav"
+        "n create, e edit param, Enter activate, d deactivate, x/delete remove, r reload, Esc back, Ctrl+/ nav"
     };
     let footer = Paragraph::new(footer_text).style(theme.text_secondary());
     frame.render_widget(footer, chunks[2]);
+}
+
+fn mask_editor_input(input: &str) -> String {
+    input
+        .split_whitespace()
+        .map(|part| {
+            let Some((key, _value)) = part.split_once('=') else {
+                return part.to_string();
+            };
+            if crate::adapters::environments::is_sensitive_key(key) {
+                format!(
+                    "{}={}",
+                    key,
+                    crate::adapters::environments::MASKED_ENV_VALUE
+                )
+            } else {
+                part.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]
@@ -216,6 +249,18 @@ mod tests {
         assert_eq!(lines.len(), 1);
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn mask_editor_input_hides_sensitive_values() {
+        let masked = mask_editor_input("HOST=prod TOKEN=plain_secret API_KEY=abc PORT=443");
+
+        assert!(masked.contains("HOST=prod"));
+        assert!(masked.contains("PORT=443"));
+        assert!(masked.contains("TOKEN=****"));
+        assert!(masked.contains("API_KEY=****"));
+        assert!(!masked.contains("plain_secret"));
+        assert!(!masked.contains("API_KEY=abc"));
     }
 
     #[test]

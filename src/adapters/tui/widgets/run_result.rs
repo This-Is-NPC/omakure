@@ -7,7 +7,9 @@ use std::path::PathBuf;
 use super::super::app::{App, ExecutionStatus};
 use super::super::theme::Theme;
 use super::common::status_label_and_style;
-use super::history::format_run_output;
+use super::history::{
+    format_args_human_redacted, format_run_output_redacted, inferred_arg_secrets,
+};
 
 pub(crate) fn render_run_result(frame: &mut Frame, area: Rect, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
@@ -50,11 +52,8 @@ fn render_lines(app: &App, theme: &Theme) -> Vec<Line<'static>> {
     };
 
     let name = app.display_path(&PathBuf::from(&entry.script_path));
-    let args = match serde_json::from_str::<Vec<String>>(&entry.args_json) {
-        Ok(args) if args.is_empty() => "-".to_string(),
-        Ok(args) => args.join(" "),
-        Err(_) => entry.args_json.clone(),
-    };
+    let secrets = inferred_arg_secrets(&entry.args_json);
+    let args = format_args_human_redacted(&entry.args_json, &secrets);
     let status = ExecutionStatus::from_run(entry);
     let (status_label, status_style) = status_label_and_style(&status, theme);
     lines.push(Line::from(format!("Script: {}", name)));
@@ -64,7 +63,7 @@ fn render_lines(app: &App, theme: &Theme) -> Vec<Line<'static>> {
         Span::styled(status_label, status_style),
     ]));
     lines.push(Line::from(""));
-    let output = format_run_output(entry);
+    let output = format_run_output_redacted(entry, &secrets);
     if output.trim().is_empty() {
         lines.push(Line::from("(no output)"));
     } else {
@@ -83,6 +82,15 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use tempfile::TempDir;
+
+    fn rendered(backend: &TestBackend) -> String {
+        backend
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    }
 
     fn make_run_row(success: bool, stdout: &str, stderr: &str) -> RunRow {
         RunRow {
@@ -171,5 +179,27 @@ mod tests {
             .draw(|f| render_run_result(f, f.size(), &mut app, &theme))
             .unwrap();
         insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn render_run_result_masks_secret_like_args_and_output() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut row = make_run_row(true, "token=plain-secret-value\n", "");
+        row.args_json = r#"["--token","plain-secret-value","--target","prod"]"#.into();
+        let mut app = App::test_new(&svc, ws, vec![], vec![row]);
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_run_result(f, f.size(), &mut app, &theme))
+            .unwrap();
+        let output = rendered(terminal.backend());
+
+        assert!(!output.contains("plain-secret-value"));
     }
 }

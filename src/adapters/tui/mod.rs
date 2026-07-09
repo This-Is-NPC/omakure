@@ -161,11 +161,24 @@ fn run_through_state_machine(
 ) -> Option<RunRow> {
     let canonical = std::fs::canonicalize(script).unwrap_or_else(|_| script.to_path_buf());
     let canonical_str = canonical.to_string_lossy().to_string();
+    // Layer 2 of the env-injection precedence table
+    // (`.docs/env-injection-spec.md` §1): the active managed env. Reserved
+    // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
+    // and remain non-overridable.
+    let extra_env = crate::adapters::environments::resolve_active_env(workspace.envs_dir());
+    let resolved_args = crate::secrets::resolve_args_with_direct_secrets(
+        workspace,
+        &canonical,
+        args,
+        &extra_env,
+        &[],
+    )
+    .ok()?;
     let conn = runs::open(workspace).ok()?;
     let row = runs::start_inline(
         &conn,
         &canonical_str,
-        args,
+        &resolved_args.persisted_args,
         &format!("inline:{}", std::process::id()),
         EnqueueOptions {
             actor: "human".into(),
@@ -176,12 +189,10 @@ fn run_through_state_machine(
     .ok()?;
     drop(conn);
 
-    // Layer 2 of the env-injection precedence table
-    // (`.docs/env-injection-spec.md` §1): the active managed env. Reserved
-    // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
-    // and remain non-overridable.
-    let extra_env = crate::adapters::environments::resolve_active_env(workspace.envs_dir());
-    let result = execute_with_heartbeat(workspace, &row, extra_env, None);
+    let mut execution_row = row.clone();
+    execution_row.args_json = serde_json::to_string(&resolved_args.execution_args)
+        .unwrap_or_else(|_| row.args_json.clone());
+    let result = execute_with_heartbeat(workspace, &execution_row, extra_env, None);
     let conn = runs::open(workspace).ok()?;
     let _ = match result.terminal {
         ExecutionTerminal::Completed => runs::complete(&conn, &row.run_id, result.completion),
@@ -289,6 +300,37 @@ mod tests {
             "expected injected var in stdout, got: {:?}",
             row.stdout
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn tui_run_persists_redacted_secret_args_only() {
+        let dir = std::env::temp_dir().join(format!(
+            "omakure_tui_secret_{}_{}",
+            std::process::id(),
+            runs::current_unix_ms()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let ws = Workspace::new(dir.clone());
+        ws.ensure_layout().unwrap();
+
+        let script = write_bash_stub(
+            ws.root(),
+            "secret.sh",
+            r#"# OMAKURE_SCHEMA_START
+# {"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}
+# OMAKURE_SCHEMA_END
+echo "$2""#,
+        );
+        let row =
+            run_through_state_machine(&ws, &script, &["--token".into(), "tui_plain_secret".into()])
+                .unwrap();
+
+        assert_eq!(row.state, RunState::Completed);
+        assert!(row.args_json.contains(crate::secrets::REDACTED));
+        assert!(!row.args_json.contains("tui_plain_secret"));
+        assert!(!row.stdout.contains("tui_plain_secret"));
         let _ = fs::remove_dir_all(&dir);
     }
 }

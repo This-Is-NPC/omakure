@@ -2,6 +2,7 @@ pub mod battery;
 pub mod config;
 pub mod core;
 pub mod doctor;
+pub mod envs;
 pub mod scripts;
 pub mod search;
 
@@ -14,6 +15,7 @@ pub type OperationResult<T> = Result<T, OperationError>;
 #[serde(rename_all = "snake_case")]
 pub enum OperationErrorCode {
     InvalidInput,
+    Forbidden,
     NotFound,
     AlreadyExists,
     NotSynced,
@@ -31,6 +33,7 @@ impl OperationErrorCode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::InvalidInput => "invalid_input",
+            Self::Forbidden => "forbidden",
             Self::NotFound => "not_found",
             Self::AlreadyExists => "already_exists",
             Self::NotSynced => "not_synced",
@@ -77,6 +80,7 @@ mod tests {
     fn operation_error_codes_match_battery_contract() {
         let cases = [
             (OperationErrorCode::InvalidInput, "invalid_input"),
+            (OperationErrorCode::Forbidden, "forbidden"),
             (OperationErrorCode::NotFound, "not_found"),
             (OperationErrorCode::AlreadyExists, "already_exists"),
             (OperationErrorCode::NotSynced, "not_synced"),

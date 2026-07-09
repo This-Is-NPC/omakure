@@ -30,7 +30,7 @@ pub fn normalize_input(field: &Field, input: &str) -> Result<Option<String>, Sch
 
     let kind = field.kind.to_lowercase();
     match kind.as_str() {
-        "string" => Ok(Some(raw_value)),
+        "string" | "secret" => Ok(Some(raw_value)),
         "number" => {
             if raw_value.parse::<f64>().is_err() {
                 return Err(SchemaError::InvalidNumber);
@@ -75,6 +75,13 @@ mod tests {
         let field = make_field("name", "string", false);
         let result = normalize_input(&field, "  hello world  ").unwrap();
         assert_eq!(result, Some("hello world".to_string()));
+    }
+
+    #[test]
+    fn test_normalize_input_secret_is_string_like() {
+        let field = make_field("token", "secret", false);
+        let result = normalize_input(&field, "  ghp_secret  ").unwrap();
+        assert_eq!(result, Some("ghp_secret".to_string()));
     }
 
     #[test]

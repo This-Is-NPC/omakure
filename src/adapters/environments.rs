@@ -840,6 +840,19 @@ pub(crate) fn value_contains_credentials(value: &str) -> bool {
     colon > 0 && colon + 1 < userinfo.len()
 }
 
+/// Decide whether a managed-env value should be masked (`****`) on read paths
+/// (`env show`, `GET /v1/envs/:name`).
+///
+/// This is a best-effort **denylist heuristic** — it masks values whose key
+/// looks sensitive ([`is_sensitive_key`]) or whose value embeds URL
+/// credentials ([`value_contains_credentials`]). It CANNOT catch a real secret
+/// stored under an innocuous key with an opaque value (e.g.
+/// `DEPLOY_HOOK=T00xxxxSECRET`); such a value is returned in cleartext.
+///
+/// Managed envs are config, not a secret store: operators must put real
+/// secrets behind `secret://` refs (env/file providers), which the redaction
+/// pipeline covers end-to-end at rest and in output, rather than relying on
+/// this display mask.
 pub(crate) fn should_mask_env_value(key: &str, value: &str) -> bool {
     !value.is_empty() && (is_sensitive_key(key) || value_contains_credentials(value))
 }

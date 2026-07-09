@@ -176,7 +176,7 @@ pub fn resolve_args_with_access(
                 Some(value) => {
                     resolved = Some(ResolvedSecretValue {
                         value,
-                        provider_ref: is_secret_ref(&candidate).then_some(candidate),
+                        provider_ref: canonical_secret_ref(&candidate),
                     });
                     break;
                 }
@@ -197,9 +197,6 @@ pub fn resolve_args_with_access(
             continue;
         };
 
-        if value.value.is_empty() {
-            continue;
-        }
         let persisted_value = value.provider_ref.as_deref().unwrap_or(REDACTED);
         if let Some(provider_ref) = &value.provider_ref {
             if !provider_refs
@@ -209,14 +206,20 @@ pub fn resolve_args_with_access(
                 provider_refs.push(provider_ref.clone());
             }
         }
+        // Replace any existing occurrence of the flag (e.g. a literal
+        // `secret://` ref passed on the command line) with the resolved value —
+        // even when that value is empty, so the child never receives the raw
+        // ref. Only append a brand-new flag when there is a non-empty value to
+        // pass.
+        let existed = set_existing_arg_value(&mut execution_args, &flag, &value.value);
         set_existing_arg_value(&mut persisted_args, &flag, persisted_value);
-        if !set_existing_arg_value(&mut execution_args, &flag, &value.value) {
+        if !existed && !value.value.is_empty() {
             execution_args.push(flag.clone());
             execution_args.push(value.value.clone());
             persisted_args.push(flag);
             persisted_args.push(persisted_value.to_string());
         }
-        if !secrets.iter().any(|secret| secret == &value.value) {
+        if !value.value.is_empty() && !secrets.iter().any(|secret| secret == &value.value) {
             secrets.push(value.value);
         }
     }
@@ -388,8 +391,21 @@ fn resolve_secret_ref(
     resolve_file_secret(workspace, &secret_ref)
 }
 
-fn is_secret_ref(value: &str) -> bool {
-    value.starts_with("secret://")
+/// Normalize an accepted secret-ref spelling to its canonical
+/// `secret://provider/key` form so persisted `provider_refs` (a run's stored
+/// allow-list) always match what [`SecretAccess::can_use`] compares against.
+/// Returns `None` for plaintext literals (non-refs). Without this, the colon
+/// form `secret://env:NAME` would be persisted verbatim yet compared against
+/// the canonical `secret://env/NAME`, denying the queued run at worker
+/// re-resolution.
+fn canonical_secret_ref(value: &str) -> Option<String> {
+    if let Some(name) = value.strip_prefix("secret://env:") {
+        if name.is_empty() {
+            return None;
+        }
+        return Some(format!("secret://env/{name}"));
+    }
+    SecretRef::parse(value).map(|secret_ref| secret_ref.canonical())
 }
 
 fn resolve_env_secret(
@@ -499,6 +515,93 @@ mod tests {
         );
         assert_eq!(resolved.secrets, vec!["from_process_env"]);
         std::env::remove_var("OMAKURE_TEST_SECRET_REF");
+    }
+
+    #[test]
+    fn empty_env_secret_replaces_literal_ref_in_execution_args() {
+        let tmp = TempDir::new().unwrap();
+        let (workspace, script) = script_with_secret(&tmp);
+        std::env::set_var("OMAKURE_TEST_EMPTY_SECRET", "");
+
+        let resolved = resolve_args_with_access(
+            &workspace,
+            &script,
+            &[
+                "--token".into(),
+                "secret://env/OMAKURE_TEST_EMPTY_SECRET".into(),
+            ],
+            &[],
+            &[],
+            &SecretAccess::allow_all(),
+        )
+        .unwrap();
+
+        // Regression: an empty resolved value must REPLACE the literal ref, not
+        // be skipped — previously the child received `--token secret://env/...`.
+        assert_eq!(resolved.execution_args, vec!["--token", ""]);
+        assert!(
+            !resolved
+                .execution_args
+                .iter()
+                .any(|arg| arg.starts_with("secret://")),
+            "literal secret ref leaked into execution args: {:?}",
+            resolved.execution_args
+        );
+        assert_eq!(
+            resolved.persisted_args,
+            vec!["--token", "secret://env/OMAKURE_TEST_EMPTY_SECRET"]
+        );
+        // An empty value must not enter the redaction list.
+        assert!(resolved.secrets.is_empty());
+        std::env::remove_var("OMAKURE_TEST_EMPTY_SECRET");
+    }
+
+    #[test]
+    fn colon_form_env_ref_persists_canonical_and_reconstructs_under_stored_acl() {
+        let tmp = TempDir::new().unwrap();
+        let (workspace, script) = script_with_secret(&tmp);
+        std::env::set_var("OMAKURE_TEST_COLON_REF", "colon_value");
+
+        // Enqueue-time resolution (allow-all) collects the provider_ref that is
+        // stored as the run's allow-list.
+        let enqueue = resolve_args_with_access(
+            &workspace,
+            &script,
+            &[
+                "--token".into(),
+                "secret://env:OMAKURE_TEST_COLON_REF".into(),
+            ],
+            &[],
+            &[],
+            &SecretAccess::allow_all(),
+        )
+        .unwrap();
+
+        // Regression: colon form must be normalized to canonical slash form so
+        // the stored allow-list matches what `can_use` compares against.
+        assert_eq!(
+            enqueue.persisted_args,
+            vec!["--token", "secret://env/OMAKURE_TEST_COLON_REF"]
+        );
+        assert_eq!(
+            enqueue.provider_refs,
+            vec!["secret://env/OMAKURE_TEST_COLON_REF"]
+        );
+
+        // Worker re-resolution using ONLY the stored allow-list must succeed
+        // (previously denied: ACL held `env:NAME` but compared `env/NAME`).
+        let access = SecretAccess::new(["secrets:use"], enqueue.provider_refs.clone());
+        let reresolved = resolve_args_with_access(
+            &workspace,
+            &script,
+            &enqueue.persisted_args,
+            &[],
+            &[],
+            &access,
+        )
+        .unwrap();
+        assert_eq!(reresolved.execution_args, vec!["--token", "colon_value"]);
+        std::env::remove_var("OMAKURE_TEST_COLON_REF");
     }
 
     #[test]

@@ -20,6 +20,16 @@ enum RouteCoverage {
 /// Inventory of every `(method, route)` declared by `src/cli/api.rs` router.
 /// Coverage notes stay here; the route list itself is parsed from
 /// `HTTP_ROUTE_INVENTORY` markers in `src/cli/api.rs`.
+///
+/// Coverage-guarantee boundary: this is a DRIFT TRIPWIRE. The keys are asserted
+/// to equal `HTTP_ROUTE_INVENTORY` (and that inventory is asserted equal to the
+/// router's `.route(...)` registrations in `src/cli/api.rs`), so a route added
+/// to the router without an inventory entry fails the suite. The
+/// `Covered("test_name")` note is a human-authored pointer — it is NOT asserted
+/// to reference a test that actually calls the route. A route can be "listed
+/// but unexercised" if a note is added without a matching request assertion;
+/// the behavioral coverage lives in the `#[test]` fns below and is kept in
+/// lockstep by hand.
 const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
     (
         ("GET", "/v1/health"),
@@ -536,17 +546,51 @@ fn scripts_search_tree_family_routes() {
         .unwrap_or("")
         .contains("OMAKURE_SCHEMA_START"));
 
+    // The HTTP search endpoint reads the FTS index without refreshing it
+    // (refresh: false), so populate the index first via the CLI — the same
+    // precondition a user hits after running `omakure search` once.
+    let refresh = omakure(workspace.path(), &["search", "job"]);
+    assert_success(&refresh);
+
     let search = server.get("/v1/search?q=job");
     assert_eq!(search.status, 200, "body: {}", search.safe_body());
-    assert_eq!(search.json()["ok"], true);
+    let search_json = search.json();
+    assert!(
+        search_json["data"]
+            .as_array()
+            .expect("search data")
+            .iter()
+            .any(|entry| entry["relative_path"] == "tools/job.sh"),
+        "search must return the matching script, got: {}",
+        search.safe_body()
+    );
 
+    // Tree root lists the `tools` directory; drilling into it lists the script.
     let tree = server.get("/v1/tree");
     assert_eq!(tree.status, 200, "body: {}", tree.safe_body());
-    assert_eq!(tree.json()["ok"], true);
+    let tree_json = tree.json();
+    assert!(
+        tree_json["data"]
+            .as_array()
+            .expect("tree data")
+            .iter()
+            .any(|entry| entry["name"] == "tools" && entry["kind"] == "directory"),
+        "tree root must list the tools directory, got: {}",
+        tree.safe_body()
+    );
 
     let tree_path = server.get("/v1/tree/tools");
     assert_eq!(tree_path.status, 200, "body: {}", tree_path.safe_body());
-    assert_eq!(tree_path.json()["ok"], true);
+    let tree_path_json = tree_path.json();
+    assert!(
+        tree_path_json["data"]
+            .as_array()
+            .expect("tree path data")
+            .iter()
+            .any(|entry| entry["name"] == "job.sh" && entry["kind"] == "script"),
+        "tree/tools must list job.sh as a script, got: {}",
+        tree_path.safe_body()
+    );
 }
 
 #[test]
@@ -729,12 +773,46 @@ fn runs_queue_family_routes() {
     assert_eq!(traces.status, 200, "body: {}", traces.safe_body());
     assert_eq!(traces.json()["ok"], true);
 
-    let list = server.get("/v1/runs?state_set=all");
-    assert_eq!(list.status, 200, "body: {}", list.safe_body());
+    // Both runs are terminal: cancelled (http-cancel-me) and dead_letter
+    // (http-dead-letter). Prove each filter selects the right subset.
+    let all = server.get("/v1/runs?state_set=all");
+    assert_eq!(all.status, 200, "body: {}", all.safe_body());
+    let all_ids = run_ids(&all.json());
+    assert!(all_ids.iter().any(|id| id == "http-cancel-me"));
+    assert!(all_ids.iter().any(|id| id == "http-dead-letter"));
+
+    // in_flight excludes both terminal runs.
+    let in_flight = server.get("/v1/runs?state_set=in_flight");
+    assert_eq!(in_flight.status, 200, "body: {}", in_flight.safe_body());
+    let in_flight_ids = run_ids(&in_flight.json());
+    assert!(
+        !in_flight_ids.iter().any(|id| id == "http-cancel-me")
+            && !in_flight_ids.iter().any(|id| id == "http-dead-letter"),
+        "in_flight must exclude terminal runs, got: {in_flight_ids:?}"
+    );
+
+    // state=cancelled selects only the cancelled run.
+    let cancelled = server.get("/v1/runs?state=cancelled");
+    assert_eq!(cancelled.status, 200, "body: {}", cancelled.safe_body());
+    let cancelled_ids = run_ids(&cancelled.json());
+    assert!(cancelled_ids.iter().any(|id| id == "http-cancel-me"));
+    assert!(
+        !cancelled_ids.iter().any(|id| id == "http-dead-letter"),
+        "state=cancelled must exclude the dead-letter run, got: {cancelled_ids:?}"
+    );
 
     let stats = server.get("/v1/queue/stats");
     assert_eq!(stats.status, 200, "body: {}", stats.safe_body());
-    assert!(stats.json()["data"]["counts_by_state"].is_object());
+    let counts = &stats.json()["data"]["counts_by_state"];
+    assert!(counts.is_object());
+    assert!(
+        counts["cancelled"].as_u64().unwrap_or(0) >= 1,
+        "queue stats must count the cancelled run (counts={counts})"
+    );
+    assert!(
+        counts["dead_letter"].as_u64().unwrap_or(0) >= 1,
+        "queue stats must count the dead-letter run (counts={counts})"
+    );
 }
 
 #[test]
@@ -903,6 +981,17 @@ fn rewrite_battery_git_url(workspace: &Path, name: &str, git_url: &str) {
         serde_json::to_string_pretty(&registry).expect("serialize registry"),
     )
     .expect("write batteries registry");
+}
+
+/// Collect `run_id` values from a runs-list envelope so filter tests can assert
+/// exact set membership (inclusion AND exclusion).
+fn run_ids(envelope: &Value) -> Vec<String> {
+    envelope["data"]
+        .as_array()
+        .expect("runs list data array")
+        .iter()
+        .filter_map(|row| row["run_id"].as_str().map(str::to_string))
+        .collect()
 }
 
 fn rewrite_battery_git_url_to_https(workspace: &Path, name: &str) {

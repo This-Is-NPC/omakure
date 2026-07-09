@@ -6,6 +6,19 @@ use std::path::Path;
 use std::process::Output;
 use std::time::Duration;
 
+// Coverage-guarantee boundary (read before trusting this inventory):
+//
+// `command_surface_inventory_maps_all_current_commands` is a DRIFT TRIPWIRE,
+// not a proof of behavioral coverage. It mechanically asserts that this
+// inventory equals the clap command set (`omakure --help`), so a command
+// added to `src/cli/args.rs` without an inventory entry fails the suite. The
+// `Covered("path")` string is a human-authored pointer to where the command is
+// exercised — it is NOT asserted to reference a test that actually invokes the
+// command. A command can therefore be "listed but unexercised" if someone adds
+// an inventory row without a matching black-box assertion. The behavioral
+// coverage itself lives in the `#[test]` functions below; keep them in lockstep
+// with the inventory by hand.
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Coverage {
     Covered(&'static str),
@@ -425,6 +438,15 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_theme_a
 
     let serve_once = omakure(workspace.path(), &["serve", "--once", "--no-worker"]);
     assert_success(&serve_once);
+    // Prove the one-shot loop actually started and shut down cleanly rather than
+    // parsing args and exiting: the daemon log must record both lifecycle lines.
+    let daemon_log = fs::read_to_string(workspace.path().join(".omakure/daemon.log"))
+        .expect("serve --once must write .omakure/daemon.log");
+    assert!(
+        daemon_log.contains("serve started") && daemon_log.contains("serve stopped"),
+        "serve --once must log start+stop lifecycle (log len={})",
+        daemon_log.len()
+    );
 
     // Host-safe boundary: status probe must not mutate systemd units.
     let serve_status = omakure(workspace.path(), &["serve", "--status"]);
@@ -550,28 +572,8 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
         .expect("run id")
         .to_string();
 
-    let history_state = omakure(
-        workspace.path(),
-        &["--json", "history", "list", "--state", "completed"],
-    );
-    assert_success(&history_state);
-    assert!(json(&history_state)["data"]
-        .as_array()
-        .expect("history data")
-        .iter()
-        .any(|row| row["run_id"] == run_id));
-
-    let history_set = omakure(
-        workspace.path(),
-        &["--json", "history", "list", "--state-set", "terminal"],
-    );
-    assert_success(&history_set);
-    assert_eq!(json(&history_set)["ok"], true);
-
-    let show = omakure(workspace.path(), &["--json", "history", "show", &run_id]);
-    assert_success(&show);
-    assert_eq!(json(&show)["data"]["run_id"], run_id);
-
+    // Enqueue (but do not run) a job so history filters have both a terminal
+    // (completed) run and an in-flight (queued) run to discriminate between.
     let queued = omakure(
         workspace.path(),
         &[
@@ -590,6 +592,60 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
     assert_success(&queued);
     assert_eq!(json(&queued)["data"]["run_id"], "prio-timeout");
     assert_eq!(json(&queued)["data"]["priority"], 9);
+
+    // `--state completed` must include the completed run and EXCLUDE the queued
+    // one — proves the filter restricts rather than returning everything.
+    let history_state = omakure(
+        workspace.path(),
+        &["--json", "history", "list", "--state", "completed"],
+    );
+    assert_success(&history_state);
+    let completed_ids = history_run_ids(&history_state);
+    assert!(
+        completed_ids.contains(&run_id),
+        "--state completed must include the completed run"
+    );
+    assert!(
+        !completed_ids.iter().any(|id| id == "prio-timeout"),
+        "--state completed must exclude the queued run"
+    );
+
+    // `--state-set terminal` includes completed, excludes queued.
+    let history_terminal = omakure(
+        workspace.path(),
+        &["--json", "history", "list", "--state-set", "terminal"],
+    );
+    assert_success(&history_terminal);
+    let terminal_ids = history_run_ids(&history_terminal);
+    assert!(
+        terminal_ids.contains(&run_id),
+        "--state-set terminal must include the completed run"
+    );
+    assert!(
+        !terminal_ids.iter().any(|id| id == "prio-timeout"),
+        "--state-set terminal must exclude the queued run"
+    );
+
+    // `--state-set in_flight` is the mirror image: includes queued, excludes
+    // completed.
+    let history_in_flight = omakure(
+        workspace.path(),
+        &["--json", "history", "list", "--state-set", "in_flight"],
+    );
+    assert_success(&history_in_flight);
+    let in_flight_ids = history_run_ids(&history_in_flight);
+    assert!(
+        in_flight_ids.iter().any(|id| id == "prio-timeout"),
+        "--state-set in_flight must include the queued run"
+    );
+    assert!(
+        !in_flight_ids.contains(&run_id),
+        "--state-set in_flight must exclude the completed run"
+    );
+
+    let show = omakure(workspace.path(), &["--json", "history", "show", &run_id]);
+    assert_success(&show);
+    assert_eq!(json(&show)["data"]["run_id"], run_id);
 
     let cancel = omakure(
         workspace.path(),
@@ -630,16 +686,62 @@ echo traced"##,
         .expect("run id")
         .to_string();
 
+    // A second run guarantees history holds >= 2 rows, so `--limit 1` is
+    // actually discriminating rather than trivially satisfied.
+    let run2 = omakure_with_env(
+        workspace.path(),
+        &["--json", "run", "trace.sh"],
+        &[("OMAKURE_BIN", omakure_bin.as_str())],
+    );
+    assert_success(&run2);
+
     for args in [
         vec!["--json", "history", "list"],
-        vec!["--json", "history", "tail", "--limit", "1"],
-        vec!["--json", "history", "stats"],
         vec!["--json", "history", "traces", &run_id],
     ] {
         let output = omakure(workspace.path(), &args);
         assert_success(&output);
         assert_eq!(json(&output)["ok"], true);
     }
+
+    // Two completed runs exist: stats must report them, not an empty summary.
+    let stats = omakure(workspace.path(), &["--json", "history", "stats"]);
+    assert_success(&stats);
+    let stats_data = &json(&stats)["data"];
+    assert!(
+        stats_data["total"].as_u64().unwrap_or(0) >= 2,
+        "history stats total must count both runs (data={stats_data})"
+    );
+    assert!(
+        stats_data["counts_by_state"]["completed"]
+            .as_u64()
+            .unwrap_or(0)
+            >= 2,
+        "history stats must report the completed runs (data={stats_data})"
+    );
+
+    // `history list` sees both runs; `tail --limit 1` must cap the result to
+    // exactly one row.
+    let full_history = omakure(workspace.path(), &["--json", "history", "list"]);
+    assert_success(&full_history);
+    assert!(
+        json(&full_history)["data"]
+            .as_array()
+            .expect("history list data")
+            .len()
+            >= 2,
+        "expected >= 2 history rows before asserting --limit caps"
+    );
+    let tail_one = omakure(
+        workspace.path(),
+        &["--json", "history", "tail", "--limit", "1"],
+    );
+    assert_success(&tail_one);
+    assert_eq!(
+        json(&tail_one)["data"].as_array().expect("tail data").len(),
+        1,
+        "--limit 1 must return exactly one row"
+    );
 
     let traces = omakure(workspace.path(), &["--json", "history", "traces", &run_id]);
     assert!(json(&traces)["data"]
@@ -692,7 +794,18 @@ echo traced"##,
 
     let stats = omakure(workspace.path(), &["--json", "queue", "stats"]);
     assert_success(&stats);
-    assert!(json(&stats)["data"]["counts_by_state"].is_object());
+    let counts = &json(&stats)["data"]["counts_by_state"];
+    assert!(counts.is_object());
+    // The two jobs above ended in distinct terminal states; stats must reflect
+    // them rather than returning an empty/placeholder map.
+    assert!(
+        counts["cancelled"].as_u64().unwrap_or(0) >= 1,
+        "queue stats must count the cancelled job (counts={counts})"
+    );
+    assert!(
+        counts["dead_letter"].as_u64().unwrap_or(0) >= 1,
+        "queue stats must count the dead-letter job (counts={counts})"
+    );
 
     let delete = omakure(workspace.path(), &["--json", "env", "delete", "prod"]);
     assert_success(&delete);
@@ -717,17 +830,45 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     );
     assert_success(&add);
 
-    for args in [
-        vec!["--json", "battery", "list"],
-        vec!["--json", "battery", "sync", "local"],
-        vec!["--json", "battery", "inspect", "local"],
-        vec!["--json", "battery", "scripts", "local"],
-        vec!["--json", "battery", "install", "local", "local.echo"],
-    ] {
-        let output = omakure(workspace.path(), &args);
-        assert_success(&output);
-        assert_eq!(json(&output)["ok"], true);
-    }
+    let sync = omakure(workspace.path(), &["--json", "battery", "sync", "local"]);
+    assert_success(&sync);
+
+    // list must contain the registered battery by name.
+    let list = omakure(workspace.path(), &["--json", "battery", "list"]);
+    assert_success(&list);
+    assert!(
+        json(&list)["data"]
+            .as_array()
+            .expect("battery list data")
+            .iter()
+            .any(|entry| entry["name"] == "local" || entry["summary"]["name"] == "local"),
+        "battery list must include the registered battery, got: {}",
+        String::from_utf8_lossy(&list.stdout)
+    );
+
+    // inspect must resolve the battery summary by name.
+    let inspect = omakure(workspace.path(), &["--json", "battery", "inspect", "local"]);
+    assert_success(&inspect);
+    assert_eq!(json(&inspect)["data"]["summary"]["name"], "local");
+
+    // scripts must list the fixture's script id.
+    let scripts = omakure(workspace.path(), &["--json", "battery", "scripts", "local"]);
+    assert_success(&scripts);
+    assert!(
+        json(&scripts)["data"]
+            .as_array()
+            .expect("battery scripts data")
+            .iter()
+            .any(|entry| entry["id"] == "local.echo"),
+        "battery scripts must list local.echo, got: {}",
+        String::from_utf8_lossy(&scripts.stdout)
+    );
+
+    let install = omakure(
+        workspace.path(),
+        &["--json", "battery", "install", "local", "local.echo"],
+    );
+    assert_success(&install);
     assert!(workspace.path().join("scripts/echo.sh").exists());
 
     // Second install without --force should fail; --force overwrites.
@@ -795,4 +936,15 @@ fn assert_success(output: &Output) {
 
 fn json(output: &Output) -> Value {
     support::json_envelope(&output.stdout)
+}
+
+/// Extract the `run_id` values from a `history list --json` envelope so filter
+/// tests can assert exact set membership (inclusion AND exclusion).
+fn history_run_ids(output: &Output) -> Vec<String> {
+    json(output)["data"]
+        .as_array()
+        .expect("history data array")
+        .iter()
+        .filter_map(|row| row["run_id"].as_str().map(str::to_string))
+        .collect()
 }

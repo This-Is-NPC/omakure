@@ -28,6 +28,14 @@ pub trait EnvironmentRepository {
     fn load_environment_config(&self) -> AppResult<EnvironmentConfig>;
     fn set_active_env(&self, name: Option<&str>) -> AppResult<()>;
     fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview>;
+    fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>;
+    fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview>;
+    fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>;
+    fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()>;
+    fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()>;
+    fn activate_env(&self, name: &str) -> AppResult<()>;
+    fn deactivate_env(&self) -> AppResult<()>;
+    fn delete_env(&self, name: &str) -> AppResult<()>;
 }
 
 #[cfg(test)]

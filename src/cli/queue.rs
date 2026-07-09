@@ -59,6 +59,8 @@ fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(
         EnqueueRunRequest {
             script: opts.script,
             args: opts.args,
+            env: None,
+            secret_fields: Vec::new(),
             run_id: opts.run_id,
             actor: opts.actor,
             reason: opts.reason,
@@ -251,7 +253,37 @@ fn execute_and_finalize(workspace: &Workspace, row: &RunRow, cancel_flag: Arc<At
     // (`.docs/env-injection-spec.md` §1): the active managed env. Reserved
     // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
     // and remain non-overridable.
-    let extra_env = crate::adapters::environments::resolve_active_env(workspace.envs_dir());
+    let run_env_name = runs::open(workspace)
+        .ok()
+        .and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());
+    let extra_env = match run_env_name.as_deref() {
+        Some(name) => {
+            let path = match crate::operations::envs::env_file_path(workspace, name) {
+                Ok(path) => path,
+                Err(err) => {
+                    fail_without_execution(
+                        workspace,
+                        row,
+                        format!("queued env resolution failed: {}", err.message),
+                    );
+                    return;
+                }
+            };
+            match crate::adapters::environments::resolve_run_env(workspace.envs_dir(), Some(&path))
+            {
+                Ok(env) => env,
+                Err(err) => {
+                    fail_without_execution(
+                        workspace,
+                        row,
+                        format!("queued env resolution failed: {err}"),
+                    );
+                    return;
+                }
+            }
+        }
+        None => crate::adapters::environments::resolve_active_env(workspace.envs_dir()),
+    };
     let result = execute_with_heartbeat(workspace, row, extra_env, Some(cancel_flag));
     let conn = match runs::open(workspace) {
         Ok(c) => c,
@@ -275,6 +307,23 @@ fn execute_and_finalize(workspace: &Workspace, row: &RunRow, cancel_flag: Arc<At
             let _ = runs::record_cancelled_output(&conn, &row.run_id, result.completion);
         }
     }
+}
+
+fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String) {
+    let Ok(conn) = runs::open(workspace) else {
+        return;
+    };
+    let _ = runs::fail(
+        &conn,
+        &row.run_id,
+        RunCompletion {
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: None,
+            success: false,
+            error: Some(error),
+        },
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -358,6 +407,23 @@ mod tests {
         perms.set_mode(0o755);
         fs::set_permissions(&p, perms).unwrap();
         p
+    }
+
+    #[cfg(unix)]
+    fn write_schema_bash_stub(
+        workspace: &Workspace,
+        name: &str,
+        schema_json: &str,
+        body: &str,
+    ) -> PathBuf {
+        write_bash_stub(
+            workspace,
+            name,
+            &format!(
+                "# OMAKURE_SCHEMA_START\n# {}\n# OMAKURE_SCHEMA_END\n{}",
+                schema_json, body
+            ),
+        )
     }
 
     #[test]
@@ -704,6 +770,252 @@ mod tests {
             "expected injected var in stdout, got: {:?}",
             after.stdout
         );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn worker_fails_queued_run_when_stored_env_disappears_before_execution() {
+        let (ws, _dir) = make_workspace("queued_env_missing");
+        let marker = ws.root().join("should_not_exist");
+        let script = write_bash_stub(
+            &ws,
+            "must_not_run.sh",
+            &format!("touch {}\necho should-not-run", marker.display()),
+        );
+        fs::write(ws.envs_dir().join("prod.conf"), "TARGET=prod\n").unwrap();
+        let conn = runs::open(&ws).unwrap();
+        let row = enqueue(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            EnqueueOptions {
+                actor: "test".into(),
+                omakure_version: "test".into(),
+                env_name: Some("prod".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        fs::remove_file(ws.envs_dir().join("prod.conf")).unwrap();
+
+        worker_loop(
+            ws.clone_for_executor(),
+            "worker:test".into(),
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+            true,
+        );
+
+        let conn = runs::open(&ws).unwrap();
+        let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
+        assert_eq!(after.state, RunState::Failed);
+        assert_eq!(after.success, Some(false));
+        assert!(after
+            .error
+            .unwrap_or_default()
+            .contains("queued env resolution failed"));
+        assert!(!marker.exists());
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn worker_resolves_secret_from_active_env_and_assembles_arg() {
+        let (ws, _dir) = make_workspace("secret_arg");
+        let envs = ws.envs_dir();
+        fs::write(envs.join("dev.conf"), "TOKEN=worker_secret_value").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let script = write_schema_bash_stub(
+            &ws,
+            "secret.sh",
+            r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
+            r#"if [ "$2" = "worker_secret_value" ]; then echo matched; else echo "leaked:$2"; exit 7; fi"#,
+        );
+        let conn = runs::open(&ws).unwrap();
+        let row = enqueue(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            EnqueueOptions {
+                actor: "test".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        worker_loop(
+            ws.clone_for_executor(),
+            "worker:test".into(),
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+            true,
+        );
+
+        let conn = runs::open(&ws).unwrap();
+        let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
+        assert_eq!(after.state, RunState::Completed, "stderr: {}", after.stderr);
+        assert!(after.stdout.contains("matched"));
+        assert!(!after.stdout.contains("worker_secret_value"));
+        assert!(!after.args_json.contains("worker_secret_value"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn worker_uses_queued_env_metadata_instead_of_later_active_env() {
+        let (ws, _dir) = make_workspace("queued_env_metadata");
+        let envs = ws.envs_dir();
+        fs::write(envs.join("prod.conf"), "TOKEN=prod_secret_value").unwrap();
+        fs::write(envs.join("dev.conf"), "TOKEN=dev_secret_value").unwrap();
+        fs::write(envs.join("active"), "dev.conf\n").unwrap();
+
+        let script = write_schema_bash_stub(
+            &ws,
+            "secret_env.sh",
+            r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
+            r#"if [ "$2" = "prod_secret_value" ]; then echo matched-prod; else echo "wrong:$2"; exit 9; fi"#,
+        );
+        let conn = runs::open(&ws).unwrap();
+        let row = enqueue(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            EnqueueOptions {
+                actor: "test".into(),
+                omakure_version: "test".into(),
+                env_name: Some("prod".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        worker_loop(
+            ws.clone_for_executor(),
+            "worker:test".into(),
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+            true,
+        );
+
+        let conn = runs::open(&ws).unwrap();
+        let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
+        assert_eq!(after.state, RunState::Completed, "stderr: {}", after.stderr);
+        assert!(after.stdout.contains("matched-prod"));
+        assert!(!after.stdout.contains("prod_secret_value"));
+        assert!(!after.stdout.contains("dev_secret_value"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn worker_denies_secret_ref_added_to_env_after_enqueue() {
+        let (ws, _dir) = make_workspace("queued_env_ref_toctou");
+        let envs = ws.envs_dir();
+        fs::write(envs.join("prod.conf"), "TOKEN=initial_plaintext").unwrap();
+        fs::write(envs.join("evil.conf"), "token=evil_secret").unwrap();
+
+        write_schema_bash_stub(
+            &ws,
+            "secret_env.sh",
+            r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
+            r#"echo "$2""#,
+        );
+        let row = crate::operations::core::enqueue_run(
+            &ws,
+            crate::operations::core::EnqueueRunRequest {
+                script: "secret_env.sh".into(),
+                args: Vec::new(),
+                env: Some("prod".into()),
+                secret_fields: Vec::new(),
+                run_id: Some("rid-toctou".into()),
+                actor: "test".into(),
+                reason: None,
+                priority: 0,
+                timeout_ms: None,
+                parent_run_id: None,
+                cron_schedule_id: None,
+            },
+        )
+        .unwrap();
+        fs::write(envs.join("prod.conf"), "TOKEN=secret://evil/token").unwrap();
+
+        worker_loop(
+            ws.clone_for_executor(),
+            "worker:test".into(),
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+            true,
+        );
+
+        let conn = runs::open(&ws).unwrap();
+        let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
+        assert_eq!(after.state, RunState::Failed);
+        assert!(!after.stdout.contains("evil_secret"));
+        assert!(!after.error.unwrap_or_default().contains("evil_secret"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn worker_fails_provider_ref_run_when_secret_policy_is_missing() {
+        let (ws, _dir) = make_workspace("missing_secret_policy");
+        let envs = ws.envs_dir();
+        fs::write(envs.join("prod.conf"), "TOKEN=policy_secret").unwrap();
+        let marker = ws.root().join("policy_missing_marker");
+        let script = write_schema_bash_stub(
+            &ws,
+            "secret_arg.sh",
+            r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
+            &format!("touch {}\necho \"$2\"", marker.display()),
+        );
+        let conn = runs::open(&ws).unwrap();
+        let row = enqueue(
+            &conn,
+            script.to_str().unwrap(),
+            &["--token".into(), "secret://prod/token".into()],
+            EnqueueOptions {
+                actor: "test".into(),
+                omakure_version: "test".into(),
+                allowed_secret_refs: Some(vec!["secret://prod/token".into()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        conn.execute(
+            "DELETE FROM run_secret_refs WHERE run_id = ?",
+            [&row.run_id],
+        )
+        .unwrap();
+        drop(conn);
+
+        worker_loop(
+            ws.clone_for_executor(),
+            "worker:test".into(),
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+            true,
+        );
+
+        let conn = runs::open(&ws).unwrap();
+        let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
+        assert_eq!(after.state, RunState::Failed);
+        assert!(after
+            .error
+            .unwrap_or_default()
+            .contains("secret provider policy missing"));
+        assert!(!after.stdout.contains("policy_secret"));
+        assert!(!marker.exists());
         let _ = fs::remove_dir_all(ws.root());
     }
 

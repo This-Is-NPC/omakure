@@ -1,6 +1,8 @@
 use crate::adapters::environments::FsEnvironmentRepository;
 use crate::domain::Schema;
 use crate::lua_widget::{self, WidgetData};
+use crate::operations::envs::{self, EnvParam};
+use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::ports::{EnvironmentConfig, WorkspaceEntry, WorkspaceEntryKind};
 use crate::runs::RunRow;
 use crate::search_index::SearchIndex;
@@ -16,7 +18,8 @@ pub(crate) const SESSION_ENV_LABEL: &str = "omakure.conf (session)";
 
 pub(crate) use super::state::{DashboardLayout, HistoryFocus, HistoryView};
 use super::state::{
-    EnvironmentState, FieldInputState, HistoryState, NavigationState, SearchState, WidgetLoadResult,
+    EnvEditorMode, EnvironmentState, FieldInputState, HistoryState, NavigationState, SearchState,
+    WidgetLoadResult,
 };
 use super::theme::Theme;
 
@@ -530,17 +533,92 @@ impl<'a> App<'a> {
         let name = self.environment.entries[self.environment.selection]
             .name
             .clone();
-        let service = self.environment_service();
-        match service.set_active_env(Some(&name)) {
+        match envs::activate_env(&self.workspace, name.trim_end_matches(".conf")) {
             Ok(()) => self.load_env_config(),
             Err(err) => self.environment.error = Some(err.to_string()),
         }
     }
 
     pub(crate) fn deactivate_env(&mut self) {
-        let service = self.environment_service();
-        match service.set_active_env(None) {
+        match envs::deactivate_env(&self.workspace) {
             Ok(()) => self.load_env_config(),
+            Err(err) => self.environment.error = Some(err.to_string()),
+        }
+    }
+
+    pub(crate) fn delete_selected_env(&mut self) {
+        let Some(entry) = self.environment.entries.get(self.environment.selection) else {
+            return;
+        };
+        let name = entry.name.trim_end_matches(".conf").to_string();
+        match envs::delete_env(&self.workspace, &name) {
+            Ok(()) => self.load_env_config(),
+            Err(err) => self.environment.error = Some(err.to_string()),
+        }
+    }
+
+    pub(crate) fn start_create_env(&mut self) {
+        self.environment.editor_mode = Some(EnvEditorMode::Create);
+        self.environment.editor_input.clear();
+        self.environment.error = None;
+    }
+
+    pub(crate) fn start_edit_env(&mut self) {
+        if self.environment.entries.is_empty() {
+            return;
+        }
+        self.environment.editor_mode = Some(EnvEditorMode::Edit);
+        self.environment.editor_input.clear();
+        self.environment.error = None;
+    }
+
+    pub(crate) fn cancel_env_editor(&mut self) {
+        self.environment.editor_mode = None;
+        self.environment.editor_input.clear();
+    }
+
+    pub(crate) fn append_env_editor_char(&mut self, ch: char) {
+        if self.environment.editor_mode.is_some() {
+            self.environment.editor_input.push(ch);
+        }
+    }
+
+    pub(crate) fn pop_env_editor_char(&mut self) {
+        if self.environment.editor_mode.is_some() {
+            self.environment.editor_input.pop();
+        }
+    }
+
+    pub(crate) fn submit_env_editor(&mut self) {
+        let Some(mode) = self.environment.editor_mode else {
+            return;
+        };
+
+        let result = match mode {
+            EnvEditorMode::Create => parse_env_create_input(&self.environment.editor_input)
+                .and_then(|(name, params)| {
+                    envs::create_env(&self.workspace, &name, &params).map(|_| ())
+                }),
+            EnvEditorMode::Edit => {
+                let Some(entry) = self.environment.entries.get(self.environment.selection) else {
+                    return;
+                };
+                let name = entry.name.trim_end_matches(".conf").to_string();
+                parse_env_param_input(&self.environment.editor_input).and_then(|params| {
+                    for param in params {
+                        envs::set_param(&self.workspace, &name, &param.key, &param.value)?;
+                    }
+                    Ok(())
+                })
+            }
+        };
+
+        match result {
+            Ok(()) => {
+                self.environment.editor_mode = None;
+                self.environment.editor_input.clear();
+                self.load_env_config();
+            }
             Err(err) => self.environment.error = Some(err.to_string()),
         }
     }
@@ -987,8 +1065,23 @@ impl<'a> App<'a> {
         let service = self.environment_service();
         match service.load_env_preview(&env_path) {
             Ok(entries) => {
+                let secret_fields: Vec<String> = self
+                    .field_input
+                    .fields
+                    .iter()
+                    .filter(|field| field.is_secret())
+                    .map(|field| field.name.to_ascii_lowercase())
+                    .collect();
                 let mut lines = Vec::new();
                 for (key, value) in entries {
+                    let value = if secret_fields
+                        .iter()
+                        .any(|secret| secret == &key.to_ascii_lowercase())
+                    {
+                        crate::adapters::environments::MASKED_ENV_VALUE.to_string()
+                    } else {
+                        value
+                    };
                     let line = ratatui::text::Line::from(vec![
                         ratatui::text::Span::styled(
                             key,
@@ -1144,6 +1237,53 @@ fn load_widget_state(dir: &Path) -> (Option<WidgetData>, Option<String>) {
         Ok(widget) => (widget, None),
         Err(err) => (None, Some(err)),
     }
+}
+
+fn parse_env_create_input(input: &str) -> OperationResult<(String, Vec<EnvParam>)> {
+    let mut parts = input.split_whitespace();
+    let name = parts.next().unwrap_or_default().trim().to_string();
+    if name.is_empty() {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "Enter: name KEY=value",
+        ));
+    }
+    parse_env_param_parts(parts).map(|params| (name, params))
+}
+
+fn parse_env_param_input(input: &str) -> OperationResult<Vec<EnvParam>> {
+    parse_env_param_parts(input.split_whitespace())
+}
+
+fn parse_env_param_parts<'a>(
+    parts: impl Iterator<Item = &'a str>,
+) -> OperationResult<Vec<EnvParam>> {
+    let mut params = Vec::new();
+    for part in parts {
+        let Some((key, value)) = part.split_once('=') else {
+            return Err(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                "Use KEY=value pairs separated by spaces",
+            ));
+        };
+        if key.trim().is_empty() {
+            return Err(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                "Environment keys cannot be empty",
+            ));
+        }
+        params.push(EnvParam {
+            key: key.trim().to_string(),
+            value: value.to_string(),
+        });
+    }
+    if params.is_empty() {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "Enter at least one KEY=value pair",
+        ));
+    }
+    Ok(params)
 }
 
 /// Start of the hour strictly after `t` in local time. Used to advance
@@ -1603,6 +1743,7 @@ suffix"#;
     // --- App method tests using test_new ---
 
     use crate::adapters::script_runner::MultiScriptRunner;
+    use crate::adapters::tui::state::EnvEditorMode;
     use crate::adapters::workspace_repository::FsWorkspaceRepository;
     use crate::ports::{EnvFile, EnvironmentConfig};
     use tempfile::TempDir;
@@ -2054,6 +2195,77 @@ suffix"#;
     }
 
     #[test]
+    fn test_load_schema_populates_secret_field_from_active_env() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        write_file(&ws.envs_dir().join("prod.conf"), "token=env-secret-value\n");
+        write_file(&ws.envs_dir().join("active"), "prod.conf\n");
+        let script = write_bash_schema_script(
+            &tmp,
+            "deploy.sh",
+            r#"{"Name":"Deploy","Fields":[{"Name":"token","Type":"secret","Order":1,"Required":true,"Arg":"--token"}]}"#,
+        );
+        let mut app = App::test_new(&svc, ws, vec![], vec![]);
+
+        app.load_schema(script);
+
+        assert_eq!(app.screen, Screen::FieldInput);
+        assert_eq!(app.field_input.field_inputs, vec!["env-secret-value"]);
+    }
+
+    #[test]
+    fn test_update_env_preview_masks_schema_secret_field_names() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        write_file(
+            &ws.envs_dir().join("dev.conf"),
+            "token=plain-secret-value\nHOST=localhost\n",
+        );
+        let mut app = App::test_new(
+            &svc,
+            Workspace::new(tmp.path().to_path_buf()),
+            vec![],
+            vec![],
+        );
+        app.field_input.fields = vec![crate::domain::Field {
+            name: "token".into(),
+            prompt: None,
+            kind: "secret".into(),
+            order: Some(1),
+            required: None,
+            default: None,
+            choices: None,
+            arg: None,
+        }];
+        app.environment.config = Some(EnvironmentConfig {
+            envs_dir: ws.envs_dir().to_path_buf(),
+            active: None,
+            defaults: std::collections::HashMap::new(),
+            session_conf_path: None,
+        });
+        app.environment.entries = vec![EnvFile {
+            name: "dev.conf".into(),
+        }];
+
+        app.update_env_preview();
+
+        let rendered: String = app
+            .environment
+            .preview_lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(!rendered.contains("plain-secret-value"));
+        assert!(rendered.contains("****"));
+        assert!(rendered.contains("localhost"));
+    }
+
+    #[test]
     fn test_load_schema_with_no_fields_sets_result_immediately() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(&tmp);
@@ -2218,6 +2430,91 @@ suffix"#;
 
         assert!(app.environment.preview_lines.is_empty());
         assert!(app.environment.preview_error.is_some());
+    }
+
+    #[test]
+    fn test_delete_selected_env_removes_file_and_clears_active() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        write_file(&ws.envs_dir().join("dev.conf"), "HOST=localhost\n");
+        write_file(&ws.envs_dir().join("active"), "dev.conf\n");
+        let mut app = App::test_new(
+            &svc,
+            Workspace::new(tmp.path().to_path_buf()),
+            vec![],
+            vec![],
+        );
+        app.load_env_config();
+        assert_eq!(app.environment.entries.len(), 1);
+
+        app.delete_selected_env();
+
+        assert!(!ws.envs_dir().join("dev.conf").exists());
+        assert!(app.environment.entries.is_empty());
+        assert!(app
+            .environment
+            .config
+            .as_ref()
+            .and_then(|config| config.active.as_ref())
+            .is_none());
+        assert!(app.environment.error.is_none());
+    }
+
+    #[test]
+    fn test_create_env_from_tui_editor_uses_shared_operations() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let mut app = App::test_new(
+            &svc,
+            Workspace::new(tmp.path().to_path_buf()),
+            vec![],
+            vec![],
+        );
+
+        app.start_create_env();
+        assert_eq!(app.environment.editor_mode, Some(EnvEditorMode::Create));
+        app.environment.editor_input = "dev HOST=localhost".into();
+        app.submit_env_editor();
+
+        assert_eq!(
+            std::fs::read_to_string(ws.envs_dir().join("dev.conf")).unwrap(),
+            "HOST=localhost\n"
+        );
+        assert!(app.environment.editor_mode.is_none());
+        assert_eq!(app.environment.entries.len(), 1);
+        assert!(app.environment.error.is_none());
+    }
+
+    #[test]
+    fn test_edit_env_from_tui_editor_sets_selected_param() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        write_file(&ws.envs_dir().join("dev.conf"), "HOST=old\n");
+        let mut app = App::test_new(
+            &svc,
+            Workspace::new(tmp.path().to_path_buf()),
+            vec![],
+            vec![],
+        );
+        app.load_env_config();
+
+        app.start_edit_env();
+        assert_eq!(app.environment.editor_mode, Some(EnvEditorMode::Edit));
+        app.environment.editor_input = "HOST=localhost".into();
+        app.submit_env_editor();
+
+        assert_eq!(
+            std::fs::read_to_string(ws.envs_dir().join("dev.conf")).unwrap(),
+            "HOST=localhost\n"
+        );
+        assert!(app.environment.editor_mode.is_none());
+        assert!(app.environment.error.is_none());
     }
 
     #[test]

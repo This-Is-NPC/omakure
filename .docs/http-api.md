@@ -36,8 +36,18 @@ Why:
 ## Command Contract
 
 ```bash
-omakure api --bind 127.0.0.1:7878
-omakure api --bind 0.0.0.0:7878 --allow-non-loopback
+omakure api --bind 127.0.0.1:7878 \
+  --capability config:read \
+  --capability scripts:read \
+  --capability runs:read \
+  --capability runs:write \
+  --capability env:read
+omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
+  --capability config:read \
+  --capability scripts:read \
+  --capability runs:read \
+  --capability env:read \
+  --capability env:write
 ```
 
 Defaults and guards:
@@ -47,6 +57,17 @@ Defaults and guards:
 - Non-loopback bind requires `--allow-non-loopback`.
 - `0.0.0.0` and `::` count as non-loopback.
 - Binding must fail before listening when the guard is not satisfied.
+- Capabilities are denied by default. Grant them with repeated `--capability`
+  flags: `config:read`, `scripts:read`, `env:read`, `env:write`,
+  `env:activate`, `env:use`, `secrets:use`, `runs:read`, `runs:write`,
+  `batteries:read`, `batteries:write`, or `all`.
+- Read endpoints are capability-gated too: config/workspace/doctor require
+  `config:read`, script/search/tree endpoints require `scripts:read`, run
+  history/trace/queue stats endpoints require `runs:read`, and Battery read
+  endpoints require `batteries:read`.
+- Secret provider refs are denied by default. Grant exact refs or provider
+  wildcards with repeated `--secret-ref`, for example `--secret-ref
+  secret://prod/token` or `--secret-ref 'secret://prod/*'`.
 
 ## Authentication Contract
 
@@ -153,6 +174,8 @@ GET /v1/runs
 GET /v1/runs/{run_id}
 GET /v1/runs/{run_id}/traces
 GET /v1/queue/stats
+GET /v1/envs
+GET /v1/envs/{name}
 GET /v1/batteries
 GET /v1/batteries/{battery_id}
 GET /v1/batteries/{battery_id}/scripts
@@ -164,6 +187,14 @@ Write endpoints require auth:
 POST /v1/runs
 POST /v1/runs/{run_id}/cancel
 POST /v1/runs/{run_id}/dead-letter
+POST /v1/envs
+PUT /v1/envs/{name}
+PATCH /v1/envs/{name}
+DELETE /v1/envs/{name}
+POST /v1/envs/{name}/activate
+DELETE /v1/envs/active
+PUT /v1/envs/{name}/params/{key}
+DELETE /v1/envs/{name}/params/{key}
 POST /v1/batteries
 POST /v1/batteries/{battery_id}/sync
 POST /v1/batteries/{battery_id}/scripts/{script_id}/install
@@ -179,6 +210,8 @@ POST /v1/runs
 {
   "script": "tools/job",
   "args": ["--flag"],
+  "env": "prod",
+  "secret_fields": { "TOKEN": "secret://prod/token" },
   "run_id": "optional-caller-id",
   "actor": "agent",
   "reason": "why this was queued",
@@ -189,7 +222,14 @@ POST /v1/runs
 }
 ```
 
-Defaults: `args=[]`, `actor="human"`, `priority=0`.
+Defaults: `args=[]`, `secret_fields={}`, `actor="human"`, `priority=0`.
+`env` names a managed environment file under `.omakure/envs/` and overlays it
+for the queued run when the worker drains it. `secret_fields` supplies
+reconstructable `secret://...` references for schema fields whose `Type` is
+`secret`; queued HTTP runs reject plaintext `secret_fields` because the worker
+cannot reconstruct them without persisting plaintext. Forwarded `args` for
+secret schema fields must also use `secret://...` refs. Responses and stored run
+args redact plaintext secret values as `<redacted>` and retain provider refs.
 
 ```json
 POST /v1/runs/{run_id}/cancel
@@ -197,6 +237,32 @@ POST /v1/runs/{run_id}/cancel
 
 POST /v1/runs/{run_id}/dead-letter
 { "reason": "optional" }
+
+POST /v1/envs
+{
+  "name": "prod",
+  "params": [
+    { "key": "HOST", "value": "prod.example.com" },
+    { "key": "API_KEY", "value": "secret://prod/api_key" }
+  ]
+}
+
+PUT /v1/envs/prod
+{
+  "params": [
+    { "key": "HOST", "value": "prod.example.com" }
+  ]
+}
+
+PATCH /v1/envs/prod
+{
+  "params": [
+    { "key": "REGION", "value": "eastus" }
+  ]
+}
+
+PUT /v1/envs/prod/params/API_KEY
+{ "value": "secret://prod/api_key" }
 
 POST /v1/batteries
 {
@@ -221,6 +287,21 @@ Read query parameters and safety policy:
 
 - `GET /v1/config` returns the full config shape, but HTTP masks every active
   environment value. Plaintext env diagnostics are CLI-only.
+- `GET /v1/envs` lists managed `.omakure/envs/*.conf` files and marks the
+  active one. `GET /v1/envs/{name}` returns parsed entries with sensitive values
+  masked as `****`.
+- Env writes validate managed environment names and keys, reject path escapes,
+  write single-line values atomically, and never operate outside
+  `.omakure/envs/`.
+- Bearer auth is required for every env endpoint. Internal capability policy
+  checks apply `EnvRead`, `EnvWrite`, `EnvActivate`, `EnvUse`, and
+  `SecretProviderUse`; a token without the required capability receives
+  `403 forbidden`.
+- `POST /v1/runs` requires `EnvUse` when the body includes `env`. It requires
+  `SecretProviderUse` when the body includes `secret_fields` or any forwarded
+  arg value beginning with `secret://`; provider refs are also checked against
+  the token's allowed ref ACL before enqueue and the allowed ref set is sealed
+  with the queued run for worker-time resolution.
 - `GET /v1/search?q=<query>&tag=<tag>` searches scripts using the existing
   SQLite index. HTTP does not rebuild the index per request. `query` is accepted
   as an alias for `q`; repeated `tag` parameters are AND-filtered. Empty queries
@@ -253,6 +334,15 @@ Read query parameters and safety policy:
 | `omakure queue add <script> --json` | `POST /v1/runs` | `enqueue_run` |
 | `omakure queue cancel <run_id> --json` | `POST /v1/runs/{run_id}/cancel` | `cancel_run` |
 | `omakure queue dead-letter <run_id> --json` | `POST /v1/runs/{run_id}/dead-letter` | `dead_letter_run` |
+| `omakure env list --json` | `GET /v1/envs` | `list_envs` |
+| `omakure env create <name> ... --json` | `POST /v1/envs` | `create_env` |
+| `omakure env show <name> --json` | `GET /v1/envs/{name}` | `show_env` |
+| `omakure env replace <name> ... --json` | `PUT /v1/envs/{name}` | `replace_env` |
+| `omakure env set <name> KEY=VALUE --json` | `PATCH /v1/envs/{name}`, `PUT /v1/envs/{name}/params/{key}` | `set_param` |
+| `omakure env remove <name> <key> --json` | `DELETE /v1/envs/{name}/params/{key}` | `remove_param` |
+| `omakure env activate <name> --json` | `POST /v1/envs/{name}/activate` | `activate_env` |
+| `omakure env deactivate --json` | `DELETE /v1/envs/active` | `deactivate_env` |
+| `omakure env delete <name> --json` | `DELETE /v1/envs/{name}` | `delete_env` |
 | `omakure battery list --json` | `GET /v1/batteries` | `list_batteries` |
 | `omakure battery add <url> --json` | `POST /v1/batteries` | `add_battery` |
 | `omakure battery sync <name> --json` | `POST /v1/batteries/{battery_id}/sync` | `sync_battery` |
@@ -281,6 +371,15 @@ HTTP routes call shared operations for these core resources:
 - `enqueue_run`
 - `cancel_run`
 - `dead_letter_run`
+- `list_envs`
+- `create_env`
+- `show_env`
+- `replace_env`
+- `set_param`
+- `remove_param`
+- `activate_env`
+- `deactivate_env`
+- `delete_env`
 - `list_batteries`
 - `add_battery`
 - `sync_battery`

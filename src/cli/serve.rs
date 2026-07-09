@@ -20,6 +20,7 @@ use crate::cli::json::{self, codes};
 use crate::domain::{next_fire_after, parse_cron};
 use crate::ports::ScriptRepository;
 use crate::runs::{self, EnqueueOptions, RunState, RunTrigger};
+use crate::secrets;
 use crate::workspace::Workspace;
 use chrono::Utc;
 use cron::Schedule as CronSchedule;
@@ -391,7 +392,39 @@ pub(crate) fn scheduler_tick(
             continue;
         }
 
-        let args = build_args_from_defaults(&schema);
+        let raw_args = build_args_from_defaults(&schema);
+        // Secret-safe enqueue: reject plaintext secret-field defaults and
+        // persist `secret://` refs (not plaintext), matching the manual and
+        // HTTP enqueue contract. Without this, a secret field carrying a
+        // plaintext `Default` would land raw in runs.sqlite `args_json` and
+        // leak through `history` / `GET /v1/runs/:id` / traces, since read
+        // paths do not redact. Fail closed: skip the fire and log on any
+        // unresolvable or non-reconstructable secret.
+        let resolved = match secrets::validate_queued_secret_args_reconstructable(
+            workspace, &canonical, &raw_args,
+        )
+        .and_then(|()| {
+            secrets::resolve_args_with_access(
+                workspace,
+                &canonical,
+                &raw_args,
+                &[],
+                &[],
+                &secrets::SecretAccess::allow_all(),
+            )
+        }) {
+            Ok(resolved) => resolved,
+            Err((field, message)) => {
+                log_line(
+                    &log_path,
+                    "ERROR",
+                    &format!(
+                        "{schedule_id}: secret field `{field}` not enqueue-safe: {message}; skipping fire"
+                    ),
+                );
+                continue;
+            }
+        };
         let opts = EnqueueOptions {
             actor: "scheduler".to_string(),
             reason: Some(format!("cron: {cron_expr}")),
@@ -399,9 +432,10 @@ pub(crate) fn scheduler_tick(
             script_name: Some(schema.name.clone()),
             omakure_version: app_meta::APP_VERSION.to_string(),
             trigger: RunTrigger::Scheduled,
+            allowed_secret_refs: Some(resolved.provider_refs),
             ..Default::default()
         };
-        match runs::enqueue(&conn, &canonical_str, &args, opts) {
+        match runs::enqueue(&conn, &canonical_str, &resolved.persisted_args, opts) {
             Ok(row) => {
                 fired += 1;
                 log_line(
@@ -621,6 +655,76 @@ mod tests {
         let fired_again = scheduler_tick(&ws, Utc::now()).unwrap();
         assert_eq!(fired_again, 0);
         let _ = script;
+    }
+
+    #[test]
+    fn tick_persists_secret_ref_default_not_plaintext() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        std::env::set_var("OMAKURE_CRON_SECRET_REF", "cron_plaintext_value");
+        let json = r#"{ "Name":"s", "Fields":[{"Name":"TOKEN","Type":"secret","Arg":"--token","Default":"secret://env/OMAKURE_CRON_SECRET_REF"}], "Schedule": { "Cron": "* * * * *", "Enabled": true } }"#;
+        let script = format!(
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {json}\n# OMAKURE_SCHEMA_END\n"
+        );
+        fs::write(tmp.path().join("sched.sh"), script).unwrap();
+
+        let fired = scheduler_tick(&ws, Utc::now()).unwrap();
+        assert_eq!(fired, 1);
+
+        let conn = runs::open(&ws).unwrap();
+        let rows = runs::query_runs(
+            &conn,
+            &runs::RunFilters {
+                states: runs::RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        // Regression (audit #1936 finding 1): the cron path must persist the
+        // secret:// ref, never the resolved plaintext, into args_json at rest.
+        assert!(rows[0]
+            .args_json
+            .contains("secret://env/OMAKURE_CRON_SECRET_REF"));
+        assert!(
+            !rows[0].args_json.contains("cron_plaintext_value"),
+            "scheduler leaked resolved secret plaintext into args_json: {}",
+            rows[0].args_json
+        );
+        std::env::remove_var("OMAKURE_CRON_SECRET_REF");
+    }
+
+    #[test]
+    fn tick_skips_fire_on_plaintext_secret_default() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let json = r#"{ "Name":"s", "Fields":[{"Name":"TOKEN","Type":"secret","Arg":"--token","Default":"plaintext_secret_default"}], "Schedule": { "Cron": "* * * * *", "Enabled": true } }"#;
+        let script = format!(
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {json}\n# OMAKURE_SCHEMA_END\n"
+        );
+        fs::write(tmp.path().join("bad.sh"), script).unwrap();
+
+        // Regression (audit #1936 finding 1): a plaintext secret default is not
+        // reconstructable, so the fire is rejected (fail-closed) rather than
+        // persisting plaintext at rest.
+        let fired = scheduler_tick(&ws, Utc::now()).unwrap();
+        assert_eq!(fired, 0, "plaintext secret default must not enqueue");
+
+        let conn = runs::open(&ws).unwrap();
+        let rows = runs::query_runs(
+            &conn,
+            &runs::RunFilters {
+                states: runs::RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            rows.is_empty(),
+            "no run should be enqueued for a plaintext secret default"
+        );
     }
 
     #[test]

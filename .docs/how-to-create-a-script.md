@@ -42,12 +42,31 @@ For each field in `Fields`:
 
 - `Name`: internal field name.
 - `Prompt`: text shown to the user.
-- `Type`: `string`, `number`, or `bool`.
+- `Type`: `string`, `number`, `bool`, or `secret`.
 - `Order`: display order.
 - `Required`: `true` or `false`.
 - `Arg`: CLI argument name (e.g., `--target`).
 - `Default`: default value (optional).
 - `Choices`: list of allowed values (optional).
+
+Secret fields use the same `Name`, `Required`, `Arg`, and `Default` shape as
+other fields, but `Choices` is rejected for `Type: "secret"`. At run time,
+Omakure resolves a secret value from direct secret input, forwarded CLI args,
+the merged run environment, or the field default. The actual secret is passed
+to the script process, while stored run args use `<redacted>` unless the value
+came from a `secret://...` reference, in which case the provider reference is
+stored instead of the plaintext value.
+
+```json
+{
+  "Name": "api_token",
+  "Prompt": "API token",
+  "Type": "secret",
+  "Order": 2,
+  "Required": true,
+  "Arg": "--api-token"
+}
+```
 
 ### Outputs (optional)
 

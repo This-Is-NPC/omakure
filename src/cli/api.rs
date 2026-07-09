@@ -4,19 +4,22 @@ use crate::operations::battery as battery_ops;
 use crate::operations::config as config_ops;
 use crate::operations::core;
 use crate::operations::doctor as doctor_ops;
+use crate::operations::envs as env_ops;
 use crate::operations::scripts as scripts_ops;
 use crate::operations::search as search_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
+use crate::ports::ScriptRepository;
 use crate::workspace::Workspace;
 use axum::body::{to_bytes, Body};
 use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::http::{header, HeaderMap, Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -32,6 +35,7 @@ const MAX_SEARCH_TAG_LEN: usize = 64;
 struct ApiState {
     token_digest: [u8; 32],
     workspace: Workspace,
+    policy: ApiPolicy,
 }
 
 impl Clone for ApiState {
@@ -39,6 +43,114 @@ impl Clone for ApiState {
         Self {
             token_digest: self.token_digest,
             workspace: self.workspace.clone_for_executor(),
+            policy: self.policy.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ApiCapability {
+    ConfigRead,
+    ScriptsRead,
+    EnvRead,
+    EnvWrite,
+    EnvActivate,
+    EnvUse,
+    SecretProviderUse,
+    RunRead,
+    RunWrite,
+    BatteryRead,
+    BatteryWrite,
+}
+
+#[derive(Debug, Clone)]
+struct ApiPolicy {
+    capabilities: Vec<ApiCapability>,
+    allowed_secret_refs: Option<Vec<String>>,
+}
+
+impl ApiPolicy {
+    fn all() -> Self {
+        let mut policy = Self::allow([
+            ApiCapability::ConfigRead,
+            ApiCapability::ScriptsRead,
+            ApiCapability::EnvRead,
+            ApiCapability::EnvWrite,
+            ApiCapability::EnvActivate,
+            ApiCapability::EnvUse,
+            ApiCapability::SecretProviderUse,
+            ApiCapability::RunRead,
+            ApiCapability::RunWrite,
+            ApiCapability::BatteryRead,
+            ApiCapability::BatteryWrite,
+        ]);
+        policy.allowed_secret_refs = None;
+        policy
+    }
+
+    fn allow<const N: usize>(capabilities: [ApiCapability; N]) -> Self {
+        Self {
+            capabilities: capabilities.into(),
+            allowed_secret_refs: Some(Vec::new()),
+        }
+    }
+
+    fn from_config(capabilities: &[String], refs: &[String]) -> Result<Self, ApiConfigError> {
+        let mut parsed = Vec::new();
+        for capability in capabilities {
+            if capability == "all" {
+                return Ok(Self::all());
+            }
+            parsed.push(ApiCapability::from_config_value(capability)?);
+        }
+        Ok(Self {
+            capabilities: parsed,
+            allowed_secret_refs: Some(refs.to_vec()),
+        })
+    }
+
+    #[cfg(test)]
+    fn allow_with_secret_refs<const N: usize, const M: usize>(
+        capabilities: [ApiCapability; N],
+        refs: [&str; M],
+    ) -> Self {
+        Self {
+            capabilities: capabilities.into(),
+            allowed_secret_refs: Some(refs.into_iter().map(str::to_string).collect()),
+        }
+    }
+
+    fn permits(&self, capability: ApiCapability) -> bool {
+        self.capabilities.contains(&capability)
+    }
+
+    fn secret_access(&self) -> crate::secrets::SecretAccess {
+        match &self.allowed_secret_refs {
+            None => crate::secrets::SecretAccess::allow_all(),
+            Some(refs) => crate::secrets::SecretAccess::new(
+                self.permits(ApiCapability::SecretProviderUse)
+                    .then_some("secrets:use"),
+                refs.iter().cloned(),
+            ),
+        }
+    }
+}
+
+impl ApiCapability {
+    fn from_config_value(value: &str) -> Result<Self, ApiConfigError> {
+        match value {
+            "config:read" => Ok(Self::ConfigRead),
+            "scripts:read" => Ok(Self::ScriptsRead),
+            "env:read" => Ok(Self::EnvRead),
+            "env:write" => Ok(Self::EnvWrite),
+            "env:activate" => Ok(Self::EnvActivate),
+            "env:use" => Ok(Self::EnvUse),
+            "secrets:use" => Ok(Self::SecretProviderUse),
+            "runs:read" => Ok(Self::RunRead),
+            "runs:write" => Ok(Self::RunWrite),
+            "batteries:read" => Ok(Self::BatteryRead),
+            "batteries:write" => Ok(Self::BatteryWrite),
+            _ => Err(ApiConfigError::InvalidCapability(value.to_string())),
         }
     }
 }
@@ -48,6 +160,7 @@ enum ApiConfigError {
     MissingToken,
     InvalidToken,
     NonLoopbackBind(SocketAddr),
+    InvalidCapability(String),
 }
 
 impl std::fmt::Display for ApiConfigError {
@@ -59,6 +172,7 @@ impl std::fmt::Display for ApiConfigError {
                 f,
                 "refusing to bind {addr}; pass --allow-non-loopback to opt in"
             ),
+            Self::InvalidCapability(value) => write!(f, "invalid API capability: {value}"),
         }
     }
 }
@@ -75,6 +189,9 @@ struct EnqueueRunBody {
     script: String,
     #[serde(default)]
     args: Vec<String>,
+    env: Option<String>,
+    #[serde(default)]
+    secret_fields: HashMap<String, String>,
     run_id: Option<String>,
     #[serde(default = "default_actor")]
     actor: String,
@@ -89,6 +206,18 @@ struct EnqueueRunBody {
 #[derive(Debug, Default, Deserialize)]
 struct RunReasonBody {
     reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EnvBody {
+    name: Option<String>,
+    #[serde(default)]
+    params: Vec<env_ops::EnvParam>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EnvParamBody {
+    value: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,22 +245,77 @@ fn default_battery_ref() -> String {
 pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
     validate_bind(args.bind, args.allow_non_loopback)?;
     let token = token_from_env()?;
+    let policy = ApiPolicy::from_config(&args.capabilities, &args.secret_refs)?;
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
 
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async move {
         let listener = tokio::net::TcpListener::bind(args.bind).await?;
-        axum::serve(listener, router(token, workspace)).await?;
+        axum::serve(listener, router_with_policy(token, workspace, policy)).await?;
         Ok::<(), Box<dyn Error>>(())
     })
 }
 
+#[cfg(test)]
 fn router(token: String, workspace: Workspace) -> Router {
+    router_with_policy(token, workspace, ApiPolicy::all())
+}
+
+/// Canonical `(method, path)` inventory for the HTTP management API.
+///
+/// Keep this list in lockstep with `router_with_policy`. Black-box E2E tests
+/// parse the markers below so route drift fails the suite without importing
+/// the binary crate as a library.
+// OMAKURE_HTTP_ROUTE_INVENTORY_START
+#[allow(dead_code)] // consumed by black-box E2E via source markers; kept as router source of truth
+pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
+    ("GET", "/v1/health"),
+    ("GET", "/v1/config"),
+    ("GET", "/v1/doctor"),
+    ("GET", "/v1/workspace"),
+    ("GET", "/v1/search"),
+    ("GET", "/v1/tree"),
+    ("GET", "/v1/tree/*path"),
+    ("GET", "/v1/scripts"),
+    ("GET", "/v1/scripts/*script_id"),
+    ("GET", "/v1/envs"),
+    ("POST", "/v1/envs"),
+    ("DELETE", "/v1/envs/active"),
+    ("GET", "/v1/envs/:name"),
+    ("PUT", "/v1/envs/:name"),
+    ("PATCH", "/v1/envs/:name"),
+    ("DELETE", "/v1/envs/:name"),
+    ("POST", "/v1/envs/:name/activate"),
+    ("PUT", "/v1/envs/:name/params/:key"),
+    ("DELETE", "/v1/envs/:name/params/:key"),
+    ("GET", "/v1/runs"),
+    ("POST", "/v1/runs"),
+    ("GET", "/v1/runs/:run_id"),
+    ("GET", "/v1/runs/:run_id/traces"),
+    ("POST", "/v1/runs/:run_id/cancel"),
+    ("POST", "/v1/runs/:run_id/dead-letter"),
+    ("GET", "/v1/queue/stats"),
+    ("GET", "/v1/batteries"),
+    ("POST", "/v1/batteries"),
+    ("GET", "/v1/batteries/:battery_id"),
+    ("DELETE", "/v1/batteries/:battery_id"),
+    ("GET", "/v1/batteries/:battery_id/scripts"),
+    (
+        "POST",
+        "/v1/batteries/:battery_id/scripts/:script_id/install",
+    ),
+    ("POST", "/v1/batteries/:battery_id/sync"),
+];
+// OMAKURE_HTTP_ROUTE_INVENTORY_END
+
+fn router_with_policy(token: String, workspace: Workspace, policy: ApiPolicy) -> Router {
     let state = ApiState {
         token_digest: token_digest_for(&token),
         workspace,
+        policy,
     };
+    // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
     Router::new()
         .route("/v1/health", get(health))
         .route("/v1/config", get(config_handler))
@@ -142,6 +326,20 @@ fn router(token: String, workspace: Workspace) -> Router {
         .route("/v1/tree/*path", get(tree_path_handler))
         .route("/v1/scripts", get(list_scripts_handler))
         .route("/v1/scripts/*script_id", get(script_path_handler))
+        .route("/v1/envs", get(list_envs_handler).post(create_env_handler))
+        .route("/v1/envs/active", delete(deactivate_env_handler))
+        .route(
+            "/v1/envs/:name",
+            get(show_env_handler)
+                .put(put_env_handler)
+                .patch(patch_env_handler)
+                .delete(delete_env_handler),
+        )
+        .route("/v1/envs/:name/activate", post(activate_env_handler))
+        .route(
+            "/v1/envs/:name/params/:key",
+            put(set_env_param_handler).delete(delete_env_param_handler),
+        )
         .route("/v1/runs", get(list_runs_handler).post(enqueue_run_handler))
         .route("/v1/runs/:run_id", get(show_run_handler))
         .route("/v1/runs/:run_id/traces", get(list_traces_handler))
@@ -182,18 +380,30 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn workspace_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ConfigRead) {
+        return response;
+    }
     operation_response(core::workspace_summary(&state.workspace))
 }
 
 async fn config_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ConfigRead) {
+        return response;
+    }
     operation_response(config_ops::redacted_config_summary(&state.workspace))
 }
 
 async fn doctor_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ConfigRead) {
+        return response;
+    }
     operation_response(doctor_ops::doctor_report(&state.workspace))
 }
 
 async fn search_handler(State(state): State<ApiState>, RawQuery(raw_query): RawQuery) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ScriptsRead) {
+        return response;
+    }
     let request = query_pairs(raw_query.as_deref()).and_then(|pairs| {
         let query = query_value(&pairs, "q")
             .or_else(|| query_value(&pairs, "query"))
@@ -237,6 +447,9 @@ async fn list_scripts_handler(
     State(state): State<ApiState>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ScriptsRead) {
+        return response;
+    }
     let request = query_pairs(raw_query.as_deref()).map(|pairs| core::ListScriptsRequest {
         tags: query_values(&pairs, "tag"),
     });
@@ -244,6 +457,9 @@ async fn list_scripts_handler(
 }
 
 async fn describe_script_handler(State(state): State<ApiState>, script_id: String) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ScriptsRead) {
+        return response;
+    }
     operation_response(core::describe_script(
         &state.workspace,
         core::DescribeScriptRequest { script: script_id },
@@ -251,6 +467,9 @@ async fn describe_script_handler(State(state): State<ApiState>, script_id: Strin
 }
 
 async fn script_schema_handler(State(state): State<ApiState>, script_id: String) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ScriptsRead) {
+        return response;
+    }
     operation_response(
         core::describe_script(
             &state.workspace,
@@ -278,6 +497,9 @@ async fn script_path_handler(
 }
 
 async fn script_content_handler(State(state): State<ApiState>, script_id: String) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ScriptsRead) {
+        return response;
+    }
     operation_response(scripts_ops::read_script_content(
         &state.workspace,
         scripts_ops::ReadScriptContentRequest { script: script_id },
@@ -285,6 +507,9 @@ async fn script_content_handler(State(state): State<ApiState>, script_id: String
 }
 
 async fn tree_root_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ScriptsRead) {
+        return response;
+    }
     operation_response(scripts_ops::list_tree(
         &state.workspace,
         scripts_ops::ListTreeRequest { path: None },
@@ -295,16 +520,154 @@ async fn tree_path_handler(
     State(state): State<ApiState>,
     AxumPath(path): AxumPath<String>,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::ScriptsRead) {
+        return response;
+    }
     operation_response(scripts_ops::list_tree(
         &state.workspace,
         scripts_ops::ListTreeRequest { path: Some(path) },
     ))
 }
 
+async fn list_envs_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvRead) {
+        return response;
+    }
+    operation_response(env_ops::list_envs(&state.workspace))
+}
+
+async fn create_env_handler(State(state): State<ApiState>, body: Body) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvWrite) {
+        return response;
+    }
+    let body = match parse_json_body::<EnvBody>(body).await {
+        Ok(body) => body,
+        Err(err) => return operation_error_response(err),
+    };
+    let Some(name) = body.name else {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "name is required",
+        ));
+    };
+    operation_response(env_ops::create_env(&state.workspace, &name, &body.params))
+}
+
+async fn show_env_handler(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvRead) {
+        return response;
+    }
+    operation_response(env_ops::show_env(&state.workspace, &name))
+}
+
+async fn put_env_handler(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvWrite) {
+        return response;
+    }
+    let body = match parse_json_body::<EnvBody>(body).await {
+        Ok(body) => body,
+        Err(err) => return operation_error_response(err),
+    };
+    let result = match env_ops::replace_env(&state.workspace, &name, &body.params) {
+        Err(err) if err.code == OperationErrorCode::NotFound => {
+            env_ops::create_env(&state.workspace, &name, &body.params)
+        }
+        other => other,
+    };
+    operation_response(result)
+}
+
+async fn patch_env_handler(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvWrite) {
+        return response;
+    }
+    let body = match parse_json_body::<EnvBody>(body).await {
+        Ok(body) => body,
+        Err(err) => return operation_error_response(err),
+    };
+    for param in body.params {
+        if let Err(err) = env_ops::set_param(&state.workspace, &name, &param.key, &param.value) {
+            return operation_error_response(err);
+        }
+    }
+    operation_response(Ok(()))
+}
+
+async fn delete_env_handler(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvWrite) {
+        return response;
+    }
+    operation_response(env_ops::delete_env(&state.workspace, &name))
+}
+
+async fn set_env_param_handler(
+    State(state): State<ApiState>,
+    AxumPath((name, key)): AxumPath<(String, String)>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvWrite) {
+        return response;
+    }
+    let body = match parse_json_body::<EnvParamBody>(body).await {
+        Ok(body) => body,
+        Err(err) => return operation_error_response(err),
+    };
+    operation_response(env_ops::set_param(
+        &state.workspace,
+        &name,
+        &key,
+        &body.value,
+    ))
+}
+
+async fn delete_env_param_handler(
+    State(state): State<ApiState>,
+    AxumPath((name, key)): AxumPath<(String, String)>,
+) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvWrite) {
+        return response;
+    }
+    operation_response(env_ops::remove_param(&state.workspace, &name, &key))
+}
+
+async fn activate_env_handler(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvActivate) {
+        return response;
+    }
+    operation_response(env_ops::activate_env(&state.workspace, &name))
+}
+
+async fn deactivate_env_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::EnvActivate) {
+        return response;
+    }
+    operation_response(env_ops::deactivate_env(&state.workspace))
+}
+
 async fn list_runs_handler(
     State(state): State<ApiState>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::RunRead) {
+        return response;
+    }
     let request = list_runs_request(raw_query.as_deref());
     operation_response(request.and_then(|request| core::list_runs(&state.workspace, request)))
 }
@@ -313,6 +676,9 @@ async fn show_run_handler(
     State(state): State<ApiState>,
     AxumPath(run_id): AxumPath<String>,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::RunRead) {
+        return response;
+    }
     operation_response(core::show_run(
         &state.workspace,
         core::ShowRunRequest { run_id },
@@ -324,24 +690,58 @@ async fn list_traces_handler(
     AxumPath(run_id): AxumPath<String>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::RunRead) {
+        return response;
+    }
     let request = list_traces_request(run_id, raw_query.as_deref());
     operation_response(request.and_then(|request| core::list_traces(&state.workspace, request)))
 }
 
 async fn queue_stats_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::RunRead) {
+        return response;
+    }
     operation_response(core::queue_stats(&state.workspace))
 }
 
 async fn enqueue_run_handler(State(state): State<ApiState>, body: Body) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::RunWrite) {
+        return response;
+    }
     let body = match parse_json_body::<EnqueueRunBody>(body).await {
         Ok(body) => body,
         Err(err) => return operation_error_response(err),
     };
-    operation_response(core::enqueue_run(
+    if body.env.is_some() {
+        if let Some(response) = require_capability(&state, ApiCapability::EnvUse) {
+            return response;
+        }
+    }
+    if !body.secret_fields.is_empty() || args_use_secret_provider(&body.args) {
+        if let Some(response) = require_capability(&state, ApiCapability::SecretProviderUse) {
+            return response;
+        }
+    }
+    if let Some(response) = require_implicit_secret_capabilities(&state, &body) {
+        return response;
+    }
+    if body
+        .secret_fields
+        .values()
+        .any(|value| !value.starts_with("secret://"))
+    {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "queued HTTP secret_fields must use secret:// refs so workers can resolve them without persisting plaintext",
+        ));
+    }
+    operation_response(core::enqueue_run_with_access(
         &state.workspace,
         core::EnqueueRunRequest {
             script: body.script,
             args: body.args,
+            env: body.env,
+            secret_fields: body.secret_fields.into_iter().collect(),
             run_id: body.run_id,
             actor: body.actor,
             reason: body.reason,
@@ -350,7 +750,92 @@ async fn enqueue_run_handler(State(state): State<ApiState>, body: Body) -> Respo
             parent_run_id: body.parent_run_id,
             cron_schedule_id: body.cron_schedule_id,
         },
+        &state.policy.secret_access(),
     ))
+}
+
+fn require_implicit_secret_capabilities(
+    state: &ApiState,
+    body: &EnqueueRunBody,
+) -> Option<Response> {
+    let description = match core::describe_script(
+        &state.workspace,
+        core::DescribeScriptRequest {
+            script: body.script.clone(),
+        },
+    ) {
+        Ok(description) => description,
+        Err(err) => return Some(operation_error_response(err)),
+    };
+    let repo = crate::adapters::workspace_repository::FsWorkspaceRepository::new(
+        state.workspace.scripts_root().to_path_buf(),
+    );
+    let schema = match repo.read_schema(std::path::Path::new(&description.absolute_path)) {
+        Ok(schema) => schema,
+        Err(err) => {
+            return Some(operation_error_response(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                err.to_string(),
+            )))
+        }
+    };
+    let secret_fields: Vec<_> = schema
+        .fields
+        .iter()
+        .filter(|field| field.is_secret())
+        .collect();
+    if secret_fields.is_empty() {
+        return None;
+    }
+
+    if secret_fields.iter().any(|field| field.default.is_some()) {
+        if let Some(response) = require_capability(state, ApiCapability::SecretProviderUse) {
+            return Some(response);
+        }
+    }
+
+    let env_file = match body
+        .env
+        .as_deref()
+        .map(|name| crate::operations::envs::env_file_path(&state.workspace, name))
+        .transpose()
+    {
+        Ok(path) => path,
+        Err(err) => return Some(operation_error_response(err)),
+    };
+    let run_env = match crate::adapters::environments::resolve_run_env(
+        state.workspace.envs_dir(),
+        env_file.as_deref(),
+    ) {
+        Ok(run_env) => run_env,
+        Err(err) => {
+            return Some(operation_error_response(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                err.to_string(),
+            )))
+        }
+    };
+    if secret_fields.iter().any(|field| {
+        run_env
+            .iter()
+            .any(|(key, _)| key.eq_ignore_ascii_case(&field.name))
+    }) {
+        if let Some(response) = require_capability(state, ApiCapability::EnvUse) {
+            return Some(response);
+        }
+    }
+
+    None
+}
+
+fn args_use_secret_provider(args: &[String]) -> bool {
+    args.iter().any(|arg| {
+        arg.starts_with("secret://")
+            || arg
+                .split_once('=')
+                .map(|(_, value)| value.starts_with("secret://"))
+                .unwrap_or(false)
+    })
 }
 
 async fn cancel_run_handler(
@@ -358,6 +843,9 @@ async fn cancel_run_handler(
     AxumPath(run_id): AxumPath<String>,
     body: Body,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::RunWrite) {
+        return response;
+    }
     let body = match parse_json_body::<RunReasonBody>(body).await {
         Ok(body) => body,
         Err(err) => return operation_error_response(err),
@@ -376,6 +864,9 @@ async fn dead_letter_run_handler(
     AxumPath(run_id): AxumPath<String>,
     body: Body,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::RunWrite) {
+        return response;
+    }
     let body = match parse_json_body::<RunReasonBody>(body).await {
         Ok(body) => body,
         Err(err) => return operation_error_response(err),
@@ -390,10 +881,16 @@ async fn dead_letter_run_handler(
 }
 
 async fn list_batteries_handler(State(state): State<ApiState>) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::BatteryRead) {
+        return response;
+    }
     operation_response(battery_ops::list_batteries(&state.workspace))
 }
 
 async fn add_battery_handler(State(state): State<ApiState>, body: Body) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::BatteryWrite) {
+        return response;
+    }
     let body = match parse_json_body::<AddBatteryBody>(body).await {
         Ok(body) => body,
         Err(err) => return operation_error_response(err),
@@ -423,6 +920,9 @@ async fn sync_battery_handler(
     State(state): State<ApiState>,
     AxumPath(battery_id): AxumPath<String>,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::BatteryWrite) {
+        return response;
+    }
     let request = require_https_battery_source(&state.workspace, &battery_id)
         .map(|_| battery_ops::SyncBatteryRequest { name: battery_id });
     operation_response(
@@ -434,6 +934,9 @@ async fn inspect_battery_handler(
     State(state): State<ApiState>,
     AxumPath(battery_id): AxumPath<String>,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::BatteryRead) {
+        return response;
+    }
     let request = require_https_battery_source(&state.workspace, &battery_id)
         .map(|_| battery_ops::InspectBatteryRequest { name: battery_id });
     operation_response(
@@ -445,6 +948,9 @@ async fn list_battery_scripts_handler(
     State(state): State<ApiState>,
     AxumPath(battery_id): AxumPath<String>,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::BatteryRead) {
+        return response;
+    }
     let request = require_https_battery_source(&state.workspace, &battery_id)
         .map(|_| battery_ops::InspectBatteryRequest { name: battery_id });
     operation_response(
@@ -457,6 +963,9 @@ async fn install_battery_script_handler(
     AxumPath((battery_id, script_id)): AxumPath<(String, String)>,
     body: Body,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::BatteryWrite) {
+        return response;
+    }
     let body = match parse_json_body::<InstallBatteryScriptBody>(body).await {
         Ok(body) => body,
         Err(err) => return operation_error_response(err),
@@ -478,6 +987,9 @@ async fn remove_battery_handler(
     AxumPath(battery_id): AxumPath<String>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
+    if let Some(response) = require_capability(&state, ApiCapability::BatteryWrite) {
+        return response;
+    }
     let request = query_pairs(raw_query.as_deref()).and_then(|pairs| {
         query_bool(&pairs, "remove_cache").map(|remove_cache| battery_ops::RemoveBatteryRequest {
             name: battery_id,
@@ -553,6 +1065,16 @@ fn error_response(status: StatusCode, code: &str, message: &str) -> Response {
     (status, Json(json::err_envelope(code, message))).into_response()
 }
 
+fn require_capability(state: &ApiState, capability: ApiCapability) -> Option<Response> {
+    (!state.policy.permits(capability)).then(|| {
+        error_response(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "token is not permitted for this operation",
+        )
+    })
+}
+
 fn operation_response<T: Serialize>(result: OperationResult<T>) -> Response {
     match result {
         Ok(data) => (StatusCode::OK, Json(json::ok_envelope(data))).into_response(),
@@ -565,6 +1087,7 @@ fn operation_error_response(err: OperationError) -> Response {
         OperationErrorCode::InvalidInput
         | OperationErrorCode::UnsafePath
         | OperationErrorCode::ManifestInvalid => StatusCode::BAD_REQUEST,
+        OperationErrorCode::Forbidden => StatusCode::FORBIDDEN,
         OperationErrorCode::NotFound => StatusCode::NOT_FOUND,
         OperationErrorCode::AlreadyExists
         | OperationErrorCode::Conflict
@@ -755,6 +1278,24 @@ mod tests {
         .unwrap();
     }
 
+    fn write_secret_script(root: &std::path::Path, name: &str, default: Option<&str>) {
+        let default_line = default
+            .map(|value| format!(r#", "Default":"{value}""#))
+            .unwrap_or_default();
+        std::fs::write(
+            root.join(name),
+            format!(
+                r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {{"Name":"Secret","Fields":[{{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"{default_line}}}]}}
+# OMAKURE_SCHEMA_END
+echo ok
+"#
+            ),
+        )
+        .unwrap();
+    }
+
     fn authed_request(uri: &str) -> Request<Body> {
         Request::builder()
             .method(Method::GET)
@@ -767,6 +1308,16 @@ mod tests {
     fn authed_json_request(uri: &str, body: &str) -> Request<Body> {
         Request::builder()
             .method(Method::POST)
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    fn authed_json_method_request(method: Method, uri: &str, body: &str) -> Request<Body> {
+        Request::builder()
+            .method(method)
             .uri(uri)
             .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
             .header(header::CONTENT_TYPE, "application/json")
@@ -862,6 +1413,98 @@ mod tests {
             serde_json::to_string_pretty(&registry).unwrap(),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn http_route_inventory_is_non_empty_and_unique() {
+        assert!(!HTTP_ROUTE_INVENTORY.is_empty());
+        let mut seen = std::collections::BTreeSet::new();
+        for entry in HTTP_ROUTE_INVENTORY {
+            assert!(
+                seen.insert(*entry),
+                "duplicate HTTP route inventory entry: {entry:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn http_route_inventory_matches_router_with_policy_registrations() {
+        let source = include_str!("api.rs");
+        let from_router = parse_router_route_registrations(source);
+        let inventory: Vec<_> = HTTP_ROUTE_INVENTORY.to_vec();
+        assert_eq!(
+            from_router, inventory,
+            "router_with_policy `.route(...)` registrations must equal HTTP_ROUTE_INVENTORY"
+        );
+    }
+
+    fn parse_router_route_registrations(source: &str) -> Vec<(&str, &str)> {
+        let start = source
+            .find("fn router_with_policy(")
+            .expect("router_with_policy");
+        let after = &source[start..];
+        let router_start = after.find("Router::new()").expect("Router::new");
+        let block = &after[router_start..];
+        // End at `.fallback(` which always follows the last `.route(...)`.
+        let end = block.find(".fallback(").expect(".fallback after routes");
+        let block = &block[..end];
+        let mut routes = Vec::new();
+        let mut i = 0;
+        let bytes = block.as_bytes();
+        while i < bytes.len() {
+            if block[i..].starts_with(".route(") {
+                i += ".route(".len();
+                while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                    i += 1;
+                }
+                assert_eq!(
+                    bytes.get(i),
+                    Some(&b'"'),
+                    "expected path string after .route("
+                );
+                i += 1;
+                let path_start = i;
+                while i < bytes.len() && bytes[i] != b'"' {
+                    i += 1;
+                }
+                let path = &block[path_start..i];
+                i += 1; // closing quote
+                while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b',') {
+                    i += 1;
+                }
+                let mut depth = 1usize;
+                let methods_start = i;
+                while i < bytes.len() && depth > 0 {
+                    match bytes[i] {
+                        b'(' => depth += 1,
+                        b')' => depth -= 1,
+                        _ => {}
+                    }
+                    if depth > 0 {
+                        i += 1;
+                    }
+                }
+                let methods_src = &block[methods_start..i];
+                for (token, method) in [
+                    ("get(", "GET"),
+                    ("post(", "POST"),
+                    ("put(", "PUT"),
+                    ("patch(", "PATCH"),
+                    ("delete(", "DELETE"),
+                ] {
+                    if methods_src.contains(token) {
+                        routes.push((method, path));
+                    }
+                }
+            } else {
+                i += 1;
+            }
+        }
+        assert!(
+            !routes.is_empty(),
+            "parsed zero .route() registrations from router_with_policy"
+        );
+        routes
     }
 
     #[test]
@@ -973,6 +1616,65 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let body = response_json(response).await;
         assert_eq!(body["error"]["code"], "not_found");
+    }
+
+    #[tokio::test]
+    async fn read_endpoints_require_explicit_read_capabilities() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_script(workspace.scripts_root(), "job.sh");
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([ApiCapability::RunWrite]),
+        );
+
+        for uri in [
+            "/v1/config",
+            "/v1/workspace",
+            "/v1/doctor",
+            "/v1/scripts",
+            "/v1/tree",
+            "/v1/runs",
+            "/v1/queue/stats",
+            "/v1/batteries",
+        ] {
+            let response = app.clone().oneshot(authed_request(uri)).await.unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN, "uri: {uri}");
+            let body = response_json(response).await;
+            assert_eq!(body["error"]["code"], "forbidden");
+        }
+    }
+
+    #[tokio::test]
+    async fn read_endpoints_accept_matching_read_capabilities() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_script(workspace.scripts_root(), "job.sh");
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([
+                ApiCapability::ConfigRead,
+                ApiCapability::ScriptsRead,
+                ApiCapability::RunRead,
+                ApiCapability::BatteryRead,
+            ]),
+        );
+
+        for uri in [
+            "/v1/config",
+            "/v1/workspace",
+            "/v1/doctor",
+            "/v1/scripts",
+            "/v1/tree",
+            "/v1/runs",
+            "/v1/queue/stats",
+            "/v1/batteries",
+        ] {
+            let response = app.clone().oneshot(authed_request(uri)).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "uri: {uri}");
+        }
     }
 
     #[tokio::test]
@@ -1162,6 +1864,16 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "tools/job.sh");
+        std::fs::write(
+            workspace.scripts_root().join("tools/secret.sh"),
+            r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Default":"schema_secret_default","Arg":"--token"}]}
+# OMAKURE_SCHEMA_END
+echo ok
+"#,
+        )
+        .unwrap();
 
         let app = router(TOKEN.to_string(), workspace);
         let show = app
@@ -1174,12 +1886,21 @@ mod tests {
         assert_eq!(show_body["data"]["relative_path"], "tools/job.sh");
 
         let schema = app
+            .clone()
             .oneshot(authed_request("/v1/scripts/tools/job.sh/schema"))
             .await
             .unwrap();
         assert_eq!(schema.status(), StatusCode::OK);
         let schema_body = response_json(schema).await;
         assert_eq!(schema_body["data"]["name"], "tools/job.sh");
+
+        let secret_schema = app
+            .oneshot(authed_request("/v1/scripts/tools/secret.sh/schema"))
+            .await
+            .unwrap();
+        assert_eq!(secret_schema.status(), StatusCode::OK);
+        let secret_body = response_json(secret_schema).await;
+        assert!(!secret_body.to_string().contains("schema_secret_default"));
     }
 
     #[tokio::test]
@@ -1336,6 +2057,174 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn env_endpoints_round_trip_and_redact_values() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let app = router(TOKEN.to_string(), workspace.clone_for_executor());
+
+        let create = app
+            .clone()
+            .oneshot(authed_json_request(
+                "/v1/envs",
+                r#"{"name":"prod","params":[{"key":"HOST","value":"prod.example.com"},{"key":"API_KEY","value":"super_secret"}]}"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(create.status(), StatusCode::OK);
+
+        let show = app
+            .clone()
+            .oneshot(authed_request("/v1/envs/prod"))
+            .await
+            .unwrap();
+        assert_eq!(show.status(), StatusCode::OK);
+        let show_body = response_json(show).await;
+        assert_eq!(show_body["data"][0]["key"], "HOST");
+        assert_eq!(show_body["data"][1]["key"], "API_KEY");
+        assert_eq!(show_body["data"][1]["value"], "****");
+        assert!(!show_body.to_string().contains("super_secret"));
+
+        let set = app
+            .clone()
+            .oneshot(authed_json_method_request(
+                Method::PUT,
+                "/v1/envs/prod/params/PORT",
+                r#"{"value":"443"}"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(set.status(), StatusCode::OK);
+
+        let activate = app
+            .clone()
+            .oneshot(authed_json_request("/v1/envs/prod/activate", r#"{}"#))
+            .await
+            .unwrap();
+        assert_eq!(activate.status(), StatusCode::OK);
+
+        let list = app
+            .clone()
+            .oneshot(authed_request("/v1/envs"))
+            .await
+            .unwrap();
+        assert_eq!(list.status(), StatusCode::OK);
+        let list_body = response_json(list).await;
+        assert_eq!(list_body["data"][0]["name"], "prod");
+        assert_eq!(list_body["data"][0]["file"], "prod.conf");
+        assert_eq!(list_body["data"][0]["active"], true);
+
+        let remove_param = app
+            .clone()
+            .oneshot(authed_delete_request("/v1/envs/prod/params/API_KEY"))
+            .await
+            .unwrap();
+        assert_eq!(remove_param.status(), StatusCode::OK);
+
+        let deactivate = app
+            .clone()
+            .oneshot(authed_delete_request("/v1/envs/active"))
+            .await
+            .unwrap();
+        assert_eq!(deactivate.status(), StatusCode::OK);
+
+        let delete = app
+            .oneshot(authed_delete_request("/v1/envs/prod"))
+            .await
+            .unwrap();
+        assert_eq!(delete.status(), StatusCode::OK);
+        assert!(!workspace.envs_dir().join("prod.conf").exists());
+    }
+
+    #[tokio::test]
+    async fn env_endpoints_replace_patch_and_reject_conf_route_names() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let app = router(TOKEN.to_string(), workspace);
+
+        let replace = app
+            .clone()
+            .oneshot(authed_json_method_request(
+                Method::PUT,
+                "/v1/envs/dev",
+                r#"{"params":[{"key":"HOST","value":"localhost"}]}"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(replace.status(), StatusCode::OK);
+
+        let patch = app
+            .clone()
+            .oneshot(authed_json_method_request(
+                Method::PATCH,
+                "/v1/envs/dev",
+                r#"{"params":[{"key":"HOST","value":"127.0.0.1"},{"key":"TOKEN","value":"secret_value"}]}"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(patch.status(), StatusCode::OK);
+
+        let show = app
+            .clone()
+            .oneshot(authed_request("/v1/envs/dev"))
+            .await
+            .unwrap();
+        let show_body = response_json(show).await;
+        assert_eq!(show_body["data"][0]["value"], "127.0.0.1");
+        assert_eq!(show_body["data"][1]["value"], "****");
+        assert!(!show_body.to_string().contains("secret_value"));
+
+        let invalid = app
+            .oneshot(authed_request("/v1/envs/dev.conf"))
+            .await
+            .unwrap();
+        assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+        let invalid_body = response_json(invalid).await;
+        assert_eq!(invalid_body["error"]["code"], "invalid_input");
+    }
+
+    #[tokio::test]
+    async fn env_endpoints_require_specific_policy_capabilities() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        env_ops::create_env(
+            &workspace,
+            "prod",
+            &[env_ops::EnvParam {
+                key: "HOST".into(),
+                value: "prod.example.com".into(),
+            }],
+        )
+        .unwrap();
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([ApiCapability::EnvRead]),
+        );
+
+        let read = app
+            .clone()
+            .oneshot(authed_request("/v1/envs/prod"))
+            .await
+            .unwrap();
+        assert_eq!(read.status(), StatusCode::OK);
+
+        for request in [
+            authed_json_method_request(
+                Method::PATCH,
+                "/v1/envs/prod",
+                r#"{"params":[{"key":"HOST","value":"changed"}]}"#,
+            ),
+            authed_json_request("/v1/envs/prod/activate", r#"{}"#),
+            authed_delete_request("/v1/envs/active"),
+        ] {
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            let body = response_json(response).await;
+            assert_eq!(body["error"]["code"], "forbidden");
+        }
+    }
+
+    #[tokio::test]
     async fn runs_and_queue_stats_endpoints_return_operation_data() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
@@ -1360,6 +2249,8 @@ mod tests {
                 script_name: None,
                 omakure_version: app_meta::APP_VERSION.to_string(),
                 trigger: runs::RunTrigger::Manual,
+                env_name: None,
+                allowed_secret_refs: None,
             },
         )
         .unwrap();
@@ -1456,6 +2347,347 @@ mod tests {
         assert_eq!(body["data"]["state"], "queued");
         assert_eq!(body["data"]["actor"], "agent");
         assert_eq!(body["data"]["priority"], 7);
+    }
+
+    #[tokio::test]
+    async fn enqueue_run_endpoint_redacts_secret_args_in_response_and_storage() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(
+            workspace.scripts_root().join("secret.sh"),
+            r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}
+# OMAKURE_SCHEMA_END
+echo ok
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "token=http_secret_value\n",
+        )
+        .unwrap();
+
+        let response = router(TOKEN.to_string(), workspace.clone_for_executor())
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret.sh","run_id":"rid-http-secret","args":["--token","secret://prod/token"]}"#,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        let rendered = body.to_string();
+        assert!(rendered.contains("secret://prod/token"));
+        assert!(!rendered.contains("http_secret_value"));
+
+        let conn = runs::open(&workspace).unwrap();
+        let row = runs::get_run(&conn, "rid-http-secret").unwrap().unwrap();
+        assert!(row.args_json.contains("secret://prod/token"));
+        assert!(!row.args_json.contains("http_secret_value"));
+    }
+
+    #[tokio::test]
+    async fn enqueue_run_rejects_plaintext_secret_arg_values() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(
+            workspace.scripts_root().join("secret.sh"),
+            r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}
+# OMAKURE_SCHEMA_END
+echo ok
+"#,
+        )
+        .unwrap();
+
+        let response = router(TOKEN.to_string(), workspace)
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret.sh","run_id":"rid-http-plain-secret","args":["--token","http_secret_value"]}"#,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "invalid_input");
+        assert!(!body.to_string().contains("http_secret_value"));
+    }
+
+    #[tokio::test]
+    async fn enqueue_run_accepts_env_and_rejects_non_reconstructable_secret_fields() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(
+            workspace.scripts_root().join("secret.sh"),
+            r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"},{"Name":"MODE","Type":"string","Arg":"--mode"}]}
+# OMAKURE_SCHEMA_END
+echo ok
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "TOKEN=env_secret_value\n",
+        )
+        .unwrap();
+
+        let env_response = router(TOKEN.to_string(), workspace.clone_for_executor())
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret.sh","run_id":"rid-http-env-secret","args":["--mode","fast"],"env":"prod"}"#,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(env_response.status(), StatusCode::OK);
+        let env_body = response_json(env_response).await;
+        assert!(env_body.to_string().contains("<redacted>"));
+        assert!(!env_body.to_string().contains("env_secret_value"));
+
+        let conn = runs::open(&workspace).unwrap();
+        let env_row = runs::get_run(&conn, "rid-http-env-secret")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            runs::get_run_env(&conn, "rid-http-env-secret")
+                .unwrap()
+                .as_deref(),
+            Some("prod")
+        );
+        assert!(env_row.args_json.contains("<redacted>"));
+        assert!(!env_row.args_json.contains("env_secret_value"));
+        drop(conn);
+
+        let direct_response = router(TOKEN.to_string(), workspace.clone_for_executor())
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret.sh","run_id":"rid-http-direct-secret","secret_fields":{"TOKEN":"direct_secret_value"}}"#,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(direct_response.status(), StatusCode::BAD_REQUEST);
+        let direct_body = response_json(direct_response).await;
+        assert_eq!(direct_body["error"]["code"], "invalid_input");
+        assert!(!direct_body.to_string().contains("direct_secret_value"));
+    }
+
+    #[tokio::test]
+    async fn enqueue_run_enforces_secret_provider_acl() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        std::fs::write(
+            workspace.scripts_root().join("secret.sh"),
+            r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}
+# OMAKURE_SCHEMA_END
+echo ok
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "token=provider_secret\n",
+        )
+        .unwrap();
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace.clone_for_executor(),
+            ApiPolicy::allow_with_secret_refs(
+                [ApiCapability::RunWrite, ApiCapability::SecretProviderUse],
+                ["secret://prod/other"],
+            ),
+        );
+
+        let denied = app
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret.sh","run_id":"rid-denied-ref","args":["--token","secret://prod/token"]}"#,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+        let body = response_json(denied).await;
+        assert_eq!(body["error"]["code"], "forbidden");
+        assert!(!body.to_string().contains("provider_secret"));
+    }
+
+    #[tokio::test]
+    async fn enqueue_run_env_and_secret_fields_require_policy_capabilities() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_script(workspace.scripts_root(), "job.sh");
+        std::fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "TOKEN=env_secret_value\n",
+        )
+        .unwrap();
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([ApiCapability::RunWrite]),
+        );
+
+        let plain = app
+            .clone()
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"job.sh","run_id":"rid-plain"}"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(plain.status(), StatusCode::OK);
+
+        for body in [
+            r#"{"script":"job.sh","run_id":"rid-env","env":"prod"}"#,
+            r#"{"script":"job.sh","run_id":"rid-secret","secret_fields":{"TOKEN":"direct_secret_value"}}"#,
+            r#"{"script":"job.sh","run_id":"rid-secret-ref","args":["--token","secret://prod/token"]}"#,
+        ] {
+            let response = app
+                .clone()
+                .oneshot(authed_json_request("/v1/runs", body))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            let body = response_json(response).await;
+            assert_eq!(body["error"]["code"], "forbidden");
+        }
+    }
+
+    #[tokio::test]
+    async fn enqueue_run_implicit_secret_default_requires_secret_capability() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_secret_script(
+            workspace.scripts_root(),
+            "secret-default.sh",
+            Some("schema_secret_value"),
+        );
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([ApiCapability::RunWrite]),
+        );
+
+        let response = app
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret-default.sh","run_id":"rid-default"}"#,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "forbidden");
+        assert!(!body.to_string().contains("schema_secret_value"));
+    }
+
+    #[tokio::test]
+    async fn enqueue_run_implicit_active_env_secret_requires_env_capability() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_secret_script(workspace.scripts_root(), "secret-env.sh", None);
+        std::fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "token=active_secret\n",
+        )
+        .unwrap();
+        std::fs::write(workspace.envs_active_path(), "prod.conf\n").unwrap();
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([ApiCapability::RunWrite]),
+        );
+
+        let response = app
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret-env.sh","run_id":"rid-env-implicit"}"#,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "forbidden");
+        assert!(!body.to_string().contains("active_secret"));
+    }
+
+    #[tokio::test]
+    async fn mutating_run_routes_require_run_write_capability() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let conn = runs::open(&workspace).unwrap();
+        runs::enqueue(
+            &conn,
+            "job.sh",
+            &[],
+            EnqueueOptions {
+                run_id: Some("rid-cap".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([ApiCapability::EnvRead]),
+        );
+
+        for request in [
+            authed_json_request("/v1/runs/rid-cap/cancel", r#"{}"#),
+            authed_json_request("/v1/runs/rid-cap/dead-letter", r#"{}"#),
+        ] {
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            let body = response_json(response).await;
+            assert_eq!(body["error"]["code"], "forbidden");
+        }
+    }
+
+    #[tokio::test]
+    async fn mutating_battery_routes_require_battery_write_capability() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        battery_ops::add_battery(
+            &workspace,
+            battery_ops::AddBatteryRequest {
+                name: "azure".into(),
+                git_url: "https://example.invalid/azure.git".into(),
+                requested_ref: "main".into(),
+            },
+        )
+        .unwrap();
+        let app = router_with_policy(
+            TOKEN.to_string(),
+            workspace,
+            ApiPolicy::allow([ApiCapability::EnvRead]),
+        );
+
+        for request in [
+            authed_json_request(
+                "/v1/batteries",
+                r#"{"name":"new","git_url":"https://example.invalid/new.git"}"#,
+            ),
+            authed_json_request("/v1/batteries/azure/sync", r#"{}"#),
+            authed_json_request("/v1/batteries/azure/scripts/list/install", r#"{}"#),
+            authed_delete_request("/v1/batteries/azure"),
+        ] {
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            let body = response_json(response).await;
+            assert_eq!(body["error"]["code"], "forbidden");
+        }
     }
 
     #[tokio::test]
@@ -1556,6 +2788,8 @@ mod tests {
                 script_name: None,
                 omakure_version: app_meta::APP_VERSION.to_string(),
                 trigger: runs::RunTrigger::Manual,
+                env_name: None,
+                allowed_secret_refs: None,
             },
         )
         .unwrap();
@@ -1606,6 +2840,8 @@ mod tests {
                 script_name: None,
                 omakure_version: app_meta::APP_VERSION.to_string(),
                 trigger: runs::RunTrigger::Manual,
+                env_name: None,
+                allowed_secret_refs: None,
             },
         )
         .unwrap();
@@ -1658,6 +2894,8 @@ mod tests {
                 script_name: None,
                 omakure_version: app_meta::APP_VERSION.to_string(),
                 trigger: runs::RunTrigger::Manual,
+                env_name: None,
+                allowed_secret_refs: None,
             },
         )
         .unwrap();
@@ -1692,6 +2930,8 @@ mod tests {
                 script_name: None,
                 omakure_version: app_meta::APP_VERSION.to_string(),
                 trigger: runs::RunTrigger::Manual,
+                env_name: None,
+                allowed_secret_refs: None,
             },
         )
         .unwrap();

@@ -151,7 +151,8 @@ fn render_history_output(frame: &mut Frame, area: Rect, app: &mut App, theme: &T
     let mut lines = Vec::new();
     if let Some(entry) = app.current_history_entry() {
         let name = app.display_path(&PathBuf::from(&entry.script_path));
-        let args = format_args_human(&entry.args_json);
+        let secrets = inferred_arg_secrets(&entry.args_json);
+        let args = format_args_human_redacted(&entry.args_json, &secrets);
         let status = ExecutionStatus::from_run(entry);
         let (status_label, status_style) = status_label_and_style(&status, theme);
         lines.push(Line::from(format!("Script: {}", name)));
@@ -166,7 +167,7 @@ fn render_history_output(frame: &mut Frame, area: Rect, app: &mut App, theme: &T
         }
         lines.push(Line::from(format!("Run id: {}", entry.run_id)));
         lines.push(Line::from(""));
-        let output = format_run_output(entry);
+        let output = format_run_output_redacted(entry, &secrets);
         if output.trim().is_empty() {
             lines.push(Line::from("(no output)"));
         } else {
@@ -214,12 +215,54 @@ pub(crate) fn format_run_output(entry: &RunRow) -> String {
     parts.join("\n\n")
 }
 
+pub(crate) fn format_run_output_redacted(entry: &RunRow, secrets: &[String]) -> String {
+    crate::secrets::redact_text(&format_run_output(entry), secrets)
+}
+
 fn format_args_human(args_json: &str) -> String {
     match serde_json::from_str::<Vec<String>>(args_json) {
         Ok(args) if args.is_empty() => "-".to_string(),
         Ok(args) => args.join(" "),
         Err(_) => args_json.to_string(),
     }
+}
+
+pub(crate) fn inferred_arg_secrets(args_json: &str) -> Vec<String> {
+    let Ok(args) = serde_json::from_str::<Vec<String>>(args_json) else {
+        return Vec::new();
+    };
+    let mut secrets = Vec::new();
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        if let Some((flag, value)) = arg.split_once('=') {
+            if is_sensitive_arg_flag(flag) && !value.is_empty() {
+                secrets.push(value.to_string());
+            }
+            continue;
+        }
+        if is_sensitive_arg_flag(arg) {
+            if let Some(value) = iter.next() {
+                if !value.is_empty() {
+                    secrets.push(value.to_string());
+                }
+            }
+        }
+    }
+    secrets.sort();
+    secrets.dedup();
+    secrets
+}
+
+pub(crate) fn format_args_human_redacted(args_json: &str, secrets: &[String]) -> String {
+    crate::secrets::redact_text(&format_args_human(args_json), secrets)
+}
+
+fn is_sensitive_arg_flag(flag: &str) -> bool {
+    let normalized = flag
+        .trim_start_matches('-')
+        .replace('-', "_")
+        .to_ascii_uppercase();
+    crate::adapters::environments::is_sensitive_key(&normalized)
 }
 
 const HISTORY_STATE_WIDTH: u16 = 12;
@@ -313,6 +356,23 @@ mod tests {
     }
 
     #[test]
+    fn format_args_and_output_redact_inferred_secret_values() {
+        let args_json = r#"["--token","plain-secret-value","--target","prod"]"#;
+        let secrets = inferred_arg_secrets(args_json);
+        assert_eq!(secrets, vec!["plain-secret-value"]);
+
+        let args = format_args_human_redacted(args_json, &secrets);
+        assert!(!args.contains("plain-secret-value"));
+        assert!(args.contains("<redacted>"));
+        assert!(args.contains("prod"));
+
+        let row = row("token=plain-secret-value\n", "", None);
+        let output = format_run_output_redacted(&row, &secrets);
+        assert!(!output.contains("plain-secret-value"));
+        assert!(output.contains("<redacted>"));
+    }
+
+    #[test]
     fn format_run_output_empty_stdout_stderr() {
         let r = row("", "", None);
         assert_eq!(format_run_output(&r), "");
@@ -334,6 +394,15 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use tempfile::TempDir;
+
+    fn rendered(backend: &TestBackend) -> String {
+        backend
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    }
 
     fn history_row(tmp: &TempDir, name: &str, state: RunState) -> RunRow {
         RunRow {
@@ -450,6 +519,33 @@ mod tests {
         terminal
             .draw(|f| render_history(f, f.size(), &mut app, &theme))
             .unwrap();
+    }
+
+    #[test]
+    fn render_history_output_masks_secret_like_args_and_output() {
+        let tmp = TempDir::new().unwrap();
+        let repo = FsWorkspaceRepository::new(tmp.path());
+        let runner = MultiScriptRunner::new();
+        let svc = ScriptService::new(Box::new(repo), Box::new(runner));
+        let ws = crate::workspace::Workspace::new(tmp.path().to_path_buf());
+        let mut row = history_row(&tmp, "deploy.sh", RunState::Completed);
+        row.args_json = r#"["--token","plain-secret-value","--target","prod"]"#.into();
+        row.stdout = "token=plain-secret-value\n".into();
+        let mut app = crate::adapters::tui::app::App::test_new(&svc, ws, vec![], vec![row]);
+        app.screen = crate::adapters::tui::app::Screen::History;
+        app.history.focus = HistoryFocus::Output;
+
+        let theme = app.theme.clone();
+        let backend = TestBackend::new(90, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_history(f, f.size(), &mut app, &theme))
+            .unwrap();
+        let output = rendered(terminal.backend());
+
+        assert!(!output.contains("plain-secret-value"));
+        assert!(output.contains("<redacted>"));
+        assert!(output.contains("prod"));
     }
 
     #[test]

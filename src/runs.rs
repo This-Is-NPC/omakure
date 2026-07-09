@@ -513,6 +513,17 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             parent_run_id TEXT,
             omakure_version TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS run_envs (
+            run_id TEXT PRIMARY KEY,
+            env_name TEXT NOT NULL,
+            FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS run_secret_refs (
+            run_id TEXT NOT NULL,
+            secret_ref TEXT NOT NULL,
+            PRIMARY KEY(run_id, secret_ref),
+            FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+        );
         CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at DESC);
         CREATE INDEX IF NOT EXISTS idx_runs_script_path ON runs(script_path);
         CREATE INDEX IF NOT EXISTS idx_runs_actor ON runs(actor);
@@ -747,7 +758,11 @@ pub struct EnqueueOptions {
     pub script_name: Option<String>,
     pub omakure_version: String,
     pub trigger: RunTrigger,
+    pub env_name: Option<String>,
+    pub allowed_secret_refs: Option<Vec<String>>,
 }
+
+pub const ALLOW_ALL_SECRET_REFS_POLICY: &str = "__omakure_allow_all_secret_refs__";
 
 /// Insert a fresh `state='queued'` row. Returns the inserted [`RunRow`].
 pub fn enqueue(
@@ -788,6 +803,17 @@ pub fn enqueue(
         omakure_version: opts.omakure_version,
     };
     insert_run(conn, &row)?;
+    if let Some(env_name) = opts.env_name.as_deref() {
+        set_run_env(conn, &row.run_id, env_name)?;
+    }
+    match opts.allowed_secret_refs.as_deref() {
+        Some(refs) => set_run_secret_refs(conn, &row.run_id, refs)?,
+        None => set_run_secret_refs(
+            conn,
+            &row.run_id,
+            &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
+        )?,
+    }
     Ok(row)
 }
 
@@ -833,7 +859,83 @@ pub fn start_inline(
         omakure_version: opts.omakure_version,
     };
     insert_run(conn, &row)?;
+    if let Some(env_name) = opts.env_name.as_deref() {
+        set_run_env(conn, &row.run_id, env_name)?;
+    }
+    match opts.allowed_secret_refs.as_deref() {
+        Some(refs) => set_run_secret_refs(conn, &row.run_id, refs)?,
+        None => set_run_secret_refs(
+            conn,
+            &row.run_id,
+            &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
+        )?,
+    }
     Ok(row)
+}
+
+pub fn set_run_env(conn: &Connection, run_id: &str, env_name: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO run_envs (run_id, env_name) VALUES (?, ?) \
+         ON CONFLICT(run_id) DO UPDATE SET env_name = excluded.env_name",
+        params![run_id, env_name],
+    )
+    .map_err(|err| format!("Set run env failed: {}", err))?;
+    Ok(())
+}
+
+pub fn get_run_env(conn: &Connection, run_id: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT env_name FROM run_envs WHERE run_id = ?",
+        [run_id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|err| format!("Get run env failed: {}", err))
+}
+
+pub fn set_run_secret_refs(conn: &Connection, run_id: &str, refs: &[String]) -> Result<(), String> {
+    conn.execute("DELETE FROM run_secret_refs WHERE run_id = ?", [run_id])
+        .map_err(|err| format!("Clear run secret refs failed: {}", err))?;
+    if refs.is_empty() {
+        conn.execute(
+            "INSERT OR IGNORE INTO run_secret_refs (run_id, secret_ref) VALUES (?, '')",
+            [run_id],
+        )
+        .map_err(|err| format!("Set run secret ref policy failed: {}", err))?;
+        return Ok(());
+    }
+    for secret_ref in refs {
+        conn.execute(
+            "INSERT OR IGNORE INTO run_secret_refs (run_id, secret_ref) VALUES (?, ?)",
+            params![run_id, secret_ref],
+        )
+        .map_err(|err| format!("Set run secret ref failed: {}", err))?;
+    }
+    Ok(())
+}
+
+pub fn get_run_secret_refs(conn: &Connection, run_id: &str) -> Result<Option<Vec<String>>, String> {
+    let mut stmt = conn
+        .prepare("SELECT secret_ref FROM run_secret_refs WHERE run_id = ? ORDER BY secret_ref")
+        .map_err(|err| format!("Prepare run secret refs failed: {}", err))?;
+    let rows = stmt
+        .query_map([run_id], |row| row.get(0))
+        .map_err(|err| format!("Query run secret refs failed: {}", err))?;
+    let mut refs = Vec::new();
+    let mut has_policy = false;
+    for row in rows {
+        let secret_ref: String =
+            row.map_err(|err| format!("Row run secret refs failed: {}", err))?;
+        has_policy = true;
+        if !secret_ref.is_empty() {
+            refs.push(secret_ref);
+        }
+    }
+    if !has_policy {
+        Ok(None)
+    } else {
+        Ok(Some(refs))
+    }
 }
 
 /// Filters used by [`claim_next`] to scope a worker to a subset of jobs.

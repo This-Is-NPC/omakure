@@ -20,12 +20,40 @@ impl EnvironmentService {
         self.repo.load_environment_config()
     }
 
-    pub fn set_active_env(&self, name: Option<&str>) -> AppResult<()> {
-        self.repo.set_active_env(name)
-    }
-
     pub fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview> {
         self.repo.load_env_preview(path)
+    }
+
+    pub fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
+        self.repo.create_env(name, params)
+    }
+
+    pub fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview> {
+        self.repo.load_env_preview_by_name(name)
+    }
+
+    pub fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
+        self.repo.replace_env(name, params)
+    }
+
+    pub fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()> {
+        self.repo.set_env_param(name, key, value)
+    }
+
+    pub fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()> {
+        self.repo.remove_env_param(name, key)
+    }
+
+    pub fn activate_env(&self, name: &str) -> AppResult<()> {
+        self.repo.activate_env(name)
+    }
+
+    pub fn deactivate_env(&self) -> AppResult<()> {
+        self.repo.deactivate_env()
+    }
+
+    pub fn delete_env(&self, name: &str) -> AppResult<()> {
+        self.repo.delete_env(name)
     }
 }
 
@@ -66,9 +94,9 @@ mod tests {
     }
 
     #[rstest]
-    fn test_set_active_env(env_service: (TempDir, EnvironmentService)) {
+    fn test_activate_env(env_service: (TempDir, EnvironmentService)) {
         let (_tmp, service) = env_service;
-        service.set_active_env(Some("dev.conf")).unwrap();
+        service.activate_env("dev").unwrap();
         let config = service.load_environment_config().unwrap();
         assert_eq!(config.active, Some("dev.conf".to_string()));
     }

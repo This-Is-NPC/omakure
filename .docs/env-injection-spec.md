@@ -218,29 +218,31 @@ it**:
    `run_executor.rs` (`command.spawn()`); the env exists solely inside
    the child process from that point on.
 
-3. **Persistence point (env-free by construction)** — `src/runs.rs`,
+3. **Persistence point (env-value-free by construction)** — `src/runs.rs`,
    `insert_run(conn, row)` executes `INSERT INTO runs (...)`. The `runs`
    table schema has columns for `args_json, actor, reason, state, ...,
-   stdout, stderr, error, omakure_version` and so on — **there is no `env`
-   column and no `extra_env` field on `RunRow`.** The env cannot be
-   persisted here because there is nowhere to put it. Trace rows go to
-   `run_traces`, which stores `level, message, data_json` and likewise has
-   no env sink.
+   stdout, stderr, error, omakure_version` and so on — **there is no env value
+   column and no `extra_env` field on `RunRow`.** Queued runs may store only a
+   logical env name in internal `run_envs(run_id, env_name)` metadata so the
+   worker can reopen the same `.conf` file later; merged env values are not
+   stored. Trace rows go to `run_traces`, which stores `level, message,
+   data_json` and likewise has no env-value sink.
 
 4. **Masking (defense in depth, TUI preview only)** —
    `src/adapters/environments.rs`, `is_sensitive_key(key)` flags keys
    containing `password`, `secret`, `token`, `key`, `api`,
    `private`, or `cred`, and the Environments **preview** masks their
-   values with `***`. This is a *display* control for the `.conf` preview
+   values with `****`. This is a *display* control for the `.conf` preview
    pane, independent of injection; it is **not** the mechanism that keeps
    secrets out of storage (that is guaranteed structurally by points 1–3).
    Code must not rely on masking as the persistence guard.
 
 ### Rules for code changes
 
-- **Do not add an `env` / `extra_env` column** to the `runs` table or any
-  field carrying env to `RunRow`, `RunCompletion`, or any `runs::*`
-  writer.
+- **Do not add an env-value / `extra_env` column** to the `runs` table or any
+  field carrying merged env values to `RunRow`, `RunCompletion`, or any
+  `runs::*` writer. Internal queued-run metadata may carry only the logical env
+  file name needed to reopen `.omakure/envs/<name>.conf` at worker time.
 - **Do not log `extra_env`, the merged env, or individual injected
   values** — not via `println!`/`eprintln!`, not via the trace
   (`run_traces`), not via any structured logger. The env must have

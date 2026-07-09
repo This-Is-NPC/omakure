@@ -131,20 +131,35 @@ Loopback mode:
 
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure api
+omakure api \
+  --capability config:read \
+  --capability scripts:read \
+  --capability runs:read \
+  --capability runs:write \
+  --capability env:read
 ```
 
 Internal container/private-network mode:
 
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure api --bind 0.0.0.0:7878 --allow-non-loopback
+omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
+  --capability config:read \
+  --capability scripts:read \
+  --capability runs:read \
+  --capability runs:write \
+  --capability env:read
 ```
 
 Safety model:
 
 - default bind is loopback (`127.0.0.1:7878`),
 - non-loopback bind requires explicit opt-in,
+- API capabilities are denied unless granted with `--capability`,
+- secret provider refs are denied unless granted with `--secret-ref`,
+- prefer `secret://provider/key` refs over plaintext `--secret FIELD=VALUE`;
+  direct plaintext secrets are supported for local interactive use, but shells
+  and process inspection can expose command-line arguments,
 - every endpoint except health requires `Authorization: Bearer <token>`,
 - request bodies are limited to 1 MiB,
 - route handlers call shared operations instead of CLI modules,
@@ -179,6 +194,16 @@ GET    /v1/runs
 GET    /v1/runs/{run_id}
 GET    /v1/runs/{run_id}/traces
 GET    /v1/queue/stats
+GET    /v1/envs
+POST   /v1/envs
+GET    /v1/envs/{name}
+PUT    /v1/envs/{name}
+PATCH  /v1/envs/{name}
+DELETE /v1/envs/{name}
+POST   /v1/envs/{name}/activate
+DELETE /v1/envs/active
+PUT    /v1/envs/{name}/params/{key}
+DELETE /v1/envs/{name}/params/{key}
 POST   /v1/runs
 POST   /v1/runs/{run_id}/cancel
 POST   /v1/runs/{run_id}/dead-letter
@@ -198,14 +223,25 @@ guidance, and the CLI/HTTP/shared-operation parity matrix.
 
 ```bash
 omakure config
-omakure env
+omakure env list
+omakure env create prod HOST=prod.example.com API_KEY=secret://prod/api_key
+omakure env show prod
+omakure env set prod REGION=eastus
+omakure env remove prod API_KEY
+omakure env replace prod HOST=prod.example.com REGION=eastus
+omakure env activate prod
+omakure env deactivate
+omakure env delete prod
 ```
 
-`config` (alias `env`) prints resolved workspace paths, the active
-environment's injected keys (sensitive values masked with `****`), and
-the **absolute interpreter path** Omakure will execute against the active
-env's `PATH` — so you can confirm which `python` actually runs. `--json`
-includes `active_env_keys` and `interpreter`.
+`config` prints resolved workspace paths, the active environment's injected
+keys (sensitive values masked with `****`), and the **absolute interpreter
+path** Omakure will execute against the active env's `PATH` — so you can
+confirm which `python` actually runs. `--json` includes `active_env_keys` and
+`interpreter`.
+
+`env` manages named `.omakure/envs/*.conf` files. `show` and the TUI preview
+mask sensitive values with `****`; activation writes `.omakure/envs/active`.
 
 TUI notes:
 

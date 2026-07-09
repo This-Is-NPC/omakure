@@ -7,6 +7,53 @@ Environment defaults live in `.omakure/envs/*.conf`. The active file name is sto
 - Each line is `KEY=value`.
 - Keys are matched (case-insensitive) to schema field names.
 - When a match exists, the value is used as the default in the TUI.
+- Blank lines and comments beginning with `#` or `;` are skipped.
+- Values may be prefixed with `export ` and may be wrapped in quotes.
+
+## Managing `.omakure/envs/*.conf`
+
+The CLI, TUI, and HTTP API all operate on the same managed files under
+`.omakure/envs/`. Environment names are plain names such as `dev` or `prod`;
+Omakure maps them to `<name>.conf` and rejects names that are `active`, start
+with `.`, end with `.conf`, contain `..`, or contain path separators.
+
+CLI management commands:
+
+```bash
+omakure env list
+omakure env create prod HOST=prod.example.com API_KEY=secret://prod/api_key
+omakure env show prod
+omakure env set prod REGION=eastus
+omakure env remove prod API_KEY
+omakure env replace prod HOST=prod.example.com REGION=eastus
+omakure env activate prod
+omakure env deactivate
+omakure env delete prod
+```
+
+`show` prints parsed entries with sensitive values masked as `****`. Sensitive
+keys are detected by name: `password`, `secret`, `token`, `key`, `api`,
+`private`, or `cred`.
+
+The Environments screen (`Ctrl+/` then `e`) lists the same managed `.conf`
+files, previews the selected file with sensitive values masked, activates a
+selected file with `Enter`, deactivates with `d`, and refreshes with `r`.
+
+The HTTP API exposes the same shared operations with bearer auth:
+
+- `GET /v1/envs`
+- `POST /v1/envs`
+- `GET /v1/envs/{name}`
+- `PUT /v1/envs/{name}`
+- `PATCH /v1/envs/{name}`
+- `DELETE /v1/envs/{name}`
+- `POST /v1/envs/{name}/activate`
+- `DELETE /v1/envs/active`
+- `PUT /v1/envs/{name}/params/{key}`
+- `DELETE /v1/envs/{name}/params/{key}`
+
+HTTP `GET /v1/envs/{name}` returns the same redacted preview as CLI `show`.
+HTTP write bodies are JSON and update the managed `.conf` files atomically.
 
 ## Runtime injection into scripts
 
@@ -61,7 +108,7 @@ Use the TUI (`Ctrl+/` then `e`) to select the active file.
 ## Environments UI
 
 The Environments screen shows a preview panel on the right for the selected file.
-The preview lists parsed KEY=VALUE entries and masks sensitive values with `***`.
+The preview lists parsed KEY=VALUE entries and masks sensitive values with `****`.
 
 Preview scroll shortcuts:
 
@@ -79,7 +126,7 @@ REGION=eastus
 Preview example:
 
 ```
-SUBSCRIPTION_ID=***
+SUBSCRIPTION_ID=****
 RESOURCE_GROUP=rg-prod
 REGION=eastus
 ```

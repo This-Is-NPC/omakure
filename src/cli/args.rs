@@ -113,7 +113,10 @@ pub enum Commands {
     /// Create a new script template
     Init(InitArgs),
 
-    /// Show resolved paths and environment
+    /// Manage named environment files
+    Env(EnvArgs),
+
+    /// Show resolved paths and environment diagnostics
     ///
     /// Prints the resolved binary path, omakure version, workspace root,
     /// scripts root, `.omakure/` directory, history directory, workspace
@@ -121,7 +124,6 @@ pub enum Commands {
     /// known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`,
     /// `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `--json`
     /// for the machine-readable envelope.
-    #[command(visible_alias = "env")]
     Config,
 
     /// Update omakure from GitHub releases
@@ -211,6 +213,18 @@ pub struct ApiArgs {
     /// Explicitly allow binding to non-loopback addresses
     #[arg(long)]
     pub allow_non_loopback: bool,
+
+    /// API capability to grant. Repeatable. Supported: config:read,
+    /// scripts:read, env:read, env:write, env:activate, env:use,
+    /// secrets:use, runs:read, runs:write, batteries:read,
+    /// batteries:write, all
+    #[arg(long = "capability")]
+    pub capabilities: Vec<String>,
+
+    /// Allowed secret provider ref for secrets:use, e.g. secret://prod/token
+    /// or secret://prod/*; repeatable. Empty denies provider refs.
+    #[arg(long = "secret-ref")]
+    pub secret_refs: Vec<String>,
 }
 
 #[derive(Args, Debug)]
@@ -366,9 +380,77 @@ pub struct RunArgs {
     #[arg(long = "env-file", value_name = "PATH")]
     pub env_file: Option<PathBuf>,
 
+    /// Direct secret field input as `FIELD=value`. The value is supplied to
+    /// secret schema fields for this run and is redacted from stored args.
+    #[arg(long = "secret", value_name = "FIELD=VALUE")]
+    pub secrets: Vec<String>,
+
     /// Arguments forwarded to the script
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct EnvArgs {
+    #[command(subcommand)]
+    pub command: EnvCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum EnvCommand {
+    /// List named environments
+    List,
+
+    /// Create a named environment from optional `KEY=value` pairs
+    Create(EnvCreateArgs),
+
+    /// Show a named environment with sensitive values redacted
+    Show(EnvNameArgs),
+
+    /// Set one `KEY=value` in a named environment
+    Set(EnvSetArgs),
+
+    /// Remove one key from a named environment
+    Remove(EnvRemoveArgs),
+
+    /// Replace a named environment with the provided `KEY=value` pairs
+    Replace(EnvCreateArgs),
+
+    /// Activate a named environment
+    Activate(EnvNameArgs),
+
+    /// Deactivate the current environment
+    Deactivate,
+
+    /// Delete a named environment
+    Delete(EnvNameArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct EnvNameArgs {
+    pub name: String,
+}
+
+#[derive(Args, Debug)]
+pub struct EnvCreateArgs {
+    pub name: String,
+
+    #[arg(value_name = "KEY=VALUE")]
+    pub params: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct EnvSetArgs {
+    pub name: String,
+
+    #[arg(value_name = "KEY=VALUE")]
+    pub param: String,
+}
+
+#[derive(Args, Debug)]
+pub struct EnvRemoveArgs {
+    pub name: String,
+    pub key: String,
 }
 
 #[derive(Args, Debug)]
@@ -660,6 +742,32 @@ mod tests {
                 assert!(args.no_prompt);
             }
             _ => panic!("expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_run_secret_input() {
+        let cli = parse(&["run", "deploy.sh", "--secret", "TOKEN=direct"]);
+        let cli = cli.unwrap();
+        match cli.command.unwrap() {
+            Commands::Run(args) => assert_eq!(args.secrets, vec!["TOKEN=direct"]),
+            _ => panic!("expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_env_namespace() {
+        let cli = parse(&["env", "set", "prod", "API_KEY=secret"]);
+        let cli = cli.unwrap();
+        match cli.command.unwrap() {
+            Commands::Env(args) => match args.command {
+                EnvCommand::Set(set) => {
+                    assert_eq!(set.name, "prod");
+                    assert_eq!(set.param, "API_KEY=secret");
+                }
+                _ => panic!("expected env set"),
+            },
+            _ => panic!("expected Env command"),
         }
     }
 

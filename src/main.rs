@@ -6,10 +6,12 @@ mod error;
 mod lua_widget;
 pub mod operations;
 mod ports;
+pub mod redaction;
 mod run_executor;
 mod runs;
 mod runtime;
 mod search_index;
+pub mod secrets;
 mod theme_config;
 mod use_cases;
 mod util;
@@ -184,6 +186,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Commands::History(args)) => cli::history::run(global_root, args, json_output)?,
         Some(Commands::Queue(args)) => cli::queue::run(global_root, args, json_output)?,
         Some(Commands::Battery(args)) => cli::battery::run(global_root, args, json_output)?,
+        Some(Commands::Env(args)) => cli::env::run(global_root, args, json_output)?,
         Some(Commands::Api(args)) => cli::api::run(global_root, args)?,
         Some(Commands::Trace(args)) => cli::trace::run(global_root, args, json_output)?,
         Some(Commands::HelpAi) => cli::help_ai::run()?,

@@ -215,9 +215,22 @@ fn handle_run_result_key(app: &mut App, key: KeyEvent) {
 // ── Environments ─────────────────────────────────────────────────
 
 fn handle_envs_key(app: &mut App, key: KeyEvent) {
+    if app.environment.editor_mode.is_some() {
+        match key.code {
+            KeyCode::Esc => app.cancel_env_editor(),
+            KeyCode::Enter => app.submit_env_editor(),
+            KeyCode::Backspace => app.pop_env_editor_char(),
+            KeyCode::Char(ch) => app.append_env_editor_char(ch),
+            _ => {}
+        }
+        return;
+    }
+
     match key.code {
         KeyCode::Esc => app.exit_envs(),
         KeyCode::Char('r') | KeyCode::Char('R') => app.refresh_status(),
+        KeyCode::Char('n') | KeyCode::Char('N') => app.start_create_env(),
+        KeyCode::Char('e') | KeyCode::Char('E') => app.start_edit_env(),
         KeyCode::Down | KeyCode::Char('j') => app.move_env_selection(1),
         KeyCode::Up | KeyCode::Char('k') => app.move_env_selection(-1),
         KeyCode::PageDown => app.scroll_env_preview(10),
@@ -226,6 +239,7 @@ fn handle_envs_key(app: &mut App, key: KeyEvent) {
         KeyCode::End => app.environment.preview_scroll = u16::MAX,
         KeyCode::Enter => app.activate_selected_env(),
         KeyCode::Char('d') | KeyCode::Char('D') => app.deactivate_env(),
+        KeyCode::Delete | KeyCode::Char('x') | KeyCode::Char('X') => app.delete_selected_env(),
         _ => {}
     }
 }
@@ -744,9 +758,32 @@ mod tests {
         handle_key_event(&mut app, key(KeyCode::Home));
         handle_key_event(&mut app, key(KeyCode::End));
         handle_key_event(&mut app, key(KeyCode::Char('r')));
+        handle_key_event(&mut app, key(KeyCode::Char('n')));
+        assert!(app.environment.editor_mode.is_some());
+        handle_key_event(&mut app, key(KeyCode::Esc));
+        assert!(app.environment.editor_mode.is_none());
+        handle_key_event(&mut app, key(KeyCode::Char('e')));
+        assert!(app.environment.editor_mode.is_none());
         handle_key_event(&mut app, key(KeyCode::Char('d')));
         handle_key_event(&mut app, key(KeyCode::Enter));
         handle_key_event(&mut app, key(KeyCode::Esc));
+    }
+
+    #[test]
+    fn envs_editor_keys_create_file() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(&tmp);
+        let mut app = setup_app(&tmp, &svc);
+        app.screen = Screen::Environments;
+
+        handle_key_event(&mut app, key(KeyCode::Char('n')));
+        for ch in "dev HOST=localhost".chars() {
+            handle_key_event(&mut app, key(KeyCode::Char(ch)));
+        }
+        handle_key_event(&mut app, key(KeyCode::Enter));
+
+        assert!(app.workspace.envs_dir().join("dev.conf").exists());
+        assert!(app.environment.editor_mode.is_none());
     }
 
     #[test]

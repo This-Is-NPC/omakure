@@ -225,32 +225,50 @@ impl HttpServer {
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        // Hold the listener until after spawn so another process cannot steal
-        // the ephemeral port between bind-and-drop and `api --bind` (TOCTOU).
-        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral localhost port");
-        let addr = listener.local_addr().expect("read local addr");
-        let mut command = omakure_command();
-        command
-            .arg("--scripts-dir")
-            .arg(workspace)
-            .arg("api")
-            .arg("--bind")
-            .arg(addr.to_string())
-            .args(extra_args)
-            .env("OMAKURE_API_TOKEN", token);
-        for (key, value) in extra_envs {
-            command.env(key, value);
-        }
-
-        drop(listener);
-        let child = spawn_guard(&mut command);
-        let server = Self {
-            addr,
-            child,
-            token: token.to_string(),
+        // `api --bind` must own the socket, so we cannot hold the probe listener
+        // across spawn. Retry on the bind→drop→spawn TOCTOU window (EADDRINUSE /
+        // readiness miss) instead of claiming the port is held until bind.
+        let attempt_timeout = timeout / 4;
+        let attempt_timeout = if attempt_timeout.is_zero() {
+            Duration::from_secs(2)
+        } else {
+            attempt_timeout.max(Duration::from_millis(500))
         };
-        server.wait_until_ready(timeout);
-        server
+        let deadline = Instant::now() + timeout;
+        let mut last_addr = None;
+        while Instant::now() < deadline {
+            let listener =
+                TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral localhost port");
+            let addr = listener.local_addr().expect("read local addr");
+            last_addr = Some(addr);
+            let mut command = omakure_command();
+            command
+                .arg("--scripts-dir")
+                .arg(workspace)
+                .arg("api")
+                .arg("--bind")
+                .arg(addr.to_string())
+                .args(extra_args)
+                .env("OMAKURE_API_TOKEN", token);
+            for (key, value) in extra_envs {
+                command.env(key, value);
+            }
+
+            drop(listener);
+            let child = spawn_guard(&mut command);
+            let mut server = Self {
+                addr,
+                child,
+                token: token.to_string(),
+            };
+            if server.try_wait_until_ready(attempt_timeout) {
+                return server;
+            }
+            let _ = server.child.child_mut().kill();
+            let _ = server.child.child_mut().wait();
+            thread::sleep(Duration::from_millis(25));
+        }
+        panic!("HTTP server did not become ready within {timeout:?} (last_addr={last_addr:?})");
     }
 
     pub fn url(&self, path: &str) -> String {
@@ -329,7 +347,7 @@ impl HttpServer {
         HttpResponse::parse(raw)
     }
 
-    fn wait_until_ready(&self, timeout: Duration) {
+    fn try_wait_until_ready(&self, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             if let Ok(mut stream) =
@@ -344,13 +362,13 @@ impl HttpServer {
                 if stream.write_all(request.as_bytes()).is_ok() {
                     let mut raw = String::new();
                     if stream.read_to_string(&mut raw).is_ok() && raw.contains(" 200 ") {
-                        return;
+                        return true;
                     }
                 }
             }
             thread::sleep(Duration::from_millis(25));
         }
-        panic!("HTTP server did not become ready within {timeout:?}");
+        false
     }
 }
 
@@ -406,6 +424,67 @@ fn parse_http_url(url: &str) -> (SocketAddr, String, String) {
 pub enum AuthMode<'a> {
     None,
     Bearer(&'a str),
+}
+
+/// Write a local git battery fixture under `root` and return after the initial commit.
+pub fn write_local_battery_repo(root: &Path, battery_name: &str, description: &str) {
+    fs::create_dir_all(root.join("scripts")).expect("create battery scripts dir");
+    fs::write(
+        root.join("omakure-battery.toml"),
+        format!(
+            r#"[battery]
+name = "{battery_name}"
+version = "0.1.0"
+description = "{description}"
+
+[[scripts]]
+id = "local.echo"
+path = "scripts/echo.sh"
+description = "Echo fixture"
+tags = ["test"]
+"#
+        ),
+    )
+    .expect("write manifest");
+    fs::write(
+        root.join("scripts/echo.sh"),
+        r#"#!/bin/sh
+# OMAKURE_SCHEMA_START
+# {"Name":"Battery Echo","Description":"Echo fixture","Fields":[]}
+# OMAKURE_SCHEMA_END
+echo battery
+"#,
+    )
+    .expect("write battery script");
+    set_executable(&root.join("scripts/echo.sh"));
+    run_git(root, &["init", "-b", "main"]);
+    run_git(root, &["add", "."]);
+    run_git(
+        root,
+        &[
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "user.name=Test User",
+            "commit",
+            "-m",
+            "battery fixture",
+        ],
+    );
+}
+
+fn run_git(cwd: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("spawn git");
+    assert!(
+        output.status.success(),
+        "git {:?} failed (stderr_len={})",
+        args,
+        output.stderr.len()
+    );
 }
 
 fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {

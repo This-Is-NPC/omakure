@@ -3,7 +3,7 @@ mod support;
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -702,7 +702,7 @@ echo traced"##,
 fn battery_lifecycle_subcommands_work_against_local_repo() {
     let workspace = support::TestWorkspace::new("cli_surface_battery");
     let repo = support::TestWorkspace::new("cli_surface_battery_repo");
-    write_battery_repo(repo.path());
+    support::write_local_battery_repo(repo.path(), "local", "Local test battery");
 
     let add = omakure(
         workspace.path(),
@@ -759,64 +759,6 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     );
     assert_success(&remove);
     assert_eq!(json(&remove)["ok"], true);
-}
-
-fn write_battery_repo(root: &Path) {
-    fs::create_dir_all(root.join("scripts")).expect("create battery scripts dir");
-    fs::write(
-        root.join("omakure-battery.toml"),
-        r#"[battery]
-name = "local"
-version = "0.1.0"
-description = "Local test battery"
-
-[[scripts]]
-id = "local.echo"
-path = "scripts/echo.sh"
-description = "Echo fixture"
-tags = ["test"]
-"#,
-    )
-    .expect("write manifest");
-    fs::write(
-        root.join("scripts/echo.sh"),
-        r#"#!/bin/sh
-# OMAKURE_SCHEMA_START
-# {"Name":"Battery Echo","Description":"Echo fixture","Fields":[]}
-# OMAKURE_SCHEMA_END
-echo battery
-"#,
-    )
-    .expect("write battery script");
-    support::set_executable(&root.join("scripts/echo.sh"));
-    run_git(root, &["init", "-b", "main"]);
-    run_git(root, &["add", "."]);
-    run_git(
-        root,
-        &[
-            "-c",
-            "user.email=test@example.invalid",
-            "-c",
-            "user.name=Test User",
-            "commit",
-            "-m",
-            "battery fixture",
-        ],
-    );
-}
-
-fn run_git(cwd: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("spawn git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
 }
 
 fn omakure(workspace: &Path, args: &[&str]) -> Output {

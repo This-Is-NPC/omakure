@@ -1428,6 +1428,86 @@ echo ok
     }
 
     #[test]
+    fn http_route_inventory_matches_router_with_policy_registrations() {
+        let source = include_str!("api.rs");
+        let from_router = parse_router_route_registrations(source);
+        let inventory: Vec<_> = HTTP_ROUTE_INVENTORY.to_vec();
+        assert_eq!(
+            from_router, inventory,
+            "router_with_policy `.route(...)` registrations must equal HTTP_ROUTE_INVENTORY"
+        );
+    }
+
+    fn parse_router_route_registrations(source: &str) -> Vec<(&str, &str)> {
+        let start = source
+            .find("fn router_with_policy(")
+            .expect("router_with_policy");
+        let after = &source[start..];
+        let router_start = after.find("Router::new()").expect("Router::new");
+        let block = &after[router_start..];
+        // End at `.fallback(` which always follows the last `.route(...)`.
+        let end = block.find(".fallback(").expect(".fallback after routes");
+        let block = &block[..end];
+        let mut routes = Vec::new();
+        let mut i = 0;
+        let bytes = block.as_bytes();
+        while i < bytes.len() {
+            if block[i..].starts_with(".route(") {
+                i += ".route(".len();
+                while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                    i += 1;
+                }
+                assert_eq!(
+                    bytes.get(i),
+                    Some(&b'"'),
+                    "expected path string after .route("
+                );
+                i += 1;
+                let path_start = i;
+                while i < bytes.len() && bytes[i] != b'"' {
+                    i += 1;
+                }
+                let path = &block[path_start..i];
+                i += 1; // closing quote
+                while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b',') {
+                    i += 1;
+                }
+                let mut depth = 1usize;
+                let methods_start = i;
+                while i < bytes.len() && depth > 0 {
+                    match bytes[i] {
+                        b'(' => depth += 1,
+                        b')' => depth -= 1,
+                        _ => {}
+                    }
+                    if depth > 0 {
+                        i += 1;
+                    }
+                }
+                let methods_src = &block[methods_start..i];
+                for (token, method) in [
+                    ("get(", "GET"),
+                    ("post(", "POST"),
+                    ("put(", "PUT"),
+                    ("patch(", "PATCH"),
+                    ("delete(", "DELETE"),
+                ] {
+                    if methods_src.contains(token) {
+                        routes.push((method, path));
+                    }
+                }
+            } else {
+                i += 1;
+            }
+        }
+        assert!(
+            !routes.is_empty(),
+            "parsed zero .route() registrations from router_with_policy"
+        );
+        routes
+    }
+
+    #[test]
     fn bind_guard_allows_loopback_by_default() {
         let addr: SocketAddr = "127.0.0.1:7878".parse().unwrap();
         assert!(validate_bind(addr, false).is_ok());

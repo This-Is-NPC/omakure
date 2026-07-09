@@ -7,11 +7,8 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::process::{Child, Command, Output};
-use std::sync::atomic::{AtomicU16, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
-
-static NEXT_PORT: AtomicU16 = AtomicU16::new(39_000);
 
 pub fn omakure_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_omakure"))
@@ -177,14 +174,61 @@ impl Drop for ChildGuard {
     }
 }
 
+pub struct HttpResponse {
+    pub status: u16,
+    pub body: String,
+}
+
+impl HttpResponse {
+    pub fn parse(raw: String) -> Self {
+        let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
+        let status = head
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .and_then(|code| code.parse().ok())
+            .expect("parse HTTP status");
+        Self {
+            status,
+            body: body.to_string(),
+        }
+    }
+
+    pub fn json(&self) -> Value {
+        serde_json::from_str(&self.body).expect("parse HTTP JSON body")
+    }
+
+    pub fn safe_body(&self) -> String {
+        format!("{} byte response", self.body.len())
+    }
+
+    pub fn assert_no_secret(&self, secret: &str) {
+        assert_redacted(&self.body, secret);
+    }
+}
+
 pub struct HttpServer {
     addr: SocketAddr,
     child: ChildGuard,
+    token: String,
 }
 
 impl HttpServer {
     pub fn start(workspace: &Path, token: &str, timeout: Duration) -> Self {
-        let addr = localhost_addr();
+        Self::start_with_args(workspace, token, &[], &[], timeout)
+    }
+
+    pub fn start_with_args(
+        workspace: &Path,
+        token: &str,
+        extra_args: &[&str],
+        extra_envs: &[(&str, &str)],
+        timeout: Duration,
+    ) -> Self {
+        // Hold the listener until after spawn so another process cannot steal
+        // the ephemeral port between bind-and-drop and `api --bind` (TOCTOU).
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral localhost port");
+        let addr = listener.local_addr().expect("read local addr");
         let mut command = omakure_command();
         command
             .arg("--scripts-dir")
@@ -192,10 +236,19 @@ impl HttpServer {
             .arg("api")
             .arg("--bind")
             .arg(addr.to_string())
+            .args(extra_args)
             .env("OMAKURE_API_TOKEN", token);
+        for (key, value) in extra_envs {
+            command.env(key, value);
+        }
 
+        drop(listener);
         let child = spawn_guard(&mut command);
-        let server = Self { addr, child };
+        let server = Self {
+            addr,
+            child,
+            token: token.to_string(),
+        };
         server.wait_until_ready(timeout);
         server
     }
@@ -204,12 +257,96 @@ impl HttpServer {
         format!("http://{}{}", self.addr, path)
     }
 
+    pub fn get(&self, path: &str) -> HttpResponse {
+        self.request("GET", path, None)
+    }
+
+    pub fn post_json(&self, path: &str, body: &Value) -> HttpResponse {
+        self.request("POST", path, Some(body.to_string()))
+    }
+
+    pub fn put_json(&self, path: &str, body: &Value) -> HttpResponse {
+        self.request("PUT", path, Some(body.to_string()))
+    }
+
+    pub fn patch_json(&self, path: &str, body: &Value) -> HttpResponse {
+        self.request("PATCH", path, Some(body.to_string()))
+    }
+
+    pub fn delete(&self, path: &str) -> HttpResponse {
+        self.request("DELETE", path, None)
+    }
+
+    pub fn get_unauthenticated(&self, path: &str) -> HttpResponse {
+        self.request_with_auth("GET", path, None, AuthMode::None)
+    }
+
+    pub fn get_with_bearer(&self, path: &str, token: &str) -> HttpResponse {
+        self.request_with_auth("GET", path, None, AuthMode::Bearer(token))
+    }
+
+    pub fn request(&self, method: &str, path: &str, body: Option<String>) -> HttpResponse {
+        self.request_with_auth(method, path, body, AuthMode::Bearer(&self.token))
+    }
+
+    pub fn request_with_auth(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<String>,
+        auth: AuthMode<'_>,
+    ) -> HttpResponse {
+        let timeout = Duration::from_secs(5);
+        let mut stream = TcpStream::connect_timeout(&self.addr, timeout).expect("connect HTTP API");
+        stream
+            .set_read_timeout(Some(timeout))
+            .expect("set read timeout");
+        stream
+            .set_write_timeout(Some(timeout))
+            .expect("set write timeout");
+
+        let body = body.unwrap_or_default();
+        let content_headers = if matches!(method, "POST" | "PUT" | "PATCH") {
+            format!(
+                "Content-Type: application/json\r\nContent-Length: {}\r\n",
+                body.len()
+            )
+        } else {
+            String::new()
+        };
+        let auth_header = match auth {
+            AuthMode::None => String::new(),
+            AuthMode::Bearer(token) => format!("Authorization: Bearer {token}\r\n"),
+        };
+        let request = format!(
+            "{method} {path} HTTP/1.1\r\nHost: {}\r\n{auth_header}{content_headers}Connection: close\r\n\r\n{body}",
+            self.addr
+        );
+        stream.write_all(request.as_bytes()).expect("write request");
+
+        let mut raw = String::new();
+        stream.read_to_string(&mut raw).expect("read response");
+        HttpResponse::parse(raw)
+    }
+
     fn wait_until_ready(&self, timeout: Duration) {
         let deadline = Instant::now() + timeout;
-        let url = self.url("/v1/health");
         while Instant::now() < deadline {
-            if http_get_status(&url, None, Duration::from_millis(250)) == Some(200) {
-                return;
+            if let Ok(mut stream) =
+                TcpStream::connect_timeout(&self.addr, Duration::from_millis(200))
+            {
+                let request = format!(
+                    "GET /v1/health HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
+                    self.addr
+                );
+                let _ = stream.set_read_timeout(Some(Duration::from_millis(200)));
+                let _ = stream.set_write_timeout(Some(Duration::from_millis(200)));
+                if stream.write_all(request.as_bytes()).is_ok() {
+                    let mut raw = String::new();
+                    if stream.read_to_string(&mut raw).is_ok() && raw.contains(" 200 ") {
+                        return;
+                    }
+                }
             }
             thread::sleep(Duration::from_millis(25));
         }
@@ -227,12 +364,6 @@ impl Drop for HttpServer {
 pub fn http_get_with_timeout(url: &str, bearer_token: Option<&str>, timeout: Duration) -> String {
     let (_status, body) = http_get(url, bearer_token, timeout).expect("HTTP GET should succeed");
     body
-}
-
-fn http_get_status(url: &str, bearer_token: Option<&str>, timeout: Duration) -> Option<u16> {
-    http_get(url, bearer_token, timeout)
-        .ok()
-        .map(|(status, _body)| status)
 }
 
 fn http_get(
@@ -272,15 +403,9 @@ fn parse_http_url(url: &str) -> (SocketAddr, String, String) {
     (addr, host_port.to_string(), format!("/{path}"))
 }
 
-fn localhost_addr() -> SocketAddr {
-    for _ in 0..1_000 {
-        let port = NEXT_PORT.fetch_add(1, Ordering::SeqCst);
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        if TcpListener::bind(addr).is_ok() {
-            return addr;
-        }
-    }
-    panic!("no deterministic localhost test port available");
+pub enum AuthMode<'a> {
+    None,
+    Bearer(&'a str),
 }
 
 fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {

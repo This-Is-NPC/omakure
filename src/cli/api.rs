@@ -262,12 +262,60 @@ fn router(token: String, workspace: Workspace) -> Router {
     router_with_policy(token, workspace, ApiPolicy::all())
 }
 
+/// Canonical `(method, path)` inventory for the HTTP management API.
+///
+/// Keep this list in lockstep with `router_with_policy`. Black-box E2E tests
+/// parse the markers below so route drift fails the suite without importing
+/// the binary crate as a library.
+// OMAKURE_HTTP_ROUTE_INVENTORY_START
+#[allow(dead_code)] // consumed by black-box E2E via source markers; kept as router source of truth
+pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
+    ("GET", "/v1/health"),
+    ("GET", "/v1/config"),
+    ("GET", "/v1/doctor"),
+    ("GET", "/v1/workspace"),
+    ("GET", "/v1/search"),
+    ("GET", "/v1/tree"),
+    ("GET", "/v1/tree/*path"),
+    ("GET", "/v1/scripts"),
+    ("GET", "/v1/scripts/*script_id"),
+    ("GET", "/v1/envs"),
+    ("POST", "/v1/envs"),
+    ("DELETE", "/v1/envs/active"),
+    ("GET", "/v1/envs/:name"),
+    ("PUT", "/v1/envs/:name"),
+    ("PATCH", "/v1/envs/:name"),
+    ("DELETE", "/v1/envs/:name"),
+    ("POST", "/v1/envs/:name/activate"),
+    ("PUT", "/v1/envs/:name/params/:key"),
+    ("DELETE", "/v1/envs/:name/params/:key"),
+    ("GET", "/v1/runs"),
+    ("POST", "/v1/runs"),
+    ("GET", "/v1/runs/:run_id"),
+    ("GET", "/v1/runs/:run_id/traces"),
+    ("POST", "/v1/runs/:run_id/cancel"),
+    ("POST", "/v1/runs/:run_id/dead-letter"),
+    ("GET", "/v1/queue/stats"),
+    ("GET", "/v1/batteries"),
+    ("POST", "/v1/batteries"),
+    ("GET", "/v1/batteries/:battery_id"),
+    ("DELETE", "/v1/batteries/:battery_id"),
+    ("GET", "/v1/batteries/:battery_id/scripts"),
+    (
+        "POST",
+        "/v1/batteries/:battery_id/scripts/:script_id/install",
+    ),
+    ("POST", "/v1/batteries/:battery_id/sync"),
+];
+// OMAKURE_HTTP_ROUTE_INVENTORY_END
+
 fn router_with_policy(token: String, workspace: Workspace, policy: ApiPolicy) -> Router {
     let state = ApiState {
         token_digest: token_digest_for(&token),
         workspace,
         policy,
     };
+    // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
     Router::new()
         .route("/v1/health", get(health))
         .route("/v1/config", get(config_handler))
@@ -1365,6 +1413,18 @@ echo ok
             serde_json::to_string_pretty(&registry).unwrap(),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn http_route_inventory_is_non_empty_and_unique() {
+        assert!(!HTTP_ROUTE_INVENTORY.is_empty());
+        let mut seen = std::collections::BTreeSet::new();
+        for entry in HTTP_ROUTE_INVENTORY {
+            assert!(
+                seen.insert(*entry),
+                "duplicate HTTP route inventory entry: {entry:?}"
+            );
+        }
     }
 
     #[test]

@@ -127,7 +127,21 @@ The internal HTTP management API runs in the same binary and wraps the same
 shared operations as the CLI. V1 is scoped as a trusted management surface,
 not a public internet API.
 
+For a single-process deploy unit (HTTP + optional in-process workers +
+scheduler), use `omakure engine` instead of running `api`, `queue worker`, and
+`serve` separately. See `.docs/http-api.md` for engine flags and `/v1/ready`.
+
 Loopback mode:
+
+Preferred (multi-token file):
+
+```bash
+omakure token generate --id local --scope '*' --json
+# store data.tokens_file_entry in a secrets TOML, then:
+omakure api --tokens-file /run/secrets/omakure_tokens.toml
+```
+
+Legacy single-token mode:
 
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
@@ -142,28 +156,27 @@ omakure api \
 Internal container/private-network mode:
 
 ```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
 omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
-  --capability config:read \
-  --capability scripts:read \
-  --capability runs:read \
-  --capability runs:write \
-  --capability env:read
+  --tokens-file /run/secrets/omakure_tokens.toml
 ```
 
 Safety model:
 
 - default bind is loopback (`127.0.0.1:7878`),
 - non-loopback bind requires explicit opt-in,
-- API capabilities are denied unless granted with `--capability`,
-- secret provider refs are denied unless granted with `--secret-ref`,
+- prefer `--tokens-file` / `OMAKURE_TOKENS_FILE` (per-token scopes); legacy
+  `OMAKURE_API_TOKEN` + `--capability` still works when no tokens file is set,
+- in tokens-file mode, `--capability` is ignored,
+- secret provider refs are denied unless granted with `--secret-ref` (legacy)
+  or `secrets:use` scope (tokens file),
 - prefer `secret://provider/key` refs over plaintext `--secret FIELD=VALUE`;
   direct plaintext secrets are supported for local interactive use, but shells
   and process inspection can expose command-line arguments,
-- every endpoint except health requires `Authorization: Bearer <token>`,
+- every endpoint except health and ready requires `Authorization: Bearer <token>`,
+- missing/unknown token → `401`; valid token missing scope → `403`,
 - request bodies are limited to 1 MiB,
 - route handlers call shared operations instead of CLI modules,
-- no CORS/OAuth/RBAC/browser support is provided in v1,
+- no CORS/OAuth/session login in v1 (scoped bearer tokens are supported),
 - Battery cache scripts are never executed directly by HTTP.
 - HTTP Battery registration accepts `https://` sources only; local paths and
   `file://` sources are CLI-only.
@@ -172,6 +185,9 @@ Quick check:
 
 ```bash
 curl http://127.0.0.1:7878/v1/health
+curl http://127.0.0.1:7878/v1/ready
+curl -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
+  http://127.0.0.1:7878/v1/admin/status
 curl -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
   http://127.0.0.1:7878/v1/scripts
 ```
@@ -180,6 +196,8 @@ Implemented endpoints:
 
 ```text
 GET    /v1/health
+GET    /v1/ready
+GET    /v1/admin/status
 GET    /v1/config
 GET    /v1/doctor
 GET    /v1/workspace
@@ -214,7 +232,13 @@ GET    /v1/batteries/{battery_id}
 GET    /v1/batteries/{battery_id}/scripts
 POST   /v1/batteries/{battery_id}/scripts/{script_id}/install
 DELETE /v1/batteries/{battery_id}
+GET    /v1/secrets
 ```
+
+`GET /v1/secrets` is metadata-only (`id`, `source`, `delivery`,
+`allowed_targets`); enable with policy `secrets.metadata_endpoint = true`
+and scope `secrets:read-metadata`. Private HTTPS Batteries use optional
+`token_ref` on `POST /v1/batteries` (requires `credentials:use`).
 
 See `http-api.md` for JSON request bodies, error/status mapping, deployment
 guidance, and the CLI/HTTP/shared-operation parity matrix.

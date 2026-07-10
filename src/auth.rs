@@ -1,0 +1,977 @@
+//! Multi-token bearer auth: Argon2id tokens file, scopes, and legacy env token.
+//!
+//! Modes:
+//! - **Legacy** — `OMAKURE_API_TOKEN` as token id `legacy` with scopes `*`.
+//!   Process-wide `--capability` still gates routes.
+//! - **Tokens file** — `--tokens-file` / `OMAKURE_TOKENS_FILE` TOML with per-token
+//!   Argon2id hashes and scopes. Process-wide `--capability` is ignored.
+
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::{Algorithm, Argon2, Params, Version};
+use rand::rngs::OsRng;
+use rand::RngCore;
+use serde::Deserialize;
+use std::collections::HashSet;
+use std::fmt;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
+
+pub const TOKEN_PREFIX: &str = "omk_live_";
+pub const LEGACY_TOKEN_ID: &str = "legacy";
+pub const WILDCARD_SCOPE: &str = "*";
+
+/// Recommended Argon2id parameters (64 MiB, t=3, p=1).
+const ARGON2_M_COST: u32 = 65536;
+const ARGON2_T_COST: u32 = 3;
+const ARGON2_P_COST: u32 = 1;
+/// Reject weaker hashes unless explicitly allowed for tests/dev.
+const MIN_M_COST: u32 = 19_456; // ~19 MiB floor for containers
+const MIN_T_COST: u32 = 2;
+const MIN_P_COST: u32 = 1;
+
+const PLAINTEXT_BYTES: usize = 32;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthContext {
+    pub token_id: String,
+    pub scopes: Vec<String>,
+}
+
+impl AuthContext {
+    pub fn has_scope(&self, required: &str) -> bool {
+        scope_allows(&self.scopes, required)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TokenRecord {
+    pub id: String,
+    pub hash: String,
+    pub scopes: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+enum AuthBackend {
+    Legacy { plaintext: String },
+    File {
+        path: PathBuf,
+        tokens: Vec<TokenRecord>,
+    },
+}
+
+/// Hot-reloadable authenticator shared by the HTTP middleware.
+#[derive(Clone)]
+pub struct Authenticator {
+    inner: Arc<RwLock<AuthBackend>>,
+    reload_status: Arc<RwLock<AuthReloadStatus>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[allow(dead_code)] // consumed by admin status route (follow-on) and unit tests
+pub struct AuthStatus {
+    pub mode: String,
+    pub token_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_reload_ok: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_reload_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_reload_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct AuthReloadStatus {
+    last_reload_ok: Option<bool>,
+    last_reload_error: Option<String>,
+    last_reload_at_ms: Option<i64>,
+}
+
+impl Authenticator {
+    pub fn legacy(plaintext: impl Into<String>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(AuthBackend::Legacy {
+                plaintext: plaintext.into(),
+            })),
+            reload_status: Arc::new(RwLock::new(AuthReloadStatus::default())),
+        }
+    }
+
+    pub fn from_tokens_file(path: impl Into<PathBuf>) -> Result<Self, AuthError> {
+        let path = path.into();
+        let tokens = load_tokens_file(&path)?;
+        Ok(Self {
+            inner: Arc::new(RwLock::new(AuthBackend::File { path, tokens })),
+            reload_status: Arc::new(RwLock::new(AuthReloadStatus::default())),
+        })
+    }
+
+    pub fn is_file_mode(&self) -> bool {
+        matches!(
+            *self.inner.read().expect("auth lock"),
+            AuthBackend::File { .. }
+        )
+    }
+
+    /// Authenticate a presented bearer token. Returns `None` for unknown/disabled.
+    pub fn authenticate(&self, presented: &str) -> Option<AuthContext> {
+        let guard = self.inner.read().expect("auth lock");
+        match &*guard {
+            AuthBackend::Legacy { plaintext } => {
+                if constant_time_eq(presented.as_bytes(), plaintext.as_bytes()) {
+                    Some(AuthContext {
+                        token_id: LEGACY_TOKEN_ID.to_string(),
+                        scopes: vec![WILDCARD_SCOPE.to_string()],
+                    })
+                } else {
+                    None
+                }
+            }
+            AuthBackend::File { tokens, .. } => authenticate_against_file(tokens, presented),
+        }
+    }
+
+    /// Metadata-only auth status (no token ids, hashes, paths, or plaintext).
+    #[allow(dead_code)] // consumed by admin status route (follow-on) and unit tests
+    pub fn status(&self) -> AuthStatus {
+        let guard = self.inner.read().expect("auth lock");
+        let reload = self.reload_status.read().expect("reload status lock");
+        match &*guard {
+            AuthBackend::Legacy { .. } => AuthStatus {
+                mode: "legacy".to_string(),
+                token_count: 1,
+                last_reload_ok: reload.last_reload_ok,
+                last_reload_error: reload.last_reload_error.clone(),
+                last_reload_at_ms: reload.last_reload_at_ms,
+            },
+            AuthBackend::File { tokens, .. } => AuthStatus {
+                mode: "tokens_file".to_string(),
+                token_count: tokens.len(),
+                last_reload_ok: reload.last_reload_ok,
+                last_reload_error: reload.last_reload_error.clone(),
+                last_reload_at_ms: reload.last_reload_at_ms,
+            },
+        }
+    }
+
+    /// Reload tokens from disk. On failure, keeps the last valid set and returns Err.
+    pub fn reload(&self) -> Result<(), AuthError> {
+        let mut guard = self.inner.write().expect("auth lock");
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        match &mut *guard {
+            AuthBackend::Legacy { .. } => Ok(()),
+            AuthBackend::File { path, tokens } => match load_tokens_file(path) {
+                Ok(loaded) => {
+                    *tokens = loaded;
+                    let mut reload = self.reload_status.write().expect("reload status lock");
+                    reload.last_reload_ok = Some(true);
+                    reload.last_reload_error = None;
+                    reload.last_reload_at_ms = Some(now_ms);
+                    Ok(())
+                }
+                Err(err) => {
+                    let mut reload = self.reload_status.write().expect("reload status lock");
+                    reload.last_reload_ok = Some(false);
+                    reload.last_reload_error = Some(err.to_string());
+                    reload.last_reload_at_ms = Some(now_ms);
+                    Err(err)
+                }
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthError {
+    Io(String),
+    Parse(String),
+    DuplicateId(String),
+    InvalidHash(String),
+    WeakHashParams { id: String, detail: String },
+    EmptyId,
+    EmptyScopes { id: String },
+    MissingAuth,
+    InvalidLegacyToken,
+    /// `auth.legacy_env_token = false` in deploy policy rejects env token.
+    LegacyEnvTokenDisabled,
+}
+
+impl fmt::Display for AuthError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(msg) => write!(f, "tokens file I/O error: {msg}"),
+            Self::Parse(msg) => write!(f, "tokens file parse error: {msg}"),
+            Self::DuplicateId(id) => write!(f, "duplicate token id: {id}"),
+            Self::InvalidHash(id) => write!(f, "invalid Argon2id hash for token id: {id}"),
+            Self::WeakHashParams { id, detail } => {
+                write!(f, "weak Argon2 params for token id {id}: {detail}")
+            }
+            Self::EmptyId => write!(f, "token id must not be empty"),
+            Self::EmptyScopes { id } => write!(f, "token id {id} has empty scopes"),
+            Self::MissingAuth => write!(
+                f,
+                "auth required: set OMAKURE_TOKENS_FILE/--tokens-file or OMAKURE_API_TOKEN"
+            ),
+            Self::InvalidLegacyToken => write!(f, "OMAKURE_API_TOKEN is invalid"),
+            Self::LegacyEnvTokenDisabled => write!(
+                f,
+                "OMAKURE_API_TOKEN rejected: policy auth.legacy_env_token=false requires --tokens-file / OMAKURE_TOKENS_FILE"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for AuthError {}
+
+#[derive(Debug, Deserialize)]
+struct TokensFileToml {
+    #[serde(default = "default_version")]
+    version: u32,
+    #[serde(default)]
+    tokens: Vec<TokenToml>,
+}
+
+fn default_version() -> u32 {
+    1
+}
+
+#[derive(Debug, Deserialize)]
+struct TokenToml {
+    id: String,
+    hash: String,
+    #[serde(default)]
+    scopes: Vec<String>,
+    #[serde(default = "default_enabled")]
+    enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+pub fn load_tokens_file(path: &Path) -> Result<Vec<TokenRecord>, AuthError> {
+    let text = fs::read_to_string(path).map_err(|e| AuthError::Io(e.to_string()))?;
+    parse_tokens_toml(&text)
+}
+
+pub fn parse_tokens_toml(text: &str) -> Result<Vec<TokenRecord>, AuthError> {
+    let parsed: TokensFileToml =
+        toml::from_str(text).map_err(|e| AuthError::Parse(e.to_string()))?;
+    if parsed.version != 1 {
+        return Err(AuthError::Parse(format!(
+            "unsupported tokens file version: {}",
+            parsed.version
+        )));
+    }
+
+    let mut seen = HashSet::new();
+    let mut out = Vec::with_capacity(parsed.tokens.len());
+    if parsed.tokens.len() > MAX_TOKENS_PER_FILE {
+        return Err(AuthError::Parse(format!(
+            "tokens file has {} entries (max {MAX_TOKENS_PER_FILE})",
+            parsed.tokens.len()
+        )));
+    }
+    for entry in parsed.tokens {
+        let id = entry.id.trim().to_string();
+        if id.is_empty() {
+            return Err(AuthError::EmptyId);
+        }
+        if !seen.insert(id.clone()) {
+            return Err(AuthError::DuplicateId(id));
+        }
+        if entry.scopes.is_empty() {
+            return Err(AuthError::EmptyScopes { id });
+        }
+        validate_phc_hash(&id, &entry.hash)?;
+        out.push(TokenRecord {
+            id,
+            hash: normalize_phc(&entry.hash),
+            scopes: entry.scopes,
+            enabled: entry.enabled,
+        });
+    }
+    Ok(out)
+}
+
+fn normalize_phc(hash: &str) -> String {
+    if hash.starts_with('$') {
+        hash.to_string()
+    } else {
+        format!("${hash}")
+    }
+}
+
+fn validate_phc_hash(id: &str, hash: &str) -> Result<(), AuthError> {
+    let normalized = normalize_phc(hash);
+    let parsed =
+        PasswordHash::new(&normalized).map_err(|_| AuthError::InvalidHash(id.to_string()))?;
+    if parsed.algorithm.as_str() != "argon2id" {
+        return Err(AuthError::InvalidHash(id.to_string()));
+    }
+    let m = parsed
+        .params
+        .get_str("m")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    let t = parsed
+        .params
+        .get_str("t")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    let p = parsed
+        .params
+        .get_str("p")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    if m < MIN_M_COST {
+        return Err(AuthError::WeakHashParams {
+            id: id.to_string(),
+            detail: format!("m={m} below minimum {MIN_M_COST}"),
+        });
+    }
+    if t < MIN_T_COST {
+        return Err(AuthError::WeakHashParams {
+            id: id.to_string(),
+            detail: format!("t={t} below minimum {MIN_T_COST}"),
+        });
+    }
+    if p < MIN_P_COST {
+        return Err(AuthError::WeakHashParams {
+            id: id.to_string(),
+            detail: format!("p={p} below minimum {MIN_P_COST}"),
+        });
+    }
+    Ok(())
+}
+
+fn authenticate_against_file(tokens: &[TokenRecord], presented: &str) -> Option<AuthContext> {
+    // Verify against every enabled token. Argon2 verify is intentionally slow;
+    // avoid early-exit on the first match for timing side-channels on id.
+    let mut matched: Option<AuthContext> = None;
+    for token in tokens.iter().filter(|t| t.enabled) {
+        if verify_argon2(&token.hash, presented) {
+            matched = Some(AuthContext {
+                token_id: token.id.clone(),
+                scopes: token.scopes.clone(),
+            });
+        }
+    }
+    matched
+}
+
+fn verify_argon2(phc: &str, presented: &str) -> bool {
+    let Ok(parsed) = PasswordHash::new(phc) else {
+        return false;
+    };
+    Argon2::default()
+        .verify_password(presented.as_bytes(), &parsed)
+        .is_ok()
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    // Digest both sides so length mismatches do not short-circuit (length oracle).
+    use sha2::{Digest, Sha256};
+    use subtle::ConstantTimeEq;
+    let ha = Sha256::digest(a);
+    let hb = Sha256::digest(b);
+    ha.ct_eq(&hb).into()
+}
+
+/// Whether `granted` scopes satisfy `required`.
+///
+/// Supports `*`, exact match, env name aliases (`env:read` ↔ `envs:read`), and
+/// **one-way** coarse→fine coverage (`runs:write` covers `runs:enqueue`, but
+/// `runs:enqueue` does **not** satisfy a `runs:write` check). Fine scopes must
+/// never escalate to coarser write privileges.
+pub fn scope_allows(granted: &[String], required: &str) -> bool {
+    if granted.iter().any(|s| s == WILDCARD_SCOPE) {
+        return true;
+    }
+    for g in granted {
+        if scopes_match(g, required) {
+            return true;
+        }
+    }
+    false
+}
+
+fn scopes_match(granted: &str, required: &str) -> bool {
+    if normalize_scope(granted) == normalize_scope(required) {
+        return true;
+    }
+    // Coarse grants cover finer required actions only (never the reverse).
+    match (granted, required) {
+        ("runs:write", "runs:enqueue" | "runs:cancel" | "runs:dead-letter" | "runs:write") => true,
+        (
+            "batteries:write",
+            "batteries:add"
+            | "batteries:sync"
+            | "batteries:install"
+            | "batteries:remove"
+            | "batteries:write",
+        ) => true,
+        ("config:read", "config:read" | "doctor:read" | "workspace:read") => true,
+        ("scripts:read", "scripts:read" | "search:read") => true,
+        _ => false,
+    }
+}
+
+fn normalize_scope(scope: &str) -> &str {
+    match scope {
+        "env:read" | "envs:read" => "envs:read",
+        "env:write" | "envs:write" => "envs:write",
+        "env:activate" | "envs:activate" => "envs:activate",
+        "env:use" | "envs:use" => "envs:use",
+        other => other,
+    }
+}
+
+/// Resolve auth configuration from CLI/env (legacy env token allowed).
+#[allow(dead_code)] // public helper; api uses resolve_authenticator_with_legacy
+pub fn resolve_authenticator(
+    tokens_file: Option<&Path>,
+    tokens_file_env: Option<&str>,
+) -> Result<Authenticator, AuthError> {
+    resolve_authenticator_with_legacy(tokens_file, tokens_file_env, true)
+}
+
+pub fn resolve_authenticator_with_legacy(
+    tokens_file: Option<&Path>,
+    tokens_file_env: Option<&str>,
+    allow_legacy_env_token: bool,
+) -> Result<Authenticator, AuthError> {
+    let path = tokens_file
+        .map(Path::to_path_buf)
+        .or_else(|| tokens_file_env.map(PathBuf::from));
+    if let Some(path) = path {
+        return Authenticator::from_tokens_file(path);
+    }
+    if !allow_legacy_env_token {
+        if std::env::var_os("OMAKURE_API_TOKEN").is_some() {
+            return Err(AuthError::LegacyEnvTokenDisabled);
+        }
+        return Err(AuthError::LegacyEnvTokenDisabled);
+    }
+    let token = std::env::var("OMAKURE_API_TOKEN").map_err(|_| AuthError::MissingAuth)?;
+    validate_legacy_token(&token)?;
+    Ok(Authenticator::legacy(token.trim()))
+}
+
+pub fn validate_legacy_token(token: &str) -> Result<(), AuthError> {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return Err(AuthError::MissingAuth);
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let known_defaults = [
+        "changeme",
+        "change-me",
+        "default",
+        "password",
+        "secret",
+        "token",
+        "omakure",
+    ];
+    if trimmed.len() < 32 || known_defaults.contains(&lower.as_str()) {
+        return Err(AuthError::InvalidLegacyToken);
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneratedToken {
+    pub id: String,
+    pub token: String,
+    pub hash: String,
+    pub scopes: Vec<String>,
+    pub tokens_file_entry: String,
+}
+
+pub fn generate_token(id: &str, scopes: &[String]) -> Result<GeneratedToken, AuthError> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err(AuthError::EmptyId);
+    }
+    if scopes.is_empty() {
+        return Err(AuthError::EmptyScopes {
+            id: id.to_string(),
+        });
+    }
+    let plaintext = random_token_plaintext();
+    let hash = hash_token(&plaintext)?;
+    let entry = format_toml_entry(id, &hash, scopes);
+    Ok(GeneratedToken {
+        id: id.to_string(),
+        token: plaintext,
+        hash,
+        scopes: scopes.to_vec(),
+        tokens_file_entry: entry,
+    })
+}
+
+pub fn random_token_plaintext() -> String {
+    let mut bytes = [0u8; PLAINTEXT_BYTES];
+    OsRng.fill_bytes(&mut bytes);
+    let mut encoded = String::with_capacity(TOKEN_PREFIX.len() + PLAINTEXT_BYTES * 2);
+    encoded.push_str(TOKEN_PREFIX);
+    for b in bytes {
+        encoded.push_str(&format!("{b:02x}"));
+    }
+    encoded
+}
+
+pub fn hash_token(plaintext: &str) -> Result<String, AuthError> {
+    let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, None)
+        .map_err(|e| AuthError::Parse(e.to_string()))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let salt = SaltString::generate(&mut OsRng);
+    let hash = argon2
+        .hash_password(plaintext.as_bytes(), &salt)
+        .map_err(|e| AuthError::Parse(e.to_string()))?;
+    Ok(hash.to_string())
+}
+
+pub fn format_toml_entry(id: &str, hash: &str, scopes: &[String]) -> String {
+    let mut out = String::new();
+    out.push_str("[[tokens]]\n");
+    out.push_str(&format!("id = \"{}\"\n", escape_toml_str(id)));
+    out.push_str(&format!("hash = \"{}\"\n", escape_toml_str(hash)));
+    out.push_str("scopes = [\n");
+    for scope in scopes {
+        out.push_str(&format!("  \"{}\",\n", escape_toml_str(scope)));
+    }
+    out.push_str("]\n");
+    out.push_str("enabled = true\n");
+    out
+}
+
+fn escape_toml_str(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+pub const MAX_TOKENS_PER_FILE: usize = 64;
+
+pub fn append_token_entry(path: &Path, id: &str, entry: &str) -> Result<(), AuthError> {
+    use std::io::Write;
+    // Validate uniqueness before mutating the file.
+    if path.exists() {
+        let existing = load_tokens_file(path)?;
+        if existing.len() >= MAX_TOKENS_PER_FILE {
+            return Err(AuthError::Parse(format!(
+                "tokens file already has {} entries (max {MAX_TOKENS_PER_FILE})",
+                existing.len()
+            )));
+        }
+        if existing.iter().any(|t| t.id == id) {
+            return Err(AuthError::DuplicateId(id.to_string()));
+        }
+    }
+    let mut staged = if path.exists() {
+        fs::read_to_string(path).map_err(|e| AuthError::Io(e.to_string()))?
+    } else {
+        "version = 1\n\n".to_string()
+    };
+    if !staged.ends_with('\n') {
+        staged.push('\n');
+    }
+    if !staged.ends_with("\n\n") && staged.trim_end() != "version = 1" {
+        staged.push('\n');
+    }
+    staged.push_str(entry);
+    if !entry.ends_with('\n') {
+        staged.push('\n');
+    }
+    // Re-parse staged content before replace so we never leave a broken file.
+    let _ = parse_tokens_toml(&staged)?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let tmp = parent.join(format!(
+        ".{}.tmp-{}",
+        path.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("tokens.toml"),
+        std::process::id()
+    ));
+    {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp)
+            .map_err(|e| AuthError::Io(e.to_string()))?;
+        file.write_all(staged.as_bytes())
+            .map_err(|e| AuthError::Io(e.to_string()))?;
+        file.sync_all().map_err(|e| AuthError::Io(e.to_string()))?;
+    }
+    fs::rename(&tmp, path).map_err(|e| AuthError::Io(e.to_string()))?;
+    Ok(())
+}
+
+/// Install a SIGHUP handler that reloads the authenticator (Unix only).
+/// Failed reloads keep the last valid set.
+#[cfg(unix)]
+pub fn install_sighup_reload(auth: Authenticator) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::thread;
+    use std::time::Duration;
+
+    static REGISTERED: AtomicBool = AtomicBool::new(false);
+    if REGISTERED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    let flag = Arc::new(AtomicBool::new(false));
+    let flag_for_hook = Arc::clone(&flag);
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, flag_for_hook);
+
+    thread::spawn(move || loop {
+        if flag.swap(false, Ordering::SeqCst) {
+            match auth.reload() {
+                Ok(()) => eprintln!("omakure: reloaded tokens file"),
+                Err(err) => {
+                    eprintln!("omakure: tokens reload failed; keeping last valid set ({err})");
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(200));
+    });
+}
+
+#[cfg(not(unix))]
+pub fn install_sighup_reload(_auth: Authenticator) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn parse_rejects_duplicate_ids() {
+        let hash = hash_token(&random_token_plaintext()).unwrap();
+        let toml = format!(
+            r#"
+version = 1
+[[tokens]]
+id = "ci"
+hash = "{hash}"
+scopes = ["runs:read"]
+[[tokens]]
+id = "ci"
+hash = "{hash}"
+scopes = ["runs:enqueue"]
+"#
+        );
+        let err = parse_tokens_toml(&toml).unwrap_err();
+        assert!(matches!(err, AuthError::DuplicateId(id) if id == "ci"));
+    }
+
+    #[test]
+    fn parse_rejects_empty_scopes() {
+        let hash = hash_token(&random_token_plaintext()).unwrap();
+        let toml = format!(
+            r#"
+version = 1
+[[tokens]]
+id = "ci"
+hash = "{hash}"
+scopes = []
+"#
+        );
+        assert!(matches!(
+            parse_tokens_toml(&toml),
+            Err(AuthError::EmptyScopes { .. })
+        ));
+    }
+
+    #[test]
+    fn parse_rejects_non_argon2id() {
+        let toml = r#"
+version = 1
+[[tokens]]
+id = "ci"
+hash = "$bcrypt$v=0$not-real"
+scopes = ["*"]
+"#;
+        assert!(matches!(
+            parse_tokens_toml(toml),
+            Err(AuthError::InvalidHash(_))
+        ));
+    }
+
+    #[test]
+    fn disabled_token_does_not_authenticate() {
+        let plaintext = random_token_plaintext();
+        let hash = hash_token(&plaintext).unwrap();
+        let toml = format!(
+            r#"
+version = 1
+[[tokens]]
+id = "disabled"
+hash = "{hash}"
+scopes = ["*"]
+enabled = false
+"#
+        );
+        let tokens = parse_tokens_toml(&toml).unwrap();
+        assert!(authenticate_against_file(&tokens, &plaintext).is_none());
+    }
+
+    #[test]
+    fn enabled_token_authenticates_with_scopes() {
+        let plaintext = random_token_plaintext();
+        let hash = hash_token(&plaintext).unwrap();
+        let toml = format!(
+            r#"
+version = 1
+[[tokens]]
+id = "ci-deployer"
+hash = "{hash}"
+scopes = ["runs:enqueue", "runs:read"]
+enabled = true
+"#
+        );
+        let tokens = parse_tokens_toml(&toml).unwrap();
+        let ctx = authenticate_against_file(&tokens, &plaintext).unwrap();
+        assert_eq!(ctx.token_id, "ci-deployer");
+        assert!(ctx.has_scope("runs:read"));
+        assert!(ctx.has_scope("runs:enqueue"));
+        assert!(!ctx.has_scope("batteries:add"));
+    }
+
+    #[test]
+    fn wildcard_scope_allows_all() {
+        let ctx = AuthContext {
+            token_id: "admin".into(),
+            scopes: vec!["*".into()],
+        };
+        assert!(ctx.has_scope("runs:enqueue"));
+        assert!(ctx.has_scope("admin:status"));
+    }
+
+    #[test]
+    fn env_scope_aliases() {
+        let ctx = AuthContext {
+            token_id: "t".into(),
+            scopes: vec!["envs:read".into()],
+        };
+        assert!(ctx.has_scope("env:read"));
+        assert!(ctx.has_scope("envs:read"));
+        let ctx2 = AuthContext {
+            token_id: "t".into(),
+            scopes: vec!["env:write".into()],
+        };
+        assert!(ctx2.has_scope("envs:write"));
+    }
+
+    #[test]
+    fn runs_write_covers_finer_plan_scopes() {
+        let ctx = AuthContext {
+            token_id: "t".into(),
+            scopes: vec!["runs:write".into()],
+        };
+        assert!(ctx.has_scope("runs:enqueue"));
+        assert!(ctx.has_scope("runs:cancel"));
+        assert!(ctx.has_scope("runs:dead-letter"));
+    }
+
+    #[test]
+    fn fine_scopes_do_not_satisfy_coarse_write_checks() {
+        let runs = AuthContext {
+            token_id: "t".into(),
+            scopes: vec!["runs:enqueue".into()],
+        };
+        assert!(runs.has_scope("runs:enqueue"));
+        assert!(!runs.has_scope("runs:write"));
+        assert!(!runs.has_scope("runs:cancel"));
+
+        let batteries = AuthContext {
+            token_id: "t".into(),
+            scopes: vec!["batteries:add".into()],
+        };
+        assert!(batteries.has_scope("batteries:add"));
+        assert!(!batteries.has_scope("batteries:write"));
+        assert!(!batteries.has_scope("batteries:sync"));
+        assert!(!batteries.has_scope("batteries:install"));
+        assert!(!batteries.has_scope("batteries:remove"));
+    }
+
+    #[test]
+    fn batteries_write_covers_finer_battery_scopes() {
+        let ctx = AuthContext {
+            token_id: "t".into(),
+            scopes: vec!["batteries:write".into()],
+        };
+        assert!(ctx.has_scope("batteries:add"));
+        assert!(ctx.has_scope("batteries:sync"));
+        assert!(ctx.has_scope("batteries:install"));
+        assert!(ctx.has_scope("batteries:remove"));
+    }
+
+    #[test]
+    fn legacy_authenticator_uses_legacy_id_and_wildcard() {
+        let token = "0123456789abcdef0123456789abcdef";
+        let auth = Authenticator::legacy(token);
+        let ctx = auth.authenticate(token).unwrap();
+        assert_eq!(ctx.token_id, LEGACY_TOKEN_ID);
+        assert!(ctx.has_scope("anything"));
+        assert!(auth
+            .authenticate("wrong-token-value-that-is-long-enough!!")
+            .is_none());
+    }
+
+    #[test]
+    fn generate_token_uses_prefix_and_verifiable_hash() {
+        let gen = generate_token("ci", &["runs:read".into(), "scripts:read".into()]).unwrap();
+        assert!(gen.token.starts_with(TOKEN_PREFIX));
+        assert!(gen.hash.contains("argon2id"));
+        assert!(gen.tokens_file_entry.contains("id = \"ci\""));
+        assert!(verify_argon2(&gen.hash, &gen.token));
+        assert!(!gen.tokens_file_entry.contains(&gen.token));
+    }
+
+    #[test]
+    fn reload_keeps_last_valid_set_on_failure() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let plaintext = random_token_plaintext();
+        let hash = hash_token(&plaintext).unwrap();
+        fs::write(
+            &path,
+            format!(
+                r#"
+version = 1
+[[tokens]]
+id = "ok"
+hash = "{hash}"
+scopes = ["*"]
+enabled = true
+"#
+            ),
+        )
+        .unwrap();
+        let auth = Authenticator::from_tokens_file(&path).unwrap();
+        assert!(auth.authenticate(&plaintext).is_some());
+
+        fs::write(&path, "this is not valid toml [[[").unwrap();
+        assert!(auth.reload().is_err());
+        assert!(auth.authenticate(&plaintext).is_some());
+    }
+
+    #[test]
+    fn status_surfaces_reload_failure_without_secrets_or_token_ids() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let plaintext = random_token_plaintext();
+        let hash = hash_token(&plaintext).unwrap();
+        fs::write(
+            &path,
+            format!(
+                r#"
+version = 1
+[[tokens]]
+id = "ok"
+hash = "{hash}"
+scopes = ["admin:status"]
+enabled = true
+"#
+            ),
+        )
+        .unwrap();
+        let auth = Authenticator::from_tokens_file(&path).unwrap();
+        let before = auth.status();
+        assert_eq!(before.mode, "tokens_file");
+        assert_eq!(before.token_count, 1);
+        assert_eq!(before.last_reload_ok, None);
+        assert!(before.last_reload_error.is_none());
+        let serialized = serde_json::to_string(&before).unwrap();
+        assert!(!serialized.contains(&plaintext));
+        // Token id must never appear; avoid matching substrings of field names.
+        assert!(!serialized.contains("\"id\""));
+        assert!(!serialized.contains(path.to_string_lossy().as_ref()));
+
+        fs::write(&path, "this is not valid toml [[[").unwrap();
+        assert!(auth.reload().is_err());
+        let after = auth.status();
+        assert_eq!(after.last_reload_ok, Some(false));
+        assert!(after
+            .last_reload_error
+            .as_deref()
+            .is_some_and(|e| !e.is_empty()));
+        assert!(after.last_reload_at_ms.is_some());
+        assert_eq!(after.token_count, 1);
+        assert!(auth.authenticate(&plaintext).is_some());
+
+        // Restore a valid file and confirm success is surfaced.
+        fs::write(
+            &path,
+            format!(
+                r#"
+version = 1
+[[tokens]]
+id = "ok"
+hash = "{hash}"
+scopes = ["admin:status"]
+enabled = true
+"#
+            ),
+        )
+        .unwrap();
+        auth.reload().unwrap();
+        let ok = auth.status();
+        assert_eq!(ok.last_reload_ok, Some(true));
+        assert!(ok.last_reload_error.is_none());
+    }
+
+    #[test]
+    fn legacy_status_reports_mode_without_token_material() {
+        let token = "0123456789abcdef0123456789abcdef";
+        let auth = Authenticator::legacy(token);
+        let status = auth.status();
+        assert_eq!(status.mode, "legacy");
+        assert_eq!(status.token_count, 1);
+        let serialized = serde_json::to_string(&status).unwrap();
+        assert!(!serialized.contains(token));
+    }
+
+    #[test]
+    fn append_token_entry_writes_parseable_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let gen = generate_token("a", &["runs:read".into()]).unwrap();
+        append_token_entry(&path, &gen.id, &gen.tokens_file_entry).unwrap();
+        let tokens = load_tokens_file(&path).unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].id, "a");
+    }
+
+    #[test]
+    fn append_token_entry_rejects_duplicate_id_without_corrupting_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let a = generate_token("dup", &["runs:read".into()]).unwrap();
+        append_token_entry(&path, &a.id, &a.tokens_file_entry).unwrap();
+        let before = fs::read_to_string(&path).unwrap();
+        let b = generate_token("dup", &["scripts:read".into()]).unwrap();
+        let err = append_token_entry(&path, &b.id, &b.tokens_file_entry).unwrap_err();
+        assert!(matches!(err, AuthError::DuplicateId(_)));
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
+        assert_eq!(load_tokens_file(&path).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn constant_time_eq_is_length_independent() {
+        assert!(!constant_time_eq(b"short", b"a-much-longer-value"));
+        assert!(constant_time_eq(b"same-bytes", b"same-bytes"));
+    }
+
+    #[test]
+    fn validate_legacy_token_rejects_short_and_defaults() {
+        assert!(validate_legacy_token("short").is_err());
+        assert!(validate_legacy_token("changeme").is_err());
+        assert!(validate_legacy_token("0123456789abcdef0123456789abcdef").is_ok());
+    }
+}

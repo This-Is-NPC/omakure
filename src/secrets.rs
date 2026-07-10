@@ -42,7 +42,7 @@ impl SecretRef {
         })
     }
 
-    fn canonical(&self) -> String {
+    pub fn canonical(&self) -> String {
         format!("secret://{}/{}", self.provider, self.key)
     }
 }
@@ -80,11 +80,33 @@ impl SecretAccess {
         if self.allow_all {
             return Ok(());
         }
-        if !self.scopes.contains("secrets:use") {
+        let may_use = self.scopes.contains("secrets:use") || self.scopes.contains("credentials:use");
+        if !may_use {
             return Err(SecretResolveError::Denied(
-                "secrets:use scope is required".to_string(),
+                "secrets:use or credentials:use scope is required".to_string(),
             ));
         }
+        self.ref_allowed(secret_ref)
+    }
+
+    /// Metadata listing accepts `secrets:read-metadata` (or use scopes) + ref ACL.
+    /// Never grants value resolution — callers must still use [`Self::can_use`].
+    fn can_list_metadata(&self, secret_ref: &SecretRef) -> Result<(), SecretResolveError> {
+        if self.allow_all {
+            return Ok(());
+        }
+        let may_list = self.scopes.contains("secrets:read-metadata")
+            || self.scopes.contains("secrets:use")
+            || self.scopes.contains("credentials:use");
+        if !may_list {
+            return Err(SecretResolveError::Denied(
+                "secrets:read-metadata scope is required".to_string(),
+            ));
+        }
+        self.ref_allowed(secret_ref)
+    }
+
+    fn ref_allowed(&self, secret_ref: &SecretRef) -> Result<(), SecretResolveError> {
         let canonical = secret_ref.canonical();
         let provider_wildcard = format!("secret://{}/*", secret_ref.provider);
         if self.allowed_refs.contains(&canonical) || self.allowed_refs.contains(&provider_wildcard)
@@ -389,6 +411,100 @@ fn resolve_secret_ref(
     }
     access.can_use(&secret_ref)?;
     resolve_file_secret(workspace, &secret_ref)
+}
+
+/// Check whether `access` permits resolving `value` without fetching the secret.
+pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), String> {
+    let secret_ref = if let Some(name) = value.strip_prefix("secret://env:") {
+        SecretRef {
+            provider: "env".to_string(),
+            key: name.to_string(),
+        }
+    } else {
+        SecretRef::parse(value).ok_or_else(|| "invalid secret ref".to_string())?
+    };
+    access
+        .can_use(&secret_ref)
+        .map_err(|err| secret_error_message(err))
+}
+
+/// Resolve a `secret://…` ref to its plaintext value under `access`.
+/// Used by Battery HTTPS auth (GIT_ASKPASS) and other credential consumers.
+pub fn resolve_secret_value(
+    workspace: &Workspace,
+    value: &str,
+    access: &SecretAccess,
+) -> Result<String, String> {
+    match resolve_secret_ref(workspace, value, access) {
+        Ok(Some(v)) => Ok(v),
+        Ok(None) => Err("secret ref not found".to_string()),
+        Err(err) => Err(secret_error_message(err)),
+    }
+}
+
+/// Metadata-only inventory of secrets visible under `access` (never values).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SecretMetadata {
+    pub id: String,
+    pub source: String,
+    pub delivery: String,
+    pub allowed_targets: Vec<String>,
+}
+
+pub fn list_secret_metadata(workspace: &Workspace, access: &SecretAccess) -> Vec<SecretMetadata> {
+    let mut out = Vec::new();
+    // Env provider: only list refs explicitly allowed (never dump process env).
+    for allowed in &access.allowed_refs {
+        if let Some(secret_ref) = SecretRef::parse(allowed) {
+            if secret_ref.provider == "env" && access.can_list_metadata(&secret_ref).is_ok() {
+                out.push(SecretMetadata {
+                    id: secret_ref.canonical(),
+                    source: "env".to_string(),
+                    delivery: "process-env".to_string(),
+                    allowed_targets: vec!["run".to_string(), "battery".to_string()],
+                });
+            }
+        }
+    }
+    // File providers: list keys from managed env files when provider wildcard or
+    // exact refs are allowed. Values are never included.
+    if let Ok(entries) = std::fs::read_dir(workspace.envs_dir()) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if path.extension().and_then(|e| e.to_str()) != Some("conf") {
+                continue;
+            }
+            if !valid_provider_name(stem) {
+                continue;
+            }
+            let Ok(values) =
+                crate::adapters::environments::read_managed_env_defaults(workspace.envs_dir(), stem)
+            else {
+                continue;
+            };
+            for key in values.keys() {
+                let secret_ref = SecretRef {
+                    provider: stem.to_string(),
+                    key: key.clone(),
+                };
+                if access.can_list_metadata(&secret_ref).is_err() {
+                    continue;
+                }
+                out.push(SecretMetadata {
+                    id: secret_ref.canonical(),
+                    source: format!("file:{stem}"),
+                    delivery: "managed-env-file".to_string(),
+                    allowed_targets: vec!["run".to_string(), "battery".to_string()],
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out.dedup_by(|a, b| a.id == b.id);
+    out
 }
 
 /// Normalize an accepted secret-ref spelling to its canonical
@@ -760,5 +876,49 @@ mod tests {
         let persisted = resolved.persisted_args.join(" ");
         assert!(persisted.contains("secret://prod/token"));
         assert!(!persisted.contains("from_file_provider"));
+    }
+
+    #[test]
+    fn list_secret_metadata_never_includes_values() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = Workspace::new(tmp.path().to_path_buf());
+        workspace.ensure_layout().unwrap();
+        fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "TOKEN=super-secret-token-value\nOTHER=also-secret\n",
+        )
+        .unwrap();
+
+        let access = SecretAccess::new(
+            ["secrets:read-metadata"],
+            ["secret://prod/token", "secret://prod/other"],
+        );
+        let meta = list_secret_metadata(&workspace, &access);
+        let serialized = serde_json::to_string(&meta).unwrap();
+
+        assert!(meta.iter().any(|m| m.id == "secret://prod/token"));
+        assert!(meta.iter().any(|m| m.id == "secret://prod/other"));
+        assert!(meta.iter().all(|m| m.delivery == "managed-env-file"));
+        assert!(!serialized.contains("super-secret-token-value"));
+        assert!(!serialized.contains("also-secret"));
+    }
+
+    #[test]
+    fn list_secret_metadata_respects_ref_acl_without_use_scope() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = Workspace::new(tmp.path().to_path_buf());
+        workspace.ensure_layout().unwrap();
+        fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "TOKEN=secret-a\nOTHER=secret-b\n",
+        )
+        .unwrap();
+
+        let access = SecretAccess::new(["secrets:read-metadata"], ["secret://prod/token"]);
+        let meta = list_secret_metadata(&workspace, &access);
+
+        assert_eq!(meta.len(), 1);
+        assert_eq!(meta[0].id, "secret://prod/token");
+        assert!(!serde_json::to_string(&meta).unwrap().contains("secret-a"));
     }
 }

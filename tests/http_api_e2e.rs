@@ -36,6 +36,14 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("health_and_config_family_routes"),
     ),
     (
+        ("GET", "/v1/ready"),
+        RouteCoverage::Covered("tests/engine_e2e.rs ready_*"),
+    ),
+    (
+        ("GET", "/v1/admin/status"),
+        RouteCoverage::Covered("admin_status_requires_scope_and_exposes_reload_without_secrets (unit)"),
+    ),
+    (
         ("GET", "/v1/config"),
         RouteCoverage::Covered("health_and_config_family_routes"),
     ),
@@ -167,6 +175,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered(
             "batteries_family_routes (https-only validation; no remote network)",
         ),
+    ),
+    (
+        ("GET", "/v1/secrets"),
+        RouteCoverage::Covered("secrets_metadata_endpoint_redacts_values (unit)"),
     ),
 ];
 

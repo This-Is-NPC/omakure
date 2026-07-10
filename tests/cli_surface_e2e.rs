@@ -41,6 +41,10 @@ const TOP_LEVEL_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
+        command: "engine",
+        coverage: Coverage::Covered("tests/engine_e2e.rs"),
+    },
+    CommandCoverage {
         command: "completion",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
@@ -97,6 +101,10 @@ const TOP_LEVEL_COVERAGE: &[CommandCoverage] = &[
     CommandCoverage {
         command: "theme",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs list/path/preview"),
+    },
+    CommandCoverage {
+        command: "token",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs + src/cli/token.rs"),
     },
     CommandCoverage {
         command: "trace",
@@ -245,6 +253,10 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
             "mutates global theme config; list/path/preview cover safe theme surface",
         ),
     },
+    CommandCoverage {
+        command: "token generate",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs + src/cli/token.rs"),
+    },
 ];
 
 #[test]
@@ -290,8 +302,10 @@ fn command_surface_inventory_maps_all_current_commands() {
         "theme path",
         "theme preview",
         "theme set",
+        "token generate",
     ];
-    let clap_nested = clap_nested_commands(&["battery", "env", "history", "queue", "theme"]);
+    let clap_nested =
+        clap_nested_commands(&["battery", "env", "history", "queue", "theme", "token"]);
     assert_eq!(
         clap_nested, expected_nested,
         "nested clap subcommands drifted from expected set"
@@ -414,11 +428,34 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_theme_a
 
     let help_ai = omakure(workspace.path(), &["help-ai"]);
     assert_success(&help_ai);
-    assert!(json(&help_ai)["data"]["verbs"]
-        .as_array()
-        .expect("verbs")
-        .iter()
-        .any(|verb| { verb["name"] == "trace" }));
+    let help_ai_json = json(&help_ai);
+    let verbs = help_ai_json["data"]["verbs"].as_array().expect("verbs");
+    assert!(verbs.iter().any(|verb| verb["name"] == "trace"));
+    assert!(verbs.iter().any(|verb| verb["name"] == "token"));
+
+    let token_gen = omakure(
+        workspace.path(),
+        &[
+            "--json",
+            "token",
+            "generate",
+            "--id",
+            "e2e",
+            "--scope",
+            "runs:read",
+        ],
+    );
+    assert_success(&token_gen);
+    let token_body = json(&token_gen);
+    assert!(token_body["ok"].as_bool().unwrap());
+    assert!(token_body["data"]["token"]
+        .as_str()
+        .unwrap()
+        .starts_with("omk_live_"));
+    assert!(token_body["data"]["hash"]
+        .as_str()
+        .unwrap()
+        .contains("argon2id"));
 
     let completion = omakure_large_output(workspace.path(), &["completion", "bash"]);
     assert_success(&completion);

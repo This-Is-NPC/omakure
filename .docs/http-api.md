@@ -16,7 +16,7 @@ serializes the operation result.
 
 - Public internet API.
 - Browser-facing CORS support.
-- OAuth, OIDC, sessions, users, or RBAC.
+- OAuth, OIDC, or session login (scoped bearer tokens are supported).
 - Distributed queue across hosts.
 - Shared SQLite over network filesystems.
 - Direct execution of Battery scripts from Git cache.
@@ -36,6 +36,10 @@ Why:
 ## Command Contract
 
 ```bash
+# Preferred: multi-token file (per-token scopes; --capability ignored)
+omakure api --bind 127.0.0.1:7878 --tokens-file /run/secrets/omakure_tokens.toml
+
+# Legacy single-token mode
 omakure api --bind 127.0.0.1:7878 \
   --capability config:read \
   --capability scripts:read \
@@ -50,6 +54,34 @@ omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
   --capability env:write
 ```
 
+### Engine (single-process deploy)
+
+`omakure engine` runs the same HTTP surface as `omakure api`, plus optional
+in-process queue workers and the existing schedule scanner, with coordinated
+SIGTERM shutdown. Auth is identical (`--tokens-file` / `OMAKURE_TOKENS_FILE`,
+or legacy `OMAKURE_API_TOKEN` + `--capability` / `--secret-ref`).
+
+```bash
+# API-only (≈ omakure api)
+omakure engine --workers 0 --no-scheduler --tokens-file /run/secrets/tokens.toml
+
+# HTTP + one worker + scheduler (defaults: --workers 1, scheduler on)
+omakure engine --workers 1 --scheduler --tokens-file /run/secrets/tokens.toml
+
+# Fail ready until configured loops are alive
+omakure engine --workers 2 \
+  --readiness-requires-worker \
+  --readiness-requires-scheduler
+```
+
+| Flag | Default | Meaning |
+|---|---:|---|
+| `--workers <n>` | `1` | Embedded queue workers; `0` = API only |
+| `--scheduler` / `--no-scheduler` | on | Enable/disable `scheduler_tick` in-process |
+| `--readiness-requires-worker` | off | `/v1/ready` fails if workers configured but not alive |
+| `--readiness-requires-scheduler` | off | `/v1/ready` fails if scheduler enabled but not alive |
+| `--tokens-file` | none | Multi-token Argon2id TOML (`OMAKURE_TOKENS_FILE`) |
+
 Defaults and guards:
 
 - Default bind: `127.0.0.1:7878`.
@@ -57,39 +89,79 @@ Defaults and guards:
 - Non-loopback bind requires `--allow-non-loopback`.
 - `0.0.0.0` and `::` count as non-loopback.
 - Binding must fail before listening when the guard is not satisfied.
-- Capabilities are denied by default. Grant them with repeated `--capability`
-  flags: `config:read`, `scripts:read`, `env:read`, `env:write`,
-  `env:activate`, `env:use`, `secrets:use`, `runs:read`, `runs:write`,
-  `batteries:read`, `batteries:write`, or `all`.
-- Read endpoints are capability-gated too: config/workspace/doctor require
-  `config:read`, script/search/tree endpoints require `scripts:read`, run
-  history/trace/queue stats endpoints require `runs:read`, and Battery read
-  endpoints require `batteries:read`.
-- Secret provider refs are denied by default. Grant exact refs or provider
-  wildcards with repeated `--secret-ref`, for example `--secret-ref
-  secret://prod/token` or `--secret-ref 'secret://prod/*'`.
+- **Tokens-file mode:** scopes come from each token entry; process-wide
+  `--capability` is ignored. Prefer plan scopes (`runs:enqueue`,
+  `envs:read`, …). Legacy capability names (`env:read`, `runs:write`) are
+  accepted as aliases.
+- **Legacy mode** (no tokens file): capabilities are denied by default.
+  Grant them with repeated `--capability` flags: `config:read`,
+  `scripts:read`, `env:read`/`envs:read`, `env:write`/`envs:write`,
+  `env:activate`/`envs:activate`, `env:use`/`envs:use`, `secrets:use`,
+  `secrets:read-metadata`, `credentials:use`, `runs:read`,
+  `runs:write`/`runs:enqueue`, `batteries:read`, `batteries:write`, or `all`.
+- Read endpoints are gated: config/workspace/doctor require `config:read`
+  (or `doctor:read` / `workspace:read` in tokens-file mode),
+  script/search/tree require `scripts:read` (or `search:read`), runs require
+  `runs:read`, Battery read requires `batteries:read`, secrets metadata
+  requires `secrets:read-metadata`.
+- Secret provider refs are denied by default in legacy mode. Grant exact refs
+  or provider wildcards with repeated `--secret-ref`. Private HTTPS Battery
+  `token_ref` also needs `credentials:use`.
 
 ## Authentication Contract
 
-Every endpoint except health requires:
+Every endpoint except `/v1/health` and `/v1/ready` requires:
 
 ```http
 Authorization: Bearer <token>
 ```
 
-Token source:
+### Multi-token file (preferred)
 
-- `OMAKURE_API_TOKEN`
+```bash
+omakure token generate --id ci-deployer \
+  --scope runs:enqueue --scope runs:read --scope scripts:read --json
+# copy data.token once; store data.tokens_file_entry in the secrets file
+export OMAKURE_TOKENS_FILE=/run/secrets/omakure_tokens.toml
+# or: omakure api --tokens-file /run/secrets/omakure_tokens.toml
+```
+
+TOML shape:
+
+```toml
+version = 1
+
+[[tokens]]
+id = "ci-deployer"
+hash = "$argon2id$v=19$m=65536,t=3,p=1$..."
+scopes = ["runs:enqueue", "runs:read", "scripts:read"]
+enabled = true
+```
 
 Rules:
 
-- Reject missing token configuration before serving protected endpoints.
-- Reject an empty token.
-- Reject known default/example tokens such as `changeme`, `password`,
-  `secret`, `token`, and `omakure`.
-- Require a minimum token length of 32 bytes.
-- Compare presented and configured tokens in constant time where practical.
-- Redact token values from logs, errors, JSON responses, and tests fixtures.
+- Plaintext never appears in the file; hashes are Argon2id PHC strings.
+- Token ids are unique; disabled tokens are ignored.
+- Missing/unknown bearer → `401`; authenticated token missing scope → `403`.
+- Internal `AuthContext { token_id, scopes }` is available to handlers.
+- On Unix, `SIGHUP` reloads the tokens file; a failed reload keeps the last
+  valid set. Reload health is visible on `GET /v1/admin/status` (never drops
+  the last valid auth set on parse/I/O failure).
+- Generate with `omakure token generate` (prefix `omk_live_`). Optional
+  `--append PATH --confirmed` appends the TOML entry.
+
+### Legacy single token
+
+Token source: `OMAKURE_API_TOKEN` when no tokens file is configured.
+
+- Internal token id is `legacy` with scopes `*`; route access still uses
+  process-wide `--capability`.
+- Reject empty, short (< 32 bytes), or known-default tokens.
+- Constant-time compare of the presented legacy token.
+
+Shared rules:
+
+- Redact token values from logs, errors, JSON responses, and test fixtures.
 - Never inject `OMAKURE_API_TOKEN` into script environments.
 - CORS is disabled by default. Do not add permissive CORS in v1.
 
@@ -151,11 +223,28 @@ The implemented v1 server uses the same envelope helper as CLI JSON output.
 
 ## Endpoint Contract
 
-Health is unauthenticated:
+Health and readiness are unauthenticated:
 
 ```http
 GET /v1/health
+GET /v1/ready
 ```
+
+`GET /v1/ready` returns only a minimal `{ "status": "ready" | "not_ready" }`
+payload (HTTP 200 or 503). It must not expose token IDs, paths, or secrets.
+Optional `--readiness-requires-worker` / `--readiness-requires-scheduler` on
+`omakure engine` gate readiness on those loops.
+
+Authenticated operator status (scope `admin:status`, or legacy `*`):
+
+```http
+GET /v1/admin/status
+```
+
+Returns readiness details (worker/scheduler gates and liveness) plus auth-file
+load/reload state (`mode`, `token_count`, `last_reload_ok`,
+`last_reload_error`, `last_reload_at_ms`). It never returns token IDs, hashes,
+plaintext secrets, or the tokens-file path.
 
 Read endpoints require auth:
 
@@ -179,7 +268,13 @@ GET /v1/envs/{name}
 GET /v1/batteries
 GET /v1/batteries/{battery_id}
 GET /v1/batteries/{battery_id}/scripts
+GET /v1/secrets
 ```
+
+`GET /v1/secrets` returns **metadata only** (`id`, `source`, `delivery`,
+`allowed_targets`) for refs allowed by the token ACL. It never returns secret
+values. Requires scope `secrets:read-metadata` and deploy policy
+`secrets.metadata_endpoint = true` (otherwise `404`).
 
 Write endpoints require auth:
 
@@ -268,7 +363,8 @@ POST /v1/batteries
 {
   "name": "azure",
   "git_url": "https://example.invalid/azure.git",
-  "requested_ref": "main"
+  "requested_ref": "main",
+  "token_ref": "secret://creds/git_token"
 }
 
 POST /v1/batteries/{battery_id}/scripts/{script_id}/install
@@ -282,6 +378,12 @@ Battery defaults: `requested_ref="main"`, `force=false`, and
 HTTP Battery registration accepts `https://` Git URLs only. Local paths,
 `file://`, and plaintext `http://` sources remain outside the HTTP API trust
 boundary; use the local CLI for local development sources.
+
+Optional `token_ref` enables private HTTPS clone/fetch via `GIT_ASKPASS`. The
+registry stores `auth.method` + `auth.token_ref` only — never plaintext.
+Private HTTPS add/sync require `credentials:use` plus
+`sources.allow_private_https_batteries` in deploy policy. Embedded URL
+credentials are rejected.
 
 Read query parameters and safety policy:
 
@@ -408,6 +510,12 @@ operation path. At minimum, writes must create or transition rows through the
 existing run state machine or Battery registry/provenance records. HTTP errors
 and responses redact bearer tokens.
 
+Authenticated HTTP requests also emit structured request audit lines on stderr
+(`omakure.http_audit {…}`) with `token_id`, `method`, `path`, `outcome`, and
+`status`. The `Authorization` header and raw bearer secrets are never logged.
+Operators correlate enqueue/cancel/dead-letter with `token_id` via these
+request logs (no runs.sqlite schema change in this increment).
+
 ## Deployment Model
 
 Loopback mode:
@@ -415,6 +523,8 @@ Loopback mode:
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
 omakure api
+# or single-process:
+omakure engine --workers 1
 ```
 
 Internal container network mode:
@@ -422,6 +532,8 @@ Internal container network mode:
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
 omakure api --bind 0.0.0.0:7878 --allow-non-loopback
+# or:
+omakure engine --bind 0.0.0.0:7878 --allow-non-loopback --workers 2
 ```
 
 Publishing the API to a host port is a deployment choice outside v1's safety

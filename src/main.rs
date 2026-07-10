@@ -1,10 +1,12 @@
 mod adapters;
+mod auth;
 mod app_meta;
 mod cli;
 mod domain;
 mod error;
 mod lua_widget;
 pub mod operations;
+mod policy;
 mod ports;
 pub mod redaction;
 mod run_executor;
@@ -187,7 +189,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Commands::Queue(args)) => cli::queue::run(global_root, args, json_output)?,
         Some(Commands::Battery(args)) => cli::battery::run(global_root, args, json_output)?,
         Some(Commands::Env(args)) => cli::env::run(global_root, args, json_output)?,
+        Some(Commands::Token(args)) => cli::token::run(args, json_output)?,
         Some(Commands::Api(args)) => cli::api::run(global_root, args)?,
+        Some(Commands::Engine(args)) => cli::engine::run(global_root, args)?,
         Some(Commands::Trace(args)) => cli::trace::run(global_root, args, json_output)?,
         Some(Commands::HelpAi) => cli::help_ai::run()?,
         Some(Commands::Run(args)) => cli::run::run(global_root, args, json_output)?,

@@ -80,14 +80,35 @@ pub enum Commands {
     /// Manage reusable Battery automation repositories
     Battery(BatteryArgs),
 
+    /// Generate hashed API tokens for `--tokens-file` auth
+    ///
+    /// Prints a plaintext token once (prefix `omk_live_`), its Argon2id PHC
+    /// hash, and a TOML `[[tokens]]` entry. Does not append to a secrets file
+    /// unless `--append` is passed with `--confirmed`.
+    Token(TokenArgs),
+
     /// Run the internal HTTP management API
     ///
     /// Starts a loopback-only HTTP API by default at `127.0.0.1:7878`.
-    /// All endpoints except `/v1/health` require `Authorization: Bearer <token>`
-    /// using `OMAKURE_API_TOKEN`. Binding to non-loopback addresses requires
-    /// `--allow-non-loopback` and should only be used behind trusted network
-    /// controls.
+    /// All endpoints except `/v1/health` and `/v1/ready` require
+    /// `Authorization: Bearer <token>`. Prefer `--tokens-file` /
+    /// `OMAKURE_TOKENS_FILE` (per-token Argon2id scopes). Legacy
+    /// `OMAKURE_API_TOKEN` still works when no tokens file is configured.
+    /// Binding to non-loopback addresses requires `--allow-non-loopback`.
     Api(ApiArgs),
+
+    /// Run the deployable engine (HTTP API + optional workers + scheduler)
+    ///
+    /// Starts the HTTP management API and optionally embeds queue workers and
+    /// the existing schedule scanner in one process. Use `--workers 0
+    /// --no-scheduler` for API-only (same auth surface as `omakure api`).
+    /// `GET /v1/ready` is unauthenticated and returns minimal readiness.
+    /// `GET /v1/admin/status` (scope `admin:status`) exposes readiness details
+    /// and token reload health without secrets. Authenticated requests emit
+    /// `omakure.http_audit` lines with `token_id` (Authorization redacted).
+    /// SIGTERM/SIGINT stops HTTP first, then scheduling/claiming, then drains
+    /// workers.
+    Engine(EngineArgs),
 
     /// Append a structured trace event from inside a running script
     Trace(TraceArgs),
@@ -205,6 +226,37 @@ pub struct DescribeArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct TokenArgs {
+    #[command(subcommand)]
+    pub command: TokenCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum TokenCommand {
+    /// Generate a plaintext token, Argon2id hash, and TOML entry
+    Generate(TokenGenerateArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct TokenGenerateArgs {
+    /// Stable token id (logged/audited; never the secret)
+    #[arg(long)]
+    pub id: String,
+
+    /// Scope to grant (repeatable), e.g. runs:read, scripts:read, *
+    #[arg(long = "scope", required = true)]
+    pub scopes: Vec<String>,
+
+    /// Append the TOML entry to this tokens file (requires `--confirmed`)
+    #[arg(long)]
+    pub append: Option<std::path::PathBuf>,
+
+    /// Confirm a destructive/automated `--append`
+    #[arg(long)]
+    pub confirmed: bool,
+}
+
+#[derive(Args, Debug)]
 pub struct ApiArgs {
     /// Address to bind the HTTP API server to
     #[arg(long, default_value = "127.0.0.1:7878")]
@@ -214,15 +266,97 @@ pub struct ApiArgs {
     #[arg(long)]
     pub allow_non_loopback: bool,
 
-    /// API capability to grant. Repeatable. Supported: config:read,
-    /// scripts:read, env:read, env:write, env:activate, env:use,
-    /// secrets:use, runs:read, runs:write, batteries:read,
-    /// batteries:write, all
+    /// Deploy-only policy.toml (route groups + auth/engine defaults).
+    /// Overrides `OMAKURE_POLICY_FILE`. Separate from workspace omakure.toml.
+    #[arg(long = "policy", env = "OMAKURE_POLICY_FILE")]
+    pub policy: Option<std::path::PathBuf>,
+
+    /// Multi-token TOML file (Argon2id hashes + per-token scopes).
+    /// Overrides `OMAKURE_TOKENS_FILE`. When set, process-wide
+    /// `--capability` is ignored; scopes come from each token.
+    #[arg(long = "tokens-file", env = "OMAKURE_TOKENS_FILE")]
+    pub tokens_file: Option<std::path::PathBuf>,
+
+    /// API capability to grant in legacy single-token mode
+    /// (`OMAKURE_API_TOKEN`). Repeatable. Ignored when `--tokens-file`
+    /// is set. Supported: config:read, scripts:read, env:read /
+    /// envs:read, env:write / envs:write, env:activate / envs:activate,
+    /// env:use / envs:use, secrets:use, secrets:read-metadata,
+    /// credentials:use, runs:read, runs:write / runs:enqueue,
+    /// batteries:read, batteries:write, admin:status, all.
+    /// `all` grants every route capability but does not bypass
+    /// `--secret-ref` (pass `--secret-ref '*'` for unrestricted refs).
     #[arg(long = "capability")]
     pub capabilities: Vec<String>,
 
-    /// Allowed secret provider ref for secrets:use, e.g. secret://prod/token
-    /// or secret://prod/*; repeatable. Empty denies provider refs.
+    /// Allowed secret provider ref for secrets:use / credentials:use,
+    /// e.g. secret://prod/token or secret://prod/*; repeatable. Empty
+    /// denies provider refs.
+    #[arg(long = "secret-ref")]
+    pub secret_refs: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct EngineArgs {
+    /// Address to bind the HTTP API server to
+    #[arg(long, default_value = "127.0.0.1:7878")]
+    pub bind: std::net::SocketAddr,
+
+    /// Explicitly allow binding to non-loopback addresses
+    #[arg(long)]
+    pub allow_non_loopback: bool,
+
+    /// Deploy-only policy.toml. Same as `omakure api --policy`.
+    #[arg(long = "policy", env = "OMAKURE_POLICY_FILE")]
+    pub policy: Option<std::path::PathBuf>,
+
+    /// Number of embedded queue workers. `0` means API-only (no claiming).
+    /// When omitted, uses `[engine].workers` from `--policy` (default 1).
+    #[arg(long)]
+    pub workers: Option<u32>,
+
+    /// Explicitly enable the in-process schedule scanner (default: on,
+    /// or `[engine].scheduler` from policy when neither flag is set).
+    #[arg(long = "scheduler", default_value_t = false)]
+    pub scheduler: bool,
+
+    /// Disable the in-process schedule scanner.
+    #[arg(
+        long = "no-scheduler",
+        default_value_t = false,
+        conflicts_with = "scheduler"
+    )]
+    pub no_scheduler: bool,
+
+    /// Only claim jobs whose actor matches this tag
+    #[arg(long = "worker-actor-filter")]
+    pub worker_actor_filter: Option<String>,
+
+    /// Only claim jobs whose script path or name contains this pattern
+    #[arg(long = "worker-script-filter")]
+    pub worker_script_filter: Option<String>,
+
+    /// Fail `/v1/ready` when workers are configured (`--workers` ≥ 1) but not alive
+    #[arg(long)]
+    pub readiness_requires_worker: bool,
+
+    /// Fail `/v1/ready` when the scheduler is enabled but not alive
+    #[arg(long)]
+    pub readiness_requires_scheduler: bool,
+
+    /// Multi-token TOML file. Same as `omakure api --tokens-file`.
+    #[arg(long = "tokens-file", env = "OMAKURE_TOKENS_FILE")]
+    pub tokens_file: Option<std::path::PathBuf>,
+
+    /// API capability to grant in legacy single-token mode. Repeatable.
+    /// Same values as `omakure api --capability`. Ignored with
+    /// `--tokens-file`.
+    #[arg(long = "capability")]
+    pub capabilities: Vec<String>,
+
+    /// Allowed secret provider ref for secrets:use. Same as `omakure api
+    /// Allowed secret provider ref for secrets:use / credentials:use.
+    /// Same values as `omakure api --secret-ref`.
     #[arg(long = "secret-ref")]
     pub secret_refs: Vec<String>,
 }
@@ -600,6 +734,11 @@ pub struct BatteryAddArgs {
     /// Branch, tag, or ref to sync
     #[arg(long = "ref", default_value = "main")]
     pub requested_ref: String,
+
+    /// Secret ref for private HTTPS auth (`secret://provider/key`).
+    /// Registry stores the ref only; sync resolves via GIT_ASKPASS.
+    #[arg(long = "token-ref")]
+    pub token_ref: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -868,8 +1007,41 @@ mod tests {
             Commands::Api(args) => {
                 assert_eq!(args.bind.to_string(), "127.0.0.1:7878");
                 assert!(!args.allow_non_loopback);
+                assert!(args.tokens_file.is_none());
             }
             _ => panic!("expected Api"),
+        }
+    }
+
+    #[test]
+    fn test_parse_token_generate() {
+        let cli = parse(&[
+            "token",
+            "generate",
+            "--id",
+            "ci",
+            "--scope",
+            "runs:read",
+            "--scope",
+            "scripts:read",
+            "--append",
+            "/tmp/tokens.toml",
+            "--confirmed",
+        ])
+        .unwrap();
+        match cli.command.unwrap() {
+            Commands::Token(args) => match args.command {
+                TokenCommand::Generate(g) => {
+                    assert_eq!(g.id, "ci");
+                    assert_eq!(g.scopes, vec!["runs:read", "scripts:read"]);
+                    assert_eq!(
+                        g.append.as_deref(),
+                        Some(std::path::Path::new("/tmp/tokens.toml"))
+                    );
+                    assert!(g.confirmed);
+                }
+            },
+            _ => panic!("expected Token"),
         }
     }
 
@@ -886,6 +1058,34 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_api_policy_flag() {
+        let cli = parse(&["api", "--policy", "/etc/omakure/policy.toml"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Api(args) => {
+                assert_eq!(
+                    args.policy.as_deref(),
+                    Some(std::path::Path::new("/etc/omakure/policy.toml"))
+                );
+            }
+            _ => panic!("expected Api"),
+        }
+    }
+
+    #[test]
+    fn test_parse_engine_policy_flag() {
+        let cli = parse(&["engine", "--policy", "/tmp/p.toml"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Engine(args) => {
+                assert_eq!(
+                    args.policy.as_deref(),
+                    Some(std::path::Path::new("/tmp/p.toml"))
+                );
+            }
+            _ => panic!("expected Engine"),
+        }
+    }
+
+    #[test]
     fn test_api_help_surface_exists() {
         let command = Cli::command();
         let api = command
@@ -895,6 +1095,95 @@ mod tests {
         assert!(api
             .get_arguments()
             .any(|arg| arg.get_id() == "allow_non_loopback"));
+    }
+
+    #[test]
+    fn test_parse_engine_defaults() {
+        let cli = parse(&["engine"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Engine(args) => {
+                assert_eq!(args.bind.to_string(), "127.0.0.1:7878");
+                assert!(!args.allow_non_loopback);
+                assert_eq!(args.workers, None);
+                assert!(args.policy.is_none());
+                assert!(!args.scheduler);
+                assert!(!args.no_scheduler);
+                assert!(!args.readiness_requires_worker);
+                assert!(!args.readiness_requires_scheduler);
+                assert!(args.capabilities.is_empty());
+                assert!(args.secret_refs.is_empty());
+            }
+            _ => panic!("expected Engine"),
+        }
+    }
+
+    #[test]
+    fn test_parse_engine_workers_zero_no_scheduler() {
+        let cli = parse(&["engine", "--workers", "0", "--no-scheduler"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Engine(args) => {
+                assert_eq!(args.workers, Some(0));
+                assert!(!args.scheduler);
+                assert!(args.no_scheduler);
+            }
+            _ => panic!("expected Engine"),
+        }
+    }
+
+    #[test]
+    fn test_parse_engine_readiness_and_filters() {
+        let cli = parse(&[
+            "engine",
+            "--workers",
+            "2",
+            "--scheduler",
+            "--readiness-requires-worker",
+            "--readiness-requires-scheduler",
+            "--worker-actor-filter",
+            "agent",
+            "--worker-script-filter",
+            "tools/",
+            "--capability",
+            "runs:write",
+            "--secret-ref",
+            "secret://env/*",
+        ])
+        .unwrap();
+        match cli.command.unwrap() {
+            Commands::Engine(args) => {
+                assert_eq!(args.workers, Some(2));
+                assert!(args.scheduler);
+                assert!(!args.no_scheduler);
+                assert!(args.readiness_requires_worker);
+                assert!(args.readiness_requires_scheduler);
+                assert_eq!(args.worker_actor_filter.as_deref(), Some("agent"));
+                assert_eq!(args.worker_script_filter.as_deref(), Some("tools/"));
+                assert_eq!(args.capabilities, vec!["runs:write".to_string()]);
+                assert_eq!(args.secret_refs, vec!["secret://env/*".to_string()]);
+            }
+            _ => panic!("expected Engine"),
+        }
+    }
+
+    #[test]
+    fn test_engine_help_surface_exists() {
+        let command = Cli::command();
+        let engine = command
+            .find_subcommand("engine")
+            .expect("engine subcommand should be registered");
+        assert!(engine.get_arguments().any(|arg| arg.get_id() == "workers"));
+        assert!(engine
+            .get_arguments()
+            .any(|arg| arg.get_id() == "scheduler"));
+        assert!(engine
+            .get_arguments()
+            .any(|arg| arg.get_id() == "no_scheduler"));
+        assert!(engine
+            .get_arguments()
+            .any(|arg| arg.get_id() == "readiness_requires_worker"));
+        assert!(engine
+            .get_arguments()
+            .any(|arg| arg.get_id() == "readiness_requires_scheduler"));
     }
 
     #[test]

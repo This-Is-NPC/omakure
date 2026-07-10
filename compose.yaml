@@ -1,0 +1,61 @@
+# Example Compose file for a single-host `omakure engine` deployment.
+#
+# Security notes (read .docs/deployment.md before production use):
+# - Prefer multi-token auth via OMAKURE_TOKENS_FILE / --tokens-file (Argon2id).
+#   Legacy OMAKURE_API_TOKEN remains supported when no tokens file is set.
+# - Publish on host loopback only (127.0.0.1:7878). The container still binds
+#   0.0.0.0:7878 internally so Docker can forward the port.
+# - Run as non-root (image USER 10001). Override `user:` only if your volume
+#   ownership requires a matching host UID/GID.
+# - One replica per workspace volume. SQLite must not be shared across hosts
+#   or network filesystems.
+
+services:
+  omakure-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: omakure-engine:local
+    # Non-root guidance: image USER is 10001:10001. Match the host owner of the
+    # mounted workspace so ensure_layout can write .omakure/.history, e.g.:
+    #   user: "10001:10001"
+    # or pass --user "$(id -u):$(id -g)" on `docker run` (see deployment.md smoke).
+    # user: "10001:10001"
+    ports:
+      - "127.0.0.1:7878:7878"
+    environment:
+      # Preferred auth: mount tokens TOML (Argon2id) and set OMAKURE_TOKENS_FILE.
+      # Generate with: omakure token generate --id ops --scope '*' --json
+      # OMAKURE_TOKENS_FILE: /run/secrets/omakure_tokens.toml
+      # Legacy fallback (min 32 random bytes) when no tokens file is mounted:
+      OMAKURE_API_TOKEN: "${OMAKURE_API_TOKEN:?set OMAKURE_API_TOKEN or mount OMAKURE_TOKENS_FILE}"
+      OMAKURE_SCRIPTS_DIR: /workspace
+    volumes:
+      # Host workspace → container scripts/history/envs root.
+      - "${OMAKURE_WORKSPACE:-./workspace}:/workspace"
+      # Tokens file (preferred). When mounted, drop --capability below —
+      # scopes come from each token entry.
+      # - ./secrets/omakure_tokens.toml:/run/secrets/omakure_tokens.toml:ro
+    # Host publish stays 127.0.0.1 (above). `--allow-non-loopback` is only for
+    # the container-internal 0.0.0.0 bind so Docker can forward the port.
+    # Legacy --capability applies only with OMAKURE_API_TOKEN (no tokens file).
+    # `all` does not bypass --secret-ref; pass explicit refs or '*'.
+    command:
+      - engine
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --workers
+      - "1"
+      - --capability
+      - scripts:read
+      - --capability
+      - runs:read
+      - --capability
+      - runs:write
+      - --capability
+      - config:read
+      # Uncomment when using tokens file instead of OMAKURE_API_TOKEN:
+      # - --tokens-file
+      # - /run/secrets/omakure_tokens.toml
+    restart: unless-stopped

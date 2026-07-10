@@ -1,5 +1,6 @@
 use crate::domain::{extract_schema_block, parse_schema};
 use crate::runtime::{script_kind, ScriptKind};
+use crate::secrets::{self, SecretAccess};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -20,6 +21,22 @@ pub struct BatteryRef {
     pub name: String,
 }
 
+/// How a Battery authenticates to a private HTTPS remote.
+///
+/// Registry stores method + secret ref only — never resolved plaintext.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BatteryAuthMethod {
+    HttpsTokenRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatteryAuth {
+    pub method: BatteryAuthMethod,
+    /// Canonical `secret://provider/key` ref. Never a plaintext token.
+    pub token_ref: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatterySummary {
     pub name: String,
@@ -28,6 +45,9 @@ pub struct BatterySummary {
     pub resolved_commit: Option<String>,
     pub cache_path: PathBuf,
     pub last_synced_at: Option<String>,
+    /// Present when the Battery uses private HTTPS auth via a secret ref.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<BatteryAuth>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +97,9 @@ pub struct AddBatteryRequest {
     pub name: String,
     pub git_url: String,
     pub requested_ref: String,
+    /// Optional `secret://…` ref for private HTTPS clone/fetch (GIT_ASKPASS).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -219,6 +242,16 @@ pub fn add_battery(
         .strip_prefix(workspace.root())
         .map(Path::to_path_buf)
         .unwrap_or(cache_abs);
+    let auth = match request.token_ref.as_deref() {
+        None | Some("") => None,
+        Some(raw) => Some(parse_battery_token_ref(raw)?),
+    };
+    if auth.is_some() && !git_url.to_ascii_lowercase().starts_with("https://") {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "token_ref auth requires an https:// git url",
+        ));
+    }
     let summary = BatterySummary {
         name: request.name.clone(),
         git_url,
@@ -226,30 +259,65 @@ pub fn add_battery(
         resolved_commit: None,
         cache_path,
         last_synced_at: None,
+        auth,
     };
     registry.batteries.push(summary.clone());
     write_registry(&paths.registry_path, &registry)?;
     Ok(summary)
 }
 
+fn parse_battery_token_ref(raw: &str) -> OperationResult<BatteryAuth> {
+    let trimmed = raw.trim();
+    let Some(secret_ref) = crate::secrets::SecretRef::parse(trimmed) else {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "token_ref must be a secret://provider/key reference",
+        ));
+    };
+    Ok(BatteryAuth {
+        method: BatteryAuthMethod::HttpsTokenRef,
+        token_ref: secret_ref.canonical(),
+    })
+}
+
 pub fn sync_battery(
     workspace: &Workspace,
     request: SyncBatteryRequest,
 ) -> OperationResult<BatterySummary> {
-    sync_battery_with_policy(workspace, request, GitTransportPolicy::Default)
+    sync_battery_with_access(
+        workspace,
+        request,
+        GitTransportPolicy::Default,
+        &SecretAccess::allow_all(),
+    )
 }
 
 pub fn sync_battery_https_only(
     workspace: &Workspace,
     request: SyncBatteryRequest,
 ) -> OperationResult<BatterySummary> {
-    sync_battery_with_policy(workspace, request, GitTransportPolicy::HttpsOnly)
+    sync_battery_with_access(
+        workspace,
+        request,
+        GitTransportPolicy::HttpsOnly,
+        &SecretAccess::allow_all(),
+    )
 }
 
-fn sync_battery_with_policy(
+/// Sync with an explicit secret ACL (HTTP uses this after `credentials:use`).
+pub fn sync_battery_https_only_with_access(
+    workspace: &Workspace,
+    request: SyncBatteryRequest,
+    access: &SecretAccess,
+) -> OperationResult<BatterySummary> {
+    sync_battery_with_access(workspace, request, GitTransportPolicy::HttpsOnly, access)
+}
+
+fn sync_battery_with_access(
     workspace: &Workspace,
     request: SyncBatteryRequest,
     policy: GitTransportPolicy,
+    access: &SecretAccess,
 ) -> OperationResult<BatterySummary> {
     let paths = BatteryPaths::for_workspace(workspace);
     let mut registry = read_registry(&paths.registry_path)?;
@@ -266,65 +334,295 @@ fn sync_battery_with_policy(
         })?;
     validate_git_url(&registry.batteries[index].git_url)?;
     validate_git_ref(&registry.batteries[index].requested_ref)?;
+    let auth = registry.batteries[index].auth.clone();
+    let askpass = prepare_git_askpass(workspace, auth.as_ref(), access)?;
+    let git_ctx = GitExecContext {
+        policy,
+        askpass: askpass.as_ref(),
+    };
     let cache_path = cache_path_for_battery(workspace, &registry.batteries[index].name)?;
-    if !cache_path.join(".git").is_dir() {
-        if cache_path.exists() {
-            fs::remove_dir_all(&cache_path).map_err(|err| {
+    let sync_result = (|| -> OperationResult<BatterySummary> {
+        if !cache_path.join(".git").is_dir() {
+            if cache_path.exists() {
+                fs::remove_dir_all(&cache_path).map_err(|err| {
+                    OperationError::new(
+                        OperationErrorCode::IoFailed,
+                        format!("failed to clear invalid battery cache: {err}"),
+                    )
+                })?;
+            }
+            run_git_with_context(
+                git_clone_spec(&registry.batteries[index].git_url, &cache_path),
+                &git_ctx,
+            )?;
+            reject_unsafe_local_git_config(&cache_path)?;
+        } else {
+            verify_cache_origin_with_context(
+                &cache_path,
+                &registry.batteries[index].git_url,
+                &git_ctx,
+            )?;
+        }
+        run_git_with_context(
+            git_fetch_spec(&cache_path, &registry.batteries[index].requested_ref),
+            &git_ctx,
+        )?;
+        let fetched_commit = run_git_capture_with_context(
+            GitCommandSpec {
+                program: "git".into(),
+                args: vec![
+                    "-C".into(),
+                    cache_path.display().to_string(),
+                    "rev-parse".into(),
+                    "FETCH_HEAD^{commit}".into(),
+                ],
+            },
+            &git_ctx,
+        )?;
+        run_git_with_context(
+            git_checkout_detached_spec(&cache_path, fetched_commit.trim()),
+            &git_ctx,
+        )?;
+        let resolved_commit = run_git_capture_with_context(
+            GitCommandSpec {
+                program: "git".into(),
+                args: vec![
+                    "-C".into(),
+                    cache_path.display().to_string(),
+                    "rev-parse".into(),
+                    "HEAD".into(),
+                ],
+            },
+            &git_ctx,
+        )?
+        .trim()
+        .to_string();
+        let manifest = load_manifest(&cache_path)?;
+        validate_manifest_for_battery(&cache_path, &manifest, &registry.batteries[index].name)?;
+        registry.batteries[index].resolved_commit = Some(resolved_commit);
+        registry.batteries[index].last_synced_at = Some(chrono::Utc::now().to_rfc3339());
+        let summary = registry.batteries[index].clone();
+        write_registry(&paths.registry_path, &registry)?;
+        // Ensure plaintext never lands in the registry file.
+        if let Some(auth) = &summary.auth {
+            let registry_text = fs::read_to_string(&paths.registry_path).unwrap_or_default();
+            if let Some(token) = askpass.as_ref().map(|a| a.token.as_str()) {
+                if !token.is_empty() && registry_text.contains(token) {
+                    return Err(OperationError::new(
+                        OperationErrorCode::Conflict,
+                        "refusing to persist resolved battery credentials",
+                    ));
+                }
+            }
+            let _ = auth;
+        }
+        Ok(summary)
+    })();
+    drop(askpass);
+    sync_result
+}
+
+struct GitAskpassGuard {
+    dir: PathBuf,
+    script_path: PathBuf,
+    token: String,
+}
+
+impl Drop for GitAskpassGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.script_path);
+        let token_path = self.dir.join("token");
+        let _ = fs::remove_file(&token_path);
+        let _ = fs::remove_dir(&self.dir);
+    }
+}
+
+struct GitExecContext<'a> {
+    policy: GitTransportPolicy,
+    askpass: Option<&'a GitAskpassGuard>,
+}
+
+fn prepare_git_askpass(
+    workspace: &Workspace,
+    auth: Option<&BatteryAuth>,
+    access: &SecretAccess,
+) -> OperationResult<Option<GitAskpassGuard>> {
+    let Some(auth) = auth else {
+        return Ok(None);
+    };
+    if !matches!(auth.method, BatteryAuthMethod::HttpsTokenRef) {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "unsupported battery auth method",
+        ));
+    }
+    let token = resolve_battery_token(workspace, &auth.token_ref, access)?;
+    if token.is_empty() {
+        return Err(OperationError::new(
+            OperationErrorCode::Forbidden,
+            "battery token_ref resolved to an empty secret",
+        ));
+    }
+    // Unique per-sync directory so concurrent Battery ops never share token files.
+    let tmp_root = workspace.omakure_dir().join("tmp");
+    fs::create_dir_all(&tmp_root).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to create askpass temp root: {err}"),
+        )
+    })?;
+    let dir = {
+        use rand::RngCore;
+        let mut last_err = None;
+        let mut created = None;
+        for _ in 0..8 {
+            let mut bytes = [0u8; 8];
+            rand::thread_rng().fill_bytes(&mut bytes);
+            let candidate = tmp_root.join(format!(
+                "git-askpass-{}-{}",
+                std::process::id(),
+                u64::from_le_bytes(bytes)
+            ));
+            match fs::create_dir(&candidate) {
+                Ok(()) => {
+                    created = Some(candidate);
+                    break;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                    last_err = Some(err);
+                    continue;
+                }
+                Err(err) => {
+                    return Err(OperationError::new(
+                        OperationErrorCode::IoFailed,
+                        format!("failed to create askpass directory: {err}"),
+                    ));
+                }
+            }
+        }
+        created.ok_or_else(|| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!(
+                    "failed to allocate unique askpass directory: {}",
+                    last_err
+                        .map(|e| e.to_string())
+                        .unwrap_or_else(|| "exhausted retries".into())
+                ),
+            )
+        })?
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&dir)
+            .map_err(|err| {
                 OperationError::new(
                     OperationErrorCode::IoFailed,
-                    format!("failed to clear invalid battery cache: {err}"),
+                    format!("failed to read askpass directory metadata: {err}"),
                 )
-            })?;
-        }
-        run_git_with_policy(
-            git_clone_spec(&registry.batteries[index].git_url, &cache_path),
-            policy,
-        )?;
-        reject_unsafe_local_git_config(&cache_path)?;
-    } else {
-        verify_cache_origin_with_policy(&cache_path, &registry.batteries[index].git_url, policy)?;
+            })?
+            .permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&dir, perms).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to set askpass directory permissions: {err}"),
+            )
+        })?;
     }
-    run_git_with_policy(
-        git_fetch_spec(&cache_path, &registry.batteries[index].requested_ref),
-        policy,
-    )?;
-    let fetched_commit = run_git_capture_with_policy(
-        GitCommandSpec {
-            program: "git".into(),
-            args: vec![
-                "-C".into(),
-                cache_path.display().to_string(),
-                "rev-parse".into(),
-                "FETCH_HEAD^{commit}".into(),
-            ],
-        },
-        policy,
-    )?;
-    run_git_with_policy(
-        git_checkout_detached_spec(&cache_path, fetched_commit.trim()),
-        policy,
-    )?;
-    let resolved_commit = run_git_capture_with_policy(
-        GitCommandSpec {
-            program: "git".into(),
-            args: vec![
-                "-C".into(),
-                cache_path.display().to_string(),
-                "rev-parse".into(),
-                "HEAD".into(),
-            ],
-        },
-        policy,
-    )?
-    .trim()
-    .to_string();
-    let manifest = load_manifest(&cache_path)?;
-    validate_manifest_for_battery(&cache_path, &manifest, &registry.batteries[index].name)?;
-    registry.batteries[index].resolved_commit = Some(resolved_commit);
-    registry.batteries[index].last_synced_at = Some(chrono::Utc::now().to_rfc3339());
-    let summary = registry.batteries[index].clone();
-    write_registry(&paths.registry_path, &registry)?;
-    Ok(summary)
+    let token_path = dir.join("token");
+    write_secret_file(&token_path, token.as_bytes())?;
+    let script_path = dir.join("askpass.sh");
+    // Resolve token via relative path under $0's directory — no shell-quoted
+    // absolute paths (avoids `'` injection and path-with-spaces breakage).
+    let script = "#!/bin/sh\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\ncase \"$1\" in\n*Username*|*username*) printf '%s\\n' 'x-access-token' ;;\n*) cat \"$DIR/token\" ;;\nesac\n";
+    write_secret_file(&script_path, script.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script_path)
+            .map_err(|err| {
+                OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    format!("failed to read askpass script metadata: {err}"),
+                )
+            })?
+            .permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&script_path, perms).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to set askpass script permissions: {err}"),
+            )
+        })?;
+    }
+    Ok(Some(GitAskpassGuard {
+        dir,
+        script_path,
+        token,
+    }))
+}
+
+fn write_secret_file(path: &Path, contents: &[u8]) -> OperationResult<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to create secret file: {err}"),
+        )
+    })?;
+    file.write_all(contents).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to write secret file: {err}"),
+        )
+    })?;
+    file.sync_all().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to sync secret file: {err}"),
+        )
+    })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path)
+            .map_err(|err| {
+                OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    format!("failed to read secret file metadata: {err}"),
+                )
+            })?
+            .permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(path, perms).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to set secret file permissions: {err}"),
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn resolve_battery_token(
+    workspace: &Workspace,
+    token_ref: &str,
+    access: &SecretAccess,
+) -> OperationResult<String> {
+    secrets::resolve_secret_value(workspace, token_ref, access).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::Forbidden,
+            format!("failed to resolve battery token_ref: {err}"),
+        )
+    })
 }
 
 pub fn install_battery_script(
@@ -614,6 +912,24 @@ fn validate_git_url(value: &str) -> OperationResult<()> {
     Ok(())
 }
 
+/// Reject local / file Battery sources when deploy policy disallows them.
+pub fn assert_local_battery_allowed(allow_local: bool, git_url: &str) -> OperationResult<()> {
+    if allow_local {
+        return Ok(());
+    }
+    let lower = git_url.trim().to_ascii_lowercase();
+    let is_local = lower.starts_with("file://")
+        || Path::new(git_url.trim()).is_absolute()
+        || (!lower.contains("://") && !lower.contains('@'));
+    if is_local {
+        return Err(OperationError::new(
+            OperationErrorCode::Forbidden,
+            "policy sources.allow_local_batteries=false",
+        ));
+    }
+    Ok(())
+}
+
 fn normalize_git_url(value: &str) -> OperationResult<String> {
     if let Some((scheme, _)) = value.split_once("://") {
         let scheme = scheme.to_ascii_lowercase();
@@ -666,13 +982,13 @@ fn validate_git_ref(value: &str) -> OperationResult<()> {
     Ok(())
 }
 
-fn verify_cache_origin_with_policy(
+fn verify_cache_origin_with_context(
     cache_path: &Path,
     expected_url: &str,
-    policy: GitTransportPolicy,
+    ctx: &GitExecContext<'_>,
 ) -> OperationResult<()> {
     reject_unsafe_local_git_config(cache_path)?;
-    let actual = run_git_capture_with_policy(
+    let actual = run_git_capture_with_context(
         GitCommandSpec {
             program: "git".into(),
             args: vec![
@@ -683,7 +999,7 @@ fn verify_cache_origin_with_policy(
                 "origin".into(),
             ],
         },
-        policy,
+        ctx,
     )?
     .trim()
     .to_string();
@@ -731,8 +1047,8 @@ fn sanitize_file_component(value: &str) -> String {
         .collect()
 }
 
-fn run_git_with_policy(spec: GitCommandSpec, policy: GitTransportPolicy) -> OperationResult<()> {
-    let output = git_command(&spec, policy).output().map_err(|err| {
+fn run_git_with_context(spec: GitCommandSpec, ctx: &GitExecContext<'_>) -> OperationResult<()> {
+    let output = git_command_with_context(&spec, ctx).output().map_err(|err| {
         OperationError::new(
             OperationErrorCode::GitFailed,
             format!("failed to spawn git: {err}"),
@@ -743,7 +1059,10 @@ fn run_git_with_policy(spec: GitCommandSpec, policy: GitTransportPolicy) -> Oper
     } else {
         Err(OperationError::new(
             OperationErrorCode::GitFailed,
-            sanitize_git_stderr(&String::from_utf8_lossy(&output.stderr)),
+            sanitize_git_output(
+                &String::from_utf8_lossy(&output.stderr),
+                ctx.askpass.map(|a| a.token.as_str()),
+            ),
         ))
     }
 }
@@ -756,23 +1075,54 @@ fn run_git_capture_with_policy(
     spec: GitCommandSpec,
     policy: GitTransportPolicy,
 ) -> OperationResult<String> {
-    let output = git_command(&spec, policy).output().map_err(|err| {
+    run_git_capture_with_context(
+        spec,
+        &GitExecContext {
+            policy,
+            askpass: None,
+        },
+    )
+}
+
+fn run_git_capture_with_context(
+    spec: GitCommandSpec,
+    ctx: &GitExecContext<'_>,
+) -> OperationResult<String> {
+    let output = git_command_with_context(&spec, ctx).output().map_err(|err| {
         OperationError::new(
             OperationErrorCode::GitFailed,
             format!("failed to spawn git: {err}"),
         )
     })?;
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        Ok(redact_token_in_text(
+            &stdout,
+            ctx.askpass.map(|a| a.token.as_str()),
+        ))
     } else {
         Err(OperationError::new(
             OperationErrorCode::GitFailed,
-            sanitize_git_stderr(&String::from_utf8_lossy(&output.stderr)),
+            sanitize_git_output(
+                &String::from_utf8_lossy(&output.stderr),
+                ctx.askpass.map(|a| a.token.as_str()),
+            ),
         ))
     }
 }
 
+#[cfg(test)]
 fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> Command {
+    git_command_with_context(
+        spec,
+        &GitExecContext {
+            policy,
+            askpass: None,
+        },
+    )
+}
+
+fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> Command {
     let mut command = Command::new(&spec.program);
     command
         .args(&spec.args)
@@ -780,8 +1130,7 @@ fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> Command {
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", git_null_config_path())
         .env("GIT_CONFIG_SYSTEM", git_null_config_path())
-        .env("GIT_ALLOW_PROTOCOL", policy.allowed_protocols())
-        .env_remove("GIT_ASKPASS")
+        .env("GIT_ALLOW_PROTOCOL", ctx.policy.allowed_protocols())
         .env_remove("SSH_ASKPASS")
         .env_remove("GIT_SSH")
         .env_remove("GIT_SSH_COMMAND")
@@ -794,6 +1143,13 @@ fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> Command {
         .env_remove("GIT_CONFIG_COUNT")
         .env_remove("GIT_CONFIG_PARAMETERS")
         .env_remove("OMAKURE_API_TOKEN");
+    if let Some(askpass) = ctx.askpass {
+        command
+            .env("GIT_ASKPASS", &askpass.script_path)
+            .env("GIT_TERMINAL_PROMPT", "0");
+    } else {
+        command.env_remove("GIT_ASKPASS");
+    }
     command
 }
 
@@ -851,17 +1207,31 @@ fn verify_synced_checkout(cache_path: &Path, expected_commit: &str) -> Operation
     Ok(())
 }
 
+#[cfg(test)]
 fn sanitize_git_stderr(stderr: &str) -> String {
-    let mut message = stderr.trim().to_string();
-    for token in stderr.split_whitespace() {
-        if url_contains_credentials(token) {
-            message = message.replace(token, &redacted_git_url(token));
+    sanitize_git_output(stderr, None)
+}
+
+fn sanitize_git_output(stderr: &str, token: Option<&str>) -> String {
+    let mut message = redact_token_in_text(stderr.trim(), token);
+    for part in stderr.split_whitespace() {
+        if url_contains_credentials(part) {
+            message = message.replace(part, &redacted_git_url(part));
         }
     }
     if message.is_empty() {
         "git command failed".to_string()
     } else {
         message
+    }
+}
+
+fn redact_token_in_text(text: &str, token: Option<&str>) -> String {
+    match token {
+        Some(token) if !token.is_empty() && text.contains(token) => {
+            text.replace(token, "<redacted>")
+        }
+        _ => text.to_string(),
     }
 }
 
@@ -2085,6 +2455,8 @@ pub fn git_clone_spec(git_url: &str, cache_path: &Path) -> GitCommandSpec {
             "core.hooksPath=/dev/null".into(),
             "-c".into(),
             "protocol.ext.allow=never".into(),
+            "-c".into(),
+            "credential.helper=".into(),
             "clone".into(),
             "--no-recurse-submodules".into(),
             "--".into(),
@@ -2104,6 +2476,8 @@ pub fn git_fetch_spec(cache_path: &Path, requested_ref: &str) -> GitCommandSpec 
             "core.hooksPath=/dev/null".into(),
             "-c".into(),
             "protocol.ext.allow=never".into(),
+            "-c".into(),
+            "credential.helper=".into(),
             "fetch".into(),
             "--no-recurse-submodules".into(),
             "origin".into(),
@@ -2154,6 +2528,7 @@ echo ok
             name: "azure".into(),
             git_url: "https://example.invalid/azure.git".into(),
             requested_ref: "main".into(),
+            token_ref: None,
         };
 
         assert_eq!(request.name, "azure");
@@ -2224,6 +2599,7 @@ echo ok
                 resolved_commit: None,
                 cache_path: PathBuf::from(".omakure/batteries/cache/azure"),
                 last_synced_at: None,
+                auth: None,
             }],
         };
 
@@ -2729,6 +3105,7 @@ tags = ["azure"]
                 resolved_commit: Some(commit.into()),
                 cache_path: PathBuf::from(".omakure/batteries/cache/azure"),
                 last_synced_at: Some("2026-07-07T00:00:00Z".into()),
+                auth: None,
             }],
         }
     }
@@ -3030,6 +3407,162 @@ tags = ["azure"]
     }
 
     #[test]
+    fn add_battery_stores_token_ref_auth_without_plaintext() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        let plaintext = "super-secret-battery-token-value";
+        std::env::set_var("OMAKURE_BATTERY_TOKEN_TEST", plaintext);
+
+        let summary = add_battery(
+            &ws,
+            AddBatteryRequest {
+                name: "private".into(),
+                git_url: "https://example.invalid/private.git".into(),
+                requested_ref: "main".into(),
+                token_ref: Some("secret://env/OMAKURE_BATTERY_TOKEN_TEST".into()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            summary.auth.as_ref().map(|a| a.method.clone()),
+            Some(BatteryAuthMethod::HttpsTokenRef)
+        );
+        assert_eq!(
+            summary.auth.as_ref().map(|a| a.token_ref.as_str()),
+            Some("secret://env/OMAKURE_BATTERY_TOKEN_TEST")
+        );
+        let registry_text =
+            fs::read_to_string(BatteryPaths::for_workspace(&ws).registry_path).unwrap();
+        assert!(registry_text.contains("secret://env/OMAKURE_BATTERY_TOKEN_TEST"));
+        assert!(registry_text.contains("https_token_ref"));
+        assert!(!registry_text.contains(plaintext));
+        std::env::remove_var("OMAKURE_BATTERY_TOKEN_TEST");
+    }
+
+    #[test]
+    fn add_battery_rejects_token_ref_on_non_https() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        let repo = create_battery_repo();
+        let err = add_battery(
+            &ws,
+            AddBatteryRequest {
+                name: "local".into(),
+                git_url: repo.path().display().to_string(),
+                requested_ref: "main".into(),
+                token_ref: Some("secret://env/TOKEN".into()),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::InvalidInput);
+    }
+
+    #[test]
+    fn prepare_git_askpass_writes_0600_files_and_redacts_token() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        let plaintext = "askpass-redact-me-token-xyz";
+        std::env::set_var("OMAKURE_ASKPASS_TOKEN", plaintext);
+        let auth = BatteryAuth {
+            method: BatteryAuthMethod::HttpsTokenRef,
+            token_ref: "secret://env/OMAKURE_ASKPASS_TOKEN".into(),
+        };
+        let guard = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
+            .unwrap()
+            .expect("askpass");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&guard.script_path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o700);
+            let token_mode =
+                fs::metadata(guard.dir.join("token")).unwrap().permissions().mode() & 0o777;
+            assert_eq!(token_mode, 0o600);
+        }
+        let redacted = sanitize_git_output(
+            &format!("fatal: Authentication failed for token {plaintext}"),
+            Some(plaintext),
+        );
+        assert!(!redacted.contains(plaintext));
+        assert!(redacted.contains("<redacted>"));
+        let script = fs::read_to_string(&guard.script_path).unwrap();
+        assert!(script.contains("\"$DIR/token\""));
+        assert!(!script.contains(plaintext));
+        assert!(!script.contains(guard.dir.to_string_lossy().as_ref()));
+        drop(guard);
+        std::env::remove_var("OMAKURE_ASKPASS_TOKEN");
+    }
+
+    #[test]
+    fn prepare_git_askpass_uses_distinct_directories_per_call() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        std::env::set_var("OMAKURE_ASKPASS_DISTINCT", "tok-a");
+        let auth = BatteryAuth {
+            method: BatteryAuthMethod::HttpsTokenRef,
+            token_ref: "secret://env/OMAKURE_ASKPASS_DISTINCT".into(),
+        };
+        let a = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
+            .unwrap()
+            .unwrap();
+        let b = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
+            .unwrap()
+            .unwrap();
+        assert_ne!(a.dir, b.dir);
+        assert!(a.dir.exists());
+        assert!(b.dir.exists());
+        drop(a);
+        drop(b);
+        std::env::remove_var("OMAKURE_ASKPASS_DISTINCT");
+    }
+
+    #[test]
+    fn assert_local_battery_allowed_rejects_file_urls_when_disabled() {
+        let err = assert_local_battery_allowed(false, "file:///tmp/repo.git").unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::Forbidden);
+        assert!(assert_local_battery_allowed(true, "file:///tmp/repo.git").is_ok());
+        assert!(assert_local_battery_allowed(
+            false,
+            "https://example.invalid/repo.git"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn git_command_with_askpass_sets_git_askpass_env() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        std::env::set_var("OMAKURE_ASKPASS_ENV", "tok");
+        let auth = BatteryAuth {
+            method: BatteryAuthMethod::HttpsTokenRef,
+            token_ref: "secret://env/OMAKURE_ASKPASS_ENV".into(),
+        };
+        let guard = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
+            .unwrap()
+            .unwrap();
+        let command = git_command_with_context(
+            &GitCommandSpec {
+                program: "git".into(),
+                args: vec!["status".into()],
+            },
+            &GitExecContext {
+                policy: GitTransportPolicy::HttpsOnly,
+                askpass: Some(&guard),
+            },
+        );
+        let envs: Vec<_> = command.get_envs().collect();
+        assert!(envs.iter().any(|(k, v)| {
+            *k == "GIT_ASKPASS" && v.map(|p| p == guard.script_path.as_os_str()).unwrap_or(false)
+        }));
+        assert!(envs.iter().any(|(k, v)| {
+            *k == "GIT_TERMINAL_PROMPT" && v.map(|v| v == "0").unwrap_or(false)
+        }));
+        drop(guard);
+        std::env::remove_var("OMAKURE_ASKPASS_ENV");
+    }
+
+    #[test]
     fn add_battery_records_unsynced_entry_and_rejects_duplicates() {
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);
@@ -3037,6 +3570,7 @@ tags = ["azure"]
             name: "azure".into(),
             git_url: "https://example.invalid/azure.git".into(),
             requested_ref: "main".into(),
+            token_ref: None,
         };
 
         let summary = add_battery(&ws, request.clone()).unwrap();
@@ -3058,7 +3592,8 @@ tags = ["azure"]
                 name: "Azure Scripts".into(),
                 git_url: "https://example.invalid/azure.git".into(),
                 requested_ref: "main".into(),
-            },
+                token_ref: None,
+        },
         )
         .unwrap_err();
 
@@ -3110,7 +3645,8 @@ tags = ["azure"]
                 name: "azure".into(),
                 git_url: repo.path().display().to_string(),
                 requested_ref: "main".into(),
-            },
+                token_ref: None,
+        },
         )
         .unwrap();
 
@@ -3142,7 +3678,8 @@ tags = ["azure"]
                 name: "azure".into(),
                 git_url: repo_one.path().display().to_string(),
                 requested_ref: "main".into(),
-            },
+                token_ref: None,
+        },
         )
         .unwrap();
         sync_battery(
@@ -3166,7 +3703,8 @@ tags = ["azure"]
                 name: "azure".into(),
                 git_url: repo_two.path().display().to_string(),
                 requested_ref: "main".into(),
-            },
+                token_ref: None,
+        },
         )
         .unwrap();
 

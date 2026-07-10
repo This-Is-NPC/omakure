@@ -148,6 +148,10 @@ impl ChildGuard {
         self.child.as_mut().expect("child already consumed")
     }
 
+    pub fn take_child(&mut self) -> Option<Child> {
+        self.child.take()
+    }
+
     pub fn wait_with_output(mut self) -> Output {
         self.child
             .take()
@@ -167,7 +171,7 @@ impl ChildGuard {
 
 impl Drop for ChildGuard {
     fn drop(&mut self) {
-        if let Some(child) = self.child.as_mut() {
+        if let Some(mut child) = self.child.take() {
             let _ = child.kill();
             let _ = child.wait();
         }
@@ -225,7 +229,28 @@ impl HttpServer {
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        // `api --bind` must own the socket, so we cannot hold the probe listener
+        Self::start_command("api", workspace, token, extra_args, extra_envs, timeout)
+    }
+
+    pub fn start_engine(
+        workspace: &Path,
+        token: &str,
+        extra_args: &[&str],
+        extra_envs: &[(&str, &str)],
+        timeout: Duration,
+    ) -> Self {
+        Self::start_command("engine", workspace, token, extra_args, extra_envs, timeout)
+    }
+
+    fn start_command(
+        command_name: &str,
+        workspace: &Path,
+        token: &str,
+        extra_args: &[&str],
+        extra_envs: &[(&str, &str)],
+        timeout: Duration,
+    ) -> Self {
+        // `--bind` must own the socket, so we cannot hold the probe listener
         // across spawn. Retry on the bind→drop→spawn TOCTOU window (EADDRINUSE /
         // readiness miss) instead of claiming the port is held until bind.
         let attempt_timeout = timeout / 4;
@@ -245,7 +270,7 @@ impl HttpServer {
             command
                 .arg("--scripts-dir")
                 .arg(workspace)
-                .arg("api")
+                .arg(command_name)
                 .arg("--bind")
                 .arg(addr.to_string())
                 .args(extra_args)
@@ -268,7 +293,37 @@ impl HttpServer {
             let _ = server.child.child_mut().wait();
             thread::sleep(Duration::from_millis(25));
         }
-        panic!("HTTP server did not become ready within {timeout:?} (last_addr={last_addr:?})");
+        panic!(
+            "HTTP {command_name} did not become ready within {timeout:?} (last_addr={last_addr:?})"
+        );
+    }
+
+    pub fn child_id(&mut self) -> u32 {
+        self.child.child_mut().id()
+    }
+
+    pub fn try_wait(&mut self) -> Option<std::process::ExitStatus> {
+        self.child
+            .child_mut()
+            .try_wait()
+            .expect("poll engine child")
+    }
+
+    pub fn wait_exit(mut self, timeout: Duration) -> std::process::ExitStatus {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(status) = self.try_wait() {
+                // Prevent Drop from killing an already-reaped child.
+                let _ = self.child.take_child();
+                return status;
+            }
+            if Instant::now() >= deadline {
+                let mut child = self.child.take_child().expect("child already consumed");
+                let _ = child.kill();
+                return child.wait().expect("wait for killed child");
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
     }
 
     pub fn url(&self, path: &str) -> String {
@@ -374,8 +429,7 @@ impl HttpServer {
 
 impl Drop for HttpServer {
     fn drop(&mut self) {
-        let _ = self.child.child_mut().kill();
-        let _ = self.child.child_mut().wait();
+        // ChildGuard::drop kills if still present; no-op when wait_exit took it.
     }
 }
 

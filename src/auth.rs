@@ -69,7 +69,6 @@ pub struct Authenticator {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[allow(dead_code)] // consumed by admin status route (follow-on) and unit tests
 pub struct AuthStatus {
     pub mode: String,
     pub token_count: usize,
@@ -133,7 +132,6 @@ impl Authenticator {
     }
 
     /// Metadata-only auth status (no token ids, hashes, paths, or plaintext).
-    #[allow(dead_code)] // consumed by admin status route (follow-on) and unit tests
     pub fn status(&self) -> AuthStatus {
         let guard = self.inner.read().expect("auth lock");
         let reload = self.reload_status.read().expect("reload status lock");
@@ -350,18 +348,20 @@ fn validate_phc_hash(id: &str, hash: &str) -> Result<(), AuthError> {
 }
 
 fn authenticate_against_file(tokens: &[TokenRecord], presented: &str) -> Option<AuthContext> {
-    // Verify against every enabled token. Argon2 verify is intentionally slow;
-    // avoid early-exit on the first match for timing side-channels on id.
-    let mut matched: Option<AuthContext> = None;
-    for token in tokens.iter().filter(|t| t.enabled) {
-        if verify_argon2(&token.hash, presented) {
-            matched = Some(AuthContext {
-                token_id: token.id.clone(),
-                scopes: token.scopes.clone(),
-            });
-        }
-    }
-    matched
+    // Argon2id verify is memory-hard (64 MiB per call). Return on the first
+    // match to bound work per request instead of hashing against every token.
+    // Token ids are not secret and each hash carries a random salt, so the
+    // per-token timing is already decorrelated — early-exit leaks nothing an
+    // attacker can use, and callers gate concurrency separately (see
+    // `require_bearer`) to cap memory-hard amplification.
+    tokens
+        .iter()
+        .filter(|t| t.enabled)
+        .find(|token| verify_argon2(&token.hash, presented))
+        .map(|token| AuthContext {
+            token_id: token.id.clone(),
+            scopes: token.scopes.clone(),
+        })
 }
 
 fn verify_argon2(phc: &str, presented: &str) -> bool {
@@ -452,9 +452,8 @@ pub fn resolve_authenticator_with_legacy(
         return Authenticator::from_tokens_file(path);
     }
     if !allow_legacy_env_token {
-        if std::env::var_os("OMAKURE_API_TOKEN").is_some() {
-            return Err(AuthError::LegacyEnvTokenDisabled);
-        }
+        // Policy disabled the legacy env token; reject regardless of whether one
+        // is present so the operator gets a consistent, actionable error.
         return Err(AuthError::LegacyEnvTokenDisabled);
     }
     let token = std::env::var("OMAKURE_API_TOKEN").map_err(|_| AuthError::MissingAuth)?;
@@ -589,20 +588,42 @@ pub fn append_token_entry(path: &Path, id: &str, entry: &str) -> Result<(), Auth
     // Re-parse staged content before replace so we never leave a broken file.
     let _ = parse_tokens_toml(&staged)?;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    // Randomize the tmp suffix so two concurrent appends in the same process
+    // never collide on the path, and so the path is unpredictable (an attacker
+    // cannot pre-plant a file/symlink at a guessable tmp name).
+    let mut tmp_rand = [0u8; 8];
+    OsRng.fill_bytes(&mut tmp_rand);
+    let tmp_rand: String = tmp_rand.iter().map(|b| format!("{b:02x}")).collect();
     let tmp = parent.join(format!(
-        ".{}.tmp-{}",
+        ".{}.tmp-{}-{}",
         path.file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("tokens.toml"),
-        std::process::id()
+        std::process::id(),
+        tmp_rand
     ));
     {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&tmp)
-            .map_err(|e| AuthError::Io(e.to_string()))?;
+        let mut opts = fs::OpenOptions::new();
+        // O_EXCL (`create_new`) so a pre-planted file/symlink at the tmp path is
+        // never followed or truncated. Least-privilege 0600 since the tokens file
+        // holds credential hashes.
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut file = match opts.open(&tmp) {
+            Ok(file) => file,
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Stale tmp (e.g. a crashed prior append with the same pid).
+                // `remove_file` unlinks the entry itself — it does not follow a
+                // symlink target — then O_EXCL re-create refuses any re-plant.
+                fs::remove_file(&tmp).map_err(|e| AuthError::Io(e.to_string()))?;
+                opts.open(&tmp).map_err(|e| AuthError::Io(e.to_string()))?
+            }
+            Err(err) => return Err(AuthError::Io(err.to_string())),
+        };
         file.write_all(staged.as_bytes())
             .map_err(|e| AuthError::Io(e.to_string()))?;
         file.sync_all().map_err(|e| AuthError::Io(e.to_string()))?;
@@ -740,6 +761,27 @@ enabled = true
         assert!(ctx.has_scope("runs:read"));
         assert!(ctx.has_scope("runs:enqueue"));
         assert!(!ctx.has_scope("batteries:add"));
+    }
+
+    #[test]
+    fn authenticate_matches_correct_token_among_many() {
+        // Early-exit refactor must still select the matching token regardless of
+        // position, and reject a plaintext that matches none of them.
+        let mut toml = String::from("version = 1\n");
+        let mut plaintexts = Vec::new();
+        for id in ["a", "b", "target", "d"] {
+            let plaintext = random_token_plaintext();
+            let hash = hash_token(&plaintext).unwrap();
+            toml.push_str(&format!(
+                "[[tokens]]\nid = \"{id}\"\nhash = \"{hash}\"\nscopes = [\"runs:read\"]\nenabled = true\n"
+            ));
+            plaintexts.push((id, plaintext));
+        }
+        let tokens = parse_tokens_toml(&toml).unwrap();
+        let (_, target_plaintext) = plaintexts.iter().find(|(id, _)| *id == "target").unwrap();
+        let ctx = authenticate_against_file(&tokens, target_plaintext).unwrap();
+        assert_eq!(ctx.token_id, "target");
+        assert!(authenticate_against_file(&tokens, "omk_live_deadbeef-not-a-real-token").is_none());
     }
 
     #[test]
@@ -946,6 +988,40 @@ enabled = true
         let tokens = load_tokens_file(&path).unwrap();
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0].id, "a");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn append_token_entry_does_not_clobber_symlink_at_guessable_tmp_path() {
+        use std::os::unix::fs::symlink;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        // Plant a symlink at the pid-guessable tmp prefix pointing at a victim
+        // file. The real tmp now carries a random suffix, so this planted path is
+        // never the one opened; combined with O_EXCL, the victim is safe.
+        let guessable = dir.path().join(format!(".tokens.toml.tmp-{}", std::process::id()));
+        let victim = dir.path().join("victim.txt");
+        fs::write(&victim, "do-not-clobber").unwrap();
+        symlink(&victim, &guessable).unwrap();
+
+        let gen = generate_token("a", &["runs:read".into()]).unwrap();
+        append_token_entry(&path, &gen.id, &gen.tokens_file_entry).unwrap();
+
+        // Victim survives untouched; tokens file is created and parseable.
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "do-not-clobber");
+        assert_eq!(load_tokens_file(&path).unwrap().len(), 1);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn append_token_entry_writes_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let gen = generate_token("a", &["runs:read".into()]).unwrap();
+        append_token_entry(&path, &gen.id, &gen.tokens_file_entry).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "tokens file must be owner-only, got {mode:o}");
     }
 
     #[test]

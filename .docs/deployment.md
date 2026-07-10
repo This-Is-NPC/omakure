@@ -77,7 +77,6 @@ envs = true
 allow_https_batteries = true
 allow_local_batteries = false
 allow_private_https_batteries = true
-allow_private_ssh_batteries = false
 
 [scripts]
 max_content_bytes = 1048576
@@ -122,6 +121,30 @@ legacy_env_token = false
 Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 `credentials:use`, plus matching `--secret-ref` entries. Secrets metadata needs
 `secrets:read-metadata` with `secrets.metadata_endpoint = true`.
+
+> **`--secret-ref '*'` and env vars.** The `*` secret-ref wildcard grants every
+> file/provider ref but **does not** grant `secret://env/…` process-environment
+> refs — those must be enumerated by exact name (`--secret-ref
+> secret://env/GIT_TOKEN`). This prevents a token holder from reading arbitrary
+> process env (e.g. `AWS_SECRET_ACCESS_KEY`) via a Battery `token_ref`. A bare
+> `--secret-ref 'secret://env/*'` is ignored for the same reason. If you
+> previously relied on `*` to resolve env secrets, list each `secret://env/NAME`
+> explicitly.
+
+### Network egress (SSRF containment)
+
+Battery add/sync makes the engine issue outbound git requests. The engine
+**rejects** hosts that are a literal private/loopback/link-local/metadata IP at
+registration, and resolves + re-checks the host immediately before fetch. That
+resolve-then-fetch check is a mitigation, **not** an isolation boundary: a
+DNS-rebinding attacker who controls the record can still return a public IP to
+the check and a private IP to git.
+
+For hard containment, run the engine behind a **network egress policy** that
+denies traffic to RFC1918 / loopback / link-local / cloud-metadata ranges — a
+Kubernetes `NetworkPolicy`/egress rule, a firewall, or a locked-down network
+namespace. Treat this as required in any deployment that accepts Battery URLs
+from less-trusted callers.
 
 Example read-only API:
 

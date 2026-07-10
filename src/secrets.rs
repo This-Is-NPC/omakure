@@ -52,6 +52,11 @@ pub struct SecretAccess {
     scopes: HashSet<String>,
     allowed_refs: HashSet<String>,
     allow_all: bool,
+    /// When set, `env` provider refs must still appear in `allowed_refs` even
+    /// when `allow_all` is true. Closes arbitrary process-environment reads
+    /// under an HTTP `--secret-ref '*'` wildcard (the wildcard grants every
+    /// file/provider ref, but env vars must be enumerated explicitly).
+    restrict_env_to_allowed_refs: bool,
 }
 
 impl SecretAccess {
@@ -66,6 +71,7 @@ impl SecretAccess {
             scopes: scopes.into_iter().map(Into::into).collect(),
             allowed_refs: allowed_refs.into_iter().map(Into::into).collect(),
             allow_all: false,
+            restrict_env_to_allowed_refs: false,
         }
     }
 
@@ -76,8 +82,42 @@ impl SecretAccess {
         }
     }
 
+    /// Wildcard that grants every non-`env` ref but keeps `env` provider refs
+    /// gated behind `env_refs`. Used for the HTTP operator `--secret-ref '*'`
+    /// so a remote caller cannot read arbitrary process env vars.
+    pub fn allow_all_non_env<I, J, S, T>(scopes: I, env_refs: J) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        J: IntoIterator<Item = T>,
+        S: Into<String>,
+        T: Into<String>,
+    {
+        // Drop an `env` provider-wildcard: the whole point of the env gate is
+        // that env vars are enumerated per exact key. A `secret://env/*` entry
+        // (also the normalized form of `secret://env:*`) would otherwise match
+        // every env ref through the provider-wildcard branch and re-grant blanket
+        // process-env access, defeating the wildcard hardening.
+        let allowed_refs = env_refs
+            .into_iter()
+            .map(Into::into)
+            .filter(|r: &String| r != "secret://env/*")
+            .collect();
+        Self {
+            scopes: scopes.into_iter().map(Into::into).collect(),
+            allowed_refs,
+            allow_all: true,
+            restrict_env_to_allowed_refs: true,
+        }
+    }
+
+    /// Whether `allow_all` must be bypassed for this ref because it names the
+    /// `env` provider and env access is restricted to the explicit allow-list.
+    fn env_gated(&self, secret_ref: &SecretRef) -> bool {
+        self.restrict_env_to_allowed_refs && secret_ref.provider == "env"
+    }
+
     fn can_use(&self, secret_ref: &SecretRef) -> Result<(), SecretResolveError> {
-        if self.allow_all {
+        if self.allow_all && !self.env_gated(secret_ref) {
             return Ok(());
         }
         let may_use = self.scopes.contains("secrets:use") || self.scopes.contains("credentials:use");
@@ -92,7 +132,7 @@ impl SecretAccess {
     /// Metadata listing accepts `secrets:read-metadata` (or use scopes) + ref ACL.
     /// Never grants value resolution — callers must still use [`Self::can_use`].
     fn can_list_metadata(&self, secret_ref: &SecretRef) -> Result<(), SecretResolveError> {
-        if self.allow_all {
+        if self.allow_all && !self.env_gated(secret_ref) {
             return Ok(());
         }
         let may_list = self.scopes.contains("secrets:read-metadata")
@@ -514,6 +554,19 @@ pub fn list_secret_metadata(workspace: &Workspace, access: &SecretAccess) -> Vec
 /// form `secret://env:NAME` would be persisted verbatim yet compared against
 /// the canonical `secret://env/NAME`, denying the queued run at worker
 /// re-resolution.
+/// Canonicalize an operator-supplied `--secret-ref` so the stored ACL matches
+/// what [`SecretAccess`] compares against at resolution time. The `*` wildcard
+/// passes through; the colon spellings `secret://env:NAME` and `secret://env:*`
+/// normalize to the slash forms `secret://env/NAME` / `secret://env/*`.
+/// Unrecognized values are returned unchanged (fail-closed — a malformed ref
+/// simply matches nothing). Without this, `--secret-ref secret://env:NAME`
+/// would be stored verbatim yet compared against the canonical
+/// `secret://env/NAME`, silently granting nothing.
+pub fn canonicalize_operator_secret_ref(value: &str) -> String {
+    let trimmed = value.trim();
+    canonical_secret_ref(trimmed).unwrap_or_else(|| trimmed.to_string())
+}
+
 fn canonical_secret_ref(value: &str) -> Option<String> {
     if let Some(name) = value.strip_prefix("secret://env:") {
         if name.is_empty() {
@@ -603,6 +656,29 @@ mod tests {
 
         assert_eq!(err, "invalid secret argument: expected FIELD=VALUE");
         assert!(!err.contains("raw_secret_without_field"));
+    }
+
+    #[test]
+    fn canonicalize_operator_secret_ref_normalizes_colon_and_preserves_wildcards() {
+        assert_eq!(canonicalize_operator_secret_ref("*"), "*");
+        assert_eq!(
+            canonicalize_operator_secret_ref("secret://env:NAME"),
+            "secret://env/NAME"
+        );
+        assert_eq!(
+            canonicalize_operator_secret_ref("secret://env:*"),
+            "secret://env/*"
+        );
+        assert_eq!(
+            canonicalize_operator_secret_ref("secret://env/NAME"),
+            "secret://env/NAME"
+        );
+        assert_eq!(
+            canonicalize_operator_secret_ref("secret://prod/token"),
+            "secret://prod/token"
+        );
+        // Malformed values pass through unchanged (fail-closed, matches nothing).
+        assert_eq!(canonicalize_operator_secret_ref("garbage"), "garbage");
     }
 
     #[test]
@@ -718,6 +794,86 @@ mod tests {
         .unwrap();
         assert_eq!(reresolved.execution_args, vec!["--token", "colon_value"]);
         std::env::remove_var("OMAKURE_TEST_COLON_REF");
+    }
+
+    #[test]
+    fn env_wildcard_requires_explicit_env_ref_but_rides_provider_refs() {
+        let tmp = TempDir::new().unwrap();
+        let (workspace, script) = script_with_secret(&tmp);
+        std::env::set_var("OMAKURE_TEST_F6_ENV", "env_value");
+        fs::write(
+            workspace.envs_dir().join("prod.conf"),
+            "TOKEN=file_value\n",
+        )
+        .unwrap();
+
+        // Wildcard WITHOUT an explicit env ref: env reads are denied even though
+        // non-env refs ride the wildcard (SSRF-exfil hardening).
+        let no_env = SecretAccess::allow_all_non_env(["secrets:use"], Vec::<String>::new());
+        let err = resolve_args_with_access(
+            &workspace,
+            &script,
+            &["--token".into(), "secret://env/OMAKURE_TEST_F6_ENV".into()],
+            &[],
+            &[],
+            &no_env,
+        )
+        .unwrap_err();
+        assert_eq!(err.0, "TOKEN");
+        assert!(err.1.contains("not allowed"));
+        assert!(!err.1.contains("env_value"));
+
+        // Same wildcard resolves a NON-env provider ref (file provider).
+        let resolved = resolve_args_with_access(
+            &workspace,
+            &script,
+            &["--token".into(), "secret://prod/token".into()],
+            &[],
+            &[],
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(resolved.execution_args, vec!["--token", "file_value"]);
+
+        // Explicitly allow-listed env ref DOES resolve under the wildcard.
+        let with_env =
+            SecretAccess::allow_all_non_env(["secrets:use"], ["secret://env/OMAKURE_TEST_F6_ENV"]);
+        let resolved_env = resolve_args_with_access(
+            &workspace,
+            &script,
+            &["--token".into(), "secret://env/OMAKURE_TEST_F6_ENV".into()],
+            &[],
+            &[],
+            &with_env,
+        )
+        .unwrap();
+        assert_eq!(resolved_env.execution_args, vec!["--token", "env_value"]);
+        std::env::remove_var("OMAKURE_TEST_F6_ENV");
+    }
+
+    #[test]
+    fn env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard() {
+        let tmp = TempDir::new().unwrap();
+        let (workspace, script) = script_with_secret(&tmp);
+        std::env::set_var("OMAKURE_TEST_A4_ENV", "leaked_value");
+
+        // Even with `secret://env/*` in the allow-list, the env gate must not
+        // grant blanket env access under the wildcard.
+        let access =
+            SecretAccess::allow_all_non_env(["secrets:use"], ["secret://env/*"]);
+        let err = resolve_args_with_access(
+            &workspace,
+            &script,
+            &["--token".into(), "secret://env/OMAKURE_TEST_A4_ENV".into()],
+            &[],
+            &[],
+            &access,
+        )
+        .unwrap_err();
+        assert_eq!(err.0, "TOKEN");
+        assert!(err.1.contains("not allowed"));
+        assert!(!err.1.contains("leaked_value"));
+        std::env::remove_var("OMAKURE_TEST_A4_ENV");
     }
 
     #[test]

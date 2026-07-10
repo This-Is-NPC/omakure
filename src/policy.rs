@@ -122,13 +122,16 @@ impl Default for RoutesPolicy {
     }
 }
 
+/// Battery source gates. SSH Battery sources are not supported over the HTTP
+/// API/engine surface (the add handler rejects non-`https` URLs), so there is
+/// no SSH toggle here — an unknown `allow_private_ssh_batteries` key in an old
+/// `policy.toml` is simply ignored.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct SourcesPolicy {
     pub allow_https_batteries: bool,
     pub allow_local_batteries: bool,
     pub allow_private_https_batteries: bool,
-    pub allow_private_ssh_batteries: bool,
 }
 
 impl Default for SourcesPolicy {
@@ -137,7 +140,6 @@ impl Default for SourcesPolicy {
             allow_https_batteries: true,
             allow_local_batteries: true,
             allow_private_https_batteries: false,
-            allow_private_ssh_batteries: false,
         }
     }
 }
@@ -384,8 +386,16 @@ impl RoutesPolicy {
         if !self.envs && (path == "/v1/envs" || path.starts_with("/v1/envs/")) {
             return false;
         }
-        if !is_write && !self.read && path != "/v1/health" && path != "/v1/ready" {
-            // Battery already handled; remaining GETs are "read" group.
+        if !is_write
+            && !self.read
+            && path != "/v1/health"
+            && path != "/v1/ready"
+            && path != "/v1/admin/status"
+        {
+            // Health, readiness, and admin status are observability endpoints and
+            // must survive a read-group lockdown (they still require the
+            // `admin:status` token scope). Battery already handled; the rest are
+            // the "read" group.
             if !is_battery {
                 return false;
             }
@@ -418,6 +428,18 @@ mod tests {
         assert!(p.auth.legacy_env_token);
         assert!(p.routes.allows("POST", "/v1/runs"));
         assert!(p.routes.allows("GET", "/v1/batteries"));
+    }
+
+    #[test]
+    fn read_false_still_allows_observability_endpoints() {
+        let mut p = DeployPolicy::default();
+        p.routes.read = false;
+        // Monitoring survives a read lockdown (scope still enforced downstream).
+        assert!(p.routes.allows("GET", "/v1/health"));
+        assert!(p.routes.allows("GET", "/v1/ready"));
+        assert!(p.routes.allows("GET", "/v1/admin/status"));
+        // A normal read route is still denied.
+        assert!(!p.routes.allows("GET", "/v1/scripts"));
     }
 
     #[test]
@@ -490,7 +512,6 @@ envs = true
 allow_https_batteries = true
 allow_local_batteries = false
 allow_private_https_batteries = true
-allow_private_ssh_batteries = false
 
 [scripts]
 max_content_bytes = 1048576
@@ -525,6 +546,15 @@ legacy_env_token = false
         );
         assert_eq!(p.http.bind, Some("0.0.0.0:7878".parse().unwrap()));
         assert!(p.http.allow_non_loopback);
+    }
+
+    #[test]
+    fn removed_ssh_source_key_is_ignored_for_backward_compat() {
+        // Old policy files may still carry the removed toggle; it must parse
+        // (unknown key ignored), not error.
+        let text = "version = 1\n[sources]\nallow_private_ssh_batteries = true\n";
+        let p = parse_policy_toml(text).unwrap();
+        assert!(p.sources.allow_https_batteries);
     }
 
     #[test]

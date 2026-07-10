@@ -209,20 +209,27 @@ impl ApiPolicy {
     }
 
     fn from_config(capabilities: &[String], refs: &[String]) -> Result<Self, ApiConfigError> {
+        // Normalize operator ref spellings (e.g. `secret://env:NAME`) to the
+        // canonical form the ACL is compared against, so the colon form is not
+        // silently dropped.
+        let refs: Vec<String> = refs
+            .iter()
+            .map(|r| crate::secrets::canonicalize_operator_secret_ref(r))
+            .collect();
         let mut parsed = Vec::new();
         for capability in capabilities {
             if capability == "all" {
                 // `all` expands route capabilities only — secret-ref ACL still
                 // comes from `--secret-ref` (empty denies provider refs).
                 let mut policy = Self::all();
-                policy.allowed_secret_refs = Some(refs.to_vec());
+                policy.allowed_secret_refs = Some(refs.clone());
                 return Ok(policy);
             }
             parsed.push(ApiCapability::from_config_value(capability)?);
         }
         Ok(Self {
             capabilities: parsed,
-            allowed_secret_refs: Some(refs.to_vec()),
+            allowed_secret_refs: Some(refs),
         })
     }
 
@@ -270,7 +277,10 @@ impl ApiPolicy {
             None => crate::secrets::SecretAccess::new(scopes, Vec::<String>::new()),
             Some(refs) => {
                 if refs.iter().any(|r| r == "*") {
-                    crate::secrets::SecretAccess::allow_all()
+                    // Wildcard grants every file/provider ref but keeps env refs
+                    // gated behind explicitly listed `secret://env/...` entries.
+                    let env_refs = refs.iter().filter(|r| *r != "*").cloned();
+                    crate::secrets::SecretAccess::allow_all_non_env(scopes, env_refs)
                 } else {
                     crate::secrets::SecretAccess::new(scopes, refs.iter().cloned())
                 }
@@ -296,7 +306,8 @@ impl ApiPolicy {
             None => crate::secrets::SecretAccess::new(["credentials:use"], Vec::<String>::new()),
             Some(refs) => {
                 if refs.iter().any(|r| r == "*") {
-                    crate::secrets::SecretAccess::allow_all()
+                    let env_refs = refs.iter().filter(|r| *r != "*").cloned();
+                    crate::secrets::SecretAccess::allow_all_non_env(["credentials:use"], env_refs)
                 } else {
                     crate::secrets::SecretAccess::new(["credentials:use"], refs.iter().cloned())
                 }
@@ -1554,6 +1565,11 @@ async fn add_battery_handler(
             "policy sources.allow_https_batteries=false",
         ));
     }
+    // SSRF guard (registration): reject literal private/loopback/metadata hosts
+    // up front. The resolving check runs at sync time before the actual fetch.
+    if let Err(err) = battery_ops::assert_git_url_host_public_literal(&body.git_url) {
+        return operation_error_response(err);
+    }
     if body.token_ref.as_ref().is_some_and(|r| !r.trim().is_empty()) {
         if !state.deploy.sources.allow_private_https_batteries {
             return operation_error_response(OperationError::new(
@@ -1599,7 +1615,9 @@ async fn sync_battery_handler(
     if let Some(response) = require_scope(&state, &auth_ctx, "batteries:sync") {
         return response;
     }
-    let result = (|| -> OperationResult<_> {
+    // Cheap authz/validation stays on the reactor; it must run BEFORE the
+    // heavy work so an authz failure returns 403 without any network I/O.
+    let prepared = (|| -> OperationResult<_> {
         require_https_battery_source(&state.workspace, &battery_id)?;
         let batteries = battery_ops::list_batteries(&state.workspace)?;
         let summary = batteries
@@ -1634,12 +1652,36 @@ async fn sync_battery_handler(
         let access = state
             .policy
             .battery_credential_access(&auth_ctx, state.auth.is_file_mode());
-        battery_ops::sync_battery_https_only_with_access(
-            &state.workspace,
-            battery_ops::SyncBatteryRequest { name: battery_id },
-            &access,
-        )
+        Ok((summary.git_url, access))
     })();
+
+    let result = match prepared {
+        Err(err) => Err(err),
+        Ok((git_url, access)) => {
+            // DNS resolution (SSRF guard) + git subprocess are blocking; run them
+            // off the async runtime so a slow/large sync never stalls the reactor.
+            let workspace = state.workspace.clone_for_executor();
+            let name = battery_id;
+            let join = tokio::task::spawn_blocking(move || -> OperationResult<_> {
+                // SSRF guard: resolve the stored host and refuse private/loopback/
+                // link-local/metadata targets immediately before the fetch.
+                battery_ops::assert_public_git_host(&git_url)?;
+                battery_ops::sync_battery_https_only_with_access(
+                    &workspace,
+                    battery_ops::SyncBatteryRequest { name },
+                    &access,
+                )
+            })
+            .await;
+            match join {
+                Ok(inner) => inner,
+                Err(_) => Err(OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    "battery sync task failed to complete",
+                )),
+            }
+        }
+    };
     operation_response(result)
 }
 
@@ -1722,6 +1764,40 @@ async fn protected_not_found() -> impl IntoResponse {
     error_response(StatusCode::NOT_FOUND, "not_found", "endpoint not found")
 }
 
+/// Cap concurrent Argon2id verifications. Each verify is memory-hard (~64 MiB);
+/// without a bound, unauthenticated requests carrying any bearer string could
+/// amplify hashing into CPU/memory exhaustion. Verifies also run on the blocking
+/// pool (see `require_bearer`) so async reactor threads never stall — keeping
+/// `/v1/health` and `/v1/ready` responsive even under an auth flood.
+const MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 8;
+
+fn auth_verification_gate() -> Arc<tokio::sync::Semaphore> {
+    static GATE: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
+    GATE.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_AUTH_VERIFICATIONS)))
+        .clone()
+}
+
+/// Authenticate a presented bearer token without blocking the async runtime.
+/// The memory-hard verify runs on the blocking pool under a concurrency permit.
+async fn authenticate_off_runtime(auth: &Authenticator, presented: &str) -> Option<AuthContext> {
+    // Hold the permit for the LIFETIME OF THE HASH, not of the request future.
+    // `spawn_blocking` is detached: if the client cancels mid-verify the request
+    // future is dropped, but the Argon2 task keeps running. Moving an *owned*
+    // permit into the blocking closure ties the permit's release to the hash
+    // completing, so a "send bearer then reset connection" flood cannot orphan
+    // unbounded memory-hard hashes past MAX_CONCURRENT_AUTH_VERIFICATIONS.
+    let permit = auth_verification_gate().acquire_owned().await.ok()?;
+    let auth = auth.clone();
+    let token = presented.to_string();
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        auth.authenticate(&token)
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 async fn require_bearer(
     State(state): State<ApiState>,
     headers: HeaderMap,
@@ -1739,7 +1815,12 @@ async fn require_bearer(
         .and_then(|h| h.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "));
 
-    match presented.and_then(|token| state.auth.authenticate(token)) {
+    let authenticated = match presented {
+        Some(token) => authenticate_off_runtime(&state.auth, token).await,
+        None => None,
+    };
+
+    match authenticated {
         Some(ctx) => {
             // Deploy policy gates route groups before token scopes.
             if let Some(message) = state.deploy.deny_reason(&method, &path) {
@@ -3947,6 +4028,30 @@ echo ok
             assert_eq!(response.status(), StatusCode::FORBIDDEN);
             let body = response_json(response).await;
             assert_eq!(body["error"]["code"], "forbidden");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_authentications_recycle_permits_and_do_not_deadlock() {
+        // Fire more concurrent authenticated requests than the semaphore has
+        // permits (MAX_CONCURRENT_AUTH_VERIFICATIONS = 8). All must complete:
+        // proves permits are released after each verify (no happy-path leak) and
+        // the off-runtime auth path does not deadlock under contention.
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let app = router(TOKEN.to_string(), workspace);
+        let mut handles = Vec::new();
+        for _ in 0..24 {
+            let app = app.clone();
+            handles.push(tokio::spawn(async move {
+                app.oneshot(authed_request("/v1/config"))
+                    .await
+                    .unwrap()
+                    .status()
+            }));
+        }
+        for handle in handles {
+            assert_eq!(handle.await.unwrap(), StatusCode::OK);
         }
     }
 

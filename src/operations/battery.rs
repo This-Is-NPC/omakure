@@ -912,6 +912,171 @@ fn validate_git_url(value: &str) -> OperationResult<()> {
     Ok(())
 }
 
+/// Registration-time SSRF guard: reject Battery HTTP(S) sources whose host is a
+/// **literal** private, loopback, link-local, or cloud-metadata IP. Purely
+/// syntactic — no DNS — so it stays hermetic and catches the obvious
+/// `https://169.254.169.254`, `https://10.0.0.5`, `https://[::1]` cases without
+/// pinning registration to name resolution. The resolving guard runs at fetch
+/// time (see [`assert_public_git_host`]). Non-network schemes are skipped.
+pub fn assert_git_url_host_public_literal(git_url: &str) -> OperationResult<()> {
+    let trimmed = git_url.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if !(lower.starts_with("https://") || lower.starts_with("http://")) {
+        return Ok(());
+    }
+    let host = git_url_host(trimmed).ok_or_else(|| {
+        OperationError::new(OperationErrorCode::InvalidInput, "battery git url has no host")
+    })?;
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        if ip_is_private(ip) {
+            return Err(private_git_host_error());
+        }
+    }
+    Ok(())
+}
+
+/// Fetch-time SSRF guard: reject Battery HTTP(S) sources that **resolve** to a
+/// private, loopback, link-local, or cloud-metadata address. Run immediately
+/// before the engine issues the git request. DNS can be re-pointed after the
+/// check (rebinding/TOCTOU), so this is a mitigation, not an isolation
+/// boundary — pair with network egress policy for hard containment. Non-network
+/// schemes (file/local) are vetted elsewhere and skipped.
+pub fn assert_public_git_host(git_url: &str) -> OperationResult<()> {
+    use std::net::ToSocketAddrs;
+
+    let trimmed = git_url.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if !(lower.starts_with("https://") || lower.starts_with("http://")) {
+        return Ok(());
+    }
+    let host = git_url_host(trimmed).ok_or_else(|| {
+        OperationError::new(OperationErrorCode::InvalidInput, "battery git url has no host")
+    })?;
+
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return if ip_is_private(ip) {
+            Err(private_git_host_error())
+        } else {
+            Ok(())
+        };
+    }
+
+    // Port is immaterial to the address check (resolution keys on host), but
+    // pick the scheme's default rather than assuming https.
+    let port = if lower.starts_with("https://") { 443u16 } else { 80u16 };
+    let resolved = (host.as_str(), port).to_socket_addrs().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("battery git host did not resolve: {err}"),
+        )
+    })?;
+    let mut any = false;
+    for addr in resolved {
+        any = true;
+        if ip_is_private(addr.ip()) {
+            return Err(private_git_host_error());
+        }
+    }
+    if !any {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "battery git host did not resolve to any address",
+        ));
+    }
+    Ok(())
+}
+
+fn private_git_host_error() -> OperationError {
+    OperationError::new(
+        OperationErrorCode::Forbidden,
+        "battery git url resolves to a private, loopback, or link-local address; refused to prevent SSRF",
+    )
+}
+
+/// Extract the bare host from an `scheme://` URL, stripping userinfo and port
+/// and unwrapping `[ipv6]` literals.
+fn git_url_host(url: &str) -> Option<String> {
+    let (_, rest) = url.split_once("://")?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    if let Some(after_bracket) = host_port.strip_prefix('[') {
+        let host = after_bracket.split(']').next().unwrap_or_default();
+        return (!host.is_empty()).then(|| host.to_string());
+    }
+    let host = host_port.split(':').next().unwrap_or_default();
+    (!host.is_empty()).then(|| host.to_string())
+}
+
+/// Whether an address is in a private / non-routable / metadata range that a
+/// remote caller must never be able to make the engine reach.
+fn ip_is_private(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || o[0] == 0
+                // Carrier-grade NAT 100.64.0.0/10
+                || (o[0] == 100 && (o[1] & 0xc0) == 64)
+        }
+        IpAddr::V6(v6) => {
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return ip_is_private(IpAddr::V4(mapped));
+            }
+            let seg = v6.segments();
+            // Several IPv6 forms embed an IPv4 address that a transition
+            // mechanism will actually route to. `to_ipv4_mapped` only unwraps
+            // `::ffff:a.b.c.d`, so classify the rest by their embedded IPv4 —
+            // otherwise e.g. `[2002:0a00:0005::]` (6to4 → 10.0.0.5) or
+            // `[::7f00:1]` (127.0.0.1) would slip through as "public".
+            let v4 = |hi: u16, lo: u16| {
+                std::net::Ipv4Addr::new(
+                    (hi >> 8) as u8,
+                    (hi & 0xff) as u8,
+                    (lo >> 8) as u8,
+                    (lo & 0xff) as u8,
+                )
+            };
+            // IPv4-compatible `::a.b.c.d` (deprecated) and NAT64 WKP
+            // `64:ff9b::/96`: embedded IPv4 in the low 32 bits.
+            let is_ipv4_compatible =
+                seg[..6].iter().all(|s| *s == 0) && (seg[6] != 0 || seg[7] > 1);
+            let is_nat64_wkp =
+                seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2..6].iter().all(|s| *s == 0);
+            if is_ipv4_compatible || is_nat64_wkp {
+                return ip_is_private(IpAddr::V4(v4(seg[6], seg[7])));
+            }
+            // 6to4 `2002::/16`: embedded IPv4 (the 6to4 gateway) in seg[1..3].
+            if seg[0] == 0x2002 {
+                return ip_is_private(IpAddr::V4(v4(seg[1], seg[2])));
+            }
+            // Teredo `2001:0000::/32`: client IPv4 is the bitwise complement of
+            // the low 32 bits.
+            if seg[0] == 0x2001 && seg[1] == 0x0000 {
+                return ip_is_private(IpAddr::V4(v4(!seg[6], !seg[7])));
+            }
+            // NAT64 local-use prefix `64:ff9b:1::/48` (RFC 8215) is local-use
+            // only and never names a legitimate public host, so block the whole
+            // prefix rather than trying to decode every RFC 6052 embedding.
+            if seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2] == 0x0001 {
+                return true;
+            }
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                // Unique-local fc00::/7
+                || (seg[0] & 0xfe00) == 0xfc00
+                // Link-local fe80::/10
+                || (seg[0] & 0xffc0) == 0xfe80
+        }
+    }
+}
+
 /// Reject local / file Battery sources when deploy policy disallows them.
 pub fn assert_local_battery_allowed(allow_local: bool, git_url: &str) -> OperationResult<()> {
     if allow_local {
@@ -3527,6 +3692,101 @@ tags = ["azure"]
             "https://example.invalid/repo.git"
         )
         .is_ok());
+    }
+
+    #[test]
+    fn assert_public_git_host_rejects_private_and_metadata_literals() {
+        for url in [
+            "https://127.0.0.1/repo.git",
+            "https://10.0.0.5/repo.git",
+            "https://192.168.1.10/repo.git",
+            "https://172.16.4.4/repo.git",
+            "https://169.254.169.254/latest/meta-data",
+            "https://100.64.0.1/repo.git",
+            "https://[::1]/repo.git",
+            "https://[fd00::1]/repo.git",
+            "https://[fe80::1]/repo.git",
+            "https://0.0.0.0/repo.git",
+        ] {
+            let err = assert_public_git_host(url).unwrap_err();
+            assert_eq!(err.code, OperationErrorCode::Forbidden, "{url}");
+        }
+    }
+
+    #[test]
+    fn assert_public_git_host_rejects_ipv4_compatible_and_nat64_literals() {
+        for url in [
+            // ::127.0.0.1 (IPv4-compatible loopback)
+            "https://[::7f00:1]/repo.git",
+            // ::10.0.0.5
+            "https://[::a00:5]/repo.git",
+            // NAT64 64:ff9b::169.254.169.254 (metadata)
+            "https://[64:ff9b::a9fe:a9fe]/latest",
+            // NAT64 64:ff9b::10.0.0.5
+            "https://[64:ff9b::a00:5]/repo.git",
+        ] {
+            let err = assert_public_git_host(url).unwrap_err();
+            assert_eq!(err.code, OperationErrorCode::Forbidden, "{url}");
+        }
+        // A public IPv4 embedded in NAT64 stays allowed.
+        assert!(assert_public_git_host("https://[64:ff9b::808:808]/repo.git").is_ok());
+    }
+
+    #[test]
+    fn assert_public_git_host_rejects_6to4_teredo_and_nat64_local_literals() {
+        for url in [
+            // 6to4 2002:<v4>::  → 10.0.0.5
+            "https://[2002:a00:5::]/repo.git",
+            // 6to4 → 127.0.0.1
+            "https://[2002:7f00:1::]/repo.git",
+            // Teredo 2001:0000:...:~client → ~f5ff:fffa == 10.0.0.5
+            "https://[2001:0:0:0:0:0:f5ff:fffa]/repo.git",
+            // NAT64 local-use prefix 64:ff9b:1::/48 (blocked wholesale)
+            "https://[64:ff9b:1::a00:5]/repo.git",
+            "https://[64:ff9b:1::808:808]/repo.git",
+        ] {
+            let err = assert_public_git_host(url).unwrap_err();
+            assert_eq!(err.code, OperationErrorCode::Forbidden, "{url}");
+        }
+        // A 6to4 address embedding a PUBLIC gateway stays allowed.
+        assert!(assert_public_git_host("https://[2002:808:808::]/repo.git").is_ok());
+    }
+
+    #[test]
+    fn assert_public_git_host_rejects_credentialed_metadata_host() {
+        // Userinfo must not smuggle a private host past the check.
+        let err = assert_public_git_host("https://user@169.254.169.254/latest").unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::Forbidden);
+    }
+
+    #[test]
+    fn literal_host_guard_blocks_private_literals_but_is_hermetic() {
+        // Blocks literal private/metadata IPs...
+        for url in [
+            "https://127.0.0.1/repo.git",
+            "https://169.254.169.254/latest",
+            "https://[::1]/repo.git",
+        ] {
+            assert_eq!(
+                assert_git_url_host_public_literal(url).unwrap_err().code,
+                OperationErrorCode::Forbidden,
+                "{url}"
+            );
+        }
+        // ...but never resolves DNS, so non-literal hosts pass regardless of
+        // whether they resolve (keeps registration hermetic).
+        assert!(assert_git_url_host_public_literal("https://example.invalid/x.git").is_ok());
+        assert!(assert_git_url_host_public_literal("https://8.8.8.8/x.git").is_ok());
+        assert!(assert_git_url_host_public_literal("file:///tmp/x.git").is_ok());
+    }
+
+    #[test]
+    fn assert_public_git_host_allows_public_literal_and_skips_non_network() {
+        assert!(assert_public_git_host("https://8.8.8.8/repo.git").is_ok());
+        assert!(assert_public_git_host("https://[2606:4700:4700::1111]/repo.git").is_ok());
+        // file / local sources are vetted elsewhere.
+        assert!(assert_public_git_host("file:///tmp/repo.git").is_ok());
+        assert!(assert_public_git_host("/tmp/local/repo.git").is_ok());
     }
 
     #[test]

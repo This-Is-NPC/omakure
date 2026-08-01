@@ -1701,20 +1701,21 @@ async fn sync_battery_handler(
         let access = state
             .policy
             .battery_credential_access(&auth_ctx, state.auth.is_file_mode());
-        Ok((summary.git_url, access))
+        Ok(access)
     })();
 
     let result = match prepared {
         Err(err) => Err(err),
-        Ok((git_url, access)) => {
+        Ok(access) => {
             // DNS resolution (SSRF guard) + git subprocess are blocking; run them
             // off the async runtime so a slow/large sync never stalls the reactor.
+            // `sync_battery_https_only_with_access` resolves the stored host and
+            // refuses private/loopback/link-local/metadata targets before
+            // issuing any git command (see `resolve_public_git_endpoint`) — no
+            // separate pre-check needed here.
             let workspace = state.workspace.clone_for_executor();
             let name = battery_id;
             let join = tokio::task::spawn_blocking(move || -> OperationResult<_> {
-                // SSRF guard: resolve the stored host and refuse private/loopback/
-                // link-local/metadata targets immediately before the fetch.
-                battery_ops::assert_public_git_host(&git_url)?;
                 battery_ops::sync_battery_https_only_with_access(
                     &workspace,
                     battery_ops::SyncBatteryRequest { name },

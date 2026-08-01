@@ -49,7 +49,7 @@ impl Default for DeployPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct HttpPolicy {
     pub enabled: bool,
     pub bind: Option<SocketAddr>,
@@ -70,8 +70,8 @@ impl Default for HttpPolicy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct EnginePolicy {
     pub workers: Option<u32>,
     pub readiness_requires_worker: bool,
@@ -79,19 +79,8 @@ pub struct EnginePolicy {
     pub readiness_requires_scheduler: bool,
 }
 
-impl Default for EnginePolicy {
-    fn default() -> Self {
-        Self {
-            workers: None,
-            readiness_requires_worker: false,
-            scheduler: None,
-            readiness_requires_scheduler: false,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct RoutesPolicy {
     pub read: bool,
     pub writes: bool,
@@ -124,10 +113,9 @@ impl Default for RoutesPolicy {
 
 /// Battery source gates. SSH Battery sources are not supported over the HTTP
 /// API/engine surface (the add handler rejects non-`https` URLs), so there is
-/// no SSH toggle here — an unknown `allow_private_ssh_batteries` key in an old
-/// `policy.toml` is simply ignored.
+/// no SSH toggle here.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct SourcesPolicy {
     pub allow_https_batteries: bool,
     pub allow_local_batteries: bool,
@@ -145,7 +133,7 @@ impl Default for SourcesPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct ScriptsPolicy {
     pub max_content_bytes: usize,
     pub tree_entry_limit: usize,
@@ -161,7 +149,7 @@ impl Default for ScriptsPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct EnvsPolicy {
     pub http_manage: bool,
     pub allow_secret_refs: bool,
@@ -177,7 +165,7 @@ impl Default for EnvsPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct RunsPolicy {
     pub allow_env_selection: bool,
     pub allow_secret_fields: bool,
@@ -193,7 +181,7 @@ impl Default for RunsPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct SecretsPolicy {
     pub provider: String,
     pub metadata_endpoint: bool,
@@ -209,7 +197,7 @@ impl Default for SecretsPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct AuthPolicy {
     pub tokens_file: Option<PathBuf>,
     pub legacy_env_token: bool,
@@ -226,6 +214,7 @@ impl Default for AuthPolicy {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DeployPolicyToml {
     #[serde(default = "default_version")]
     version: u32,
@@ -277,10 +266,7 @@ impl fmt::Display for PolicyError {
 impl std::error::Error for PolicyError {}
 
 /// Resolve policy path from CLI / env. Missing path → built-in defaults.
-pub fn resolve_policy_path(
-    cli_path: Option<&Path>,
-    env_path: Option<&str>,
-) -> Option<PathBuf> {
+pub fn resolve_policy_path(cli_path: Option<&Path>, env_path: Option<&str>) -> Option<PathBuf> {
     cli_path
         .map(Path::to_path_buf)
         .or_else(|| env_path.map(PathBuf::from))
@@ -338,10 +324,7 @@ impl RoutesPolicy {
     /// Checked before token scopes.
     pub fn allows(&self, method: &str, path: &str) -> bool {
         let method = method.to_ascii_uppercase();
-        let is_write = matches!(
-            method.as_str(),
-            "POST" | "PUT" | "PATCH" | "DELETE"
-        );
+        let is_write = matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
         let is_battery = path == "/v1/batteries" || path.starts_with("/v1/batteries/");
 
         if is_battery && !self.battery {
@@ -361,7 +344,10 @@ impl RoutesPolicy {
         if method == "POST" && path == "/v1/runs" && !self.run_enqueue {
             return false;
         }
-        if method == "POST" && path.ends_with("/cancel") && path.starts_with("/v1/runs/") && !self.run_cancel
+        if method == "POST"
+            && path.ends_with("/cancel")
+            && path.starts_with("/v1/runs/")
+            && !self.run_cancel
         {
             return false;
         }
@@ -549,12 +535,33 @@ legacy_env_token = false
     }
 
     #[test]
-    fn removed_ssh_source_key_is_ignored_for_backward_compat() {
-        // Old policy files may still carry the removed toggle; it must parse
-        // (unknown key ignored), not error.
+    fn parse_rejects_unknown_top_level_key() {
+        let err = parse_policy_toml("version = 1\nroutez = {}\n").unwrap_err();
+        assert!(matches!(err, PolicyError::Parse(_)));
+        assert!(err.to_string().contains("routez"));
+    }
+
+    #[test]
+    fn parse_rejects_unknown_key_in_every_policy_section() {
+        for section in [
+            "http", "engine", "routes", "sources", "scripts", "envs", "runs", "secrets", "auth",
+        ] {
+            let text = format!("version = 1\n[{section}]\nunknown_policy_key = true\n");
+            let err = parse_policy_toml(&text).unwrap_err();
+            assert!(
+                matches!(err, PolicyError::Parse(_)),
+                "section [{section}] accepted an unknown field"
+            );
+            assert!(err.to_string().contains("unknown_policy_key"));
+        }
+    }
+
+    #[test]
+    fn removed_ssh_source_key_is_rejected_fail_closed() {
         let text = "version = 1\n[sources]\nallow_private_ssh_batteries = true\n";
-        let p = parse_policy_toml(text).unwrap();
-        assert!(p.sources.allow_https_batteries);
+        let err = parse_policy_toml(text).unwrap_err();
+        assert!(matches!(err, PolicyError::Parse(_)));
+        assert!(err.to_string().contains("allow_private_ssh_batteries"));
     }
 
     #[test]

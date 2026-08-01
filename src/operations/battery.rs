@@ -334,12 +334,17 @@ fn sync_battery_with_access(
         })?;
     validate_git_url(&registry.batteries[index].git_url)?;
     validate_git_ref(&registry.batteries[index].requested_ref)?;
+    let http_pin = resolve_public_git_endpoint(&registry.batteries[index].git_url)?;
     let auth = registry.batteries[index].auth.clone();
     let askpass = prepare_git_askpass(workspace, auth.as_ref(), access)?;
     let git_ctx = GitExecContext {
         policy,
         askpass: askpass.as_ref(),
+        http_pin: http_pin.as_ref(),
     };
+    if http_pin.is_some() {
+        assert_git_http_pinning_supported(&git_ctx)?;
+    }
     let cache_path = cache_path_for_battery(workspace, &registry.batteries[index].name)?;
     let sync_result = (|| -> OperationResult<BatterySummary> {
         if !cache_path.join(".git").is_dir() {
@@ -440,6 +445,29 @@ impl Drop for GitAskpassGuard {
 struct GitExecContext<'a> {
     policy: GitTransportPolicy,
     askpass: Option<&'a GitAskpassGuard>,
+    http_pin: Option<&'a GitHttpPin>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GitHttpPin {
+    host: String,
+    port: u16,
+    address: std::net::IpAddr,
+    credential_authority: String,
+}
+
+impl GitHttpPin {
+    fn curlopt_resolve(&self) -> String {
+        let address = match self.address {
+            std::net::IpAddr::V4(address) => address.to_string(),
+            std::net::IpAddr::V6(address) => format!("[{address}]"),
+        };
+        format!("{}:{}:{address}", self.host, self.port)
+    }
+
+    fn credential_authority(&self) -> &str {
+        &self.credential_authority
+    }
 }
 
 fn prepare_git_askpass(
@@ -536,7 +564,7 @@ fn prepare_git_askpass(
     let script_path = dir.join("askpass.sh");
     // Resolve token via relative path under $0's directory — no shell-quoted
     // absolute paths (avoids `'` injection and path-with-spaces breakage).
-    let script = "#!/bin/sh\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\ncase \"$1\" in\n*Username*|*username*) printf '%s\\n' 'x-access-token' ;;\n*) cat \"$DIR/token\" ;;\nesac\n";
+    let script = "#!/bin/sh\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n[ -n \"$OMAKURE_GIT_AUTHORITY\" ] || exit 1\ncase \"$1\" in\n*\"//$OMAKURE_GIT_AUTHORITY/\"*|*\"//$OMAKURE_GIT_AUTHORITY'\"*|*\"@$OMAKURE_GIT_AUTHORITY/\"*|*\"@$OMAKURE_GIT_AUTHORITY'\"*) ;;\n*) exit 1 ;;\nesac\ncase \"$1\" in\n*Username*|*username*) printf '%s\\n' 'x-access-token' ;;\n*) cat \"$DIR/token\" ;;\nesac\n";
     write_secret_file(&script_path, script.as_bytes())?;
     #[cfg(unix)]
     {
@@ -925,7 +953,10 @@ pub fn assert_git_url_host_public_literal(git_url: &str) -> OperationResult<()> 
         return Ok(());
     }
     let host = git_url_host(trimmed).ok_or_else(|| {
-        OperationError::new(OperationErrorCode::InvalidInput, "battery git url has no host")
+        OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "battery git url has no host",
+        )
     })?;
     if let Ok(ip) = host.parse::<std::net::IpAddr>() {
         if ip_is_private(ip) {
@@ -935,55 +966,71 @@ pub fn assert_git_url_host_public_literal(git_url: &str) -> OperationResult<()> 
     Ok(())
 }
 
-/// Fetch-time SSRF guard: reject Battery HTTP(S) sources that **resolve** to a
-/// private, loopback, link-local, or cloud-metadata address. Run immediately
-/// before the engine issues the git request. DNS can be re-pointed after the
-/// check (rebinding/TOCTOU), so this is a mitigation, not an isolation
-/// boundary — pair with network egress policy for hard containment. Non-network
-/// schemes (file/local) are vetted elsewhere and skipped.
+/// Fetch-time SSRF guard used by HTTP policy checks. Battery sync additionally
+/// pins Git/curl to the verified address so Git cannot perform a second DNS
+/// lookup after this check.
 pub fn assert_public_git_host(git_url: &str) -> OperationResult<()> {
+    resolve_public_git_endpoint(git_url).map(|_| ())
+}
+
+fn resolve_public_git_endpoint(git_url: &str) -> OperationResult<Option<GitHttpPin>> {
     use std::net::ToSocketAddrs;
 
     let trimmed = git_url.trim();
     let lower = trimmed.to_ascii_lowercase();
     if !(lower.starts_with("https://") || lower.starts_with("http://")) {
-        return Ok(());
+        return Ok(None);
     }
-    let host = git_url_host(trimmed).ok_or_else(|| {
-        OperationError::new(OperationErrorCode::InvalidInput, "battery git url has no host")
+    let (host, port) = git_url_endpoint(trimmed).ok_or_else(|| {
+        OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "battery git url has no host",
+        )
+    })?;
+    let credential_authority = git_url_authority(trimmed).ok_or_else(|| {
+        OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "battery git url has no authority",
+        )
     })?;
 
     if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        return if ip_is_private(ip) {
-            Err(private_git_host_error())
-        } else {
-            Ok(())
-        };
+        if ip_is_private(ip) {
+            return Err(private_git_host_error());
+        }
+        return Ok(Some(GitHttpPin {
+            host,
+            port,
+            address: ip,
+            credential_authority,
+        }));
     }
 
-    // Port is immaterial to the address check (resolution keys on host), but
-    // pick the scheme's default rather than assuming https.
-    let port = if lower.starts_with("https://") { 443u16 } else { 80u16 };
     let resolved = (host.as_str(), port).to_socket_addrs().map_err(|err| {
         OperationError::new(
             OperationErrorCode::InvalidInput,
             format!("battery git host did not resolve: {err}"),
         )
     })?;
-    let mut any = false;
+    let mut pinned = None;
     for addr in resolved {
-        any = true;
         if ip_is_private(addr.ip()) {
             return Err(private_git_host_error());
         }
+        pinned.get_or_insert(addr.ip());
     }
-    if !any {
-        return Err(OperationError::new(
+    let address = pinned.ok_or_else(|| {
+        OperationError::new(
             OperationErrorCode::InvalidInput,
             "battery git host did not resolve to any address",
-        ));
-    }
-    Ok(())
+        )
+    })?;
+    Ok(Some(GitHttpPin {
+        host,
+        port,
+        address,
+        credential_authority,
+    }))
 }
 
 fn private_git_host_error() -> OperationError {
@@ -996,15 +1043,39 @@ fn private_git_host_error() -> OperationError {
 /// Extract the bare host from an `scheme://` URL, stripping userinfo and port
 /// and unwrapping `[ipv6]` literals.
 fn git_url_host(url: &str) -> Option<String> {
-    let (_, rest) = url.split_once("://")?;
+    git_url_endpoint(url).map(|(host, _)| host)
+}
+
+fn git_url_endpoint(url: &str) -> Option<(String, u16)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let default_port = match scheme.to_ascii_lowercase().as_str() {
+        "https" => 443,
+        "http" => 80,
+        _ => return None,
+    };
     let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
     let host_port = authority.rsplit('@').next().unwrap_or(authority);
     if let Some(after_bracket) = host_port.strip_prefix('[') {
-        let host = after_bracket.split(']').next().unwrap_or_default();
-        return (!host.is_empty()).then(|| host.to_string());
+        let (host, suffix) = after_bracket.split_once(']')?;
+        let port = match suffix.strip_prefix(':') {
+            Some(value) => value.parse().ok()?,
+            None if suffix.is_empty() => default_port,
+            None => return None,
+        };
+        return (!host.is_empty()).then(|| (host.to_string(), port));
     }
-    let host = host_port.split(':').next().unwrap_or_default();
-    (!host.is_empty()).then(|| host.to_string())
+    let (host, port) = match host_port.rsplit_once(':') {
+        Some((host, port)) => (host, port.parse().ok()?),
+        None => (host_port, default_port),
+    };
+    (!host.is_empty()).then(|| (host.to_string(), port))
+}
+
+fn git_url_authority(url: &str) -> Option<String> {
+    let (_, rest) = url.split_once("://")?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let authority = authority.rsplit('@').next().unwrap_or(authority);
+    (!authority.is_empty()).then(|| authority.to_string())
 }
 
 /// Whether an address is in a private / non-routable / metadata range that a
@@ -1023,6 +1094,15 @@ fn ip_is_private(ip: std::net::IpAddr) -> bool {
                 || o[0] == 0
                 // Carrier-grade NAT 100.64.0.0/10
                 || (o[0] == 100 && (o[1] & 0xc0) == 64)
+                // IETF protocol assignments and deprecated relay anycast.
+                || (o[0] == 192 && o[1] == 0 && o[2] == 0)
+                || (o[0] == 192 && o[1] == 88 && o[2] == 99)
+                // Benchmarking networks are commonly routed inside infrastructure.
+                || (o[0] == 198 && matches!(o[1], 18 | 19))
+                // Multicast and reserved/future-use space are never public unicast.
+                || o[0] >= 224
+                // Azure platform virtual IP is reachable only from tenant networks.
+                || o == [168, 63, 129, 16]
         }
         IpAddr::V6(v6) => {
             if let Some(mapped) = v6.to_ipv4_mapped() {
@@ -1069,6 +1149,13 @@ fn ip_is_private(ip: std::net::IpAddr) -> bool {
             v6.is_loopback()
                 || v6.is_unspecified()
                 || v6.is_multicast()
+                // Only global-unicast 2000::/3 is accepted after transition forms.
+                || (seg[0] & 0xe000) != 0x2000
+                // Documentation, benchmarking, and ORCHID are not public endpoints.
+                || (seg[0] == 0x2001 && seg[1] == 0x0db8)
+                || (seg[0] == 0x2001 && seg[1] == 0x0002 && seg[2] == 0)
+                || (seg[0] == 0x2001 && (seg[1] & 0xfff0) == 0x0010)
+                || (seg[0] == 0x2001 && (seg[1] & 0xfff0) == 0x0020)
                 // Unique-local fc00::/7
                 || (seg[0] & 0xfe00) == 0xfc00
                 // Link-local fe80::/10
@@ -1213,12 +1300,14 @@ fn sanitize_file_component(value: &str) -> String {
 }
 
 fn run_git_with_context(spec: GitCommandSpec, ctx: &GitExecContext<'_>) -> OperationResult<()> {
-    let output = git_command_with_context(&spec, ctx).output().map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::GitFailed,
-            format!("failed to spawn git: {err}"),
-        )
-    })?;
+    let output = git_command_with_context(&spec, ctx)
+        .output()
+        .map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::GitFailed,
+                format!("failed to spawn git: {err}"),
+            )
+        })?;
     if output.status.success() {
         Ok(())
     } else {
@@ -1245,6 +1334,7 @@ fn run_git_capture_with_policy(
         &GitExecContext {
             policy,
             askpass: None,
+            http_pin: None,
         },
     )
 }
@@ -1253,12 +1343,14 @@ fn run_git_capture_with_context(
     spec: GitCommandSpec,
     ctx: &GitExecContext<'_>,
 ) -> OperationResult<String> {
-    let output = git_command_with_context(&spec, ctx).output().map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::GitFailed,
-            format!("failed to spawn git: {err}"),
-        )
-    })?;
+    let output = git_command_with_context(&spec, ctx)
+        .output()
+        .map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::GitFailed,
+                format!("failed to spawn git: {err}"),
+            )
+        })?;
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         Ok(redact_token_in_text(
@@ -1276,6 +1368,24 @@ fn run_git_capture_with_context(
     }
 }
 
+fn assert_git_http_pinning_supported(ctx: &GitExecContext<'_>) -> OperationResult<()> {
+    let supported = run_git_capture_with_context(
+        GitCommandSpec {
+            program: "git".into(),
+            args: vec!["help".into(), "--config".into()],
+        },
+        ctx,
+    )?;
+    if supported.lines().any(|key| key == "http.curloptResolve") {
+        Ok(())
+    } else {
+        Err(OperationError::new(
+            OperationErrorCode::GitFailed,
+            "installed git does not support http.curloptResolve; refusing unpinned battery fetch",
+        ))
+    }
+}
+
 #[cfg(test)]
 fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> Command {
     git_command_with_context(
@@ -1283,12 +1393,22 @@ fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> Command {
         &GitExecContext {
             policy,
             askpass: None,
+            http_pin: None,
         },
     )
 }
 
 fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> Command {
     let mut command = Command::new(&spec.program);
+    command
+        .args(["-c", "http.followRedirects=false"])
+        .args(["-c", "http.proxy="]);
+    if let Some(pin) = ctx.http_pin {
+        command.args([
+            "-c",
+            &format!("http.curloptResolve={}", pin.curlopt_resolve()),
+        ]);
+    }
     command
         .args(&spec.args)
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -1307,13 +1427,28 @@ fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> 
         .env_remove("GIT_CONFIG")
         .env_remove("GIT_CONFIG_COUNT")
         .env_remove("GIT_CONFIG_PARAMETERS")
-        .env_remove("OMAKURE_API_TOKEN");
+        .env_remove("OMAKURE_API_TOKEN")
+        .env_remove("http_proxy")
+        .env_remove("https_proxy")
+        .env_remove("all_proxy")
+        .env_remove("no_proxy")
+        .env_remove("HTTP_PROXY")
+        .env_remove("HTTPS_PROXY")
+        .env_remove("ALL_PROXY")
+        .env_remove("NO_PROXY");
     if let Some(askpass) = ctx.askpass {
         command
             .env("GIT_ASKPASS", &askpass.script_path)
             .env("GIT_TERMINAL_PROMPT", "0");
+        if let Some(pin) = ctx.http_pin {
+            command.env("OMAKURE_GIT_AUTHORITY", pin.credential_authority());
+        } else {
+            command.env_remove("OMAKURE_GIT_AUTHORITY");
+        }
     } else {
-        command.env_remove("GIT_ASKPASS");
+        command
+            .env_remove("GIT_ASKPASS")
+            .env_remove("OMAKURE_GIT_AUTHORITY");
     }
     command
 }
@@ -1446,6 +1581,12 @@ fn reject_unsafe_git_config_text(config: &str) -> OperationResult<()> {
                     format!("battery cache has unsafe local git config: {section}"),
                 ));
             }
+            if section == "http" || section.starts_with("http ") {
+                return Err(OperationError::new(
+                    OperationErrorCode::Conflict,
+                    format!("battery cache has unsafe local git config: {section}"),
+                ));
+            }
             continue;
         }
         let key = line
@@ -1459,7 +1600,9 @@ fn reject_unsafe_git_config_text(config: &str) -> OperationResult<()> {
             || (section == "core"
                 && (key == "askpass" || key == "sshcommand" || key == "worktree"))
             || (section == "extensions" && key == "worktreeconfig")
-            || (section.starts_with("url ") && key == "insteadof");
+            || (section.starts_with("url ") && key == "insteadof")
+            || (section.starts_with("remote ")
+                && matches!(key.as_str(), "proxy" | "proxyauthmethod"));
         if unsafe_key {
             return Err(OperationError::new(
                 OperationErrorCode::Conflict,
@@ -3103,6 +3246,72 @@ path = "scripts/ignored.sh"
         }));
     }
 
+    #[test]
+    fn git_http_command_disables_redirects_proxies_and_pins_verified_host() {
+        let spec = GitCommandSpec {
+            program: "git".into(),
+            args: vec!["fetch".into()],
+        };
+        let pin = GitHttpPin {
+            host: "git.example.test".into(),
+            port: 8443,
+            address: "203.0.113.10".parse().unwrap(),
+            credential_authority: "git.example.test:8443".into(),
+        };
+        let command = git_command_with_context(
+            &spec,
+            &GitExecContext {
+                policy: GitTransportPolicy::HttpsOnly,
+                askpass: None,
+                http_pin: Some(&pin),
+            },
+        );
+        let args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["-c", "http.followRedirects=false"]));
+        assert!(args.windows(2).any(|pair| pair == ["-c", "http.proxy="]));
+        assert!(args.windows(2).any(|pair| {
+            pair == [
+                "-c",
+                "http.curloptResolve=git.example.test:8443:203.0.113.10",
+            ]
+        }));
+        for proxy in [
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+            "no_proxy",
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "NO_PROXY",
+        ] {
+            assert!(command
+                .get_envs()
+                .any(|(key, value)| key == proxy && value.is_none()));
+        }
+    }
+
+    #[test]
+    fn git_http_pin_formats_ipv6_for_curl_and_uses_url_port() {
+        let pin = resolve_public_git_endpoint("https://[2606:4700:4700::1111]:9443/repository.git")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(pin.host, "2606:4700:4700::1111");
+        assert_eq!(pin.port, 9443);
+        assert_eq!(pin.credential_authority(), "[2606:4700:4700::1111]:9443");
+        assert_eq!(
+            pin.curlopt_resolve(),
+            "2606:4700:4700::1111:9443:[2606:4700:4700::1111]"
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn intermediate_symlink_directories_are_rejected() {
@@ -3153,6 +3362,21 @@ path = "scripts/ignored.sh"
 
         let checkout = git_checkout_detached_spec(cache, "0123456789abcdef");
         assert!(checkout.args.contains(&"--detach".to_string()));
+    }
+
+    #[test]
+    fn local_git_config_cannot_override_http_containment() {
+        for config in [
+            "[http]\n\tfollowRedirects = true\n",
+            "[http \"https://example.test\"]\n\tcurloptResolve = example.test:443:127.0.0.1\n",
+            "[remote \"origin\"]\n\tproxy = http://127.0.0.1:8080\n",
+        ] {
+            assert_eq!(
+                reject_unsafe_git_config_text(config).unwrap_err().code,
+                OperationErrorCode::Conflict,
+                "{config}"
+            );
+        }
     }
 
     #[test]
@@ -3639,10 +3863,17 @@ tags = ["azure"]
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(&guard.script_path).unwrap().permissions().mode() & 0o777;
+            let mode = fs::metadata(&guard.script_path)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
             assert_eq!(mode, 0o700);
-            let token_mode =
-                fs::metadata(guard.dir.join("token")).unwrap().permissions().mode() & 0o777;
+            let token_mode = fs::metadata(guard.dir.join("token"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
             assert_eq!(token_mode, 0o600);
         }
         let redacted = sanitize_git_output(
@@ -3687,11 +3918,7 @@ tags = ["azure"]
         let err = assert_local_battery_allowed(false, "file:///tmp/repo.git").unwrap_err();
         assert_eq!(err.code, OperationErrorCode::Forbidden);
         assert!(assert_local_battery_allowed(true, "file:///tmp/repo.git").is_ok());
-        assert!(assert_local_battery_allowed(
-            false,
-            "https://example.invalid/repo.git"
-        )
-        .is_ok());
+        assert!(assert_local_battery_allowed(false, "https://example.invalid/repo.git").is_ok());
     }
 
     #[test]
@@ -3703,9 +3930,17 @@ tags = ["azure"]
             "https://172.16.4.4/repo.git",
             "https://169.254.169.254/latest/meta-data",
             "https://100.64.0.1/repo.git",
+            "https://192.0.0.1/repo.git",
+            "https://192.88.99.1/repo.git",
+            "https://198.18.0.1/repo.git",
+            "https://224.0.0.1/repo.git",
+            "https://240.0.0.1/repo.git",
+            "https://168.63.129.16/repo.git",
             "https://[::1]/repo.git",
             "https://[fd00::1]/repo.git",
             "https://[fe80::1]/repo.git",
+            "https://[2001:db8::1]/repo.git",
+            "https://[2001:2::1]/repo.git",
             "https://0.0.0.0/repo.git",
         ] {
             let err = assert_public_git_host(url).unwrap_err();
@@ -3801,6 +4036,12 @@ tags = ["azure"]
         let guard = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
             .unwrap()
             .unwrap();
+        let pin = GitHttpPin {
+            host: "git.example.test".into(),
+            port: 443,
+            address: "203.0.113.10".parse().unwrap(),
+            credential_authority: "git.example.test".into(),
+        };
         let command = git_command_with_context(
             &GitCommandSpec {
                 program: "git".into(),
@@ -3809,17 +4050,66 @@ tags = ["azure"]
             &GitExecContext {
                 policy: GitTransportPolicy::HttpsOnly,
                 askpass: Some(&guard),
+                http_pin: Some(&pin),
             },
         );
         let envs: Vec<_> = command.get_envs().collect();
         assert!(envs.iter().any(|(k, v)| {
-            *k == "GIT_ASKPASS" && v.map(|p| p == guard.script_path.as_os_str()).unwrap_or(false)
+            *k == "GIT_ASKPASS"
+                && v.map(|p| p == guard.script_path.as_os_str())
+                    .unwrap_or(false)
         }));
+        assert!(envs
+            .iter()
+            .any(|(k, v)| { *k == "GIT_TERMINAL_PROMPT" && v.map(|v| v == "0").unwrap_or(false) }));
         assert!(envs.iter().any(|(k, v)| {
-            *k == "GIT_TERMINAL_PROMPT" && v.map(|v| v == "0").unwrap_or(false)
+            *k == "OMAKURE_GIT_AUTHORITY" && v.map(|v| v == "git.example.test").unwrap_or(false)
         }));
         drop(guard);
         std::env::remove_var("OMAKURE_ASKPASS_ENV");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn git_askpass_refuses_credentials_for_another_host() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        std::env::set_var("OMAKURE_ASKPASS_HOST", "host-bound-token");
+        let auth = BatteryAuth {
+            method: BatteryAuthMethod::HttpsTokenRef,
+            token_ref: "secret://env/OMAKURE_ASKPASS_HOST".into(),
+        };
+        let guard = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
+            .unwrap()
+            .unwrap();
+
+        let allowed = Command::new(&guard.script_path)
+            .arg("Password for 'https://x-access-token@git.example.test':")
+            .env("OMAKURE_GIT_AUTHORITY", "git.example.test")
+            .output()
+            .unwrap();
+        let denied = Command::new(&guard.script_path)
+            .arg("Password for 'https://x-access-token@internal.example':")
+            .env("OMAKURE_GIT_AUTHORITY", "git.example.test")
+            .output()
+            .unwrap();
+        let suffix_denied = Command::new(&guard.script_path)
+            .arg("Password for 'https://x-access-token@git.example.test.evil':")
+            .env("OMAKURE_GIT_AUTHORITY", "git.example.test")
+            .output()
+            .unwrap();
+
+        assert!(allowed.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&allowed.stdout).trim(),
+            "host-bound-token"
+        );
+        assert!(!denied.status.success());
+        assert!(denied.stdout.is_empty());
+        assert!(!suffix_denied.status.success());
+        assert!(suffix_denied.stdout.is_empty());
+        drop(guard);
+        std::env::remove_var("OMAKURE_ASKPASS_HOST");
     }
 
     #[test]
@@ -3853,7 +4143,7 @@ tags = ["azure"]
                 git_url: "https://example.invalid/azure.git".into(),
                 requested_ref: "main".into(),
                 token_ref: None,
-        },
+            },
         )
         .unwrap_err();
 
@@ -3906,7 +4196,7 @@ tags = ["azure"]
                 git_url: repo.path().display().to_string(),
                 requested_ref: "main".into(),
                 token_ref: None,
-        },
+            },
         )
         .unwrap();
 
@@ -3939,7 +4229,7 @@ tags = ["azure"]
                 git_url: repo_one.path().display().to_string(),
                 requested_ref: "main".into(),
                 token_ref: None,
-        },
+            },
         )
         .unwrap();
         sync_battery(
@@ -3964,7 +4254,7 @@ tags = ["azure"]
                 git_url: repo_two.path().display().to_string(),
                 requested_ref: "main".into(),
                 token_ref: None,
-        },
+            },
         )
         .unwrap();
 

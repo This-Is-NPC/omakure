@@ -31,6 +31,11 @@ const MIN_T_COST: u32 = 2;
 const MIN_P_COST: u32 = 1;
 
 const PLAINTEXT_BYTES: usize = 32;
+const APPEND_LOCK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+#[cfg(test)]
+thread_local! {
+    static ARGON2_VERIFY_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthContext {
@@ -54,7 +59,9 @@ pub struct TokenRecord {
 
 #[derive(Debug, Clone)]
 enum AuthBackend {
-    Legacy { plaintext: String },
+    Legacy {
+        plaintext: String,
+    },
     File {
         path: PathBuf,
         tokens: Vec<TokenRecord>,
@@ -174,7 +181,7 @@ impl Authenticator {
                 Err(err) => {
                     let mut reload = self.reload_status.write().expect("reload status lock");
                     reload.last_reload_ok = Some(false);
-                    reload.last_reload_error = Some(err.to_string());
+                    reload.last_reload_error = Some(err.status_message().to_string());
                     reload.last_reload_at_ms = Some(now_ms);
                     Err(err)
                 }
@@ -189,9 +196,14 @@ pub enum AuthError {
     Parse(String),
     DuplicateId(String),
     InvalidHash(String),
-    WeakHashParams { id: String, detail: String },
+    WeakHashParams {
+        id: String,
+        detail: String,
+    },
     EmptyId,
-    EmptyScopes { id: String },
+    EmptyScopes {
+        id: String,
+    },
     MissingAuth,
     InvalidLegacyToken,
     /// `auth.legacy_env_token = false` in deploy policy rejects env token.
@@ -225,7 +237,25 @@ impl fmt::Display for AuthError {
 
 impl std::error::Error for AuthError {}
 
+impl AuthError {
+    fn status_message(&self) -> &'static str {
+        match self {
+            Self::Io(_) => "tokens file I/O error",
+            Self::Parse(_) => "tokens file parse error",
+            Self::DuplicateId(_) => "tokens file contains duplicate token ids",
+            Self::InvalidHash(_) => "tokens file contains an invalid Argon2id hash",
+            Self::WeakHashParams { .. } => "tokens file contains weak Argon2 parameters",
+            Self::EmptyId => "tokens file contains an empty token id",
+            Self::EmptyScopes { .. } => "tokens file contains a token with empty scopes",
+            Self::MissingAuth => "authentication is not configured",
+            Self::InvalidLegacyToken => "legacy authentication token is invalid",
+            Self::LegacyEnvTokenDisabled => "legacy authentication token is disabled",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TokensFileToml {
     #[serde(default = "default_version")]
     version: u32,
@@ -238,6 +268,7 @@ fn default_version() -> u32 {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TokenToml {
     id: String,
     hash: String,
@@ -258,7 +289,7 @@ pub fn load_tokens_file(path: &Path) -> Result<Vec<TokenRecord>, AuthError> {
 
 pub fn parse_tokens_toml(text: &str) -> Result<Vec<TokenRecord>, AuthError> {
     let parsed: TokensFileToml =
-        toml::from_str(text).map_err(|e| AuthError::Parse(e.to_string()))?;
+        toml::from_str(text).map_err(|e| AuthError::Parse(e.message().to_string()))?;
     if parsed.version != 1 {
         return Err(AuthError::Parse(format!(
             "unsupported tokens file version: {}",
@@ -348,23 +379,42 @@ fn validate_phc_hash(id: &str, hash: &str) -> Result<(), AuthError> {
 }
 
 fn authenticate_against_file(tokens: &[TokenRecord], presented: &str) -> Option<AuthContext> {
-    // Argon2id verify is memory-hard (64 MiB per call). Return on the first
-    // match to bound work per request instead of hashing against every token.
-    // Token ids are not secret and each hash carries a random salt, so the
-    // per-token timing is already decorrelated — early-exit leaks nothing an
-    // attacker can use, and callers gate concurrency separately (see
-    // `require_bearer`) to cap memory-hard amplification.
+    let id = token_selector(presented)?;
     tokens
         .iter()
-        .filter(|t| t.enabled)
-        .find(|token| verify_argon2(&token.hash, presented))
-        .map(|token| AuthContext {
-            token_id: token.id.clone(),
-            scopes: token.scopes.clone(),
-        })
+        .find(|token| token.enabled && token.id == id)
+        .filter(|token| verify_argon2(&token.hash, presented))
+        .map(auth_context)
+}
+
+fn auth_context(token: &TokenRecord) -> AuthContext {
+    AuthContext {
+        token_id: token.id.clone(),
+        scopes: token.scopes.clone(),
+    }
+}
+
+fn token_selector(presented: &str) -> Option<String> {
+    let remainder = presented.strip_prefix(TOKEN_PREFIX)?;
+    let (encoded_id, secret) = remainder.split_once('_')?;
+    if encoded_id.is_empty()
+        || secret.len() != PLAINTEXT_BYTES * 2
+        || !secret.bytes().all(|b| b.is_ascii_hexdigit())
+        || encoded_id.len() % 2 != 0
+    {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(encoded_id.len() / 2);
+    for pair in encoded_id.as_bytes().chunks_exact(2) {
+        let pair = std::str::from_utf8(pair).ok()?;
+        bytes.push(u8::from_str_radix(pair, 16).ok()?);
+    }
+    String::from_utf8(bytes).ok()
 }
 
 fn verify_argon2(phc: &str, presented: &str) -> bool {
+    #[cfg(test)]
+    ARGON2_VERIFY_COUNT.with(|count| count.set(count.get() + 1));
     let Ok(parsed) = PasswordHash::new(phc) else {
         return false;
     };
@@ -405,20 +455,23 @@ fn scopes_match(granted: &str, required: &str) -> bool {
         return true;
     }
     // Coarse grants cover finer required actions only (never the reverse).
-    match (granted, required) {
-        ("runs:write", "runs:enqueue" | "runs:cancel" | "runs:dead-letter" | "runs:write") => true,
+    matches!(
+        (granted, required),
         (
+            "runs:write",
+            "runs:enqueue" | "runs:cancel" | "runs:dead-letter" | "runs:write"
+        ) | (
             "batteries:write",
             "batteries:add"
-            | "batteries:sync"
-            | "batteries:install"
-            | "batteries:remove"
-            | "batteries:write",
-        ) => true,
-        ("config:read", "config:read" | "doctor:read" | "workspace:read") => true,
-        ("scripts:read", "scripts:read" | "search:read") => true,
-        _ => false,
-    }
+                | "batteries:sync"
+                | "batteries:install"
+                | "batteries:remove"
+                | "batteries:write",
+        ) | (
+            "config:read",
+            "config:read" | "doctor:read" | "workspace:read"
+        ) | ("scripts:read", "scripts:read" | "search:read")
+    )
 }
 
 fn normalize_scope(scope: &str) -> &str {
@@ -497,11 +550,9 @@ pub fn generate_token(id: &str, scopes: &[String]) -> Result<GeneratedToken, Aut
         return Err(AuthError::EmptyId);
     }
     if scopes.is_empty() {
-        return Err(AuthError::EmptyScopes {
-            id: id.to_string(),
-        });
+        return Err(AuthError::EmptyScopes { id: id.to_string() });
     }
-    let plaintext = random_token_plaintext();
+    let plaintext = selector_token_plaintext(id);
     let hash = hash_token(&plaintext)?;
     let entry = format_toml_entry(id, &hash, scopes);
     Ok(GeneratedToken {
@@ -513,15 +564,25 @@ pub fn generate_token(id: &str, scopes: &[String]) -> Result<GeneratedToken, Aut
     })
 }
 
-pub fn random_token_plaintext() -> String {
+fn selector_token_plaintext(id: &str) -> String {
     let mut bytes = [0u8; PLAINTEXT_BYTES];
     OsRng.fill_bytes(&mut bytes);
-    let mut encoded = String::with_capacity(TOKEN_PREFIX.len() + PLAINTEXT_BYTES * 2);
+    let mut encoded =
+        String::with_capacity(TOKEN_PREFIX.len() + id.len() * 2 + 1 + bytes.len() * 2);
     encoded.push_str(TOKEN_PREFIX);
+    for b in id.as_bytes() {
+        encoded.push_str(&format!("{b:02x}"));
+    }
+    encoded.push('_');
     for b in bytes {
         encoded.push_str(&format!("{b:02x}"));
     }
     encoded
+}
+
+#[cfg(test)]
+pub fn test_token_plaintext(id: &str) -> String {
+    selector_token_plaintext(id)
 }
 
 pub fn hash_token(plaintext: &str) -> Result<String, AuthError> {
@@ -557,6 +618,7 @@ pub const MAX_TOKENS_PER_FILE: usize = 64;
 
 pub fn append_token_entry(path: &Path, id: &str, entry: &str) -> Result<(), AuthError> {
     use std::io::Write;
+    let _lock = AppendLock::acquire(path)?;
     // Validate uniqueness before mutating the file.
     if path.exists() {
         let existing = load_tokens_file(path)?;
@@ -628,8 +690,60 @@ pub fn append_token_entry(path: &Path, id: &str, entry: &str) -> Result<(), Auth
             .map_err(|e| AuthError::Io(e.to_string()))?;
         file.sync_all().map_err(|e| AuthError::Io(e.to_string()))?;
     }
+    #[cfg(windows)]
+    if path.exists() {
+        // Windows rename does not replace an existing destination. The sidecar
+        // advisory lock still serializes readers/writers around this fallback.
+        fs::remove_file(path).map_err(|e| AuthError::Io(e.to_string()))?;
+    }
     fs::rename(&tmp, path).map_err(|e| AuthError::Io(e.to_string()))?;
     Ok(())
+}
+
+struct AppendLock {
+    file: fs::File,
+}
+
+impl AppendLock {
+    fn acquire(tokens_path: &Path) -> Result<Self, AuthError> {
+        let parent = tokens_path.parent().unwrap_or_else(|| Path::new("."));
+        let file_name = tokens_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("tokens.toml");
+        let path = parent.join(format!(".{file_name}.append.lock"));
+        let mut options = fs::OpenOptions::new();
+        options.read(true).write(true).create(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        let file = options
+            .open(&path)
+            .map_err(|err| AuthError::Io(err.to_string()))?;
+        let start = std::time::Instant::now();
+        loop {
+            match fs2::FileExt::try_lock_exclusive(&file) {
+                Ok(()) => return Ok(Self { file }),
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if start.elapsed() >= APPEND_LOCK_TIMEOUT {
+                        return Err(AuthError::Io(
+                            "timed out waiting for another token-file append".to_string(),
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(err) => return Err(AuthError::Io(err.to_string())),
+            }
+        }
+    }
+}
+
+impl Drop for AppendLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.file);
+    }
 }
 
 /// Install a SIGHUP handler that reloads the authenticator (Unix only).
@@ -654,7 +768,10 @@ pub fn install_sighup_reload(auth: Authenticator) {
             match auth.reload() {
                 Ok(()) => eprintln!("omakure: reloaded tokens file"),
                 Err(err) => {
-                    eprintln!("omakure: tokens reload failed; keeping last valid set ({err})");
+                    eprintln!(
+                        "omakure: tokens reload failed; keeping last valid set ({})",
+                        err.status_message()
+                    );
                 }
             }
         }
@@ -672,7 +789,7 @@ mod tests {
 
     #[test]
     fn parse_rejects_duplicate_ids() {
-        let hash = hash_token(&random_token_plaintext()).unwrap();
+        let hash = hash_token(&test_token_plaintext("ci")).unwrap();
         let toml = format!(
             r#"
 version = 1
@@ -692,7 +809,7 @@ scopes = ["runs:enqueue"]
 
     #[test]
     fn parse_rejects_empty_scopes() {
-        let hash = hash_token(&random_token_plaintext()).unwrap();
+        let hash = hash_token(&test_token_plaintext("ci")).unwrap();
         let toml = format!(
             r#"
 version = 1
@@ -724,8 +841,28 @@ scopes = ["*"]
     }
 
     #[test]
+    fn parse_rejects_unknown_top_level_and_token_fields() {
+        let hash = hash_token(&test_token_plaintext("ci")).unwrap();
+        let top_level = format!(
+            "version = 1\nunknown = true\n[[tokens]]\nid = \"ci\"\nhash = \"{hash}\"\nscopes = [\"*\"]\n"
+        );
+        let entry = format!(
+            "version = 1\n[[tokens]]\nid = \"ci\"\nhash = \"{hash}\"\nscopes = [\"*\"]\nunknown = true\n"
+        );
+
+        for (field, text) in [("top-level", top_level), ("entry", entry)] {
+            let err = parse_tokens_toml(&text).unwrap_err();
+            assert!(
+                matches!(err, AuthError::Parse(_)),
+                "accepted unknown {field} field"
+            );
+            assert!(err.to_string().contains("unknown"));
+        }
+    }
+
+    #[test]
     fn disabled_token_does_not_authenticate() {
-        let plaintext = random_token_plaintext();
+        let plaintext = test_token_plaintext("disabled");
         let hash = hash_token(&plaintext).unwrap();
         let toml = format!(
             r#"
@@ -743,7 +880,7 @@ enabled = false
 
     #[test]
     fn enabled_token_authenticates_with_scopes() {
-        let plaintext = random_token_plaintext();
+        let plaintext = test_token_plaintext("ci-deployer");
         let hash = hash_token(&plaintext).unwrap();
         let toml = format!(
             r#"
@@ -770,7 +907,7 @@ enabled = true
         let mut toml = String::from("version = 1\n");
         let mut plaintexts = Vec::new();
         for id in ["a", "b", "target", "d"] {
-            let plaintext = random_token_plaintext();
+            let plaintext = test_token_plaintext(id);
             let hash = hash_token(&plaintext).unwrap();
             toml.push_str(&format!(
                 "[[tokens]]\nid = \"{id}\"\nhash = \"{hash}\"\nscopes = [\"runs:read\"]\nenabled = true\n"
@@ -782,6 +919,53 @@ enabled = true
         let ctx = authenticate_against_file(&tokens, target_plaintext).unwrap();
         assert_eq!(ctx.token_id, "target");
         assert!(authenticate_against_file(&tokens, "omk_live_deadbeef-not-a-real-token").is_none());
+    }
+
+    #[test]
+    fn selector_authenticates_with_one_argon2_verification() {
+        let generated = generate_token("target", &["runs:read".into()]).unwrap();
+        let mut tokens = (0..MAX_TOKENS_PER_FILE)
+            .map(|index| TokenRecord {
+                id: format!("other-{index}"),
+                hash: generated.hash.clone(),
+                scopes: vec!["runs:read".into()],
+                enabled: true,
+            })
+            .collect::<Vec<_>>();
+        tokens.push(TokenRecord {
+            id: generated.id.clone(),
+            hash: generated.hash.clone(),
+            scopes: generated.scopes.clone(),
+            enabled: true,
+        });
+
+        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
+        let ctx = authenticate_against_file(&tokens, &generated.token).unwrap();
+        assert_eq!(ctx.token_id, "target");
+        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 1));
+
+        let unknown = selector_token_plaintext("missing");
+        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
+        assert!(authenticate_against_file(&tokens, &unknown).is_none());
+        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
+    }
+
+    #[test]
+    fn bearer_without_selector_does_no_argon2_work() {
+        let plaintext = test_token_plaintext("configured");
+        let hash = hash_token(&plaintext).unwrap();
+        let tokens = (0..MAX_TOKENS_PER_FILE)
+            .map(|index| TokenRecord {
+                id: format!("legacy-{index}"),
+                hash: hash.clone(),
+                scopes: vec!["runs:read".into()],
+                enabled: true,
+            })
+            .collect::<Vec<_>>();
+
+        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
+        assert!(authenticate_against_file(&tokens, "invalid legacy bearer").is_none());
+        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
     }
 
     #[test]
@@ -879,7 +1063,7 @@ enabled = true
     fn reload_keeps_last_valid_set_on_failure() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("tokens.toml");
-        let plaintext = random_token_plaintext();
+        let plaintext = test_token_plaintext("ok");
         let hash = hash_token(&plaintext).unwrap();
         fs::write(
             &path,
@@ -907,7 +1091,7 @@ enabled = true
     fn status_surfaces_reload_failure_without_secrets_or_token_ids() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("tokens.toml");
-        let plaintext = random_token_plaintext();
+        let plaintext = test_token_plaintext("ok");
         let hash = hash_token(&plaintext).unwrap();
         fs::write(
             &path,
@@ -935,8 +1119,15 @@ enabled = true
         assert!(!serialized.contains("\"id\""));
         assert!(!serialized.contains(path.to_string_lossy().as_ref()));
 
-        fs::write(&path, "this is not valid toml [[[").unwrap();
-        assert!(auth.reload().is_err());
+        let source_canary = "RAW_SOURCE_SECRET_CANARY_7f83";
+        fs::write(
+            &path,
+            format!("version = 1\nsecret_canary = \"{source_canary}\"\n"),
+        )
+        .unwrap();
+        let local_error = auth.reload().unwrap_err().to_string();
+        assert!(local_error.contains("secret_canary"));
+        assert!(!local_error.contains(source_canary));
         let after = auth.status();
         assert_eq!(after.last_reload_ok, Some(false));
         assert!(after
@@ -946,6 +1137,9 @@ enabled = true
         assert!(after.last_reload_at_ms.is_some());
         assert_eq!(after.token_count, 1);
         assert!(auth.authenticate(&plaintext).is_some());
+        let status_json = serde_json::to_string(&after).unwrap();
+        assert!(!status_json.contains(source_canary));
+        assert!(!status_json.contains("secret_canary"));
 
         // Restore a valid file and confirm success is surfaced.
         fs::write(
@@ -991,6 +1185,68 @@ enabled = true
     }
 
     #[test]
+    fn append_recovers_when_advisory_lock_file_survives_prior_process() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        fs::write(dir.path().join(".tokens.toml.append.lock"), "stale").unwrap();
+        let generated = generate_token("a", &["runs:read".into()]).unwrap();
+
+        append_token_entry(&path, &generated.id, &generated.tokens_file_entry).unwrap();
+
+        assert_eq!(load_tokens_file(&path).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn append_token_entry_process_worker() {
+        let Ok(path) = std::env::var("OMAKURE_APPEND_TEST_PATH") else {
+            return;
+        };
+        let id = std::env::var("OMAKURE_APPEND_TEST_ID").unwrap();
+        let entry = std::env::var("OMAKURE_APPEND_TEST_ENTRY").unwrap();
+        append_token_entry(Path::new(&path), &id, &entry).unwrap();
+    }
+
+    #[test]
+    fn concurrent_process_appends_do_not_lose_updates() {
+        use std::process::Command;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let hash = hash_token(&test_token_plaintext("process")).unwrap();
+        let executable = std::env::current_exe().unwrap();
+        let mut children = Vec::new();
+
+        for index in 0..6 {
+            let id = format!("process-{index}");
+            let entry = format_toml_entry(&id, &hash, &["runs:read".into()]);
+            children.push(
+                Command::new(&executable)
+                    .args([
+                        "--exact",
+                        "auth::tests::append_token_entry_process_worker",
+                        "--test-threads=1",
+                    ])
+                    .env("OMAKURE_APPEND_TEST_PATH", &path)
+                    .env("OMAKURE_APPEND_TEST_ID", &id)
+                    .env("OMAKURE_APPEND_TEST_ENTRY", entry)
+                    .spawn()
+                    .unwrap(),
+            );
+        }
+
+        for mut child in children {
+            assert!(child.wait().unwrap().success());
+        }
+        let tokens = load_tokens_file(&path).unwrap();
+        assert_eq!(tokens.len(), 6);
+        for index in 0..6 {
+            assert!(tokens
+                .iter()
+                .any(|token| token.id == format!("process-{index}")));
+        }
+    }
+
+    #[test]
     #[cfg(unix)]
     fn append_token_entry_does_not_clobber_symlink_at_guessable_tmp_path() {
         use std::os::unix::fs::symlink;
@@ -999,7 +1255,9 @@ enabled = true
         // Plant a symlink at the pid-guessable tmp prefix pointing at a victim
         // file. The real tmp now carries a random suffix, so this planted path is
         // never the one opened; combined with O_EXCL, the victim is safe.
-        let guessable = dir.path().join(format!(".tokens.toml.tmp-{}", std::process::id()));
+        let guessable = dir
+            .path()
+            .join(format!(".tokens.toml.tmp-{}", std::process::id()));
         let victim = dir.path().join("victim.txt");
         fs::write(&victim, "do-not-clobber").unwrap();
         symlink(&victim, &guessable).unwrap();

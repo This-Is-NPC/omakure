@@ -1,6 +1,6 @@
 mod adapters;
-mod auth;
 mod app_meta;
+mod auth;
 mod cli;
 mod domain;
 mod error;

@@ -38,6 +38,7 @@ subtle = "2.6"
 sha2 = "0.10"
 argon2 = { version = "0.5.3", features = ["std"] }
 rand = "0.8"
+fs2 = "0.4"
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5"

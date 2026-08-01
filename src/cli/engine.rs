@@ -13,12 +13,78 @@ use chrono::Utc;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 const SCHEDULER_SCAN_SLICE_MS: u64 = 200;
 const SCHEDULER_SCAN_INTERVAL: Duration = Duration::from_secs(5);
+
+#[derive(Clone, Copy)]
+enum LoopKind {
+    Workers,
+    Scheduler,
+}
+
+struct LoopLifecycle {
+    readiness: Arc<ReadinessGate>,
+    kind: LoopKind,
+    expected: usize,
+    state: Mutex<LoopLifecycleState>,
+}
+
+#[derive(Default)]
+struct LoopLifecycleState {
+    entered: usize,
+    exited: bool,
+}
+
+struct LoopGuard {
+    lifecycle: Arc<LoopLifecycle>,
+}
+
+impl LoopLifecycle {
+    fn new(readiness: Arc<ReadinessGate>, kind: LoopKind, expected: usize) -> Arc<Self> {
+        Arc::new(Self {
+            readiness,
+            kind,
+            expected,
+            state: Mutex::new(LoopLifecycleState::default()),
+        })
+    }
+
+    fn enter(self: &Arc<Self>) -> LoopGuard {
+        let mut state = self.state.lock().expect("loop lifecycle lock");
+        state.entered += 1;
+        if !state.exited && state.entered == self.expected {
+            self.set_alive(true);
+        }
+        drop(state);
+        LoopGuard {
+            lifecycle: Arc::clone(self),
+        }
+    }
+
+    fn set_alive(&self, alive: bool) {
+        match self.kind {
+            LoopKind::Workers => self.readiness.set_workers_alive(alive),
+            LoopKind::Scheduler => self.readiness.set_scheduler_alive(alive),
+        }
+    }
+}
+
+impl Drop for LoopGuard {
+    fn drop(&mut self) {
+        let mut state = self.lifecycle.state.lock().expect("loop lifecycle lock");
+        state.exited = true;
+        self.lifecycle.set_alive(false);
+    }
+}
+
+fn run_tracked_loop(lifecycle: Arc<LoopLifecycle>, run_loop: impl FnOnce()) {
+    let _guard = lifecycle.enter();
+    run_loop();
+}
 
 pub fn run(scripts_dir: PathBuf, args: EngineArgs) -> Result<(), Box<dyn Error>> {
     let api_args = ApiArgs {
@@ -32,10 +98,7 @@ pub fn run(scripts_dir: PathBuf, args: EngineArgs) -> Result<(), Box<dyn Error>>
     // Fail before bind: policy parse, auth, non-loopback guard.
     let boot = api::prepare_api_boot(&api_args)?;
 
-    let workers = args
-        .workers
-        .or(boot.deploy.engine.workers)
-        .unwrap_or(1);
+    let workers = args.workers.or(boot.deploy.engine.workers).unwrap_or(1);
     let scheduler_enabled = if args.no_scheduler {
         false
     } else if args.scheduler {
@@ -66,34 +129,33 @@ pub fn run(scripts_dir: PathBuf, args: EngineArgs) -> Result<(), Box<dyn Error>>
 
     let mut worker_handles = Vec::new();
     if workers >= 1 {
+        let worker_lifecycle =
+            LoopLifecycle::new(Arc::clone(&readiness), LoopKind::Workers, workers as usize);
         for thread_idx in 0..workers {
             let ws = workspace.clone_for_executor();
             let flag = Arc::clone(&cancel_flag);
             let actor_filter = args.worker_actor_filter.clone();
             let script_filter = args.worker_script_filter.clone();
             let worker_id = format!("engine-worker:{}-t{}", std::process::id(), thread_idx);
+            let lifecycle = Arc::clone(&worker_lifecycle);
             worker_handles.push(thread::spawn(move || {
-                queue::worker_loop(ws, worker_id, flag, actor_filter, script_filter, false);
+                run_tracked_loop(lifecycle, || {
+                    queue::worker_loop(ws, worker_id, flag, actor_filter, script_filter, false);
+                });
             }));
         }
-        readiness.set_workers_alive(true);
     }
 
     let scheduler_handle = if scheduler_enabled {
         let ws = workspace.clone_for_executor();
         let flag = Arc::clone(&cancel_flag);
+        let lifecycle = LoopLifecycle::new(Arc::clone(&readiness), LoopKind::Scheduler, 1);
         Some(thread::spawn(move || {
-            scheduler_loop(ws, flag);
+            run_tracked_loop(lifecycle, || scheduler_loop(ws, flag));
         }))
     } else {
         None
     };
-    if scheduler_enabled {
-        // Mark alive on the supervisor thread (same as workers) so
-        // `--readiness-requires-scheduler` cannot race HTTP startup.
-        readiness.set_scheduler_alive(true);
-    }
-
     let runtime = tokio::runtime::Runtime::new()?;
     let cancel_for_http = Arc::clone(&cancel_flag);
     let readiness_for_http = Arc::clone(&readiness);
@@ -148,6 +210,7 @@ fn scheduler_loop(workspace: Workspace, cancel_flag: Arc<AtomicBool>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
 
     #[test]
     fn readiness_gate_defaults_ready_without_requirements() {
@@ -181,5 +244,60 @@ mod tests {
     fn readiness_requires_scheduler_ignored_when_scheduler_disabled() {
         let gate = ReadinessGate::new(false, true, false, false);
         assert!(gate.is_ready());
+    }
+
+    #[test]
+    fn worker_readiness_tracks_entry_and_unexpected_exit() {
+        let gate = ReadinessGate::new(true, false, true, false);
+        let lifecycle = LoopLifecycle::new(Arc::clone(&gate), LoopKind::Workers, 2);
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+
+        let first_lifecycle = Arc::clone(&lifecycle);
+        let first = thread::spawn(move || {
+            run_tracked_loop(first_lifecycle, || {
+                entered_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+            });
+        });
+        entered_rx.recv().unwrap();
+        assert!(!gate.is_ready(), "all configured workers must enter first");
+
+        let (second_entered_tx, second_entered_rx) = mpsc::channel();
+        let (second_release_tx, second_release_rx) = mpsc::channel();
+        let second = thread::spawn(move || {
+            run_tracked_loop(lifecycle, || {
+                second_entered_tx.send(()).unwrap();
+                second_release_rx.recv().unwrap();
+            });
+        });
+        second_entered_rx.recv().unwrap();
+        assert!(gate.is_ready());
+
+        release_tx.send(()).unwrap();
+        first.join().unwrap();
+        assert!(
+            !gate.is_ready(),
+            "one worker exit makes the group unhealthy"
+        );
+        second_release_tx.send(()).unwrap();
+        second.join().unwrap();
+    }
+
+    #[test]
+    fn scheduler_readiness_clears_when_loop_panics() {
+        let gate = ReadinessGate::new(false, true, false, true);
+        let lifecycle = LoopLifecycle::new(Arc::clone(&gate), LoopKind::Scheduler, 1);
+        let (entered_tx, entered_rx) = mpsc::channel();
+
+        let handle = thread::spawn(move || {
+            run_tracked_loop(lifecycle, || {
+                entered_tx.send(()).unwrap();
+                panic!("unexpected scheduler failure");
+            });
+        });
+        entered_rx.recv().unwrap();
+        assert!(handle.join().is_err());
+        assert!(!gate.is_ready());
     }
 }

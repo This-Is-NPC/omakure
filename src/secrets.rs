@@ -120,7 +120,8 @@ impl SecretAccess {
         if self.allow_all && !self.env_gated(secret_ref) {
             return Ok(());
         }
-        let may_use = self.scopes.contains("secrets:use") || self.scopes.contains("credentials:use");
+        let may_use =
+            self.scopes.contains("secrets:use") || self.scopes.contains("credentials:use");
         if !may_use {
             return Err(SecretResolveError::Denied(
                 "secrets:use or credentials:use scope is required".to_string(),
@@ -463,9 +464,7 @@ pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), Str
     } else {
         SecretRef::parse(value).ok_or_else(|| "invalid secret ref".to_string())?
     };
-    access
-        .can_use(&secret_ref)
-        .map_err(|err| secret_error_message(err))
+    access.can_use(&secret_ref).map_err(secret_error_message)
 }
 
 /// Resolve a `secret://…` ref to its plaintext value under `access`.
@@ -520,9 +519,10 @@ pub fn list_secret_metadata(workspace: &Workspace, access: &SecretAccess) -> Vec
             if !valid_provider_name(stem) {
                 continue;
             }
-            let Ok(values) =
-                crate::adapters::environments::read_managed_env_defaults(workspace.envs_dir(), stem)
-            else {
+            let Ok(values) = crate::adapters::environments::read_managed_env_defaults(
+                workspace.envs_dir(),
+                stem,
+            ) else {
                 continue;
             };
             for key in values.keys() {
@@ -801,11 +801,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
         std::env::set_var("OMAKURE_TEST_F6_ENV", "env_value");
-        fs::write(
-            workspace.envs_dir().join("prod.conf"),
-            "TOKEN=file_value\n",
-        )
-        .unwrap();
+        fs::write(workspace.envs_dir().join("prod.conf"), "TOKEN=file_value\n").unwrap();
 
         // Wildcard WITHOUT an explicit env ref: env reads are denied even though
         // non-env refs ride the wildcard (SSRF-exfil hardening).
@@ -859,8 +855,7 @@ mod tests {
 
         // Even with `secret://env/*` in the allow-list, the env gate must not
         // grant blanket env access under the wildcard.
-        let access =
-            SecretAccess::allow_all_non_env(["secrets:use"], ["secret://env/*"]);
+        let access = SecretAccess::allow_all_non_env(["secrets:use"], ["secret://env/*"]);
         let err = resolve_args_with_access(
             &workspace,
             &script,

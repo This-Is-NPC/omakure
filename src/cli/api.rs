@@ -34,11 +34,16 @@ use std::time::Duration;
 pub(crate) struct HttpAuditEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
     pub method: String,
     pub path: String,
     pub outcome: String,
     pub status: u16,
 }
+
+#[derive(Debug, Clone)]
+struct AuditRunId(String);
 
 type AuditHook = Arc<dyn Fn(&HttpAuditEvent) + Send + Sync>;
 
@@ -139,6 +144,7 @@ struct ApiState {
     /// Deploy-time route-group gates (before scopes).
     deploy: DeployPolicy,
     readiness: Option<Arc<ReadinessGate>>,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
 }
 
 impl Clone for ApiState {
@@ -149,6 +155,7 @@ impl Clone for ApiState {
             policy: self.policy.clone(),
             deploy: self.deploy.clone(),
             readiness: self.readiness.clone(),
+            auth_verification_gate: Arc::clone(&self.auth_verification_gate),
         }
     }
 }
@@ -333,10 +340,7 @@ impl ApiCapability {
                 Ok(Self::RunWrite)
             }
             "batteries:read" => Ok(Self::BatteryRead),
-            "batteries:write"
-            | "batteries:add"
-            | "batteries:sync"
-            | "batteries:install"
+            "batteries:write" | "batteries:add" | "batteries:sync" | "batteries:install"
             | "batteries:remove" => Ok(Self::BatteryWrite),
             "admin:status" => Ok(Self::AdminStatus),
             "doctor:read" | "workspace:read" => Ok(Self::ConfigRead),
@@ -526,8 +530,8 @@ pub(crate) struct ApiBoot {
 pub(crate) fn prepare_api_boot(args: &ApiArgs) -> Result<ApiBoot, ApiConfigError> {
     let env_policy = std::env::var("OMAKURE_POLICY_FILE").ok();
     let policy_path = policy::resolve_policy_path(args.policy.as_deref(), env_policy.as_deref());
-    let deploy =
-        policy::load_policy(policy_path.as_deref()).map_err(|e| ApiConfigError::Policy(e.to_string()))?;
+    let deploy = policy::load_policy(policy_path.as_deref())
+        .map_err(|e| ApiConfigError::Policy(e.to_string()))?;
 
     let allow_non_loopback = args.allow_non_loopback || deploy.http.allow_non_loopback;
     // CLI `--bind` wins when not the clap default; otherwise policy `http.bind`
@@ -559,6 +563,9 @@ pub(crate) fn prepare_api_boot(args: &ApiArgs) -> Result<ApiBoot, ApiConfigError
 
 /// Serve the HTTP management API until `cancel_flag` is set, then shut down
 /// gracefully. Used by `omakure api` and `omakure engine`.
+// Audit note: keeping the independently configured security and lifecycle
+// controls explicit here is clearer than hiding them in a second config type.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn serve_http(
     bind: SocketAddr,
     auth: Authenticator,
@@ -689,6 +696,9 @@ fn router_with_policy(
         policy,
         deploy,
         readiness,
+        auth_verification_gate: Arc::new(tokio::sync::Semaphore::new(
+            MAX_CONCURRENT_AUTH_VERIFICATIONS,
+        )),
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
     Router::new()
@@ -1021,7 +1031,6 @@ async fn list_envs_handler(
     operation_response(env_ops::list_envs(&state.workspace))
 }
 
-
 fn env_params_forbid_secret_refs(
     deploy: &crate::policy::DeployPolicy,
     params: &[env_ops::EnvParam],
@@ -1185,7 +1194,8 @@ async fn set_env_param_handler(
             "policy envs.http_manage=false",
         ));
     }
-    let body = match parse_json_body::<EnvParamBody>(body, state.deploy.http.body_limit_bytes).await {
+    let body = match parse_json_body::<EnvParamBody>(body, state.deploy.http.body_limit_bytes).await
+    {
         Ok(body) => body,
         Err(err) => return operation_error_response(err),
     };
@@ -1307,48 +1317,62 @@ async fn enqueue_run_handler(
     if let Some(response) = require_scope(&state, &auth_ctx, "runs:enqueue") {
         return response;
     }
-    let body = match parse_json_body::<EnqueueRunBody>(body, state.deploy.http.body_limit_bytes).await {
-        Ok(body) => body,
-        Err(err) => return operation_error_response(err),
-    };
+    let body =
+        match parse_json_body::<EnqueueRunBody>(body, state.deploy.http.body_limit_bytes).await {
+            Ok(body) => body,
+            Err(err) => return operation_error_response(err),
+        };
+    let requested_run_id = body.run_id.as_deref().and_then(safe_audit_run_id);
     if body.env.is_some() {
         if !state.deploy.runs.allow_env_selection {
-            return operation_error_response(OperationError::new(
-                OperationErrorCode::Forbidden,
-                "policy runs.allow_env_selection=false",
-            ));
+            return attach_audit_run_id(
+                operation_error_response(OperationError::new(
+                    OperationErrorCode::Forbidden,
+                    "policy runs.allow_env_selection=false",
+                )),
+                requested_run_id,
+            );
         }
         if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvUse) {
-            return response;
+            return attach_audit_run_id(response, requested_run_id);
         }
     }
-    if !body.secret_fields.is_empty() {
-        if !state.deploy.runs.allow_secret_fields {
-            return operation_error_response(OperationError::new(
+    let args_use_secret_provider = args_use_secret_provider(&body.args);
+    if !state.deploy.runs.allow_secret_fields
+        && (!body.secret_fields.is_empty() || args_use_secret_provider)
+    {
+        return attach_audit_run_id(
+            operation_error_response(OperationError::new(
                 OperationErrorCode::Forbidden,
                 "policy runs.allow_secret_fields=false",
-            ));
-        }
+            )),
+            requested_run_id,
+        );
     }
-    if !body.secret_fields.is_empty() || args_use_secret_provider(&body.args) {
-        if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::SecretProviderUse) {
-            return response;
+    if !body.secret_fields.is_empty() || args_use_secret_provider {
+        if let Some(response) =
+            require_capability(&state, &auth_ctx, ApiCapability::SecretProviderUse)
+        {
+            return attach_audit_run_id(response, requested_run_id);
         }
     }
     if let Some(response) = require_implicit_secret_capabilities(&state, &auth_ctx, &body) {
-        return response;
+        return attach_audit_run_id(response, requested_run_id);
     }
     if body
         .secret_fields
         .values()
         .any(|value| !value.starts_with("secret://"))
     {
-        return operation_error_response(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            "queued HTTP secret_fields must use secret:// refs so workers can resolve them without persisting plaintext",
-        ));
+        return attach_audit_run_id(
+            operation_error_response(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                "queued HTTP secret_fields must use secret:// refs so workers can resolve them without persisting plaintext",
+            )),
+            requested_run_id,
+        );
     }
-    operation_response(core::enqueue_run_with_access(
+    let result = core::enqueue_run_with_access(
         &state.workspace,
         core::EnqueueRunRequest {
             script: body.script,
@@ -1363,8 +1387,16 @@ async fn enqueue_run_handler(
             parent_run_id: body.parent_run_id,
             cron_schedule_id: body.cron_schedule_id,
         },
-        &state.policy.secret_access(&auth_ctx, state.auth.is_file_mode()),
-    ))
+        &state
+            .policy
+            .secret_access(&auth_ctx, state.auth.is_file_mode()),
+    );
+    let run_id = result
+        .as_ref()
+        .ok()
+        .map(|row| row.run_id.clone())
+        .or(requested_run_id);
+    operation_response_with_run_id(result, run_id)
 }
 
 fn require_implicit_secret_capabilities(
@@ -1403,7 +1435,15 @@ fn require_implicit_secret_capabilities(
     }
 
     if secret_fields.iter().any(|field| field.default.is_some()) {
-        if let Some(response) = require_capability(state, &auth_ctx, ApiCapability::SecretProviderUse) {
+        if !state.deploy.runs.allow_secret_fields {
+            return Some(operation_error_response(OperationError::new(
+                OperationErrorCode::Forbidden,
+                "policy runs.allow_secret_fields=false",
+            )));
+        }
+        if let Some(response) =
+            require_capability(state, auth_ctx, ApiCapability::SecretProviderUse)
+        {
             return Some(response);
         }
     }
@@ -1434,7 +1474,7 @@ fn require_implicit_secret_capabilities(
             .iter()
             .any(|(key, _)| key.eq_ignore_ascii_case(&field.name))
     }) {
-        if let Some(response) = require_capability(state, &auth_ctx, ApiCapability::EnvUse) {
+        if let Some(response) = require_capability(state, auth_ctx, ApiCapability::EnvUse) {
             return Some(response);
         }
     }
@@ -1461,17 +1501,19 @@ async fn cancel_run_handler(
     if let Some(response) = require_scope(&state, &auth_ctx, "runs:cancel") {
         return response;
     }
-    let body = match parse_json_body::<RunReasonBody>(body, state.deploy.http.body_limit_bytes).await {
-        Ok(body) => body,
-        Err(err) => return operation_error_response(err),
-    };
-    operation_response(core::cancel_run(
+    let body =
+        match parse_json_body::<RunReasonBody>(body, state.deploy.http.body_limit_bytes).await {
+            Ok(body) => body,
+            Err(err) => return operation_error_response(err),
+        };
+    let result = core::cancel_run(
         &state.workspace,
         core::CancelRunRequest {
-            run_id,
+            run_id: run_id.clone(),
             reason: body.reason,
         },
-    ))
+    );
+    operation_response_with_run_id(result, Some(run_id))
 }
 
 async fn dead_letter_run_handler(
@@ -1483,17 +1525,19 @@ async fn dead_letter_run_handler(
     if let Some(response) = require_scope(&state, &auth_ctx, "runs:dead-letter") {
         return response;
     }
-    let body = match parse_json_body::<RunReasonBody>(body, state.deploy.http.body_limit_bytes).await {
-        Ok(body) => body,
-        Err(err) => return operation_error_response(err),
-    };
-    operation_response(core::dead_letter_run(
+    let body =
+        match parse_json_body::<RunReasonBody>(body, state.deploy.http.body_limit_bytes).await {
+            Ok(body) => body,
+            Err(err) => return operation_error_response(err),
+        };
+    let result = core::dead_letter_run(
         &state.workspace,
         core::DeadLetterRunRequest {
-            run_id,
+            run_id: run_id.clone(),
             reason: body.reason,
         },
-    ))
+    );
+    operation_response_with_run_id(result, Some(run_id))
 }
 
 async fn list_secrets_metadata_handler(
@@ -1539,10 +1583,11 @@ async fn add_battery_handler(
     if let Some(response) = require_scope(&state, &auth_ctx, "batteries:add") {
         return response;
     }
-    let body = match parse_json_body::<AddBatteryBody>(body, state.deploy.http.body_limit_bytes).await {
-        Ok(body) => body,
-        Err(err) => return operation_error_response(err),
-    };
+    let body =
+        match parse_json_body::<AddBatteryBody>(body, state.deploy.http.body_limit_bytes).await {
+            Ok(body) => body,
+            Err(err) => return operation_error_response(err),
+        };
     if !body
         .git_url
         .trim()
@@ -1554,9 +1599,10 @@ async fn add_battery_handler(
             "HTTP API battery registration only accepts https git URLs",
         ));
     }
-    if let Err(err) =
-        battery_ops::assert_local_battery_allowed(state.deploy.sources.allow_local_batteries, &body.git_url)
-    {
+    if let Err(err) = battery_ops::assert_local_battery_allowed(
+        state.deploy.sources.allow_local_batteries,
+        &body.git_url,
+    ) {
         return operation_error_response(err);
     }
     if !state.deploy.sources.allow_https_batteries {
@@ -1570,15 +1616,18 @@ async fn add_battery_handler(
     if let Err(err) = battery_ops::assert_git_url_host_public_literal(&body.git_url) {
         return operation_error_response(err);
     }
-    if body.token_ref.as_ref().is_some_and(|r| !r.trim().is_empty()) {
+    if body
+        .token_ref
+        .as_ref()
+        .is_some_and(|r| !r.trim().is_empty())
+    {
         if !state.deploy.sources.allow_private_https_batteries {
             return operation_error_response(OperationError::new(
                 OperationErrorCode::Forbidden,
                 "policy sources.allow_private_https_batteries=false",
             ));
         }
-        if let Some(response) =
-            require_capability(&state, &auth_ctx, ApiCapability::CredentialsUse)
+        if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::CredentialsUse)
         {
             return response;
         }
@@ -1586,10 +1635,9 @@ async fn add_battery_handler(
         let access = state
             .policy
             .battery_credential_access(&auth_ctx, state.auth.is_file_mode());
-        if let Err(err) = crate::secrets::check_secret_access(
-            body.token_ref.as_deref().unwrap_or(""),
-            &access,
-        ) {
+        if let Err(err) =
+            crate::secrets::check_secret_access(body.token_ref.as_deref().unwrap_or(""), &access)
+        {
             return operation_error_response(OperationError::new(
                 OperationErrorCode::Forbidden,
                 format!("token_ref not usable: {err}"),
@@ -1724,10 +1772,13 @@ async fn install_battery_script_handler(
     if let Some(response) = require_scope(&state, &auth_ctx, "batteries:install") {
         return response;
     }
-    let body = match parse_json_body::<InstallBatteryScriptBody>(body, state.deploy.http.body_limit_bytes).await {
-        Ok(body) => body,
-        Err(err) => return operation_error_response(err),
-    };
+    let body =
+        match parse_json_body::<InstallBatteryScriptBody>(body, state.deploy.http.body_limit_bytes)
+            .await
+        {
+            Ok(body) => body,
+            Err(err) => return operation_error_response(err),
+        };
     let request = require_https_battery_source(&state.workspace, &battery_id).map(|_| {
         battery_ops::InstallBatteryScriptRequest {
             battery_name: battery_id,
@@ -1769,33 +1820,43 @@ async fn protected_not_found() -> impl IntoResponse {
 /// amplify hashing into CPU/memory exhaustion. Verifies also run on the blocking
 /// pool (see `require_bearer`) so async reactor threads never stall — keeping
 /// `/v1/health` and `/v1/ready` responsive even under an auth flood.
-const MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 8;
-
-fn auth_verification_gate() -> Arc<tokio::sync::Semaphore> {
-    static GATE: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-    GATE.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_AUTH_VERIFICATIONS)))
-        .clone()
-}
+// Two 64 MiB Argon2id verifications keep the authentication memory budget near
+// 128 MiB. Excess requests fail fast instead of forming an unbounded queue.
+const MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 2;
 
 /// Authenticate a presented bearer token without blocking the async runtime.
 /// The memory-hard verify runs on the blocking pool under a concurrency permit.
-async fn authenticate_off_runtime(auth: &Authenticator, presented: &str) -> Option<AuthContext> {
+enum AuthAttempt {
+    Accepted(AuthContext),
+    Rejected,
+    Busy,
+}
+
+async fn authenticate_off_runtime(
+    auth: &Authenticator,
+    gate: &Arc<tokio::sync::Semaphore>,
+    presented: &str,
+) -> AuthAttempt {
     // Hold the permit for the LIFETIME OF THE HASH, not of the request future.
     // `spawn_blocking` is detached: if the client cancels mid-verify the request
     // future is dropped, but the Argon2 task keeps running. Moving an *owned*
     // permit into the blocking closure ties the permit's release to the hash
     // completing, so a "send bearer then reset connection" flood cannot orphan
     // unbounded memory-hard hashes past MAX_CONCURRENT_AUTH_VERIFICATIONS.
-    let permit = auth_verification_gate().acquire_owned().await.ok()?;
+    let Ok(permit) = Arc::clone(gate).try_acquire_owned() else {
+        return AuthAttempt::Busy;
+    };
     let auth = auth.clone();
     let token = presented.to_string();
-    tokio::task::spawn_blocking(move || {
+    match tokio::task::spawn_blocking(move || {
         let _permit = permit;
         auth.authenticate(&token)
     })
     .await
-    .ok()
-    .flatten()
+    {
+        Ok(Some(context)) => AuthAttempt::Accepted(context),
+        Ok(None) | Err(_) => AuthAttempt::Rejected,
+    }
 }
 
 async fn require_bearer(
@@ -1816,16 +1877,19 @@ async fn require_bearer(
         .and_then(|value| value.strip_prefix("Bearer "));
 
     let authenticated = match presented {
-        Some(token) => authenticate_off_runtime(&state.auth, token).await,
-        None => None,
+        Some(token) => {
+            authenticate_off_runtime(&state.auth, &state.auth_verification_gate, token).await
+        }
+        None => AuthAttempt::Rejected,
     };
 
     match authenticated {
-        Some(ctx) => {
+        AuthAttempt::Accepted(ctx) => {
             // Deploy policy gates route groups before token scopes.
             if let Some(message) = state.deploy.deny_reason(&method, &path) {
                 emit_http_audit(HttpAuditEvent {
                     token_id: Some(ctx.token_id),
+                    run_id: mutation_path_run_id(&method, &path),
                     method,
                     path,
                     outcome: "forbidden".to_string(),
@@ -1837,6 +1901,11 @@ async fn require_bearer(
             request.extensions_mut().insert(ctx);
             let response = next.run(request).await;
             let status = response.status().as_u16();
+            let run_id = response
+                .extensions()
+                .get::<AuditRunId>()
+                .and_then(|value| safe_audit_run_id(&value.0))
+                .or_else(|| mutation_path_run_id(&method, &path));
             let outcome = if (200..400).contains(&status) {
                 "ok"
             } else if status == 403 {
@@ -1848,6 +1917,7 @@ async fn require_bearer(
             };
             emit_http_audit(HttpAuditEvent {
                 token_id: Some(token_id),
+                run_id,
                 method,
                 path,
                 outcome: outcome.to_string(),
@@ -1855,9 +1925,10 @@ async fn require_bearer(
             });
             response
         }
-        None => {
+        AuthAttempt::Rejected => {
             emit_http_audit(HttpAuditEvent {
                 token_id: None,
+                run_id: None,
                 method,
                 path,
                 outcome: "unauthorized".to_string(),
@@ -1869,7 +1940,42 @@ async fn require_bearer(
                 "bearer token required",
             )
         }
+        AuthAttempt::Busy => {
+            emit_http_audit(HttpAuditEvent {
+                token_id: None,
+                run_id: None,
+                method,
+                path,
+                outcome: "unavailable".to_string(),
+                status: StatusCode::SERVICE_UNAVAILABLE.as_u16(),
+            });
+            error_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "auth_busy",
+                "authentication capacity is temporarily exhausted",
+            )
+        }
     }
+}
+
+fn safe_audit_run_id(run_id: &str) -> Option<String> {
+    (!run_id.is_empty()
+        && run_id.len() <= 128
+        && run_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')))
+    .then(|| run_id.to_string())
+}
+
+fn mutation_path_run_id(method: &str, path: &str) -> Option<String> {
+    if method != "POST" {
+        return None;
+    }
+    let suffix = path.strip_prefix("/v1/runs/")?;
+    let (run_id, mutation) = suffix.split_once('/')?;
+    matches!(mutation, "cancel" | "dead-letter")
+        .then(|| safe_audit_run_id(run_id))
+        .flatten()
 }
 
 async fn parse_json_body<T: for<'de> Deserialize<'de>>(
@@ -1931,10 +2037,7 @@ fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Re
                 ApiCapability::RunWrite
             }
             "batteries:read" => ApiCapability::BatteryRead,
-            "batteries:write"
-            | "batteries:add"
-            | "batteries:sync"
-            | "batteries:install"
+            "batteries:write" | "batteries:add" | "batteries:sync" | "batteries:install"
             | "batteries:remove" => ApiCapability::BatteryWrite,
             "admin:status" => ApiCapability::AdminStatus,
             _ => {
@@ -1956,12 +2059,25 @@ fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Re
     })
 }
 
-
 fn operation_response<T: Serialize>(result: OperationResult<T>) -> Response {
     match result {
         Ok(data) => (StatusCode::OK, Json(json::ok_envelope(data))).into_response(),
         Err(err) => operation_error_response(err),
     }
+}
+
+fn operation_response_with_run_id<T: Serialize>(
+    result: OperationResult<T>,
+    run_id: Option<String>,
+) -> Response {
+    attach_audit_run_id(operation_response(result), run_id)
+}
+
+fn attach_audit_run_id(mut response: Response, run_id: Option<String>) -> Response {
+    if let Some(run_id) = run_id {
+        response.extensions_mut().insert(AuditRunId(run_id));
+    }
+    response
 }
 
 fn operation_error_response(err: OperationError) -> Response {
@@ -2554,9 +2670,9 @@ echo ok
     async fn admin_status_requires_scope_and_exposes_reload_without_secrets() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let admin_plain = auth::random_token_plaintext();
+        let admin_plain = auth::test_token_plaintext("ops-admin");
         let admin_hash = auth::hash_token(&admin_plain).unwrap();
-        let reader_plain = auth::random_token_plaintext();
+        let reader_plain = auth::test_token_plaintext("reader");
         let reader_hash = auth::hash_token(&reader_plain).unwrap();
         let tokens_path = dir.path().join("tokens.toml");
         std::fs::write(
@@ -2641,7 +2757,7 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
-        let plaintext = auth::random_token_plaintext();
+        let plaintext = auth::test_token_plaintext("ci-enqueue");
         let hash = auth::hash_token(&plaintext).unwrap();
         let tokens_path = dir.path().join("tokens.toml");
         std::fs::write(
@@ -2667,16 +2783,16 @@ enabled = true
             None,
             BODY_LIMIT_BYTES,
         );
+        let request_body = r#"{"script":"job.sh","run_id":"rid-audit","actor":"agent","reason":"request-secret-marker"}"#;
         let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method(Method::POST)
                     .uri("/v1/runs")
                     .header(header::AUTHORIZATION, format!("Bearer {plaintext}"))
                     .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        r#"{"script":"job.sh","run_id":"rid-audit","actor":"agent"}"#.to_string(),
-                    ))
+                    .body(Body::from(request_body))
                     .unwrap(),
             )
             .await
@@ -2686,15 +2802,73 @@ enabled = true
         let events = sink.events();
         let event = events
             .iter()
-            .find(|e| e.path == "/v1/runs" && e.method == "POST")
+            .find(|e| e.run_id.as_deref() == Some("rid-audit"))
             .expect("audit event for POST /v1/runs");
         assert_eq!(event.token_id.as_deref(), Some("ci-enqueue"));
+        assert_eq!(event.run_id.as_deref(), Some("rid-audit"));
         assert_eq!(event.outcome, "ok");
         assert_eq!(event.status, 200);
         let serialized = serde_json::to_string(event).unwrap();
         assert!(!serialized.contains(&plaintext));
         assert!(!serialized.contains("Authorization"));
         assert!(!serialized.to_lowercase().contains("bearer "));
+        assert!(!serialized.contains("request-secret-marker"));
+
+        let duplicate = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/runs")
+                    .header(header::AUTHORIZATION, format!("Bearer {plaintext}"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(request_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let duplicate_status = duplicate.status();
+        assert!(!duplicate_status.is_success());
+        assert!(sink.events().iter().any(|event| {
+            event.run_id.as_deref() == Some("rid-audit")
+                && event.status == duplicate_status.as_u16()
+        }));
+    }
+
+    #[tokio::test]
+    async fn rejected_enqueue_audit_keeps_safe_run_id_without_request_secrets() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_secret_script(workspace.scripts_root(), "secret.sh", None);
+        let mut deploy = DeployPolicy::default();
+        deploy.runs.allow_secret_fields = false;
+        let sink = AuditCapture::install().await;
+        let app = router_with_policy(
+            Authenticator::legacy(TOKEN),
+            workspace,
+            ApiPolicy::all(),
+            deploy,
+            None,
+            BODY_LIMIT_BYTES,
+        );
+
+        let response = app
+            .oneshot(authed_json_request(
+                "/v1/runs",
+                r#"{"script":"secret.sh","run_id":"rid-denied-audit","args":["--token","secret://request-secret-marker/token"]}"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let event = sink
+            .events()
+            .into_iter()
+            .find(|event| event.run_id.as_deref() == Some("rid-denied-audit"))
+            .expect("audit event for rejected enqueue");
+        assert_eq!(event.run_id.as_deref(), Some("rid-denied-audit"));
+        let serialized = serde_json::to_string(&event).unwrap();
+        assert!(!serialized.contains("request-secret-marker"));
+        assert!(!serialized.contains(TOKEN));
     }
 
     #[tokio::test]
@@ -2721,6 +2895,7 @@ enabled = true
             .find(|e| e.path == "/v1/scripts" && e.outcome == "unauthorized")
             .expect("401 audit event");
         assert_eq!(event.token_id, None);
+        assert_eq!(event.run_id, None);
         assert_eq!(event.status, 401);
         let serialized = serde_json::to_string(event).unwrap();
         assert!(!serialized.contains("wrong-token"));
@@ -2865,7 +3040,7 @@ enabled = true
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
-        let plaintext = auth::random_token_plaintext();
+        let plaintext = auth::test_token_plaintext("reader");
         let hash = auth::hash_token(&plaintext).unwrap();
         let path = dir.path().join("tokens.toml");
         std::fs::write(
@@ -2892,7 +3067,10 @@ enabled = true
                 Request::builder()
                     .method(Method::GET)
                     .uri("/v1/scripts")
-                    .header(header::AUTHORIZATION, "Bearer omk_live_not_a_real_token_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                    .header(
+                        header::AUTHORIZATION,
+                        "Bearer omk_live_not_a_real_token_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -2934,7 +3112,7 @@ enabled = true
     async fn tokens_file_env_scope_alias_envs_read() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let plaintext = auth::random_token_plaintext();
+        let plaintext = auth::test_token_plaintext("env-reader");
         let hash = auth::hash_token(&plaintext).unwrap();
         let path = dir.path().join("tokens.toml");
         std::fs::write(
@@ -3931,6 +4109,61 @@ echo ok
     }
 
     #[tokio::test]
+    async fn enqueue_run_secret_fields_policy_denies_all_provider_entry_points() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        write_secret_script(workspace.scripts_root(), "secret.sh", None);
+        write_secret_script(
+            workspace.scripts_root(),
+            "secret-default.sh",
+            Some("secret://prod/token"),
+        );
+        let mut deploy = DeployPolicy::default();
+        deploy.runs.allow_secret_fields = false;
+        let app = router_with_policy(
+            Authenticator::legacy(TOKEN),
+            workspace.clone_for_executor(),
+            ApiPolicy::all(),
+            deploy,
+            None,
+            BODY_LIMIT_BYTES,
+        );
+
+        for (run_id, body) in [
+            (
+                "rid-policy-args",
+                r#"{"script":"secret.sh","run_id":"rid-policy-args","args":["--token","secret://prod/token"]}"#,
+            ),
+            (
+                "rid-policy-fields",
+                r#"{"script":"secret.sh","run_id":"rid-policy-fields","secret_fields":{"TOKEN":"secret://prod/token"}}"#,
+            ),
+            (
+                "rid-policy-default",
+                r#"{"script":"secret-default.sh","run_id":"rid-policy-default"}"#,
+            ),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(authed_json_request("/v1/runs", body))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN, "{run_id}");
+            let body = response_json(response).await;
+            assert_eq!(body["error"]["code"], "forbidden");
+            assert_eq!(
+                body["error"]["message"],
+                "policy runs.allow_secret_fields=false"
+            );
+        }
+
+        let conn = runs::open(&workspace).unwrap();
+        for run_id in ["rid-policy-args", "rid-policy-fields", "rid-policy-default"] {
+            assert!(runs::get_run(&conn, run_id).unwrap().is_none());
+        }
+    }
+
+    #[tokio::test]
     async fn enqueue_run_implicit_secret_default_requires_secret_capability() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
@@ -4033,10 +4266,8 @@ echo ok
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn concurrent_authentications_recycle_permits_and_do_not_deadlock() {
-        // Fire more concurrent authenticated requests than the semaphore has
-        // permits (MAX_CONCURRENT_AUTH_VERIFICATIONS = 8). All must complete:
-        // proves permits are released after each verify (no happy-path leak) and
-        // the off-runtime auth path does not deadlock under contention.
+        // Fire more concurrent requests than the bounded auth budget. Requests
+        // either authenticate or fail fast; none may queue indefinitely.
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         let app = router(TOKEN.to_string(), workspace);
@@ -4050,9 +4281,15 @@ echo ok
                     .status()
             }));
         }
+        let mut accepted = 0;
         for handle in handles {
-            assert_eq!(handle.await.unwrap(), StatusCode::OK);
+            match handle.await.unwrap() {
+                StatusCode::OK => accepted += 1,
+                StatusCode::SERVICE_UNAVAILABLE => {}
+                status => panic!("unexpected auth response: {status}"),
+            }
         }
+        assert!(accepted > 0);
     }
 
     #[tokio::test]
@@ -4404,10 +4641,7 @@ echo ok
             add_body["data"]["auth"]["token_ref"],
             "secret://prod/GIT_TOKEN"
         );
-        let list = app
-            .oneshot(authed_request("/v1/batteries"))
-            .await
-            .unwrap();
+        let list = app.oneshot(authed_request("/v1/batteries")).await.unwrap();
         let body = response_json(list).await;
         let auth = &body["data"][0]["auth"];
         assert_eq!(auth["method"], "https_token_ref");
@@ -4541,10 +4775,7 @@ echo ok
             ApiPolicy::allow([ApiCapability::BatteryRead]),
             deploy,
         );
-        let response = denied
-            .oneshot(authed_request("/v1/secrets"))
-            .await
-            .unwrap();
+        let response = denied.oneshot(authed_request("/v1/secrets")).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
@@ -4865,10 +5096,7 @@ echo ok
             Err(e) => e,
             Ok(_) => panic!("expected policy parse failure"),
         };
-        assert!(
-            matches!(err, ApiConfigError::Policy(_)),
-            "got {err}"
-        );
+        assert!(matches!(err, ApiConfigError::Policy(_)), "got {err}");
         assert!(err.to_string().contains("parse"));
     }
 
@@ -4876,20 +5104,13 @@ echo ok
     fn prepare_api_boot_legacy_disabled_rejects_env_token() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("policy.toml");
-        std::fs::write(
-            &path,
-            "version = 1\n[auth]\nlegacy_env_token = false\n",
-        )
-        .unwrap();
+        std::fs::write(&path, "version = 1\n[auth]\nlegacy_env_token = false\n").unwrap();
         // Direct auth path (avoid mutating process-wide OMAKURE_API_TOKEN).
         let err = match resolve_auth_with_policy(None, false) {
             Err(e) => e,
             Ok(_) => panic!("expected legacy disabled failure"),
         };
-        assert!(
-            matches!(err, ApiConfigError::Auth(_)),
-            "got {err}"
-        );
+        assert!(matches!(err, ApiConfigError::Auth(_)), "got {err}");
         assert!(err.to_string().contains("legacy_env_token"));
 
         // Policy load still succeeds; boot fails at auth when no tokens file.
@@ -4934,7 +5155,7 @@ legacy_env_token = true
         )
         .unwrap();
         let tokens = dir.path().join("tokens.toml");
-        let plaintext = auth::random_token_plaintext();
+        let plaintext = auth::test_token_plaintext("admin");
         let hash = auth::hash_token(&plaintext).unwrap();
         std::fs::write(
             &tokens,

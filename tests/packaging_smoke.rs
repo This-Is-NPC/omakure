@@ -45,14 +45,16 @@ fn dockerignore_excludes_heavy_paths() {
     let ignore = read(".dockerignore");
     for path in ["target", ".git", ".temp"] {
         assert!(
-            ignore.lines().any(|l| l.trim() == path || l.trim() == format!("{path}/")),
+            ignore
+                .lines()
+                .any(|l| l.trim() == path || l.trim() == format!("{path}/")),
             ".dockerignore should exclude {path}"
         );
     }
 }
 
 #[test]
-fn compose_example_is_host_loopback_with_workspace_and_token() {
+fn compose_example_is_host_loopback_with_workspace_and_tokens_file() {
     let compose = read("compose.yaml");
     assert!(
         compose.contains("127.0.0.1:7878"),
@@ -63,15 +65,27 @@ fn compose_example_is_host_loopback_with_workspace_and_token() {
         "compose must document legacy OMAKURE_API_TOKEN"
     );
     assert!(
-        compose.contains("OMAKURE_TOKENS_FILE") || compose.contains("tokens-file") || compose.contains("tokens.toml"),
-        "compose must document multi-token tokens file"
+        !compose.lines().any(|line| {
+            let line = line.trim_start();
+            !line.starts_with('#') && line.starts_with("OMAKURE_API_TOKEN:")
+        }),
+        "compose must not require legacy OMAKURE_API_TOKEN"
+    );
+    assert!(
+        compose.lines().any(|line| {
+            let line = line.trim_start();
+            !line.starts_with('#') && line.starts_with("OMAKURE_TOKENS_FILE:")
+        }) && compose.contains("/run/secrets/omakure_tokens.toml:ro"),
+        "compose must enable and read-only mount the multi-token file"
     );
     assert!(
         compose.contains("/workspace") || compose.contains("workspace"),
         "compose must mount a workspace volume"
     );
     assert!(
-        compose.contains("user:") || compose.to_lowercase().contains("non-root") || compose.contains("1000"),
+        compose.contains("user:")
+            || compose.to_lowercase().contains("non-root")
+            || compose.contains("1000"),
         "compose should guide non-root operation"
     );
 }

@@ -41,7 +41,9 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
     ),
     (
         ("GET", "/v1/admin/status"),
-        RouteCoverage::Covered("admin_status_requires_scope_and_exposes_reload_without_secrets (unit)"),
+        RouteCoverage::Covered(
+            "admin_status_requires_scope_and_exposes_reload_without_secrets (unit)",
+        ),
     ),
     (
         ("GET", "/v1/config"),
@@ -1118,7 +1120,8 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     assert_eq!(cfg_in.json()["ok"], true);
     let cfg_out = server.get_with_bearer("/v1/scripts", &config_token);
     assert_eq!(
-        cfg_out.status, 403,
+        cfg_out.status,
+        403,
         "config token must not reach scripts; body: {}",
         cfg_out.safe_body()
     );
@@ -1131,7 +1134,8 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     assert_eq!(scr_in.json()["ok"], true);
     let scr_out = server.get_with_bearer("/v1/config", &scripts_token);
     assert_eq!(
-        scr_out.status, 403,
+        scr_out.status,
+        403,
         "scripts token must not reach config; body: {}",
         scr_out.safe_body()
     );
@@ -1145,7 +1149,8 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     // The legacy env token must NOT authenticate in tokens-file mode.
     let legacy = server.get_with_bearer("/v1/config", API_TOKEN);
     assert_eq!(
-        legacy.status, 401,
+        legacy.status,
+        401,
         "legacy env token must not work in file mode; body: {}",
         legacy.safe_body()
     );

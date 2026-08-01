@@ -16,13 +16,7 @@ fn write_wildcard_tokens(path: &Path) -> String {
     // Use CLI token generate for a real Argon2id entry.
     let output = support::omakure_command()
         .args([
-            "token",
-            "generate",
-            "--id",
-            "admin",
-            "--scope",
-            "*",
-            "--json",
+            "token", "generate", "--id", "admin", "--scope", "*", "--json",
         ])
         .output()
         .expect("token generate");
@@ -239,9 +233,10 @@ legacy_env_token = false
     let deadline = Instant::now() + Duration::from_secs(20);
     let mut ready = false;
     while Instant::now() < deadline {
-        if let Ok(mut stream) =
-            std::net::TcpStream::connect_timeout(&format!("127.0.0.1:{port}").parse().unwrap(), Duration::from_millis(200))
-        {
+        if let Ok(mut stream) = std::net::TcpStream::connect_timeout(
+            &format!("127.0.0.1:{port}").parse().unwrap(),
+            Duration::from_millis(200),
+        ) {
             use std::io::{Read, Write};
             let req = format!(
                 "GET /v1/health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
@@ -259,7 +254,10 @@ legacy_env_token = false
         }
         std::thread::sleep(Duration::from_millis(25));
     }
-    assert!(ready, "api with policy allow_non_loopback should serve on {bind}");
+    assert!(
+        ready,
+        "api with policy allow_non_loopback should serve on {bind}"
+    );
     let _ = plaintext;
     let _ = child.kill_and_wait();
 }

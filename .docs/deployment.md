@@ -135,16 +135,17 @@ Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 
 Battery add/sync makes the engine issue outbound git requests. The engine
 **rejects** hosts that are a literal private/loopback/link-local/metadata IP at
-registration, and resolves + re-checks the host immediately before fetch. That
-resolve-then-fetch check is a mitigation, **not** an isolation boundary: a
-DNS-rebinding attacker who controls the record can still return a public IP to
-the check and a private IP to git.
+registration. At sync it resolves the host, rejects the operation if any answer
+is private, and pins Git/curl to one verified public answer with
+`http.curloptResolve`. Redirects and inherited HTTP proxies are disabled, so a
+remote cannot redirect credentials or make Git resolve a second host. Failure
+to resolve and pin fails closed.
 
-For hard containment, run the engine behind a **network egress policy** that
+Keep defense in depth by running the engine behind a **network egress policy** that
 denies traffic to RFC1918 / loopback / link-local / cloud-metadata ranges — a
 Kubernetes `NetworkPolicy`/egress rule, a firewall, or a locked-down network
-namespace. Treat this as required in any deployment that accepts Battery URLs
-from less-trusted callers.
+namespace. Battery sync intentionally ignores process proxy variables; deploy
+the egress control transparently rather than through `HTTP_PROXY`/`HTTPS_PROXY`.
 
 Example read-only API:
 
@@ -239,7 +240,7 @@ Artifacts in the repo root:
 |------|------|
 | `Dockerfile` | Multi-stage build → `omakure` binary; `ENTRYPOINT`/`CMD` run `engine` on `0.0.0.0:7878` with `--allow-non-loopback` |
 | `.dockerignore` | Keeps build context lean |
-| `compose.yaml` | Example: workspace volume, legacy token env, host bind `127.0.0.1:7878`, non-root guidance |
+| `compose.yaml` | Example: workspace and tokens-file volumes, host bind `127.0.0.1:7878`, non-root guidance |
 
 ### Base image runtimes
 
@@ -259,11 +260,21 @@ docker build -t omakure-engine:local .
 ### Compose example
 
 ```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
+mkdir -p secrets
+omakure token generate --id ops --scope scripts:read --scope runs:read \
+  --scope runs:write --scope config:read \
+  --append secrets/omakure_tokens.toml --confirmed
+# Save the generated plaintext token shown once on stdout in your secret store.
 export OMAKURE_WORKSPACE="/path/to/your/omakure-scripts"
 mkdir -p "$OMAKURE_WORKSPACE"
 docker compose up --build
 ```
+
+`compose.yaml` uses tokens-file auth by default and does not require
+`OMAKURE_API_TOKEN`. To use the legacy single-token mode instead, remove or
+comment the `OMAKURE_TOKENS_FILE` environment entry and tokens-file volume,
+uncomment the `OMAKURE_API_TOKEN` entry, then export a token of at least 32
+random bytes before starting Compose.
 
 Compose publishes **`127.0.0.1:7878`** on the host. The container process still
 listens on `0.0.0.0:7878` so the published port works. Prefer matching the

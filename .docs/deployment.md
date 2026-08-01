@@ -105,6 +105,7 @@ metadata_endpoint = false
 [auth]
 tokens_file = "/run/secrets/omakure_tokens.toml"
 legacy_env_token = false
+max_concurrent_verifications = 2      # default; see Hard gates below
 ```
 
 ### Hard gates
@@ -124,11 +125,24 @@ legacy_env_token = false
 | `http.body_limit_bytes` | Caps JSON request bodies (and Axum body limit) |
 | `secrets.metadata_endpoint = false` | `GET /v1/secrets` returns `404` |
 | `auth.legacy_env_token = false` | Rejects `OMAKURE_API_TOKEN`; requires tokens file |
+| `auth.max_concurrent_verifications` | Caps in-flight Argon2id bearer verifications (default `2`) |
 | `http.allow_non_loopback = true` | Same as CLI `--allow-non-loopback` |
 
 Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 `credentials:use`, plus matching `--secret-ref` entries. Secrets metadata needs
 `secrets:read-metadata` with `secrets.metadata_endpoint = true`.
+
+> **`auth.max_concurrent_verifications` tradeoff.** Each Argon2id bearer
+> verify is memory-hard (~64 MiB); the bound keeps worst-case memory near
+> `max_concurrent_verifications * ~64 MiB` and makes excess requests fail
+> fast (`503 auth_busy`) instead of queuing unbounded. A tighter bound is
+> also easier to exhaust: token ids are not secret (they're visible in the
+> bearer string itself), so a party holding one valid id can occupy every
+> permit with a stream of wrong-secret requests against that id, denying
+> auth to all other tokens until a permit frees up. Raise the bound if your
+> deployment has more legitimate concurrent auth traffic than headroom for
+> this tradeoff; the memory-hard verify cost is the mitigation against
+> unbounded CPU/memory exhaustion either way.
 
 > **`--secret-ref '*'` and env vars.** The `*` secret-ref wildcard grants every
 > file/provider ref but **does not** grant `secret://env/…` process-environment

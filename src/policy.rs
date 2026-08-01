@@ -196,11 +196,24 @@ impl Default for SecretsPolicy {
     }
 }
 
+/// Default `[auth] max_concurrent_verifications`: two concurrent 64 MiB
+/// Argon2id verifications keep the authentication memory budget near 128 MiB
+/// while excess requests fail fast instead of forming an unbounded queue.
+pub const DEFAULT_MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 2;
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AuthPolicy {
     pub tokens_file: Option<PathBuf>,
     pub legacy_env_token: bool,
+    /// Concurrency bound on in-flight Argon2id bearer verifications. Each
+    /// verify is memory-hard (~64 MiB); this trades authentication
+    /// availability against memory/CPU exhaustion. A tighter bound is easier
+    /// to exhaust with concurrent requests against a single known token id
+    /// (id existence is not secret — it is visible in the bearer string
+    /// itself); a looser bound raises the worst-case memory footprint
+    /// (`max_concurrent_verifications * ~64 MiB`). Tune per deployment.
+    pub max_concurrent_verifications: usize,
 }
 
 impl Default for AuthPolicy {
@@ -209,6 +222,7 @@ impl Default for AuthPolicy {
             tokens_file: None,
             // Default true preserves pre-policy legacy OMAKURE_API_TOKEN behavior.
             legacy_env_token: true,
+            max_concurrent_verifications: DEFAULT_MAX_CONCURRENT_AUTH_VERIFICATIONS,
         }
     }
 }
@@ -303,6 +317,11 @@ pub fn parse_policy_toml(text: &str) -> Result<DeployPolicy, PolicyError> {
     if !parsed.http.enabled {
         return Err(PolicyError::Invalid(
             "http.enabled = false is unsupported for api/engine (omit the process instead)".into(),
+        ));
+    }
+    if parsed.auth.max_concurrent_verifications == 0 {
+        return Err(PolicyError::Invalid(
+            "auth.max_concurrent_verifications must be > 0".into(),
         ));
     }
     Ok(DeployPolicy {
@@ -518,6 +537,7 @@ metadata_endpoint = false
 [auth]
 tokens_file = "/run/secrets/omakure_tokens.toml"
 legacy_env_token = false
+max_concurrent_verifications = 4
 "#;
         let p = parse_policy_toml(text).unwrap();
         assert_eq!(p.version, 1);
@@ -530,8 +550,25 @@ legacy_env_token = false
             p.auth.tokens_file.as_deref(),
             Some(Path::new("/run/secrets/omakure_tokens.toml"))
         );
+        assert_eq!(p.auth.max_concurrent_verifications, 4);
         assert_eq!(p.http.bind, Some("0.0.0.0:7878".parse().unwrap()));
         assert!(p.http.allow_non_loopback);
+    }
+
+    #[test]
+    fn default_max_concurrent_verifications_matches_constant() {
+        assert_eq!(
+            DeployPolicy::default().auth.max_concurrent_verifications,
+            DEFAULT_MAX_CONCURRENT_AUTH_VERIFICATIONS
+        );
+    }
+
+    #[test]
+    fn parse_rejects_zero_max_concurrent_verifications() {
+        let text = "version = 1\n[auth]\nmax_concurrent_verifications = 0\n";
+        let err = parse_policy_toml(text).unwrap_err();
+        assert!(matches!(err, PolicyError::Invalid(_)));
+        assert!(err.to_string().contains("max_concurrent_verifications"));
     }
 
     #[test]

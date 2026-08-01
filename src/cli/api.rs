@@ -690,15 +690,16 @@ fn router_with_policy(
     readiness: Option<Arc<ReadinessGate>>,
     body_limit: usize,
 ) -> Router {
+    let auth_verification_gate = Arc::new(tokio::sync::Semaphore::new(
+        deploy.auth.max_concurrent_verifications.max(1),
+    ));
     let state = ApiState {
         auth,
         workspace,
         policy,
         deploy,
         readiness,
-        auth_verification_gate: Arc::new(tokio::sync::Semaphore::new(
-            MAX_CONCURRENT_AUTH_VERIFICATIONS,
-        )),
+        auth_verification_gate,
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
     Router::new()
@@ -1815,14 +1816,14 @@ async fn protected_not_found() -> impl IntoResponse {
     error_response(StatusCode::NOT_FOUND, "not_found", "endpoint not found")
 }
 
-/// Cap concurrent Argon2id verifications. Each verify is memory-hard (~64 MiB);
-/// without a bound, unauthenticated requests carrying any bearer string could
-/// amplify hashing into CPU/memory exhaustion. Verifies also run on the blocking
-/// pool (see `require_bearer`) so async reactor threads never stall — keeping
-/// `/v1/health` and `/v1/ready` responsive even under an auth flood.
-// Two 64 MiB Argon2id verifications keep the authentication memory budget near
-// 128 MiB. Excess requests fail fast instead of forming an unbounded queue.
-const MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 2;
+// Concurrent Argon2id verifications are capped by
+// `deploy.auth.max_concurrent_verifications` (see
+// `policy::DEFAULT_MAX_CONCURRENT_AUTH_VERIFICATIONS`). Each verify is
+// memory-hard (~64 MiB); without a bound, unauthenticated requests carrying
+// any bearer string could amplify hashing into CPU/memory exhaustion.
+// Verifies also run on the blocking pool (see `require_bearer`) so async
+// reactor threads never stall — keeping `/v1/health` and `/v1/ready`
+// responsive even under an auth flood.
 
 /// Authenticate a presented bearer token without blocking the async runtime.
 /// The memory-hard verify runs on the blocking pool under a concurrency permit.

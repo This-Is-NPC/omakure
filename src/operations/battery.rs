@@ -1424,22 +1424,34 @@ fn run_git_capture_with_context(
     }
 }
 
+/// Whether the installed `git` supports `http.curloptResolve`. This depends
+/// only on the installed git binary, not on any per-sync state, so the
+/// process-wide result is cached instead of spawning `git help --config` on
+/// every battery sync.
+static GIT_HTTP_PINNING_SUPPORTED: std::sync::OnceLock<Result<(), String>> =
+    std::sync::OnceLock::new();
+
 fn assert_git_http_pinning_supported(ctx: &GitExecContext<'_>) -> OperationResult<()> {
-    let supported = run_git_capture_with_context(
-        GitCommandSpec {
-            program: "git".into(),
-            args: vec!["help".into(), "--config".into()],
-        },
-        ctx,
-    )?;
-    if supported.lines().any(|key| key == "http.curloptResolve") {
-        Ok(())
-    } else {
-        Err(OperationError::new(
-            OperationErrorCode::GitFailed,
-            "installed git does not support http.curloptResolve; refusing unpinned battery fetch",
-        ))
-    }
+    let cached = GIT_HTTP_PINNING_SUPPORTED.get_or_init(|| {
+        let supported = run_git_capture_with_context(
+            GitCommandSpec {
+                program: "git".into(),
+                args: vec!["help".into(), "--config".into()],
+            },
+            ctx,
+        );
+        match supported {
+            Ok(output) if output.lines().any(|key| key == "http.curloptResolve") => Ok(()),
+            Ok(_) => Err(
+                "installed git does not support http.curloptResolve; refusing unpinned battery fetch"
+                    .to_string(),
+            ),
+            Err(err) => Err(err.to_string()),
+        }
+    });
+    cached
+        .clone()
+        .map_err(|message| OperationError::new(OperationErrorCode::GitFailed, message))
 }
 
 #[cfg(test)]

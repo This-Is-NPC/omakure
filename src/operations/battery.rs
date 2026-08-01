@@ -1428,8 +1428,10 @@ fn run_git_capture_with_context(
 /// only on the installed git binary, not on any per-sync state, so the
 /// process-wide conclusive result is cached instead of spawning
 /// `git help --config` on every battery sync. Transient execution failures are
-/// not cached so a later sync can recover without restarting the process.
-static GIT_HTTP_PINNING_SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+/// not cached so a later sync can recover without restarting the process. The
+/// mutex is held across the probe so concurrent callers single-flight onto
+/// one subprocess spawn instead of a thundering herd.
+static GIT_HTTP_PINNING_SUPPORTED: std::sync::Mutex<Option<bool>> = std::sync::Mutex::new(None);
 
 fn assert_git_http_pinning_supported(ctx: &GitExecContext<'_>) -> OperationResult<()> {
     assert_git_http_pinning_supported_with(&GIT_HTTP_PINNING_SUPPORTED, || {
@@ -1444,18 +1446,20 @@ fn assert_git_http_pinning_supported(ctx: &GitExecContext<'_>) -> OperationResul
 }
 
 fn assert_git_http_pinning_supported_with<F>(
-    cache: &std::sync::OnceLock<bool>,
+    cache: &std::sync::Mutex<Option<bool>>,
     probe: F,
 ) -> OperationResult<()>
 where
     F: FnOnce() -> OperationResult<String>,
 {
-    let supported = match cache.get() {
-        Some(supported) => *supported,
+    let mut guard = cache.lock().unwrap();
+    let supported = match *guard {
+        Some(supported) => supported,
         None => {
             let output = probe()?;
             let detected = output.lines().any(|key| key == "http.curloptResolve");
-            *cache.get_or_init(|| detected)
+            *guard = Some(detected);
+            detected
         }
     };
     if supported {
@@ -2928,7 +2932,7 @@ echo ok
 
     #[test]
     fn git_http_pinning_probe_retries_after_transient_failure() {
-        let cache = std::sync::OnceLock::new();
+        let cache = std::sync::Mutex::new(None);
         let attempts = Cell::new(0);
         let err = assert_git_http_pinning_supported_with(&cache, || {
             attempts.set(attempts.get() + 1);
@@ -2940,7 +2944,7 @@ echo ok
         .unwrap_err();
 
         assert_eq!(err.code, OperationErrorCode::GitFailed);
-        assert!(cache.get().is_none());
+        assert!(cache.lock().unwrap().is_none());
 
         assert_git_http_pinning_supported_with(&cache, || {
             attempts.set(attempts.get() + 1);
@@ -2957,16 +2961,49 @@ echo ok
 
     #[test]
     fn git_http_pinning_probe_caches_definitive_unsupported_result() {
-        let cache = std::sync::OnceLock::new();
+        let cache = std::sync::Mutex::new(None);
         let err = assert_git_http_pinning_supported_with(&cache, || Ok("other.key\n".into()))
             .unwrap_err();
 
         assert_eq!(err.code, OperationErrorCode::GitFailed);
-        assert_eq!(cache.get(), Some(&false));
+        assert_eq!(*cache.lock().unwrap(), Some(false));
         assert_git_http_pinning_supported_with(&cache, || {
             panic!("conclusive probe result should be cached")
         })
         .unwrap_err();
+    }
+
+    #[test]
+    fn git_http_pinning_probe_single_flights_concurrent_callers() {
+        let cache = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let start_barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let cache = std::sync::Arc::clone(&cache);
+                let attempts = std::sync::Arc::clone(&attempts);
+                let start_barrier = std::sync::Arc::clone(&start_barrier);
+                std::thread::spawn(move || {
+                    start_barrier.wait();
+                    assert_git_http_pinning_supported_with(&cache, || {
+                        attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                        Ok("http.curloptResolve\n".into())
+                    })
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "concurrent callers must single-flight onto one probe spawn"
+        );
     }
 
     #[test]

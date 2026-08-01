@@ -1091,85 +1091,133 @@ fn git_url_authority(url: &str) -> Option<String> {
 fn ip_is_private(ip: std::net::IpAddr) -> bool {
     use std::net::IpAddr;
     match ip {
-        IpAddr::V4(v4) => {
-            let o = v4.octets();
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_unspecified()
-                || v4.is_broadcast()
-                || v4.is_documentation()
-                || o[0] == 0
-                // Carrier-grade NAT 100.64.0.0/10
-                || (o[0] == 100 && (o[1] & 0xc0) == 64)
-                // IETF protocol assignments and deprecated relay anycast.
-                || (o[0] == 192 && o[1] == 0 && o[2] == 0)
-                || (o[0] == 192 && o[1] == 88 && o[2] == 99)
-                // Benchmarking networks are commonly routed inside infrastructure.
-                || (o[0] == 198 && matches!(o[1], 18 | 19))
-                // Multicast and reserved/future-use space are never public unicast.
-                || o[0] >= 224
-                // Azure platform virtual IP is reachable only from tenant networks.
-                || o == [168, 63, 129, 16]
-        }
-        IpAddr::V6(v6) => {
-            if let Some(mapped) = v6.to_ipv4_mapped() {
-                return ip_is_private(IpAddr::V4(mapped));
-            }
-            let seg = v6.segments();
-            // Several IPv6 forms embed an IPv4 address that a transition
-            // mechanism will actually route to. `to_ipv4_mapped` only unwraps
-            // `::ffff:a.b.c.d`, so classify the rest by their embedded IPv4 —
-            // otherwise e.g. `[2002:0a00:0005::]` (6to4 → 10.0.0.5) or
-            // `[::7f00:1]` (127.0.0.1) would slip through as "public".
-            let v4 = |hi: u16, lo: u16| {
-                std::net::Ipv4Addr::new(
-                    (hi >> 8) as u8,
-                    (hi & 0xff) as u8,
-                    (lo >> 8) as u8,
-                    (lo & 0xff) as u8,
-                )
-            };
-            // IPv4-compatible `::a.b.c.d` (deprecated) and NAT64 WKP
-            // `64:ff9b::/96`: embedded IPv4 in the low 32 bits.
-            let is_ipv4_compatible =
-                seg[..6].iter().all(|s| *s == 0) && (seg[6] != 0 || seg[7] > 1);
-            let is_nat64_wkp =
-                seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2..6].iter().all(|s| *s == 0);
-            if is_ipv4_compatible || is_nat64_wkp {
-                return ip_is_private(IpAddr::V4(v4(seg[6], seg[7])));
-            }
-            // 6to4 `2002::/16`: embedded IPv4 (the 6to4 gateway) in seg[1..3].
-            if seg[0] == 0x2002 {
-                return ip_is_private(IpAddr::V4(v4(seg[1], seg[2])));
-            }
-            // Teredo `2001:0000::/32`: client IPv4 is the bitwise complement of
-            // the low 32 bits.
-            if seg[0] == 0x2001 && seg[1] == 0x0000 {
-                return ip_is_private(IpAddr::V4(v4(!seg[6], !seg[7])));
-            }
-            // NAT64 local-use prefix `64:ff9b:1::/48` (RFC 8215) is local-use
-            // only and never names a legitimate public host, so block the whole
-            // prefix rather than trying to decode every RFC 6052 embedding.
-            if seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2] == 0x0001 {
-                return true;
-            }
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || v6.is_multicast()
-                // Only global-unicast 2000::/3 is accepted after transition forms.
-                || (seg[0] & 0xe000) != 0x2000
-                // Documentation, benchmarking, and ORCHID are not public endpoints.
-                || (seg[0] == 0x2001 && seg[1] == 0x0db8)
-                || (seg[0] == 0x2001 && seg[1] == 0x0002 && seg[2] == 0)
-                || (seg[0] == 0x2001 && (seg[1] & 0xfff0) == 0x0010)
-                || (seg[0] == 0x2001 && (seg[1] & 0xfff0) == 0x0020)
-                // Unique-local fc00::/7
-                || (seg[0] & 0xfe00) == 0xfc00
-                // Link-local fe80::/10
-                || (seg[0] & 0xffc0) == 0xfe80
-        }
+        IpAddr::V4(v4) => ipv4_is_private(v4),
+        IpAddr::V6(v6) => ipv6_is_private(v6),
     }
+}
+
+fn ipv4_is_private(v4: std::net::Ipv4Addr) -> bool {
+    let o = v4.octets();
+    v4.is_loopback()
+        || v4.is_private()
+        || v4.is_link_local()
+        || v4.is_unspecified()
+        || v4.is_broadcast()
+        || v4.is_documentation()
+        || o[0] == 0
+        || is_carrier_grade_nat(o)
+        || is_ietf_protocol_assignment_or_relay_anycast(o)
+        || is_benchmarking_range(o)
+        // Multicast and reserved/future-use space are never public unicast.
+        || o[0] >= 224
+        // Azure platform virtual IP is reachable only from tenant networks.
+        || o == [168, 63, 129, 16]
+}
+
+/// Carrier-grade NAT `100.64.0.0/10`.
+fn is_carrier_grade_nat(o: [u8; 4]) -> bool {
+    o[0] == 100 && (o[1] & 0xc0) == 64
+}
+
+/// IETF protocol assignments (`192.0.0.0/24`) and the deprecated 6to4 relay
+/// anycast prefix (`192.88.99.0/24`).
+fn is_ietf_protocol_assignment_or_relay_anycast(o: [u8; 4]) -> bool {
+    (o[0] == 192 && o[1] == 0 && o[2] == 0) || (o[0] == 192 && o[1] == 88 && o[2] == 99)
+}
+
+/// Benchmarking networks (`198.18.0.0/15`) are commonly routed inside
+/// infrastructure.
+fn is_benchmarking_range(o: [u8; 4]) -> bool {
+    o[0] == 198 && matches!(o[1], 18 | 19)
+}
+
+fn ipv6_is_private(v6: std::net::Ipv6Addr) -> bool {
+    if let Some(mapped) = v6.to_ipv4_mapped() {
+        return ipv4_is_private(mapped);
+    }
+    let seg = v6.segments();
+    // Several IPv6 forms embed an IPv4 address that a transition mechanism
+    // will actually route to. `to_ipv4_mapped` only unwraps `::ffff:a.b.c.d`,
+    // so classify the rest by their embedded IPv4 — otherwise e.g.
+    // `[2002:0a00:0005::]` (6to4 → 10.0.0.5) or `[::7f00:1]` (127.0.0.1)
+    // would slip through as "public".
+    if let Some(embedded) = ipv6_embedded_ipv4(seg) {
+        return ipv4_is_private(embedded);
+    }
+    // NAT64 local-use prefix `64:ff9b:1::/48` (RFC 8215) is local-use only and
+    // never names a legitimate public host, so block the whole prefix rather
+    // than trying to decode every RFC 6052 embedding.
+    if is_nat64_local_use(seg) {
+        return true;
+    }
+    ipv6_is_reserved_or_non_global(v6, seg)
+}
+
+fn ipv4_embedded_in_ipv6(hi: u16, lo: u16) -> std::net::Ipv4Addr {
+    std::net::Ipv4Addr::new(
+        (hi >> 8) as u8,
+        (hi & 0xff) as u8,
+        (lo >> 8) as u8,
+        (lo & 0xff) as u8,
+    )
+}
+
+/// Extract the embedded IPv4 for the transition mechanisms that carry a
+/// routable address: IPv4-compatible, NAT64 WKP, 6to4, and Teredo.
+fn ipv6_embedded_ipv4(seg: [u16; 8]) -> Option<std::net::Ipv4Addr> {
+    if is_ipv4_compatible(seg) || is_nat64_wkp(seg) {
+        return Some(ipv4_embedded_in_ipv6(seg[6], seg[7]));
+    }
+    if is_6to4(seg) {
+        return Some(ipv4_embedded_in_ipv6(seg[1], seg[2]));
+    }
+    if is_teredo(seg) {
+        return Some(ipv4_embedded_in_ipv6(!seg[6], !seg[7]));
+    }
+    None
+}
+
+/// IPv4-compatible `::a.b.c.d` (deprecated): embedded IPv4 in the low 32
+/// bits, with the all-zero and loopback (`::1`) addresses excluded.
+fn is_ipv4_compatible(seg: [u16; 8]) -> bool {
+    seg[..6].iter().all(|s| *s == 0) && (seg[6] != 0 || seg[7] > 1)
+}
+
+/// NAT64 Well-Known Prefix `64:ff9b::/96`: embedded IPv4 in the low 32 bits.
+fn is_nat64_wkp(seg: [u16; 8]) -> bool {
+    seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2..6].iter().all(|s| *s == 0)
+}
+
+/// 6to4 `2002::/16`: embedded IPv4 (the 6to4 gateway) in seg[1..3].
+fn is_6to4(seg: [u16; 8]) -> bool {
+    seg[0] == 0x2002
+}
+
+/// Teredo `2001:0000::/32`: client IPv4 is the bitwise complement of the low
+/// 32 bits.
+fn is_teredo(seg: [u16; 8]) -> bool {
+    seg[0] == 0x2001 && seg[1] == 0x0000
+}
+
+fn is_nat64_local_use(seg: [u16; 8]) -> bool {
+    seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2] == 0x0001
+}
+
+fn ipv6_is_reserved_or_non_global(v6: std::net::Ipv6Addr, seg: [u16; 8]) -> bool {
+    v6.is_loopback()
+        || v6.is_unspecified()
+        || v6.is_multicast()
+        // Only global-unicast 2000::/3 is accepted after transition forms.
+        || (seg[0] & 0xe000) != 0x2000
+        // Documentation, benchmarking, and ORCHID are not public endpoints.
+        || (seg[0] == 0x2001 && seg[1] == 0x0db8)
+        || (seg[0] == 0x2001 && seg[1] == 0x0002 && seg[2] == 0)
+        || (seg[0] == 0x2001 && (seg[1] & 0xfff0) == 0x0010)
+        || (seg[0] == 0x2001 && (seg[1] & 0xfff0) == 0x0020)
+        // Unique-local fc00::/7
+        || (seg[0] & 0xfe00) == 0xfc00
+        // Link-local fe80::/10
+        || (seg[0] & 0xffc0) == 0xfe80
 }
 
 /// Reject local / file Battery sources when deploy policy disallows them.

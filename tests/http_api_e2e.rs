@@ -36,6 +36,16 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("health_and_config_family_routes"),
     ),
     (
+        ("GET", "/v1/ready"),
+        RouteCoverage::Covered("tests/engine_e2e.rs ready_*"),
+    ),
+    (
+        ("GET", "/v1/admin/status"),
+        RouteCoverage::Covered(
+            "admin_status_requires_scope_and_exposes_reload_without_secrets (unit)",
+        ),
+    ),
+    (
         ("GET", "/v1/config"),
         RouteCoverage::Covered("health_and_config_family_routes"),
     ),
@@ -167,6 +177,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered(
             "batteries_family_routes (https-only validation; no remote network)",
         ),
+    ),
+    (
+        ("GET", "/v1/secrets"),
+        RouteCoverage::Covered("secrets_metadata_endpoint_redacts_values (unit)"),
     ),
 ];
 
@@ -1031,6 +1045,115 @@ fi
     )
     .expect("write secret script");
     support::set_executable(&script);
+}
+
+/// Black-box coverage for tokens-file (multi-token Argon2) mode and the
+/// file-mode branch of `require_scope`. The headline engine feature — per-token
+/// scopes — otherwise had only in-crate unit tests; this locks it end-to-end so
+/// a regression that makes file-mode scope checks always-allow (or inverts the
+/// `is_file_mode` branch, or lets the legacy env token slip through) fails here.
+#[test]
+fn tokens_file_mode_enforces_per_token_scopes() {
+    let workspace = support::TestWorkspace::new("http_tokens_file_scopes");
+    let tokens_path = workspace.path().join("tokens.toml");
+    let tokens_path_str = tokens_path.to_str().expect("tokens path utf8");
+
+    // Generate a narrowly-scoped token (config:read only) into a tokens file.
+    let gen = omakure(
+        workspace.path(),
+        &[
+            "--json",
+            "token",
+            "generate",
+            "--id",
+            "ci-readonly",
+            "--scope",
+            "config:read",
+            "--append",
+            tokens_path_str,
+            "--confirmed",
+        ],
+    );
+    assert_success(&gen);
+    let config_token = support::json_envelope(&gen.stdout)["data"]["token"]
+        .as_str()
+        .expect("generated token plaintext")
+        .to_string();
+
+    // A SECOND token with a DISJOINT scope (scripts:read only). Two tokens with
+    // non-overlapping scopes prove the enforced scope comes from the *presented*
+    // token, not a fixed/first entry in the file.
+    let gen2 = omakure(
+        workspace.path(),
+        &[
+            "--json",
+            "token",
+            "generate",
+            "--id",
+            "ci-scripts",
+            "--scope",
+            "scripts:read",
+            "--append",
+            tokens_path_str,
+            "--confirmed",
+        ],
+    );
+    assert_success(&gen2);
+    let scripts_token = support::json_envelope(&gen2.stdout)["data"]["token"]
+        .as_str()
+        .expect("generated token plaintext")
+        .to_string();
+
+    // Boot in tokens-file mode. Legacy OMAKURE_API_TOKEN is still set by the
+    // harness but must be ignored once --tokens-file wins.
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--tokens-file", tokens_path_str],
+        &[],
+        Duration::from_secs(10),
+    );
+
+    // config_token: reaches /v1/config (200), denied /v1/scripts (403).
+    let cfg_in = server.get_with_bearer("/v1/config", &config_token);
+    assert_eq!(cfg_in.status, 200, "body: {}", cfg_in.safe_body());
+    assert_eq!(cfg_in.json()["ok"], true);
+    let cfg_out = server.get_with_bearer("/v1/scripts", &config_token);
+    assert_eq!(
+        cfg_out.status,
+        403,
+        "config token must not reach scripts; body: {}",
+        cfg_out.safe_body()
+    );
+    assert_error_code(&cfg_out.json(), "forbidden");
+
+    // scripts_token: the mirror image — reaches /v1/scripts (200), denied
+    // /v1/config (403). This is what proves scopes are per-presented-token.
+    let scr_in = server.get_with_bearer("/v1/scripts", &scripts_token);
+    assert_eq!(scr_in.status, 200, "body: {}", scr_in.safe_body());
+    assert_eq!(scr_in.json()["ok"], true);
+    let scr_out = server.get_with_bearer("/v1/config", &scripts_token);
+    assert_eq!(
+        scr_out.status,
+        403,
+        "scripts token must not reach config; body: {}",
+        scr_out.safe_body()
+    );
+    assert_error_code(&scr_out.json(), "forbidden");
+
+    // A token absent from the file is rejected (file-mode auth actually verifies).
+    let bogus = server.get_with_bearer("/v1/config", "omk_live_not_a_real_token_value_000000");
+    assert_eq!(bogus.status, 401, "body: {}", bogus.safe_body());
+    assert_error_code(&bogus.json(), "unauthorized");
+
+    // The legacy env token must NOT authenticate in tokens-file mode.
+    let legacy = server.get_with_bearer("/v1/config", API_TOKEN);
+    assert_eq!(
+        legacy.status,
+        401,
+        "legacy env token must not work in file mode; body: {}",
+        legacy.safe_body()
+    );
 }
 
 fn omakure(workspace: &Path, args: &[&str]) -> Output {

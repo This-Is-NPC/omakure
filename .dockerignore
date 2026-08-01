@@ -1,0 +1,24 @@
+# Build context hygiene for the official engine image.
+# Required for `cargo build --bin omakure`: Cargo.toml, Cargo.lock, src/, themes/
+
+target/
+.git/
+.github/
+.temp/
+.docs/
+.claude/
+.cursor/
+.opencode/
+.omaken/
+release-notes/
+scripts/
+tests/
+*.log
+*.tmp
+tarpaulin-report.html
+cobertura.xml
+.env
+.env.*
+compose.yaml
+.dockerignore
+*.md

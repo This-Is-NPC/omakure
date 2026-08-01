@@ -41,6 +41,7 @@ pub fn run(
                         name: args.name,
                         git_url: args.git_url,
                         requested_ref: args.requested_ref,
+                        token_ref: args.token_ref,
                     },
                 )
             },

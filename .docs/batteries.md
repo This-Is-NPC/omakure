@@ -59,7 +59,11 @@ Battery metadata is Omakure-owned runtime state and lives under `.omakure/`.
       "requested_ref": "main",
       "resolved_commit": "0123456789abcdef0123456789abcdef01234567",
       "cache_path": ".omakure/batteries/cache/azure",
-      "last_synced_at": "2026-07-07T00:00:00Z"
+      "last_synced_at": "2026-07-07T00:00:00Z",
+      "auth": {
+        "method": "https_token_ref",
+        "token_ref": "secret://creds/git_token"
+      }
     }
   ]
 }
@@ -70,8 +74,37 @@ Rules:
 - `name` is the stable Battery id used by CLI and operation requests.
 - `cache_path` is stored relative to the workspace root.
 - `resolved_commit` is empty until the first successful sync.
+- Optional `auth` stores HTTPS private-clone metadata only: `method` +
+  `token_ref` (`secret://…`). Resolved plaintext tokens never enter the
+  registry.
 - Writes to the registry are performed through the Battery operations layer.
 - A malformed registry is an operation error, not a silent reset.
+
+## Private HTTPS auth
+
+Private HTTPS Batteries authenticate with a `token_ref` pointing at a
+`secret://provider/key` (env or managed file provider). Sync resolves the
+secret at clone/fetch time via a temporary `GIT_ASKPASS` helper:
+
+- `GIT_TERMINAL_PROMPT=0`
+- credential helpers disabled (`credential.helper=`)
+- askpass script + token files written `0600` (dir `0700`) and removed after use
+- resolved tokens redacted from git stderr/stdout before surfacing errors
+
+Git URLs must not embed credentials (`https://user:pass@…` is rejected).
+
+SSH deploy-key Battery auth is out of scope for this release.
+
+### Secret ACL gaps
+
+HTTP Battery auth reuses the process `--secret-ref` allow-list plus
+`credentials:use`. Remaining gaps vs a full plan ACL:
+
+- No per-Battery or per-script target binding beyond the shared ref list
+- No delivery-channel ACL (run vs battery) enforced at resolve time —
+  metadata advertises `allowed_targets` as informational only
+- CLI `battery add/sync` still uses unrestricted local secret access
+  (`SecretAccess::allow_all`); HTTP enforces scopes + refs
 
 ## Repository Format
 
@@ -185,3 +218,10 @@ shell out to `omakure` and does not reimplement Battery safety logic in route
 handlers. HTTP applies a narrower source policy than the local CLI: Batteries
 created or used through HTTP must have `https://` Git URLs. Local paths,
 `file://`, and plaintext `http://` sources remain CLI-only.
+
+Private HTTPS registration (`token_ref`) additionally requires:
+
+- deploy policy `sources.allow_private_https_batteries = true`
+- token scopes `batteries:add|sync` (or `batteries:write`) **and**
+  `credentials:use`
+- `token_ref` allowed by the process `--secret-ref` ACL

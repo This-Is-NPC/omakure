@@ -184,4 +184,4 @@ Full reference: `.docs/ai-interface.md`.
 
 ## License
 
-AGPL-3.0-only. See `LICENSE`.
+Apache-2.0. See `LICENSE`.

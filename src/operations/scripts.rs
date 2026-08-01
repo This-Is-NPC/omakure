@@ -40,6 +40,14 @@ pub fn list_tree(
     workspace: &Workspace,
     request: ListTreeRequest,
 ) -> OperationResult<Vec<TreeEntry>> {
+    list_tree_limited(workspace, request, MAX_TREE_ENTRIES)
+}
+
+pub fn list_tree_limited(
+    workspace: &Workspace,
+    request: ListTreeRequest,
+    max_entries: usize,
+) -> OperationResult<Vec<TreeEntry>> {
     let root = canonical_scripts_root(workspace)?;
     let dir = resolve_workspace_path(request.path.as_deref().unwrap_or(""), &root)?;
     if !dir.is_dir() {
@@ -51,10 +59,11 @@ pub fn list_tree(
 
     let repo = FsWorkspaceRepository::new(root.clone());
     let entries = repo.list_entries(&dir).map_err(io_error)?;
-    if entries.len() > MAX_TREE_ENTRIES {
+    let limit = max_entries.max(1);
+    if entries.len() > limit {
         return Err(OperationError::new(
             OperationErrorCode::PayloadTooLarge,
-            format!("tree listing exceeds {MAX_TREE_ENTRIES} entries"),
+            format!("tree listing exceeds {limit} entries"),
         ));
     }
     Ok(entries
@@ -90,6 +99,14 @@ pub fn read_script_content(
     workspace: &Workspace,
     request: ReadScriptContentRequest,
 ) -> OperationResult<ScriptContent> {
+    read_script_content_limited(workspace, request, MAX_SCRIPT_CONTENT_BYTES)
+}
+
+pub fn read_script_content_limited(
+    workspace: &Workspace,
+    request: ReadScriptContentRequest,
+    max_bytes: u64,
+) -> OperationResult<ScriptContent> {
     let root = canonical_scripts_root(workspace)?;
     let path = resolve_workspace_path(&request.script, &root)?;
     if !path.is_file() {
@@ -106,10 +123,11 @@ pub fn read_script_content(
     }
     let mut file = open_script_file(&path, &root)?;
     let metadata = file.metadata().map_err(io_error)?;
-    if metadata.len() > MAX_SCRIPT_CONTENT_BYTES {
+    let limit = max_bytes.max(1);
+    if metadata.len() > limit {
         return Err(OperationError::new(
             OperationErrorCode::PayloadTooLarge,
-            format!("script content exceeds {} bytes", MAX_SCRIPT_CONTENT_BYTES),
+            format!("script content exceeds {limit} bytes"),
         ));
     }
     let mut bytes = Vec::with_capacity(metadata.len() as usize);

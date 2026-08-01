@@ -6,6 +6,7 @@ Start here if you want a map of the docs. For quick start and requirements, see 
 
 - `installation.md`: install, update, uninstall, and version pinning.
 - `usage.md`: CLI commands and common flows.
+- `deployment.md`: API / worker / engine deploy topologies, container image, volumes, SQLite single-host warning, security + smoke checklists.
 - `scheduling.md`: cron scheduler (`omakure serve`) — lifecycle, overlap protection, systemd autostart, observability.
 - `workspace.md`: workspace layout, runtime state (`runs.sqlite`), daemon artifacts.
 - `scripts-path.md`: default scripts path and the full resolution precedence.

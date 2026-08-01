@@ -691,7 +691,10 @@ fn router_with_policy(
     body_limit: usize,
 ) -> Router {
     let auth_verification_gate = Arc::new(tokio::sync::Semaphore::new(
-        deploy.auth.max_concurrent_verifications.max(1),
+        deploy
+            .auth
+            .max_concurrent_verifications
+            .clamp(1, policy::MAX_CONCURRENT_AUTH_VERIFICATIONS),
     ));
     let state = ApiState {
         auth,

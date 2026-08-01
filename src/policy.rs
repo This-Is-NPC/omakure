@@ -200,6 +200,9 @@ impl Default for SecretsPolicy {
 /// Argon2id verifications keep the authentication memory budget near 128 MiB
 /// while excess requests fail fast instead of forming an unbounded queue.
 pub const DEFAULT_MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 2;
+/// Maximum configurable authentication memory budget: eight concurrent
+/// Argon2id verifications at roughly 64 MiB each (about 512 MiB total).
+pub const MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -323,6 +326,11 @@ pub fn parse_policy_toml(text: &str) -> Result<DeployPolicy, PolicyError> {
         return Err(PolicyError::Invalid(
             "auth.max_concurrent_verifications must be > 0".into(),
         ));
+    }
+    if parsed.auth.max_concurrent_verifications > MAX_CONCURRENT_AUTH_VERIFICATIONS {
+        return Err(PolicyError::Invalid(format!(
+            "auth.max_concurrent_verifications must be <= {MAX_CONCURRENT_AUTH_VERIFICATIONS}"
+        )));
     }
     Ok(DeployPolicy {
         version: parsed.version,
@@ -569,6 +577,31 @@ max_concurrent_verifications = 4
         let err = parse_policy_toml(text).unwrap_err();
         assert!(matches!(err, PolicyError::Invalid(_)));
         assert!(err.to_string().contains("max_concurrent_verifications"));
+    }
+
+    #[test]
+    fn parse_accepts_max_concurrent_verifications_limit() {
+        let text = format!(
+            "version = 1\n[auth]\nmax_concurrent_verifications = {MAX_CONCURRENT_AUTH_VERIFICATIONS}\n"
+        );
+        let policy = parse_policy_toml(&text).unwrap();
+
+        assert_eq!(
+            policy.auth.max_concurrent_verifications,
+            MAX_CONCURRENT_AUTH_VERIFICATIONS
+        );
+    }
+
+    #[test]
+    fn parse_rejects_max_concurrent_verifications_above_limit() {
+        let value = MAX_CONCURRENT_AUTH_VERIFICATIONS + 1;
+        let text = format!("version = 1\n[auth]\nmax_concurrent_verifications = {value}\n");
+        let err = parse_policy_toml(&text).unwrap_err();
+
+        assert!(matches!(err, PolicyError::Invalid(_)));
+        assert!(err
+            .to_string()
+            .contains(&format!("must be <= {MAX_CONCURRENT_AUTH_VERIFICATIONS}")));
     }
 
     #[test]

@@ -125,7 +125,7 @@ max_concurrent_verifications = 2      # default; see Hard gates below
 | `http.body_limit_bytes` | Caps JSON request bodies (and Axum body limit) |
 | `secrets.metadata_endpoint = false` | `GET /v1/secrets` returns `404` |
 | `auth.legacy_env_token = false` | Rejects `OMAKURE_API_TOKEN`; requires tokens file |
-| `auth.max_concurrent_verifications` | Caps in-flight Argon2id bearer verifications (default `2`) |
+| `auth.max_concurrent_verifications` | Caps in-flight Argon2id bearer verifications (default `2`, maximum `8`) |
 | `http.allow_non_loopback = true` | Same as CLI `--allow-non-loopback` |
 
 Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
@@ -141,8 +141,9 @@ Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 > permit with a stream of wrong-secret requests against that id, denying
 > auth to all other tokens until a permit frees up. Raise the bound if your
 > deployment has more legitimate concurrent auth traffic than headroom for
-> this tradeoff; the memory-hard verify cost is the mitigation against
-> unbounded CPU/memory exhaustion either way.
+> this tradeoff, up to the maximum of `8` (~512 MiB). Larger values are
+> rejected while loading policy so a configuration error cannot panic startup
+> or permit an excessive authentication memory budget.
 
 > **`--secret-ref '*'` and env vars.** The `*` secret-ref wildcard grants every
 > file/provider ref but **does not** grant `secret://env/…` process-environment

@@ -458,11 +458,19 @@ struct GitHttpPin {
 
 impl GitHttpPin {
     fn curlopt_resolve(&self) -> String {
+        // curl's `HOST:PORT:ADDRESS` --resolve syntax needs `[HOST]` whenever
+        // HOST itself is an IPv6 literal, or the colons make it ambiguous
+        // with the PORT/ADDRESS delimiters.
+        let host = if self.host.contains(':') {
+            format!("[{}]", self.host)
+        } else {
+            self.host.clone()
+        };
         let address = match self.address {
             std::net::IpAddr::V4(address) => address.to_string(),
             std::net::IpAddr::V6(address) => format!("[{address}]"),
         };
-        format!("{}:{}:{address}", self.host, self.port)
+        format!("{host}:{}:{address}", self.port)
     }
 
     fn credential_authority(&self) -> &str {
@@ -3308,7 +3316,7 @@ path = "scripts/ignored.sh"
         assert_eq!(pin.credential_authority(), "[2606:4700:4700::1111]:9443");
         assert_eq!(
             pin.curlopt_resolve(),
-            "2606:4700:4700::1111:9443:[2606:4700:4700::1111]"
+            "[2606:4700:4700::1111]:9443:[2606:4700:4700::1111]"
         );
     }
 

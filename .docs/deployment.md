@@ -17,6 +17,14 @@ See `.docs/http-api.md` → Authentication Contract.
 (internal id `legacy`, scopes `*`, gated by process-wide `--capability`),
 unless deploy policy sets `auth.legacy_env_token = false`.
 
+**Tokens-file format note:** tokens generated before the `token_selector`
+optimization (bare `omk_live_<64 hex>`, no embedded id) still authenticate —
+the verifier falls back to checking every enabled token's hash for that
+shape. New tokens from `omakure token generate` embed the id
+(`omk_live_<hex id>_<64 hex>`) and only cost one Argon2id verify. Regenerate
+and redistribute old-format tokens when convenient to get the faster path;
+there is no forced cutover.
+
 ## Deploy policy (`policy.toml`)
 
 Deploy-only file via `--policy` / `OMAKURE_POLICY_FILE`. **Not** workspace

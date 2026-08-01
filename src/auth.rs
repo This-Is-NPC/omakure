@@ -379,12 +379,39 @@ fn validate_phc_hash(id: &str, hash: &str) -> Result<(), AuthError> {
 }
 
 fn authenticate_against_file(tokens: &[TokenRecord], presented: &str) -> Option<AuthContext> {
-    let id = token_selector(presented)?;
-    tokens
-        .iter()
-        .find(|token| token.enabled && token.id == id)
-        .filter(|token| verify_argon2(&token.hash, presented))
-        .map(auth_context)
+    if let Some(id) = token_selector(presented) {
+        return tokens
+            .iter()
+            .find(|token| token.enabled && token.id == id)
+            .filter(|token| verify_argon2(&token.hash, presented))
+            .map(auth_context);
+    }
+    if !is_legacy_token_shape(presented) {
+        // Neither the new selector format nor the pre-upgrade shape: cannot be
+        // a real token, so skip Argon2 entirely (keeps the auth-flood bound
+        // effective against arbitrary bearer strings).
+        return None;
+    }
+    // Tokens generated before the token_selector upgrade carry no embedded id
+    // (`omk_live_<64 hex>`, not `omk_live_<hex id>_<64 hex>`), so there is no
+    // id to look up by. Fall back to checking every enabled token's hash, with
+    // no early exit, matching the pre-upgrade behavior these tokens were
+    // issued under (avoids leaking a token's position via timing).
+    let mut matched: Option<AuthContext> = None;
+    for token in tokens.iter().filter(|t| t.enabled) {
+        if verify_argon2(&token.hash, presented) {
+            matched = Some(auth_context(token));
+        }
+    }
+    matched
+}
+
+/// Whether `presented` has the pre-token_selector shape: `TOKEN_PREFIX` plus
+/// exactly `PLAINTEXT_BYTES * 2` hex characters and no embedded id/underscore.
+fn is_legacy_token_shape(presented: &str) -> bool {
+    presented.strip_prefix(TOKEN_PREFIX).is_some_and(|rest| {
+        rest.len() == PLAINTEXT_BYTES * 2 && rest.bytes().all(|b| b.is_ascii_hexdigit())
+    })
 }
 
 fn auth_context(token: &TokenRecord) -> AuthContext {
@@ -963,9 +990,42 @@ enabled = true
             })
             .collect::<Vec<_>>();
 
+        // Not the token_selector shape and not the pre-upgrade legacy shape
+        // (no TOKEN_PREFIX at all) — must never trigger Argon2 work.
         ARGON2_VERIFY_COUNT.with(|count| count.set(0));
         assert!(authenticate_against_file(&tokens, "invalid legacy bearer").is_none());
         ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
+    }
+
+    #[test]
+    fn pre_upgrade_legacy_shaped_token_still_authenticates() {
+        // Tokens minted before the token_selector upgrade (1726c8c) are bare
+        // `TOKEN_PREFIX + 64 hex chars`, with no embedded id. Deploying the
+        // selector upgrade must not lock out tokens already distributed under
+        // the old format.
+        let legacy_plaintext = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
+        let hash = hash_token(&legacy_plaintext).unwrap();
+        let mut tokens = (0..MAX_TOKENS_PER_FILE - 1)
+            .map(|index| TokenRecord {
+                id: format!("other-{index}"),
+                hash: hash_token(&test_token_plaintext(&format!("other-{index}"))).unwrap(),
+                scopes: vec!["runs:read".into()],
+                enabled: true,
+            })
+            .collect::<Vec<_>>();
+        tokens.push(TokenRecord {
+            id: "legacy-holder".into(),
+            hash,
+            scopes: vec!["runs:read".into()],
+            enabled: true,
+        });
+
+        let ctx = authenticate_against_file(&tokens, &legacy_plaintext).unwrap();
+        assert_eq!(ctx.token_id, "legacy-holder");
+
+        // A legacy-shaped guess that matches no hash is rejected, not panicked.
+        let wrong = format!("{TOKEN_PREFIX}{}", "cd".repeat(PLAINTEXT_BYTES));
+        assert!(authenticate_against_file(&tokens, &wrong).is_none());
     }
 
     #[test]

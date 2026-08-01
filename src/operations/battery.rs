@@ -1426,32 +1426,46 @@ fn run_git_capture_with_context(
 
 /// Whether the installed `git` supports `http.curloptResolve`. This depends
 /// only on the installed git binary, not on any per-sync state, so the
-/// process-wide result is cached instead of spawning `git help --config` on
-/// every battery sync.
-static GIT_HTTP_PINNING_SUPPORTED: std::sync::OnceLock<Result<(), String>> =
-    std::sync::OnceLock::new();
+/// process-wide conclusive result is cached instead of spawning
+/// `git help --config` on every battery sync. Transient execution failures are
+/// not cached so a later sync can recover without restarting the process.
+static GIT_HTTP_PINNING_SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 
 fn assert_git_http_pinning_supported(ctx: &GitExecContext<'_>) -> OperationResult<()> {
-    let cached = GIT_HTTP_PINNING_SUPPORTED.get_or_init(|| {
-        let supported = run_git_capture_with_context(
+    assert_git_http_pinning_supported_with(&GIT_HTTP_PINNING_SUPPORTED, || {
+        run_git_capture_with_context(
             GitCommandSpec {
                 program: "git".into(),
                 args: vec!["help".into(), "--config".into()],
             },
             ctx,
-        );
-        match supported {
-            Ok(output) if output.lines().any(|key| key == "http.curloptResolve") => Ok(()),
-            Ok(_) => Err(
-                "installed git does not support http.curloptResolve; refusing unpinned battery fetch"
-                    .to_string(),
-            ),
-            Err(err) => Err(err.to_string()),
+        )
+    })
+}
+
+fn assert_git_http_pinning_supported_with<F>(
+    cache: &std::sync::OnceLock<bool>,
+    probe: F,
+) -> OperationResult<()>
+where
+    F: FnOnce() -> OperationResult<String>,
+{
+    let supported = match cache.get() {
+        Some(supported) => *supported,
+        None => {
+            let output = probe()?;
+            let detected = output.lines().any(|key| key == "http.curloptResolve");
+            *cache.get_or_init(|| detected)
         }
-    });
-    cached
-        .clone()
-        .map_err(|message| OperationError::new(OperationErrorCode::GitFailed, message))
+    };
+    if supported {
+        Ok(())
+    } else {
+        Err(OperationError::new(
+            OperationErrorCode::GitFailed,
+            "installed git does not support http.curloptResolve; refusing unpinned battery fetch",
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -2883,6 +2897,7 @@ pub fn git_checkout_detached_spec(cache_path: &Path, commit: &str) -> GitCommand
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
     use tempfile::TempDir;
 
     fn valid_schema_script() -> String {
@@ -2909,6 +2924,49 @@ echo ok
 
         assert_eq!(request.name, "azure");
         assert_eq!(request.requested_ref, "main");
+    }
+
+    #[test]
+    fn git_http_pinning_probe_retries_after_transient_failure() {
+        let cache = std::sync::OnceLock::new();
+        let attempts = Cell::new(0);
+        let err = assert_git_http_pinning_supported_with(&cache, || {
+            attempts.set(attempts.get() + 1);
+            Err(OperationError::new(
+                OperationErrorCode::GitFailed,
+                "temporary spawn failure",
+            ))
+        })
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::GitFailed);
+        assert!(cache.get().is_none());
+
+        assert_git_http_pinning_supported_with(&cache, || {
+            attempts.set(attempts.get() + 1);
+            Ok("http.curloptResolve\n".into())
+        })
+        .unwrap();
+        assert_eq!(attempts.get(), 2);
+
+        assert_git_http_pinning_supported_with(&cache, || {
+            panic!("conclusive probe result should be cached")
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn git_http_pinning_probe_caches_definitive_unsupported_result() {
+        let cache = std::sync::OnceLock::new();
+        let err = assert_git_http_pinning_supported_with(&cache, || Ok("other.key\n".into()))
+            .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::GitFailed);
+        assert_eq!(cache.get(), Some(&false));
+        assert_git_http_pinning_supported_with(&cache, || {
+            panic!("conclusive probe result should be cached")
+        })
+        .unwrap_err();
     }
 
     #[test]

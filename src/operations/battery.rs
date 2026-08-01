@@ -9,7 +9,7 @@ use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use super::{OperationError, OperationErrorCode, OperationResult};
 
@@ -1430,17 +1430,93 @@ fn run_git_capture_with_context(
 /// `git help --config` on every battery sync. Transient execution failures are
 /// not cached so a later sync can recover without restarting the process. The
 /// mutex is held across the probe so concurrent callers single-flight onto
-/// one subprocess spawn instead of a thundering herd.
+/// one subprocess spawn instead of a thundering herd. The lock is recovered
+/// on poisoning rather than propagating the panic, since a poisoned lock here
+/// would otherwise wedge every future battery sync in the process for good.
 static GIT_HTTP_PINNING_SUPPORTED: std::sync::Mutex<Option<bool>> = std::sync::Mutex::new(None);
+
+/// Ceiling on the probe subprocess so a hung `git` can't stall the
+/// single-flight lock (and therefore every queued battery sync) forever.
+const GIT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Like `run_git_capture_with_context`, but kills the child and returns an
+/// error if it doesn't exit within `timeout` instead of blocking forever.
+/// Only safe for commands with small, bounded output (like `git help
+/// --config`): stdout/stderr are read after exit, not streamed, so a command
+/// that fills the OS pipe buffer before exiting could still deadlock.
+fn run_git_capture_with_timeout(
+    spec: GitCommandSpec,
+    ctx: &GitExecContext<'_>,
+    timeout: std::time::Duration,
+) -> OperationResult<String> {
+    let mut child = git_command_with_context(&spec, ctx)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::GitFailed,
+                format!("failed to spawn git: {err}"),
+            )
+        })?;
+
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stdout = String::new();
+                if let Some(mut out) = child.stdout.take() {
+                    let _ = out.read_to_string(&mut stdout);
+                }
+                let mut stderr = Vec::new();
+                if let Some(mut err) = child.stderr.take() {
+                    let _ = err.read_to_end(&mut stderr);
+                }
+                return if status.success() {
+                    Ok(redact_token_in_text(
+                        &stdout,
+                        ctx.askpass.map(|a| a.token.as_str()),
+                    ))
+                } else {
+                    Err(OperationError::new(
+                        OperationErrorCode::GitFailed,
+                        sanitize_git_output(
+                            &String::from_utf8_lossy(&stderr),
+                            ctx.askpass.map(|a| a.token.as_str()),
+                        ),
+                    ))
+                };
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(OperationError::new(
+                        OperationErrorCode::GitFailed,
+                        format!("git probe timed out after {timeout:?}"),
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(err) => {
+                return Err(OperationError::new(
+                    OperationErrorCode::GitFailed,
+                    format!("failed to wait for git: {err}"),
+                ))
+            }
+        }
+    }
+}
 
 fn assert_git_http_pinning_supported(ctx: &GitExecContext<'_>) -> OperationResult<()> {
     assert_git_http_pinning_supported_with(&GIT_HTTP_PINNING_SUPPORTED, || {
-        run_git_capture_with_context(
+        run_git_capture_with_timeout(
             GitCommandSpec {
                 program: "git".into(),
-                args: vec!["help".into(), "--config".into()],
+                args: vec!["--no-pager".into(), "help".into(), "--config".into()],
             },
             ctx,
+            GIT_PROBE_TIMEOUT,
         )
     })
 }
@@ -1452,7 +1528,7 @@ fn assert_git_http_pinning_supported_with<F>(
 where
     F: FnOnce() -> OperationResult<String>,
 {
-    let mut guard = cache.lock().unwrap();
+    let mut guard = cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let supported = match *guard {
         Some(supported) => supported,
         None => {
@@ -1462,6 +1538,7 @@ where
             detected
         }
     };
+    drop(guard);
     if supported {
         Ok(())
     } else {
@@ -3003,6 +3080,65 @@ echo ok
             attempts.load(std::sync::atomic::Ordering::SeqCst),
             1,
             "concurrent callers must single-flight onto one probe spawn"
+        );
+    }
+
+    #[test]
+    fn git_http_pinning_probe_single_flights_through_repeated_transient_failures() {
+        let cache = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let in_flight = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let max_in_flight = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let start_barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let cache = std::sync::Arc::clone(&cache);
+                let attempts = std::sync::Arc::clone(&attempts);
+                let in_flight = std::sync::Arc::clone(&in_flight);
+                let max_in_flight = std::sync::Arc::clone(&max_in_flight);
+                let start_barrier = std::sync::Arc::clone(&start_barrier);
+                std::thread::spawn(move || {
+                    start_barrier.wait();
+                    loop {
+                        let result = assert_git_http_pinning_supported_with(&cache, || {
+                            let concurrent =
+                                in_flight.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                            max_in_flight
+                                .fetch_max(concurrent, std::sync::atomic::Ordering::SeqCst);
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                            let attempt =
+                                attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            in_flight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                            if attempt < 5 {
+                                Err(OperationError::new(
+                                    OperationErrorCode::GitFailed,
+                                    "temporary spawn failure",
+                                ))
+                            } else {
+                                Ok("http.curloptResolve\n".into())
+                            }
+                        });
+                        if result.is_ok() {
+                            return;
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(
+            max_in_flight.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "at most one probe may run at a time, even while callers retry after transient failures"
+        );
+        assert!(
+            attempts.load(std::sync::atomic::Ordering::SeqCst) >= 6,
+            "expected 5 transient failures followed by 1 successful probe"
         );
     }
 

@@ -152,7 +152,7 @@ tests/                          Integration tests (cli_positional_path.rs)
 - **Task Runner (`mise.toml`):** `tui`, `dev` (build + daemon + TUI), `daemon-start`, `daemon-stop`, `daemon-log`, `build`, `test`, `lint`, `install`, `coverage` (tarpaulin).
 - **Two Binaries:** `omakure` (main TUI + CLI) and `omakure-installer` (standalone installer).
 - **Install Scripts:** `install.sh`, `install.ps1`, `install-from-source.sh` at the repo root (public `curl | bash` entrypoints).
-- **License:** AGPL-3.0-only.
+- **License:** Apache-2.0.
 
 ## Code Metrics
 

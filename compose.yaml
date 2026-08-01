@@ -33,7 +33,10 @@ services:
     volumes:
       # Host workspace → container scripts/history/envs root.
       - "${OMAKURE_WORKSPACE:-./workspace}:/workspace"
-      # Create this file before `docker compose up`; scopes come from its entries.
+      # This bind mount requires the file to already exist — `docker compose up`
+      # fails to start otherwise. Create it first with `omakure token generate
+      # --append secrets/omakure_tokens.toml --confirmed` (see deployment.md
+      # → Compose example); scopes come from its entries.
       - "${OMAKURE_TOKENS_FILE_HOST:-./secrets/omakure_tokens.toml}:/run/secrets/omakure_tokens.toml:ro"
     # Host publish stays 127.0.0.1 (above). `--allow-non-loopback` is only for
     # the container-internal 0.0.0.0 bind so Docker can forward the port.

@@ -96,6 +96,7 @@ auth.
 
 ## Documentation
 
+- `rebuild-omakure.md`: canonical future product direction and node contract
 - `.docs/README.md`: documentation index
 - `.docs/usage.md`: CLI and HTTP workflows
 - `.docs/ai-interface.md`: JSON, queue, history, trace, and agent contract

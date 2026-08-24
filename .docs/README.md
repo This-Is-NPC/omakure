@@ -6,6 +6,7 @@ process.
 
 ## Users and operators
 
+- `../rebuild-omakure.md`: canonical future product direction and node contract
 - `installation.md`: install, update, uninstall, and version pinning.
 - `usage.md`: CLI commands and common workflows.
 - `deployment.md`: API/worker/engine topologies, containers, volumes, and security.

@@ -1,4 +1,5 @@
 use crate::node::{write_atomic_new, NodeContext, NodeError};
+use crate::node_registry::{NodeRegistry, RegistryError};
 use fs2::FileExt;
 use k256::elliptic_curve::Generate;
 use k256::schnorr::{signature::hazmat::PrehashSigner, Signature, SigningKey};
@@ -27,6 +28,8 @@ pub enum NodeIdentityError {
     Signing,
     #[error("prehash must be exactly 32 bytes")]
     InvalidPrehash,
+    #[error("node trust registry error: {0}")]
+    Registry(#[from] RegistryError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,7 +167,9 @@ impl NodeIdentity {
             signing_key
         };
 
-        Ok(Self::from_signing_key(context, signing_key))
+        let identity = Self::from_signing_key(context, signing_key);
+        context.open_trust_registry(identity.public_status())?;
+        Ok(identity)
     }
 
     fn from_signing_key(context: &NodeContext, signing_key: SigningKey) -> Self {
@@ -178,6 +183,10 @@ impl NodeIdentity {
 
     pub fn public_status(&self) -> &NodeIdentityStatus {
         &self.status
+    }
+
+    pub fn open_trust_registry(&self) -> Result<NodeRegistry, NodeIdentityError> {
+        Ok(self.context.open_trust_registry(&self.status)?)
     }
 
     /// Sign a direct-envelope prehash; canonicalization is deliberately external.
@@ -246,14 +255,18 @@ impl NodeContext {
 fn status_for_key(signing_key: &SigningKey) -> NodeIdentityStatus {
     let x_only_public_key = signing_key.verifying_key().to_bytes();
     let public_key_hex = encode_hex(x_only_public_key.as_ref());
-    let node_id = format!(
-        "{NODE_ID_PREFIX}{}",
-        encode_hex(&sha256_domain(NODE_ID_DOMAIN, x_only_public_key.as_ref()))
-    );
+    let node_id = node_id_for_x_only_public_key(x_only_public_key.as_ref());
     NodeIdentityStatus {
         public_key_hex,
         node_id,
     }
+}
+
+pub(crate) fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
+    format!(
+        "{NODE_ID_PREFIX}{}",
+        encode_hex(&sha256_domain(NODE_ID_DOMAIN, public_key))
+    )
 }
 
 fn sha256_domain(domain: &[u8], bytes: &[u8]) -> [u8; 32] {

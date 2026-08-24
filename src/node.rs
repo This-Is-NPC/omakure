@@ -1,4 +1,6 @@
 use crate::domain::{NodeConfig, NodeConfigError};
+use crate::node_identity::NodeIdentityStatus;
+use crate::node_registry::{NodeRegistry, RegistryError};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::env;
@@ -237,6 +239,13 @@ impl NodeContext {
 
     pub fn is_test_mode(&self) -> bool {
         self.test_mode
+    }
+
+    pub fn open_trust_registry(
+        &self,
+        identity: &NodeIdentityStatus,
+    ) -> Result<NodeRegistry, RegistryError> {
+        NodeRegistry::open(self, identity)
     }
 
     /// Create only the state directory and public config. Identity and the

@@ -94,6 +94,17 @@ For a single deploy unit, prefer `engine`; it exposes `/v1/health` and
 `/v1/ready` without authentication and protects all other routes with bearer
 auth.
 
+## Node Registry Foundation
+
+The node foundation owns machine-state `node.sqlite` separately from the
+workspace `.history/runs.sqlite`. It currently exposes Rust repository and
+operation interfaces only: peer discovery, enrollment, transport, Cue
+execution, and `node serve` are intentionally not part of this package
+surface. The registry uses the same source-level contract on Linux, macOS,
+and Windows, while installed-service ownership, ACLs, and cross-target release
+validation remain platform-specific release gates and are not simulated by
+the Linux development test run.
+
 ## Documentation
 
 - `rebuild-omakure.md`: canonical future product direction and node contract

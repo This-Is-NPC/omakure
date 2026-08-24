@@ -7,6 +7,7 @@ process.
 ## Users and operators
 
 - `../rebuild-omakure.md`: canonical future product direction and node contract
+- `direct-transport-contract.md`: owner-approved direct transport/enrollment wire and state contract under technical review
 - `installation.md`: install, update, uninstall, and version pinning.
 - `usage.md`: CLI commands and common workflows.
 - `deployment.md`: API/node-service topologies, containers, volumes, and security.

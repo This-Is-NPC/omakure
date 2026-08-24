@@ -352,7 +352,9 @@ implementation; no second identity implementation is added.
 - BIP-340 Schnorr is the sole node/application signing algorithm. No alternate
   signing algorithm or parity-sensitive alias is part of the contract. The same
   normalized scalar and x-only public key are used for direct envelopes and
-  optional Nostr transport; a node never creates a second transport keypair.
+  optional Nostr transport. Direct Noise transport uses a separate service-owned
+  static X25519 key only; that key is bound to this identity by the signed
+  transport certificate and never defines node identity or trust.
 - `node_id` version 1 is the ASCII string `omk1_` followed by lowercase hex of
   `SHA-256(b"omakure/node-id/v1\\0" || x_only_public_key)`. The NUL is part of
   the hashed input. The version marker is both the `omk1_` prefix and the
@@ -411,6 +413,16 @@ security notes, enable no unnecessary algorithms, and run upstream and local
 vector tests. References: `https://crates.io/crates/k256`,
 `https://docs.rs/k256/`, and
 `https://github.com/RustCrypto/elliptic-curves/tree/master/k256`.
+
+The direct authenticated channel and enrollment contract is recorded in
+`.docs/direct-transport-contract.md`. The owner approved the standard pure-Rust
+Noise `XX_25519_ChaChaPoly_SHA256` construction through `snow` 0.10.0, with a
+service-owned static X25519 key bound to the canonical normalized
+secp256k1/BIP-340 identity by a signed certificate. The exact direct-channel
+wire format, handshake, session state machine, enrollment format, limits, and
+schema migration boundary are frozen there. No production transport is
+implemented; dependent tasks must implement that contract without inventing
+alternate bytes or trust paths.
 
 ### Initialization, lifecycle, and recovery
 
@@ -553,5 +565,7 @@ and productivity scoring are excluded.
 | Malicious relay or replay | End-to-end authenticated envelopes, expiry, nonces, local replay keys, durable Cue IDs, and direct-channel preference. |
 
 The implementation task must add tests for these failure modes before any
-transport or MDM implementation is accepted. This document freezes the
-contract; it does not claim those tests or features are already shipped.
+transport or MDM implementation is accepted. This document freezes the node
+foundation and future direction; it does not claim transport, enrollment, or
+those future tests/features are already shipped. The direct transport gate is
+the authoritative stop record until an owner-approved construction replaces it.

@@ -45,6 +45,8 @@ libc = "0.2"
 rstest = "0.23"
 pretty_assertions = "1.4"
 tempfile = "3.10"
+snow = { version = "0.10.0", default-features = false, features = ["use-curve25519", "use-chacha20poly1305", "use-sha2", "use-getrandom"] }
+curve25519-dalek = { version = "4.1.3", default-features = false, features = ["alloc"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

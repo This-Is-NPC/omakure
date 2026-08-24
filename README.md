@@ -114,6 +114,7 @@ runtime evidence.
 ## Documentation
 
 - `rebuild-omakure.md`: canonical future product direction and node contract
+- `.docs/direct-transport-contract.md`: owner-selected direct transport/enrollment contract under technical review; no transport is implemented
 - `.docs/README.md`: documentation index
 - `.docs/usage.md`: CLI and HTTP workflows
 - `.docs/ai-interface.md`: JSON, queue, history, trace, and agent contract

@@ -1,0 +1,363 @@
+format_version = 2
+contract_id = "omakure/direct-transport/v1"
+status = "owner-approved-under-technical-review"
+wire_contract_status = "frozen"
+production_transport_claim = false
+identity_curve = "secp256k1"
+identity_algorithm = "BIP-340-Schnorr"
+identity_key_material = "one-normalized-k256-scalar"
+second_static_transport_keypair = "service-owned-x25519-only"
+target_platforms = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
+noise_protocol_name = "Noise_XX_25519_ChaChaPoly_SHA256"
+noise_payload_kind = 1
+noise_prologue_hex = "6f6d616b7572652f6469726563742d7472616e73706f72742f763100"
+certificate_domain_hex = "6f6d616b7572652f7472616e73706f72742d636572742f763100"
+certificate_encoding = "OMTC || version:u8 || kind:u8 || flags:u16be || xonly:32 || node_id:69 || x25519:32 || epoch:u64be || not_before:u64be || not_after:u64be || certificate_id:16 || bip340_signature:64"
+frame_encoding = "length:u32be || version:u8 || kind:u8 || flags:u16be || body:length-4"
+role_encoding = "1=conductor, 2=performer"
+capability_grammar = "ASCII [a-z0-9][a-z0-9._-]{0,63}; sorted by raw bytes; unique; allowlisted"
+capability_allowlist = ["backup-orchestration", "baseline-push", "inventory-health", "lost-device-revocation", "notifications", "remote-run", "ssh-credential-rotation"]
+max_capability_count = 32
+max_capability_bytes = 64
+max_capabilities_encoding_bytes = 4096
+max_frame_length_field = 1048580
+max_frame_bytes = 1048584
+max_handshake_message_bytes = 4096
+max_plaintext_bytes = 1048520
+max_peers = 1024
+max_sessions_per_peer = 4
+max_handshake_seconds = 10
+max_idle_seconds = 300
+max_retries = 3
+max_global_handshakes = 256
+max_source_handshakes_per_minute = 4
+max_global_queue_bytes = 67108864
+max_source_queue_bytes = 4194304
+max_session_queue_bytes = 262144
+max_malformed_work_units = 4
+header_read_deadline_ms = 2000
+body_read_base_deadline_ms = 1000
+body_read_per_64k_deadline_ms = 1000
+body_read_deadline_cap_ms = 10000
+cleanup_interval_seconds = 30
+rekey_messages = 1048576
+rekey_plaintext_bytes = 1073741824
+test_rekey_messages = 2
+test_rekey_plaintext_bytes = 32
+# Historical pre-kind comparison values; payload_* fields below are normative.
+message_1_hex = "1c9fd88f45606d932a80c71824ae151d15d73e77de38e8e000852e614fae7019"
+message_2_hex = "ff63fe57bfbf43fa3f563628b149af704d3db625369c49983650347a6a71e00eb0b3ee8c1214bc8cb3b34fcf0b71b02ec23b425d0a370434dcf334640da6a40599c7f1bc6f96ff13df0712ff948db5f57d510e9a248c3e18e0ab45e91d522ab0e171e46bee9711b9d7485781208350cb9e63ad4b9b3a8c2d5050b6d8a21de6da15ccc5701492ee91f937a1c8e7715b9fa1ee98bb856f9463965254f1b544e1fb0f3197144fad03f88a299df2ce87711f0e411ba04ee6349d6fb00843763c515bf2a0738c06465e0f8f868d424ab67e6183ec6967b4467965651b6923d4dbf05ecfea2c87ea4655237052af8d5303e61d2ea8e9a75cc6182e09c7a5e69ecc9116823ff02ff4808f8526f450b3d3e44073e795e1bd55dca35d030dbdd39c11baaaa313a1e7b100691cd8dad0e99fa6817a94a2e858dd5b925f6fa90aa475fae4ab583eee21b5f12e16a33612687f6500ae410e4dcd22d7"
+message_3_hex = "6ebf03599b48ebadc05fd4d09294c65bf1250345fbed81c16c51db19fac1c3e60ec4f7efa064036355faee9293d9d808495335120974d3e6e9cdfa4b9675bd3c567c83048b737c482d105a67aed505db7b36d3a1f6cc43037488cc3b789959ef7094f733740c58312725eb9bb753c441d35d1388f825d293839adb011b84ed6dcfb955010f86bd62a36f0b0e5029e029fd382e693528acdbdc2ae787aeaead9014b4ede89371ca9b52e6e7340adfd8b12668854ce342c480cd38e20728295e9575fbdd664f1f22650ba8061c684b2d8aa6fcb30865a6d31a55fbc022e14ed21ec6d0ec9cf36f8c02a08308808fa50dfb273d6658b1492b3acc68c4224d0805134b1228d7129d8f82bdb3e74885870950084cd48f76de9462388d0e92f5371d32c82247e3e58b70934781970e25bd4c8fdccd1523b4"
+handshake_hash_hex = "d1a0ca17759a6d9f3592c2fac1a2b3d1aa4cbfabe95318a8f3cc5c93bde7179d"
+data_ciphertext_hex = "39c80b6aea6929d8c675e6b8e970169af45f5b965c80966353197ac0704c435b04e5e317308c"
+reply_ciphertext_hex = "21fa5f6bc3ccfd3218aadd0d6997f6760b80151f5b40652e95ba1942a1571df928c3a8"
+payload_message_1_hex = "1c9fd88f45606d932a80c71824ae151d15d73e77de38e8e000852e614fae7019"
+payload_message_2_hex = "ff63fe57bfbf43fa3f563628b149af704d3db625369c49983650347a6a71e00eb0b3ee8c1214bc8cb3b34fcf0b71b02ec23b425d0a370434dcf334640da6a40599c7f1bc6f96ff13df0712ff948db5f57d510e9a248c3e18e0ab45e91d522ab0e171e46bee9711b9d7485781208350cb9e63ad4b9b3a8c2d5050b6d8a21de6da15ccc5701492ee91f937a1c8e7715b9fa1ee98bb856f9463965254f1b544e1fb0f3197144fad03f88a299df2ce87711f0e411ba04ee6349d6fb00843763c515bf2a0738c06465e0f8f868d424ab67e6183ec6967b4467965651b6923d4dbf05ecfea2c87ea4655237052af8d5303e61d2ea8e9a75cc6182e09c7a5e69ecc9116823ff02ff4808f8526f450b3d3e44073e795e1bd55dca35d030dbdd39c11baaaa313a1e7b100691cd8dad0e99fa6817a94a2e858dd5b925f6fa90aa475fae4ab583eee21b5f12e16a33612687f6500ae410e4dcd22d7"
+payload_message_3_hex = "6ebf03599b48ebadc05fd4d09294c65bf1250345fbed81c16c51db19fac1c3e61f5cec1ad7f8546545add2d28716d2fe07512c054b74d2e6900a22531150da2baf8941f3d03af04428893d405836e32afb9da07bbb22ac8c838aca6116a40aea25ccfe37760353332523bb9ae400901186514ddeae218592869adc56438fbb6b9cba52030d87ec3faa3f5a06587fbf23a86a293c6527f3df8b2be6d3ab4f0840ed34547f6051356df38e6dfda7886a3411439b6e0d5d8b8dea1cd3d20c435e9575fbdd664e1e22650ba8061c684b2d8aa69ba0f96026d31a55fbc022e14ed21ec6d0ec9cf253e1375004e9985d10f0a1c205093afa1bc66fa0b581f5777a182d17c82eeaab5f0eca1684ecd3073c7d04253c6a2875e8b594827126ccbd2a40c721201d83b37a363bd21a4983808275fc8c455a675d90"
+payload_handshake_hash_hex = "d1a0ca17759a6d9f3592c2fac1a2b3d1aa4cbfabe95318a8f3cc5c93bde7179d"
+payload_data_ciphertext_hex = "39c80b6aea6929d8c675e6b8e970169af45f5b965c80966353197ac0704c435b04e5e317308c"
+payload_reply_ciphertext_hex = "21fa5f6bc3ccfd3218aadd0d6997f6760b80151f5b40652e95ba1942a1571df928c3a8"
+direct_envelope_canonical_hex = "7b22637265617465645f6174223a313730303030303030302c226b696e64223a22646972656374222c226e6f6e6365223a2230303030303030303030303030303031222c227061796c6f6164223a7b22636f6d6d616e64223a22737461747573222c22746172676574223a22706572666f726d65722d61227d2c2273656e646572223a226f6d6b315f62313461393034363932303234646536653161343866306662353431313661393264623132353735346538316130383066393366343366363966623534356164222c2276657273696f6e223a317d"
+direct_envelope_signature_hex = "9fd2c49727950c750bc26b8fe2aa9d007035975c65f08f267d2a239ec1b1925989b707c886a088d5c3af52b13875234daec1e2d0cbd5fcbbcadc52288770a9fa"
+manual_request_id_hex = "00000000000000000000000000000001"
+manual_code_hex = "000102030405060708090a0b0c0d0e0f"
+manual_code_hash_hex = "e9380fb38041d9a4cb70fbca9631da6d796fea839738fbd6e7015d829ccd54f7"
+manual_created_at = 1700000000
+manual_expires_at = 1702592000
+payload_message_3_final_hex = "6ebf03599b48ebadc05fd4d09294c65bf1250345fbed81c16c51db19fac1c3e61f5cec1ad7f8546545add2d28716d2fe07512c054b74d2e6900a22531150da2baf8941f3d03af04428893d405836e32afb9da07bbb22ac8c838aca6116a40aea25ccfe37760353332523bb9ae400901186514ddeae218592869adc56438fbb6b9cba52030d87ec3faa3f5a06587fbf23a86a293c6527f3df8b2be6d3ab4f0840ed34547f6051356df38e6dfda7886a3411439b6e0d5d8b8dea1cd3d20c435e9575fbdd664e1e22650bcd30be994b2d8aa69ba0f96026d31a55fbc022e14ed21ec6d0ec9cf253e1375004e9985d10f0a1c205093afa1bc66fa0b581f5777a182d17c82eeaab5f0eca1684ecd3073c7d04253c6a2875e8b594827126ccbd2a40c721201d83b37a363bd21a4983808275fc8c455a675d90"
+
+x25519_probe_scalar_hex = "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a"
+x25519_prohibited_public_hex = [
+  "0000000000000000000000000000000000000000000000000000000000000000",
+  "0100000000000000000000000000000000000000000000000000000000000000",
+  "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+  "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+  "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+]
+
+[[x25519_vectors]]
+name = "rfc7748-alice-bob"
+public_hex = "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f"
+expected_shared_hex = "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742"
+expected = "nonzero"
+
+[[x25519_vectors]]
+name = "rfc7748-all-zero-u"
+public_hex = "0000000000000000000000000000000000000000000000000000000000000000"
+expected_shared_hex = "0000000000000000000000000000000000000000000000000000000000000000"
+expected = "reject_all_zero"
+
+[[x25519_vectors]]
+name = "rfc7748-low-order-u-one"
+public_hex = "0100000000000000000000000000000000000000000000000000000000000000"
+expected_shared_hex = "0000000000000000000000000000000000000000000000000000000000000000"
+expected = "reject_all_zero"
+
+[[x25519_vectors]]
+name = "invalid-public-length"
+public_hex = "00"
+expected_shared_hex = ""
+expected = "reject_invalid"
+
+[[certificate_cases]]
+name = "not-before-inclusive"
+vector = "public-initiator-vector"
+now = 1700000000
+expected = "ok"
+
+[[certificate_cases]]
+name = "not-before-skew-inclusive"
+vector = "public-initiator-vector"
+now = 1699999700
+expected = "ok"
+
+[[certificate_cases]]
+name = "not-before-skew-exclusive"
+vector = "public-initiator-vector"
+now = 1699999699
+expected = "clock_skew"
+
+[[certificate_cases]]
+name = "not-after-exclusive"
+vector = "public-initiator-vector"
+now = 1735689599
+expected = "ok"
+
+[[certificate_cases]]
+name = "not-after-boundary"
+vector = "public-initiator-vector"
+now = 1735689600
+expected = "expired"
+
+[[certificate_cases]]
+name = "node-id-mismatch"
+vector = "public-initiator-vector"
+now = 1700000000
+expected_node_id = "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92"
+expected = "identity_mismatch"
+
+[[model_cases]]
+name = "authenticated-unknown-peer"
+now = 1700000000
+trust = "none"
+expected_state = "authenticated_untrusted"
+
+[[model_cases]]
+name = "active-peer"
+now = 1700000000
+trust = "active"
+expected_state = "active"
+
+[[model_cases]]
+name = "revoked-peer"
+now = 1700000000
+trust = "revoked"
+expected_state = "revoked"
+
+[[model_cases]]
+name = "expired-peer"
+now = 1735689600
+trust = "active"
+expected_state = "expired"
+
+[[model_cases]]
+name = "rotation-revokes-old-epoch"
+now = 1700000000
+trust = "rotate"
+expected_state = "pending_replacement"
+
+[[frame_cases]]
+name = "minimum-data-body"
+version = 1
+kind = 2
+flags = 0
+body_hex = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+expected = "ok"
+
+[[frame_cases]]
+name = "short-data-body"
+version = 1
+kind = 2
+flags = 0
+body_hex = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+expected = "invalid_body_length"
+
+[[frame_cases]]
+name = "unknown-version"
+version = 2
+kind = 2
+flags = 0
+body_hex = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+expected = "unsupported_version"
+
+[[frame_cases]]
+name = "unknown-kind"
+version = 1
+kind = 9
+flags = 0
+body_hex = "00000000"
+expected = "unknown_frame_kind"
+
+[[frame_cases]]
+name = "reserved-flags"
+version = 1
+kind = 2
+flags = 1
+body_hex = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+expected = "reserved_flags"
+
+[[frame_cases]]
+name = "truncated-length-prefix"
+raw_hex = "0000"
+expected = "truncated_length_prefix"
+
+[[frame_cases]]
+name = "length-below-header"
+raw_hex = "00000003010200"
+expected = "invalid_length"
+
+[[frame_cases]]
+name = "truncated-frame"
+raw_hex = "0000000801020000"
+expected = "truncated_frame"
+
+[[frame_cases]]
+name = "length-mismatch"
+raw_hex = "000000040102000000"
+expected = "length_mismatch"
+
+[[handshake_order_cases]]
+previous = 0
+incoming = 1
+expected = "ok"
+
+[[handshake_order_cases]]
+previous = 1
+incoming = 3
+expected = "handshake_order"
+
+[[handshake_order_cases]]
+previous = 1
+incoming = 2
+expected = "ok"
+
+[[handshake_order_cases]]
+previous = 2
+incoming = 3
+expected = "ok"
+
+[[rekey_cases]]
+messages = 1048575
+bytes = 0
+next_plaintext = 1
+expected = "rekey"
+
+[[rekey_cases]]
+messages = 1048574
+bytes = 1073741823
+next_plaintext = 1
+expected = "rekey"
+
+[[rekey_cases]]
+messages = 1048574
+bytes = 1073741823
+next_plaintext = 0
+expected = "no_rekey"
+
+[[role_cases]]
+value = 1
+expected = "conductor"
+
+[[role_cases]]
+value = 2
+expected = "performer"
+
+[[role_cases]]
+value = 0
+expected = "invalid_role"
+
+[[role_cases]]
+value = 3
+expected = "invalid_role"
+
+[[capability_cases]]
+values = ["baseline-push", "remote-run"]
+expected = "ok"
+
+[[capability_cases]]
+values = ["remote-run", "baseline-push"]
+expected = "unsorted"
+
+[[capability_cases]]
+values = ["baseline-push", "baseline-push"]
+expected = "duplicate"
+
+[[capability_cases]]
+values = ["not-allowlisted"]
+expected = "unsupported"
+
+[[capability_cases]]
+values = ["BadCase"]
+expected = "invalid_grammar"
+
+[[candidates]]
+name = "noise-xx-25519-chachapoly-sha256"
+crate = "snow"
+version = "0.10.0"
+status = "selected"
+reason = "standard pure-Rust Noise XX construction; the service-owned X25519 static key is bound to the canonical BIP-340 identity by the certificate below"
+
+[[candidates]]
+name = "libp2p-noise-xx"
+crate = "libp2p-noise"
+version = "0.46.1"
+status = "rejected"
+reason = "X25519-only and its documented wire protocol is experimental"
+
+[[candidates]]
+name = "rfc9180-hpke"
+crate = "hpke"
+version = "0.14.0"
+status = "rejected"
+reason = "KEM encryption is not the mutually authenticated ordered channel required here"
+
+[[candidates]]
+name = "k256-ecdh-primitive"
+crate = "k256"
+version = "0.14.0"
+status = "rejected"
+reason = "an audited primitive is not evidence for a custom channel composition"
+
+[[vectors]]
+name = "public-initiator-vector"
+role = "initiator"
+# All private values in this table are public test inputs, never production material.
+identity_private_key_hex = "0000000000000000000000000000000000000000000000000000000000000001"
+identity_x_only_public_key_hex = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+node_id = "omk1_b14a904692024de6e1a48f0fb54116a92db125754e81a080f93f43f69fb545ad"
+transport_private_key_hex = "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a"
+transport_public_key_hex = "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"
+ephemeral_private_key_hex = "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4"
+key_epoch = 1
+not_before = 1700000000
+not_after = 1735689600
+certificate_id_hex = "00000000000000000000000000000001"
+certificate_signature_hex = "3d50659512f3eb398c712bcef699fbb0e20f5a36ebae7943312c124e9492af16d4551db6818a1193285c082555eb4c4f7958ae14e8c09ed6cb96638a88d2b2e4"
+
+[[vectors]]
+name = "public-responder-vector"
+role = "responder"
+# All private values in this table are public test inputs, never production material.
+identity_private_key_hex = "0000000000000000000000000000000000000000000000000000000000000002"
+identity_x_only_public_key_hex = "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+node_id = "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92"
+transport_private_key_hex = "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb"
+transport_public_key_hex = "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f"
+ephemeral_private_key_hex = "4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d"
+key_epoch = 1
+not_before = 1700000000
+not_after = 1735689600
+certificate_id_hex = "00000000000000000000000000000002"
+certificate_signature_hex = "4856b3d7560d2213759063e4d6e1198457fdbd36feea06a1194a75048f0ef132bbc7d77f602f0046fa2733abf416e27fa8989515b27efca0bd3b33537bcc3099"

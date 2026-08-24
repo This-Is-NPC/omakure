@@ -127,6 +127,9 @@ pub enum Commands {
     /// Manage named environment files
     Env(EnvArgs),
 
+    /// Inspect and explicitly manage the machine-owned node identity and trust registry
+    Node(NodeArgs),
+
     /// Show resolved paths and environment diagnostics
     ///
     /// Prints the resolved binary path, omakure version, workspace root,
@@ -271,6 +274,8 @@ pub struct ApiArgs {
     /// env:use / envs:use, secrets:use, secrets:read-metadata,
     /// credentials:use, runs:read, runs:write / runs:enqueue,
     /// batteries:read, batteries:write, admin:status, all.
+    /// Node management uses narrow node:read, node:write, and trust:write
+    /// capabilities.
     /// `all` grants every route capability but does not bypass
     /// `--secret-ref` (pass `--secret-ref '*'` for unrestricted refs).
     #[arg(long = "capability")]
@@ -515,6 +520,112 @@ pub struct RunArgs {
 pub struct EnvArgs {
     #[command(subcommand)]
     pub command: EnvCommand,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeArgs {
+    /// Deterministic test-only node state directory override
+    #[arg(long = "node-state-dir")]
+    pub state_dir: Option<PathBuf>,
+
+    /// Deterministic test-only node configuration path override
+    #[arg(long = "node-config")]
+    pub config_path: Option<PathBuf>,
+
+    #[command(subcommand)]
+    pub command: NodeCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NodeCommand {
+    /// Explicitly initialize public config, identity, and local trust state
+    Init,
+
+    /// Inspect public node identity, redacted config, and bounded trust counts
+    Status,
+
+    /// List registered peers without audit history or private state
+    Peers,
+
+    /// Explicitly import and activate one manually trusted peer
+    Trust(NodeTrustArgs),
+
+    /// Update one peer's capability allow-list with confirmation and evidence
+    Capabilities(NodeCapabilitiesArgs),
+
+    /// Revoke one peer with confirmation and evidence
+    Revoke(NodeRevokeArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct NodeTrustArgs {
+    /// Canonical omk1_ node identifier
+    #[arg(long)]
+    pub node_id: String,
+
+    /// Lowercase hexadecimal x-only BIP-340 public key
+    #[arg(long)]
+    pub public_key: String,
+
+    /// Peer role: conductor or performer
+    #[arg(long, default_value = "performer")]
+    pub role: String,
+
+    /// Allowed capability (repeatable; sorted unique values are required)
+    #[arg(long = "capability")]
+    pub capabilities: Vec<String>,
+
+    /// Audit actor
+    #[arg(long)]
+    pub actor: String,
+
+    /// Audit reason/evidence
+    #[arg(long)]
+    pub reason: String,
+
+    /// Confirm this trust mutation explicitly
+    #[arg(long)]
+    pub confirmed: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeCapabilitiesArgs {
+    /// Peer node identifier
+    pub node_id: String,
+
+    /// Allowed capability (repeatable; sorted unique values are required)
+    #[arg(long = "capability")]
+    pub capabilities: Vec<String>,
+
+    /// Audit actor
+    #[arg(long)]
+    pub actor: String,
+
+    /// Audit reason/evidence
+    #[arg(long)]
+    pub reason: String,
+
+    /// Confirm this trust mutation explicitly
+    #[arg(long)]
+    pub confirmed: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeRevokeArgs {
+    /// Peer node identifier
+    pub node_id: String,
+
+    /// Audit actor
+    #[arg(long)]
+    pub actor: String,
+
+    /// Audit reason/evidence
+    #[arg(long)]
+    pub reason: String,
+
+    /// Confirm this trust mutation explicitly
+    #[arg(long)]
+    pub confirmed: bool,
 }
 
 #[derive(Subcommand, Debug)]

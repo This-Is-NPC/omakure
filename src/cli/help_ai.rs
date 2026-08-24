@@ -51,7 +51,7 @@ argv, exit code, stdout, stderr, start/end timestamps, and a stable run_id.";
 
 const AI_VERBS: &[&str] = &[
     "scripts", "describe", "search", "run", "init", "history", "queue", "battery", "token", "api",
-    "engine", "trace", "config", "help-ai",
+    "engine", "trace", "config", "node", "help-ai",
 ];
 
 pub fn run() -> Result<(), Box<dyn Error>> {
@@ -172,6 +172,7 @@ fn build_payload() -> HelpAiPayload {
                 "error": null,
                 "schema_version": SCHEMA_VERSION,
             }),
+            "node": "Public node status, explicit initialization, bounded peer listing, and confirmed trust mutations; private identity material and audit history are never returned.",
         }),
     }
 }

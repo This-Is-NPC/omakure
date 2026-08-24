@@ -12,6 +12,20 @@ HTTP is an adapter. It must not own business logic. Each route translates an
 HTTP request into a shared operation request, calls `src/operations/*`, then
 serializes the operation result.
 
+## Node management
+
+Node routes use the shared machine-state operations and never access
+`.history/runs.sqlite`. `node:read` permits public status and bounded peer
+listing; `node:write` permits explicit initialization; `trust:write` permits
+manual import, capability updates, and revocation. Trust mutation bodies must
+include `confirmed: true`, a non-empty `actor`, and a non-empty `reason`.
+
+Routes are `GET /v1/node/status`, `POST /v1/node/init`, `GET` and `POST
+/v1/node/peers`, `PATCH /v1/node/peers/:node_id/capabilities`, and `POST
+/v1/node/peers/:node_id/revoke`. Responses use the standard JSON envelope.
+Private keys, plaintext secret values, revocation reasons, and unbounded audit
+history are never returned.
+
 ## Non-Goals
 
 - Public internet API.

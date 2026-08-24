@@ -367,6 +367,29 @@ impl NodeContext {
         Ok(created)
     }
 
+    /// Validate an already-created state directory without creating anything.
+    /// Status and other read-only management operations use this boundary so
+    /// observation cannot initialize node state as a side effect.
+    pub(crate) fn validate_existing_state_directory(&self) -> Result<bool, NodeError> {
+        match fs::symlink_metadata(self.state_dir()) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() {
+                    return Err(NodeError::UnexpectedFileType(
+                        self.state_dir().display().to_string(),
+                    ));
+                }
+                validate_directory_security(
+                    self.state_dir(),
+                    owner_policy(self.platform, self.custom_paths, true)?,
+                    self.test_mode,
+                )?;
+                Ok(true)
+            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     pub(crate) fn validate_private_file(&self, path: &Path) -> Result<(), NodeError> {
         validate_file_security_mode(
             path,
@@ -374,6 +397,63 @@ impl NodeContext {
             self.test_mode,
             0o600,
         )
+    }
+
+    /// Open the public configuration without following a final symlink or a
+    /// reparse point, then validate the opened file's security metadata.
+    pub(crate) fn open_public_file(&self) -> Result<Option<fs::File>, NodeError> {
+        let path = self.config_path();
+        if !ensure_safe_parent_if_present(path)? {
+            return Ok(None);
+        }
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+        let file = match options.open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => {
+                return Err(NodeError::InsecurePath(
+                    "node configuration file could not be opened securely".to_string(),
+                ))
+            }
+        };
+        let metadata = file.metadata()?;
+        if !metadata.file_type().is_file() {
+            return Err(NodeError::UnexpectedFileType(
+                "node configuration".to_string(),
+            ));
+        }
+        validate_file_security_metadata(
+            &metadata,
+            owner_policy(self.platform, self.custom_paths, false)?,
+            self.test_mode,
+            0o640,
+        )?;
+        if !ensure_safe_parent_if_present(path)? {
+            return Err(NodeError::InsecurePath(
+                "node configuration path changed while opening".to_string(),
+            ));
+        }
+        validate_open_file_identity(path, &file)?;
+        #[cfg(windows)]
+        {
+            validate_windows_security_handle(path, &file, self.test_mode)?;
+            // Recheck after handle-bound ACL validation as a final defense
+            // against path replacement during the security decision.
+            validate_open_file_identity(path, &file)?;
+        }
+        Ok(Some(file))
     }
 }
 
@@ -473,19 +553,29 @@ fn cleanup_partial_initialization(
 }
 
 fn ensure_safe_parent(path: &Path) -> Result<(), NodeError> {
+    if !ensure_safe_parent_if_present(path)? {
+        return Err(NodeError::UnsafePath(format!(
+            "parent does not exist: {}",
+            path.parent()
+                .map(|parent| parent.display().to_string())
+                .unwrap_or_else(|| path.display().to_string())
+        )));
+    }
+    Ok(())
+}
+
+fn ensure_safe_parent_if_present(path: &Path) -> Result<bool, NodeError> {
     let parent = path
         .parent()
         .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
     let mut current = PathBuf::new();
     for component in parent.components() {
         current.push(component.as_os_str());
-        let metadata = fs::symlink_metadata(&current).map_err(|err| {
-            if err.kind() == io::ErrorKind::NotFound {
-                NodeError::UnsafePath(format!("parent does not exist: {}", current.display()))
-            } else {
-                NodeError::Io(err)
-            }
-        })?;
+        let metadata = match fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(NodeError::Io(error)),
+        };
         if metadata.file_type().is_symlink() {
             return Err(NodeError::UnsafePath(current.display().to_string()));
         }
@@ -497,7 +587,100 @@ fn ensure_safe_parent(path: &Path) -> Result<(), NodeError> {
             return Err(NodeError::UnexpectedFileType(current.display().to_string()));
         }
     }
+    Ok(true)
+}
+
+#[cfg(unix)]
+fn validate_open_file_identity(path: &Path, opened_file: &fs::File) -> Result<(), NodeError> {
+    let path_metadata = fs::symlink_metadata(path)?;
+    if path_metadata.file_type().is_symlink() || !path_metadata.file_type().is_file() {
+        return Err(NodeError::InsecurePath(
+            "node configuration path is not a regular file".to_string(),
+        ));
+    }
+    let opened_metadata = opened_file.metadata()?;
+    if !same_file_identity(&opened_metadata, &path_metadata) {
+        return Err(NodeError::InsecurePath(
+            "node configuration path changed while opening".to_string(),
+        ));
+    }
     Ok(())
+}
+
+#[cfg(unix)]
+fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WindowsFileIdentity {
+    volume_serial_number: u32,
+    file_index: u64,
+}
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Debug, Default)]
+struct ByHandleFileInformation {
+    file_attributes: u32,
+    creation_time: [u32; 2],
+    last_access_time: [u32; 2],
+    last_write_time: [u32; 2],
+    volume_serial_number: u32,
+    file_size_high: u32,
+    file_size_low: u32,
+    number_of_links: u32,
+    file_index_high: u32,
+    file_index_low: u32,
+}
+
+#[cfg(windows)]
+fn validate_open_file_identity(path: &Path, opened_file: &fs::File) -> Result<(), NodeError> {
+    let path_metadata = fs::symlink_metadata(path)?;
+    if path_metadata.file_type().is_symlink() || !path_metadata.file_type().is_file() {
+        return Err(NodeError::InsecurePath(
+            "node configuration path is not a regular file".to_string(),
+        ));
+    }
+    if windows_has_reparse_point(path)? {
+        return Err(NodeError::UnsafePath(
+            "node configuration path has a reparse point".to_string(),
+        ));
+    }
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    let mut options = fs::OpenOptions::new();
+    options
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let current_file = options.open(path).map_err(NodeError::Io)?;
+    let opened_identity = windows_file_identity(opened_file)?;
+    let current_identity = windows_file_identity(&current_file)?;
+    if opened_identity != current_identity {
+        return Err(NodeError::InsecurePath(
+            "node configuration path changed while opening".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn windows_file_identity(file: &fs::File) -> Result<WindowsFileIdentity, NodeError> {
+    use std::os::windows::io::AsRawHandle;
+
+    let mut information = ByHandleFileInformation::default();
+    let success = unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) };
+    if success == 0 {
+        return Err(NodeError::Io(io::Error::last_os_error()));
+    }
+    Ok(WindowsFileIdentity {
+        volume_serial_number: information.volume_serial_number,
+        file_index: (u64::from(information.file_index_high) << 32)
+            | u64::from(information.file_index_low),
+    })
 }
 
 fn write_atomic_config(path: &Path, contents: &[u8]) -> Result<(), NodeError> {
@@ -680,14 +863,11 @@ fn validate_file_security(
     #[cfg(not(unix))] _owner: (),
     _test_mode: bool,
 ) -> Result<(), NodeError> {
-    #[cfg(unix)]
-    {
-        validate_file_security_mode(path, owner, _test_mode, 0o640)
-    }
-    #[cfg(not(unix))]
-    {
-        validate_file_security_mode(path, (), _test_mode, 0o640)
-    }
+    let metadata = fs::symlink_metadata(path)?;
+    validate_file_security_metadata(&metadata, owner, _test_mode, 0o640)?;
+    #[cfg(windows)]
+    validate_windows_security(path, false, _test_mode)?;
+    Ok(())
 }
 
 fn validate_file_security_mode(
@@ -697,26 +877,35 @@ fn validate_file_security_mode(
     _test_mode: bool,
     _expected_mode: u32,
 ) -> Result<(), NodeError> {
+    let metadata = fs::symlink_metadata(path)?;
+    validate_file_security_metadata(&metadata, owner, _test_mode, _expected_mode)?;
+    #[cfg(windows)]
+    validate_windows_security(path, false, _test_mode)?;
+    Ok(())
+}
+
+fn validate_file_security_metadata(
+    metadata: &fs::Metadata,
+    #[cfg(unix)] owner: UnixOwner,
+    #[cfg(not(unix))] _owner: (),
+    _test_mode: bool,
+    expected_mode: u32,
+) -> Result<(), NodeError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let metadata = fs::symlink_metadata(path)?;
-        if metadata.permissions().mode() & 0o777 != _expected_mode {
-            return Err(NodeError::InsecurePath(format!(
-                "{} has an unexpected mode",
-                path.display()
-            )));
+        if metadata.permissions().mode() & 0o777 != expected_mode {
+            return Err(NodeError::InsecurePath(
+                "node file has an unexpected mode".to_string(),
+            ));
         }
         if metadata.uid() != owner.uid || metadata.gid() != owner.gid {
-            return Err(NodeError::InsecurePath(format!(
-                "{} has the wrong owner or group",
-                path.display()
-            )));
+            return Err(NodeError::InsecurePath(
+                "node file has the wrong owner or group".to_string(),
+            ));
         }
     }
-    #[cfg(windows)]
-    validate_windows_security(path, false, _test_mode)?;
-    let _ = path;
+    let _ = (metadata, _test_mode, expected_mode);
     Ok(())
 }
 
@@ -736,6 +925,13 @@ fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError> {
 }
 
 #[cfg(windows)]
+const OWNER_AND_DACL_SECURITY_INFORMATION: u32 = 0x0000_0005;
+#[cfg(windows)]
+const SE_FILE_OBJECT: u32 = 1;
+#[cfg(windows)]
+const ERROR_SUCCESS: u32 = 0;
+
+#[cfg(windows)]
 fn validate_windows_security(
     path: &Path,
     _directory: bool,
@@ -746,30 +942,6 @@ fn validate_windows_security(
 
     if windows_has_reparse_point(path)? {
         return Err(NodeError::UnsafePath(path.display().to_string()));
-    }
-
-    const OWNER_AND_DACL_SECURITY_INFORMATION: u32 = 0x0000_0005;
-    const SE_FILE_OBJECT: u32 = 1;
-    const ACL_SIZE_INFORMATION_CLASS: u32 = 2;
-    const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
-    const INHERITED_ACE: u8 = 0x10;
-    const WIN_LOCAL_SYSTEM_SID: u32 = 22;
-    const WIN_LOCAL_SERVICE_SID: u32 = 23;
-    const ERROR_SUCCESS: u32 = 0;
-    const SECURITY_MAX_SID_SIZE: usize = 68;
-
-    #[repr(C)]
-    struct AceHeader {
-        ace_type: u8,
-        ace_flags: u8,
-        ace_size: u16,
-    }
-
-    #[repr(C)]
-    struct AclSizeInformation {
-        ace_count: u32,
-        acl_bytes_in_use: u32,
-        acl_bytes_free: u32,
     }
 
     let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
@@ -795,6 +967,72 @@ fn validate_windows_security(
             path.display()
         )));
     }
+    validate_windows_security_descriptor(path, test_mode, owner_sid, dacl, security_descriptor)
+}
+
+#[cfg(windows)]
+fn validate_windows_security_handle(
+    path: &Path,
+    file: &fs::File,
+    test_mode: bool,
+) -> Result<(), NodeError> {
+    use std::os::windows::io::AsRawHandle;
+    use std::ptr;
+
+    let mut security_descriptor: *mut std::ffi::c_void = ptr::null_mut();
+    let mut owner_sid: *mut std::ffi::c_void = ptr::null_mut();
+    let mut dacl: *mut std::ffi::c_void = ptr::null_mut();
+    let status = unsafe {
+        GetSecurityInfo(
+            file.as_raw_handle(),
+            SE_FILE_OBJECT,
+            OWNER_AND_DACL_SECURITY_INFORMATION,
+            &mut owner_sid,
+            ptr::null_mut(),
+            &mut dacl,
+            ptr::null_mut(),
+            &mut security_descriptor,
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return Err(NodeError::InsecurePath(format!(
+            "cannot read ACL for {} (error {status})",
+            path.display()
+        )));
+    }
+    validate_windows_security_descriptor(path, test_mode, owner_sid, dacl, security_descriptor)
+}
+
+#[cfg(windows)]
+fn validate_windows_security_descriptor(
+    path: &Path,
+    test_mode: bool,
+    owner_sid: *mut std::ffi::c_void,
+    dacl: *mut std::ffi::c_void,
+    security_descriptor: *mut std::ffi::c_void,
+) -> Result<(), NodeError> {
+    const ACL_SIZE_INFORMATION_CLASS: u32 = 2;
+    const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
+    const INHERITED_ACE: u8 = 0x10;
+    const WIN_LOCAL_SYSTEM_SID: u32 = 22;
+    const WIN_LOCAL_SERVICE_SID: u32 = 23;
+    const SECURITY_MAX_SID_SIZE: usize = 68;
+    use std::ptr;
+
+    #[repr(C)]
+    struct AceHeader {
+        ace_type: u8,
+        ace_flags: u8,
+        ace_size: u16,
+    }
+
+    #[repr(C)]
+    struct AclSizeInformation {
+        ace_count: u32,
+        acl_bytes_in_use: u32,
+        acl_bytes_free: u32,
+    }
+
     let result = (|| {
         if dacl.is_null() {
             return Err(NodeError::InsecurePath(format!(
@@ -926,12 +1164,26 @@ fn validate_windows_security(
 #[link(name = "kernel32")]
 extern "system" {
     fn GetFileAttributesW(path: *const u16) -> u32;
+    fn GetFileInformationByHandle(
+        handle: *mut std::ffi::c_void,
+        file_information: *mut ByHandleFileInformation,
+    ) -> i32;
     fn LocalFree(memory: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
 }
 
 #[cfg(windows)]
 #[link(name = "advapi32")]
 extern "system" {
+    fn GetSecurityInfo(
+        handle: *mut std::ffi::c_void,
+        object_type: u32,
+        security_info: u32,
+        owner: *mut *mut std::ffi::c_void,
+        group: *mut *mut std::ffi::c_void,
+        dacl: *mut *mut std::ffi::c_void,
+        sacl: *mut *mut std::ffi::c_void,
+        security_descriptor: *mut *mut std::ffi::c_void,
+    ) -> u32;
     fn GetNamedSecurityInfoW(
         object_name: *const u16,
         object_type: u32,
@@ -963,7 +1215,21 @@ extern "system" {
 #[cfg(windows)]
 const _: unsafe extern "system" fn(*const u16) -> u32 = GetFileAttributesW;
 #[cfg(windows)]
+const _: unsafe extern "system" fn(*mut std::ffi::c_void, *mut ByHandleFileInformation) -> i32 =
+    GetFileInformationByHandle;
+#[cfg(windows)]
 const _: unsafe extern "system" fn(*mut std::ffi::c_void) -> *mut std::ffi::c_void = LocalFree;
+#[cfg(windows)]
+const _: unsafe extern "system" fn(
+    *mut std::ffi::c_void,
+    u32,
+    u32,
+    *mut *mut std::ffi::c_void,
+    *mut *mut std::ffi::c_void,
+    *mut *mut std::ffi::c_void,
+    *mut *mut std::ffi::c_void,
+    *mut *mut std::ffi::c_void,
+) -> u32 = GetSecurityInfo;
 #[cfg(windows)]
 const _: unsafe extern "system" fn(
     *const u16,
@@ -1270,6 +1536,19 @@ mod tests {
             )
             .is_err());
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opened_file_identity_detects_path_replacement() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let opened_path = tmp.path().join("opened.toml");
+        let replacement_path = tmp.path().join("replacement.toml");
+        fs::write(&opened_path, "opened").unwrap();
+        fs::write(&replacement_path, "replacement").unwrap();
+        let file = fs::File::open(&opened_path).unwrap();
+        assert!(validate_open_file_identity(&opened_path, &file).is_ok());
+        assert!(validate_open_file_identity(&replacement_path, &file).is_err());
     }
 
     #[cfg(all(windows, debug_assertions))]

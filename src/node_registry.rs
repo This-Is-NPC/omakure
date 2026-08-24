@@ -58,6 +58,8 @@ pub enum RegistryError {
     InvalidTransition { from: PeerState, to: PeerState },
     #[error("peer was not found: {0}")]
     NotFound(String),
+    #[error("peer update would not change state: {0}")]
+    Unchanged(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,6 +176,12 @@ pub struct PeerRecord {
     pub source: PeerSource,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PeerCounts {
+    pub total: usize,
+    pub active: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RevocationRecord {
     pub id: i64,
@@ -218,6 +226,53 @@ impl NodeRegistry {
             local_public_key: public_key,
         };
         registry.with_connection(|connection| initialize_database(connection, &registry))?;
+        Ok(registry)
+    }
+
+    /// Open and validate an existing registry without creating a state
+    /// directory or initializing a missing database. Read-only status paths
+    /// use this to avoid turning observation into initialization.
+    pub fn open_existing(
+        context: &NodeContext,
+        identity: &NodeIdentityStatus,
+    ) -> Result<Self, RegistryError> {
+        if !context.validate_existing_state_directory()? {
+            return Err(RegistryError::NotFound(
+                "node state is not initialized".to_string(),
+            ));
+        }
+        let path = context.database_path();
+        match std::fs::symlink_metadata(&path) {
+            Ok(metadata)
+                if metadata.file_type().is_symlink() || !metadata.file_type().is_file() =>
+            {
+                return Err(RegistryError::InvalidSchema(
+                    "node.sqlite has an unexpected file type".to_string(),
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(RegistryError::NotFound(
+                    "node trust registry is not initialized".to_string(),
+                ));
+            }
+            Err(error) => return Err(error.into()),
+        }
+        let (node_id, public_key) = validate_identity(identity)?;
+        let registry = Self {
+            path,
+            local_node_id: node_id,
+            local_public_key: public_key,
+        };
+        registry.with_connection(|connection| {
+            let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+            if version == 0 {
+                return Err(RegistryError::InvalidSchema(
+                    "existing node.sqlite has no schema version".to_string(),
+                ));
+            }
+            initialize_database(connection, &registry)
+        })?;
         Ok(registry)
     }
 
@@ -276,6 +331,60 @@ impl NodeRegistry {
             )?;
             let peer = load_peer(&transaction, &registration.node_id)?
                 .ok_or_else(|| RegistryError::Corrupt("inserted peer disappeared".to_string()))?;
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    /// Atomically import a manually approved peer as active trust. The
+    /// operation is intentionally separate from observation/pending
+    /// registration and records the approval evidence in the same transaction
+    /// as the peer row.
+    pub fn import_manual_peer(
+        &self,
+        registration: PeerRegistration,
+    ) -> Result<PeerRecord, RegistryError> {
+        validate_registration(&registration, &self.local_node_id, &self.local_public_key)?;
+        let now = now_timestamp();
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            reject_retained_revocation(
+                &transaction,
+                &registration.node_id,
+                &registration.public_key,
+            )?;
+            if peer_exists(&transaction, &registration.node_id)?
+                || public_key_exists(&transaction, &registration.public_key)?
+            {
+                return Err(RegistryError::Duplicate(registration.node_id.clone()));
+            }
+            transaction.execute(
+                "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
+                 VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?5, NULL, ?6)",
+                params![
+                    registration.node_id,
+                    registration.public_key,
+                    registration.role.as_str(),
+                    capabilities_json(&registration.capabilities)?,
+                    now,
+                    registration.source.as_str(),
+                ],
+            )?;
+            record_audit(
+                &transaction,
+                AuditInput {
+                    event_type: "peer_trusted",
+                    node_id: &registration.node_id,
+                    from_state: None,
+                    to_state: Some(PeerState::Active),
+                    actor: &registration.actor,
+                    reason: &registration.reason,
+                    occurred_at: &now,
+                },
+            )?;
+            let peer = load_peer(&transaction, &registration.node_id)?
+                .ok_or_else(|| RegistryError::Corrupt("imported peer disappeared".to_string()))?;
             transaction.commit()?;
             Ok(peer)
         })
@@ -357,6 +466,57 @@ impl NodeRegistry {
             let peer = load_peer(&transaction, node_id)?.ok_or_else(|| {
                 RegistryError::Corrupt("transitioned peer disappeared".to_string())
             })?;
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    /// Update a peer's capability allow-list with explicit audit evidence.
+    /// Repeating an identical update is rejected so replayed input cannot
+    /// append another apparent trust decision.
+    pub fn update_peer_capabilities(
+        &self,
+        node_id: &str,
+        capabilities: Vec<String>,
+        actor: &str,
+        reason: &str,
+    ) -> Result<PeerRecord, RegistryError> {
+        validate_node_id(node_id)?;
+        validate_capabilities(&capabilities)?;
+        validate_actor_reason(actor, reason)?;
+        let now = now_timestamp();
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current = load_peer(&transaction, node_id)?
+                .ok_or_else(|| RegistryError::NotFound(node_id.to_string()))?;
+            if current.state == PeerState::Revoked {
+                return Err(RegistryError::InvalidTransition {
+                    from: current.state,
+                    to: current.state,
+                });
+            }
+            if current.capabilities == capabilities {
+                return Err(RegistryError::Unchanged(node_id.to_string()));
+            }
+            transaction.execute(
+                "UPDATE peers SET capabilities_json = ?1, updated_at = ?2 WHERE node_id = ?3",
+                params![capabilities_json(&capabilities)?, now, node_id],
+            )?;
+            record_audit(
+                &transaction,
+                AuditInput {
+                    event_type: "peer_capabilities_updated",
+                    node_id,
+                    from_state: Some(current.state),
+                    to_state: Some(current.state),
+                    actor,
+                    reason,
+                    occurred_at: &now,
+                },
+            )?;
+            let peer = load_peer(&transaction, node_id)?
+                .ok_or_else(|| RegistryError::Corrupt("updated peer disappeared".to_string()))?;
             transaction.commit()?;
             Ok(peer)
         })
@@ -460,6 +620,43 @@ impl NodeRegistry {
             drop(statement);
             transaction.commit()?;
             Ok(peers)
+        })
+    }
+
+    pub fn peers_limited(&self, limit: usize) -> Result<Vec<PeerRecord>, RegistryError> {
+        if limit == 0 || limit > 1024 {
+            return Err(RegistryError::InvalidInput(
+                "peer listing limit must be between 1 and 1024".to_string(),
+            ));
+        }
+        self.with_connection(|connection| {
+            let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let mut statement = transaction.prepare(
+                "SELECT node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source
+                 FROM peers ORDER BY node_id LIMIT ?1",
+            )?;
+            let rows = statement.query_map([limit as i64], peer_from_row)?;
+            let peers = rows.collect::<Result<Vec<_>, _>>()?;
+            drop(statement);
+            transaction.commit()?;
+            Ok(peers)
+        })
+    }
+
+    pub fn peer_counts(&self) -> Result<PeerCounts, RegistryError> {
+        self.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT COUNT(*), COALESCE(SUM(state = 'active'), 0) FROM peers",
+                    [],
+                    |row| {
+                        Ok(PeerCounts {
+                            total: row.get::<_, i64>(0)? as usize,
+                            active: row.get::<_, i64>(1)? as usize,
+                        })
+                    },
+                )
+                .map_err(Into::into)
         })
     }
 

@@ -5,6 +5,14 @@ use thiserror::Error;
 
 pub const NODE_CONFIG_VERSION: u8 = 1;
 pub const MAX_MESSAGE_BYTES: u64 = 16 * 1024 * 1024;
+pub const MAX_NODE_CONFIG_RELAYS: usize = 32;
+pub const MAX_NODE_CONFIG_STATIC_PEERS: usize = 256;
+pub const MAX_NODE_CONFIG_RELAY_BYTES: usize = 512;
+pub const MAX_NODE_CONFIG_STATIC_PEER_BYTES: usize = 256;
+pub const MAX_NODE_CONFIG_SECRET_REF_BYTES: usize = 256;
+const MAX_BIND_BYTES: usize = 128;
+const MAX_NETWORK_MODE_BYTES: usize = 64;
+const MAX_ENROLLMENT_BYTES: usize = 64;
 const MAX_DISPLAY_NAME_BYTES: usize = 128;
 const MAX_ORGANIZATION_ID_BYTES: usize = 128;
 
@@ -119,7 +127,15 @@ impl NodeConfig {
             MAX_ORGANIZATION_ID_BYTES,
             true,
         )?;
+        validate_text("api.bind", &self.api.bind, MAX_BIND_BYTES, false)?;
         validate_bind(&self.api.bind)?;
+
+        validate_text(
+            "network.mode",
+            &self.network.mode,
+            MAX_NETWORK_MODE_BYTES,
+            false,
+        )?;
 
         match self.network.mode.as_str() {
             "direct" | "direct-with-nostr-fallback" | "nostr" => {}
@@ -134,6 +150,16 @@ impl NodeConfig {
                 "network.relays must be empty in direct mode".to_string(),
             ));
         }
+        if self.network.relays.len() > MAX_NODE_CONFIG_RELAYS {
+            return Err(NodeConfigError::Invalid(
+                "network.relays has too many entries".to_string(),
+            ));
+        }
+        if self.network.static_peers.len() > MAX_NODE_CONFIG_STATIC_PEERS {
+            return Err(NodeConfigError::Invalid(
+                "network.static_peers has too many entries".to_string(),
+            ));
+        }
         if !(1..=MAX_MESSAGE_BYTES).contains(&self.network.max_message_bytes) {
             return Err(NodeConfigError::Invalid(format!(
                 "network.max_message_bytes must be between 1 and {MAX_MESSAGE_BYTES}"
@@ -146,6 +172,12 @@ impl NodeConfig {
             validate_static_peer(peer)?;
         }
 
+        validate_text(
+            "trust.enrollment",
+            &self.trust.enrollment,
+            MAX_ENROLLMENT_BYTES,
+            false,
+        )?;
         match self.trust.enrollment.as_str() {
             "disabled" | "manual" | "signed-bundle" => {}
             value => {
@@ -204,6 +236,11 @@ fn validate_bind(value: &str) -> Result<(), NodeConfigError> {
 }
 
 fn validate_relay(value: &str) -> Result<(), NodeConfigError> {
+    if value.len() > MAX_NODE_CONFIG_RELAY_BYTES {
+        return Err(NodeConfigError::Invalid(
+            "network relay is too long".to_string(),
+        ));
+    }
     let Some(rest) = value.strip_prefix("wss://") else {
         return Err(NodeConfigError::Invalid(format!(
             "network relay `{value}` must use wss://"
@@ -233,6 +270,11 @@ fn validate_relay(value: &str) -> Result<(), NodeConfigError> {
 }
 
 fn validate_static_peer(value: &str) -> Result<(), NodeConfigError> {
+    if value.len() > MAX_NODE_CONFIG_STATIC_PEER_BYTES {
+        return Err(NodeConfigError::Invalid(
+            "static peer is too long".to_string(),
+        ));
+    }
     let Some((node_id, endpoint)) = value.split_once('@') else {
         return Err(NodeConfigError::Invalid(format!(
             "static peer `{value}` must be node_id@host:port"
@@ -324,6 +366,11 @@ fn is_node_id(value: &str) -> bool {
 }
 
 fn validate_secret_ref(value: &str) -> Result<(), NodeConfigError> {
+    if value.len() > MAX_NODE_CONFIG_SECRET_REF_BYTES {
+        return Err(NodeConfigError::Invalid(
+            "organization.discovery_secret_ref is invalid".to_string(),
+        ));
+    }
     if value.is_empty() {
         return Ok(());
     }
@@ -415,6 +462,38 @@ mod tests {
         config.organization.discovery_secret_ref = "secret://prod/discovery_key".into();
         config.trust.enrollment = "manual".into();
         config.validate().unwrap();
+    }
+
+    #[test]
+    fn validation_rejects_unbounded_public_config_values() {
+        let mut config = NodeConfig::default();
+        config.node.display_name = "d".repeat(129);
+        assert!(config.validate().is_err());
+
+        config = NodeConfig::default();
+        config.organization.id = "o".repeat(129);
+        assert!(config.validate().is_err());
+
+        config = NodeConfig::default();
+        config.network.mode = "nostr".into();
+        config.network.relays = vec!["wss://relay.example.test".into(); MAX_NODE_CONFIG_RELAYS + 1];
+        assert!(config.validate().is_err());
+
+        config.network.relays.clear();
+        config.network.static_peers = vec![
+            format!("omk1_{}@127.0.0.1:7879", "a".repeat(64));
+            MAX_NODE_CONFIG_STATIC_PEERS + 1
+        ];
+        assert!(config.validate().is_err());
+
+        config.network.static_peers.clear();
+        config.network.relays = vec![format!("wss://{}", "r".repeat(MAX_NODE_CONFIG_RELAY_BYTES))];
+        assert!(config.validate().is_err());
+
+        config.network.relays.clear();
+        config.organization.discovery_secret_ref =
+            "secret://".to_string() + &"provider".repeat(MAX_NODE_CONFIG_SECRET_REF_BYTES);
+        assert!(config.validate().is_err());
     }
 
     #[test]

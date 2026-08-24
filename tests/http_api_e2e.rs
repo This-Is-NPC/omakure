@@ -182,6 +182,30 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         ("GET", "/v1/secrets"),
         RouteCoverage::Covered("secrets_metadata_endpoint_redacts_values (unit)"),
     ),
+    (
+        ("GET", "/v1/node/status"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
+        ("POST", "/v1/node/init"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
+        ("GET", "/v1/node/peers"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
+        ("POST", "/v1/node/peers"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
+        ("PATCH", "/v1/node/peers/:node_id/capabilities"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
+        ("POST", "/v1/node/peers/:node_id/revoke"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
 ];
 
 #[test]
@@ -950,32 +974,438 @@ fn protected_routes_return_401_without_or_with_invalid_bearer() {
     let health = server.get_unauthenticated("/v1/health");
     assert_eq!(health.status, 200, "body: {}", health.safe_body());
 
-    for path in [
-        "/v1/config",
-        "/v1/scripts",
-        "/v1/envs",
-        "/v1/runs",
-        "/v1/queue/stats",
-        "/v1/batteries",
+    for (method, path, body) in [
+        ("GET", "/v1/config", None),
+        ("GET", "/v1/scripts", None),
+        ("GET", "/v1/envs", None),
+        ("GET", "/v1/runs", None),
+        ("GET", "/v1/queue/stats", None),
+        ("GET", "/v1/batteries", None),
+        ("GET", "/v1/node/status", None),
+        ("POST", "/v1/node/init", Some("{}")),
+        ("GET", "/v1/node/peers", None),
+        ("POST", "/v1/node/peers", Some("{}")),
+        ("PATCH", "/v1/node/peers/omk1_test/capabilities", Some("{}")),
+        ("POST", "/v1/node/peers/omk1_test/revoke", Some("{}")),
     ] {
-        let missing = server.get_unauthenticated(path);
+        let body = body.map(str::to_string);
+        let missing = server.request_with_auth(method, path, body.clone(), support::AuthMode::None);
         assert_eq!(
             missing.status,
             401,
-            "{path} missing token; body: {}",
+            "{method} {path} missing token; body: {}",
             missing.safe_body()
         );
         assert_error_code(&missing.json(), "unauthorized");
 
-        let invalid = server.get_with_bearer(path, "definitely-not-the-api-token-value");
+        let invalid = server.request_with_auth(
+            method,
+            path,
+            body,
+            support::AuthMode::Bearer("definitely-not-the-api-token-value"),
+        );
         assert_eq!(
             invalid.status,
             401,
-            "{path} invalid token; body: {}",
+            "{method} {path} invalid token; body: {}",
             invalid.safe_body()
         );
         assert_error_code(&invalid.json(), "unauthorized");
     }
+}
+
+#[test]
+fn node_management_routes_cover_missing_scopes_individually() {
+    let workspace = support::TestWorkspace::new("http_node_route_scopes");
+    let full = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--capability",
+            "node:read",
+            "--capability",
+            "node:write",
+            "--capability",
+            "trust:write",
+        ],
+        &[],
+        Duration::from_secs(10),
+    );
+
+    let node_write_only = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "node:write"],
+        &[],
+        Duration::from_secs(10),
+    );
+    for path in ["/v1/node/status", "/v1/node/peers"] {
+        let denied = node_write_only.request("GET", path, None);
+        assert_eq!(denied.status, 403, "GET {path}: {}", denied.safe_body());
+        assert_error_code(&denied.json(), "forbidden");
+    }
+
+    let node_read_only = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "node:read"],
+        &[],
+        Duration::from_secs(10),
+    );
+    let denied_init = node_read_only.post_json("/v1/node/init", &json!({}));
+    assert_eq!(
+        denied_init.status,
+        403,
+        "POST /v1/node/init: {}",
+        denied_init.safe_body()
+    );
+    assert_error_code(&denied_init.json(), "forbidden");
+    for (method, path) in [
+        ("POST", "/v1/node/peers"),
+        ("PATCH", "/v1/node/peers/omk1_test/capabilities"),
+        ("POST", "/v1/node/peers/omk1_test/revoke"),
+    ] {
+        let denied = node_read_only.request(method, path, Some("{}".to_string()));
+        assert_eq!(
+            denied.status,
+            403,
+            "{method} {path}: {}",
+            denied.safe_body()
+        );
+        assert_error_code(&denied.json(), "forbidden");
+    }
+
+    drop(node_read_only);
+    drop(node_write_only);
+    drop(full);
+}
+
+#[test]
+fn node_management_routes_use_shared_operations_and_exact_scopes() {
+    let workspace = support::TestWorkspace::new("http_node_management");
+    let state = workspace.path().join("node-state");
+    let config = workspace.path().join("node.toml");
+    let state_string = state.to_string_lossy().to_string();
+    let config_string = config.to_string_lossy().to_string();
+    let envs = [
+        ("OMAKURE_NODE_TEST_MODE", "1"),
+        ("OMAKURE_NODE_STATE_DIR", state_string.as_str()),
+        ("OMAKURE_NODE_CONFIG", config_string.as_str()),
+    ];
+
+    let readonly = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "node:read"],
+        &envs,
+        Duration::from_secs(10),
+    );
+    let readonly_init = readonly.post_json("/v1/node/init", &json!({}));
+    assert_eq!(readonly_init.status, 403);
+    assert_error_code(&readonly_init.json(), "forbidden");
+
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--capability",
+            "node:read",
+            "--capability",
+            "node:write",
+            "--capability",
+            "trust:write",
+        ],
+        &envs,
+        Duration::from_secs(10),
+    );
+    let before = server.get("/v1/node/status");
+    assert_eq!(before.status, 200, "body: {}", before.safe_body());
+    assert_eq!(before.json()["data"]["initialized"], false);
+    before.assert_no_secret("identity.key");
+
+    let init = server.post_json("/v1/node/init", &json!({}));
+    assert_eq!(init.status, 200, "body: {}", init.safe_body());
+    assert_eq!(init.json()["data"]["status"]["initialized"], true);
+    init.assert_no_secret("private_key");
+
+    let status = server.get("/v1/node/status");
+    assert_eq!(status.status, 200, "body: {}", status.safe_body());
+    assert_eq!(
+        status.json()["data"]["identity"]["public_key"]
+            .as_str()
+            .unwrap()
+            .len(),
+        64
+    );
+    assert!(status.json()["data"]["identity"]
+        .get("private_key")
+        .is_none());
+
+    let peer = json!({
+        "node_id": "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92",
+        "public_key": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        "role": "performer",
+        "capabilities": ["remote-run"],
+        "actor": "operator",
+        "reason": "approved",
+        "confirmed": false
+    });
+    let not_confirmed = server.post_json("/v1/node/peers", &peer);
+    assert_eq!(not_confirmed.status, 403);
+    assert_error_code(&not_confirmed.json(), "forbidden");
+    assert!(server.get("/v1/node/peers").json()["data"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+
+    let mut confirmed_peer = peer.clone();
+    confirmed_peer["confirmed"] = json!(true);
+    let imported = server.post_json("/v1/node/peers", &confirmed_peer);
+    assert_eq!(imported.status, 200, "body: {}", imported.safe_body());
+    assert_eq!(imported.json()["data"]["state"], "active");
+    imported.assert_no_secret("approved");
+
+    let replay = server.post_json("/v1/node/peers", &confirmed_peer);
+    assert_eq!(replay.status, 409, "body: {}", replay.safe_body());
+    assert_error_code(&replay.json(), "conflict");
+    assert_eq!(
+        server.get("/v1/node/peers").json()["data"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let malformed = server.patch_json(
+        "/v1/node/peers/omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92/capabilities",
+        &json!({"capabilities":["remote-run","notifications"],"actor":"operator","reason":"bad order","confirmed":true}),
+    );
+    assert_eq!(malformed.status, 400, "body: {}", malformed.safe_body());
+    assert_error_code(&malformed.json(), "invalid_input");
+
+    let update = server.patch_json(
+        "/v1/node/peers/omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92/capabilities",
+        &json!({"capabilities":["notifications"],"actor":"operator","reason":"narrowed","confirmed":true}),
+    );
+    assert_eq!(update.status, 200, "body: {}", update.safe_body());
+    assert_eq!(
+        update.json()["data"]["capabilities"],
+        json!(["notifications"])
+    );
+
+    let revoked = server.post_json(
+        "/v1/node/peers/omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92/revoke",
+        &json!({"actor":"operator","reason":"retired","confirmed":true}),
+    );
+    assert_eq!(revoked.status, 200, "body: {}", revoked.safe_body());
+    assert_eq!(revoked.json()["data"]["state"], "revoked");
+
+    let repeated_revoke = server.post_json(
+        "/v1/node/peers/omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92/revoke",
+        &json!({"actor":"operator","reason":"replay","confirmed":true}),
+    );
+    assert_eq!(repeated_revoke.status, 409);
+    assert_error_code(&repeated_revoke.json(), "conflict");
+}
+
+#[test]
+fn node_json_mutation_routes_return_413_envelopes_without_mutation() {
+    let workspace = support::TestWorkspace::new("http_node_body_limit");
+    let policy = workspace.path().join("policy.toml");
+    fs::write(&policy, "version = 1\n[http]\nbody_limit_bytes = 64\n")
+        .expect("write body-limit policy");
+    let state = workspace.path().join("node-state");
+    let config = workspace.path().join("node.toml");
+    let state_string = state.to_string_lossy().to_string();
+    let config_string = config.to_string_lossy().to_string();
+    let envs = [
+        ("OMAKURE_NODE_TEST_MODE", "1"),
+        ("OMAKURE_NODE_STATE_DIR", state_string.as_str()),
+        ("OMAKURE_NODE_CONFIG", config_string.as_str()),
+    ];
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--policy", policy.to_str().unwrap(), "--capability", "all"],
+        &envs,
+        Duration::from_secs(10),
+    );
+    let oversized = json!({"padding": "x".repeat(256)}).to_string();
+
+    for (method, path) in [
+        ("POST", "/v1/node/init"),
+        ("POST", "/v1/node/peers"),
+        ("PATCH", "/v1/node/peers/omk1_test/capabilities"),
+        ("POST", "/v1/node/peers/omk1_test/revoke"),
+    ] {
+        let response = server.request(method, path, Some(oversized.clone()));
+        assert_eq!(
+            response.status,
+            413,
+            "{method} {path}: {}",
+            response.safe_body()
+        );
+        assert_error_code(&response.json(), "payload_too_large");
+    }
+
+    let status = server.get("/v1/node/status");
+    assert_eq!(status.status, 200, "body: {}", status.safe_body());
+    assert_eq!(status.json()["data"]["initialized"], false);
+    assert_eq!(status.json()["data"]["trust"]["peer_count"], 0);
+    assert!(
+        !state.exists(),
+        "oversized mutation bodies must not initialize state"
+    );
+}
+
+#[test]
+fn node_status_redacts_malformed_config_values_in_http_envelope() {
+    let workspace = support::TestWorkspace::new("http_node_config_redaction");
+    let state = workspace.path().join("node-state");
+    let config = workspace.path().join("node.toml");
+    let state_string = state.to_string_lossy().to_string();
+    let config_string = config.to_string_lossy().to_string();
+    let envs = [
+        ("OMAKURE_NODE_TEST_MODE", "1"),
+        ("OMAKURE_NODE_STATE_DIR", state_string.as_str()),
+        ("OMAKURE_NODE_CONFIG", config_string.as_str()),
+    ];
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "node:read", "--capability", "node:write"],
+        &envs,
+        Duration::from_secs(10),
+    );
+    let init = server.post_json("/v1/node/init", &json!({}));
+    assert_eq!(init.status, 200, "body: {}", init.safe_body());
+
+    let secret = "relay-user-super-secret-value";
+    let malformed = fs::read_to_string(&config)
+        .expect("read initialized node config")
+        .replace("mode = \"direct\"", "mode = \"nostr\"")
+        .replace(
+            "relays = []",
+            &format!("relays = [\"wss://user:{secret}@relay.example.test\"]"),
+        );
+    fs::write(&config, malformed).expect("write malformed node config");
+
+    let response = server.get("/v1/node/status");
+    assert_eq!(response.status, 500, "body: {}", response.safe_body());
+    assert_error_code(&response.json(), "registry_invalid");
+    assert_eq!(
+        response.json()["error"]["message"],
+        "node configuration is invalid or corrupt"
+    );
+    response.assert_no_secret(secret);
+}
+
+#[test]
+fn node_cli_and_http_expose_identical_public_status_and_peers() {
+    let workspace = support::TestWorkspace::new("node_adapter_parity");
+    let state = workspace.path().join("node-state");
+    let config = workspace.path().join("node.toml");
+    let state_arg = state.to_string_lossy().to_string();
+    let config_arg = config.to_string_lossy().to_string();
+    let envs = [
+        ("OMAKURE_NODE_TEST_MODE", "1"),
+        ("OMAKURE_NODE_STATE_DIR", state_arg.as_str()),
+        ("OMAKURE_NODE_CONFIG", config_arg.as_str()),
+    ];
+    let cli_init = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            &state_arg,
+            "--node-config",
+            &config_arg,
+            "init",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&cli_init);
+    let cli_init_json = support::json_envelope(&cli_init.stdout);
+    assert_eq!(cli_init_json["data"]["status"]["initialized"], true);
+
+    let cli_trust = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            &state_arg,
+            "--node-config",
+            &config_arg,
+            "trust",
+            "--node-id",
+            "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92",
+            "--public-key",
+            "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "--actor",
+            "operator",
+            "--reason",
+            "parity fixture",
+            "--confirmed",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&cli_trust);
+
+    let cli_status = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            &state_arg,
+            "--node-config",
+            &config_arg,
+            "status",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&cli_status);
+    let cli_status_json = support::json_envelope(&cli_status.stdout);
+
+    let cli_peers = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            &state_arg,
+            "--node-config",
+            &config_arg,
+            "peers",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&cli_peers);
+    let cli_peers_json = support::json_envelope(&cli_peers.stdout);
+
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--capability",
+            "node:read",
+            "--capability",
+            "node:write",
+            "--capability",
+            "trust:write",
+        ],
+        &envs,
+        Duration::from_secs(10),
+    );
+    let http_status = server.get("/v1/node/status");
+    assert_eq!(http_status.status, 200, "body: {}", http_status.safe_body());
+    assert_eq!(http_status.json()["data"], cli_status_json["data"]);
+
+    let http_peers = server.get("/v1/node/peers");
+    assert_eq!(http_peers.status, 200, "body: {}", http_peers.safe_body());
+    assert_eq!(http_peers.json()["data"], cli_peers_json["data"]);
 }
 
 fn rewrite_battery_git_url(workspace: &Path, name: &str, git_url: &str) {

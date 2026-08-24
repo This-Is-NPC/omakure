@@ -124,6 +124,34 @@ impl NodeIdentity {
         Self::load_or_initialize_with(context, Some(signing_key))
     }
 
+    /// Load an existing identity without creating a state directory, lock
+    /// file, identity, or registry. This is the fail-closed path for public
+    /// status inspection.
+    pub fn load_existing(context: &NodeContext) -> Result<Self, NodeIdentityError> {
+        if !context.validate_existing_state_directory()? {
+            return Err(NodeIdentityError::State(
+                "node state is not initialized".to_string(),
+            ));
+        }
+        reject_public_companion(context.state_dir())?;
+        let identity_path = context.identity_path();
+        if !inspect_existing_state_file(&identity_path, "identity.key")? {
+            return Err(NodeIdentityError::State(
+                "node identity is not initialized".to_string(),
+            ));
+        }
+        context.validate_private_file(&identity_path)?;
+        let bytes = read_private_key(context, &identity_path)?;
+        let signing_key =
+            SigningKey::from_slice(&bytes).map_err(|_| NodeIdentityError::InvalidKey)?;
+        if signing_key.to_bytes().as_slice() != bytes.as_slice() {
+            return Err(NodeIdentityError::State(
+                "persisted identity scalar is not even-Y normalized".to_string(),
+            ));
+        }
+        Ok(Self::from_signing_key(context, signing_key))
+    }
+
     fn load_or_initialize_with(
         context: &NodeContext,
         imported: Option<SigningKey>,
@@ -249,6 +277,10 @@ impl NodeIdentity {
 impl NodeContext {
     pub fn load_or_initialize_identity(&self) -> Result<NodeIdentity, NodeIdentityError> {
         NodeIdentity::load_or_initialize(self)
+    }
+
+    pub fn load_existing_identity(&self) -> Result<NodeIdentity, NodeIdentityError> {
+        NodeIdentity::load_existing(self)
     }
 }
 

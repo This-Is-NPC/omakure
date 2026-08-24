@@ -6,6 +6,7 @@ use crate::operations::config as config_ops;
 use crate::operations::core;
 use crate::operations::doctor as doctor_ops;
 use crate::operations::envs as env_ops;
+use crate::operations::node as node_ops;
 use crate::operations::scripts as scripts_ops;
 use crate::operations::search as search_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
@@ -176,6 +177,9 @@ enum ApiCapability {
     BatteryRead,
     BatteryWrite,
     AdminStatus,
+    NodeRead,
+    NodeWrite,
+    TrustWrite,
 }
 
 #[derive(Debug, Clone)]
@@ -201,6 +205,9 @@ impl ApiPolicy {
             ApiCapability::BatteryRead,
             ApiCapability::BatteryWrite,
             ApiCapability::AdminStatus,
+            ApiCapability::NodeRead,
+            ApiCapability::NodeWrite,
+            ApiCapability::TrustWrite,
         ]);
         // Explicit empty allow-list: `all` does not bypass secret-ref ACLs.
         // Grant refs with repeated `--secret-ref` (or leave empty to deny provider refs).
@@ -343,6 +350,9 @@ impl ApiCapability {
             "batteries:write" | "batteries:add" | "batteries:sync" | "batteries:install"
             | "batteries:remove" => Ok(Self::BatteryWrite),
             "admin:status" => Ok(Self::AdminStatus),
+            "node:read" => Ok(Self::NodeRead),
+            "node:write" => Ok(Self::NodeWrite),
+            "trust:write" => Ok(Self::TrustWrite),
             "doctor:read" | "workspace:read" => Ok(Self::ConfigRead),
             "search:read" => Ok(Self::ScriptsRead),
             _ => Err(ApiConfigError::InvalidCapability(value.to_string())),
@@ -365,6 +375,9 @@ impl ApiCapability {
             Self::BatteryRead => "batteries:read",
             Self::BatteryWrite => "batteries:write",
             Self::AdminStatus => "admin:status",
+            Self::NodeRead => "node:read",
+            Self::NodeWrite => "node:write",
+            Self::TrustWrite => "trust:write",
         }
     }
 }
@@ -486,6 +499,37 @@ fn default_actor() -> String {
 
 fn default_battery_ref() -> String {
     "main".to_string()
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct NodeInitializeBody {}
+
+#[derive(Debug, Deserialize)]
+struct ManualTrustBody {
+    node_id: String,
+    public_key: String,
+    role: String,
+    #[serde(default)]
+    capabilities: Vec<String>,
+    actor: String,
+    reason: String,
+    confirmed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct NodeCapabilitiesBody {
+    #[serde(default)]
+    capabilities: Vec<String>,
+    actor: String,
+    reason: String,
+    confirmed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct NodeRevokeBody {
+    actor: String,
+    reason: String,
+    confirmed: bool,
 }
 
 pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
@@ -679,6 +723,12 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ),
     ("POST", "/v1/batteries/:battery_id/sync"),
     ("GET", "/v1/secrets"),
+    ("GET", "/v1/node/status"),
+    ("POST", "/v1/node/init"),
+    ("GET", "/v1/node/peers"),
+    ("POST", "/v1/node/peers"),
+    ("PATCH", "/v1/node/peers/:node_id/capabilities"),
+    ("POST", "/v1/node/peers/:node_id/revoke"),
 ];
 // OMAKURE_HTTP_ROUTE_INVENTORY_END
 
@@ -758,6 +808,17 @@ fn router_with_policy(
         )
         .route("/v1/batteries/:battery_id/sync", post(sync_battery_handler))
         .route("/v1/secrets", get(list_secrets_metadata_handler))
+        .route("/v1/node/status", get(node_status_handler))
+        .route("/v1/node/init", post(node_initialize_handler))
+        .route(
+            "/v1/node/peers",
+            get(node_peers_handler).post(node_trust_handler),
+        )
+        .route(
+            "/v1/node/peers/:node_id/capabilities",
+            axum::routing::patch(node_capabilities_handler),
+        )
+        .route("/v1/node/peers/:node_id/revoke", post(node_revoke_handler))
         .fallback(protected_not_found)
         .layer(axum::extract::DefaultBodyLimit::max(body_limit))
         .layer(middleware::from_fn_with_state(
@@ -844,6 +905,134 @@ async fn workspace_handler(
         return response;
     }
     operation_response(core::workspace_summary(&state.workspace))
+}
+
+async fn node_status_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+        return response;
+    }
+    operation_response(node_context().and_then(|context| node_ops::public_node_status(&context)))
+}
+
+async fn node_initialize_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeWrite) {
+        return response;
+    }
+    if let Err(error) =
+        parse_json_body::<NodeInitializeBody>(body, state.deploy.http.body_limit_bytes).await
+    {
+        return operation_error_response(error);
+    }
+    operation_response(node_context().and_then(|context| {
+        node_ops::initialize_node(&context, &crate::domain::NodeConfig::default())
+    }))
+}
+
+async fn node_peers_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+        return response;
+    }
+    operation_response(node_context().and_then(|context| node_ops::list_trusted_peers(&context)))
+}
+
+async fn node_trust_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_scope(&state, &auth_ctx, "trust:write") {
+        return response;
+    }
+    let body =
+        match parse_json_body::<ManualTrustBody>(body, state.deploy.http.body_limit_bytes).await {
+            Ok(body) => body,
+            Err(error) => return operation_error_response(error),
+        };
+    operation_response(node_context().and_then(|context| {
+        node_ops::import_manual_trust(
+            &context,
+            node_ops::ManualTrustRequest {
+                node_id: body.node_id,
+                public_key: body.public_key,
+                role: body.role,
+                capabilities: body.capabilities,
+                actor: body.actor,
+                reason: body.reason,
+                confirmed: body.confirmed,
+            },
+        )
+    }))
+}
+
+async fn node_capabilities_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    AxumPath(node_id): AxumPath<String>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_scope(&state, &auth_ctx, "trust:write") {
+        return response;
+    }
+    let body =
+        match parse_json_body::<NodeCapabilitiesBody>(body, state.deploy.http.body_limit_bytes)
+            .await
+        {
+            Ok(body) => body,
+            Err(error) => return operation_error_response(error),
+        };
+    operation_response(node_context().and_then(|context| {
+        node_ops::update_peer_capabilities(
+            &context,
+            node_ops::CapabilityUpdateRequest {
+                node_id,
+                capabilities: body.capabilities,
+                actor: body.actor,
+                reason: body.reason,
+                confirmed: body.confirmed,
+            },
+        )
+    }))
+}
+
+async fn node_revoke_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    AxumPath(node_id): AxumPath<String>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_scope(&state, &auth_ctx, "trust:write") {
+        return response;
+    }
+    let body =
+        match parse_json_body::<NodeRevokeBody>(body, state.deploy.http.body_limit_bytes).await {
+            Ok(body) => body,
+            Err(error) => return operation_error_response(error),
+        };
+    operation_response(node_context().and_then(|context| {
+        node_ops::revoke_peer(
+            &context,
+            node_ops::RevocationRequest {
+                node_id,
+                actor: body.actor,
+                reason: body.reason,
+                confirmed: body.confirmed,
+            },
+        )
+    }))
+}
+
+fn node_context() -> OperationResult<crate::node::NodeContext> {
+    node_ops::resolve_context(crate::node::NodePathOverrides::default())
 }
 
 async fn config_handler(
@@ -2045,6 +2234,9 @@ fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Re
             "batteries:write" | "batteries:add" | "batteries:sync" | "batteries:install"
             | "batteries:remove" => ApiCapability::BatteryWrite,
             "admin:status" => ApiCapability::AdminStatus,
+            "node:read" => ApiCapability::NodeRead,
+            "node:write" => ApiCapability::NodeWrite,
+            "trust:write" => ApiCapability::TrustWrite,
             _ => {
                 return Some(error_response(
                     StatusCode::FORBIDDEN,

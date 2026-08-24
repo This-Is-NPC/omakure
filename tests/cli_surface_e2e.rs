@@ -77,6 +77,10 @@ const TOP_LEVEL_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
+        command: "node",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
         command: "queue",
         coverage: Coverage::Covered("tests/secret_cli_e2e.rs + tests/cli_surface_e2e.rs"),
     },
@@ -200,6 +204,30 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
+        command: "node capabilities",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
+        command: "node init",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
+        command: "node peers",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
+        command: "node revoke",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
+        command: "node status",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
+        command: "node trust",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
         command: "queue add",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs + tests/secret_cli_e2e.rs"),
     },
@@ -269,6 +297,12 @@ fn command_surface_inventory_maps_all_current_commands() {
         "history stats",
         "history tail",
         "history traces",
+        "node capabilities",
+        "node init",
+        "node peers",
+        "node revoke",
+        "node status",
+        "node trust",
         "queue add",
         "queue cancel",
         "queue dead-letter",
@@ -276,7 +310,8 @@ fn command_surface_inventory_maps_all_current_commands() {
         "queue worker",
         "token generate",
     ];
-    let clap_nested = clap_nested_commands(&["battery", "env", "history", "queue", "token"]);
+    let clap_nested =
+        clap_nested_commands(&["battery", "env", "history", "queue", "node", "token"]);
     assert_eq!(
         clap_nested, expected_nested,
         "nested clap subcommands drifted from expected set"
@@ -475,6 +510,98 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
         assert_success(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage"));
     }
+}
+
+#[test]
+fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
+    let workspace = support::TestWorkspace::new("cli_node_surface");
+    let state = workspace.path().join("node-state");
+    let config = workspace.path().join("node.toml");
+    let state_arg = state.to_string_lossy().to_string();
+    let config_arg = config.to_string_lossy().to_string();
+    let node_args = [state_arg.as_str(), config_arg.as_str()];
+
+    let init = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            node_args[0],
+            "--node-config",
+            node_args[1],
+            "init",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&init);
+    assert_eq!(json(&init)["data"]["status"]["initialized"], true);
+    assert_eq!(json(&init)["data"]["state_dir_created"], true);
+
+    let status = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            node_args[0],
+            "--node-config",
+            node_args[1],
+            "status",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&status);
+    assert_eq!(
+        json(&status)["data"]["identity"]["public_key"]
+            .as_str()
+            .unwrap()
+            .len(),
+        64
+    );
+    assert!(json(&status)["data"]["identity"]
+        .get("private_key")
+        .is_none());
+
+    let trust = [
+        "--json",
+        "node",
+        "--node-state-dir",
+        node_args[0],
+        "--node-config",
+        node_args[1],
+        "trust",
+        "--node-id",
+        "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92",
+        "--public-key",
+        "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        "--capability",
+        "remote-run",
+        "--actor",
+        "operator",
+        "--reason",
+        "approved",
+        "--confirmed",
+    ];
+    let imported = omakure_with_env(workspace.path(), &trust, &[("OMAKURE_NODE_TEST_MODE", "1")]);
+    assert_success(&imported);
+    assert_eq!(json(&imported)["data"]["state"], "active");
+
+    let peers = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            node_args[0],
+            "--node-config",
+            node_args[1],
+            "peers",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&peers);
+    assert_eq!(json(&peers)["data"].as_array().unwrap().len(), 1);
 }
 
 #[test]

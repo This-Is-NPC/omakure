@@ -200,6 +200,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         Commands::Queue(args) => cli::queue::run(global_root, args, json_output)?,
         Commands::Battery(args) => cli::battery::run(global_root, args, json_output)?,
         Commands::Env(args) => cli::env::run(global_root, args, json_output)?,
+        Commands::Node(args) => cli::node::run(args, json_output)?,
         Commands::Token(args) => cli::token::run(args, json_output)?,
         Commands::Api(args) => cli::api::run(global_root, args)?,
         Commands::Engine(args) => cli::engine::run(global_root, args)?,

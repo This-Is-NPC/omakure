@@ -84,6 +84,8 @@ pub struct EnginePolicy {
 pub struct RoutesPolicy {
     pub read: bool,
     pub writes: bool,
+    pub node: bool,
+    pub trust: bool,
     pub battery: bool,
     pub battery_install: bool,
     pub run_enqueue: bool,
@@ -99,6 +101,8 @@ impl Default for RoutesPolicy {
         Self {
             read: true,
             writes: true,
+            node: true,
+            trust: true,
             battery: true,
             battery_install: true,
             run_enqueue: true,
@@ -353,7 +357,15 @@ impl RoutesPolicy {
         let method = method.to_ascii_uppercase();
         let is_write = matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
         let is_battery = path == "/v1/batteries" || path.starts_with("/v1/batteries/");
+        let is_node = path == "/v1/node" || path.starts_with("/v1/node/");
+        let is_trust = is_node && path.contains("/peers");
 
+        if is_node && !self.node {
+            return false;
+        }
+        if is_trust && is_write && !self.trust {
+            return false;
+        }
         if is_battery && !self.battery {
             return false;
         }
@@ -489,6 +501,47 @@ mod tests {
         assert!(!p.routes.allows("DELETE", "/v1/batteries/azure"));
         assert!(!p.routes.allows("POST", "/v1/batteries/azure/sync"));
         assert!(p.routes.allows("GET", "/v1/scripts"));
+    }
+
+    #[test]
+    fn node_and_trust_route_groups_are_independently_gated() {
+        let mut p = DeployPolicy::default();
+        for (method, path) in [
+            ("GET", "/v1/node/status"),
+            ("POST", "/v1/node/init"),
+            ("GET", "/v1/node/peers"),
+            ("POST", "/v1/node/peers"),
+            ("PATCH", "/v1/node/peers/omk1_test/capabilities"),
+            ("POST", "/v1/node/peers/omk1_test/revoke"),
+        ] {
+            assert!(
+                p.routes.allows(method, path),
+                "default policy: {method} {path}"
+            );
+        }
+        p.routes.node = false;
+        for (method, path) in [
+            ("GET", "/v1/node/status"),
+            ("POST", "/v1/node/init"),
+            ("GET", "/v1/node/peers"),
+            ("POST", "/v1/node/peers"),
+            ("PATCH", "/v1/node/peers/omk1_test/capabilities"),
+            ("POST", "/v1/node/peers/omk1_test/revoke"),
+        ] {
+            assert!(
+                !p.routes.allows(method, path),
+                "node disabled: {method} {path}"
+            );
+        }
+
+        p.routes.node = true;
+        p.routes.trust = false;
+        assert!(p.routes.allows("GET", "/v1/node/peers"));
+        assert!(!p.routes.allows("POST", "/v1/node/peers"));
+        assert!(!p
+            .routes
+            .allows("PATCH", "/v1/node/peers/omk1_test/capabilities"));
+        assert!(!p.routes.allows("POST", "/v1/node/peers/omk1_test/revoke"));
     }
 
     #[test]

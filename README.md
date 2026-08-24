@@ -97,13 +97,16 @@ auth.
 ## Node Registry Foundation
 
 The node foundation owns machine-state `node.sqlite` separately from the
-workspace `.history/runs.sqlite`. It currently exposes Rust repository and
-operation interfaces only: peer discovery, enrollment, transport, Cue
-execution, and `node serve` are intentionally not part of this package
-surface. The registry uses the same source-level contract on Linux, macOS,
-and Windows, while installed-service ownership, ACLs, and cross-target release
-validation remain platform-specific release gates and are not simulated by
-the Linux development test run.
+workspace `.history/runs.sqlite`. The headless `node init`, `node status`,
+`node peers`, `node trust`, `node capabilities`, and `node revoke` commands,
+plus the authenticated `/v1/node/*` management routes, use shared operations.
+Public output contains only the x-only identity and redacted/bounded state.
+Trust mutations require explicit confirmation, actor, and reason evidence.
+Peer discovery, enrollment, transport, Cue execution, and `node serve` are
+intentionally not part of this package surface. The registry uses the same
+source-level contract on Linux, macOS, and Windows, while installed-service
+ownership, ACLs, and cross-target release validation remain platform-specific
+release gates and are not simulated by the Linux development test run.
 
 ## Documentation
 

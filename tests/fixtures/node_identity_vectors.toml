@@ -1,23 +1,33 @@
-format_version = 1
+format_version = 2
+curve = "secp256k1"
 hash = "SHA-256"
 domain_separator_hex = "6f6d616b7572652f6e6f64652d69642f763100"
-public_key_encoding = "compressed-sec1-hex-lowercase"
+node_id_hash_input = "SHA-256(b\"omakure/node-id/v1\\0\" || x_only_public_key)"
+private_key_encoding = "normalized-scalar-32-byte-big-endian-hex"
+public_key_encoding = "x-only-bip340-hex-lowercase"
+signing_algorithm = "BIP-340-Schnorr"
+normalization = "even-y: d if y(dG) is even, otherwise n-d"
+identity_file = "identity.key"
+public_identity_file = "none"
 node_id_prefix = "omk1_"
 
 [[vectors]]
-name = "scalar-one"
-private_key_hex = "0000000000000000000000000000000000000000000000000000000000000001"
-public_key_hex = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
-node_id = "omk1_f66c4ce79eadb28122b64a41ecbc26f315bd33365283e7e683e37a7f9dfdfec8"
+name = "scalar-one-normalized"
+input_scalar_hex = "0000000000000000000000000000000000000000000000000000000000000001"
+normalized_private_key_hex = "0000000000000000000000000000000000000000000000000000000000000001"
+x_only_public_key_hex = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+node_id = "omk1_b14a904692024de6e1a48f0fb54116a92db125754e81a080f93f43f69fb545ad"
 
 [[vectors]]
-name = "scalar-two"
-private_key_hex = "0000000000000000000000000000000000000000000000000000000000000002"
-public_key_hex = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
-node_id = "omk1_495b328c4efe2dcf40f85b4b611f585a8e67cca348137750458a64e351dffbe9"
+name = "scalar-order-minus-one-normalized"
+input_scalar_hex = "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"
+normalized_private_key_hex = "0000000000000000000000000000000000000000000000000000000000000001"
+x_only_public_key_hex = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+node_id = "omk1_b14a904692024de6e1a48f0fb54116a92db125754e81a080f93f43f69fb545ad"
 
 [[vectors]]
-name = "scalar-order-minus-one"
-private_key_hex = "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"
-public_key_hex = "0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
-node_id = "omk1_3a7eef2bfe10d1990209896aba2390bcf119f9d51a188f7babe0326f8422e99e"
+name = "scalar-two-normalized"
+input_scalar_hex = "0000000000000000000000000000000000000000000000000000000000000002"
+normalized_private_key_hex = "0000000000000000000000000000000000000000000000000000000000000002"
+x_only_public_key_hex = "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+node_id = "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92"

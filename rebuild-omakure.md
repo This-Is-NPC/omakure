@@ -260,9 +260,10 @@ unexpected file type is an initialization error.
 | macOS | `/Library/LaunchDaemons/com.omakure.node.plist`, user/group `_omakure:_omakure` | `/Library/Application Support/Omakure/node.toml` | `/Library/Application Support/Omakure/` | config `root:_omakure` `0640`; state and database `_omakure:_omakure` `0700`/`0600`; identity `0600` |
 | Windows | service name `OmakureNode`, account `NT AUTHORITY\LocalService` | `%ProgramData%\Omakure\node.toml` | `%ProgramData%\Omakure\` | directory and files use a DACL granting `LocalService` and `SYSTEM` access only; identity and database are not inheritable by users |
 
-The service state directory contains exactly `identity.key`, `node.sqlite`,
-and `node.sqlite-wal`/`node.sqlite-shm` while SQLite is open. The config is
-public policy and contains no private key,
+The service state directory contains exactly the normalized scalar file
+`identity.key`, `node.sqlite`, and `node.sqlite-wal`/`node.sqlite-shm` while
+SQLite is open. `identity.pub` is forbidden; there is no persisted public-key
+companion file. The config is public policy and contains no private key,
 secret value, enrollment token, or trust database. The workspace may be on a
 different volume or absent entirely.
 
@@ -325,32 +326,65 @@ cannot discover, enroll, accept a manager, or execute a remote Cue.
 
 ### Identity and node ID
 
-The selected future implementation is RustCrypto `k256` 0.14.0, with only the
-features needed for secp256k1 public-key derivation and signatures. This task
-does not add it to `Cargo.toml`.
+The implementation uses RustCrypto `k256` 0.14.0, with only the features
+needed for secp256k1 scalar arithmetic, x-only public keys, BIP-340 Schnorr
+signatures, and OS entropy. It provides the sole production identity
+implementation; no second identity implementation is added.
 
-- The private key is exactly 32 random bytes, big-endian, interpreted as a
-  secp256k1 scalar in `[1, n-1]`. It is stored as raw bytes in `identity.key`,
-  never as a mnemonic, PEM, environment value, or JSON string.
+- A generated or imported private scalar is exactly 32 big-endian bytes in
+  `[1, n-1]`. Let `Q = dG`; if `Q.y` is odd, replace `d` with `n-d`. This
+  normalization is mandatory before any persistence, rotation, recovery, or
+  signing, and the resulting scalar is the only identity material stored in
+  `identity.key`. It is never stored as a mnemonic, PEM, environment value, or
+  JSON string.
 - Production generation uses the operating system CSPRNG through the crate's
   `getrandom` path. Deterministic keys are test fixtures only and are rejected
-  by production initialization.
-- The public key is the 33-byte compressed SEC1 encoding, prefix `02` or `03`,
-  followed by the 32-byte x coordinate. Its canonical wire/text form is 66
-  lowercase hexadecimal characters with no prefix such as `0x`.
+  by production initialization. An imported scalar is normalized before its
+  atomic write; an existing persisted scalar that is not normalized fails
+  closed rather than being silently rewritten.
+- The canonical public identity is the 32-byte BIP-340 x-only public key, the
+  x coordinate of the even-Y point after normalization. Its only wire/text form
+  is 64 lowercase hexadecimal characters with no `02`/`03` prefix and no
+  `0x`. There is no `identity.pub` file; public identity is derived in memory
+  or carried in protocol fields.
+- BIP-340 Schnorr is the sole node/application signing algorithm. No alternate
+  signing algorithm or parity-sensitive alias is part of the contract. The same
+  normalized scalar and x-only public key are used for direct envelopes and
+  optional Nostr transport; a node never creates a second transport keypair.
 - `node_id` version 1 is the ASCII string `omk1_` followed by lowercase hex of
-  `SHA-256(ASCII("omakure/node-id/v1"), NUL byte, compressed SEC1 public key)`.
-  The NUL is part of the hashed input. The version marker is both the `omk1_`
-  prefix and the domain separator; changing either creates a new node-id
-  derivation version.
+  `SHA-256(b"omakure/node-id/v1\\0" || x_only_public_key)`. The NUL is part of
+  the hashed input. The version marker is both the `omk1_` prefix and the
+  domain separator; changing either creates a new node-id derivation version.
+  Scalars `d` and `n-d` therefore produce the same normalized scalar, public
+  key, and node ID.
 - A node ID is an identifier, not proof of trust. Knowing an ID, relay URL,
   organization ID, or discovery secret never authorizes a manager or Cue.
 
 The exact vectors used by later tests are in
 `tests/fixtures/node_identity_vectors.toml`. They contain no production secret;
-the private values are intentionally public test inputs. The vectors were
-independently checked against SEC1 secp256k1 public keys and SHA-256 using
-OpenSSL 3.6.3 and `sha256sum`.
+the scalar values are intentionally public test inputs. The vectors include
+both the input scalar and the normalized scalar so parity normalization and the
+`d == n-d` equivalence are directly testable. They were independently checked
+against a secp256k1 oracle and SHA-256 using OpenSSL 3.6.3 and `sha256sum`.
+
+### Signing prehash contracts
+
+Direct and Nostr signatures use the same normalized BIP-340 key, but their
+message construction is not interchangeable:
+
+- A direct envelope excludes its signature field and is serialized as strict
+  RFC 8785 JSON Canonicalization Scheme UTF-8 bytes: sorted object keys, no
+  insignificant whitespace, no duplicate keys, integer-only numbers, and
+  preserved array order. Its signing message is
+  `SHA-256(ASCII("omakure/direct-envelope/v1"), NUL byte, canonical bytes)`.
+  BIP-340 signs that resulting 32-byte message; no other application hash or
+  domain is added.
+- A Nostr event uses NIP-01 serialization of
+  `[0, pubkey, created_at, kind, tags, content]`, where `pubkey` is the 64
+  lowercase x-only key. The event ID is the SHA-256 of those serialized bytes.
+  BIP-340 signs the 32-byte event ID directly, without an additional
+  application prehash or double hashing. NIP-01 event IDs, signatures, and
+  relay fields remain distinct from the direct envelope contract.
 
 ### Crypto feasibility record
 
@@ -358,8 +392,8 @@ The feasibility check was performed on this branch with `rustc 1.97.1` and
 `cargo 1.97.1`; the crate advertises Rust 1.85+ and therefore fits the
 repository toolchain. `k256` is pure Rust, dual licensed Apache-2.0/MIT, and
 does not link OpenSSL or a platform C library. Its public documentation lists
-secp256k1 ECDSA, ECDH, Schnorr, compressed public-key operations, and
-constant-time scalar multiplication. The repository's supported targets are
+  secp256k1 Schnorr/BIP-340, x-only public-key operations, and constant-time
+  scalar multiplication. The repository's supported targets are
 Linux, macOS, and Windows; `k256` has no OS-specific crypto code and its
 `getrandom` backend supplies platform entropy on all three. The installed CI
 target here is `x86_64-unknown-linux-gnu`; cross-target builds remain a release
@@ -384,13 +418,15 @@ vector tests. References: `https://crates.io/crates/k256`,
 2. Open the state directory without following symlinks and verify owner,
    permissions, and file types. A missing directory may be created atomically
    only with the platform defaults or explicit test overrides.
-3. Before generating anything, inspect any existing `node.sqlite`. If it exists
-   while `identity.key` is absent, the state is inconsistent and startup fails
-   closed. If both are absent, obtain 32 bytes from the OS CSPRNG, reject an
-   invalid scalar, write a private temporary file with restrictive permissions,
-   fsync it, atomically rename it to `identity.key`, fsync the parent, and then
-   derive the public key and node ID. A lock held across this sequence makes
-   concurrent first starts converge on one identity.
+3. Before generating anything, inspect any existing `node.sqlite` and reject an
+   `identity.pub` file as an unsupported extra. If `node.sqlite` exists while
+   `identity.key` is absent, the state is inconsistent and startup fails closed.
+   If both are absent, obtain 32 bytes from the OS CSPRNG, reject an invalid
+   scalar, normalize it to even-Y, write only that normalized scalar to a
+   private temporary file with restrictive permissions, fsync it, atomically
+   rename it to `identity.key`, fsync the parent, and derive the x-only public
+   key and node ID in memory. A lock held across this sequence makes concurrent
+   first starts converge on one identity.
 4. If identity, database, or metadata is corrupt, insecure, a symlink, owned by
    the wrong principal, or from an unsupported version, fail closed. Do not
    replace it, generate a second identity, repair trust, or continue with an
@@ -400,9 +436,10 @@ vector tests. References: `https://crates.io/crates/k256`,
    created database contains no peers, managers, enrollment, or trust rows.
    Identity creation never creates peer trust or enrollment.
 
-Normal upgrades preserve `identity.key`, `node.sqlite`, revocations, and the
-node ID. A migration is a numbered, transactional forward migration; a newer
-database, failed migration, or downgrade attempt stops the service. Uninstall
+Normal upgrades preserve the normalized `identity.key`, `node.sqlite`,
+revocations, and the node ID. There is no persisted public-key companion file.
+A migration is a numbered, transactional forward migration; a newer database,
+failed migration, or downgrade attempt stops the service. Uninstall
 removes the binary and service registration but preserves node state by default.
 Reset is a separately confirmed operation that stops the service, archives or
 deletes the entire node state as requested, and does not create a replacement
@@ -417,9 +454,10 @@ recovery import requires an offline-protected private key, an explicit
 operator action, validation of its derived public key and node ID, and an
 authorized trust decision; restoring a file alone is not enrollment.
 
-Key rotation is explicit. The node creates and validates a new key, records
-the old node ID as revoked with a reason and timestamp, and activates the new
-identity only after the replacement trust transition is durably recorded.
+Key rotation is explicit. The node generates or imports a scalar, normalizes it
+to even-Y before persistence, records the old node ID as revoked with a reason
+and timestamp, and activates the new identity only after the replacement trust
+transition is durably recorded.
 Offline recovery uses a previously configured recovery authority or a second
 manager; relay availability cannot recover trust. Revocation records are
 retained indefinitely unless the confirmed reset destroys the whole node
@@ -438,12 +476,13 @@ forensic recovery.
 Schema version 1 has no unspecified security fields:
 
 - `metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL)` stores exactly
-  `schema_version = "1"`, the active node ID, and the active public-key
-  encoding. No other metadata keys are accepted.
+  `schema_version = "1"`, the active node ID, and
+  `public_key_encoding = "x-only-bip340-hex-lowercase"`. No other metadata
+  keys are accepted.
 - `peers(node_id TEXT PRIMARY KEY, public_key TEXT NOT NULL, role TEXT NOT NULL,
   state TEXT NOT NULL, capabilities_json TEXT NOT NULL, added_at TEXT NOT NULL,
   updated_at TEXT NOT NULL, last_seen TEXT NULL, source TEXT NOT NULL)` requires
-  canonical key/ID pairing, RFC3339 UTC timestamps, a sorted unique JSON string
+  canonical x-only key/ID pairing, RFC3339 UTC timestamps, a sorted unique JSON string
   array of capability names, `role` of `conductor` or `performer`, `state` of
   `pending`, `active`, `suspended`, or `revoked`, and `source` of `manual`,
   `bundle`, or `recovery`. `active` is the only state allowed to authorize

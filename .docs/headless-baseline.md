@@ -68,7 +68,7 @@ removed with the TUI; it must not be reintroduced as a headless alias.
 | `battery` | Retain | `list`, `add`, `sync`, `inspect`, `scripts`, `install`, and `remove`; local repository lifecycle in `tests/cli_surface_e2e.rs` and `tests/cli_battery.rs` |
 | `token` | Retain | `generate`, Argon2id hashes, scoped entries, and confirmed append; `tests/cli_surface_e2e.rs`, `tests/http_api_e2e.rs` |
 | `api` | Retain | Loopback HTTP management API, auth, scopes, and routes below; `tests/http_api_e2e.rs` |
-| `engine` | Retain | API plus optional workers/scheduler and readiness; `tests/engine_e2e.rs`, `tests/policy_e2e.rs` |
+| `node serve` | Complete | Machine-owned API plus optional workers/scheduler, readiness, identity, and isolated trust state; `tests/node_service_e2e.rs`, `tests/policy_e2e.rs` |
 | `trace` | Retain | Child-script structured trace insertion with redaction; `tests/cli_surface_e2e.rs`, `src/cli/trace.rs` tests |
 | `help-ai` | Retain | Clap-derived AI capability discovery; `tests/cli_surface_e2e.rs`, `src/cli/help_ai.rs` tests |
 | `init` | Retain | Schema-aware script generation, stdin body, force behavior; `tests/cli_surface_e2e.rs`, `src/cli/init.rs` tests |
@@ -173,13 +173,13 @@ The route inventory is checked against the router by
 token plaintext, token hashes, local paths in readiness, and authorization
 headers must never appear in responses or audit logs.
 
-## Engine, Queue, and State
+## Node Service, Queue, and State
 
-`omakure engine` retains the API surface and can embed the queue worker and
+`omakure node serve` owns the API surface and can embed the queue worker and
 scheduler. `--workers 0 --no-scheduler` is API-only. The default is one worker
 and the scheduler enabled; readiness flags can require configured loops to be
 alive. SIGTERM/SIGINT shuts down HTTP first, then scheduler/claiming, then
-workers. Engine behavior is covered by `tests/engine_e2e.rs` and policy behavior
+workers. Node-service behavior is covered by `tests/node_service_e2e.rs` and policy behavior
 by `tests/policy_e2e.rs`.
 
 The SQLite run state machine in `src/runs.rs` retains these states and

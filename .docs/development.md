@@ -14,7 +14,7 @@ cargo fmt --check
 mise run dev
 ```
 
-`mise run dev` builds the debug binary, starts an engine on a disposable local
+`mise run dev` builds the debug binary, starts a node service on a disposable local
 port, verifies `/v1/health` and `/v1/ready`, then terminates it. It does not
 leave a daemon running or require a terminal UI. Set `OMAKURE_DEV_WORKSPACE`
 and `OMAKURE_DEV_PORT` to override its fixtures.
@@ -26,9 +26,9 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | `mise run build` | `cargo build` |
 | `mise run test` | `cargo test` |
 | `mise run lint` | clippy with warnings denied and `cargo fmt --check` |
-| `mise run dev` | bounded headless engine health/readiness smoke check |
-| `mise run engine` | run the engine in the foreground |
-| `mise run engine-check` | focused CLI/HTTP/engine integration tests |
+| `mise run dev` | bounded node-service health/readiness smoke check |
+| `mise run node` | run the node service in the foreground |
+| `mise run node-service-check` | focused CLI/HTTP/node-service integration tests |
 | `mise run coverage` | tarpaulin coverage report |
 | `mise run install` | `cargo install --path .` |
 
@@ -41,7 +41,7 @@ process cleanup.
 
 - `src/domain/`: pure schema parsing, validation, and cron logic.
 - `src/operations/`: shared behavior called by CLI and HTTP adapters.
-- `src/cli/`: clap commands, JSON envelopes, API/engine lifecycle, workers,
+- `src/cli/`: clap commands, JSON envelopes, API/node-service lifecycle, workers,
   scheduler, history, and local lifecycle commands.
 - `src/runs.rs`: SQLite run state machine and trace storage.
 - `src/run_executor.rs`: one execution path for direct, queued, and scheduled runs.
@@ -58,7 +58,7 @@ SQLite from route handlers or duplicate CLI logic in HTTP handlers.
 
 ```bash
 cargo test --test cli_surface_e2e
-cargo test --test engine_e2e
+cargo test --test node_service_e2e
 cargo test --test http_api_e2e
 cargo test --test policy_e2e
 cargo test --test packaging_smoke

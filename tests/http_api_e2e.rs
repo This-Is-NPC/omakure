@@ -37,7 +37,7 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
     ),
     (
         ("GET", "/v1/ready"),
-        RouteCoverage::Covered("tests/engine_e2e.rs ready_*"),
+        RouteCoverage::Covered("tests/node_service_e2e.rs ready_*"),
     ),
     (
         ("GET", "/v1/admin/status"),
@@ -1478,7 +1478,7 @@ fi
 }
 
 /// Black-box coverage for tokens-file (multi-token Argon2) mode and the
-/// file-mode branch of `require_scope`. The headline engine feature — per-token
+/// file-mode branch of `require_scope`. The headline node-service feature — per-token
 /// scopes — otherwise had only in-crate unit tests; this locks it end-to-end so
 /// a regression that makes file-mode scope checks always-allow (or inverts the
 /// `is_file_mode` branch, or lets the legacy env token slip through) fails here.

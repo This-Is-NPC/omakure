@@ -1,9 +1,9 @@
 # omakure
 
 Omakure is a headless Rust automation runner. The product surface is a
-machine-readable CLI plus an authenticated HTTP API. `omakure engine` combines
-the API, optional queue workers, and the schedule scanner into one deployable
-process.
+machine-readable CLI plus an authenticated HTTP API. `omakure node serve` is
+the machine-owned service that combines the API, optional queue workers, and
+the schedule scanner into one deployable process.
 
 Scripts are ordinary Bash, PowerShell, or Python files with an embedded JSON
 schema between `OMAKURE_SCHEMA_START` and `OMAKURE_SCHEMA_END`. Runs, queue
@@ -38,15 +38,15 @@ omakure doctor
 omakure --json scripts
 ```
 
-Start a local headless engine. This example uses the legacy local token mode;
+Start a local node service. This example uses the legacy local token mode;
 deployments should prefer a `--tokens-file` with scoped Argon2id tokens.
 
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure engine --workers 1 --no-scheduler \
-  --capability all >./omakure-engine.log 2>&1 &
-ENGINE_PID=$!
-trap 'kill "$ENGINE_PID" 2>/dev/null || true' EXIT
+omakure node serve --workers 1 --no-scheduler \
+  --capability all >./omakure-node.log 2>&1 &
+NODE_PID=$!
+trap 'kill "$NODE_PID" 2>/dev/null || true' EXIT
 
 curl -fsS http://127.0.0.1:7878/v1/health
 curl -fsS http://127.0.0.1:7878/v1/ready
@@ -89,24 +89,27 @@ omakure --json history stats
 omakure --json history traces RUN_ID
 ```
 
-For schedules, use `omakure serve` or enable the scheduler in `omakure engine`.
-For a single deploy unit, prefer `engine`; it exposes `/v1/health` and
+For schedules, use `omakure serve` or enable the scheduler in `omakure node serve`.
+For a single deploy unit, use `node serve`; it exposes `/v1/health` and
 `/v1/ready` without authentication and protects all other routes with bearer
 auth.
 
 ## Node Registry Foundation
 
-The node foundation owns machine-state `node.sqlite` separately from the
+The portable node foundation owns machine-state `node.sqlite` separately from the
 workspace `.history/runs.sqlite`. The headless `node init`, `node status`,
 `node peers`, `node trust`, `node capabilities`, and `node revoke` commands,
 plus the authenticated `/v1/node/*` management routes, use shared operations.
 Public output contains only the x-only identity and redacted/bounded state.
 Trust mutations require explicit confirmation, actor, and reason evidence.
-Peer discovery, enrollment, transport, Cue execution, and `node serve` are
-intentionally not part of this package surface. The registry uses the same
-source-level contract on Linux, macOS, and Windows, while installed-service
-ownership, ACLs, and cross-target release validation remain platform-specific
-release gates and are not simulated by the Linux development test run.
+`node serve` is the completed portable node lifecycle foundation. It creates
+one machine identity and an empty trust registry on first start, preserves
+them across restarts, workspaces, updates, and uninstall, and requires
+`omakure node reset --confirmed` for destructive removal. Peer discovery,
+transport, Nostr, enrollment, Pulses, remote Cues, campaigns, MDM, and Lua
+remain future work. Installed-service ownership and ACLs are platform-specific
+release gates; this Linux development run does not fabricate macOS or Windows
+runtime evidence.
 
 ## Documentation
 
@@ -115,14 +118,14 @@ release gates and are not simulated by the Linux development test run.
 - `.docs/usage.md`: CLI and HTTP workflows
 - `.docs/ai-interface.md`: JSON, queue, history, trace, and agent contract
 - `.docs/http-api.md`: routes, authentication, policy, and parity
-- `.docs/deployment.md`: engine/container deployment and security
+- `.docs/deployment.md`: node-service/container deployment and security
 - `.docs/workspace.md`: on-disk state and ownership
 - `.docs/scripts-path.md`: workspace resolution and ignore files
 - `.docs/how-to-create-a-script.md`: schema and script authoring
 - `.docs/scheduling.md`: cron scheduler lifecycle
 - `.docs/headless-migration.md`: breaking removals and migration actions
 - `.docs/headless-release.md`: current headless release contract
-- `.docs/development.md`: local build, test, lint, and engine smoke checks
+- `.docs/development.md`: local build, test, lint, and node-service checks
 - `.docs/architecture.md`: source structure and retained dependencies
 - `.docs/requirements.md`: implemented requirements with source references
 

@@ -5,7 +5,8 @@ Guidelines for working in the Omakure codebase.
 ## Product overview
 
 Omakure is a headless Rust automation runner. Its supported surfaces are the
-CLI, the authenticated HTTP management API, and the combined `engine` process.
+CLI, the authenticated HTTP management API, and the machine-owned `node serve`
+process.
 The CLI and HTTP adapters call shared protocol-neutral operations. There is no
 interactive terminal application, theme subsystem, or directory widget
 runtime.
@@ -19,7 +20,8 @@ runtime.
 - **Runtime state**: `.history/runs.sqlite` stores runs, queue state, and traces.
 - **Metadata**: `.omakure/` stores environments, Battery registry/cache,
   scheduler artifacts, and workspace-owned runtime files.
-- **Engine**: HTTP plus optional queue workers and scheduler in one process.
+- **Node service**: HTTP plus optional queue workers and scheduler in one
+  machine-owned process with isolated identity/trust state.
 
 ## Task and plan management
 
@@ -37,16 +39,17 @@ cargo test
 cargo run -- --help
 
 # Named headless development workflows
-mise run dev          # bounded engine health/readiness smoke check
-mise run engine       # foreground engine
-mise run engine-check # focused CLI/HTTP/engine integration tests
+mise run dev                # bounded node-service health/readiness smoke check
+mise run node               # foreground node service
+mise run node-service-check # focused CLI/HTTP/node-service integration tests
 mise run lint         # clippy -D warnings + fmt --check
 ```
 
 Never use bare `omakure` as an interactive app. No-argument invocation prints
 help; operational commands must be explicit (`omakure scripts`, `omakure run`,
-`omakure api`, or `omakure engine`). The `.scripts/dev-daemon.sh` helper starts
-the engine on a temporary local port, checks health/readiness, and cleans up.
+`omakure api`, or `omakure node serve`). The `.scripts/dev-daemon.sh` helper
+starts the node service on a temporary local port, checks health/readiness, and
+cleans up.
 
 ## Workspace selection
 
@@ -66,7 +69,7 @@ src/
 ├── cli/                  # clap command adapters and JSON output
 │   ├── args.rs           # command tree and long-form help
 │   ├── api.rs            # authenticated HTTP adapter
-│   ├── engine.rs         # HTTP + workers + scheduler lifecycle
+│   ├── node_service.rs   # HTTP + workers + scheduler lifecycle
 │   ├── run.rs            # direct execution
 │   ├── queue.rs          # queue producers and workers
 │   ├── history.rs        # run and trace reads
@@ -124,7 +127,7 @@ not reintroduce `ratatui`, `crossterm`, `rattles`, or `mlua`.
 
 Supported script extensions are `.bash`, `.sh`, `.ps1`, and `.py`. Schema
 fields may be strings, numbers, booleans, or secrets. Optional `Schedule` data
-is consumed by `serve` and `engine`; see `.docs/scheduling.md`.
+is consumed by `serve` and `node serve`; see `.docs/scheduling.md`.
 
 ## JSON and HTTP contracts
 
@@ -139,7 +142,7 @@ other routes require bearer auth. Prefer scoped Argon2id tokens from a
 ```bash
 cargo test
 cargo test --test cli_surface_e2e
-cargo test --test engine_e2e
+cargo test --test node_service_e2e
 cargo test --test http_api_e2e
 cargo test --test packaging_smoke
 cargo clippy --all-targets -- -D warnings

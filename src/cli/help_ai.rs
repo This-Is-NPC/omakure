@@ -51,7 +51,7 @@ argv, exit code, stdout, stderr, start/end timestamps, and a stable run_id.";
 
 const AI_VERBS: &[&str] = &[
     "scripts", "describe", "search", "run", "init", "history", "queue", "battery", "token", "api",
-    "engine", "trace", "config", "node", "help-ai",
+    "trace", "config", "node", "help-ai",
 ];
 
 pub fn run() -> Result<(), Box<dyn Error>> {

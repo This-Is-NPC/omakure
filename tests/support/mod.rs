@@ -232,14 +232,14 @@ impl HttpServer {
         Self::start_command("api", workspace, token, extra_args, extra_envs, timeout)
     }
 
-    pub fn start_engine(
+    pub fn start_node_service(
         workspace: &Path,
         token: &str,
         extra_args: &[&str],
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        Self::start_command("engine", workspace, token, extra_args, extra_envs, timeout)
+        Self::start_command("node", workspace, token, extra_args, extra_envs, timeout)
     }
 
     fn start_command(
@@ -271,10 +271,17 @@ impl HttpServer {
                 .arg("--scripts-dir")
                 .arg(workspace)
                 .arg(command_name)
+                .args((command_name == "node").then_some("serve"))
                 .arg("--bind")
                 .arg(addr.to_string())
                 .args(extra_args)
                 .env("OMAKURE_API_TOKEN", token);
+            if command_name == "node" {
+                command
+                    .env("OMAKURE_NODE_TEST_MODE", "1")
+                    .env("OMAKURE_NODE_STATE_DIR", workspace.join(".node-state"))
+                    .env("OMAKURE_NODE_CONFIG", workspace.join("node.toml"));
+            }
             for (key, value) in extra_envs {
                 command.env(key, value);
             }
@@ -306,7 +313,7 @@ impl HttpServer {
         self.child
             .child_mut()
             .try_wait()
-            .expect("poll engine child")
+            .expect("poll node-service child")
     }
 
     pub fn wait_exit(mut self, timeout: Duration) -> std::process::ExitStatus {
@@ -324,6 +331,12 @@ impl HttpServer {
             }
             thread::sleep(Duration::from_millis(25));
         }
+    }
+
+    pub fn terminate(mut self) -> std::process::ExitStatus {
+        let mut child = self.child.take_child().expect("child already consumed");
+        child.kill().expect("terminate child process");
+        child.wait().expect("wait for terminated child")
     }
 
     pub fn url(&self, path: &str) -> String {

@@ -1087,7 +1087,7 @@ fn git_url_authority(url: &str) -> Option<String> {
 }
 
 /// Whether an address is in a private / non-routable / metadata range that a
-/// remote caller must never be able to make the engine reach.
+/// remote caller must never be able to make the node service reach.
 fn ip_is_private(ip: std::net::IpAddr) -> bool {
     use std::net::IpAddr;
     match ip {

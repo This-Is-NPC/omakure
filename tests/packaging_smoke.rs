@@ -1,8 +1,8 @@
-//! Packaging contract checks for the official engine container artifacts.
+//! Packaging contract checks for the official node-service container artifacts.
 //!
 //! These are file-content assertions (not `docker build`). Full image smoke
-//! (including volume ownership / `--user "$(id -u):$(id -g)"`) lives in
-//! `.docs/deployment.md`. CI does not require a Docker daemon for this test.
+//! (including fixed uid/gid volume ownership) runs in the Linux CI Docker job.
+//! CI does not require a Docker daemon for this test.
 
 use std::fs;
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ fn read(rel: &str) -> String {
 }
 
 #[test]
-fn dockerfile_is_multi_stage_engine_entrypoint() {
+fn dockerfile_is_multi_stage_node_entrypoint() {
     let df = read("Dockerfile");
     assert!(
         df.contains("FROM") && df.to_lowercase().contains("as builder"),
@@ -32,8 +32,8 @@ fn dockerfile_is_multi_stage_engine_entrypoint() {
         "default CMD must bind 0.0.0.0:7878 with --allow-non-loopback"
     );
     assert!(
-        df.contains("engine"),
-        "default command must run the engine subcommand"
+        df.contains("node") && df.contains("serve"),
+        "default command must run the node serve subcommand"
     );
     assert!(
         !df.to_lowercase().contains("python3") || df.contains("deferred") || df.contains("variant"),
@@ -84,11 +84,140 @@ fn compose_example_is_host_loopback_with_workspace_and_tokens_file() {
         "compose must mount a workspace volume"
     );
     assert!(
-        compose.contains("user:")
-            || compose.to_lowercase().contains("non-root")
-            || compose.contains("1000"),
-        "compose should guide non-root operation"
+        compose.contains("user: \"10001:10001\"") && compose.contains("10001"),
+        "compose must keep the fixed image principal"
     );
+}
+
+#[test]
+fn machine_service_installers_are_explicit_and_preserve_node_state() {
+    let shell = read("install.sh");
+    for needle in [
+        "--install-node-service",
+        "--node-tokens-file",
+        "--uninstall-node-service",
+        "--uninstall-node-state",
+        "--confirmed",
+        "systemctl enable omakure-node.service",
+        "User=omakure",
+        "ExecStart=",
+        "/var/lib/omakure",
+        "/etc/omakure/node.toml",
+        "chmod 0640",
+        "node serve",
+        "com.omakure.node.plist",
+        "_omakure",
+        "/Library/LaunchDaemons",
+        "RunAtLoad",
+    ] {
+        assert!(
+            shell.contains(needle),
+            "install.sh should contain {needle:?}"
+        );
+    }
+    assert!(shell.contains("if [[ ! -e \"${config_path}\" ]]"));
+    assert!(shell.contains("RESET_NODE_STATE"));
+    assert!(shell.contains("validate_native_service_binary_path"));
+    assert!(shell.contains("ExecStart=${binary} node serve"));
+    assert!(
+        shell.find("if (( UNINSTALL_NODE_SERVICE ))").unwrap()
+            < shell.find("VERSION=\"$(fetch_latest_version").unwrap(),
+        "Unix uninstall must exit before release-version resolution"
+    );
+
+    let powershell = read("install.ps1");
+    for needle in [
+        "InstallNodeService",
+        "NodeTokensFile",
+        "UninstallNodeService",
+        "UninstallNodeState",
+        "Confirmed",
+        "NT AUTHORITY\\LocalService",
+        "node serve",
+        "ProgramData",
+        "sc.exe create OmakureNode",
+        "icacls",
+        "Set-ExactNodeAcl",
+        "Prepare-NodeAclAccess",
+        "if (-not (Test-Path $ConfigPath))",
+    ] {
+        assert!(
+            powershell.contains(needle),
+            "install.ps1 should contain {needle:?}"
+        );
+    }
+    assert!(!powershell.contains("obj= \"NT SERVICE\\OmakureNode\""));
+    let acl_start = powershell.find("function Set-ExactNodeAcl").unwrap();
+    let acl_end = powershell[acl_start..]
+        .find("function Restore-NodeAcls")
+        .map(|offset| acl_start + offset)
+        .unwrap();
+    assert!(
+        !powershell[acl_start..acl_end].contains("BUILTIN\\Administrators"),
+        "final PowerShell ACL function must not grant Administrators"
+    );
+    let installer = read("src/installer.rs");
+    assert!(installer.contains("NT AUTHORITY\\\\LocalService"));
+    assert!(installer.contains("/setowner"));
+    assert!(!installer.contains("obj=\",\n                \"NT SERVICE\\\\OmakureNode\""));
+}
+
+#[cfg(unix)]
+#[test]
+fn unix_uninstall_service_path_skips_release_resolution_and_network() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let log = temp.path().join("commands.log");
+    let shim_dir = temp.path().join("bin");
+    fs::create_dir(&shim_dir).unwrap();
+    for (name, body) in [
+        ("uname", "#!/bin/sh\nprintf 'Linux\\n'\n"),
+        ("id", "#!/bin/sh\nprintf '0\\n'\n"),
+        (
+            "systemctl",
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$OMAKURE_TEST_LOG\"\n",
+        ),
+        ("rm", "#!/bin/sh\nexit 0\n"),
+        (
+            "curl",
+            "#!/bin/sh\nprintf 'network\\n' >> \"$OMAKURE_TEST_LOG\"\nexit 99\n",
+        ),
+        (
+            "wget",
+            "#!/bin/sh\nprintf 'network\\n' >> \"$OMAKURE_TEST_LOG\"\nexit 99\n",
+        ),
+    ] {
+        let path = shim_dir.join(name);
+        fs::write(&path, body).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let output = Command::new("bash")
+        .arg(repo_root().join("install.sh"))
+        .arg("--uninstall-node-service")
+        .env("PATH", format!("{}:/usr/bin:/bin", shim_dir.display()))
+        .env("OMAKURE_TEST_LOG", &log)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "stderr: {:?}", output.stderr);
+    let commands = fs::read_to_string(log).unwrap_or_default();
+    assert!(commands.contains("disable --now omakure-node.service"));
+    assert!(!commands.contains("network"));
+}
+
+#[test]
+fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results() {
+    let ci = read(".github/workflows/ci.yml");
+    assert!(ci.contains("cargo test --test node_service_e2e --test policy_e2e --locked"));
+    assert!(ci.contains("docker build --tag omakure-node:ci ."));
+    assert!(ci.contains("for path in health ready"));
+    assert!(ci.contains("docker volume create"));
+    assert!(ci.contains("chown 10001:10001"));
+    assert!(ci.contains("chmod 0700 /var/lib/omakure"));
+    let release = read(".docs/headless-release.md");
+    assert!(release.contains("Hosted Linux, macOS, and Windows CI/release runs remain pending"));
+    assert!(release.contains("816 passed"));
 }
 
 #[test]
@@ -97,7 +226,7 @@ fn deployment_doc_covers_required_topics_and_multi_token() {
     for needle in [
         "API-only",
         "worker",
-        "engine",
+        "node serve",
         "volume",
         "SQLite",
         "/v1/health",
@@ -128,6 +257,41 @@ fn deployment_doc_covers_required_topics_and_multi_token() {
         lower.contains("load order"),
         "deployment.md must document policy load order"
     );
+}
+
+#[test]
+fn legacy_engine_command_is_absent_from_current_surfaces() {
+    let help = Command::new(env!("CARGO_BIN_EXE_omakure"))
+        .arg("--help")
+        .output()
+        .expect("run omakure --help");
+    let help_text = String::from_utf8_lossy(&help.stdout);
+    assert!(!help_text.contains("engine"));
+
+    let help_ai = Command::new(env!("CARGO_BIN_EXE_omakure"))
+        .arg("help-ai")
+        .output()
+        .expect("run omakure help-ai");
+    let help_ai_text = String::from_utf8_lossy(&help_ai.stdout);
+    assert!(!help_ai_text.contains("omakure engine"));
+    assert!(!help_ai_text.contains("\"engine\""));
+
+    for path in [
+        "README.md",
+        "mise.toml",
+        "Dockerfile",
+        "compose.yaml",
+        ".docs/architecture.md",
+        ".docs/requirements.md",
+        ".docs/deployment.md",
+        ".docs/development.md",
+        ".docs/headless-release.md",
+        ".docs/headless-migration.md",
+        "rebuild-omakure.md",
+    ] {
+        let text = read(path);
+        assert!(!text.contains("omakure engine"), "stale command in {path}");
+    }
 }
 
 #[test]
@@ -175,14 +339,13 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     assert!(mise.contains("OMAKURE_API_TOKEN"));
     assert!(mise.contains("openssl rand -hex 32"));
     assert!(mise.contains("--capability all"));
-    assert!(mise.contains("cargo run --bin omakure -- engine"));
+    assert!(mise.contains("cargo run --bin omakure -- node serve"));
     let release = read(".docs/headless-release.md");
     assert!(release.contains("10,520,464 bytes"));
     assert!(release.contains("8,815,352 bytes"));
     assert!(release.contains("-1,705,112 bytes (-16.21%)"));
     assert!(release.contains("27") && release.contains("23") && release.contains("-4"));
-    assert!(release.contains("3,379,669"));
-    assert!(release.contains("contained only the root `omakure` binary"));
+    assert!(release.contains("release archive contract is still binary-only"));
     assert!(release.contains("Hosted Linux, macOS, and Windows CI/release runs remain pending"));
 }
 

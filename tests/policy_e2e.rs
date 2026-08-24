@@ -301,22 +301,22 @@ legacy_env_token = true
 }
 
 #[test]
-fn engine_takes_workers_default_from_policy() {
-    let workspace = support::TestWorkspace::new("policy_engine");
+fn node_service_takes_workers_default_from_policy() {
+    let workspace = support::TestWorkspace::new("policy_node_service");
     workspace.write_schema_script("echo.sh", "echo", "echo ok");
     let policy_path = workspace.path().join("policy.toml");
     write_policy(
         &policy_path,
         r#"
 version = 1
-[engine]
+[node]
 workers = 0
 scheduler = false
 [auth]
 legacy_env_token = true
 "#,
     );
-    let server = support::HttpServer::start_engine(
+    let server = support::HttpServer::start_node_service(
         workspace.path(),
         API_TOKEN,
         &[
@@ -334,11 +334,11 @@ legacy_env_token = true
 
     let enqueue = server.post_json(
         "/v1/runs",
-        &json!({ "script": "echo.sh", "run_id": "policy-engine-run" }),
+        &json!({ "script": "echo.sh", "run_id": "policy-node-service-run" }),
     );
     assert_eq!(enqueue.status, 200, "body: {}", enqueue.safe_body());
     // workers=0 from policy → stays queued
-    let show = server.get("/v1/runs/policy-engine-run");
+    let show = server.get("/v1/runs/policy-node-service-run");
     assert_eq!(show.status, 200);
     assert_eq!(show.json()["data"]["state"], "queued");
 }

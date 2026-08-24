@@ -20,4 +20,4 @@ assertions. `tests/packaging_smoke.rs` verifies the source/package contract
 without requiring Docker.
 
 The runtime workspace is created or mounted separately. See `deployment.md`
-for the engine container and `workspace.md` for its volume layout.
+for the node-service container and `workspace.md` for its volume layout.

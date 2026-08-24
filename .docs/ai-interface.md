@@ -92,7 +92,7 @@ Concretely:
 - An agent cannot corrupt the schema or the SQLite WAL pages by
   partial writes from a buggy script.
 - Tools that wrap the omakure CLI for orchestration purposes (workflow
-  engines, dashboards, custom dispatchers) get a single, stable contract
+  runners, dashboards, custom dispatchers) get a single, stable contract
   via the verbs — they never have to worry about schema drift in
   `runs.sqlite`.
 

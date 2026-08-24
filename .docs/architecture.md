@@ -2,7 +2,7 @@
 
 Omakure is a headless Rust application with three adapters over the same
 workspace operations: the local CLI, the HTTP management API, and the
-single-process `engine` deploy mode.
+machine-owned single-process `node serve` service.
 
 ## Stack
 
@@ -31,7 +31,7 @@ src/
 ├── cli/                     command adapters and JSON output
 │   ├── args.rs              clap command tree and long-form help
 │   ├── api.rs               authenticated Axum management server
-│   ├── engine.rs            HTTP + workers + scheduler lifecycle
+│   ├── node_service.rs      HTTP + workers + scheduler lifecycle
 │   ├── run.rs               synchronous execution entry point
 │   ├── queue.rs             queue producers and worker
 │   ├── history.rs           run and trace queries
@@ -73,7 +73,8 @@ src/
 - Direct runs, queue workers, and scheduled runs all use
   `run_executor::execute_with_heartbeat`, including cancellation, timeout,
   reserved environment variables, and output redaction.
-- `engine` starts HTTP first, then optional workers and scheduler, and shuts
+ - `node serve` validates and initializes machine state before binding HTTP,
+   then starts optional workers and scheduler and shuts
   them down in reverse order. `/v1/health` and `/v1/ready` are unauthenticated;
   other routes require bearer auth and policy scopes.
 - Schedules are declared in script schemas. `serve` scans every five seconds,
@@ -84,6 +85,11 @@ src/
   rules and metadata-directory exclusions are shared by CLI and HTTP listings.
 - HTTP handlers never open SQLite or call CLI handlers directly. They call the
   same operations used by the CLI and map operation errors to HTTP statuses.
+- `node.sqlite` is owned only by the node service and trust operations; it is
+  never the workspace-owned `.history/runs.sqlite` database.
+- The portable node foundation is complete. Transport, discovery, Nostr,
+  enrollment, Pulses, remote Cues, campaigns, MDM, and Lua remain future
+  features.
 
 ## Release and tests
 

@@ -1,26 +1,24 @@
-# Example Compose file for a single-host `omakure engine` deployment.
+# Example Compose file for a single-host `omakure node serve` deployment.
 #
 # Security notes (read .docs/deployment.md before production use):
 # - Prefer multi-token auth via OMAKURE_TOKENS_FILE / --tokens-file (Argon2id).
 #   Legacy OMAKURE_API_TOKEN remains supported when no tokens file is set.
 # - Publish on host loopback only (127.0.0.1:7878). The container still binds
 #   0.0.0.0:7878 internally so Docker can forward the port.
-# - Run as non-root (image USER 10001). Override `user:` only if your volume
-#   ownership requires a matching host UID/GID.
+# - Run as the fixed non-root image principal (uid/gid 10001); prepare bind
+#   mounts for that principal instead of overriding `user:`.
 # - One replica per workspace volume. SQLite must not be shared across hosts
 #   or network filesystems.
 
 services:
-  omakure-engine:
+  omakure-node:
     build:
       context: .
       dockerfile: Dockerfile
-    image: omakure-engine:local
-    # Non-root guidance: image USER is 10001:10001. Match the host owner of the
-    # mounted workspace so ensure_layout can write .omakure/.history, e.g.:
-    #   user: "10001:10001"
-    # or pass --user "$(id -u):$(id -g)" on `docker run` (see deployment.md smoke).
-    # user: "10001:10001"
+    image: omakure-node:local
+    # The image's fixed machine principal is uid/gid 10001. Prepare bind mounts
+    # with that ownership; do not override this with an arbitrary host UID.
+    user: "10001:10001"
     ports:
       - "127.0.0.1:7878:7878"
     environment:
@@ -33,6 +31,8 @@ services:
     volumes:
       # Host workspace → container scripts/history/envs root.
       - "${OMAKURE_WORKSPACE:-./workspace}:/workspace"
+      # Machine-owned node trust/identity state; never place this in the workspace.
+      - "${OMAKURE_NODE_STATE:-./node-state}:/var/lib/omakure"
       # This bind mount requires the file to already exist — `docker compose up`
       # fails to start otherwise. Create it first with `omakure token generate
       # --append secrets/omakure_tokens.toml --confirmed` (see deployment.md
@@ -43,7 +43,8 @@ services:
     # Legacy --capability applies only with OMAKURE_API_TOKEN (no tokens file).
     # `all` does not bypass --secret-ref; pass explicit refs or '*'.
     command:
-      - engine
+      - node
+      - serve
       - --bind
       - 0.0.0.0:7878
       - --allow-non-loopback

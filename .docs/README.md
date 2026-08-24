@@ -1,7 +1,7 @@
 # Documentation index
 
 The repository is a headless automation product. Its supported integration
-surfaces are the CLI, the HTTP management API, and the combined `engine`
+surfaces are the CLI, the HTTP management API, and the machine-owned `node serve`
 process.
 
 ## Users and operators
@@ -9,7 +9,7 @@ process.
 - `../rebuild-omakure.md`: canonical future product direction and node contract
 - `installation.md`: install, update, uninstall, and version pinning.
 - `usage.md`: CLI commands and common workflows.
-- `deployment.md`: API/worker/engine topologies, containers, volumes, and security.
+- `deployment.md`: API/node-service topologies, containers, volumes, and security.
 - `http-api.md`: HTTP routes, auth, policy, limits, and shared operations.
 - `scheduling.md`: cron scheduler lifecycle and systemd autostart.
 - `workspace.md`: workspace layout and SQLite runtime state.

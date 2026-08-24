@@ -3,16 +3,16 @@ powershell = "latest"
 rust = "latest"
 
 [tasks.dev]
-description = "Build and run the bounded headless engine smoke check"
+description = "Build and run the bounded node-service smoke check"
 run = "./.scripts/dev-daemon.sh"
 
-[tasks.engine]
-description = "Build and run the authenticated headless engine in the foreground"
-run = "OMAKURE_API_TOKEN=\"$(openssl rand -hex 32)\" cargo run --bin omakure -- engine --workers 1 --capability all"
+[tasks.node]
+description = "Run the authenticated machine node service in the foreground"
+run = "OMAKURE_API_TOKEN=\"$(openssl rand -hex 32)\" cargo run --bin omakure -- node serve --workers 1 --capability all"
 
-[tasks.engine-check]
-description = "Run the headless CLI, HTTP, and engine integration checks"
-run = "cargo test --test engine_e2e --test http_api_e2e --test cli_surface_e2e"
+[tasks.node-service-check]
+description = "Run node-service, CLI, HTTP, and policy integration checks"
+run = "cargo test --test node_service_e2e --test http_api_e2e --test cli_surface_e2e --test policy_e2e"
 
 [tasks.build]
 description = "Build the project in debug mode"

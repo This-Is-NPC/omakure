@@ -70,7 +70,7 @@ child processes; `--env-file` overrides them for one run and reserved Omakure
 variables win last. Sensitive values are masked in diagnostics and excluded
 from run storage. See `environments.md` and `env-injection-spec.md`.
 
-## HTTP API and engine
+## HTTP API and node service
 
 API-only mode:
 
@@ -83,7 +83,7 @@ The recommended single-process deployment is:
 
 ```bash
 omakure token generate --id local --scope '*' --json
-omakure engine --workers 1 --tokens-file /run/secrets/omakure_tokens.toml
+omakure node serve --workers 1 --tokens-file /run/secrets/omakure_tokens.toml
 ```
 
 The default bind is `127.0.0.1:7878`; non-loopback binding requires
@@ -111,7 +111,7 @@ omakure serve --status
 omakure serve --uninstall
 ```
 
-`engine` enables the scheduler by default; use `--no-scheduler` for API-only
+`node serve` enables the scheduler by default; use `--no-scheduler` for API-only
 or worker-only test fixtures. See `scheduling.md` for cron and overlap rules.
 
 ## Batteries, tokens, and lifecycle

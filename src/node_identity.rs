@@ -1,5 +1,5 @@
 use crate::node::{write_atomic_new, NodeContext, NodeError};
-use crate::node_registry::{NodeRegistry, RegistryError};
+use crate::node_registry::RegistryError;
 use fs2::FileExt;
 use k256::elliptic_curve::Generate;
 use k256::schnorr::{signature::hazmat::PrehashSigner, Signature, SigningKey};
@@ -169,7 +169,13 @@ impl NodeIdentity {
                 "node state is missing its private identity".to_string(),
             ));
         }
+        if identity_exists && !database_exists {
+            return Err(NodeIdentityError::State(
+                "node state is missing its trust registry".to_string(),
+            ));
+        }
 
+        let created_identity = !identity_exists;
         let signing_key = if identity_exists {
             if imported.is_some() {
                 return Err(NodeIdentityError::State(
@@ -196,7 +202,11 @@ impl NodeIdentity {
         };
 
         let identity = Self::from_signing_key(context, signing_key);
-        context.open_trust_registry(identity.public_status())?;
+        if created_identity {
+            context.open_trust_registry_for_initialization(identity.public_status())?;
+        } else {
+            context.open_trust_registry(identity.public_status())?;
+        }
         Ok(identity)
     }
 
@@ -211,10 +221,6 @@ impl NodeIdentity {
 
     pub fn public_status(&self) -> &NodeIdentityStatus {
         &self.status
-    }
-
-    pub fn open_trust_registry(&self) -> Result<NodeRegistry, NodeIdentityError> {
-        Ok(self.context.open_trust_registry(&self.status)?)
     }
 
     /// Sign a direct-envelope prehash; canonicalization is deliberately external.
@@ -271,6 +277,36 @@ impl NodeIdentity {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(error) => Err(error.into()),
         }
+    }
+
+    /// Remove the complete validated node-owned state for an explicit factory
+    /// reset. The public config is removed only when it lives inside the state
+    /// directory; normal platform config lives outside this boundary.
+    pub(crate) fn execute_factory_reset(context: &NodeContext) -> Result<bool, NodeIdentityError> {
+        if !context.validate_existing_state_contents()? {
+            return Ok(false);
+        }
+        let lock = IdentityLock::acquire(context)?;
+        let mut paths = Vec::new();
+        for entry in fs::read_dir(context.state_dir())? {
+            let entry = entry?;
+            let metadata = fs::symlink_metadata(entry.path())?;
+            if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
+                return Err(NodeIdentityError::State(
+                    "node state contains an unexpected file type".to_string(),
+                ));
+            }
+            paths.push(entry.path());
+        }
+        for path in paths.iter().filter(|path| {
+            path.file_name()
+                .map(|name| name != ".identity.lock" && name != ".node.lifecycle.lock")
+                .unwrap_or(false)
+        }) {
+            fs::remove_file(path)?;
+        }
+        drop(lock);
+        Ok(true)
     }
 }
 

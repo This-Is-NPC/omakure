@@ -1,11 +1,11 @@
-//! `omakure engine` — HTTP API + optional in-process workers + scheduler.
+//! `omakure node serve` — HTTP API + optional in-process workers + scheduler.
 //!
 //! Composes existing `api::serve_http`, `queue::worker_loop`, and
 //! `serve::scheduler_tick` under one cancel flag. Shutdown order:
 //! stop accepting HTTP → stop scheduling → stop claiming → drain/join workers.
 
 use crate::cli::api::{self, ReadinessGate};
-use crate::cli::args::{ApiArgs, EngineArgs};
+use crate::cli::args::{ApiArgs, NodeServeArgs};
 use crate::cli::queue;
 use crate::cli::serve;
 use crate::workspace::Workspace;
@@ -86,9 +86,27 @@ fn run_tracked_loop(lifecycle: Arc<LoopLifecycle>, run_loop: impl FnOnce()) {
     run_loop();
 }
 
-pub fn run(scripts_dir: PathBuf, args: EngineArgs) -> Result<(), Box<dyn Error>> {
+pub fn run(
+    scripts_dir: PathBuf,
+    context: crate::node::NodeContext,
+    args: NodeServeArgs,
+) -> Result<(), Box<dyn Error>> {
+    let state_was_present = context.validate_existing_state_directory()?;
+    let _lifecycle = context.acquire_lifecycle_lock()?;
+    let initialized = crate::operations::node::initialize_node_locked(
+        &context,
+        &crate::domain::NodeConfig::default(),
+        state_was_present,
+    )?;
+    let configured_bind = initialized
+        .status
+        .config
+        .as_ref()
+        .ok_or("node configuration was not initialized")?
+        .api_bind
+        .parse()?;
     let api_args = ApiArgs {
-        bind: args.bind,
+        bind: args.bind.unwrap_or(configured_bind),
         allow_non_loopback: args.allow_non_loopback,
         policy: args.policy.clone(),
         tokens_file: args.tokens_file.clone(),
@@ -98,18 +116,18 @@ pub fn run(scripts_dir: PathBuf, args: EngineArgs) -> Result<(), Box<dyn Error>>
     // Fail before bind: policy parse, auth, non-loopback guard.
     let boot = api::prepare_api_boot(&api_args)?;
 
-    let workers = args.workers.or(boot.deploy.engine.workers).unwrap_or(1);
+    let workers = args.workers.or(boot.deploy.node.workers).unwrap_or(1);
     let scheduler_enabled = if args.no_scheduler {
         false
     } else if args.scheduler {
         true
     } else {
-        boot.deploy.engine.scheduler.unwrap_or(true)
+        boot.deploy.node.scheduler.unwrap_or(true)
     };
     let readiness_requires_worker =
-        args.readiness_requires_worker || boot.deploy.engine.readiness_requires_worker;
+        args.readiness_requires_worker || boot.deploy.node.readiness_requires_worker;
     let readiness_requires_scheduler =
-        args.readiness_requires_scheduler || boot.deploy.engine.readiness_requires_scheduler;
+        args.readiness_requires_scheduler || boot.deploy.node.readiness_requires_scheduler;
 
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
@@ -136,7 +154,7 @@ pub fn run(scripts_dir: PathBuf, args: EngineArgs) -> Result<(), Box<dyn Error>>
             let flag = Arc::clone(&cancel_flag);
             let actor_filter = args.worker_actor_filter.clone();
             let script_filter = args.worker_script_filter.clone();
-            let worker_id = format!("engine-worker:{}-t{}", std::process::id(), thread_idx);
+            let worker_id = format!("node-worker:{}-t{}", std::process::id(), thread_idx);
             let lifecycle = Arc::clone(&worker_lifecycle);
             worker_handles.push(thread::spawn(move || {
                 run_tracked_loop(lifecycle, || {

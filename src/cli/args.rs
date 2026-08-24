@@ -87,7 +87,7 @@ pub enum Commands {
     /// Binding to non-loopback addresses requires `--allow-non-loopback`.
     Api(ApiArgs),
 
-    /// Run the deployable engine (HTTP API + optional workers + scheduler)
+    /// Run the machine-owned node service (HTTP API + optional workers + scheduler)
     ///
     /// Starts the HTTP management API and optionally embeds queue workers and
     /// the existing schedule scanner in one process. Use `--workers 0
@@ -98,8 +98,6 @@ pub enum Commands {
     /// `omakure.http_audit` lines with `token_id` (Authorization redacted).
     /// SIGTERM/SIGINT stops HTTP first, then scheduling/claiming, then drains
     /// workers.
-    Engine(EngineArgs),
-
     /// Append a structured trace event from inside a running script
     Trace(TraceArgs),
 
@@ -256,7 +254,7 @@ pub struct ApiArgs {
     #[arg(long)]
     pub allow_non_loopback: bool,
 
-    /// Deploy-only policy.toml (route groups + auth/engine defaults).
+    /// Deploy-only policy.toml (route groups + auth/node-service defaults).
     /// Overrides `OMAKURE_POLICY_FILE`. Separate from workspace omakure.toml.
     #[arg(long = "policy", env = "OMAKURE_POLICY_FILE")]
     pub policy: Option<std::path::PathBuf>,
@@ -284,71 +282,6 @@ pub struct ApiArgs {
     /// Allowed secret provider ref for secrets:use / credentials:use,
     /// e.g. secret://prod/token or secret://prod/*; repeatable. Empty
     /// denies provider refs.
-    #[arg(long = "secret-ref")]
-    pub secret_refs: Vec<String>,
-}
-
-#[derive(Args, Debug)]
-pub struct EngineArgs {
-    /// Address to bind the HTTP API server to
-    #[arg(long, default_value = "127.0.0.1:7878")]
-    pub bind: std::net::SocketAddr,
-
-    /// Explicitly allow binding to non-loopback addresses
-    #[arg(long)]
-    pub allow_non_loopback: bool,
-
-    /// Deploy-only policy.toml. Same as `omakure api --policy`.
-    #[arg(long = "policy", env = "OMAKURE_POLICY_FILE")]
-    pub policy: Option<std::path::PathBuf>,
-
-    /// Number of embedded queue workers. `0` means API-only (no claiming).
-    /// When omitted, uses `[engine].workers` from `--policy` (default 1).
-    #[arg(long)]
-    pub workers: Option<u32>,
-
-    /// Explicitly enable the in-process schedule scanner (default: on,
-    /// or `[engine].scheduler` from policy when neither flag is set).
-    #[arg(long = "scheduler", default_value_t = false)]
-    pub scheduler: bool,
-
-    /// Disable the in-process schedule scanner.
-    #[arg(
-        long = "no-scheduler",
-        default_value_t = false,
-        conflicts_with = "scheduler"
-    )]
-    pub no_scheduler: bool,
-
-    /// Only claim jobs whose actor matches this tag
-    #[arg(long = "worker-actor-filter")]
-    pub worker_actor_filter: Option<String>,
-
-    /// Only claim jobs whose script path or name contains this pattern
-    #[arg(long = "worker-script-filter")]
-    pub worker_script_filter: Option<String>,
-
-    /// Fail `/v1/ready` when workers are configured (`--workers` ≥ 1) but not alive
-    #[arg(long)]
-    pub readiness_requires_worker: bool,
-
-    /// Fail `/v1/ready` when the scheduler is enabled but not alive
-    #[arg(long)]
-    pub readiness_requires_scheduler: bool,
-
-    /// Multi-token TOML file. Same as `omakure api --tokens-file`.
-    #[arg(long = "tokens-file", env = "OMAKURE_TOKENS_FILE")]
-    pub tokens_file: Option<std::path::PathBuf>,
-
-    /// API capability to grant in legacy single-token mode. Repeatable.
-    /// Same values as `omakure api --capability`. Ignored with
-    /// `--tokens-file`.
-    #[arg(long = "capability")]
-    pub capabilities: Vec<String>,
-
-    /// Allowed secret provider ref for secrets:use. Same as `omakure api
-    /// Allowed secret provider ref for secrets:use / credentials:use.
-    /// Same values as `omakure api --secret-ref`.
     #[arg(long = "secret-ref")]
     pub secret_refs: Vec<String>,
 }
@@ -538,6 +471,9 @@ pub struct NodeArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum NodeCommand {
+    /// Run the machine-owned HTTP node service with optional workers and scheduler
+    Serve(NodeServeArgs),
+
     /// Explicitly initialize public config, identity, and local trust state
     Init,
 
@@ -555,6 +491,75 @@ pub enum NodeCommand {
 
     /// Revoke one peer with confirmation and evidence
     Revoke(NodeRevokeArgs),
+
+    /// Explicitly remove validated machine identity and node trust state
+    Reset(NodeResetArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct NodeServeArgs {
+    /// Address to bind the HTTP API server to; defaults to node.toml `api.bind`
+    #[arg(long)]
+    pub bind: Option<std::net::SocketAddr>,
+
+    /// Explicitly allow binding to non-loopback addresses
+    #[arg(long)]
+    pub allow_non_loopback: bool,
+
+    /// Deploy-only policy.toml. Same as `omakure api --policy`.
+    #[arg(long = "policy", env = "OMAKURE_POLICY_FILE")]
+    pub policy: Option<std::path::PathBuf>,
+
+    /// Number of embedded queue workers. `0` means API-only (no claiming).
+    #[arg(long)]
+    pub workers: Option<u32>,
+
+    /// Explicitly enable the in-process schedule scanner.
+    #[arg(long = "scheduler", default_value_t = false)]
+    pub scheduler: bool,
+
+    /// Disable the in-process schedule scanner.
+    #[arg(
+        long = "no-scheduler",
+        default_value_t = false,
+        conflicts_with = "scheduler"
+    )]
+    pub no_scheduler: bool,
+
+    /// Only claim jobs whose actor matches this tag
+    #[arg(long = "worker-actor-filter")]
+    pub worker_actor_filter: Option<String>,
+
+    /// Only claim jobs whose script path or name contains this pattern
+    #[arg(long = "worker-script-filter")]
+    pub worker_script_filter: Option<String>,
+
+    /// Fail `/v1/ready` when configured workers are not alive
+    #[arg(long)]
+    pub readiness_requires_worker: bool,
+
+    /// Fail `/v1/ready` when the scheduler is enabled but not alive
+    #[arg(long)]
+    pub readiness_requires_scheduler: bool,
+
+    /// Multi-token TOML file. Same as `omakure api --tokens-file`.
+    #[arg(long = "tokens-file", env = "OMAKURE_TOKENS_FILE")]
+    pub tokens_file: Option<std::path::PathBuf>,
+
+    /// API capability to grant in legacy single-token mode. Repeatable.
+    #[arg(long = "capability")]
+    pub capabilities: Vec<String>,
+
+    /// Allowed secret provider ref for secrets:use. Same as `omakure api --secret-ref`.
+    #[arg(long = "secret-ref")]
+    pub secret_refs: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeResetArgs {
+    /// Confirm destructive removal of identity and trust state
+    #[arg(long)]
+    pub confirmed: bool,
 }
 
 #[derive(Args, Debug)]
@@ -1132,20 +1137,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_engine_policy_flag() {
-        let cli = parse(&["engine", "--policy", "/tmp/p.toml"]).unwrap();
-        match cli.command.unwrap() {
-            Commands::Engine(args) => {
-                assert_eq!(
-                    args.policy.as_deref(),
-                    Some(std::path::Path::new("/tmp/p.toml"))
-                );
-            }
-            _ => panic!("expected Engine"),
-        }
-    }
-
-    #[test]
     fn test_api_help_surface_exists() {
         let command = Cli::command();
         let api = command
@@ -1158,42 +1149,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_engine_defaults() {
-        let cli = parse(&["engine"]).unwrap();
-        match cli.command.unwrap() {
-            Commands::Engine(args) => {
-                assert_eq!(args.bind.to_string(), "127.0.0.1:7878");
-                assert!(!args.allow_non_loopback);
-                assert_eq!(args.workers, None);
-                assert!(args.policy.is_none());
-                assert!(!args.scheduler);
-                assert!(!args.no_scheduler);
-                assert!(!args.readiness_requires_worker);
-                assert!(!args.readiness_requires_scheduler);
-                assert!(args.capabilities.is_empty());
-                assert!(args.secret_refs.is_empty());
-            }
-            _ => panic!("expected Engine"),
-        }
-    }
-
-    #[test]
-    fn test_parse_engine_workers_zero_no_scheduler() {
-        let cli = parse(&["engine", "--workers", "0", "--no-scheduler"]).unwrap();
-        match cli.command.unwrap() {
-            Commands::Engine(args) => {
-                assert_eq!(args.workers, Some(0));
-                assert!(!args.scheduler);
-                assert!(args.no_scheduler);
-            }
-            _ => panic!("expected Engine"),
-        }
-    }
-
-    #[test]
-    fn test_parse_engine_readiness_and_filters() {
+    fn test_parse_node_serve_flags() {
         let cli = parse(&[
-            "engine",
+            "node",
+            "serve",
+            "--bind",
+            "127.0.0.1:8787",
             "--workers",
             "2",
             "--scheduler",
@@ -1210,40 +1171,86 @@ mod tests {
         ])
         .unwrap();
         match cli.command.unwrap() {
-            Commands::Engine(args) => {
-                assert_eq!(args.workers, Some(2));
-                assert!(args.scheduler);
-                assert!(!args.no_scheduler);
-                assert!(args.readiness_requires_worker);
-                assert!(args.readiness_requires_scheduler);
-                assert_eq!(args.worker_actor_filter.as_deref(), Some("agent"));
-                assert_eq!(args.worker_script_filter.as_deref(), Some("tools/"));
-                assert_eq!(args.capabilities, vec!["runs:write".to_string()]);
-                assert_eq!(args.secret_refs, vec!["secret://env/*".to_string()]);
-            }
-            _ => panic!("expected Engine"),
+            Commands::Node(args) => match args.command {
+                NodeCommand::Serve(args) => {
+                    assert_eq!(args.bind.unwrap().to_string(), "127.0.0.1:8787");
+                    assert_eq!(args.workers, Some(2));
+                    assert!(args.scheduler);
+                    assert!(!args.no_scheduler);
+                    assert!(args.readiness_requires_worker);
+                    assert!(args.readiness_requires_scheduler);
+                    assert_eq!(args.worker_actor_filter.as_deref(), Some("agent"));
+                    assert_eq!(args.worker_script_filter.as_deref(), Some("tools/"));
+                    assert_eq!(args.capabilities, vec!["runs:write".to_string()]);
+                    assert_eq!(args.secret_refs, vec!["secret://env/*".to_string()]);
+                }
+                _ => panic!("expected node serve"),
+            },
+            _ => panic!("expected Node"),
         }
     }
 
     #[test]
-    fn test_engine_help_surface_exists() {
+    fn test_node_reset_requires_explicit_flag_in_surface() {
+        let cli = parse(&["node", "reset", "--confirmed"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Node(args) => match args.command {
+                NodeCommand::Reset(args) => assert!(args.confirmed),
+                _ => panic!("expected node reset"),
+            },
+            _ => panic!("expected Node"),
+        }
+    }
+
+    #[test]
+    fn test_node_serve_defaults_are_safe() {
+        let cli = parse(&["node", "serve"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Node(args) => match args.command {
+                NodeCommand::Serve(args) => {
+                    assert!(args.bind.is_none());
+                    assert_eq!(args.workers, None);
+                    assert!(!args.scheduler);
+                    assert!(!args.no_scheduler);
+                    assert!(!args.readiness_requires_worker);
+                    assert!(!args.readiness_requires_scheduler);
+                    assert!(args.capabilities.is_empty());
+                    assert!(args.secret_refs.is_empty());
+                }
+                _ => panic!("expected node serve"),
+            },
+            _ => panic!("expected Node"),
+        }
+    }
+
+    #[test]
+    fn test_node_serve_help_surface_exists() {
         let command = Cli::command();
-        let engine = command
-            .find_subcommand("engine")
-            .expect("engine subcommand should be registered");
-        assert!(engine.get_arguments().any(|arg| arg.get_id() == "workers"));
-        assert!(engine
-            .get_arguments()
-            .any(|arg| arg.get_id() == "scheduler"));
-        assert!(engine
-            .get_arguments()
-            .any(|arg| arg.get_id() == "no_scheduler"));
-        assert!(engine
+        let node = command
+            .find_subcommand("node")
+            .expect("node subcommand should be registered");
+        let serve = node
+            .find_subcommand("serve")
+            .expect("node serve should be registered");
+        assert!(serve.get_arguments().any(|arg| arg.get_id() == "workers"));
+        assert!(serve
             .get_arguments()
             .any(|arg| arg.get_id() == "readiness_requires_worker"));
-        assert!(engine
-            .get_arguments()
-            .any(|arg| arg.get_id() == "readiness_requires_scheduler"));
+    }
+
+    #[test]
+    fn test_parse_node_serve_policy_flag() {
+        let cli = parse(&["node", "serve", "--policy", "/tmp/p.toml"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Node(args) => match args.command {
+                NodeCommand::Serve(args) => assert_eq!(
+                    args.policy.as_deref(),
+                    Some(std::path::Path::new("/tmp/p.toml"))
+                ),
+                _ => panic!("expected node serve"),
+            },
+            _ => panic!("expected Node"),
+        }
     }
 
     #[test]

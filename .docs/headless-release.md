@@ -6,7 +6,7 @@ accurately recorded without being presented as current product guidance.
 
 ## Product
 
-- Supported surfaces: CLI, HTTP management API, and `engine`.
+- Supported surfaces: CLI, HTTP management API, and machine-owned `node serve`.
 - CLI discovery: `--help` and `help-ai` are generated from the compiled clap
   command tree.
 - Operational probes: unauthenticated `/v1/health` and `/v1/ready`.
@@ -52,11 +52,12 @@ x86_64-unknown-linux-gnu`).
 | `omakure` release binary | 10,520,464 bytes | 8,815,352 bytes | -1,705,112 bytes (-16.21%) |
 | Direct normal dependencies | 27 | 23 | -4 |
 
-Local gates passed: `cargo test --all-targets --locked` (769 passed, 0 failed),
-`mise run lint`, `cargo test --test packaging_smoke --locked`,
-`mise run engine-check`, `mise run dev`, and the source, dependency, asset,
-`--help`, and `help-ai` negative scans. The release archive was 3,379,669
-bytes and contained only the root `omakure` binary.
+Current local verification passed: `cargo test --all-targets --locked` (816 passed,
+0 failed), `mise run lint`, `cargo test --test packaging_smoke --locked`,
+Compose/workflow YAML parsing, lifecycle regression tests, and stale-engine
+negative scans. Docker image build and hosted platform execution are CI jobs,
+not local evidence. Historical binary-size and dependency measurements above
+remain unchanged; the release archive contract is still binary-only.
 
 Hosted Linux, macOS, and Windows CI/release runs remain pending. They are not
 claimed by this local snapshot; task #2678 remains blocked on that evidence.

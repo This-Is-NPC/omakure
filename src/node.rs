@@ -1,6 +1,7 @@
 use crate::domain::{NodeConfig, NodeConfigError};
 use crate::node_identity::NodeIdentityStatus;
 use crate::node_registry::{NodeRegistry, RegistryError};
+use fs2::FileExt;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::env;
@@ -98,6 +99,8 @@ pub enum NodeError {
     InsecurePath(String),
     #[error("node configuration already exists and is invalid: {0}")]
     ExistingConfig(String),
+    #[error("node service lifecycle lock is busy")]
+    LifecycleBusy,
     #[error("node configuration error: {0}")]
     Config(#[from] NodeConfigError),
     #[error("node I/O error: {0}")]
@@ -241,11 +244,18 @@ impl NodeContext {
         self.test_mode
     }
 
-    pub fn open_trust_registry(
+    pub(crate) fn open_trust_registry(
         &self,
         identity: &NodeIdentityStatus,
     ) -> Result<NodeRegistry, RegistryError> {
         NodeRegistry::open(self, identity)
+    }
+
+    pub(crate) fn open_trust_registry_for_initialization(
+        &self,
+        identity: &NodeIdentityStatus,
+    ) -> Result<NodeRegistry, RegistryError> {
+        NodeRegistry::open_for_initialization(self, identity)
     }
 
     /// Create only the state directory and public config. Identity and the
@@ -293,13 +303,39 @@ impl NodeContext {
                 }
                 Err(err) if err.kind() == io::ErrorKind::NotFound => {
                     let contents = config.to_toml()?;
-                    write_atomic_config(self.config_path(), contents.as_bytes())?;
+                    let created = match write_atomic_config(self.config_path(), contents.as_bytes())
+                    {
+                        Ok(()) => true,
+                        // Another first start may win the config race. Never
+                        // replace its file; validate and converge on it.
+                        Err(NodeError::Io(error))
+                            if error.kind() == io::ErrorKind::AlreadyExists =>
+                        {
+                            let metadata = fs::symlink_metadata(self.config_path())?;
+                            if metadata.file_type().is_symlink() || !metadata.file_type().is_file()
+                            {
+                                return Err(NodeError::UnexpectedFileType(
+                                    self.config_path().display().to_string(),
+                                ));
+                            }
+                            validate_file_security(
+                                self.config_path(),
+                                owner_policy(self.platform, self.custom_paths, false)?,
+                                self.test_mode,
+                            )?;
+                            let existing = fs::read_to_string(self.config_path())?;
+                            NodeConfig::parse(&existing)
+                                .map_err(|err| NodeError::ExistingConfig(err.to_string()))?;
+                            false
+                        }
+                        Err(error) => return Err(error),
+                    };
                     validate_file_security(
                         self.config_path(),
                         owner_policy(self.platform, self.custom_paths, false)?,
                         self.test_mode,
                     )?;
-                    Ok(true)
+                    Ok(created)
                 }
                 Err(err) => Err(err.into()),
             })();
@@ -390,6 +426,48 @@ impl NodeContext {
         }
     }
 
+    /// Reject state entries that are not owned by the node persistence
+    /// contract. This is intentionally observational: it never repairs or
+    /// removes an entry.
+    pub(crate) fn validate_existing_state_contents(&self) -> Result<bool, NodeError> {
+        if !self.validate_existing_state_directory()? {
+            return Ok(false);
+        }
+        for entry in fs::read_dir(self.state_dir())? {
+            let entry = entry?;
+            let metadata = fs::symlink_metadata(entry.path())?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
+                return Err(NodeError::UnexpectedFileType(name.into_owned()));
+            }
+            let allowed = matches!(
+                name.as_ref(),
+                "identity.key"
+                    | "node.sqlite"
+                    | "node.sqlite-wal"
+                    | "node.sqlite-shm"
+                    | ".identity.lock"
+                    | ".node.lifecycle.lock"
+                    | "node.toml"
+            );
+            if !allowed {
+                return Err(NodeError::InsecurePath(format!(
+                    "unsupported node state entry {name:?}"
+                )));
+            }
+        }
+        Ok(true)
+    }
+
+    pub(crate) fn acquire_lifecycle_lock(&self) -> Result<NodeLifecycleLock, NodeError> {
+        NodeLifecycleLock::acquire(self, false)
+    }
+
+    pub(crate) fn try_acquire_lifecycle_lock(&self) -> Result<NodeLifecycleLock, NodeError> {
+        NodeLifecycleLock::acquire(self, true)
+    }
+
     pub(crate) fn validate_private_file(&self, path: &Path) -> Result<(), NodeError> {
         validate_file_security_mode(
             path,
@@ -454,6 +532,76 @@ impl NodeContext {
             validate_open_file_identity(path, &file)?;
         }
         Ok(Some(file))
+    }
+}
+
+/// Serializes the complete machine-node lifecycle, not just identity writes.
+/// The file remains after reset so Windows never needs to unlink an open lock
+/// or race a new service between deletion and cleanup.
+pub(crate) struct NodeLifecycleLock {
+    file: fs::File,
+}
+
+impl NodeLifecycleLock {
+    fn acquire(context: &NodeContext, nonblocking: bool) -> Result<Self, NodeError> {
+        context.ensure_state_directory()?;
+        let path = context.state_dir().join(".node.lifecycle.lock");
+        let mut options = fs::OpenOptions::new();
+        options.read(true).write(true).create(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+        let file = match options.open(&path) {
+            Ok(file) => file,
+            Err(error)
+                if nonblocking
+                    && matches!(
+                        error.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::PermissionDenied
+                    ) =>
+            {
+                return Err(NodeError::LifecycleBusy);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if fs::symlink_metadata(&path)?.file_type().is_symlink() {
+            return Err(NodeError::InsecurePath(
+                "node lifecycle lock is a symlink".to_string(),
+            ));
+        }
+        context.validate_private_file(&path)?;
+        let result = if nonblocking {
+            file.try_lock_exclusive()
+        } else {
+            file.lock_exclusive()
+        };
+        match result {
+            Ok(()) => Ok(Self { file }),
+            Err(error)
+                if nonblocking
+                    && matches!(
+                        error.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::PermissionDenied
+                    ) =>
+            {
+                Err(NodeError::LifecycleBusy)
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+}
+
+impl Drop for NodeLifecycleLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
     }
 }
 
@@ -1013,7 +1161,6 @@ fn validate_windows_security_descriptor(
 ) -> Result<(), NodeError> {
     const ACL_SIZE_INFORMATION_CLASS: u32 = 2;
     const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
-    const INHERITED_ACE: u8 = 0x10;
     const WIN_LOCAL_SYSTEM_SID: u32 = 22;
     const WIN_LOCAL_SERVICE_SID: u32 = 23;
     const SECURITY_MAX_SID_SIZE: usize = 68;
@@ -1113,9 +1260,9 @@ fn validate_windows_security_descriptor(
                 )));
             }
             let header = unsafe { &*(ace as *const AceHeader) };
-            if header.ace_type != ACCESS_ALLOWED_ACE_TYPE || header.ace_flags & INHERITED_ACE != 0 {
+            if header.ace_type != ACCESS_ALLOWED_ACE_TYPE {
                 return Err(NodeError::InsecurePath(format!(
-                    "{} has a non-explicit or non-allow ACL entry",
+                    "{} has a non-allow ACL entry",
                     path.display()
                 )));
             }

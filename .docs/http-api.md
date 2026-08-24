@@ -68,22 +68,22 @@ omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
   --capability env:write
 ```
 
-### Engine (single-process deploy)
+### Node service (single-process deploy)
 
-`omakure engine` runs the same HTTP surface as `omakure api`, plus optional
+`omakure node serve` runs the same HTTP surface as `omakure api`, plus optional
 in-process queue workers and the existing schedule scanner, with coordinated
 SIGTERM shutdown. Auth is identical (`--tokens-file` / `OMAKURE_TOKENS_FILE`,
 or legacy `OMAKURE_API_TOKEN` + `--capability` / `--secret-ref`).
 
 ```bash
 # API-only (≈ omakure api)
-omakure engine --workers 0 --no-scheduler --tokens-file /run/secrets/tokens.toml
+omakure node serve --workers 0 --no-scheduler --tokens-file /run/secrets/tokens.toml
 
 # HTTP + one worker + scheduler (defaults: --workers 1, scheduler on)
-omakure engine --workers 1 --scheduler --tokens-file /run/secrets/tokens.toml
+omakure node serve --workers 1 --scheduler --tokens-file /run/secrets/tokens.toml
 
 # Fail ready until configured loops are alive
-omakure engine --workers 2 \
+omakure node serve --workers 2 \
   --readiness-requires-worker \
   --readiness-requires-scheduler
 ```
@@ -247,7 +247,7 @@ GET /v1/ready
 `GET /v1/ready` returns only a minimal `{ "status": "ready" | "not_ready" }`
 payload (HTTP 200 or 503). It must not expose token IDs, paths, or secrets.
 Optional `--readiness-requires-worker` / `--readiness-requires-scheduler` on
-`omakure engine` gate readiness on those loops.
+`omakure node serve` gates readiness on those loops.
 
 Authenticated operator status (scope `admin:status`, or legacy `*`):
 
@@ -538,7 +538,7 @@ Loopback mode:
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
 omakure api
 # or single-process:
-omakure engine --workers 1
+omakure node serve --workers 1
 ```
 
 Internal container network mode:
@@ -547,7 +547,7 @@ Internal container network mode:
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
 omakure api --bind 0.0.0.0:7878 --allow-non-loopback
 # or:
-omakure engine --bind 0.0.0.0:7878 --allow-non-loopback --workers 2
+omakure node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 2
 ```
 
 Publishing the API to a host port is a deployment choice outside v1's safety

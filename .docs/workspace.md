@@ -48,5 +48,5 @@ search, HTTP tree routes, and scheduling.
 ## Single-host storage
 
 SQLite is local runtime state, not a distributed queue. Run one writer topology
-per workspace volume, keep API/workers/engine on the same host, and do not use
+per workspace volume, keep API/workers/node service on the same host, and do not use
 NFS/CIFS or scale replicas over one `.history` directory.

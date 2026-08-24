@@ -213,19 +213,55 @@ pub struct NodeRegistry {
 
 impl NodeRegistry {
     /// Open and validate the node-owned database for the supplied public identity.
-    pub fn open(
+    pub(crate) fn open(
         context: &NodeContext,
         identity: &NodeIdentityStatus,
     ) -> Result<Self, RegistryError> {
+        Self::open_with_mode(context, identity, false)
+    }
+
+    pub(crate) fn open_for_initialization(
+        context: &NodeContext,
+        identity: &NodeIdentityStatus,
+    ) -> Result<Self, RegistryError> {
+        Self::open_with_mode(context, identity, true)
+    }
+
+    fn open_with_mode(
+        context: &NodeContext,
+        identity: &NodeIdentityStatus,
+        allow_create: bool,
+    ) -> Result<Self, RegistryError> {
         context.ensure_state_directory()?;
         let path = context.database_path();
+        let database_existed = std::fs::symlink_metadata(&path).is_ok();
+        if !database_existed && !allow_create {
+            return Err(RegistryError::NotFound(
+                "node trust registry is not initialized".to_string(),
+            ));
+        }
+        let sidecars_existed = database_sidecar_presence(&path);
         let (node_id, public_key) = validate_identity(identity)?;
         let registry = Self {
             path,
             local_node_id: node_id,
             local_public_key: public_key,
         };
-        registry.with_connection(|connection| initialize_database(connection, &registry))?;
+        registry.with_connection(|connection| {
+            if !database_existed {
+                set_new_database_mode(&registry.path)?;
+            }
+            for (sidecar, existed) in database_sidecar_paths(&registry.path)
+                .into_iter()
+                .zip(sidecars_existed)
+            {
+                if !existed && sidecar.exists() {
+                    set_new_database_mode(&sidecar)?;
+                }
+            }
+            validate_database_security(context, &registry.path)?;
+            initialize_database(connection, &registry)
+        })?;
         Ok(registry)
     }
 
@@ -259,12 +295,14 @@ impl NodeRegistry {
             Err(error) => return Err(error.into()),
         }
         let (node_id, public_key) = validate_identity(identity)?;
+        validate_database_security(context, &path)?;
         let registry = Self {
             path,
             local_node_id: node_id,
             local_public_key: public_key,
         };
         registry.with_connection(|connection| {
+            validate_database_security(context, &registry.path)?;
             let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
             if version == 0 {
                 return Err(RegistryError::InvalidSchema(
@@ -700,6 +738,57 @@ impl NodeRegistry {
         configure_connection(&mut connection)?;
         operation(&mut connection)
     }
+}
+
+fn validate_database_security(context: &NodeContext, path: &Path) -> Result<(), RegistryError> {
+    context.validate_private_file(path)?;
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = path.with_file_name(format!(
+            "{}{}",
+            path.file_name().unwrap().to_string_lossy(),
+            suffix
+        ));
+        match std::fs::symlink_metadata(&sidecar) {
+            Ok(metadata)
+                if metadata.file_type().is_symlink() || !metadata.file_type().is_file() =>
+            {
+                return Err(RegistryError::InvalidSchema(
+                    "node SQLite sidecar has an unexpected file type".to_string(),
+                ));
+            }
+            Ok(_) => context.validate_private_file(&sidecar)?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
+fn database_sidecar_paths(path: &Path) -> [PathBuf; 2] {
+    [
+        path.with_file_name(format!(
+            "{}-wal",
+            path.file_name().unwrap().to_string_lossy()
+        )),
+        path.with_file_name(format!(
+            "{}-shm",
+            path.file_name().unwrap().to_string_lossy()
+        )),
+    ]
+}
+
+fn database_sidecar_presence(path: &Path) -> [bool; 2] {
+    database_sidecar_paths(path).map(|path| std::fs::symlink_metadata(path).is_ok())
+}
+
+fn set_new_database_mode(path: &Path) -> Result<(), RegistryError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    let _ = path;
+    Ok(())
 }
 
 fn initialize_database(
@@ -1668,19 +1757,28 @@ mod tests {
     #[test]
     fn future_schema_corruption_and_metadata_downgrade_fail_closed() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
-        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
-        let database = context.database_path();
+        let ctx = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&ctx).unwrap();
+        let database = ctx.database_path();
         let connection = Connection::open(&database).unwrap();
         connection.execute_batch("PRAGMA user_version = 2").unwrap();
         assert!(matches!(
-            NodeRegistry::open(&context, identity.public_status()),
+            NodeRegistry::open(&ctx, identity.public_status()),
             Err(RegistryError::InvalidSchema(_))
         ));
         drop(connection);
         fs::remove_file(&database).unwrap();
-        let _ = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        let connection = Connection::open(&database).unwrap();
+        assert!(matches!(
+            NodeRegistry::open(&ctx, identity.public_status()),
+            Err(RegistryError::NotFound(_))
+        ));
+        assert!(ctx.identity_path().is_file());
+        assert!(!ctx.database_path().exists());
+
+        let temp = TempDir::new().unwrap();
+        let context2 = context(&temp);
+        let identity2 = NodeIdentity::load_or_initialize(&context2).unwrap();
+        let connection = Connection::open(context2.database_path()).unwrap();
         connection
             .execute(
                 "UPDATE metadata SET value = '0' WHERE key = 'schema_version'",
@@ -1689,7 +1787,7 @@ mod tests {
             .unwrap();
         drop(connection);
         assert!(matches!(
-            NodeRegistry::open(&context, identity.public_status()),
+            NodeRegistry::open(&context2, identity2.public_status()),
             Err(RegistryError::InvalidSchema(_))
         ));
     }

@@ -29,9 +29,9 @@ must be updated in the same change.
 | FR-019 | `help-ai` derives a machine-readable command and data-shape inventory from clap metadata. | `src/cli/help_ai.rs`, `src/cli/args.rs` |
 | FR-020 | CLI JSON uses `{ ok, data, error, schema_version }` and stable error codes. | `src/cli/json.rs`, `src/cli/args.rs` |
 | FR-021 | `api` exposes authenticated management routes for config, diagnostics, workspace, scripts, search, runs, queues, environments, Batteries, and secret metadata. | `src/cli/api.rs`, `src/operations/*.rs` |
-| FR-022 | `engine` composes HTTP, optional workers, and optional scheduler with coordinated shutdown and readiness gates. | `src/cli/engine.rs`, `src/cli/args.rs` |
-| FR-023 | Health and readiness are unauthenticated; other HTTP routes require scoped bearer tokens or explicitly granted legacy capabilities. | `src/auth.rs`, `src/cli/api.rs`, `src/cli/engine.rs` |
-| FR-024 | Deploy policy controls route groups, auth modes, body limits, script limits, environment use, secret use, and scheduler/worker defaults. | `src/policy.rs`, `src/cli/api.rs`, `src/cli/engine.rs` |
+| FR-022 | `node serve` validates machine state, initializes one identity and empty trust registry when absent, then composes HTTP, optional workers, and optional scheduler with coordinated shutdown and readiness gates. | `src/cli/node_service.rs`, `src/operations/node.rs`, `src/cli/args.rs` |
+| FR-023 | Health and readiness are unauthenticated; other HTTP routes require scoped bearer tokens or explicitly granted legacy capabilities. | `src/auth.rs`, `src/cli/api.rs`, `src/cli/node_service.rs` |
+| FR-024 | Deploy policy controls route groups, auth modes, body limits, script limits, environment use, secret use, and node-service scheduler/worker defaults. | `src/policy.rs`, `src/cli/api.rs`, `src/cli/node_service.rs` |
 
 ## Non-functional requirements
 
@@ -58,3 +58,4 @@ must be updated in the same change.
 | BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery.rs`, `src/cli/api.rs` |
 | BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api.rs`, `src/policy.rs` |
 | BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args.rs`, `src/main.rs`, `tests/packaging_smoke.rs` |
+| BR-010 | Machine identity and trust are independent of script workspaces; normal update, replacement, restart, and uninstall preserve node state, while `node reset --confirmed` removes it and creates no replacement until the next service start. | `src/node.rs`, `src/node_identity.rs`, `src/operations/node.rs`, `src/cli/node.rs` |

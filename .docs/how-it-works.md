@@ -10,7 +10,7 @@
    readable or the stable JSON envelope; HTTP adds authentication, policy, and
    status mapping.
 5. Direct `run` inserts a running row. `queue add` inserts a queued row and a
-   worker claims it atomically. `serve` and the engine scheduler enqueue due
+   worker claims it atomically. `serve` and the node-service scheduler enqueue due
    scheduled rows. All paths use the same executor.
 6. The executor resolves the runtime, injects managed/per-run environments,
    sets reserved run variables, captures and redacts output, refreshes a lease,
@@ -18,9 +18,9 @@
 7. `history` and `queue stats` expose state; `trace` and `history traces` expose
    structured progress without requiring direct database access.
 
-## Deployable engine
+## Deployable node service
 
-`omakure engine` starts the HTTP server and, unless disabled, an in-process
+`omakure node serve` starts the HTTP server and, unless disabled, an in-process
 worker pool and schedule scanner. `/v1/health` reports liveness and `/v1/ready`
 reports minimal readiness. Optional readiness flags require the configured
 worker or scheduler loop to be alive. Shutdown stops HTTP acceptance first,
@@ -30,7 +30,7 @@ then scheduling/claiming, then drains workers.
 
 ```text
 init -> scripts/describe -> run or queue add -> worker/executor -> history/traces
-                                      \-> serve/engine scheduler for Schedule
+                                       \-> serve/node-service scheduler for Schedule
 ```
 
 Use `help-ai` once per binary version to discover the complete command tree and

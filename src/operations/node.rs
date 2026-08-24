@@ -63,6 +63,13 @@ pub struct NodeInitializationResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NodeResetResult {
+    pub state_removed: bool,
+    pub trust_removed: bool,
+    pub identity_removed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PublicPeer {
     pub node_id: String,
     pub public_key: String,
@@ -111,15 +118,49 @@ pub fn initialize_node(
     let state_was_present = context
         .validate_existing_state_directory()
         .map_err(map_node_error)?;
+    let _lifecycle = context.acquire_lifecycle_lock().map_err(map_node_error)?;
+    initialize_node_locked(context, config, state_was_present)
+}
+
+/// Initialize through an exposed control surface without waiting behind the
+/// long-lived node-service lifecycle lock. Genuine first initialization callers
+/// should use `initialize_node`, which preserves serialized convergence.
+pub fn initialize_node_nonblocking(
+    context: &NodeContext,
+    config: &NodeConfig,
+) -> OperationResult<NodeInitializationResult> {
+    let state_was_present = context
+        .validate_existing_state_directory()
+        .map_err(map_node_error)?;
+    let _lifecycle = context
+        .try_acquire_lifecycle_lock()
+        .map_err(map_node_error)?;
+    initialize_node_locked(context, config, state_was_present)
+}
+
+pub(crate) fn initialize_node_locked(
+    context: &NodeContext,
+    config: &NodeConfig,
+    state_was_present: bool,
+) -> OperationResult<NodeInitializationResult> {
+    let _state_contents_present = context
+        .validate_existing_state_contents()
+        .map_err(map_node_error)?;
     let identity_was_present = path_is_present(&context.identity_path(), "identity.key")?;
     let registry_was_present = path_is_present(&context.database_path(), "node.sqlite")?;
+    if state_was_present
+        && (identity_was_present || registry_was_present)
+        && read_node_config(context)?.is_none()
+    {
+        return Err(registry_error("node configuration is missing"));
+    }
     let initialization = context.initialize(config).map_err(map_node_error)?;
     let _identity = context
         .load_or_initialize_identity()
         .map_err(map_identity_error)?;
     let status = public_node_status(context)?;
     Ok(NodeInitializationResult {
-        state_dir_created: initialization.state_dir_created && !state_was_present,
+        state_dir_created: !state_was_present,
         config_created: initialization.config_created,
         identity_created: !identity_was_present,
         registry_created: !registry_was_present,
@@ -133,7 +174,7 @@ pub fn initialize_node(
 pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> {
     let config = read_public_config(context)?;
     let state_present = context
-        .validate_existing_state_directory()
+        .validate_existing_state_contents()
         .map_err(map_node_error)?;
     if !state_present {
         return Ok(NodeStatus {
@@ -185,6 +226,36 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
             peer_count: counts.total,
             active_peer_count: counts.active,
         },
+    })
+}
+
+pub fn reset_node(context: &NodeContext, confirmed: bool) -> OperationResult<NodeResetResult> {
+    if !confirmed {
+        return Err(OperationError::new(
+            OperationErrorCode::Forbidden,
+            "explicit confirmation is required for node factory reset",
+        ));
+    }
+    if !context
+        .validate_existing_state_directory()
+        .map_err(map_node_error)?
+    {
+        return Ok(NodeResetResult {
+            state_removed: false,
+            trust_removed: false,
+            identity_removed: false,
+        });
+    }
+    let _lifecycle = context
+        .try_acquire_lifecycle_lock()
+        .map_err(map_node_error)?;
+    let had_identity = path_is_present(&context.identity_path(), "identity.key")?;
+    let had_registry = path_is_present(&context.database_path(), "node.sqlite")?;
+    let removed = NodeIdentity::execute_factory_reset(context).map_err(map_identity_error)?;
+    Ok(NodeResetResult {
+        state_removed: removed,
+        trust_removed: removed && had_registry,
+        identity_removed: removed && had_identity,
     })
 }
 
@@ -252,6 +323,14 @@ fn open_initialized_registry(context: &NodeContext) -> OperationResult<NodeRegis
 }
 
 fn read_public_config(context: &NodeContext) -> OperationResult<Option<PublicNodeConfig>> {
+    Ok(read_node_config(context)?.map(public_config))
+}
+
+pub fn load_node_config(context: &NodeContext) -> OperationResult<NodeConfig> {
+    read_node_config(context)?.ok_or_else(|| registry_error("node configuration is missing"))
+}
+
+fn read_node_config(context: &NodeContext) -> OperationResult<Option<NodeConfig>> {
     let Some(file) = context.open_public_file().map_err(map_node_error)? else {
         return Ok(None);
     };
@@ -270,7 +349,7 @@ fn read_public_config(context: &NodeContext) -> OperationResult<Option<PublicNod
         .map_err(|_| registry_error("node configuration is invalid or corrupt"))?;
     let config = NodeConfig::parse(&text)
         .map_err(|_| registry_error("node configuration is invalid or corrupt"))?;
-    Ok(Some(public_config(config)))
+    Ok(Some(config))
 }
 
 fn path_is_present(path: &std::path::Path, label: &str) -> OperationResult<bool> {
@@ -382,6 +461,10 @@ fn map_node_error(error: NodeError) -> OperationError {
         | NodeError::UnsafePath(_)
         | NodeError::UnexpectedFileType(_)
         | NodeError::ExistingConfig(_) => registry_error("node state is invalid or insecure"),
+        NodeError::LifecycleBusy => OperationError::new(
+            OperationErrorCode::Conflict,
+            "node service is active; stop it before changing node state",
+        ),
         NodeError::TestModeUnavailable => registry_error("node test mode is unavailable"),
         NodeError::Io(_) => OperationError::new(OperationErrorCode::IoFailed, error.to_string()),
     }
@@ -422,7 +505,7 @@ fn map_registry_error(error: RegistryError) -> OperationError {
         RegistryError::Io(error) => {
             OperationError::new(OperationErrorCode::IoFailed, error.to_string())
         }
-        RegistryError::Sqlite(_) => registry_error("node trust registry is unavailable"),
+        RegistryError::Sqlite(_) => registry_error("node trust registry is invalid or corrupt"),
         RegistryError::Node(error) => map_node_error(error),
         RegistryError::SelfTrust => {
             OperationError::new(OperationErrorCode::Conflict, "peer cannot trust itself")
@@ -531,9 +614,12 @@ mod tests {
         let node_id = request.node_id.clone();
         let peer = import_manual_trust(&context, request.clone()).unwrap();
         assert_eq!(peer.state, "active");
-        let registry = NodeIdentity::load_existing(&context)
-            .unwrap()
-            .open_trust_registry()
+        let registry = context
+            .open_trust_registry(
+                NodeIdentity::load_existing(&context)
+                    .unwrap()
+                    .public_status(),
+            )
             .unwrap();
         let audit = registry.audit_events().unwrap();
         assert_eq!(audit.len(), 1);
@@ -691,5 +777,107 @@ mod tests {
         let error = public_node_status(&linked_context).unwrap_err();
         assert_eq!(error.code, OperationErrorCode::RegistryInvalid);
         assert_eq!(error.message, "node state is invalid or insecure");
+    }
+
+    #[test]
+    fn concurrent_service_initialization_converges_without_duplicate_state() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let temp = TempDir::new().unwrap();
+        let context = Arc::new(context(&temp));
+        let barrier = Arc::new(Barrier::new(8));
+        let handles = (0..8)
+            .map(|_| {
+                let context = Arc::clone(&context);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    initialize_node(&context, &NodeConfig::default()).unwrap()
+                })
+            })
+            .collect::<Vec<_>>();
+        let results = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect::<Vec<_>>();
+        let identity = results[0].status.identity.clone().unwrap();
+        assert!(results.iter().all(|result| {
+            result.status.identity.as_ref() == Some(&identity)
+                && result.status.trust.peer_count == 0
+        }));
+        assert!(context.identity_path().is_file());
+        assert!(context.database_path().is_file());
+    }
+
+    #[test]
+    fn factory_reset_requires_confirmation_and_removes_identity_and_trust_only() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        initialize_node(&context, &NodeConfig::default()).unwrap();
+        let identity_before = NodeIdentity::load_existing(&context)
+            .unwrap()
+            .public_status()
+            .clone();
+
+        let denied = reset_node(&context, false).unwrap_err();
+        assert_eq!(denied.code, OperationErrorCode::Forbidden);
+        assert!(context.identity_path().exists());
+
+        let result = reset_node(&context, true).unwrap();
+        assert!(result.state_removed);
+        assert!(result.identity_removed);
+        assert!(result.trust_removed);
+        assert!(context.state_dir().is_dir());
+        assert!(!context.identity_path().exists());
+        assert!(!context.database_path().exists());
+        assert!(context.config_path().is_file());
+
+        initialize_node(&context, &NodeConfig::default()).unwrap();
+        let identity_after = NodeIdentity::load_existing(&context)
+            .unwrap()
+            .public_status()
+            .clone();
+        assert_ne!(identity_before, identity_after);
+        assert!(list_trusted_peers(&context).unwrap().is_empty());
+    }
+
+    #[test]
+    fn reset_and_initialize_race_preserves_identity_registry_pairing() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let temp = TempDir::new().unwrap();
+        let context = Arc::new(context(&temp));
+        initialize_node(&context, &NodeConfig::default()).unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let reset_context = Arc::clone(&context);
+        let reset_barrier = Arc::clone(&barrier);
+        let reset = thread::spawn(move || {
+            reset_barrier.wait();
+            reset_node(&reset_context, true)
+        });
+        let init_context = Arc::clone(&context);
+        let init_barrier = Arc::clone(&barrier);
+        let init = thread::spawn(move || {
+            init_barrier.wait();
+            initialize_node(&init_context, &NodeConfig::default())
+        });
+
+        let reset_result = reset.join().unwrap();
+        let init_result = init.join().unwrap();
+        assert!(
+            reset_result.is_ok()
+                || reset_result.as_ref().unwrap_err().code == OperationErrorCode::Conflict
+        );
+        assert!(init_result.is_ok());
+
+        let identity_exists = context.identity_path().is_file();
+        let registry_exists = context.database_path().is_file();
+        assert_eq!(identity_exists, registry_exists);
+        if identity_exists {
+            let identity = NodeIdentity::load_existing(&context).unwrap();
+            NodeRegistry::open_existing(&context, identity.public_status()).unwrap();
+        }
     }
 }

@@ -31,7 +31,7 @@ the source of truth for the current command surface.
    terminal or client application's own presentation configuration.
 4. Remove directory `index.lua` files from Omakure workspace assumptions; put
    any needed metadata in schemas, scripts, or the consuming client.
-5. For automation and deployment, use `engine` with `/v1/health` and
+5. For automation and deployment, use `node serve` with `/v1/health` and
    `/v1/ready`, or run `api`, `queue worker`, and `serve` as explicit processes.
 
 ## Data and release notes

@@ -41,10 +41,6 @@ const TOP_LEVEL_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
-        command: "engine",
-        coverage: Coverage::Covered("tests/engine_e2e.rs"),
-    },
-    CommandCoverage {
         command: "completion",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
@@ -216,8 +212,16 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
+        command: "node reset",
+        coverage: Coverage::Covered("src/cli/args.rs + node lifecycle tests"),
+    },
+    CommandCoverage {
         command: "node revoke",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
+        command: "node serve",
+        coverage: Coverage::Covered("tests/node_service_e2e.rs"),
     },
     CommandCoverage {
         command: "node status",
@@ -300,7 +304,9 @@ fn command_surface_inventory_maps_all_current_commands() {
         "node capabilities",
         "node init",
         "node peers",
+        "node reset",
         "node revoke",
+        "node serve",
         "node status",
         "node trust",
         "queue add",

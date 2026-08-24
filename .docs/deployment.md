@@ -1,7 +1,7 @@
 # Deployment guide
 
 How to run Omakure's HTTP management surface on a single host: API-only,
-API plus a separate worker, or the combined `omakure engine` process —
+API plus a separate worker, or the combined `omakure node serve` process —
 including the official container image.
 
 This guide is for **trusted internal** deployments (loopback or private
@@ -30,11 +30,11 @@ there is no forced cutover.
 Deploy-only file via `--policy` / `OMAKURE_POLICY_FILE`. **Not** workspace
 `omakure.toml`. Bad/missing required policy fails **before** binding a socket.
 
-### Load order (api / engine)
+### Load order (api / node serve)
 
-1. Built-in defaults (route groups allowed; engine workers=1, scheduler on;
+1. Built-in defaults (route groups allowed; node-service workers=1, scheduler on;
    `auth.legacy_env_token = true`).
-2. Deploy `policy.toml` overlays `[http]` / `[engine]` defaults and hard
+2. Deploy `policy.toml` overlays `[http]` / `[node]` defaults and hard
    `[routes]` / `[auth]` gates.
 3. Explicit CLI flags win when provided (`--bind`, `--workers`,
    `--scheduler` / `--no-scheduler`, readiness flags, `--tokens-file`,
@@ -46,8 +46,8 @@ override `routes.writes = false` or `routes.battery = false`.
 
 ### Schema (v1)
 
-Sections: `http`, `engine`, `routes`, `sources`, `scripts`, `envs`, `runs`,
-`secrets`, `auth`. Route groups and auth/engine/http defaults apply globally;
+Sections: `http`, `node`, `routes`, `sources`, `scripts`, `envs`, `runs`,
+`secrets`, `auth`. Route groups and auth/node/http defaults apply globally;
 HTTP handlers also enforce `sources.*`, `scripts.*` size/tree limits,
 `envs.http_manage` / `envs.allow_secret_refs`, `runs.allow_*`, and
 `secrets.metadata_endpoint`. CLI local Battery add is not gated by deploy
@@ -63,7 +63,7 @@ allow_non_loopback = true
 body_limit_bytes = 1048576
 cors = "disabled"              # only "disabled" in v1
 
-[engine]
+[node]
 workers = 2                    # used when --workers omitted
 scheduler = true               # used when neither --scheduler nor --no-scheduler
 readiness_requires_worker = true
@@ -156,7 +156,7 @@ Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 
 ### Network egress (SSRF containment)
 
-Battery add/sync makes the engine issue outbound git requests. The engine
+Battery add/sync makes the node service issue outbound git requests. The node service
 **rejects** hosts that are a literal private/loopback/link-local/metadata IP at
 registration. At sync it resolves the host, rejects the operation if any answer
 is private, and pins Git/curl to one verified public answer with
@@ -164,7 +164,7 @@ is private, and pins Git/curl to one verified public answer with
 remote cannot redirect credentials or make Git resolve a second host. Failure
 to resolve and pin fails closed.
 
-Keep defense in depth by running the engine behind a **network egress policy** that
+Keep defense in depth by running the node service behind a **network egress policy** that
 denies traffic to RFC1918 / loopback / link-local / cloud-metadata ranges — a
 Kubernetes `NetworkPolicy`/egress rule, a firewall, or a locked-down network
 namespace. Battery sync intentionally ignores process proxy variables; deploy
@@ -188,10 +188,10 @@ omakure token generate --id local --scope '*' --json
 omakure api --bind 127.0.0.1:7878 --tokens-file secrets/tokens.toml
 ```
 
-Equivalent engine form:
+Equivalent node-service form:
 
 ```bash
-omakure engine --workers 0 --no-scheduler --tokens-file secrets/tokens.toml
+omakure node serve --workers 0 --no-scheduler --tokens-file secrets/tokens.toml
 ```
 
 Legacy single-token form (still supported):
@@ -207,7 +207,7 @@ management without draining the queue in this process.
 
 ### API + separate worker
 
-Run the HTTP API (or API-only engine) in one process and drain the queue
+Run the HTTP API (or API-only node service) in one process and drain the queue
 elsewhere:
 
 ```bash
@@ -224,15 +224,15 @@ Optional scheduler in a third process: `omakure serve --no-worker`.
 All processes must share the **same workspace directory** (same
 `.history/runs.sqlite`). Do not point them at different mounts.
 
-### Engine (recommended single-process deploy)
+### Node service (recommended single-process deploy)
 
-`omakure engine` composes HTTP + optional embedded workers + the existing
+`omakure node serve` composes HTTP + optional embedded workers + the existing
 schedule scanner, with coordinated SIGTERM shutdown (HTTP stop → stop
 scheduling/claiming → drain workers).
 
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure engine --workers 1 \
+omakure node serve --workers 1 \
   --capability scripts:read \
   --capability runs:read \
   --capability runs:write \
@@ -242,7 +242,7 @@ omakure engine --workers 1 \
 Container-friendly bind (inside the image default):
 
 ```bash
-omakure engine --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
+omakure node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
   --capability scripts:read --capability runs:read --capability runs:write
 ```
 
@@ -261,9 +261,9 @@ Artifacts in the repo root:
 
 | File | Role |
 |------|------|
-| `Dockerfile` | Multi-stage build → `omakure` binary; `ENTRYPOINT`/`CMD` run `engine` on `0.0.0.0:7878` with `--allow-non-loopback` |
+| `Dockerfile` | Multi-stage build → `omakure` binary; `ENTRYPOINT`/`CMD` run `node serve` on `0.0.0.0:7878` with `--allow-non-loopback` |
 | `.dockerignore` | Keeps build context lean |
-| `compose.yaml` | Example: workspace and tokens-file volumes, host bind `127.0.0.1:7878`, non-root guidance |
+| `compose.yaml` | Example: workspace and tokens-file volumes, host bind `127.0.0.1:7878`, fixed uid/gid `10001` |
 
 ### Base image runtimes
 
@@ -277,7 +277,7 @@ install provides them — do not assume they are in the default image.
 ### Build
 
 ```bash
-docker build -t omakure-engine:local .
+docker build -t omakure-node:local .
 ```
 
 ### Compose example
@@ -290,6 +290,11 @@ omakure token generate --id ops --scope scripts:read --scope runs:read \
 # Save the generated plaintext token shown once on stdout in your secret store.
 export OMAKURE_WORKSPACE="/path/to/your/omakure-scripts"
 mkdir -p "$OMAKURE_WORKSPACE"
+# Compose runs as the fixed image principal 10001:10001. Prepare both bind
+# mounts; do not substitute the invoking user's UID/GID.
+export OMAKURE_NODE_STATE="${OMAKURE_NODE_STATE:-$(pwd)/node-state}"
+install -d -o 10001 -g 10001 -m 0700 "$OMAKURE_NODE_STATE"
+chown 10001:10001 "$OMAKURE_WORKSPACE"
 docker compose up --build
 ```
 
@@ -300,9 +305,9 @@ uncomment the `OMAKURE_API_TOKEN` entry, then export a token of at least 32
 random bytes before starting Compose.
 
 Compose publishes **`127.0.0.1:7878`** on the host. The container process still
-listens on `0.0.0.0:7878` so the published port works. Prefer matching the
-container `user` to the UID/GID that owns the mounted workspace if you hit
-permission errors (image default is uid/gid `10001`).
+listens on `0.0.0.0:7878` so the published port works. The image always runs as
+uid/gid `10001:10001`; host bind mounts must be prepared for that principal.
+The image-owned `/etc/omakure/node.toml` remains `root:omakure` mode `0640`.
 
 ## Volume layout
 
@@ -357,24 +362,25 @@ Verify locally after packaging changes:
 
 ```bash
 # 1. Build
-docker build -t omakure-engine:local .
+docker build -t omakure-node:local .
 
 # 2. Prepare a disposable workspace + token
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
 SMOKE_WS="$(mktemp -d)"
 # optional: copy a tiny script tree into "$SMOKE_WS"
 
-# 3. Run engine (API + one worker); map host loopback only.
-# Use the host UID/GID so ensure_layout can write into the mounted workspace
-# (image default USER is 10001 — fine when the volume is owned by that uid).
+# 3. Run node service (API + one worker); map host loopback only.
+# Prepare fixed image-principal ownership; do not pass an arbitrary --user.
+sudo install -d -o 10001 -g 10001 -m 0750 "$SMOKE_WS"
+sudo install -d -o 10001 -g 10001 -m 0700 "${SMOKE_WS}-node-state"
 docker run --rm -d --name omakure-smoke \
-  --user "$(id -u):$(id -g)" \
   -e OMAKURE_API_TOKEN \
   -e OMAKURE_SCRIPTS_DIR=/workspace \
   -v "$SMOKE_WS:/workspace" \
+  -v "${SMOKE_WS}-node-state:/var/lib/omakure" \
   -p 127.0.0.1:7878:7878 \
-  omakure-engine:local \
-  engine --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
+  omakure-node:local \
+  node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
     --capability scripts:read --capability runs:read --capability runs:write \
     --capability config:read
 
@@ -390,6 +396,7 @@ curl -sf -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
 # 6. Cleanup
 docker stop omakure-smoke
 rm -rf "$SMOKE_WS"
+sudo rm -rf "${SMOKE_WS}-node-state"
 ```
 
 Packaging contract tests (file assertions, no Docker daemon required):
@@ -401,6 +408,6 @@ cargo test --test packaging_smoke
 ## Related docs
 
 - `http-api.md` — route and auth contract
-- `usage.md` — CLI including `engine` / `api`
+- `usage.md` — CLI including `node serve` / `api`
 - `workspace.md` — on-disk layout
 - `scheduling.md` — standalone `omakure serve`

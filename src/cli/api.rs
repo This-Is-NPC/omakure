@@ -559,7 +559,7 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
     })
 }
 
-/// Resolved startup config for `api` / `engine` (validated before bind).
+/// Resolved startup config for `api` / `node serve` (validated before bind).
 #[derive(Clone)]
 pub(crate) struct ApiBoot {
     pub bind: SocketAddr,
@@ -606,7 +606,7 @@ pub(crate) fn prepare_api_boot(args: &ApiArgs) -> Result<ApiBoot, ApiConfigError
 }
 
 /// Serve the HTTP management API until `cancel_flag` is set, then shut down
-/// gracefully. Used by `omakure api` and `omakure engine`.
+/// gracefully. Used by `omakure api` and `omakure node serve`.
 // Audit note: keeping the independently configured security and lifecycle
 // controls explicit here is clearer than hiding them in a second config type.
 #[allow(clippy::too_many_arguments)]
@@ -931,7 +931,7 @@ async fn node_initialize_handler(
         return operation_error_response(error);
     }
     operation_response(node_context().and_then(|context| {
-        node_ops::initialize_node(&context, &crate::domain::NodeConfig::default())
+        node_ops::initialize_node_nonblocking(&context, &crate::domain::NodeConfig::default())
     }))
 }
 
@@ -2397,7 +2397,7 @@ fn query_bool(pairs: &[(String, String)], key: &str) -> OperationResult<Option<b
         .transpose()
 }
 
-#[allow(dead_code)] // retained for engine/tests that build ApiPolicy without boot
+#[allow(dead_code)] // retained for tests that build ApiPolicy without boot
 pub(crate) fn policy_from_config(
     capabilities: &[String],
     refs: &[String],

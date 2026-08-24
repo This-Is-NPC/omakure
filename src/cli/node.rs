@@ -6,15 +6,24 @@ use crate::operations::node as node_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use std::error::Error;
 
-pub fn run(args: NodeArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(
+    scripts_dir: std::path::PathBuf,
+    args: NodeArgs,
+    json_output: bool,
+) -> Result<(), Box<dyn Error>> {
     let context =
         match NodeContext::resolve(NodePathOverrides::new(args.state_dir, args.config_path)) {
             Ok(context) => context,
             Err(error) => return emit_error(json_output, map_node_error(error)),
         };
     let result: OperationResult<serde_json::Value> = match args.command {
-        NodeCommand::Init => node_ops::initialize_node(&context, &NodeConfig::default())
-            .map(|result| serde_json::to_value(result).expect("node initialization serializes")),
+        NodeCommand::Serve(args) => {
+            return crate::cli::node_service::run(scripts_dir, context, args);
+        }
+        NodeCommand::Init => {
+            node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
+                .map(|result| serde_json::to_value(result).expect("node initialization serializes"))
+        }
         NodeCommand::Status => node_ops::public_node_status(&context)
             .map(|result| serde_json::to_value(result).expect("node status serializes")),
         NodeCommand::Peers => node_ops::list_trusted_peers(&context)
@@ -53,6 +62,8 @@ pub fn run(args: NodeArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
             },
         )
         .map(|result| serde_json::to_value(result).expect("peer serializes")),
+        NodeCommand::Reset(args) => node_ops::reset_node(&context, args.confirmed)
+            .map(|result| serde_json::to_value(result).expect("node reset serializes")),
     };
     emit_result(json_output, result)
 }
@@ -99,6 +110,10 @@ fn map_node_error(error: NodeError) -> OperationError {
         | NodeError::ExistingConfig(_) => OperationError::new(
             OperationErrorCode::RegistryInvalid,
             "node state is invalid or insecure",
+        ),
+        NodeError::LifecycleBusy => OperationError::new(
+            OperationErrorCode::Conflict,
+            "node service is active; stop it before resetting",
         ),
         NodeError::Io(error) => {
             OperationError::new(OperationErrorCode::IoFailed, error.to_string())

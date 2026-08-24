@@ -161,8 +161,9 @@ provide — scoped to operational management, **never surveillance**:
 1. **Strip to CLI + HTTP** — remove TUI and theme subsystem while preserving
    schemas, JSON envelopes, queue states, history, traces, secret redaction,
    schedules, and Batteries.
-2. **Portable node core** — target-generated identity, `node.toml`, peer
-   registry, and platform adapters for Linux, macOS, and Windows.
+2. **Portable node core — complete** — target-generated identity, `node.toml`,
+   isolated peer registry, node service lifecycle, and platform adapters for
+   Linux, macOS, and Windows.
 3. **Secure transport & pairing** — encrypted authenticated channels, static
    seeds, LAN discovery, manual enrollment, and unattended signed-bundle
    enrollment using the target-generated identity.
@@ -225,25 +226,26 @@ that the mesh, identity, trust, or MDM features have been implemented.
 
 - The package is `omakure 0.3.0`, a headless Rust CLI and authenticated HTTP
   management API.
-- The current combined deploy command is `omakure engine`; it composes the API,
-  optional queue workers, and the workspace scheduler. Existing architecture,
-  requirements, usage, and release documents remain the source of truth for
-  this shipped command.
+- The completed portable node command is `omakure node serve`; it owns the
+  machine identity and isolated trust registry while composing the authenticated
+  HTTP API, optional queue workers, and scheduler through shared lifecycle code.
+  Its readiness gate is not reached when node state is corrupt, insecure,
+  mismatched, unsupported, or unwritable.
 - Script state is workspace-owned under `.omakure/` and `.history/`; the future
   node state defined here is not implemented and must never be inferred from a
   script workspace.
-- Shipped script kinds are Bash, PowerShell, and Python. Lua, node identity,
-  transport, trust, enrollment, Cues, Pulses, Profiles, Signals, and MDM
-  campaigns remain future work.
-- The package intentionally has no production secp256k1 dependency. The crypto
-  choice and vectors in this document are design evidence for later work, not
-  an implementation claim.
+- Shipped script kinds are Bash, PowerShell, and Python. The portable node
+  foundation includes identity, `node.toml`, isolated `node.sqlite`, explicit
+  trust management, service lifecycle, reset, and platform path validation.
+- Transport, discovery, Nostr, enrollment, Pulses, Profiles, Signals, remote
+  Cues, campaigns, MDM, and Lua remain future work.
+- The production identity implementation is the reviewed RustCrypto `k256`
+  BIP-340 adapter documented below; no second identity implementation exists.
 
 ## Frozen node boundary
 
-The future service command is `omakure node serve`. It replaces `omakure engine`
-as the product command for the machine node; this task does not add that
-command. The service is one machine/service identity, independent of any script
+The service command is `omakure node serve`. It is the product command for the
+machine node. The service is one machine/service identity, independent of any script
 workspace. A node may expose the existing script runner later, but a workspace
 must never own, select, copy, or silently reset the node identity or trust DB.
 

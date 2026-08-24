@@ -1,12 +1,12 @@
-//! Deploy-only `policy.toml` for `omakure api` / `omakure engine`.
+//! Deploy-only `policy.toml` for `omakure api` / `omakure node serve`.
 //!
 //! Separate from workspace `omakure.toml`. Load via `--policy` /
 //! `OMAKURE_POLICY_FILE`. Route-group gates apply **before** token scopes.
 //!
-//! ## Load order (api / engine)
+//! ## Load order (api / node serve)
 //!
-//! 1. Built-in defaults (permissive route groups; engine workers=1, scheduler on).
-//! 2. Deploy `policy.toml` overlays http/engine defaults and hard route gates.
+//! 1. Built-in defaults (permissive route groups; node workers=1, scheduler on).
+//! 2. Deploy `policy.toml` overlays http/node defaults and hard route gates.
 //! 3. Explicit CLI flags override policy for bind / workers / scheduler /
 //!    readiness / tokens-file / allow-non-loopback when provided.
 //! 4. Workspace `omakure.toml` is never consulted for deploy policy.
@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 pub struct DeployPolicy {
     pub version: u32,
     pub http: HttpPolicy,
-    pub engine: EnginePolicy,
+    pub node: NodeServicePolicy,
     pub routes: RoutesPolicy,
     pub sources: SourcesPolicy,
     pub scripts: ScriptsPolicy,
@@ -36,7 +36,7 @@ impl Default for DeployPolicy {
         Self {
             version: 1,
             http: HttpPolicy::default(),
-            engine: EnginePolicy::default(),
+            node: NodeServicePolicy::default(),
             routes: RoutesPolicy::default(),
             sources: SourcesPolicy::default(),
             scripts: ScriptsPolicy::default(),
@@ -72,7 +72,7 @@ impl Default for HttpPolicy {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct EnginePolicy {
+pub struct NodeServicePolicy {
     pub workers: Option<u32>,
     pub readiness_requires_worker: bool,
     pub scheduler: Option<bool>,
@@ -116,7 +116,7 @@ impl Default for RoutesPolicy {
 }
 
 /// Battery source gates. SSH Battery sources are not supported over the HTTP
-/// API/engine surface (the add handler rejects non-`https` URLs), so there is
+/// API/node service surface (the add handler rejects non-`https` URLs), so there is
 /// no SSH toggle here.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -242,7 +242,7 @@ struct DeployPolicyToml {
     #[serde(default)]
     http: HttpPolicy,
     #[serde(default)]
-    engine: EnginePolicy,
+    node: NodeServicePolicy,
     #[serde(default)]
     routes: RoutesPolicy,
     #[serde(default)]
@@ -323,7 +323,8 @@ pub fn parse_policy_toml(text: &str) -> Result<DeployPolicy, PolicyError> {
     }
     if !parsed.http.enabled {
         return Err(PolicyError::Invalid(
-            "http.enabled = false is unsupported for api/engine (omit the process instead)".into(),
+            "http.enabled = false is unsupported for api/node serve (omit the process instead)"
+                .into(),
         ));
     }
     if parsed.auth.max_concurrent_verifications == 0 {
@@ -339,7 +340,7 @@ pub fn parse_policy_toml(text: &str) -> Result<DeployPolicy, PolicyError> {
     Ok(DeployPolicy {
         version: parsed.version,
         http: parsed.http,
-        engine: parsed.engine,
+        node: parsed.node,
         routes: parsed.routes,
         sources: parsed.sources,
         scripts: parsed.scripts,
@@ -556,7 +557,7 @@ allow_non_loopback = true
 body_limit_bytes = 1048576
 cors = "disabled"
 
-[engine]
+[node]
 workers = 2
 readiness_requires_worker = true
 scheduler = true
@@ -605,8 +606,8 @@ max_concurrent_verifications = 4
         assert!(!p.routes.writes);
         assert!(!p.routes.battery);
         assert!(!p.auth.legacy_env_token);
-        assert_eq!(p.engine.workers, Some(2));
-        assert_eq!(p.engine.scheduler, Some(true));
+        assert_eq!(p.node.workers, Some(2));
+        assert_eq!(p.node.scheduler, Some(true));
         assert_eq!(
             p.auth.tokens_file.as_deref(),
             Some(Path::new("/run/secrets/omakure_tokens.toml"))
@@ -667,7 +668,7 @@ max_concurrent_verifications = 4
     #[test]
     fn parse_rejects_unknown_key_in_every_policy_section() {
         for section in [
-            "http", "engine", "routes", "sources", "scripts", "envs", "runs", "secrets", "auth",
+            "http", "node", "routes", "sources", "scripts", "envs", "runs", "secrets", "auth",
         ] {
             let text = format!("version = 1\n[{section}]\nunknown_policy_key = true\n");
             let err = parse_policy_toml(&text).unwrap_err();

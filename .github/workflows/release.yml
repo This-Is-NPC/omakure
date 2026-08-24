@@ -61,6 +61,8 @@ jobs:
 
       - name: Test headless binary
         run: cargo test --all-targets --locked
+      - name: Test node-service lifecycle surface
+        run: cargo test --test node_service_e2e --test policy_e2e --locked
 
       - name: Build
         env:

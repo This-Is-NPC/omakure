@@ -236,6 +236,13 @@ impl NodeIdentity {
         self.sign_prehash(&event_id.0)
     }
 
+    pub(crate) fn sign_transport_certificate(
+        &self,
+        body: &[u8],
+    ) -> Result<Bip340Signature, NodeIdentityError> {
+        self.sign_prehash(&sha256_domain(b"omakure/transport-cert/v1\0", body))
+    }
+
     fn sign_prehash(&self, prehash: &[u8; 32]) -> Result<Bip340Signature, NodeIdentityError> {
         let signature: Signature = self
             .signing_key

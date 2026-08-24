@@ -20,6 +20,11 @@ pub fn run(
         NodeCommand::Serve(args) => {
             return crate::cli::node_service::run(scripts_dir, context, args);
         }
+        NodeCommand::DirectProbe(args) => {
+            crate::direct_service::probe(args.endpoint, &args.peer_node_id, &context)
+                .map(|()| serde_json::json!({"accepted": true}))
+                .map_err(map_direct_error)
+        }
         NodeCommand::Init => {
             node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
                 .map(|result| serde_json::to_value(result).expect("node initialization serializes"))
@@ -33,6 +38,7 @@ pub fn run(
             node_ops::ManualTrustRequest {
                 node_id: args.node_id,
                 public_key: args.public_key,
+                transport_certificate: args.transport_certificate,
                 role: args.role,
                 capabilities: args.capabilities,
                 actor: args.actor,
@@ -66,6 +72,48 @@ pub fn run(
             .map(|result| serde_json::to_value(result).expect("node reset serializes")),
     };
     emit_result(json_output, result)
+}
+
+fn map_direct_error(error: crate::direct_service::DirectServiceError) -> OperationError {
+    let code = match &error {
+        crate::direct_service::DirectServiceError::Protocol(error) => match error.code() {
+            crate::direct_transport::ProtocolErrorCode::UnsupportedVersion => {
+                OperationErrorCode::TransportUnsupportedVersion
+            }
+            crate::direct_transport::ProtocolErrorCode::InvalidFrame => {
+                OperationErrorCode::TransportInvalidFrame
+            }
+            crate::direct_transport::ProtocolErrorCode::MessageTooLarge => {
+                OperationErrorCode::TransportMessageTooLarge
+            }
+            crate::direct_transport::ProtocolErrorCode::HandshakeFailed => {
+                OperationErrorCode::TransportHandshakeFailed
+            }
+            crate::direct_transport::ProtocolErrorCode::IdentityMismatch => {
+                OperationErrorCode::TransportIdentityMismatch
+            }
+            crate::direct_transport::ProtocolErrorCode::NotEnrolled => {
+                OperationErrorCode::TransportNotEnrolled
+            }
+            crate::direct_transport::ProtocolErrorCode::Revoked => {
+                OperationErrorCode::TransportRevoked
+            }
+            crate::direct_transport::ProtocolErrorCode::Expired => {
+                OperationErrorCode::TransportExpired
+            }
+            crate::direct_transport::ProtocolErrorCode::Replay => {
+                OperationErrorCode::TransportReplay
+            }
+            crate::direct_transport::ProtocolErrorCode::RateLimited => {
+                OperationErrorCode::TransportRateLimited
+            }
+            crate::direct_transport::ProtocolErrorCode::Internal => {
+                OperationErrorCode::TransportInternal
+            }
+        },
+        _ => OperationErrorCode::TransportInternal,
+    };
+    OperationError::new(code, error.to_string())
 }
 
 fn emit_result<T: serde::Serialize>(

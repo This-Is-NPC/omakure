@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_ACTOR_BYTES: usize = 256;
 const MAX_REASON_BYTES: usize = 1024;
@@ -23,6 +23,8 @@ const MAX_CAPABILITY_BYTES: usize = 64;
 const MAX_CAPABILITIES_JSON_BYTES: usize = 4096;
 const NODE_ID_BYTES: usize = 69;
 const PUBLIC_KEY_BYTES: usize = 64;
+const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
+const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
 
 const SUPPORTED_CAPABILITIES: &[&str] = &[
     "backup-orchestration",
@@ -60,6 +62,8 @@ pub enum RegistryError {
     NotFound(String),
     #[error("peer update would not change state: {0}")]
     Unchanged(String),
+    #[error("transport audit capacity is exhausted")]
+    AuditCapacity,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,6 +178,15 @@ pub struct PeerRecord {
     pub updated_at: String,
     pub last_seen: Option<String>,
     pub source: PeerSource,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransportPeer {
+    pub node_id: String,
+    pub identity_key: [u8; 32],
+    pub transport_public_key: Option<[u8; 32]>,
+    pub key_epoch: Option<u64>,
+    pub state: PeerState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -355,6 +368,12 @@ impl NodeRegistry {
                     registration.source.as_str(),
                 ],
             )?;
+            insert_v2_identity_projection(
+                &transaction,
+                &registration,
+                timestamp_seconds(&now)?,
+                "authenticated_untrusted",
+            )?;
             record_audit(
                 &transaction,
                 AuditInput {
@@ -382,6 +401,14 @@ impl NodeRegistry {
         &self,
         registration: PeerRegistration,
     ) -> Result<PeerRecord, RegistryError> {
+        self.import_manual_peer_with_transport(registration, None)
+    }
+
+    pub fn import_manual_peer_with_transport(
+        &self,
+        registration: PeerRegistration,
+        certificate: Option<&[u8]>,
+    ) -> Result<PeerRecord, RegistryError> {
         validate_registration(&registration, &self.local_node_id, &self.local_public_key)?;
         let now = now_timestamp();
         self.with_connection(|connection| {
@@ -408,6 +435,12 @@ impl NodeRegistry {
                     now,
                     registration.source.as_str(),
                 ],
+            )?;
+            insert_v2_trust_projection(
+                &transaction,
+                &registration,
+                timestamp_seconds(&now)?,
+                certificate,
             )?;
             record_audit(
                 &transaction,
@@ -486,6 +519,7 @@ impl NodeRegistry {
                 "UPDATE peers SET state = ?1, updated_at = ?2 WHERE node_id = ?3",
                 params![target.as_str(), now, node_id],
             )?;
+            project_v2_transition(&transaction, &current, target, timestamp_seconds(&now)?)?;
             if target == PeerState::Revoked {
                 insert_revocation(&transaction, &current, &now, reason, None)?;
             }
@@ -540,6 +574,14 @@ impl NodeRegistry {
             transaction.execute(
                 "UPDATE peers SET capabilities_json = ?1, updated_at = ?2 WHERE node_id = ?3",
                 params![capabilities_json(&capabilities)?, now, node_id],
+            )?;
+            transaction.execute(
+                "UPDATE trusted_peers SET capabilities = ?1, updated_at = ?2 WHERE node_id = ?3",
+                params![
+                    capabilities_json(&capabilities)?.as_bytes(),
+                    timestamp_seconds(&now)?,
+                    node_id
+                ],
             )?;
             record_audit(
                 &transaction,
@@ -608,6 +650,12 @@ impl NodeRegistry {
             transaction.execute(
                 "UPDATE peers SET state = 'revoked', updated_at = ?1 WHERE node_id = ?2",
                 params![now, old_node_id],
+            )?;
+            project_v2_replacement(
+                &transaction,
+                &old,
+                &replacement,
+                timestamp_seconds(&now)?,
             )?;
             insert_revocation(
                 &transaction,
@@ -730,6 +778,147 @@ impl NodeRegistry {
         })
     }
 
+    /// Return the v2 projection for transport authorization. Legacy `peers`
+    /// rows are intentionally not consulted by the runtime path.
+    pub fn transport_peer(
+        &self,
+        node_id: &str,
+        public_key_hex: &str,
+    ) -> Result<Option<TransportPeer>, RegistryError> {
+        validate_node_id(node_id)?;
+        validate_public_key(public_key_hex)?;
+        let identity_key = decode_hex(public_key_hex)?;
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let peer = transaction
+                .query_row(
+                    "SELECT r.node_id, r.identity_key, r.state,
+                            t.key_epoch, t.public_key, t.state, p.state
+                     FROM remote_identities r
+                     LEFT JOIN trusted_peers p ON p.node_id = r.node_id
+                     LEFT JOIN transport_key_epochs t
+                       ON t.node_id = r.node_id AND t.state = 'active'
+                     WHERE r.node_id = ?1 AND r.identity_key = ?2",
+                    params![node_id, identity_key],
+                    |row| {
+                        let node_id: String = row.get(0)?;
+                        let identity_key: Vec<u8> = row.get(1)?;
+                        let identity_key = identity_key.try_into().map_err(|_| {
+                            rusqlite::Error::InvalidColumnType(
+                                1,
+                                "identity_key".to_string(),
+                                rusqlite::types::Type::Blob,
+                            )
+                        })?;
+                        let identity_state: String = row.get(2)?;
+                        let key_epoch: Option<i64> = row.get(3)?;
+                        let transport_public_key: Option<Vec<u8>> = row.get(4)?;
+                        let transport_public_key = transport_public_key
+                            .map(|key| {
+                                key.try_into().map_err(|_| {
+                                    rusqlite::Error::InvalidColumnType(
+                                        4,
+                                        "public_key".to_string(),
+                                        rusqlite::types::Type::Blob,
+                                    )
+                                })
+                            })
+                            .transpose()?;
+                        let epoch_state: Option<String> = row.get(5)?;
+                        let trust_state: Option<String> = row.get(6)?;
+                        let state = if identity_state == "revoked"
+                            || trust_state.as_deref() == Some("revoked")
+                            || epoch_state.as_deref() == Some("revoked")
+                        {
+                            PeerState::Revoked
+                        } else if identity_state == "active"
+                            && trust_state.as_deref() == Some("active")
+                        {
+                            PeerState::Active
+                        } else {
+                            PeerState::Pending
+                        };
+                        Ok(TransportPeer {
+                            node_id,
+                            identity_key,
+                            transport_public_key,
+                            key_epoch: key_epoch.map(|epoch| epoch as u64),
+                            state,
+                        })
+                    },
+                )
+                .optional()?;
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    /// Append a redacted transport outcome. The method deliberately accepts
+    /// only bounded metadata and never accepts frames, plaintext, keys, or
+    /// signatures.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_transport_audit(
+        &self,
+        event_type: &str,
+        node_id: &str,
+        session_id: Option<&[u8; 32]>,
+        direction: Option<u8>,
+        byte_count: usize,
+        outcome: &str,
+        error_code: Option<u16>,
+    ) -> Result<(), RegistryError> {
+        validate_bounded_text("transport event type", event_type, 64)?;
+        validate_node_id(node_id)?;
+        validate_bounded_text("transport outcome", outcome, 32)?;
+        if let Some(session_id) = session_id {
+            if session_id.len() != 32 {
+                return Err(RegistryError::InvalidInput(
+                    "transport session ID must be 32 bytes".to_string(),
+                ));
+            }
+        }
+        if !matches!(direction, None | Some(0) | Some(1))
+            || error_code.is_some_and(|code| !(1000..=1999).contains(&code))
+        {
+            return Err(RegistryError::InvalidInput(
+                "transport audit metadata is invalid".to_string(),
+            ));
+        }
+        let now = chrono::Utc::now().timestamp();
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let audit_count: i64 = transaction.query_row(
+                "SELECT COUNT(*) FROM transport_audit",
+                [],
+                |row| row.get(0),
+            )?;
+            if audit_count >= MAX_TRANSPORT_AUDIT_ROWS {
+                return Err(RegistryError::AuditCapacity);
+            }
+            transaction.execute(
+                "INSERT INTO transport_audit
+                 (event_type, node_id, session_id, bundle_id, direction, byte_count, outcome, error_code, occurred_at)
+                 VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    event_type,
+                    node_id,
+                    session_id.map(|value| value.as_slice()),
+                    direction,
+                    i64::try_from(byte_count).map_err(|_| RegistryError::InvalidInput(
+                        "transport byte count is too large".to_string()
+                    ))?,
+                    outcome,
+                    error_code,
+                    now,
+                ],
+            )?;
+            transaction.commit()?;
+            Ok(())
+        })
+    }
+
     fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
@@ -817,6 +1006,10 @@ fn initialize_database(
         create_schema(&transaction, registry)?;
         transaction.execute_batch("PRAGMA user_version = 1")?;
         transaction.commit()?;
+    }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 1 {
+        migrate_v1_to_v2(connection, registry)?;
     }
     validate_schema(connection, registry)
 }
@@ -932,7 +1125,417 @@ fn create_schema(
     Ok(())
 }
 
+fn migrate_v1_to_v2(
+    connection: &mut Connection,
+    registry: &NodeRegistry,
+) -> Result<(), RegistryError> {
+    validate_v1_preflight(connection, registry)?;
+    let metadata_version: String = connection.query_row(
+        "SELECT value FROM metadata WHERE key = 'schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if metadata_version != "1" {
+        return Err(RegistryError::InvalidSchema(
+            "v1 database metadata marker is invalid".to_string(),
+        ));
+    }
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    create_v2_schema(&transaction)?;
+
+    let mut statement = transaction.prepare(
+        "SELECT node_id, public_key, role, state, capabilities_json, added_at, updated_at
+         FROM peers ORDER BY node_id",
+    )?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(statement);
+    for (node_id, public_key, role, state, capabilities_json, added_at, updated_at) in rows {
+        let identity_key = decode_hex(&public_key)?;
+        let first_seen = timestamp_seconds(&added_at)?;
+        let updated = timestamp_seconds(&updated_at)?;
+        let (identity_state, revoked_at) = match state.as_str() {
+            "active" => ("active", None),
+            "revoked" => ("revoked", Some(updated)),
+            "pending" | "suspended" => ("authenticated_untrusted", None),
+            _ => {
+                return Err(RegistryError::InvalidSchema(format!(
+                    "unknown v1 peer state {state:?}"
+                )))
+            }
+        };
+        transaction.execute(
+            "INSERT INTO remote_identities
+             (node_id, identity_key, state, first_seen, revoked_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                node_id,
+                identity_key,
+                identity_state,
+                first_seen,
+                revoked_at
+            ],
+        )?;
+        if state == "active" || state == "suspended" || state == "revoked" {
+            let role = match role.as_str() {
+                "conductor" => 1,
+                "performer" => 2,
+                _ => {
+                    return Err(RegistryError::InvalidSchema(format!(
+                        "unknown v1 peer role {role:?}"
+                    )))
+                }
+            };
+            validate_capabilities_json_bytes(&capabilities_json)?;
+            transaction.execute(
+                "INSERT INTO trusted_peers
+                 (node_id, role, capabilities, state, added_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    node_id,
+                    role,
+                    capabilities_json.as_bytes(),
+                    if state == "active" {
+                        "active"
+                    } else {
+                        "revoked"
+                    },
+                    first_seen,
+                    updated,
+                ],
+            )?;
+        }
+    }
+    transaction.execute(
+        "UPDATE metadata SET value = '2' WHERE key = 'schema_version'",
+        [],
+    )?;
+    transaction.execute_batch("PRAGMA user_version = 2")?;
+    transaction.commit()?;
+    validate_v2_invariants(connection, registry)
+}
+
+fn validate_v1_preflight(
+    connection: &Connection,
+    registry: &NodeRegistry,
+) -> Result<(), RegistryError> {
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version != 1 {
+        return Err(RegistryError::InvalidSchema(
+            "v1 preflight requires schema version 1".to_string(),
+        ));
+    }
+    let expected_metadata = [
+        ("schema_version", "1"),
+        ("node_id", registry.local_node_id.as_str()),
+        ("public_key_encoding", "x-only-bip340-hex-lowercase"),
+    ];
+    let metadata: Vec<(String, String)> = connection
+        .prepare("SELECT key, value FROM metadata ORDER BY key")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if metadata.len() != expected_metadata.len()
+        || expected_metadata.iter().any(|expected| {
+            !metadata
+                .iter()
+                .any(|actual| actual.0 == expected.0 && actual.1 == expected.1)
+        })
+    {
+        return Err(RegistryError::InvalidSchema(
+            "v1 metadata does not match the active identity".to_string(),
+        ));
+    }
+    validate_columns(connection, "metadata", &["key", "value"])?;
+    validate_columns(
+        connection,
+        "peers",
+        &[
+            "node_id",
+            "public_key",
+            "role",
+            "state",
+            "capabilities_json",
+            "added_at",
+            "updated_at",
+            "last_seen",
+            "source",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "revocations",
+        &[
+            "id",
+            "node_id",
+            "public_key",
+            "revoked_at",
+            "reason",
+            "replacement_node_id",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "audit_events",
+        &[
+            "id",
+            "event_type",
+            "node_id",
+            "from_state",
+            "to_state",
+            "actor",
+            "reason",
+            "occurred_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "replay_keys",
+        &["key", "first_seen", "expires_at"],
+    )?;
+    validate_columns(
+        connection,
+        "inbox",
+        &[
+            "cue_id",
+            "state",
+            "received_at",
+            "updated_at",
+            "expires_at",
+            "outcome_hash",
+        ],
+    )?;
+    let actual_objects: Vec<(String, String)> = connection
+        .prepare(
+            "SELECT type, name FROM sqlite_master
+             WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
+        )?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
+    let expected_objects = vec![
+        ("index".to_string(), "audit_events_node_idx".to_string()),
+        ("index".to_string(), "peers_state_idx".to_string()),
+        ("table".to_string(), "audit_events".to_string()),
+        ("table".to_string(), "inbox".to_string()),
+        ("table".to_string(), "metadata".to_string()),
+        ("table".to_string(), "peers".to_string()),
+        ("table".to_string(), "replay_keys".to_string()),
+        ("table".to_string(), "revocations".to_string()),
+        ("trigger".to_string(), "audit_events_no_delete".to_string()),
+        ("trigger".to_string(), "audit_events_no_update".to_string()),
+        ("trigger".to_string(), "revocations_no_delete".to_string()),
+        ("trigger".to_string(), "revocations_no_update".to_string()),
+    ];
+    if actual_objects != expected_objects {
+        return Err(RegistryError::InvalidSchema(
+            "v1 database contains unexpected or missing schema objects".to_string(),
+        ));
+    }
+    validate_all_rows(connection)
+}
+
+fn create_v2_schema(transaction: &Transaction<'_>) -> Result<(), RegistryError> {
+    transaction.execute_batch(
+        "CREATE TABLE remote_identities (
+          node_id TEXT PRIMARY KEY CHECK (length(CAST(node_id AS BLOB)) = 69),
+          identity_key BLOB NOT NULL UNIQUE CHECK (length(identity_key) = 32),
+          state TEXT NOT NULL CHECK (state IN ('authenticated_untrusted', 'active', 'revoked')),
+          first_seen INTEGER NOT NULL CHECK (first_seen > 0),
+          revoked_at INTEGER NULL CHECK (revoked_at IS NULL OR revoked_at >= first_seen)
+        );
+        CREATE TABLE trusted_peers (
+          node_id TEXT PRIMARY KEY REFERENCES remote_identities(node_id),
+          role INTEGER NOT NULL CHECK (role IN (1, 2)),
+          capabilities BLOB NOT NULL CHECK (length(capabilities) <= 4096),
+          state TEXT NOT NULL CHECK (state IN ('active', 'revoked')),
+          added_at INTEGER NOT NULL CHECK (added_at > 0),
+          updated_at INTEGER NOT NULL CHECK (updated_at >= added_at)
+        );
+        CREATE TABLE transport_key_epochs (
+          node_id TEXT NOT NULL REFERENCES remote_identities(node_id),
+          key_epoch INTEGER NOT NULL CHECK (key_epoch > 0),
+          public_key BLOB NOT NULL CHECK (length(public_key) = 32),
+          certificate BLOB NOT NULL CHECK (length(certificate) = 245),
+          state TEXT NOT NULL CHECK (state IN ('pending', 'active', 'revoked')),
+          added_at INTEGER NOT NULL CHECK (added_at > 0),
+          retired_at INTEGER NULL CHECK (retired_at IS NULL OR retired_at >= added_at),
+          PRIMARY KEY (node_id, key_epoch),
+          UNIQUE (node_id, public_key)
+        );
+        CREATE TABLE channel_sessions (
+          session_id BLOB PRIMARY KEY CHECK (length(session_id) = 32),
+          node_id TEXT NOT NULL REFERENCES remote_identities(node_id),
+          direction INTEGER NOT NULL CHECK (direction IN (0, 1)),
+          send_sequence INTEGER NOT NULL CHECK (send_sequence >= 0),
+          receive_sequence INTEGER NOT NULL CHECK (receive_sequence >= 0),
+          state TEXT NOT NULL CHECK (state IN ('handshaking', 'authenticated_untrusted', 'active', 'closed')),
+          started_at INTEGER NOT NULL CHECK (started_at > 0),
+          last_seen INTEGER NOT NULL CHECK (last_seen >= started_at),
+          expires_at INTEGER NOT NULL CHECK (expires_at >= last_seen)
+        );
+        CREATE TABLE enrollment_replays (
+          replay_kind TEXT NOT NULL CHECK (replay_kind IN ('bundle', 'manual_request')),
+          replay_id BLOB NOT NULL CHECK (length(replay_id) = 16),
+          expires_at INTEGER NOT NULL CHECK (expires_at > 0),
+          first_seen INTEGER NOT NULL CHECK (first_seen > 0),
+          PRIMARY KEY (replay_kind, replay_id)
+        );
+        CREATE TABLE transport_audit (
+          id INTEGER PRIMARY KEY,
+          event_type TEXT NOT NULL CHECK (length(CAST(event_type AS BLOB)) BETWEEN 1 AND 64),
+          node_id TEXT NOT NULL,
+          session_id BLOB NULL CHECK (session_id IS NULL OR length(session_id) = 32),
+          bundle_id BLOB NULL CHECK (bundle_id IS NULL OR length(bundle_id) = 16),
+          direction INTEGER NULL CHECK (direction IS NULL OR direction IN (0, 1)),
+          byte_count INTEGER NOT NULL CHECK (byte_count >= 0),
+          outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
+          error_code INTEGER NULL CHECK (error_code IS NULL OR error_code BETWEEN 1000 AND 1999),
+          occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
+        );
+        CREATE INDEX transport_key_epochs_state_idx ON transport_key_epochs(state, node_id);
+        CREATE UNIQUE INDEX transport_key_epochs_one_active
+          ON transport_key_epochs(node_id) WHERE state = 'active';
+        CREATE INDEX channel_sessions_peer_idx ON channel_sessions(node_id, state, last_seen);
+         CREATE INDEX enrollment_replays_expiry_idx ON enrollment_replays(expires_at);
+         CREATE INDEX transport_audit_node_idx ON transport_audit(node_id, id);
+         CREATE INDEX transport_audit_expiry_idx ON transport_audit(occurred_at);
+         CREATE TRIGGER trusted_peers_require_known_identity
+        BEFORE INSERT ON trusted_peers
+        WHEN (SELECT state FROM remote_identities WHERE node_id = NEW.node_id)
+          NOT IN ('authenticated_untrusted', 'active')
+        BEGIN SELECT RAISE(ABORT, 'trusted peer requires known identity'); END;
+        CREATE TRIGGER transport_key_epochs_active_require_trust
+        BEFORE INSERT ON transport_key_epochs
+          WHEN NEW.state = 'active' AND (
+          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+        )
+        BEGIN SELECT RAISE(ABORT, 'active transport key requires active trusted peer'); END;
+        CREATE TRIGGER transport_key_epochs_active_update_require_trust
+        BEFORE UPDATE OF state ON transport_key_epochs
+          WHEN NEW.state = 'active' AND (
+          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+        )
+        BEGIN SELECT RAISE(ABORT, 'active transport key requires active trusted peer'); END;
+        CREATE TRIGGER remote_identities_no_untrusted_trust_update
+        BEFORE UPDATE OF state ON remote_identities
+        WHEN NEW.state = 'active' AND NOT EXISTS (
+          SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id
+        )
+        BEGIN SELECT RAISE(ABORT, 'active identity requires trusted peer'); END;
+        CREATE TRIGGER trusted_peers_no_identity_demotion
+        BEFORE UPDATE OF state ON remote_identities
+        WHEN NEW.state <> 'active' AND EXISTS (
+          SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active'
+        )
+        BEGIN SELECT RAISE(ABORT, 'trusted peer must be revoked before identity demotion'); END;
+        CREATE TRIGGER channel_sessions_active_requires_trust
+        BEFORE INSERT ON channel_sessions
+        WHEN NEW.state = 'active' AND (
+          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+        )
+        BEGIN SELECT RAISE(ABORT, 'active session requires active trusted peer'); END;
+        CREATE TRIGGER channel_sessions_active_update_requires_trust
+        BEFORE UPDATE OF state, node_id ON channel_sessions
+        WHEN NEW.state = 'active' AND (
+          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+        )
+        BEGIN SELECT RAISE(ABORT, 'active session requires active trusted peer'); END;
+        CREATE TRIGGER transport_key_epochs_monotonic_insert
+        BEFORE INSERT ON transport_key_epochs
+        WHEN NEW.key_epoch <= COALESCE((SELECT MAX(key_epoch) FROM transport_key_epochs WHERE node_id = NEW.node_id), 0)
+        BEGIN SELECT RAISE(ABORT, 'transport key epoch must increase'); END;
+        CREATE TRIGGER transport_key_epochs_monotonic_update
+        BEFORE UPDATE OF key_epoch ON transport_key_epochs
+        WHEN NEW.key_epoch <= COALESCE((SELECT MAX(key_epoch) FROM transport_key_epochs WHERE node_id = NEW.node_id AND key_epoch <> OLD.key_epoch), 0)
+        BEGIN SELECT RAISE(ABORT, 'transport key epoch must increase'); END;
+        CREATE TRIGGER remote_identities_no_delete
+        BEFORE DELETE ON remote_identities
+        BEGIN SELECT RAISE(ABORT, 'remote identities are retained'); END;
+        CREATE TRIGGER trusted_peers_no_delete
+        BEFORE DELETE ON trusted_peers
+        BEGIN SELECT RAISE(ABORT, 'trusted peer history is retained'); END;
+        CREATE TRIGGER transport_key_epochs_no_delete
+        BEFORE DELETE ON transport_key_epochs
+        BEGIN SELECT RAISE(ABORT, 'transport key epochs are retained'); END;
+        CREATE TRIGGER revoked_identity_no_resurrection
+        BEFORE UPDATE OF state ON remote_identities
+        WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
+        BEGIN SELECT RAISE(ABORT, 'revoked identity cannot be resurrected'); END;
+        CREATE TRIGGER revoked_trusted_peer_no_resurrection
+        BEFORE UPDATE OF state ON trusted_peers
+        WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
+        BEGIN SELECT RAISE(ABORT, 'revoked trust cannot be resurrected'); END;
+        CREATE TRIGGER revoked_transport_epoch_no_resurrection
+        BEFORE UPDATE OF state ON transport_key_epochs
+        WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
+        BEGIN SELECT RAISE(ABORT, 'revoked transport epoch cannot be resurrected'); END;",
+    )?;
+    Ok(())
+}
+
+fn validate_v2_invariants(
+    connection: &Connection,
+    _registry: &NodeRegistry,
+) -> Result<(), RegistryError> {
+    let active_without_trust: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM remote_identities WHERE state = 'active' AND NOT EXISTS
+         (SELECT 1 FROM trusted_peers WHERE node_id = remote_identities.node_id AND state = 'active')",
+        [],
+        |row| row.get(0),
+    )?;
+    if active_without_trust != 0 {
+        return Err(RegistryError::InvalidSchema(
+            "active identity has no active trusted peer".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn timestamp_seconds(value: &str) -> Result<i64, RegistryError> {
+    let parsed = DateTime::parse_from_rfc3339(value)
+        .map_err(|_| RegistryError::InvalidSchema(format!("invalid v1 timestamp {value:?}")))?;
+    if parsed.offset().local_minus_utc() != 0 {
+        return Err(RegistryError::InvalidSchema(format!(
+            "v1 timestamp is not UTC: {value:?}"
+        )));
+    }
+    let seconds = parsed.timestamp();
+    if seconds <= 0 {
+        return Err(RegistryError::InvalidSchema(
+            "v1 timestamp is not positive".to_string(),
+        ));
+    }
+    Ok(seconds)
+}
+
+fn validate_capabilities_json_bytes(value: &str) -> Result<(), RegistryError> {
+    let capabilities: Vec<String> = serde_json::from_str(value).map_err(|_| {
+        RegistryError::InvalidSchema("v1 capabilities are not valid JSON".to_string())
+    })?;
+    validate_capabilities(&capabilities)
+}
+
 fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(), RegistryError> {
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version != SCHEMA_VERSION {
+        return Err(RegistryError::InvalidSchema(format!(
+            "database schema marker is {version}, expected {SCHEMA_VERSION}"
+        )));
+    }
     validate_objects(connection)?;
     validate_columns(connection, "metadata", &["key", "value"])?;
     validate_columns(
@@ -993,6 +1596,78 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
             "outcome_hash",
         ],
     )?;
+    validate_columns(
+        connection,
+        "remote_identities",
+        &[
+            "node_id",
+            "identity_key",
+            "state",
+            "first_seen",
+            "revoked_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "trusted_peers",
+        &[
+            "node_id",
+            "role",
+            "capabilities",
+            "state",
+            "added_at",
+            "updated_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "transport_key_epochs",
+        &[
+            "node_id",
+            "key_epoch",
+            "public_key",
+            "certificate",
+            "state",
+            "added_at",
+            "retired_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "channel_sessions",
+        &[
+            "session_id",
+            "node_id",
+            "direction",
+            "send_sequence",
+            "receive_sequence",
+            "state",
+            "started_at",
+            "last_seen",
+            "expires_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "enrollment_replays",
+        &["replay_kind", "replay_id", "expires_at", "first_seen"],
+    )?;
+    validate_columns(
+        connection,
+        "transport_audit",
+        &[
+            "id",
+            "event_type",
+            "node_id",
+            "session_id",
+            "bundle_id",
+            "direction",
+            "byte_count",
+            "outcome",
+            "error_code",
+            "occurred_at",
+        ],
+    )?;
     let metadata: Vec<(String, String)> = connection
         .prepare("SELECT key, value FROM metadata ORDER BY key")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -1003,7 +1678,7 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
         ));
     }
     let expected = [
-        ("schema_version", "1"),
+        ("schema_version", "2"),
         ("node_id", registry.local_node_id.as_str()),
         ("public_key_encoding", "x-only-bip340-hex-lowercase"),
     ];
@@ -1027,17 +1702,98 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
         .collect::<Result<Vec<_>, _>>()?;
     let expected = vec![
         ("index".to_string(), "audit_events_node_idx".to_string()),
+        ("index".to_string(), "channel_sessions_peer_idx".to_string()),
+        (
+            "index".to_string(),
+            "enrollment_replays_expiry_idx".to_string(),
+        ),
         ("index".to_string(), "peers_state_idx".to_string()),
+        (
+            "index".to_string(),
+            "transport_audit_expiry_idx".to_string(),
+        ),
+        ("index".to_string(), "transport_audit_node_idx".to_string()),
+        (
+            "index".to_string(),
+            "transport_key_epochs_one_active".to_string(),
+        ),
+        (
+            "index".to_string(),
+            "transport_key_epochs_state_idx".to_string(),
+        ),
         ("table".to_string(), "audit_events".to_string()),
+        ("table".to_string(), "channel_sessions".to_string()),
+        ("table".to_string(), "enrollment_replays".to_string()),
         ("table".to_string(), "inbox".to_string()),
         ("table".to_string(), "metadata".to_string()),
         ("table".to_string(), "peers".to_string()),
+        ("table".to_string(), "remote_identities".to_string()),
         ("table".to_string(), "replay_keys".to_string()),
         ("table".to_string(), "revocations".to_string()),
+        ("table".to_string(), "transport_audit".to_string()),
+        ("table".to_string(), "transport_key_epochs".to_string()),
+        ("table".to_string(), "trusted_peers".to_string()),
         ("trigger".to_string(), "audit_events_no_delete".to_string()),
         ("trigger".to_string(), "audit_events_no_update".to_string()),
+        (
+            "trigger".to_string(),
+            "channel_sessions_active_requires_trust".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "channel_sessions_active_update_requires_trust".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "remote_identities_no_delete".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "remote_identities_no_untrusted_trust_update".to_string(),
+        ),
         ("trigger".to_string(), "revocations_no_delete".to_string()),
         ("trigger".to_string(), "revocations_no_update".to_string()),
+        (
+            "trigger".to_string(),
+            "revoked_identity_no_resurrection".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "revoked_transport_epoch_no_resurrection".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "revoked_trusted_peer_no_resurrection".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "transport_key_epochs_active_require_trust".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "transport_key_epochs_active_update_require_trust".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "transport_key_epochs_monotonic_insert".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "transport_key_epochs_monotonic_update".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "transport_key_epochs_no_delete".to_string(),
+        ),
+        ("trigger".to_string(), "trusted_peers_no_delete".to_string()),
+        (
+            "trigger".to_string(),
+            "trusted_peers_no_identity_demotion".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "trusted_peers_require_known_identity".to_string(),
+        ),
     ];
     if actual != expected {
         return Err(RegistryError::InvalidSchema(
@@ -1388,6 +2144,190 @@ fn insert_revocation(
         ],
     )?;
     Ok(())
+}
+
+fn insert_v2_trust_projection(
+    transaction: &Transaction<'_>,
+    registration: &PeerRegistration,
+    now: i64,
+    certificate: Option<&[u8]>,
+) -> Result<(), RegistryError> {
+    let identity_key = decode_hex(&registration.public_key)?;
+    insert_v2_identity_projection(transaction, registration, now, "active")?;
+    transaction.execute(
+        "INSERT INTO trusted_peers
+         (node_id, role, capabilities, state, added_at, updated_at)
+         VALUES (?1, ?2, ?3, 'active', ?4, ?4)",
+        params![
+            registration.node_id,
+            match registration.role {
+                PeerRole::Conductor => 1,
+                PeerRole::Performer => 2,
+            },
+            capabilities_json(&registration.capabilities)?.as_bytes(),
+            now,
+        ],
+    )?;
+    let Some(certificate) = certificate else {
+        return Ok(());
+    };
+    if certificate.len() != TRANSPORT_CERTIFICATE_BYTES
+        || &certificate[40..109] != registration.node_id.as_bytes()
+        || &certificate[8..40] != identity_key.as_slice()
+    {
+        return Err(RegistryError::InvalidInput(
+            "transport certificate does not match trusted identity".to_string(),
+        ));
+    }
+    let key_epoch = u64::from_be_bytes(certificate[141..149].try_into().unwrap());
+    if key_epoch == 0 {
+        return Err(RegistryError::InvalidInput(
+            "transport certificate epoch must be positive".to_string(),
+        ));
+    }
+    transaction.execute(
+        "INSERT INTO transport_key_epochs
+         (node_id, key_epoch, public_key, certificate, state, added_at, retired_at)
+         VALUES (?1, ?2, ?3, ?4, 'active', ?5, NULL)",
+        params![
+            registration.node_id,
+            i64::try_from(key_epoch).map_err(|_| {
+                RegistryError::InvalidInput("transport certificate epoch is too large".to_string())
+            })?,
+            &certificate[109..141],
+            certificate,
+            now,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_v2_identity_projection(
+    transaction: &Transaction<'_>,
+    registration: &PeerRegistration,
+    now: i64,
+    state: &str,
+) -> Result<(), RegistryError> {
+    let identity_key = decode_hex(&registration.public_key)?;
+    transaction.execute(
+        "INSERT INTO remote_identities
+         (node_id, identity_key, state, first_seen, revoked_at)
+         VALUES (?1, ?2, ?3, ?4, NULL)",
+        params![registration.node_id, identity_key, state, now],
+    )?;
+    Ok(())
+}
+
+fn project_v2_transition(
+    transaction: &Transaction<'_>,
+    current: &PeerRecord,
+    target: PeerState,
+    now: i64,
+) -> Result<(), RegistryError> {
+    match target {
+        PeerState::Active => {
+            let identity_state: Option<String> = transaction
+                .query_row(
+                    "SELECT state FROM remote_identities WHERE node_id = ?1",
+                    [&current.node_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if identity_state.is_none() {
+                let registration = PeerRegistration {
+                    node_id: current.node_id.clone(),
+                    public_key: current.public_key.clone(),
+                    role: current.role,
+                    capabilities: current.capabilities.clone(),
+                    source: current.source,
+                    actor: "migration".to_string(),
+                    reason: "v2 projection".to_string(),
+                };
+                insert_v2_identity_projection(
+                    transaction,
+                    &registration,
+                    now,
+                    "authenticated_untrusted",
+                )?;
+            }
+            transaction.execute(
+                "INSERT INTO trusted_peers (node_id, role, capabilities, state, added_at, updated_at)
+                 VALUES (?1, ?2, ?3, 'active', ?4, ?4)
+                 ON CONFLICT(node_id) DO UPDATE SET state = 'active', updated_at = excluded.updated_at",
+                params![
+                    current.node_id,
+                    match current.role { PeerRole::Conductor => 1, PeerRole::Performer => 2 },
+                    capabilities_json(&current.capabilities)?.as_bytes(),
+                    now,
+                ],
+            )?;
+            transaction.execute(
+                "UPDATE remote_identities SET state = 'active', revoked_at = NULL WHERE node_id = ?1",
+                [&current.node_id],
+            )?;
+            transaction.execute(
+                "UPDATE transport_key_epochs SET state = 'active', retired_at = NULL
+                 WHERE node_id = ?1 AND state = 'pending'",
+                [&current.node_id],
+            )?;
+        }
+        PeerState::Suspended => {
+            transaction.execute(
+                "UPDATE transport_key_epochs SET state = 'pending', retired_at = ?1
+                 WHERE node_id = ?2 AND state = 'active'",
+                params![now, current.node_id],
+            )?;
+            let identity_exists: bool = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM remote_identities WHERE node_id = ?1)",
+                [&current.node_id],
+                |row| row.get::<_, i64>(0),
+            )? != 0;
+            if !identity_exists {
+                let registration = PeerRegistration {
+                    node_id: current.node_id.clone(),
+                    public_key: current.public_key.clone(),
+                    role: current.role,
+                    capabilities: current.capabilities.clone(),
+                    source: current.source,
+                    actor: "migration".to_string(),
+                    reason: "v2 projection".to_string(),
+                };
+                insert_v2_identity_projection(
+                    transaction,
+                    &registration,
+                    now,
+                    "authenticated_untrusted",
+                )?;
+            }
+        }
+        PeerState::Revoked => {
+            transaction.execute(
+                "UPDATE transport_key_epochs SET state = 'revoked', retired_at = ?1
+                 WHERE node_id = ?2 AND state <> 'revoked'",
+                params![now, current.node_id],
+            )?;
+            transaction.execute(
+                "UPDATE trusted_peers SET state = 'revoked', updated_at = ?1 WHERE node_id = ?2 AND state <> 'revoked'",
+                params![now, current.node_id],
+            )?;
+            transaction.execute(
+                "UPDATE remote_identities SET state = 'revoked', revoked_at = ?1 WHERE node_id = ?2 AND state <> 'revoked'",
+                params![now, current.node_id],
+            )?;
+        }
+        PeerState::Pending => {}
+    }
+    Ok(())
+}
+
+fn project_v2_replacement(
+    transaction: &Transaction<'_>,
+    old: &PeerRecord,
+    replacement: &PeerRegistration,
+    now: i64,
+) -> Result<(), RegistryError> {
+    project_v2_transition(transaction, old, PeerState::Revoked, now)?;
+    insert_v2_identity_projection(transaction, replacement, now, "authenticated_untrusted")
 }
 
 struct AuditInput<'a> {
@@ -1761,7 +2701,7 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&ctx).unwrap();
         let database = ctx.database_path();
         let connection = Connection::open(&database).unwrap();
-        connection.execute_batch("PRAGMA user_version = 2").unwrap();
+        connection.execute_batch("PRAGMA user_version = 3").unwrap();
         assert!(matches!(
             NodeRegistry::open(&ctx, identity.public_status()),
             Err(RegistryError::InvalidSchema(_))

@@ -1,14 +1,29 @@
 #![allow(dead_code)]
 
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::process::{Child, Command, Output};
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
+
+static RESERVED_TEST_PORTS: OnceLock<Mutex<HashSet<u16>>> = OnceLock::new();
+
+pub fn unique_loopback_port() -> u16 {
+    let ports = RESERVED_TEST_PORTS.get_or_init(|| Mutex::new(HashSet::new()));
+    loop {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind test port");
+        let port = listener.local_addr().expect("read test port").port();
+        if ports.lock().expect("lock test ports").insert(port) {
+            return port;
+        }
+    }
+}
 
 pub fn omakure_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_omakure"))

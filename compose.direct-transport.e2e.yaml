@@ -1,0 +1,51 @@
+services:
+  direct-a:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: omakure-direct-transport-e2e:local
+    environment:
+      OMAKURE_API_TOKEN: direct-transport-docker-e2e-token-with-enough-entropy
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --workers
+      - "0"
+      - --no-scheduler
+      - --direct-bind
+      - 0.0.0.0:7879
+    volumes:
+      - direct-a-state:/var/lib/omakure
+
+  direct-b:
+    image: omakure-direct-transport-e2e:local
+    environment:
+      OMAKURE_API_TOKEN: direct-transport-docker-e2e-token-with-enough-entropy
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --workers
+      - "0"
+      - --no-scheduler
+      - --direct-bind
+      - 0.0.0.0:7879
+    volumes:
+      - direct-b-state:/var/lib/omakure
+
+  direct-c:
+    image: omakure-direct-transport-e2e:local
+    environment:
+      OMAKURE_API_TOKEN: direct-transport-docker-e2e-token-with-enough-entropy
+    volumes:
+      - direct-c-state:/var/lib/omakure
+
+volumes:
+  direct-a-state:
+  direct-b-state:
+  direct-c-state:

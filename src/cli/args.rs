@@ -474,6 +474,9 @@ pub enum NodeCommand {
     /// Run the machine-owned HTTP node service with optional workers and scheduler
     Serve(NodeServeArgs),
 
+    /// Establish a direct encrypted probe with one explicitly trusted peer
+    DirectProbe(NodeDirectProbeArgs),
+
     /// Explicitly initialize public config, identity, and local trust state
     Init,
 
@@ -501,6 +504,10 @@ pub struct NodeServeArgs {
     /// Address to bind the HTTP API server to; defaults to node.toml `api.bind`
     #[arg(long)]
     pub bind: Option<std::net::SocketAddr>,
+
+    /// Optional direct transport listener address.
+    #[arg(long = "direct-bind")]
+    pub direct_bind: Option<std::net::SocketAddr>,
 
     /// Explicitly allow binding to non-loopback addresses
     #[arg(long)]
@@ -556,6 +563,17 @@ pub struct NodeServeArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct NodeDirectProbeArgs {
+    /// Peer direct transport address.
+    #[arg(long)]
+    pub endpoint: std::net::SocketAddr,
+
+    /// Expected canonical peer node ID.
+    #[arg(long = "peer-node-id")]
+    pub peer_node_id: String,
+}
+
+#[derive(Args, Debug)]
 pub struct NodeResetArgs {
     /// Confirm destructive removal of identity and trust state
     #[arg(long)]
@@ -571,6 +589,10 @@ pub struct NodeTrustArgs {
     /// Lowercase hexadecimal x-only BIP-340 public key
     #[arg(long)]
     pub public_key: String,
+
+    /// Signed transport certificate as lowercase hexadecimal bytes
+    #[arg(long)]
+    pub transport_certificate: Option<String>,
 
     /// Peer role: conductor or performer
     #[arg(long, default_value = "performer")]

@@ -28,6 +28,17 @@ pub enum OperationErrorCode {
     IoFailed,
     RegistryInvalid,
     PayloadTooLarge,
+    TransportUnsupportedVersion,
+    TransportInvalidFrame,
+    TransportMessageTooLarge,
+    TransportHandshakeFailed,
+    TransportIdentityMismatch,
+    TransportNotEnrolled,
+    TransportRevoked,
+    TransportExpired,
+    TransportReplay,
+    TransportRateLimited,
+    TransportInternal,
 }
 
 impl OperationErrorCode {
@@ -46,6 +57,17 @@ impl OperationErrorCode {
             Self::IoFailed => "io_failed",
             Self::RegistryInvalid => "registry_invalid",
             Self::PayloadTooLarge => "payload_too_large",
+            Self::TransportUnsupportedVersion => "transport_unsupported_version",
+            Self::TransportInvalidFrame => "transport_invalid_frame",
+            Self::TransportMessageTooLarge => "transport_message_too_large",
+            Self::TransportHandshakeFailed => "transport_handshake_failed",
+            Self::TransportIdentityMismatch => "transport_identity_mismatch",
+            Self::TransportNotEnrolled => "transport_not_enrolled",
+            Self::TransportRevoked => "transport_revoked",
+            Self::TransportExpired => "transport_expired",
+            Self::TransportReplay => "transport_replay",
+            Self::TransportRateLimited => "transport_rate_limited",
+            Self::TransportInternal => "transport_internal",
         }
     }
 }

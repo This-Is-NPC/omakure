@@ -77,6 +77,14 @@ impl NodeLayout {
     pub fn database_path(&self) -> PathBuf {
         self.state_dir.join("node.sqlite")
     }
+
+    pub fn transport_key_path(&self) -> PathBuf {
+        self.state_dir.join("transport.key")
+    }
+
+    pub fn transport_certificate_path(&self) -> PathBuf {
+        self.state_dir.join("transport.cert")
+    }
 }
 
 #[derive(Debug, Error)]
@@ -238,6 +246,14 @@ impl NodeContext {
 
     pub fn database_path(&self) -> PathBuf {
         self.layout.database_path()
+    }
+
+    pub fn transport_key_path(&self) -> PathBuf {
+        self.layout.transport_key_path()
+    }
+
+    pub fn transport_certificate_path(&self) -> PathBuf {
+        self.layout.transport_certificate_path()
     }
 
     pub fn is_test_mode(&self) -> bool {
@@ -447,6 +463,8 @@ impl NodeContext {
                     | "node.sqlite"
                     | "node.sqlite-wal"
                     | "node.sqlite-shm"
+                    | "transport.key"
+                    | "transport.cert"
                     | ".identity.lock"
                     | ".node.lifecycle.lock"
                     | "node.toml"

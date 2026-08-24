@@ -4,6 +4,7 @@ use crate::node_identity::{NodeIdentity, NodeIdentityError};
 use crate::node_registry::{
     NodeRegistry, PeerRecord, PeerRegistration, PeerRole, PeerSource, PeerState, RegistryError,
 };
+use crate::node_transport::LocalTransport;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, Read};
@@ -91,6 +92,8 @@ pub struct ManualTrustRequest {
     pub capabilities: Vec<String>,
     pub actor: String,
     pub reason: String,
+    #[serde(default)]
+    pub transport_certificate: Option<String>,
     pub confirmed: bool,
 }
 
@@ -155,9 +158,31 @@ pub(crate) fn initialize_node_locked(
         return Err(registry_error("node configuration is missing"));
     }
     let initialization = context.initialize(config).map_err(map_node_error)?;
-    let _identity = context
+    let identity = context
         .load_or_initialize_identity()
         .map_err(map_identity_error)?;
+    let transport_key_was_present =
+        path_is_present(&context.transport_key_path(), "transport.key")?;
+    let transport_certificate_was_present =
+        path_is_present(&context.transport_certificate_path(), "transport.cert")?;
+    let first_machine_creation = !identity_was_present
+        && !registry_was_present
+        && !transport_key_was_present
+        && !transport_certificate_was_present;
+    if !first_machine_creation && (!identity_was_present || !registry_was_present) {
+        return Err(registry_error("node machine state is incomplete"));
+    }
+    let provision = if first_machine_creation {
+        LocalTransport::provision_new(context, &identity)
+    } else {
+        LocalTransport::load_existing(context, &identity)
+    };
+    provision.map_err(|error| {
+        OperationError::new(
+            OperationErrorCode::RegistryInvalid,
+            format!("transport provisioning failed: {error}"),
+        )
+    })?;
     let status = public_node_status(context)?;
     Ok(NodeInitializationResult {
         state_dir_created: !state_was_present,
@@ -282,10 +307,46 @@ pub fn import_manual_trust(
         actor: request.actor,
         reason: request.reason,
     };
+    let certificate = request
+        .transport_certificate
+        .as_deref()
+        .map(decode_transport_certificate)
+        .transpose()?;
     registry
-        .import_manual_peer(registration)
+        .import_manual_peer_with_transport(registration, certificate.as_deref())
         .map_err(map_registry_error)
         .map(public_peer)
+}
+
+fn decode_transport_certificate(value: &str) -> OperationResult<Vec<u8>> {
+    if value.len() != crate::direct_transport::MAX_CERTIFICATE_BYTES * 2
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "transport certificate must be lowercase hexadecimal bytes",
+        ));
+    }
+    let bytes: Vec<u8> = (0..value.len())
+        .step_by(2)
+        .map(|index| {
+            u8::from_str_radix(&value[index..index + 2], 16).map_err(|_| {
+                OperationError::new(
+                    OperationErrorCode::InvalidInput,
+                    "transport certificate is not valid hexadecimal",
+                )
+            })
+        })
+        .collect::<OperationResult<Vec<_>>>()?;
+    crate::direct_transport::TransportCertificate::from_bytes(&bytes).map_err(|error| {
+        OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("transport certificate is invalid: {error}"),
+        )
+    })?;
+    Ok(bytes)
 }
 
 pub fn update_peer_capabilities(
@@ -507,6 +568,9 @@ fn map_registry_error(error: RegistryError) -> OperationError {
         }
         RegistryError::Sqlite(_) => registry_error("node trust registry is invalid or corrupt"),
         RegistryError::Node(error) => map_node_error(error),
+        RegistryError::AuditCapacity => {
+            registry_error("node transport audit capacity is exhausted")
+        }
         RegistryError::SelfTrust => {
             OperationError::new(OperationErrorCode::Conflict, "peer cannot trust itself")
         }
@@ -556,6 +620,7 @@ mod tests {
         ManualTrustRequest {
             node_id,
             public_key,
+            transport_certificate: None,
             role: "performer".into(),
             capabilities: vec!["remote-run".into()],
             actor: "operator".into(),
@@ -580,6 +645,19 @@ mod tests {
         let error = import_manual_trust(&context, request).unwrap_err();
         assert_eq!(error.code, OperationErrorCode::Forbidden);
         assert!(list_trusted_peers(&context).unwrap().is_empty());
+    }
+
+    #[test]
+    fn initialization_does_not_recreate_deleted_transport_state() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        initialize_node(&context, &NodeConfig::default()).unwrap();
+        fs::remove_file(context.transport_key_path()).unwrap();
+        fs::remove_file(context.transport_certificate_path()).unwrap();
+
+        assert!(initialize_node(&context, &NodeConfig::default()).is_err());
+        assert!(!context.transport_key_path().exists());
+        assert!(!context.transport_certificate_path().exists());
     }
 
     #[test]

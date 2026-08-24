@@ -719,8 +719,10 @@ RFC test inputs and are explicitly not production secrets. The test
 `snow` handshake and transport ciphertext, exact framing, and mutations of
 certificate/frame bytes.
 
-The pinned pure-Rust dependency is currently a dev dependency solely for this
-contract test. Production transport code must not be added under this task.
+The pinned pure-Rust dependency is a dev dependency for the contract fixture.
+Contract-freeze task #2718 adds no production transport; task #2719 owns the
+first production implementation and must promote the dependency and the
+fixture's `production_transport_claim` only when its runtime and E2E gates pass.
 The selected crate has no required OS crypto ABI with the selected resolver.
 The repository's locked CI matrix supplies Linux, macOS, and Windows build
 feasibility for the dependency graph; this Linux development environment does

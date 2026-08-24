@@ -116,6 +116,11 @@ pub fn run(
     // Fail before bind: policy parse, auth, non-loopback guard.
     let boot = api::prepare_api_boot(&api_args)?;
 
+    let direct_listener = args
+        .direct_bind
+        .map(|bind| crate::direct_service::DirectListener::start(bind, context.clone()))
+        .transpose()?;
+
     let workers = args.workers.or(boot.deploy.node.workers).unwrap_or(1);
     let scheduler_enabled = if args.no_scheduler {
         false
@@ -190,6 +195,8 @@ pub fn run(
         )
         .await
     });
+
+    drop(direct_listener);
 
     // HTTP stopped (cancel or error). Ensure cancel is set so loops exit, then
     // join scheduler and workers (stop scheduling → stop claiming → drain).

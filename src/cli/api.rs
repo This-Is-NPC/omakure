@@ -508,6 +508,8 @@ struct NodeInitializeBody {}
 struct ManualTrustBody {
     node_id: String,
     public_key: String,
+    #[serde(default)]
+    transport_certificate: Option<String>,
     role: String,
     #[serde(default)]
     capabilities: Vec<String>,
@@ -964,6 +966,7 @@ async fn node_trust_handler(
             node_ops::ManualTrustRequest {
                 node_id: body.node_id,
                 public_key: body.public_key,
+                transport_certificate: body.transport_certificate,
                 role: body.role,
                 capabilities: body.capabilities,
                 actor: body.actor,
@@ -2291,7 +2294,18 @@ fn operation_error_response(err: OperationError) -> Response {
         OperationErrorCode::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         OperationErrorCode::GitFailed
         | OperationErrorCode::IoFailed
-        | OperationErrorCode::RegistryInvalid => StatusCode::INTERNAL_SERVER_ERROR,
+        | OperationErrorCode::RegistryInvalid
+        | OperationErrorCode::TransportUnsupportedVersion
+        | OperationErrorCode::TransportInvalidFrame
+        | OperationErrorCode::TransportMessageTooLarge
+        | OperationErrorCode::TransportHandshakeFailed
+        | OperationErrorCode::TransportIdentityMismatch
+        | OperationErrorCode::TransportNotEnrolled
+        | OperationErrorCode::TransportRevoked
+        | OperationErrorCode::TransportExpired
+        | OperationErrorCode::TransportReplay
+        | OperationErrorCode::TransportRateLimited
+        | OperationErrorCode::TransportInternal => StatusCode::INTERNAL_SERVER_ERROR,
     };
     error_response(status, err.code.as_str(), &err.message)
 }

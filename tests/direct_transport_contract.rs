@@ -27,7 +27,7 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
         Some("owner-approved-under-technical-review")
     );
     assert_eq!(fixture["wire_contract_status"].as_str(), Some("frozen"));
-    assert_eq!(fixture["production_transport_claim"].as_bool(), Some(false));
+    assert_eq!(fixture["production_transport_claim"].as_bool(), Some(true));
     assert_eq!(
         fixture["identity_key_material"].as_str(),
         Some("one-normalized-k256-scalar")

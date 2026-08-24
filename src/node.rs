@@ -243,7 +243,6 @@ impl NodeContext {
     /// trust database are deliberately not created by this foundation layer.
     pub fn initialize(&self, config: &NodeConfig) -> Result<NodeInitialization, NodeError> {
         config.validate()?;
-        ensure_safe_parent(self.state_dir())?;
         let config_parent = self
             .config_path()
             .parent()
@@ -256,44 +255,7 @@ impl NodeContext {
             ensure_safe_parent(config_parent)?;
         }
 
-        let mut created_state = false;
-        let state_result: Result<bool, NodeError> = (|| match fs::symlink_metadata(self.state_dir())
-        {
-            Ok(metadata) => {
-                if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
-                    return Err(NodeError::UnexpectedFileType(
-                        self.state_dir().display().to_string(),
-                    ));
-                }
-                validate_directory_security(
-                    self.state_dir(),
-                    owner_policy(self.platform, self.custom_paths, true)?,
-                    self.test_mode,
-                )?;
-                Ok(false)
-            }
-            Err(err) if err.kind() == io::ErrorKind::NotFound => {
-                fs::create_dir(self.state_dir())?;
-                created_state = true;
-                set_directory_mode(self.state_dir())?;
-                validate_directory_security(
-                    self.state_dir(),
-                    owner_policy(self.platform, self.custom_paths, true)?,
-                    self.test_mode,
-                )?;
-                Ok(true)
-            }
-            Err(err) => Err(err.into()),
-        })();
-        let state_dir_created = match state_result {
-            Ok(created) => created,
-            Err(err) => {
-                if created_state {
-                    fs::remove_dir(self.state_dir())?;
-                }
-                return Err(err);
-            }
-        };
+        let state_dir_created = self.ensure_state_directory()?;
 
         if shared_config {
             ensure_safe_parent(config_parent)?;
@@ -351,6 +313,58 @@ impl NodeContext {
             state_dir_created,
             config_created,
         })
+    }
+
+    /// Ensure the machine-owned state directory exists and is secure.
+    pub(crate) fn ensure_state_directory(&self) -> Result<bool, NodeError> {
+        ensure_safe_parent(self.state_dir())?;
+        let created = match fs::symlink_metadata(self.state_dir()) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() {
+                    return Err(NodeError::UnexpectedFileType(
+                        self.state_dir().display().to_string(),
+                    ));
+                }
+                false
+            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                match create_secure_directory(self.state_dir()) {
+                    Ok(()) => true,
+                    Err(err) if err.kind() == io::ErrorKind::AlreadyExists => false,
+                    Err(err) => return Err(err.into()),
+                }
+            }
+            Err(err) => return Err(err.into()),
+        };
+        if created {
+            if let Err(err) = (|| {
+                set_directory_mode(self.state_dir())?;
+                validate_directory_security(
+                    self.state_dir(),
+                    owner_policy(self.platform, self.custom_paths, true)?,
+                    self.test_mode,
+                )
+            })() {
+                let _ = fs::remove_dir(self.state_dir());
+                return Err(err);
+            }
+        } else {
+            validate_directory_security(
+                self.state_dir(),
+                owner_policy(self.platform, self.custom_paths, true)?,
+                self.test_mode,
+            )?;
+        }
+        Ok(created)
+    }
+
+    pub(crate) fn validate_private_file(&self, path: &Path) -> Result<(), NodeError> {
+        validate_file_security_mode(
+            path,
+            owner_policy(self.platform, self.custom_paths, true)?,
+            self.test_mode,
+            0o600,
+        )
     }
 }
 
@@ -478,6 +492,15 @@ fn ensure_safe_parent(path: &Path) -> Result<(), NodeError> {
 }
 
 fn write_atomic_config(path: &Path, contents: &[u8]) -> Result<(), NodeError> {
+    write_atomic_new(path, contents, 0o640)
+}
+
+pub(crate) fn write_atomic_new(
+    path: &Path,
+    contents: &[u8],
+    #[cfg(unix)] mode: u32,
+    #[cfg(not(unix))] _mode: u32,
+) -> Result<(), NodeError> {
     let parent = path
         .parent()
         .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
@@ -498,7 +521,7 @@ fn write_atomic_config(path: &Path, contents: &[u8]) -> Result<(), NodeError> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o640);
+            options.mode(mode);
         }
         let mut file = options.open(&temp)?;
         file.write_all(contents)?;
@@ -536,6 +559,28 @@ fn set_directory_mode(path: &Path) -> io::Result<()> {
     }
     let _ = path;
     Ok(())
+}
+
+fn create_secure_directory(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidInput, "node path contains a NUL byte")
+        })?;
+        let result = unsafe { libc::mkdir(path.as_ptr(), 0o700) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        fs::create_dir(path)
+    }
 }
 
 #[cfg(unix)]
@@ -628,11 +673,28 @@ fn validate_file_security(
 ) -> Result<(), NodeError> {
     #[cfg(unix)]
     {
+        validate_file_security_mode(path, owner, _test_mode, 0o640)
+    }
+    #[cfg(not(unix))]
+    {
+        validate_file_security_mode(path, (), _test_mode, 0o640)
+    }
+}
+
+fn validate_file_security_mode(
+    path: &Path,
+    #[cfg(unix)] owner: UnixOwner,
+    #[cfg(not(unix))] _owner: (),
+    _test_mode: bool,
+    _expected_mode: u32,
+) -> Result<(), NodeError> {
+    #[cfg(unix)]
+    {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
         let metadata = fs::symlink_metadata(path)?;
-        if metadata.permissions().mode() & 0o777 != 0o640 {
+        if metadata.permissions().mode() & 0o777 != _expected_mode {
             return Err(NodeError::InsecurePath(format!(
-                "{} must have mode 0640",
+                "{} has an unexpected mode",
                 path.display()
             )));
         }

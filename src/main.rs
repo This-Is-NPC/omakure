@@ -5,6 +5,7 @@ mod cli;
 pub mod domain;
 mod error;
 pub mod node;
+pub mod node_identity;
 pub mod operations;
 mod policy;
 mod ports;

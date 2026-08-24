@@ -32,6 +32,7 @@ tower = { version = "0.5", features = ["util"] }
 serde_urlencoded = "0.7"
 subtle = "2.6"
 sha2 = "0.10"
+k256 = { version = "0.14.0", default-features = false, features = ["schnorr", "getrandom"] }
 argon2 = { version = "0.5.3", features = ["std"] }
 rand = "0.8"
 fs2 = "0.4"

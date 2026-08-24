@@ -54,11 +54,9 @@ through shared operations and the HTTP management API.
 | CLI | Reason |
 |---|---|
 | `omakure help-ai` | Capability discovery is a local CLI JSON surface. |
-| `omakure theme list|preview|path` | Theme discovery reads local theme files and is exposed only by CLI/TUI. |
-| `omakure theme set <name>` | Mutates global user config. |
 | `omakure serve --status` | systemd user-unit inspection is local host process state. |
 | `omakure history stats --json` | Same aggregate is exposed through `GET /v1/queue/stats`; there is no separate `/v1/runs/stats` route. |
-| `omakure run <script>` | Inline synchronous execution is CLI/TUI-only. HTTP enqueues with `POST /v1/runs`. |
+| `omakure run <script>` | Inline synchronous execution is CLI-only. HTTP enqueues with `POST /v1/runs`. |
 | `omakure init <script>` | Script creation is local CLI-only. |
 | `omakure trace` | Trace writes are script-authored CLI calls using `OMAKURE_RUN_ID`. |
 | `omakure serve` lifecycle | Host process control is CLI-only. |
@@ -70,7 +68,5 @@ through shared operations and the HTTP management API.
 
 | CLI | Reason |
 |---|---|
-| TUI launch | Interactive terminal UI. |
-| TUI positional path | Session-only local UI behavior. |
 | `omakure api` | Starts the HTTP server itself. |
 | `omakure completion <shell>` | Shell integration emitted to local stdout. |

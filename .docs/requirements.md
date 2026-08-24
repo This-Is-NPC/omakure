@@ -1,111 +1,60 @@
 # Implemented Requirements
 
-## Functional Requirements
+This inventory describes the compiled headless baseline. Source paths are
+references, not design proposals; if a command or module is removed, this file
+must be updated in the same change.
 
-| ID | Description | Source files |
-|----|------------|-------------|
-| FR-001 | Interactive TUI for browsing and selecting scripts from a workspace directory | `src/adapters/tui/app.rs`, `src/adapters/tui/widgets/scripts.rs` |
-| FR-002 | Hierarchical directory navigation with parent traversal in script browser | `src/adapters/tui/app.rs` (`enter_selected`, `navigate_up`) |
-| FR-003 | Script schema parsing from embedded JSON blocks delimited by `OMAKURE_SCHEMA_START`/`OMAKURE_SCHEMA_END` comment markers | `src/domain/parsing.rs`, `src/adapters/workspace_repository.rs` |
-| FR-004 | Dynamic form generation from schema fields with type validation (string, number, boolean, secret) | `src/domain/validation.rs`, `src/domain/schema.rs`, `src/adapters/tui/app.rs` (`submit_form`) |
-| FR-005 | Choice-constrained fields with validation against allowed values | `src/domain/validation.rs` |
-| FR-006 | Default values for fields, overridable by environment configuration | `src/adapters/tui/app.rs` (`build_field_inputs`) |
-| FR-007 | Multi-runtime script execution: Bash (`.bash`/`.sh`), PowerShell (`.ps1`), Python (`.py`) | `src/runtime.rs`, `src/adapters/script_runner.rs` |
-| FR-008 | Runtime dependency checking before execution (`git`, `bash`, `jq`, optional `python`, `pwsh`) | `src/adapters/script_runner.rs`, `src/adapters/system_checks.rs` |
-| FR-009 | Execution history recorded in `<workspace>/.history/runs.sqlite` with `run_id`, `script_path`, `actor`, `reason`, args, exit code, stdout, stderr, start/end timestamps, duration, `parent_run_id`, `trigger`, and `cron_schedule_id` | `src/runs.rs`, `src/cli/run.rs`, `src/adapters/tui/mod.rs` |
-| FR-010 | History browsing in TUI with output preview, scroll, and Actor column, sourced from `runs.sqlite` | `src/adapters/tui/app.rs`, `src/adapters/tui/widgets/history.rs`, `src/adapters/tui/state/history.rs` |
-| FR-011 | Full-text search index backed by SQLite with background rebuild | `src/search_index.rs` |
-| FR-012 | Search screen with live query filtering and script detail preview | `src/adapters/tui/app.rs` (`enter_search`, `refresh_search_results`), `src/adapters/tui/widgets/search.rs` |
-| FR-013 | Environment management: list, create, show, set, remove, replace, activate, deactivate, and delete managed `.omakure/envs/*.conf` files through shared operations | `src/adapters/environments.rs`, `src/use_cases/environment.rs`, `src/operations/envs.rs`, `src/cli/env.rs` |
-| FR-014 | Environment preview with sensitive value masking (password, secret, token, key, api, private, cred) | `src/adapters/environments.rs` (`is_sensitive_key`) |
-| FR-015 | CLI `run` command for headless script execution | `src/cli/run.rs` |
-| FR-016 | CLI `doctor` command for runtime health checks + embedded-schema parse verification | `src/cli/doctor.rs` |
-| FR-017 | CLI `init` command for script template creation | `src/cli/init.rs` |
-| FR-018 | CLI `config` command to display resolved paths and environment | `src/cli/config.rs` |
-| FR-019 | CLI `scripts` command to list available scripts | `src/cli/list.rs` |
-| FR-021 | Theme system with TOML-based themes (5 built-in: default, dracula, catppuccin-mocha, nord, solarized-dark) + Omarchy theme import | `src/adapters/tui/theme.rs`, `src/adapters/omarchy.rs`, `themes/` |
-| FR-022 | Theme management CLI: list, set, preview, and print theme paths | `src/cli/theme.rs` |
-| FR-023 | Shell completion generation for bash, zsh, fish, pwsh | `src/cli/args.rs`, `src/main.rs` (`generate_completions`) |
-| FR-024 | Self-update from GitHub releases (downloads archive for current OS/arch, replaces binary in place, syncs missing scripts) | `src/cli/update.rs` |
-| FR-025 | Self-uninstall with optional scripts-workspace removal | `src/cli/uninstall.rs` |
-| FR-026 | Lua widget extension: custom TUI widgets via `index.lua` in directories | `src/lua_widget.rs` |
-| FR-027 | Workspace auto-initialization: creates root, `.omakure/`, `.omakure/envs/`, `.history/`, and `omakure.toml` | `src/workspace.rs` |
-| FR-028 | Queue/Matrix execution support declared in schema (matrix values and named cases) | `src/domain/schema.rs` (`QueueSpec`, `MatrixSpec`, `QueueCase`) |
-| FR-029 | Schema preview in script browser showing name, description, tags, fields, outputs, queue, and schedule | `src/adapters/tui/app.rs` (`update_schema_preview`), `src/adapters/tui/widgets/schema.rs` |
-| FR-030 | Standalone installer binary (`omakure-installer`) | `src/installer.rs` |
-| FR-031 | Optional positional path argument launches TUI against any directory as a session-only scripts root, leaving global state untouched | `src/cli/args.rs`, `src/main.rs` (`resolve_scripts_root`, `run_tui`) |
-| FR-032 | History rows are keyed by the absolute canonical path of the executed script; legacy relative entries continue to load and are filtered against the global workspace root | `src/runs.rs` (`RunRow.script_path`), `src/adapters/tui/app.rs` (`history_belongs_to_scripts_root`) |
-| FR-033 | `<scripts-root>/omakure.conf` becomes the session-active environment when the TUI is launched with a positional path; absent file falls back to the globally active env; malformed lines are tolerated silently; I/O failure is non-fatal | `src/adapters/tui/app.rs` (`load_env_config`, `load_session_env_config`), `src/adapters/environments.rs` (`parse_env_defaults`), `src/workspace.rs` (`has_scripts_root_override`) |
-| FR-034 | Global `--json` flag emits a uniform `{ ok, data, error, schema_version: "1" }` envelope for `scripts`, `describe`, `search`, `run`, `init`, `history`, `queue`, `trace`, `config`, `serve` autostart flows, and `help-ai` | `src/cli/json.rs`, `src/cli/args.rs`, `src/main.rs` |
-| FR-035 | `omakure describe <script>` returns the full parsed schema (name, description, tags, fields with type/required/arg/default/choices/order) plus the resolved absolute script path; missing scripts return `not_found`, malformed schemas return `schema_invalid` | `src/cli/describe.rs` |
-| FR-036 | `omakure search <query>` surfaces the SQLite-backed script index from the CLI, returning the same per-script shape as `scripts --json` | `src/cli/search.rs`, `src/search_index.rs` |
-| FR-037 | `omakure history list/show/tail` queries `.history/runs.sqlite` with filters `--script`, `--actor`, `--since`, `--until`, `--success`, `--failure`, `--limit`; ordered by `started_at DESC`; `show <run_id>` returns the full row including stdout/stderr; unknown ids return `not_found` | `src/cli/history.rs`, `src/runs.rs` |
-| FR-038 | `omakure help-ai` emits a single JSON capability payload (verbs, flags, nested subcommands, error codes, envelope shape, data shapes) generated by walking `Cli::command()` so it cannot drift from `--help` | `src/cli/help_ai.rs` |
-| FR-039 | `omakure run` accepts `--actor`, `--reason`, `--run-id`, `--parent-run-id`, `--no-prompt`; `--json` implies `--no-prompt`; `--no-prompt` fails fast with `missing_required_field` and writes no history row when a required field has no `--<arg>` on the command line | `src/cli/run.rs`, `src/cli/args.rs` |
-| FR-040 | `omakure init` accepts `--schema-json '<json>\|@file'`, `--body-stdin`, and `--force`; supplied schema is validated before the script is written; `script_exists` returned for existing files without `--force`; `schema_invalid` for malformed schemas | `src/cli/init.rs`, `src/cli/args.rs` |
-| FR-041 | First-launch cleanup: every top-level `*.json` file under `<workspace>/.history/` is deleted on the first `runs::open`; subdirectories, `runs.sqlite`, and `search-index.sqlite` are left untouched; subsequent opens are natural no-ops | `src/runs.rs` (`cleanup_legacy_json_files`) |
-| FR-042 | Run state machine with seven states (`queued`, `running`, `completed`, `failed`, `cancelled`, `timed_out`, `dead_letter`) and a closed transition matrix; illegal transitions return `invalid_argument`. v0.1-shaped tables (no `state` / no `trigger` column) are detected and destructively rebuilt on first open | `src/runs.rs` (`RunState`, `init_schema`, `rebuild_legacy_schema_if_needed`, `enqueue`, `start_inline`, `claim_next`, `complete`, `fail`, `cancel`, `time_out`, `dead_letter`, `heartbeat`) |
-| FR-043 | Single shared execution code path used by `omakure run`, `omakure queue worker`, and scheduler-enqueued rows; spawns child with `OMAKURE_RUN_ID`, refreshes SQLite lease via `runs::heartbeat`, reacts to mid-execution cancel and per-row `--timeout`, drains stdout/stderr through bounded mpsc channels | `src/run_executor.rs` (`execute_with_heartbeat`), `src/adapters/script_runner.rs` (`MultiScriptRunner::build_command`) |
-| FR-044 | Producer verbs `omakure queue add | cancel | dead-letter | stats` write through the state machine. `add` resolves the script and inserts a `queued` row with optional `--actor`/`--reason`/`--priority`/`--timeout`/`--parent-run-id`/`--run-id`/`--cron-schedule-id`; `cancel` flips queued rows instantly and lets the worker kill running rows on the next heartbeat; `dead-letter` only succeeds against `failed`/`timed_out` | `src/cli/queue.rs`, `src/runs.rs` |
-| FR-045 | Long-running `omakure queue worker --concurrency N` daemon claims jobs atomically via `UPDATE … RETURNING`, runs them through the shared executor, and drains in-flight jobs cleanly on SIGINT/SIGTERM (via `signal-hook`). Crashed workers' jobs are reclaimed automatically once `lease_until` (60 s heartbeat) expires | `src/cli/queue.rs` (`worker_loop`, `install_signal_handlers`), `src/runs.rs` (`claim_next`) |
-| FR-046 | Structured trace stream: `omakure trace` writer reads `OMAKURE_RUN_ID` from env, validates `--level` and `--data` (JSON), inserts a row in `run_traces` with monotonic per-run `sequence` computed inside a SQLite transaction. When `OMAKURE_RUN_ID` is unset the verb is a silent no-op | `src/cli/trace.rs`, `src/runs.rs` (`insert_trace`) |
-| FR-047 | `omakure history traces <run_id>` reader returns trace rows ordered by `sequence ASC`, with `--level` and `--since-sequence` filters; `PRAGMA foreign_keys = ON` cascades trace deletes when a run is removed | `src/cli/history.rs` (`traces`), `src/runs.rs` (`query_traces`, `open_connection`) |
-| FR-048 | `omakure scripts` and `omakure search` accept a repeatable `--tag` flag with case-sensitive AND semantics against the embedded schema's `Tags` field | `src/cli/list.rs` (`matches_all_tags`), `src/cli/search.rs` |
-| FR-049 | `omakure history list` accepts `--state` (repeatable) and `--state-set` (`in_flight`/`terminal`/`all`), mutually exclusive; default when neither is set is the terminal set | `src/cli/history.rs` (`resolve_state_filter`), `src/runs.rs` (`RunFilters::default`) |
-| FR-050 | `omakure history stats` returns counts per state and per actor in a single envelope (same data as `queue stats`, exposed under the visibility surface) | `src/cli/history.rs` (`stats`), `src/runs.rs` (`stats`) |
-| FR-051 | TUI history screen renders a per-state colored State column and surfaces in-flight rows (`queued`/`running`) at the top of the list, ordered by `enqueued_at`/`started_at` DESC | `src/adapters/tui/widgets/history.rs` (`state_color`), `src/runs.rs` (`query_runs` ordering) |
-| FR-052 | Embedded schema optionally declares a `Schedule { Cron, Enabled }` block. Cron is normalized and validated at load time (5-field, 6-field, 7-field, and macros `@hourly`/`@daily`/`@midnight`/`@weekly`/`@monthly`/`@yearly`/`@annually`); `@reboot` is rejected with `schema_invalid`; `Enabled` defaults to `true` | `src/domain/schema.rs` (`Schedule`, `default_enabled`), `src/domain/schedule.rs` (`normalize_cron_expr`, `parse_cron`) |
-| FR-053 | `omakure serve` is a per-workspace cron scheduler daemon. Default is foreground; `-d`/`--detach` daemonizes on Unix; `--stop` sends SIGTERM with a 5 s grace window; `--no-worker` disables the spawned in-process worker; `--concurrency` controls the worker pool size; `--once` runs a single tick for tests | `src/cli/serve.rs`, `src/cli/args.rs` (`ServeArgs`) |
-| FR-054 | Scheduler scans the workspace every 5 seconds, parses each script's `Schedule`, computes next fire via `next_fire_after`, enqueues a run when due with `trigger = Scheduled` and `cron_schedule_id = <canonical_path>@<cron_expr>`; default-valued field args are assembled automatically; invalid cron or enqueue failures log and continue without crashing the daemon | `src/cli/serve.rs` (`scheduler_tick`, `build_args_from_defaults`, `is_due`) |
-| FR-055 | Overlap protection: a new fire is skipped when a previous run with the same `cron_schedule_id` is still `queued` or `running`; first-ever fire after daemon start looks back 2 minutes so sub-minute crons are recognized on the first tick | `src/cli/serve.rs` (`has_live_run`, `last_fire_ms`) |
-| FR-056 | PID-file locking at `<workspace>/.omakure/daemon.pid` via `OpenOptions::create_new`; on collision the PID is checked with `kill(pid, 0)` and only reclaimed when dead; live collisions return `error.code = "daemon_already_running"` | `src/cli/serve.rs` (`acquire_lock`, `process_alive`, `read_pid`) |
-| FR-057 | Structured daemon log at `<workspace>/.omakure/daemon.log` with ISO-8601 timestamp, level, and message; tick + enqueue events, skipped overlap, invalid cron, and lifecycle (start/stop) are logged | `src/cli/serve.rs` (`log_line`, `run_scheduler`) |
-| FR-058 | `omakure serve --install`/`--uninstall`/`--status` manages a per-workspace systemd user service (Linux only). Unit name is `omakure-<fnv1a-hash-of-canonical-workspace-path>.service` so multiple workspaces coexist; install writes the unit, runs `systemctl --user daemon-reload`, and enables the unit with `--now`. Non-Linux platforms return `not_implemented` | `src/cli/serve_autostart.rs` |
-| FR-059 | `runs.trigger` column (`Manual`/`Scheduled`) is written on every enqueue and surfaced in history/queue JSON envelopes and TUI history rows | `src/runs.rs` (`RunTrigger`, `EnqueueOptions.trigger`), `src/cli/history.rs`, `src/adapters/tui/widgets/history.rs` |
-| FR-060 | TUI `Schedules` screen lists jobs with Script, Cron, Enabled, Next Run, and Last Run Status; `Space` toggles `Schedule.Enabled` in place by rewriting only the `"Enabled"` value inside the `OMAKURE_SCHEMA_START`/`END` span while preserving every other byte | `src/adapters/tui/widgets/schedules.rs`, `src/adapters/tui/app.rs` (`toggle_selected_schedule`, `toggle_schedule_enabled_in_file`, `rewrite_schedule_enabled`) |
-| FR-061 | TUI Activity Grid widget renders a time-bucketed heatmap of run density (per-script or per-workspace) from `app.history.entries` | `src/adapters/tui/widgets/activity_grid.rs` |
-| FR-062 | History Dashboards view (`Tab` on History) renders a BarChart of runs by state, a 14-day Sparkline of runs per day, and a per-script panel with a Canvas pie chart + duration sparkline (avg/p50/p95). `e`/`Enter` expands the per-script panel; narrow panels fall back to a horizontal stacked "ribbon" bar | `src/adapters/tui/widgets/dashboards.rs`, `src/adapters/tui/state/history.rs` (`HistoryView`) |
-| FR-063 | `update --version <TAG>` flag is preserved against clap's auto-generated `--version` by disabling the auto flag on `UpdateArgs`; `--repo` defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release | `src/cli/args.rs` (`UpdateArgs` with `disable_version_flag`), `src/cli/update.rs` (`resolve_repo`, `resolve_version`) |
-| FR-064 | Per-run environment injection: `omakure run --env-file <PATH>` parses case-preserving `KEY=value` pairs, expands `$VAR`/`${VAR}` single-pass, overlays the managed active env, and injects the merged env into the spawned process only | `src/cli/run.rs`, `src/cli/args.rs` (`RunArgs.env_file`), `src/adapters/environments.rs` (`resolve_run_env`, `parse_env_file`, `expand_env_value`) |
-| FR-065 | Omakure-reserved runtime env vars `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` are injected last by the shared executor and cannot be overridden by active env or `--env-file` values | `src/run_executor.rs` (`execute_with_heartbeat`), `src/adapters/script_runner.rs` (`MultiScriptRunner::build_command`) |
-| FR-066 | Battery CLI registers, syncs, inspects, lists, installs, and removes reusable Omakure-compatible automation repositories through shared Battery operations; cached checkouts remain untrusted and scripts are copied into the trusted workspace only through `battery install` | `src/cli/battery.rs`, `src/operations/battery.rs` |
-| FR-067 | Internal HTTP management API: `omakure api` starts an Axum server with `/v1/health`, config/doctor/workspace/search/tree/scripts/envs/runs/queue-stats/Battery endpoints, CLI-compatible JSON envelopes, shared operation calls, bearer auth, and loopback-by-default binding | `src/cli/api.rs`, `src/cli/args.rs` (`ApiArgs`), `src/operations/*` |
-| FR-068 | Secret schema fields (`Type: "secret"`) resolve from direct secret inputs, forwarded args, run env, or defaults; choices are rejected; plaintext secret args are redacted in stored run args while provider references are retained | `src/domain/schema.rs`, `src/secrets.rs`, `src/cli/run.rs`, `src/operations/core.rs` |
-| FR-069 | HTTP env and secret run inputs are capability-gated: API capabilities are denied by default unless granted through `omakure api --capability`; read endpoints require config/script/run/Battery read capabilities; env endpoints require env read/write/activate capabilities; Battery write endpoints require `batteries:write`; `POST /v1/runs` with `env` or implicit secret values from env requires `EnvUse`; secret defaults and provider refs require `SecretProviderUse`; queued `secret_fields` and secret-field args must be reconstructable `secret://` refs; provider refs require `--secret-ref` ACL allowance sealed with the queued run | `src/cli/api.rs` (`ApiCapability`, `ApiPolicy`, `require_capability`, `enqueue_run_handler`), `src/runs.rs` (`run_secret_refs`) |
+## Functional requirements
 
-## Non-Functional Requirements
+| ID | Requirement | Source |
+|---|---|---|
+| FR-001 | No-argument invocation prints CLI help; JSON mode returns one `invalid_argument` envelope. | `src/main.rs`, `tests/cli_no_subcommand.rs` |
+| FR-002 | Global `--scripts-dir` and environment overrides resolve one workspace root; positional paths are rejected. | `src/main.rs`, `src/cli/args.rs`, `tests/cli_surface_e2e.rs` |
+| FR-003 | Recursive script listing supports `.bash`, `.sh`, `.ps1`, and `.py`, nested `.omakureignore`, and repeatable AND tag filters. | `src/adapters/workspace_repository.rs`, `src/runtime.rs`, `src/cli/list.rs` |
+| FR-004 | Embedded PascalCase schemas parse and validate fields, outputs, queue declarations, secret fields, and schedules. | `src/domain/schema.rs`, `src/domain/parsing.rs` |
+| FR-005 | `describe` returns a complete parsed schema and resolved path; malformed schemas and missing scripts have stable errors. | `src/cli/describe.rs`, `src/operations/core.rs` |
+| FR-006 | SQLite full-text search supports CLI queries and repeatable tag filters without rebuilding per request. | `src/search_index.rs`, `src/cli/search.rs`, `src/operations/search.rs` |
+| FR-007 | `init` creates schema-bearing Bash, PowerShell, or Python templates, validates supplied schema JSON, reads optional body stdin, and protects existing files unless forced. | `src/cli/init.rs` |
+| FR-008 | Direct runs support actors, reasons, caller IDs, parent IDs, forwarded args, per-run env files, no-prompt mode, timeouts, and secret inputs. | `src/cli/run.rs`, `src/run_executor.rs` |
+| FR-009 | Bash, PowerShell, and Python commands resolve interpreters and preserve injected `PATH` semantics. | `src/runtime.rs`, `src/adapters/script_runner.rs` |
+| FR-010 | Active and per-run environment values are injected with reserved Omakure variables last; sensitive values are masked and not persisted. | `src/adapters/environments.rs`, `src/run_executor.rs`, `src/redaction.rs` |
+| FR-011 | Named environments can be listed, created, shown, set, removed, replaced, activated, deactivated, and deleted through CLI and HTTP. | `src/cli/env.rs`, `src/operations/envs.rs` |
+| FR-012 | Runs are stored in SQLite with state, actor, reason, args, output, timing, trigger, and schedule provenance. | `src/runs.rs` |
+| FR-013 | Queue producers add, cancel, dead-letter, and report jobs; workers claim jobs atomically, heartbeat leases, honor timeouts, and drain on signals. | `src/cli/queue.rs`, `src/runs.rs`, `src/run_executor.rs` |
+| FR-014 | History lists, shows, tails, aggregates, and filters runs; trace events can be written from a child and read incrementally. | `src/cli/history.rs`, `src/cli/trace.rs`, `src/runs.rs` |
+| FR-015 | Schema schedules accept supported cron forms, enqueue due runs every five seconds, skip overlap, and log lifecycle/errors. | `src/domain/schedule.rs`, `src/cli/serve.rs` |
+| FR-016 | Linux systemd user lifecycle operations install, uninstall, and report the per-workspace scheduler service. | `src/cli/serve_autostart.rs`, `src/cli/serve.rs` |
+| FR-017 | Batteries can be registered, synced, inspected, listed, installed with validation/provenance, and removed; cached content is untrusted. | `src/cli/battery.rs`, `src/operations/battery.rs` |
+| FR-018 | `doctor`, `config`, `completion`, `update`, and `uninstall` provide local diagnostics, integration, lifecycle, and release operations. | `src/cli/doctor.rs`, `src/cli/config.rs`, `src/main.rs` |
+| FR-019 | `help-ai` derives a machine-readable command and data-shape inventory from clap metadata. | `src/cli/help_ai.rs`, `src/cli/args.rs` |
+| FR-020 | CLI JSON uses `{ ok, data, error, schema_version }` and stable error codes. | `src/cli/json.rs`, `src/cli/args.rs` |
+| FR-021 | `api` exposes authenticated management routes for config, diagnostics, workspace, scripts, search, runs, queues, environments, Batteries, and secret metadata. | `src/cli/api.rs`, `src/operations/*.rs` |
+| FR-022 | `engine` composes HTTP, optional workers, and optional scheduler with coordinated shutdown and readiness gates. | `src/cli/engine.rs`, `src/cli/args.rs` |
+| FR-023 | Health and readiness are unauthenticated; other HTTP routes require scoped bearer tokens or explicitly granted legacy capabilities. | `src/auth.rs`, `src/cli/api.rs`, `src/cli/engine.rs` |
+| FR-024 | Deploy policy controls route groups, auth modes, body limits, script limits, environment use, secret use, and scheduler/worker defaults. | `src/policy.rs`, `src/cli/api.rs`, `src/cli/engine.rs` |
 
-| ID | Description | Source files |
-|----|------------|-------------|
-| NFR-001 | Cross-platform support: Linux, macOS, Windows (conditional compilation for Windows registry, Unix daemonize, Unix signal checks) | `src/main.rs`, `src/runtime.rs`, `src/cli/serve.rs`, `src/cli/serve_autostart.rs`, `Cargo.toml` |
-| NFR-002 | Background search indexing with non-blocking status polling via shared `Arc<Mutex<SearchStatus>>` | `src/search_index.rs` (`start_background_rebuild`), `src/adapters/tui/app.rs` (`poll_widget_load`) |
-| NFR-003 | SQLite WAL mode with busy timeout for concurrent access (runs + search index) | `src/search_index.rs` (`open_connection`), `src/runs.rs` (`open_connection`) |
-| NFR-004 | Graceful terminal restore on TUI exit (raw-mode cleanup) | `src/main.rs` (`run_tui`), `src/adapters/tui/mod.rs` |
-| NFR-005 | Schema cache to avoid re-parsing on repeated selection | `src/adapters/tui/app.rs` (`load_schema`, `schema_cache`) |
-| NFR-006 | Centralized error hierarchy with typed errors (`AppError`, `SchemaError`, `ScriptError`, `EnvironmentError`) mapped to stable JSON codes | `src/error.rs`, `src/cli/json.rs` |
-| NFR-007 | Automated release pipeline: PR merge to `master` reads the current `Cargo.toml` version, requires matching release notes, creates the version tag, builds cross-platform release artifacts, and publishes a GitHub Release | `.github/workflows/auto-release.yml`, `.github/workflows/release.yml` |
-| NFR-008 | PR-gate CI (`ci.yml`) runs `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check`, and a release-readiness check on every pull request | `.github/workflows/ci.yml` |
-| NFR-009 | Scheduler never fork-bombs the queue: all fires go through the same `runs::enqueue` state machine as manual runs, so worker concurrency, cancel semantics, and lease reclamation are shared | `src/cli/serve.rs`, `src/runs.rs` |
-| NFR-010 | In-process worker pool within `omakure serve` is opt-in via `--no-worker = false` (default); pool size is `--concurrency` (default 1). Workers cooperate with the same SIGINT/SIGTERM handler as `queue worker` so the daemon drains in-flight work on shutdown | `src/cli/serve.rs` (`run_scheduler`), `src/cli/queue.rs` (`worker_loop`, `install_signal_handlers`) |
-| NFR-011 | HTTP API management access requires `Authorization: Bearer <token>` for every endpoint except `/v1/health`; `OMAKURE_API_TOKEN` must be present, at least 32 bytes, and not a known default; comparisons use a token digest and constant-time equality | `src/cli/api.rs` (`token_from_env`, `require_bearer`, `token_digest_for`) |
-| NFR-012 | HTTP request bodies are capped at 1 MiB and Battery registration through HTTP accepts `https://` sources only | `src/cli/api.rs` (`BODY_LIMIT_BYTES`, `add_battery_handler`, `sanitize_battery_for_http`) |
+## Non-functional requirements
 
-## Business Rules
+| ID | Requirement | Source |
+|---|---|---|
+| NFR-001 | Linux, macOS, and Windows builds use conditional platform adapters for paths, daemonization, signals, and services. | `src/main.rs`, `src/cli/serve.rs`, `src/cli/serve_autostart.rs`, `Cargo.toml` |
+| NFR-002 | CLI and HTTP behavior remains protocol-neutral in `operations/`; adapters do not duplicate business rules. | `src/operations/`, `src/cli/`, `src/cli/api.rs` |
+| NFR-003 | SQLite uses WAL/busy-timeout behavior for concurrent local readers and writers; one workspace remains single-host storage. | `src/runs.rs`, `src/search_index.rs` |
+| NFR-004 | HTTP request bodies and script/tree responses are bounded, and unsafe paths/symlinks/metadata paths are rejected. | `src/cli/api.rs`, `src/operations/scripts.rs` |
+| NFR-005 | Bearer tokens are hashed, scopes are explicit, token values are redacted from logs/responses, and auth failures do not reveal secrets. | `src/auth.rs`, `src/cli/api.rs` |
+| NFR-006 | Release CI tests all targets, denies clippy warnings, checks formatting, verifies binary-only archives, and requires matching release notes. | `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `tests/packaging_smoke.rs` |
+| NFR-007 | The shipped package contains no TUI/theme/widget code or removed direct dependencies. | `tests/packaging_smoke.rs`, `Cargo.toml` |
 
-| ID | Rule | Source files |
-|----|------|-------------|
-| BR-001 | Hidden directories `.history`, `.git`, and Omakure-owned `.omakure/` metadata are excluded from script listing | `src/adapters/workspace_repository.rs` (`should_skip_dir`) |
-| BR-002 | Only files with extensions `.bash`, `.sh`, `.ps1`, `.py` are recognized as scripts | `src/runtime.rs` (`script_extensions`, `script_kind`) |
-| BR-003 | Boolean inputs accept: `true`/`t`/`yes`/`y`/`1` and `false`/`f`/`no`/`n`/`0` (case-insensitive) | `src/domain/validation.rs` (`parse_bool`) |
-| BR-004 | Environment variable keys containing `password`, `secret`, `token`, `key`, `api`, `private`, or `cred` are masked as `****` in preview | `src/adapters/environments.rs` (`is_sensitive_key`) |
-| BR-005 | Scripts directory resolution priority: `--scripts-dir` CLI flag > `OMAKURE_SCRIPTS_DIR` > `OVERTURE_SCRIPTS_DIR` > `CLOUD_MGMT_SCRIPTS_DIR` > dev `scripts/` (debug only) > `~/Documents/omakure-scripts` > legacy `overture-scripts`/`cloud-mgmt-scripts` directories | `src/main.rs` (`scripts_dir`) |
-| BR-006 | Directory entries are sorted with directories first, then scripts, both alphabetically (case-insensitive) | `src/adapters/workspace_repository.rs` (`list_entries` sort) |
-| BR-007 | Workspace config (`<workspace>/omakure.toml`) is auto-created with the current app version on first run | `src/workspace.rs` (`ensure_layout`, `default_config`) |
-| BR-008 | `@reboot` cron macro is explicitly rejected because it has no calendar semantics the scheduler can evaluate | `src/domain/schedule.rs` (`expand_macro`) |
-| BR-009 | Default-valued arguments (`--<arg> <default>`) are auto-assembled for scheduled fires; fields without a default are silently skipped, yielding a scheduled run with fewer args rather than failing the daemon | `src/cli/serve.rs` (`build_args_from_defaults`) |
-| BR-010 | Scheduler PID-file collision is resolved by checking PID liveness; live PID returns `daemon_already_running`, dead PID is reclaimed silently | `src/cli/serve.rs` (`acquire_lock`, `process_alive`) |
-| BR-011 | Systemd autostart unit name is FNV-1a hash of the canonical workspace path, ensuring multiple workspaces don't collide on the same machine; deterministic across invocations | `src/cli/serve_autostart.rs` (`path_hash`, `unit_name`) |
-| BR-012 | TUI in-place `Schedule.Enabled` toggle never reserializes the user's JSON block; only the `"Enabled"` value inside the `OMAKURE_SCHEMA_START`/`END` span is rewritten, and the round-trip through `parse_schema` is verified before the write is persisted | `src/adapters/tui/app.rs` (`rewrite_schedule_enabled`, `toggle_schedule_enabled_in_file`) |
-| BR-013 | `runs.trigger` defaults to `Manual` for legacy rows written before the column existed (migration backfills with `DEFAULT 'Manual'` on rebuild) | `src/runs.rs` (`rebuild_legacy_schema_if_needed`, `init_schema`) |
-| BR-014 | Injected env values are never persisted in `runs.sqlite`, daemon logs, or run traces; the merged env is passed only to `Command::env` at spawn time | `src/run_executor.rs`, `src/adapters/script_runner.rs`, `src/runs.rs` |
-| BR-015 | Battery operations reject unsafe manifest paths, unsupported script extensions, invalid schemas, and symlinks before exposing or installing scripts | `src/operations/battery.rs` |
+## Business rules
+
+| ID | Rule | Source |
+|---|---|---|
+| BR-001 | `.history`, `.git`, and `.omakure` metadata are excluded from script discovery. | `src/adapters/workspace_repository.rs` |
+| BR-002 | Schema markers and field names use extension comment syntax and PascalCase JSON keys. | `src/domain/parsing.rs`, `src/domain/schema.rs` |
+| BR-003 | Scheduled runs use declared field defaults; missing defaults are omitted rather than blocking the scheduler. | `src/cli/serve.rs` |
+| BR-004 | Scheduler overlap is keyed by canonical script path and cron expression. | `src/cli/serve.rs`, `src/runs.rs` |
+| BR-005 | Secret schema fields cannot declare choices; plaintext secret values are redacted while provider references can be retained. | `src/domain/schema.rs`, `src/secrets.rs`, `src/runs.rs` |
+| BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor.rs` |
+| BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery.rs`, `src/cli/api.rs` |
+| BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api.rs`, `src/policy.rs` |
+| BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args.rs`, `src/main.rs`, `tests/packaging_smoke.rs` |

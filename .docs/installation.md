@@ -1,72 +1,57 @@
 # Installation
 
-## Installation (one command, GitHub Releases)
+## Release installation
 
 Linux/macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh | bash -s -- --repo This-Is-NPC/omakure
+curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh \
+  | bash -s -- --repo This-Is-NPC/omakure
 ```
 
-Windows (PowerShell):
+Windows PowerShell:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command \
+  "irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.ps1 | iex"
 ```
 
-Then run:
+Verify an installation with named commands:
 
 ```bash
-omakure
+omakure --version
+omakure --help
+omakure --json doctor
 ```
 
-The installation creates the scripts folder at `~/Documents/omakure-scripts` (Windows: `%USERPROFILE%\Documents\omakure-scripts`).
+The first workspace operation creates the selected workspace, `.omakure/`,
+`.history/`, and `omakure.toml`. The binary itself is a CLI; deploy the
+headless `engine` command when an HTTP endpoint and background loops are needed.
 
 ## Update
 
 ```bash
 omakure update
+omakure update --version vX.Y.Z --repo This-Is-NPC/omakure
 ```
 
-Linux/macOS requires `curl` (or `wget`) and `tar` for the update flow. Windows uses PowerShell.
-The update also syncs new scripts from the repo without overwriting existing files.
-
-Optional overrides:
-
-```bash
-omakure update --version v0.1.1 --repo This-Is-NPC/omakure
-```
+Linux/macOS update needs `curl` or `wget` and `tar`; Windows uses PowerShell.
+Existing workspace scripts are not overwritten by the update flow.
 
 ## Uninstall
 
 ```bash
 omakure uninstall
+omakure uninstall --scripts  # also permanently deletes the workspace
 ```
 
-To remove the scripts folder as well:
+Back up `.history/` and `.omakure/` before the destructive form.
 
-```bash
-omakure uninstall --scripts
-```
-
-## Install a specific version
-
-Linux/macOS:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh | VERSION=v0.1.1 bash -s -- --repo This-Is-NPC/omakure
-```
-
-Windows (PowerShell):
-
-```powershell
-$env:REPO = "This-Is-NPC/omakure"
-$env:VERSION = "v0.1.1"
-irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.ps1 | iex
-```
-
-## Install from source (optional)
+## Install from source
 
 ```bash
 bash install-from-source.sh
 ```
+
+For development, use `cargo build`, `cargo test`, `mise run lint`, and
+`mise run dev`; see `development.md`.

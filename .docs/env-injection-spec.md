@@ -1,7 +1,7 @@
 # Environment injection spec
 
 This is the implemented environment-injection contract. It documents three
-behaviors shared by `omakure run`, the TUI run path, and `queue worker`:
+behaviors shared by `omakure run`, `queue worker`, and scheduler execution:
 
 1. the **precedence table** — the canonical merge order of env sources;
 2. the **var-expansion grammar** — how `$VAR` / `${VAR}` are substituted;
@@ -11,7 +11,7 @@ behaviors shared by `omakure run`, the TUI run path, and `queue worker`:
 Terminology: "env" means the ordered set of `KEY=value` pairs that will be
 handed to a script process. "Merged env" means the single map produced
 after all precedence layers have been folded together. Keys are compared
-**case-sensitively** at injection time (unlike the TUI-defaults parser in
+**case-sensitively** at injection time (unlike schema-field matching in
 `src/adapters/environments.rs`, which lowercases keys to match schema
 fields — that path is unrelated to process injection).
 
@@ -57,8 +57,6 @@ key survives*.
 
 ### Notes / edge cases
 
-- The **session `omakure.conf`** override (see `.docs/environments.md`)
-  governs *TUI schema-field defaults*, not process injection.
 - `--env-file` is a single optional flag on `omakure run`. The supplied
   file enters the fold at priority 3.
 
@@ -228,12 +226,12 @@ it**:
    stored. Trace rows go to `run_traces`, which stores `level, message,
    data_json` and likewise has no env-value sink.
 
-4. **Masking (defense in depth, TUI preview only)** —
+4. **Masking (defense in depth, diagnostic previews only)** —
    `src/adapters/environments.rs`, `is_sensitive_key(key)` flags keys
    containing `password`, `secret`, `token`, `key`, `api`,
    `private`, or `cred`, and the Environments **preview** masks their
-   values with `****`. This is a *display* control for the `.conf` preview
-   pane, independent of injection; it is **not** the mechanism that keeps
+    values with `****`. This is a *display* control for diagnostic output,
+    independent of injection; it is **not** the mechanism that keeps
    secrets out of storage (that is guaranteed structurally by points 1–3).
    Code must not rely on masking as the persistence guard.
 

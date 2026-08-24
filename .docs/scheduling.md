@@ -50,8 +50,8 @@ Cron formats accepted (`src/domain/schedule.rs::normalize_cron_expr`):
 attach it to. Unknown macros and malformed expressions fail script load
 with `error.code = "schema_invalid"`.
 
-`Enabled` defaults to `true` when omitted. Toggle in place from the TUI
-Schedules screen (`Ctrl+/` then `c`, `Space` on the row).
+`Enabled` defaults to `true` when omitted. Edit the schema file and rerun
+`omakure doctor` to validate the changed schedule.
 
 ## Running the scheduler
 
@@ -102,8 +102,8 @@ Per workspace:
   start/stop, `tick fired=N`, `enqueued run_id=…`, `previous run still
   in flight, skipping fire`, and `invalid cron` parse errors.
 - **History** — scheduled rows are first-class. Query with
-  `omakure history list --state-set all` or filter by trigger in the
-  TUI `History` screen.
+  `omakure history list --state-set all` and inspect trigger/provenance fields
+  in the JSON output.
 
 Per scheduled row:
 

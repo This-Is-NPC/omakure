@@ -30,8 +30,8 @@ Why:
 
 - Middleware and extractors keep auth, body limits, and route state testable.
 - `tower` service testing lets endpoint tests run without binding real ports.
-- The async runtime is contained behind `omakure api`; existing CLI/TUI code
-  remains synchronous.
+- The async runtime is contained behind `omakure api`; local CLI commands remain
+  synchronous.
 
 ## Command Contract
 

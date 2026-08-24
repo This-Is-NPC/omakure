@@ -24,8 +24,8 @@ does.
 ## Secret handling
 
 Script schemas may declare `Type: "secret"` fields. Secret fields are accepted
-by `omakure describe`, `omakure init --schema-json`, TUI forms, CLI runs, queue
-runs, and HTTP enqueue. `Choices` is not supported on secret fields.
+by `omakure describe`, `omakure init --schema-json`, CLI runs, queue runs, and
+HTTP enqueue. `Choices` is not supported on secret fields.
 
 Secret value resolution for a run checks, in order:
 
@@ -300,8 +300,8 @@ Errors:
 
 ### `omakure search <query> --json`
 
-Surfaces the SQLite-backed script index that powers the TUI search
-screen. Returns the same per-script shape as `scripts --json` so
+Surfaces the SQLite-backed script index used by the CLI and HTTP search
+operations. Returns the same per-script shape as `scripts --json` so
 results pipe between the two commands without translating fields.
 
 ```bash

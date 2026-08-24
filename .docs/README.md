@@ -1,30 +1,33 @@
 # Documentation index
 
-Start here if you want a map of the docs. For quick start and requirements, see the repo `README.md`.
+The repository is a headless automation product. Its supported integration
+surfaces are the CLI, the HTTP management API, and the combined `engine`
+process.
 
-## For users
+## Users and operators
 
 - `installation.md`: install, update, uninstall, and version pinning.
-- `usage.md`: CLI commands and common flows.
-- `deployment.md`: API / worker / engine deploy topologies, container image, volumes, SQLite single-host warning, security + smoke checklists.
-- `scheduling.md`: cron scheduler (`omakure serve`) — lifecycle, overlap protection, systemd autostart, observability.
-- `workspace.md`: workspace layout, runtime state (`runs.sqlite`), daemon artifacts.
-- `scripts-path.md`: default scripts path and the full resolution precedence.
-- `environments.md`: environment documents (`.omakure/envs/`) and session `omakure.conf`.
-- `lua-widgets.md`: how to render `index.lua` widgets in the TUI.
-- `how-it-works.md`: overview of the manual / queued / scheduled execution paths.
-- `how-to-create-a-script.md`: step-by-step script guide incl. the `Schedule` block.
+- `usage.md`: CLI commands and common workflows.
+- `deployment.md`: API/worker/engine topologies, containers, volumes, and security.
+- `http-api.md`: HTTP routes, auth, policy, limits, and shared operations.
+- `scheduling.md`: cron scheduler lifecycle and systemd autostart.
+- `workspace.md`: workspace layout and SQLite runtime state.
+- `scripts-path.md`: workspace resolution and `.omakureignore` rules.
+- `environments.md`: managed environment files and runtime injection.
+- `batteries.md`: reusable script repositories and provenance.
+- `how-to-create-a-script.md`: schema and script authoring.
 
-## For AI integrators
+## AI and integration
 
-- `ai-interface.md`: JSON envelope contract, AI-facing verbs, error codes, data shapes.
-- `cli-http-parity.md`: implemented CLI, operations, and HTTP parity matrix.
+- `ai-interface.md`: JSON envelope, agent verbs, queue, history, and traces.
+- `cli-http-parity.md`: CLI, shared operation, and HTTP parity matrix.
+- `headless-migration.md`: intentional breaking removals and migration actions.
 
-## For contributors
+## Contributors
 
-- `development.md`: dev workflow, `mise` tasks, repo layout.
-- `architecture.md`: stack, patterns, code metrics, infrastructure.
-- `requirements.md`: implemented functional/non-functional/business rules (file-referenced).
-- `release-artifacts.md`: release archive naming requirements.
-- `tui-screens-and-widgets.md`: TUI screen flow, per-screen keybindings, and widget inventory.
-- `env-injection-spec.md`: implemented env precedence table, var-expansion grammar, and the secret-non-persistence invariant.
+- `development.md`: build, test, lint, integration checks, and `mise` tasks.
+- `architecture.md`: retained stack, source structure, and boundaries.
+- `requirements.md`: implemented requirements with source references.
+- `release-artifacts.md`: binary-only release archive contract.
+- `headless-release.md`: current release checklist and compatibility statement.
+- `env-injection-spec.md`: environment precedence and secret non-persistence.

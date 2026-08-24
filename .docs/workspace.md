@@ -1,78 +1,52 @@
 # Workspace layout
 
-Omakure treats the workspace as a filesystem store:
+Omakure treats one directory as both the scripts root and the owner of its
+runtime metadata. The root is selected with `--scripts-dir` or the documented
+environment/default precedence.
 
-```
+```text
 omakure-scripts/
-├── .omakure/              # Omakure-owned runtime metadata
-│   ├── envs/              # Environment defaults (active file listed in .omakure/envs/active)
+├── .omakure/
+│   ├── envs/
 │   │   ├── active
 │   │   └── env_template.conf
-│   ├── batteries.json     # Registered Battery sources
+│   ├── batteries.json
 │   ├── batteries/
-│   │   ├── cache/         # Untrusted synced Battery Git checkouts
-│   │   └── installed/     # Provenance records for installed Battery scripts
-│   ├── daemon.pid         # `omakure serve` PID lock (present when the scheduler is running)
-│   └── daemon.log         # Structured scheduler log (RFC3339 lines)
-├── .history/              # Runtime state (SQLite)
-│   ├── runs.sqlite            # Run state machine + structured traces
-│   └── search-index.sqlite    # Script search index
-└── omakure.toml           # Optional workspace config
+│   │   ├── cache/             # untrusted synced repositories
+│   │   └── installed/         # install provenance
+│   ├── daemon.pid             # standalone scheduler lock
+│   └── daemon.log             # standalone scheduler log
+├── .history/
+│   ├── runs.sqlite             # runs, queue, and traces
+│   └── search-index.sqlite     # script search index
+├── omakure.toml                # workspace configuration
+└── <scripts and folders>
 ```
 
-If a folder includes `index.lua`, Omakure renders it in the TUI header panel. See `lua-widgets.md`.
+`ensure_layout` creates metadata only below the selected workspace. The CLI has
+no session-root or positional-path mode, so there is no second path anchor and
+no per-directory `omakure.conf` contract.
 
-Environment defaults live in `.omakure/envs/*.conf`. Use the TUI (`Ctrl+/` then `e`) to switch the active file.
-Defaults are applied by matching field names (case-insensitive) to `key=value` pairs.
-See `environments.md` for usage details.
+Environment files use `KEY=value` lines and are managed through `omakure env`
+or the authenticated HTTP environment routes. Their values can be injected
+into child processes but sensitive values are masked in diagnostics and are not
+persisted in runs, logs, or traces.
 
-Batteries store their registry and cache under `.omakure/`. Cached Battery
-repositories are untrusted and are not executed directly; `battery install`
-copies validated scripts into the scripts workspace and records provenance. See
-`batteries.md`.
+The `.history/` directory is private Omakure state. Use `history`, `queue`, and
+`trace` commands or their HTTP equivalents instead of opening SQLite directly.
+Run rows use canonical script paths and include state-machine, actor, trigger,
+timing, output, and provenance fields.
 
-The `.history/` folder stores local run logs and is ignored by git. Run
-entries are keyed by the **absolute canonical path** of the executed
-script so the same physical script always produces the same key,
-regardless of which directory the run was launched from.
+## Ignore rules
 
-## Global workspace vs. session scripts root
+`.omakureignore` files can be placed at the workspace root or below it. Rules
+apply relative to their file, support directory-only patterns, and combine
+parent and child rules. The supported subset is documented in
+`scripts-path.md`; ignored content is excluded consistently from CLI listing,
+search, HTTP tree routes, and scheduling.
 
-Omakure tracks two distinct path anchors:
+## Single-host storage
 
-- **Global workspace** — owns `.history/`, `.omakure/`, `.omakure/envs/`,
-  the SQLite search index, and `omakure.toml`. Resolved by the
-  `scripts_dir()` precedence chain (`--scripts-dir` >
-  `OMAKURE_SCRIPTS_DIR` > legacy env vars > debug `scripts/` fallback >
-  `~/Documents/omakure-scripts`).
-- **Scripts root** — the directory the TUI is currently browsing. By
-  default this is the global workspace. When you launch the TUI with a
-  positional path (`omakure .`, `omakure ../team-scripts`, `omakure
-  /abs/path`), only the scripts root is overridden for that session.
-
-Launching `omakure <PATH>` never creates `.omakure/`, `.history/`, or
-`omakure.toml` inside `<PATH>`. The `Workspace` type has an internal
-invariant that `ensure_layout()` is strictly bound to the global root,
-so the positional target stays untouched.
-
-History entries recorded from a session-override TUI are written to the
-**global** `.history/` directory and use the absolute canonical script
-path. The in-session history view filters entries to those whose
-absolute path lies within the active scripts root, so:
-
-- Plain `omakure` shows every entry whose script lives under the global
-  workspace, including runs originally launched from `omakure <PATH>`
-  sessions whose target was a subdirectory of the global workspace.
-- `omakure <PATH>` shows entries whose script lives under `<PATH>`,
-  regardless of which session originally recorded them.
-
-Legacy history entries (which stored workspace-relative paths) continue
-to load and display; the filter resolves them against the global
-workspace root so they remain visible in the plain-`omakure` case.
-
-## Removed Omaken layout
-
-The old Omaken flavor concept and `.omaken/` directory are removed from the
-active workspace contract. Omakure does not read, create, or migrate
-`.omaken/`; reusable script repositories are managed by Batteries under
-`.omakure/`.
+SQLite is local runtime state, not a distributed queue. Run one writer topology
+per workspace volume, keep API/workers/engine on the same host, and do not use
+NFS/CIFS or scale replicas over one `.history` directory.

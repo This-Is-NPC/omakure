@@ -20,7 +20,9 @@
 //! tables — not the database file.
 
 use crate::workspace::Workspace;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use rusqlite::{
+    params, params_from_iter, Connection, ErrorCode, OptionalExtension, TransactionBehavior,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
@@ -28,7 +30,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Internal heartbeat lease duration in milliseconds (60 s).
 ///
@@ -1292,22 +1294,46 @@ pub fn stats(conn: &Connection) -> Result<RunStats, String> {
 // Trace storage
 // ---------------------------------------------------------------------------
 
-/// Insert one trace event tied to `run_id`. Assigns a monotonic per-run
-/// `sequence` inside a SQLite transaction so two concurrent inserts for
-/// the same run never collide. Returns the newly inserted [`TraceRow`].
-///
-/// Returns an error message describing `not_found` when the parent run
-/// does not exist; the CLI maps this to `error.code = "not_found"`.
-pub fn insert_trace(
+const TRACE_RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(25), Duration::from_millis(100)];
+
+enum TraceInsertError {
+    NotFound(String),
+    Sqlite {
+        operation: &'static str,
+        error: rusqlite::Error,
+    },
+}
+
+impl TraceInsertError {
+    fn is_retryable(&self) -> bool {
+        matches!(self, Self::Sqlite { error, .. }
+        if matches!(
+            error.sqlite_error_code(),
+            Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
+        ))
+    }
+
+    fn into_message(self) -> String {
+        match self {
+            Self::NotFound(run_id) => format!("not_found: {run_id}"),
+            Self::Sqlite { operation, error } => format!("{operation}: {error}"),
+        }
+    }
+}
+
+fn insert_trace_once(
     conn: &mut Connection,
     run_id: &str,
     level: TraceLevel,
     message: &str,
     data_json: Option<&str>,
-) -> Result<TraceRow, String> {
+) -> Result<TraceRow, TraceInsertError> {
     let tx = conn
-        .transaction()
-        .map_err(|err| format!("Begin trace tx failed: {}", err))?;
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| TraceInsertError::Sqlite {
+            operation: "Begin trace tx failed",
+            error,
+        })?;
 
     let exists: bool = tx
         .query_row(
@@ -1316,10 +1342,13 @@ pub fn insert_trace(
             |row| row.get::<_, i64>(0),
         )
         .optional()
-        .map_err(|err| format!("Lookup run for trace failed: {}", err))?
+        .map_err(|error| TraceInsertError::Sqlite {
+            operation: "Lookup run for trace failed",
+            error,
+        })?
         .is_some();
     if !exists {
-        return Err(format!("not_found: {}", run_id));
+        return Err(TraceInsertError::NotFound(run_id.to_string()));
     }
 
     let next_seq: i64 = tx
@@ -1328,17 +1357,25 @@ pub fn insert_trace(
             params![run_id],
             |row| row.get(0),
         )
-        .map_err(|err| format!("Compute next sequence failed: {}", err))?;
+        .map_err(|error| TraceInsertError::Sqlite {
+            operation: "Compute next sequence failed",
+            error,
+        })?;
     let now = current_unix_ms();
     tx.execute(
         "INSERT INTO run_traces (run_id, timestamp, sequence, level, message, data_json)
              VALUES (?,?,?,?,?,?)",
         params![run_id, now, next_seq, level.as_str(), message, data_json],
     )
-    .map_err(|err| format!("Insert trace failed: {}", err))?;
+    .map_err(|error| TraceInsertError::Sqlite {
+        operation: "Insert trace failed",
+        error,
+    })?;
     let trace_id = tx.last_insert_rowid();
-    tx.commit()
-        .map_err(|err| format!("Commit trace tx failed: {}", err))?;
+    tx.commit().map_err(|error| TraceInsertError::Sqlite {
+        operation: "Commit trace tx failed",
+        error,
+    })?;
 
     Ok(TraceRow {
         trace_id,
@@ -1349,6 +1386,36 @@ pub fn insert_trace(
         message: message.to_string(),
         data_json: data_json.map(|s| s.to_string()),
     })
+}
+
+/// Insert one trace event tied to `run_id`. Assigns a monotonic per-run
+/// `sequence` inside a SQLite transaction so two concurrent inserts for
+/// the same run never collide. Returns the newly inserted [`TraceRow`].
+///
+/// A busy/locked transaction is retried twice with short backoff after the
+/// connection's normal busy timeout. Each retry starts a fresh transaction;
+/// non-busy SQLite errors are returned immediately.
+///
+/// Returns an error message describing `not_found` when the parent run
+/// does not exist; the CLI maps this to `error.code = "not_found"`.
+pub fn insert_trace(
+    conn: &mut Connection,
+    run_id: &str,
+    level: TraceLevel,
+    message: &str,
+    data_json: Option<&str>,
+) -> Result<TraceRow, String> {
+    let mut retry = 0;
+    loop {
+        match insert_trace_once(conn, run_id, level, message, data_json) {
+            Ok(trace) => return Ok(trace),
+            Err(error) if error.is_retryable() && retry < TRACE_RETRY_DELAYS.len() => {
+                std::thread::sleep(TRACE_RETRY_DELAYS[retry]);
+                retry += 1;
+            }
+            Err(error) => return Err(error.into_message()),
+        }
+    }
 }
 
 /// Query trace rows for `run_id`, ordered by `sequence ASC`.
@@ -2149,13 +2216,14 @@ mod tests {
                 conn.busy_timeout(std::time::Duration::from_secs(15))
                     .unwrap();
                 for i in 0..PER_THREAD {
-                    insert_trace_with_retry(
+                    insert_trace(
                         &mut conn,
                         &run_id,
                         TraceLevel::Info,
                         &format!("event {}", i),
                         None,
-                    );
+                    )
+                    .unwrap();
                 }
             }));
         }
@@ -2175,32 +2243,31 @@ mod tests {
         let _ = fs::remove_dir_all(ws.root());
     }
 
-    /// Test helper that retries on the SQLite "database is locked" error.
-    /// Real callers (the `omakure trace` verb) only insert one trace per
-    /// invocation so they hit the busy_timeout naturally; the test
-    /// hammers the same connection from N threads in a tight loop and
-    /// needs an extra layer of patience to win the race fairly.
-    fn insert_trace_with_retry(
-        conn: &mut Connection,
-        run_id: &str,
-        level: TraceLevel,
-        message: &str,
-        data_json: Option<&str>,
-    ) {
-        let mut attempt = 0;
-        loop {
-            match insert_trace(conn, run_id, level, message, data_json) {
-                Ok(_) => return,
-                Err(err) if err.contains("locked") || err.contains("busy") => {
-                    attempt += 1;
-                    if attempt > 100 {
-                        panic!("insert_trace_with_retry exhausted: {}", err);
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-                Err(err) => panic!("insert_trace failed: {}", err),
-            }
-        }
+    #[test]
+    fn insert_trace_retries_after_busy_timeout_without_duplicates() {
+        let ws = unique_workspace("trace_busy_retry");
+        let mut conn = open(&ws).expect("open");
+        let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
+        let db_path = runs_db_path(&ws);
+        let ready = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let lock_ready = ready.clone();
+        let locker = std::thread::spawn(move || {
+            let locker = open_connection(&db_path).expect("open locker");
+            locker.execute_batch("BEGIN IMMEDIATE").unwrap();
+            lock_ready.wait();
+            std::thread::sleep(Duration::from_millis(2_250));
+            locker.execute_batch("ROLLBACK").unwrap();
+        });
+
+        ready.wait();
+        insert_trace(&mut conn, &row.run_id, TraceLevel::Info, "after lock", None).unwrap();
+        locker.join().unwrap();
+
+        let traces = query_traces(&conn, &row.run_id, None, None).unwrap();
+        assert_eq!(traces.len(), 1);
+        assert_eq!(traces[0].sequence, 1);
+        assert_eq!(traces[0].message, "after lock");
+        let _ = fs::remove_dir_all(ws.root());
     }
 
     #[test]

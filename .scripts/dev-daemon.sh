@@ -1,40 +1,42 @@
 #!/usr/bin/env bash
-# Dev helper: build, (re)start the daemon, tail its log, and open the TUI.
-# On exit, stops the daemon so we don't leave orphans behind.
+# Build and smoke-test the headless engine without leaving a daemon running.
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 WORKSPACE="${OMAKURE_DEV_WORKSPACE:-$REPO_DIR/scripts}"
-
 BIN="$REPO_DIR/target/debug/omakure"
-LOG="$WORKSPACE/.omakure/daemon.log"
+PORT="${OMAKURE_DEV_PORT:-17878}"
+LOG="${WORKSPACE}/.omakure/dev-engine.log"
 
 (cd "$REPO_DIR" && cargo build --bin omakure)
+mkdir -p "$WORKSPACE/.omakure"
 
-cd "$WORKSPACE"
+TOKEN="$(openssl rand -hex 32)"
+export OMAKURE_API_TOKEN="$TOKEN"
+READY_URL="http://127.0.0.1:${PORT}/v1/ready"
+HEALTH_URL="http://127.0.0.1:${PORT}/v1/health"
 
-"$BIN" serve --stop >/dev/null 2>&1 || true
-
-mkdir -p .omakure
-: > "$LOG"
-
-"$BIN" serve -d
-echo "daemon started — log: $LOG"
-
-TAIL_PID=""
-if [[ "${OMAKURE_DEV_TAIL:-1}" != "0" ]]; then
-  tail -f "$LOG" &
-  TAIL_PID=$!
-fi
+"$BIN" engine --bind "127.0.0.1:${PORT}" --workers 0 --no-scheduler \
+  --capability all >"$LOG" 2>&1 &
+ENGINE_PID=$!
 
 cleanup() {
-  if [[ -n "$TAIL_PID" ]]; then
-    kill "$TAIL_PID" 2>/dev/null || true
-  fi
-  "$BIN" serve --stop >/dev/null 2>&1 || true
-  echo "daemon stopped"
+  kill "$ENGINE_PID" 2>/dev/null || true
+  wait "$ENGINE_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-"$BIN"
+for _ in {1..50}; do
+  if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.1
+done
+
+curl -fsS "$HEALTH_URL" >/dev/null
+curl -fsS "$READY_URL" >/dev/null
+curl -fsS -H "Authorization: Bearer ${TOKEN}" \
+  "http://127.0.0.1:${PORT}/v1/scripts" >/dev/null
+
+printf 'headless engine ready on %s (log: %s)\n' "127.0.0.1:${PORT}" "$LOG"

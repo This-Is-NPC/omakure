@@ -2,25 +2,17 @@
 powershell = "latest"
 rust = "latest"
 
-[tasks.tui]
-description = "Start the TUI interface"
-run = "cargo run --bin omakure"
-
 [tasks.dev]
-description = "Build, start the daemon, tail its log, and open the TUI (stops the daemon on exit)"
+description = "Build and run the bounded headless engine smoke check"
 run = "./.scripts/dev-daemon.sh"
 
-[tasks.daemon-start]
-description = "Build and start the scheduler daemon in the background"
-run = ["cargo build --bin omakure", "./target/debug/omakure serve -d"]
+[tasks.engine]
+description = "Build and run the authenticated headless engine in the foreground"
+run = "OMAKURE_API_TOKEN=\"$(openssl rand -hex 32)\" cargo run --bin omakure -- engine --workers 1 --capability all"
 
-[tasks.daemon-stop]
-description = "Stop the scheduler daemon"
-run = "./target/debug/omakure serve --stop"
-
-[tasks.daemon-log]
-description = "Tail the daemon log"
-run = "tail -f .omakure/daemon.log"
+[tasks.engine-check]
+description = "Run the headless CLI, HTTP, and engine integration checks"
+run = "cargo test --test engine_e2e --test http_api_e2e --test cli_surface_e2e"
 
 [tasks.build]
 description = "Build the project in debug mode"
@@ -40,4 +32,4 @@ run = "cargo install --path ."
 
 [tasks.coverage]
 description = "Run tests with tarpaulin and generate HTML coverage report"
-run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/adapters/tui/mod.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/update.rs' --skip-clean"
+run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/update.rs' --skip-clean"

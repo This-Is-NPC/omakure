@@ -1,5 +1,4 @@
 use std::io;
-use std::path::PathBuf;
 use thiserror::Error;
 
 /// Application error type covering all error categories.
@@ -17,20 +16,11 @@ pub enum AppError {
     #[error("Environment error: {0}")]
     Environment(#[from] EnvironmentError),
 
-    #[error("scripts directory not found: {}", path.display())]
-    ScriptsDirNotFound { path: PathBuf },
-
-    #[error("expected a directory, found a file: {}", path.display())]
-    ScriptsDirNotADirectory { path: PathBuf },
-
-    #[error("failed to resolve scripts directory {}: {message}", path.display())]
-    ScriptsDirResolveFailed { path: PathBuf, message: String },
-
     #[error("{0}")]
     General(String),
 }
 
-/// Errors related to schema parsing and validation.
+/// Errors related to schema parsing.
 #[derive(Debug, Error)]
 pub enum SchemaError {
     #[error("Schema block not found in script")]
@@ -47,18 +37,6 @@ pub enum SchemaError {
 
     #[error("Schema JSON object not found in output")]
     JsonNotFound,
-
-    #[error("Value required")]
-    ValueRequired,
-
-    #[error("Enter a valid number")]
-    InvalidNumber,
-
-    #[error("Enter true/false (or yes/no)")]
-    InvalidBoolean,
-
-    #[error("Allowed values: {choices}")]
-    InvalidChoice { choices: String },
 
     #[error("Invalid cron expression `{expr}`: {reason}")]
     InvalidCron { expr: String, reason: String },
@@ -128,14 +106,6 @@ mod tests {
             format!("{}", err),
             "Schema error: Schema block not found in script"
         );
-    }
-
-    #[test]
-    fn test_schema_error_display() {
-        let err = SchemaError::InvalidChoice {
-            choices: "dev, prod".to_string(),
-        };
-        assert_eq!(format!("{}", err), "Allowed values: dev, prod");
     }
 
     #[test]

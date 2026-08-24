@@ -20,6 +20,7 @@ impl EnvironmentService {
         self.repo.load_environment_config()
     }
 
+    #[allow(dead_code)]
     pub fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview> {
         self.repo.load_env_preview(path)
     }

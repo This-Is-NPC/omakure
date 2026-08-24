@@ -1005,10 +1005,14 @@ enabled = true
         // the old format.
         let legacy_plaintext = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
         let hash = hash_token(&legacy_plaintext).unwrap();
-        let mut tokens = (0..MAX_TOKENS_PER_FILE - 1)
+        let other_hash = hash_token(&test_token_plaintext("other")).unwrap();
+        // Keep this compatibility test focused on the legacy shape. The
+        // selector tests cover the maximum file size; scanning 64 Argon2
+        // hashes here makes the suite needlessly expensive on slow hosts.
+        let mut tokens = (0..1)
             .map(|index| TokenRecord {
                 id: format!("other-{index}"),
-                hash: hash_token(&test_token_plaintext(&format!("other-{index}"))).unwrap(),
+                hash: other_hash.clone(),
                 scopes: vec!["runs:read".into()],
                 enabled: true,
             })

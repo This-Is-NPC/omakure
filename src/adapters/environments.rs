@@ -107,7 +107,6 @@ impl EnvironmentRepository for FsEnvironmentRepository {
             envs_dir: self.envs_dir.clone(),
             active,
             defaults,
-            session_conf_path: None,
         })
     }
 
@@ -503,7 +502,7 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
 /// key/value pairs.
 ///
 /// This is a deliberately separate path from [`parse_env_defaults`] (which
-/// lowercases keys for TUI schema-field prefill). Real environment variables
+/// lowercases keys for legacy schema-field prefill). Real environment variables
 /// such as `PATH` and `VIRTUAL_ENV` are case-sensitive on Linux, so keys are
 /// preserved verbatim here.
 ///
@@ -619,8 +618,8 @@ pub(crate) fn read_managed_env_defaults(
 /// process.
 ///
 /// This is the single composition root for env injection: all three run
-/// call sites (CLI `omakure run`, the queue worker, and the TUI inline run)
-/// call this function to build their `extra_env`, so there is one merge
+/// call sites (CLI `omakure run` and the queue worker) call this function to
+/// build their `extra_env`, so there is one merge
 /// implementation, not three.
 ///
 /// It implements **layer 2** of the env-injection precedence table
@@ -644,7 +643,7 @@ pub(crate) fn read_managed_env_defaults(
 ///   cannot clobber the reserved value.
 ///
 /// Behavior change (was: prefill-only): prior to this, `.omakure/envs/*.conf`
-/// only prefilled TUI schema-field defaults and never reached the spawned
+/// only provided legacy schema-field defaults and never reached the spawned
 /// process. Those files now inject into the child's `os.environ`. There is
 /// no CHANGELOG file in this repo, so this doc-comment records the change.
 ///

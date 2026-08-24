@@ -1528,7 +1528,9 @@ fn assert_git_http_pinning_supported_with<F>(
 where
     F: FnOnce() -> OperationResult<String>,
 {
-    let mut guard = cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let supported = match *guard {
         Some(supported) => supported,
         None => {

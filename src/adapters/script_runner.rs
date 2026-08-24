@@ -3,8 +3,7 @@ use crate::adapters::system_checks::{
     ensure_python_installed,
 };
 use crate::error::{AppResult, ScriptError};
-use crate::ports::{ScriptRunOutput, ScriptRunner};
-use crate::runtime::{command_for_script, command_for_script_with_env, script_kind, ScriptKind};
+use crate::runtime::{command_for_script_with_env, script_kind, ScriptKind};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -13,19 +12,14 @@ const API_TOKEN_ENV: &str = "OMAKURE_API_TOKEN";
 pub struct MultiScriptRunner;
 
 impl MultiScriptRunner {
-    pub fn new() -> Self {
-        Self
-    }
-
     /// Build a [`Command`] that will execute `script` with `args` and the
     /// supplied extra environment variables. Used by the worker / inline
     /// run path so the spawned child process always carries the
     /// `OMAKURE_RUN_ID` (and any future) environment values.
     ///
-    /// This bypasses the `ScriptRunner` trait's `output()`-and-block API
-    /// because the worker needs to spawn the child without consuming the
-    /// caller thread, monitor it for cancellation/timeout, and capture
-    /// stdout/stderr after the fact.
+    /// The worker needs to spawn the child without consuming the caller
+    /// thread, monitor it for cancellation/timeout, and capture stdout and
+    /// stderr after the fact.
     pub fn build_command(
         script: &Path,
         args: &[String],
@@ -63,23 +57,6 @@ fn ensure_runtime_for(script: &Path) -> AppResult<()> {
         }
     }
     Ok(())
-}
-
-impl ScriptRunner for MultiScriptRunner {
-    fn run(&self, script: &Path, args: &[String]) -> AppResult<ScriptRunOutput> {
-        ensure_runtime_for(script)?;
-
-        let output = command_for_script(script)?
-            .args(args)
-            .env_remove(API_TOKEN_ENV)
-            .output()?;
-        Ok(ScriptRunOutput {
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            exit_code: output.status.code(),
-            success: output.status.success(),
-        })
-    }
 }
 
 #[cfg(test)]
@@ -175,41 +152,5 @@ mod tests {
 
         let cmd = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
         assert_eq!(cmd.get_program(), shim.as_os_str());
-    }
-
-    #[test]
-    fn test_run_simple_bash_script() {
-        let tmp = TempDir::new().unwrap();
-        let script = tmp.path().join("hello.sh");
-        fs::write(&script, "#!/bin/bash\necho hello").unwrap();
-
-        let runner = MultiScriptRunner::new();
-        let output = runner.run(&script, &[]).unwrap();
-        assert!(output.success);
-        assert_eq!(output.stdout.trim(), "hello");
-    }
-
-    #[test]
-    fn test_run_script_nonzero_exit() {
-        let tmp = TempDir::new().unwrap();
-        let script = tmp.path().join("fail.sh");
-        fs::write(&script, "#!/bin/bash\nexit 42").unwrap();
-
-        let runner = MultiScriptRunner::new();
-        let output = runner.run(&script, &[]).unwrap();
-        assert!(!output.success);
-        assert_eq!(output.exit_code, Some(42));
-    }
-
-    #[test]
-    fn test_run_script_with_args() {
-        let tmp = TempDir::new().unwrap();
-        let script = tmp.path().join("echo_arg.sh");
-        fs::write(&script, "#!/bin/bash\necho $1").unwrap();
-
-        let runner = MultiScriptRunner::new();
-        let output = runner.run(&script, &["world".to_string()]).unwrap();
-        assert!(output.success);
-        assert_eq!(output.stdout.trim(), "world");
     }
 }

@@ -33,6 +33,7 @@ pub struct SearchField {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SearchDetails {
     pub display_name: String,
     pub description: Option<String>,
@@ -145,6 +146,7 @@ impl SearchIndex {
         Ok(results)
     }
 
+    #[allow(dead_code)]
     pub fn load_details(&self, script_path: &Path) -> Result<Option<SearchDetails>, String> {
         let conn = open_connection(&self.db_path)?;
         init_db(&conn)?;

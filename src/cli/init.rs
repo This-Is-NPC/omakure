@@ -220,7 +220,7 @@ fn build_bash_template(script_id: &str) -> String {
         r#"#!/usr/bin/env bash
 set -euo pipefail
 
-# 1) Schema for the TUI
+# 1) Schema for the script
 # OMAKURE_SCHEMA_START
 # {{
 #   "Name": "{script_id}",

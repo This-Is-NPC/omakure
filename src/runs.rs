@@ -666,7 +666,7 @@ pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>
         sql.push_str(" WHERE ");
         sql.push_str(&where_clauses.join(" AND "));
     }
-    // In-flight rows (queued/running) sort to the top so the TUI history
+    // In-flight rows (queued/running) sort to the top so history consumers
     // screen and `history list --state-set all` always show the live work
     // first. Within each group we order by enqueued_at DESC (live) and
     // started_at DESC (terminal) so the most recent rows are at the top.
@@ -1452,7 +1452,7 @@ pub fn current_unix_ms() -> i64 {
 }
 
 /// Format a Unix-millisecond timestamp as `YYYY-MM-DD HH:MM` (UTC).
-/// Used by the TUI history screen.
+/// Used by history CLI and API consumers.
 pub fn format_run_timestamp(timestamp_ms: i64) -> String {
     let mut ms = timestamp_ms;
     if ms < 0 {

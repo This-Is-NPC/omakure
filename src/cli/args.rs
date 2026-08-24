@@ -1,13 +1,11 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-/// Omakure - TUI and CLI for navigating, running, and scheduling automation scripts.
+/// Omakure - CLI for running and scheduling automation scripts.
 ///
-/// Run `omakure` with no arguments to open the TUI against the global
-/// workspace. Pass a path (e.g. `omakure .`) to open the TUI against any
-/// directory without touching global history or environments.
+/// Run `omakure` with no arguments to print this help.
 ///
-/// Non-TUI surfaces:{n}
+/// CLI surfaces:{n}
 ///   run <SCRIPT>          execute a script directly{n}
 ///   queue add <SCRIPT>    push a job; `queue worker` drains it{n}
 ///   serve                 run the cron scheduler daemon{n}
@@ -35,21 +33,13 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
-    /// Open the TUI against the given directory as a session-only scripts
-    /// root. History, environments, and workspace config stay anchored to
-    /// the global workspace; only script listings, the root `index.lua`,
-    /// and an optional `<PATH>/omakure.conf` session env are read from
-    /// `<PATH>`. Mutually exclusive with `--scripts-dir`.
-    #[arg(value_name = "PATH", conflicts_with = "scripts_dir")]
-    pub path: Option<PathBuf>,
-
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Run a script without the TUI
+    /// Run a script directly
     Run(RunArgs),
 
     /// Check runtime dependencies and workspace
@@ -180,9 +170,6 @@ pub enum Commands {
     /// For a one-shot session pipe into your current shell:
     /// `eval "$(omakure completion zsh)"`.
     Completion(CompletionArgs),
-
-    /// Manage themes
-    Theme(ThemeArgs),
 
     /// Run the cron scheduler daemon for scripts declaring a `Schedule` block
     ///
@@ -645,34 +632,6 @@ pub struct CompletionArgs {
     pub shell: Shell,
 }
 
-#[derive(Args, Debug)]
-pub struct ThemeArgs {
-    #[command(subcommand)]
-    pub command: ThemeCommand,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum ThemeCommand {
-    /// List available themes
-    List,
-
-    /// Set the default theme
-    Set(ThemeSetArgs),
-
-    /// Preview a theme
-    Preview(ThemeSetArgs),
-
-    /// Print theme paths
-    Path,
-}
-
-#[derive(Args, Debug)]
-pub struct ThemeSetArgs {
-    /// Theme name
-    #[arg(value_name = "NAME")]
-    pub name: String,
-}
-
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Shell {
     Bash,
@@ -845,16 +804,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_no_args_opens_tui() {
+    fn test_parse_no_args_leaves_command_empty_for_help() {
         let cli = parse(&[]).unwrap();
-        assert!(cli.command.is_none());
-        assert!(cli.path.is_none());
-    }
-
-    #[test]
-    fn test_parse_positional_path() {
-        let cli = parse(&["/some/path"]).unwrap();
-        assert_eq!(cli.path, Some(PathBuf::from("/some/path")));
         assert!(cli.command.is_none());
     }
 
@@ -917,10 +868,8 @@ mod tests {
     }
 
     #[test]
-    fn test_omaken_list_command_is_removed() {
-        let cli = parse(&["list"]).unwrap();
-        assert!(cli.command.is_none());
-        assert_eq!(cli.path, Some(PathBuf::from("list")));
+    fn test_unknown_top_level_command_is_rejected() {
+        assert!(parse(&["list"]).is_err());
     }
 
     #[test]
@@ -1261,18 +1210,6 @@ mod tests {
                 assert_eq!(args.schema_json, Some("{}".to_string()));
             }
             _ => panic!("expected Init"),
-        }
-    }
-
-    #[test]
-    fn test_parse_theme_set() {
-        let cli = parse(&["theme", "set", "dracula"]).unwrap();
-        match cli.command.unwrap() {
-            Commands::Theme(t) => match t.command {
-                ThemeCommand::Set(args) => assert_eq!(args.name, "dracula"),
-                _ => panic!("expected Set"),
-            },
-            _ => panic!("expected Theme"),
         }
     }
 

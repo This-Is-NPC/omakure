@@ -50,9 +50,7 @@ const TOP_LEVEL_COVERAGE: &[CommandCoverage] = &[
     },
     CommandCoverage {
         command: "config",
-        coverage: Coverage::Covered(
-            "tests/cli_positional_path.rs + tests/cli_surface_e2e.rs --json",
-        ),
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs --json"),
     },
     CommandCoverage {
         command: "describe",
@@ -88,7 +86,7 @@ const TOP_LEVEL_COVERAGE: &[CommandCoverage] = &[
     },
     CommandCoverage {
         command: "scripts",
-        coverage: Coverage::Covered("tests/cli_positional_path.rs"),
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
         command: "search",
@@ -97,10 +95,6 @@ const TOP_LEVEL_COVERAGE: &[CommandCoverage] = &[
     CommandCoverage {
         command: "serve",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs --once"),
-    },
-    CommandCoverage {
-        command: "theme",
-        coverage: Coverage::Covered("tests/cli_surface_e2e.rs list/path/preview"),
     },
     CommandCoverage {
         command: "token",
@@ -236,24 +230,6 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs host-safe status probe"),
     },
     CommandCoverage {
-        command: "theme list",
-        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
-    },
-    CommandCoverage {
-        command: "theme path",
-        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
-    },
-    CommandCoverage {
-        command: "theme preview",
-        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
-    },
-    CommandCoverage {
-        command: "theme set",
-        coverage: Coverage::Excluded(
-            "mutates global theme config; list/path/preview cover safe theme surface",
-        ),
-    },
-    CommandCoverage {
         command: "token generate",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs + src/cli/token.rs"),
     },
@@ -298,14 +274,9 @@ fn command_surface_inventory_maps_all_current_commands() {
         "queue dead-letter",
         "queue stats",
         "queue worker",
-        "theme list",
-        "theme path",
-        "theme preview",
-        "theme set",
         "token generate",
     ];
-    let clap_nested =
-        clap_nested_commands(&["battery", "env", "history", "queue", "theme", "token"]);
+    let clap_nested = clap_nested_commands(&["battery", "env", "history", "queue", "token"]);
     assert_eq!(
         clap_nested, expected_nested,
         "nested clap subcommands drifted from expected set"
@@ -403,7 +374,7 @@ fn clap_nested_commands(parents: &[&str]) -> Vec<String> {
 }
 
 #[test]
-fn local_info_commands_cover_init_describe_search_doctor_help_completion_theme_and_serve() {
+fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_serve() {
     let workspace = support::TestWorkspace::new("cli_surface_info");
 
     let init = omakure(workspace.path(), &["--json", "init", "tools/info.sh"]);
@@ -461,18 +432,6 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_theme_a
     assert_success(&completion);
     assert!(String::from_utf8_lossy(&completion.stdout).contains("omakure"));
 
-    let theme_list = omakure(workspace.path(), &["theme", "list"]);
-    assert_success(&theme_list);
-    assert!(String::from_utf8_lossy(&theme_list.stdout).contains("Built-in themes"));
-
-    let theme_path = omakure(workspace.path(), &["theme", "path"]);
-    assert_success(&theme_path);
-    assert!(String::from_utf8_lossy(&theme_path.stdout).contains("Config dir"));
-
-    let theme_preview = omakure(workspace.path(), &["theme", "preview", "default"]);
-    assert_success(&theme_preview);
-    assert!(String::from_utf8_lossy(&theme_preview.stdout).contains("Theme:"));
-
     let serve_once = omakure(workspace.path(), &["serve", "--once", "--no-worker"]);
     assert_success(&serve_once);
     // Prove the one-shot loop actually started and shut down cleanly rather than
@@ -511,7 +470,6 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_theme_a
     for args in [
         ["update", "--help"].as_slice(),
         ["uninstall", "--help"].as_slice(),
-        ["theme", "set", "--help"].as_slice(),
     ] {
         let output = omakure(workspace.path(), args);
         assert_success(&output);

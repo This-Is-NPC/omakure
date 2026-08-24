@@ -23,12 +23,8 @@ pub fn script_extensions() -> &'static [&'static str] {
     &["bash", "sh", "ps1", "py"]
 }
 
-pub fn command_for_script(script: &Path) -> Result<Command, ScriptError> {
-    command_for_script_with_env(script, &[])
-}
-
-/// Like [`command_for_script`], but honors an injected environment when
-/// choosing the interpreter binary.
+/// Build a command while honoring an injected environment when choosing the
+/// interpreter binary.
 ///
 /// Per the locked spike decision (`tests/spike_command_path_resolution.rs`,
 /// task 1751): if `env` carries a `PATH` entry (e.g. a venv-prepended PATH
@@ -212,30 +208,6 @@ mod tests {
         assert!(exts.contains(&"ps1"));
         assert!(exts.contains(&"py"));
         assert_eq!(exts.len(), 4);
-    }
-
-    #[rstest]
-    #[case::bash_command_for_sh("script.sh", "bash")]
-    #[case::bash_command_for_bash("script.bash", "bash")]
-    #[case::python_command("script.py", python_program())]
-    #[case::powershell_command("script.ps1", powershell_program())]
-    fn test_command_for_script_program(#[case] path: &str, #[case] expected_program: &str) {
-        let cmd = command_for_script(Path::new(path)).unwrap();
-        assert_eq!(cmd.get_program(), expected_program);
-    }
-
-    #[test]
-    fn test_command_for_script_unsupported() {
-        let result = command_for_script(Path::new("script.txt"));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_command_for_script_ps1_has_noprofile_flag() {
-        let cmd = command_for_script(Path::new("script.ps1")).unwrap();
-        let args: Vec<_> = cmd.get_args().collect();
-        assert!(args.contains(&std::ffi::OsStr::new("-NoProfile")));
-        assert!(args.contains(&std::ffi::OsStr::new("-File")));
     }
 
     #[cfg(not(windows))]

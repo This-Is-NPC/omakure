@@ -11,9 +11,6 @@ WORKDIR /src
 # Cache dependency builds when only sources change.
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-COPY themes ./themes
-# Integration tests are not needed in the image binary, but the package
-# layout may reference them; keep the tree minimal via .dockerignore.
 
 RUN cargo build --release --bin omakure \
     && strip target/release/omakure

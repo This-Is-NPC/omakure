@@ -2,15 +2,36 @@ name: CI
 
 on:
   pull_request:
-    branches: [master]
+    branches: [test, master]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  platform:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux headless test and release build
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - name: macOS headless test and release build
+            os: macos-latest
+            target: x86_64-apple-darwin
+          - name: Windows headless test and release build
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test
+        with:
+          targets: ${{ matrix.target }}
+      # The Unix SIGTERM integration test is cfg(unix); Windows still runs the
+      # readiness and process-boundary tests and gets the same release build.
+      - name: Test headless binary
+        run: cargo test --all-targets --locked
+      - name: Build release binary
+        run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
 
   lint:
     runs-on: ubuntu-latest
@@ -19,8 +40,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      - run: cargo clippy -- -D warnings
+      - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo fmt --check
+
+  packaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --test packaging_smoke --locked
 
   release-ready:
     runs-on: ubuntu-latest

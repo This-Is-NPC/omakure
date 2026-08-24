@@ -59,10 +59,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Test headless binary
+        run: cargo test --all-targets --locked
+
       - name: Build
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
-        run: cargo build --release --bin omakure --target ${{ matrix.target }}
+        run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
 
       - name: Package
         shell: bash
@@ -76,9 +79,20 @@ jobs:
             powershell -NoProfile -Command "Compress-Archive -Path \"${dist}\\${{ matrix.bin }}\" -DestinationPath \"${dist}\\${out}\" -Force"
             rm "${dist}/${{ matrix.bin }}"
           else
-            cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "${dist}/${{ matrix.bin }}"
-            (cd "${dist}" && tar -czf "${out}" "${{ matrix.bin }}")
-            rm "${dist}/${{ matrix.bin }}"
+            bash .github/package-release.sh \
+              "target/${{ matrix.target }}/release/${{ matrix.bin }}" \
+              "${dist}/${out}"
+          fi
+
+      - name: Verify archive contains only the headless binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="dist/${APP_NAME}-${RELEASE_TAG}-${{ matrix.asset_os }}-x86_64.${{ matrix.ext }}"
+          if [[ "${{ matrix.ext }}" == "zip" ]]; then
+            powershell -NoProfile -Command '$entries = (Get-ChildItem -Path (Join-Path (Get-Location) "dist\*.zip")).FullName | ForEach-Object { [IO.Compression.ZipFile]::OpenRead($_).Entries.FullName }; if ($entries.Count -ne 1 -or $entries[0] -ne "${{ matrix.bin }}") { throw "archive must contain only ${{ matrix.bin }}" }'
+          else
+            test "$(tar -tzf "${archive}")" = "${{ matrix.bin }}"
           fi
 
       - uses: actions/upload-artifact@v4

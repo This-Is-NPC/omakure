@@ -1,6 +1,6 @@
 [tools]
 powershell = "latest"
-rust = "latest"
+rust = "1.97.1"
 
 [tasks.dev]
 description = "Build and run the bounded node-service smoke check"
@@ -13,6 +13,14 @@ run = "OMAKURE_API_TOKEN=\"$(openssl rand -hex 32)\" cargo run --bin omakure -- 
 [tasks.node-service-check]
 description = "Run node-service, CLI, HTTP, and policy integration checks"
 run = "cargo test --test node_service_e2e --test http_api_e2e --test cli_surface_e2e --test policy_e2e"
+
+[tasks.transport-certification]
+description = "Run the complete bounded Linux transport certification and cleanup matrix"
+run = "./.scripts/transport-certification.sh"
+
+[tasks.transport-certification-cleanup-test]
+description = "Verify certification cleanup after an induced failure"
+run = "./.scripts/transport-certification-cleanup-test.sh"
 
 [tasks.build]
 description = "Build the project in debug mode"

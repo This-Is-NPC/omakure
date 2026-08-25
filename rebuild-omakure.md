@@ -164,9 +164,11 @@ provide — scoped to operational management, **never surveillance**:
 2. **Portable node core — complete** — target-generated identity, `node.toml`,
    isolated peer registry, node service lifecycle, and platform adapters for
    Linux, macOS, and Windows.
-3. **Secure transport & pairing** — encrypted authenticated channels, static
-   seeds, LAN discovery, manual enrollment, and unattended signed-bundle
-   enrollment using the target-generated identity.
+3. **Secure transport & pairing — complete for the bounded direct foundation** —
+   encrypted authenticated channels, static peers, LAN discovery, manual
+   enrollment, unattended signed-bundle enrollment, revocation, replay
+   protection, and reset/replacement recovery. Nostr fallback and later fleet
+   planes are not included in this phase.
 4. **Health plane** — Pulse, Profile, Signal, and Conductor fleet status.
 5. **Script execution** — Lua as an embedded first-class script kind; retain
    Bash, PowerShell, and Python through host runtimes.
@@ -222,7 +224,8 @@ approved baselines, and revokes node trust.
 
 This section is an inventory of what is shipped today. It is deliberately
 separate from the future node contract below; it must not be read as evidence
-that the mesh, identity, trust, or MDM features have been implemented.
+that the later health, remote-management, MDM, or Lua features have been
+implemented.
 
 - The package is `omakure 0.3.0`, a headless Rust CLI and authenticated HTTP
   management API.
@@ -237,8 +240,10 @@ that the mesh, identity, trust, or MDM features have been implemented.
 - Shipped script kinds are Bash, PowerShell, and Python. The portable node
   foundation includes identity, `node.toml`, isolated `node.sqlite`, explicit
   trust management, service lifecycle, reset, and platform path validation.
-- Transport, discovery, Nostr, enrollment, Pulses, Profiles, Signals, remote
-  Cues, campaigns, MDM, and Lua remain future work.
+- Direct transport, trust-neutral discovery, manual enrollment, signed-bundle
+  enrollment, static-peer lifecycle, revocation, replay protection, and
+  reset/replacement recovery are shipped. Nostr, Pulses, Profiles, Signals,
+  remote Cues, campaigns, MDM, and Lua remain future work.
 - The production identity implementation is the reviewed RustCrypto `k256`
   BIP-340 adapter documented below; no second identity implementation exists.
 
@@ -564,8 +569,8 @@ and productivity scoring are excluded.
 | Corruption or insecure permissions | Fail closed and preserve evidence; never replace corrupt identity/database with fresh state. |
 | Malicious relay or replay | End-to-end authenticated envelopes, expiry, nonces, local replay keys, durable Cue IDs, and direct-channel preference. |
 
-The implementation task must add tests for these failure modes before any
-transport or MDM implementation is accepted. This document freezes the node
-foundation and future direction; it does not claim transport, enrollment, or
-those future tests/features are already shipped. The direct transport gate is
-the authoritative stop record until an owner-approved construction replaces it.
+Future implementation tasks must add tests for these failure modes before any
+health-plane, remote-management, or MDM feature is accepted. This document
+freezes the node foundation and future direction; direct transport, discovery,
+and enrollment are shipped only within the bounded foundation described above.
+The direct transport gate is the authoritative stop record for this phase.

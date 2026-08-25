@@ -1327,16 +1327,19 @@ pub fn probe(
             &registry,
             remote.node_id(),
             None,
-            TransportError::IdentityMismatch,
+            &TransportError::IdentityMismatch,
         )?;
         return Err(TransportError::IdentityMismatch.into());
     }
     let peer = registry.transport_peer(remote.node_id(), &hex(remote.identity_key()))?;
-    authorize_peer(
+    if let Err(error) = authorize_peer(
         &remote,
         peer.as_ref().map(peer_authorization),
         unix_seconds(),
-    )?;
+    ) {
+        audit_error(&registry, remote.node_id(), None, &error)?;
+        return Err(error.into());
+    }
     let mut session = handshake.into_session()?;
     let mut nonce = [0u8; 16];
     OsRng.fill_bytes(&mut nonce);
@@ -1695,7 +1698,7 @@ fn audit_error(
     registry: &NodeRegistry,
     node_id: &str,
     session_id: Option<&[u8; 32]>,
-    error: TransportError,
+    error: &TransportError,
 ) -> Result<(), DirectServiceError> {
     registry.record_transport_audit(
         "probe_rejected",

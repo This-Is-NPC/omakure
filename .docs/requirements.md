@@ -32,6 +32,8 @@ must be updated in the same change.
 | FR-022 | `node serve` validates machine state, initializes one identity and empty trust registry when absent, then composes HTTP, optional workers, and optional scheduler with coordinated shutdown and readiness gates. | `src/cli/node_service.rs`, `src/operations/node.rs`, `src/cli/args.rs` |
 | FR-023 | Health and readiness are unauthenticated; other HTTP routes require scoped bearer tokens or explicitly granted legacy capabilities. | `src/auth.rs`, `src/cli/api.rs`, `src/cli/node_service.rs` |
 | FR-024 | Deploy policy controls route groups, auth modes, body limits, script limits, environment use, secret use, and node-service scheduler/worker defaults. | `src/policy.rs`, `src/cli/api.rs`, `src/cli/node_service.rs` |
+| FR-025 | Direct transport provides authenticated encrypted sessions with bounded framing, static peer validation, trust authorization, replay protection, revocation handling, and redacted audit outcomes. | `src/direct_transport.rs`, `src/direct_service.rs`, `src/node_transport.rs` |
+| FR-026 | LAN discovery is bounded and trust-neutral; manual enrollment and signed enrollment bundles validate identity binding, audience, expiry, replay, authority, and revocation before trust mutation. | `src/discovery.rs`, `src/enrollment.rs`, `src/node_registry.rs` |
 
 ## Non-functional requirements
 
@@ -44,6 +46,7 @@ must be updated in the same change.
 | NFR-005 | Bearer tokens are hashed, scopes are explicit, token values are redacted from logs/responses, and auth failures do not reveal secrets. | `src/auth.rs`, `src/cli/api.rs` |
 | NFR-006 | Release CI tests all targets, denies clippy warnings, checks formatting, verifies binary-only archives, and requires matching release notes. | `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `tests/packaging_smoke.rs` |
 | NFR-007 | The shipped package contains no TUI/theme/widget code or removed direct dependencies. | `tests/packaging_smoke.rs`, `Cargo.toml` |
+| NFR-008 | Linux CI runs the bounded four-service transport certification; Linux, macOS, and Windows CI run native protocol/build/lifecycle coverage without Docker assumptions. | `.scripts/transport-certification.sh`, `.github/workflows/ci.yml` |
 
 ## Business rules
 
@@ -59,3 +62,4 @@ must be updated in the same change.
 | BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api.rs`, `src/policy.rs` |
 | BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args.rs`, `src/main.rs`, `tests/packaging_smoke.rs` |
 | BR-010 | Machine identity and trust are independent of script workspaces; normal update, replacement, restart, and uninstall preserve node state, while `node reset --confirmed` removes it and creates no replacement until the next service start. | `src/node.rs`, `src/node_identity.rs`, `src/operations/node.rs`, `src/cli/node.rs` |
+| BR-011 | Direct transport never grants trust or authorization by handshake alone; only explicit enrollment/trust operations may mutate active peer state, and malformed, oversized, downgraded, spoofed, wrong-target, replayed, expired, or revoked inputs fail closed. | `src/direct_service.rs`, `src/node_registry.rs`, `tests/direct_transport_contract.rs` |

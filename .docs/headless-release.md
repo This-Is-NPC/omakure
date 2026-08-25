@@ -14,6 +14,9 @@ accurately recorded without being presented as current product guidance.
   SQLite run state, queue workers, traces, and cron scheduling.
 - Deployment: scoped tokens-file auth is preferred; legacy local token auth is
   retained for migration.
+- Node transport: direct encrypted transport, trust-neutral discovery, manual
+  enrollment, and signed-bundle enrollment are shipped. Nostr, Pulses, Profiles,
+  Signals, remote Cues, campaigns, MDM, and Lua remain outside this release.
 
 ## Intentional breaking removals
 
@@ -31,7 +34,10 @@ cargo test --all-targets --locked
 cargo clippy --all-targets --locked -- -D warnings
 cargo fmt --check
 cargo test --test packaging_smoke --locked
+cargo test --test direct_transport_contract --locked
+cargo test --test direct_transport_e2e --locked
 cargo tree --edges normal
+mise run transport-certification
 ```
 
 The dependency tree must not reintroduce `ratatui`, `crossterm`, `rattles`, or
@@ -52,12 +58,14 @@ x86_64-unknown-linux-gnu`).
 | `omakure` release binary | 10,520,464 bytes | 8,815,352 bytes | -1,705,112 bytes (-16.21%) |
 | Direct normal dependencies | 27 | 23 | -4 |
 
-Current local verification passed: `cargo test --all-targets --locked` (816 passed,
-0 failed), `mise run lint`, `cargo test --test packaging_smoke --locked`,
-Compose/workflow YAML parsing, lifecycle regression tests, and stale-engine
-negative scans. Docker image build and hosted platform execution are CI jobs,
-not local evidence. Historical binary-size and dependency measurements above
-remain unchanged; the release archive contract is still binary-only.
+The historical task #2678 snapshot records `816 passed`; current local verification
+passed: `cargo test --all-targets --locked` (863 passed,
+0 failed, twice), `mise run lint`, `cargo test --test packaging_smoke --locked`,
+Compose/workflow YAML parsing, lifecycle regression tests, stale-engine negative
+scans, and two consecutive bounded transport certification runs. The local
+Docker image/topology evidence does not replace hosted macOS/Windows execution.
+Historical binary-size and dependency measurements above remain unchanged; the
+release archive contract is still binary-only.
 
 Hosted Linux, macOS, and Windows CI/release runs remain pending. They are not
 claimed by this local snapshot; task #2678 remains blocked on that evidence.

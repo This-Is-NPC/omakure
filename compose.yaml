@@ -89,7 +89,7 @@ services:
     image: omakure-node:enrollment-e2e
     hostname: enrollment-target
     environment:
-      "OMAKURE_TOKENS_FILE": /run/secrets/enrollment-e2e-tokens.toml
+      "OMAKURE_TOKENS_FILE": /run/secrets/enrollment-target-tokens.toml
     depends_on:
       enrollment-target-config-init:
         condition: service_completed_successfully
@@ -111,7 +111,8 @@ services:
     volumes:
       - enrollment-target-state:/var/lib/omakure
       - enrollment-target-config:/etc/omakure
-      - "${OMAKURE_ENROLLMENT_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TOKENS_FILE}:/run/secrets/enrollment-e2e-tokens.toml:ro"
+      - "${OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE}:/run/secrets/enrollment-target-tokens.toml:ro"
+      - "${OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE:?set OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE}:/run/secrets/client.token:ro"
     ports:
       - "127.0.0.1:17878:7878"
       - "127.0.0.1:17988:7988"
@@ -125,7 +126,7 @@ services:
       enrollment-candidate-config-init:
         condition: service_completed_successfully
     environment:
-      "OMAKURE_TOKENS_FILE": /run/secrets/enrollment-e2e-tokens.toml
+      "OMAKURE_TOKENS_FILE": /run/secrets/enrollment-candidate-tokens.toml
     command:
       - node
       - serve
@@ -144,7 +145,8 @@ services:
     volumes:
       - enrollment-candidate-state:/var/lib/omakure
       - enrollment-candidate-config:/etc/omakure
-      - "${OMAKURE_ENROLLMENT_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TOKENS_FILE}:/run/secrets/enrollment-e2e-tokens.toml:ro"
+      - "${OMAKURE_ENROLLMENT_CANDIDATE_TOKENS_FILE:?set OMAKURE_ENROLLMENT_CANDIDATE_TOKENS_FILE}:/run/secrets/enrollment-candidate-tokens.toml:ro"
+      - "${OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE:?set OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE}:/run/secrets/client.token:ro"
     ports:
       - "127.0.0.1:17879:7878"
       - "127.0.0.1:17989:7988"

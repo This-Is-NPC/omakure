@@ -29,6 +29,8 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | `mise run dev` | bounded node-service health/readiness smoke check |
 | `mise run node` | run the node service in the foreground |
 | `mise run node-service-check` | focused CLI/HTTP/node-service integration tests |
+| `mise run transport-certification` | one bounded Linux command covering canonical Compose, production tests, retained Docker suites, direct Docker transport, and induced-failure cleanup |
+| `mise run transport-certification-cleanup-test` | internal/diagnostic induced-failure cleanup verification |
 | `mise run coverage` | tarpaulin coverage report |
 | `mise run install` | `cargo install --path .` |
 
@@ -62,7 +64,43 @@ cargo test --test node_service_e2e
 cargo test --test http_api_e2e
 cargo test --test policy_e2e
 cargo test --test packaging_smoke
+cargo test --test direct_transport_contract
+cargo test --test direct_transport_e2e
+mise run transport-certification
 ```
+
+## Certification toolchain
+
+The certification gate requires Linux, Docker Engine 27 or newer, Docker
+Compose v2.30 or newer, `jq` 1.8 or newer, SQLite 3.40 or newer, Cargo/Rust
+matching the repository toolchain, and GNU `timeout`. Check the exact local
+versions with:
+
+The repository pins Rust `1.97.1` in `mise.toml` and CI. The production image
+pins its Dockerfile frontend to
+`docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32`,
+uses the Debian Bookworm image digest in `Dockerfile`, and installs these exact
+package versions: `bash=5.2.15-2+b13`, `ca-certificates=20250419~deb12u1`,
+`curl=7.88.1-10+deb12u15`, `git=1:2.39.5-0+deb12u3`,
+`jq=1.6-2.1+deb12u2`, and `tini=0.19.0-1+b3`. If Debian removes one of these
+versions from its mutable mirrors, the image build fails rather than silently
+selecting a different package.
+
+```bash
+docker version --format '{{.Client.Version}} {{.Server.Version}}'
+docker compose version --short
+jq --version
+sqlite3 --version
+cargo --version
+rustc --version
+timeout --version | head -n 1
+```
+
+The runtime image pins the Rust and Debian Bookworm base manifests by digest and
+fails the build if the recorded apt package versions are unavailable. Record
+the resulting image package manifest with `docker run --rm
+omakure-node:transport-certification dpkg-query -W` when producing a release
+image.
 
 The integration suites launch the compiled binary, use temporary workspaces,
 exercise real SQLite state, and test HTTP readiness/authentication. Keep

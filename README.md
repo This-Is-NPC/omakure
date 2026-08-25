@@ -106,20 +106,23 @@ Trust mutations require explicit confirmation, actor, and reason evidence.
 one machine identity and an empty trust registry on first start, preserves
 them across restarts, workspaces, updates, and uninstall, and requires
 `omakure node reset --confirmed` for destructive removal. Peer discovery,
-transport, Nostr, enrollment, Pulses, remote Cues, campaigns, MDM, and Lua
-remain future work. Installed-service ownership and ACLs are platform-specific
-release gates; this Linux development run does not fabricate macOS or Windows
-runtime evidence.
+direct transport, LAN discovery, manual enrollment, and signed-bundle enrollment
+are implemented and covered by focused protocol tests plus the bounded Linux
+certification gate. Nostr, Pulses, Profiles, Signals, remote Cues, campaigns,
+MDM, and Lua remain explicitly deferred. Installed-service ownership and ACLs
+are platform-specific release gates; this Linux development run does not
+fabricate macOS or Windows runtime evidence.
 
 ## Documentation
 
 - `rebuild-omakure.md`: canonical future product direction and node contract
-- `.docs/direct-transport-contract.md`: owner-selected direct transport/enrollment contract under technical review; no transport is implemented
+- `.docs/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
 - `.docs/README.md`: documentation index
 - `.docs/usage.md`: CLI and HTTP workflows
 - `.docs/ai-interface.md`: JSON, queue, history, trace, and agent contract
 - `.docs/http-api.md`: routes, authentication, policy, and parity
 - `.docs/deployment.md`: node-service/container deployment and security
+- `.docs/recovery.md`: restart, revocation, reset, and identity-replacement recovery
 - `.docs/workspace.md`: on-disk state and ownership
 - `.docs/scripts-path.md`: workspace resolution and ignore files
 - `.docs/how-to-create-a-script.md`: schema and script authoring

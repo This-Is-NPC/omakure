@@ -16,7 +16,8 @@ machine-owned single-process `node serve` service.
 | Errors | thiserror 1.0 | Typed domain and application errors |
 | Scheduling | cron 0.12, chrono 0.4 | Schedule parsing and next-fire calculation |
 | Processes | signal-hook 0.3, daemonize 0.5 | Graceful workers and Unix daemon mode |
-| Security | argon2, subtle, sha2, rand | Token hashing, comparison, and generation |
+| Security | argon2, subtle, sha2, rand, k256, snow | Token hashing, BIP-340 identity, Noise transport, comparison, and generation |
+| Resolution | hickory-resolver | Bounded async static-peer DNS resolution |
 | Filesystem | dirs 5, fs2 | Platform paths and file coordination |
 | Windows | winreg 0.52 | Documents path and install-path handling |
 
@@ -60,6 +61,11 @@ src/
 ├── policy.rs                deploy-time route and runtime policy
 ├── secrets.rs               secret references and provider resolution
 ├── redaction.rs             output and trace redaction
+├── direct_transport.rs      Noise framing, certificates, envelopes, and replay limits
+├── direct_service.rs        production direct listener and peer admission
+├── discovery.rs              bounded trust-neutral LAN discovery
+├── enrollment.rs             manual and signed-bundle enrollment records
+├── node_transport.rs         node-owned transport state and static peers
 └── installer.rs             standalone installer binary
 ```
 
@@ -87,15 +93,18 @@ src/
   same operations used by the CLI and map operation errors to HTTP statuses.
 - `node.sqlite` is owned only by the node service and trust operations; it is
   never the workspace-owned `.history/runs.sqlite` database.
-- The portable node foundation is complete. Transport, discovery, Nostr,
-  enrollment, Pulses, remote Cues, campaigns, MDM, and Lua remain future
+- The portable node foundation includes direct Noise transport, trust-neutral LAN
+  discovery, manual enrollment, signed-bundle enrollment, static-peer lifecycle,
+  revocation, replay protection, and bounded transport audit events. Nostr,
+  Pulses, Profiles, Signals, remote Cues, campaigns, MDM, and Lua remain future
   features.
 
 ## Release and tests
 
-CI runs all targets, clippy with warnings denied, formatting, packaging checks,
-and release-readiness validation. Release archives contain only the matching
-`omakure` executable (or `omakure.exe` on Windows). See
+CI runs all targets, the native protocol/build/lifecycle matrix, the bounded
+Linux multi-node transport certification, clippy with warnings denied, formatting,
+packaging checks, and release-readiness validation. Release archives contain
+only the matching `omakure` executable (or `omakure.exe` on Windows). See
 `release-artifacts.md` and `headless-release.md`.
 
 Use `cargo test` for unit and integration coverage, `cargo clippy --all-targets

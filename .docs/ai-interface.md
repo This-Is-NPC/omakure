@@ -6,6 +6,14 @@ contract — every AI-relevant verb produces a stable JSON envelope on
 stdout when called with `--json`, and the run history is persisted in a
 queryable SQLite database.
 
+## Certification command
+
+`help-ai` remains generated from the compiled CLI command tree and is unchanged
+by the repository-level transport certification runner. The bounded Linux gate
+is invoked through `mise run transport-certification` or
+`.scripts/transport-certification.sh`; it is not an AI-facing node verb and does
+not add a second protocol surface.
+
 ## Trust model
 
 **The AI is a full user. Everything is audited.**

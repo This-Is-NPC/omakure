@@ -1,11 +1,10 @@
 # Direct Transport and Enrollment Contract
 
-**Status: OWNER-APPROVED DESIGN UNDER TECHNICAL REVIEW.** This document freezes the direct transport and
-enrollment protocol for later implementation. It is not a transport
-implementation: this repository still has no direct listener, enrollment
-exchange, relay, or production Noise dependency. Dependent implementation work
-must implement these bytes and state transitions without inventing a second
-wire format.
+**Status: IMPLEMENTED CONTRACT.** This document freezes the direct transport
+and enrollment protocol implemented by the production node listener, discovery
+service, and node registry. It remains the compatibility and review contract;
+dependent work must use these bytes and state transitions without inventing a
+second wire format.
 
 ## Decision
 
@@ -23,11 +22,9 @@ transport key. The X25519 key is channel material only; it never becomes a
 `node_id`, signs an application envelope, or creates trust. A signed transport
 certificate binds the two materials before the channel is accepted.
 
-The selected construction is reviewed for protocol composition in this gate;
-the future production implementation still requires dependency review, locked
-cross-platform builds, and implementation-level security review. The public
-fixture is executable against the pinned `snow` implementation and contains
-only published test inputs.
+The selected construction is covered by protocol fixtures, direct transport
+integration tests, and the bounded Linux multi-node certification. Cross-platform
+native protocol/build/lifecycle coverage remains in the hosted CI matrix.
 
 ## Version and Domains
 

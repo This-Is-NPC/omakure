@@ -9,60 +9,79 @@ use std::fs;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-const COMPOSE_PROJECT: &str = "omakure";
 const TARGET_API: &str = "http://127.0.0.1:17878";
+
+fn compose_project() -> &'static str {
+    static PROJECT: OnceLock<String> = OnceLock::new();
+    PROJECT
+        .get_or_init(|| format!("omakure-enrollment-{}", std::process::id()))
+        .as_str()
+}
+
+fn bounded_command(program: &str) -> Command {
+    let mut command = Command::new("timeout");
+    command.args(["--foreground", "--kill-after=10s", "120s", program]);
+    command
+}
 
 struct ComposeGuard {
     root: PathBuf,
     _tokens_dir: TempDir,
+    finalized: bool,
 }
 
 impl ComposeGuard {
     fn new() -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let tokens_dir = TempDir::new().expect("create ephemeral enrollment token directory");
-        let tokens_path = tokens_dir.path().join("tokens.toml");
-        let generated = Command::new(env!("CARGO_BIN_EXE_omakure"))
-            .args([
-                "--json",
-                "token",
-                "generate",
-                "--id",
-                "enrollment-e2e",
-                "--scope",
-                "node:read",
-                "--scope",
-                "enrollment:read",
-                "--scope",
-                "enrollment:write",
-                "--scope",
-                "discovery:read",
-            ])
-            .output()
-            .expect("generate ephemeral enrollment token");
-        assert!(
-            generated.status.success(),
-            "token generation failed: {}",
-            output_text(&generated)
+        let (target_tokens, target_client) = generate_auth(tokens_dir.path(), "enrollment-target");
+        let (candidate_tokens, candidate_client) =
+            generate_auth(tokens_dir.path(), "enrollment-candidate");
+        std::env::set_var("OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE", &target_tokens);
+        std::env::set_var("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE", &target_client);
+        std::env::set_var(
+            "OMAKURE_ENROLLMENT_CANDIDATE_TOKENS_FILE",
+            &candidate_tokens,
         );
-        let generated: Value = serde_json::from_slice(&generated.stdout).expect("token JSON");
-        let token = generated["data"]["token"]
-            .as_str()
-            .expect("generated plaintext token")
-            .to_string();
-        let entry = generated["data"]["tokens_file_entry"]
-            .as_str()
-            .expect("generated tokens file entry");
-        fs::write(&tokens_path, format!("version = 1\n\n{entry}"))
-            .expect("write ephemeral enrollment tokens file");
-        std::env::set_var("OMAKURE_ENROLLMENT_TOKENS_FILE", &tokens_path);
-        std::env::set_var("OMAKURE_ENROLLMENT_E2E_TOKEN", token);
-        compose(&root, &["down", "-v"]);
+        std::env::set_var(
+            "OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE",
+            &candidate_client,
+        );
+        let guard = Self {
+            root,
+            _tokens_dir: tokens_dir,
+            finalized: false,
+        };
+        guard.start();
+        guard
+    }
+
+    fn start(&self) {
+        if std::env::var_os("OMAKURE_E2E_INDUCE_PARTIAL_UP").is_some() {
+            let partial = compose(&self.root, &["up", "--build", "-d", "enrollment-target"]);
+            assert!(partial.status.success(), "partial Compose setup failed");
+            let failed = compose(
+                &self.root,
+                &[
+                    "up",
+                    "--build",
+                    "-d",
+                    "enrollment-target",
+                    "missing-induced-failure-service",
+                ],
+            );
+            assert!(
+                !failed.status.success(),
+                "induced Compose failure unexpectedly passed"
+            );
+            panic!("induced partial-up failure");
+        }
         let output = compose(
-            &root,
+            &self.root,
             &[
                 "up",
                 "--build",
@@ -76,23 +95,153 @@ impl ComposeGuard {
             "docker compose up failed: {}",
             output_text(&output)
         );
-        Self {
-            root,
-            _tokens_dir: tokens_dir,
-        }
     }
+
+    fn finalize(mut self) {
+        if let Err(error) = cleanup(&self.root) {
+            panic!("enrollment Docker cleanup failed: {error}");
+        }
+        self.finalized = true;
+    }
+}
+
+fn generate_auth(directory: &Path, id: &str) -> (PathBuf, PathBuf) {
+    let generated = bounded_command(env!("CARGO_BIN_EXE_omakure"))
+        .args([
+            "--json",
+            "token",
+            "generate",
+            "--id",
+            id,
+            "--scope",
+            "node:read",
+            "--scope",
+            "enrollment:read",
+            "--scope",
+            "enrollment:write",
+            "--scope",
+            "discovery:read",
+        ])
+        .output()
+        .expect("generate ephemeral enrollment token");
+    if !generated.status.success() {
+        panic!(
+            "token generation failed: status={} stderr={}",
+            generated.status,
+            safe_generation_stderr(&generated)
+        );
+    }
+    let generated: Value = serde_json::from_slice(&generated.stdout).expect("token JSON");
+    let token = generated["data"]["token"]
+        .as_str()
+        .expect("generated plaintext token");
+    let entry = generated["data"]["tokens_file_entry"]
+        .as_str()
+        .expect("generated tokens file entry");
+    let tokens_path = directory.join(format!("{id}.tokens.toml"));
+    let client_path = directory.join(format!("{id}.client.token"));
+    fs::write(&tokens_path, format!("version = 1\n\n{entry}"))
+        .expect("write ephemeral enrollment tokens file");
+    fs::write(&client_path, token).expect("write ephemeral enrollment client token");
+    (tokens_path, client_path)
 }
 
 impl Drop for ComposeGuard {
     fn drop(&mut self) {
-        let _ = compose(&self.root, &["down", "-v"]);
+        if !self.finalized {
+            if let Err(error) = cleanup(&self.root) {
+                eprintln!("enrollment Docker cleanup after panic failed: {error}");
+            }
+        }
     }
 }
 
+fn cleanup(root: &Path) -> Result<(), String> {
+    let mut failures = Vec::new();
+    let down = compose(root, &["down", "--volumes", "--remove-orphans"]);
+    if !down.status.success() {
+        failures.push(format!(
+            "compose down status={} stderr={}",
+            down.status,
+            safe_stderr(&down)
+        ));
+    }
+    for resource in ["container", "network", "volume"] {
+        let output = bounded_command("docker")
+            .args([
+                resource,
+                "ls",
+                "-q",
+                "--filter",
+                &format!("label=com.docker.compose.project={}", compose_project()),
+            ])
+            .output();
+        match output {
+            Ok(output) if !output.status.success() => failures.push(format!(
+                "inspect {resource} status={} stderr={}",
+                output.status,
+                safe_stderr(&output)
+            )),
+            Ok(output) if !String::from_utf8_lossy(&output.stdout).trim().is_empty() => {
+                failures.push(format!("project-labeled {resource} remains"));
+            }
+            Ok(_) => {}
+            Err(error) => failures.push(format!("inspect {resource}: {error}")),
+        }
+    }
+    cleanup_result(failures)
+}
+
+fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
+    }
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::cleanup_result;
+
+    #[test]
+    fn cleanup_reports_all_failures() {
+        let error = cleanup_result(vec!["down failed".into(), "network remains".into()])
+            .expect_err("cleanup failure should be returned");
+        assert!(error.contains("down failed"));
+        assert!(error.contains("network remains"));
+    }
+}
+
+#[test]
+#[ignore]
+fn cleanup_after_induced_partial_up() {
+    std::env::set_var("OMAKURE_E2E_INDUCE_PARTIAL_UP", "1");
+    let result = std::panic::catch_unwind(ComposeGuard::new);
+    std::env::remove_var("OMAKURE_E2E_INDUCE_PARTIAL_UP");
+    assert!(result.is_err(), "induced partial-up should fail");
+    cleanup(&PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        .expect("induced partial-up cleanup should leave no resources");
+}
+
+fn safe_stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).trim().to_string()
+}
+
+fn safe_generation_stderr(output: &Output) -> String {
+    let stderr = safe_stderr(output);
+    let lower = stderr.to_ascii_lowercase();
+    assert!(
+        !lower.contains("bearer ") && !lower.contains("$argon2") && !lower.contains("token ="),
+        "token generation stderr contained sensitive material"
+    );
+    stderr
+}
+
 fn compose(root: &Path, args: &[&str]) -> Output {
-    Command::new("docker")
+    bounded_command("docker")
         .current_dir(root)
-        .args(["compose", "-p", COMPOSE_PROJECT])
+        .args(["compose", "-p", compose_project()])
         .args(args)
         .output()
         .expect("run docker compose")
@@ -100,10 +249,10 @@ fn compose(root: &Path, args: &[&str]) -> Output {
 
 fn exec(service: &str, args: &[&str]) -> Output {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut command = Command::new("docker");
+    let mut command = bounded_command("docker");
     command
         .current_dir(root)
-        .args(["compose", "-p", COMPOSE_PROJECT, "exec", "-T", service])
+        .args(["compose", "-p", compose_project(), "exec", "-T", service])
         .args(args);
     command.output().expect("run docker compose exec")
 }
@@ -117,7 +266,7 @@ fn container_ip(service: &str) -> String {
         output_text(&id)
     );
     let id = String::from_utf8_lossy(&id.stdout).trim().to_string();
-    let output = Command::new("docker")
+    let output = bounded_command("docker")
         .args([
             "inspect",
             "-f",
@@ -189,19 +338,42 @@ fn transport_ready(service: &str) -> bool {
 }
 
 fn curl(method: &str, url: &str, body: Option<&str>) -> Value {
-    let mut args = vec!["--fail", "--silent", "--show-error", "-X", method, url];
+    let mut args = vec![
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--connect-timeout",
+        "3",
+        "--max-time",
+        "10",
+        "-X",
+        method,
+        url,
+    ];
     let body_arg = body.map(str::to_string);
-    let token = std::env::var("OMAKURE_ENROLLMENT_E2E_TOKEN")
-        .expect("ephemeral enrollment token is configured");
-    let auth_header = format!("Authorization: Bearer {token}");
+    let client_file = if url.contains(":17879/") {
+        std::env::var_os("OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE").expect("candidate client file")
+    } else {
+        std::env::var_os("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE").expect("target client file")
+    };
+    let token = fs::read_to_string(client_file).expect("read protected enrollment client token");
+    let header_file = tempfile::NamedTempFile::new().expect("create curl header file");
+    fs::write(
+        header_file.path(),
+        format!("Authorization: Bearer {token}\n"),
+    )
+    .expect("write curl header file");
+    let header_arg = format!("@{}", header_file.path().display());
     if let Some(body) = body_arg.as_deref() {
-        args.extend(["-H", "Content-Type: application/json", "-H"]);
-        args.push(&auth_header);
+        args.extend(["-H", "Content-Type: application/json", "-H", &header_arg]);
         args.extend(["--data", body]);
     } else {
-        args.extend(["-H", &auth_header]);
+        args.extend(["-H", &header_arg]);
     }
-    let output = Command::new("curl").args(args).output().expect("run curl");
+    let output = bounded_command("curl")
+        .args(args)
+        .output()
+        .expect("run curl");
     assert!(
         output.status.success(),
         "curl failed: {}",
@@ -226,12 +398,12 @@ fn decode_hex(value: &str) -> Vec<u8> {
 fn copy_from_container(service: &str, source: &str, destination: &Path) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let destination = destination.to_str().expect("temporary path is UTF-8");
-    let output = Command::new("docker")
+    let output = bounded_command("docker")
         .current_dir(root)
         .args([
             "compose",
             "-p",
-            COMPOSE_PROJECT,
+            compose_project(),
             "cp",
             &format!("{service}:{source}"),
             destination,
@@ -341,7 +513,7 @@ fn registry_snapshot(path: &Path) -> RegistrySnapshot {
 #[test]
 #[ignore = "requires Docker and intentionally runs the full two-container transaction"]
 fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
-    let _compose = ComposeGuard::new();
+    let compose_guard = ComposeGuard::new();
     wait_for_health();
     let target_endpoint = format!("{}:7988", container_ip("enrollment-target"));
 
@@ -637,4 +809,5 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         json_output(&accepted_after_restart)["data"]["accepted"],
         true
     );
+    compose_guard.finalize();
 }

@@ -100,6 +100,23 @@ curl http://127.0.0.1:7878/v1/ready
 All other routes require `Authorization: Bearer <token>`. See `http-api.md`
 for routes and `deployment.md` for policy and container operation.
 
+## Transport certification
+
+The repository's bounded Linux certification uses four isolated Compose services
+and production node listeners. It covers encrypted direct probes, malformed,
+oversized, downgraded, expired, forged, identity-mismatched, wrong-target,
+untrusted, and exact-replay ingress, durable redacted audits with unchanged
+registry-state snapshots, static-peer locator validation, partition/reconnect,
+revocation, identity reset/replacement, and the retained discovery/manual/
+signed-bundle suites.
+
+```bash
+mise run transport-certification
+```
+
+This is a development and CI gate, not a general fleet launcher. Nostr, Pulses,
+Profiles, Signals, remote Cues, campaigns, MDM, and Lua are outside this scope.
+
 ## Scheduling and local lifecycle
 
 ```bash

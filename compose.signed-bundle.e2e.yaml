@@ -71,7 +71,7 @@ services:
       signed-authority-token-init:
         condition: service_completed_successfully
     environment:
-      OMAKURE_TOKENS_FILE: /run/secrets/e2e-tokens.toml
+      OMAKURE_TOKENS_FILE: /run/secrets/management-tokens.toml
     command:
       - node
       - serve
@@ -82,13 +82,14 @@ services:
       - 0.0.0.0:7988
       - --allow-non-loopback-direct
       - --tokens-file
-      - /run/secrets/e2e-tokens.toml
+      - /run/secrets/management-tokens.toml
       - --bootstrap-token-file
       - /run/secrets/bootstrap-token/bootstrap.token
     volumes:
       - signed-authority-state:/var/lib/omakure
       - signed-authority-config:/etc/omakure
-      - "${OMAKURE_ENROLLMENT_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TOKENS_FILE}:/run/secrets/e2e-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_AUTHORITY_TOKENS:?set OMAKURE_SIGNED_AUTHORITY_TOKENS}:/run/secrets/management-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_AUTHORITY_CURL:?set OMAKURE_SIGNED_AUTHORITY_CURL}:/run/secrets/curl.conf:ro"
       - signed-authority-token:/run/secrets/bootstrap-token
       - "${OMAKURE_SIGNED_AUTHORITY_A_BUNDLE:?set OMAKURE_SIGNED_AUTHORITY_A_BUNDLE}:/run/secrets/target-a.bundle:ro"
 
@@ -103,7 +104,7 @@ services:
       signed-target-a-token-init:
         condition: service_completed_successfully
     environment:
-      OMAKURE_TOKENS_FILE: /run/secrets/e2e-tokens.toml
+      OMAKURE_TOKENS_FILE: /run/secrets/management-tokens.toml
     command:
       - node
       - serve
@@ -114,13 +115,14 @@ services:
       - 0.0.0.0:7988
       - --allow-non-loopback-direct
       - --tokens-file
-      - /run/secrets/e2e-tokens.toml
+      - /run/secrets/management-tokens.toml
       - --bootstrap-token-file
       - /run/secrets/bootstrap-token/bootstrap.token
     volumes:
       - signed-target-a-state:/var/lib/omakure
       - signed-target-a-config:/etc/omakure
-      - "${OMAKURE_ENROLLMENT_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TOKENS_FILE}:/run/secrets/e2e-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_TARGET_A_TOKENS:?set OMAKURE_SIGNED_TARGET_A_TOKENS}:/run/secrets/management-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_TARGET_A_CURL:?set OMAKURE_SIGNED_TARGET_A_CURL}:/run/secrets/curl.conf:ro"
       - signed-target-a-token:/run/secrets/bootstrap-token
       - "${OMAKURE_SIGNED_TARGET_A_BUNDLE:?set OMAKURE_SIGNED_TARGET_A_BUNDLE}:/run/secrets/target-a.bundle:ro"
 
@@ -135,7 +137,7 @@ services:
       signed-target-b-token-init:
         condition: service_completed_successfully
     environment:
-      OMAKURE_TOKENS_FILE: /run/secrets/e2e-tokens.toml
+      OMAKURE_TOKENS_FILE: /run/secrets/management-tokens.toml
     command:
       - node
       - serve
@@ -146,13 +148,14 @@ services:
       - 0.0.0.0:7988
       - --allow-non-loopback-direct
       - --tokens-file
-      - /run/secrets/e2e-tokens.toml
+      - /run/secrets/management-tokens.toml
       - --bootstrap-token-file
       - /run/secrets/bootstrap-token/bootstrap.token
     volumes:
       - signed-target-b-state:/var/lib/omakure
       - signed-target-b-config:/etc/omakure
-      - "${OMAKURE_ENROLLMENT_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TOKENS_FILE}:/run/secrets/e2e-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_TARGET_B_TOKENS:?set OMAKURE_SIGNED_TARGET_B_TOKENS}:/run/secrets/management-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_TARGET_B_CURL:?set OMAKURE_SIGNED_TARGET_B_CURL}:/run/secrets/curl.conf:ro"
       - signed-target-b-token:/run/secrets/bootstrap-token
       - "${OMAKURE_SIGNED_TARGET_B_BUNDLE:?set OMAKURE_SIGNED_TARGET_B_BUNDLE}:/run/secrets/target-b.bundle:ro"
 

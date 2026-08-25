@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 #
 # Official multi-stage image for `omakure node serve`.
 # Default runtime includes bash/git/jq (required script runtimes).
 # Python and PowerShell variants are deferred — see .docs/deployment.md.
 
-FROM rust:1-bookworm AS builder
+FROM rust@sha256:e536cf316987faedfe8ae120f83b70c7df0068fdb4fc9efcce55c71a625001d5 AS builder
 
 WORKDIR /src
 
@@ -15,15 +15,16 @@ COPY src ./src
 RUN cargo build --release --bin omakure \
     && strip target/release/omakure
 
-FROM debian:bookworm-slim AS runtime
+FROM debian@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        bash \
-        ca-certificates \
-        git \
-        jq \
-        tini \
+        bash=5.2.15-2+b13 \
+        ca-certificates=20250419~deb12u1 \
+        curl=7.88.1-10+deb12u15 \
+        git=1:2.39.5-0+deb12u3 \
+        jq=1.6-2.1+deb12u2 \
+        tini=0.19.0-1+b3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 omakure \
     && useradd --system --uid 10001 --gid omakure --home-dir /workspace --shell /usr/sbin/nologin omakure \

@@ -7,10 +7,11 @@ process.
 ## Users and operators
 
 - `../rebuild-omakure.md`: canonical future product direction and node contract
-- `direct-transport-contract.md`: owner-approved direct transport/enrollment wire and state contract under technical review
+- `direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
 - `installation.md`: install, update, uninstall, and version pinning.
 - `usage.md`: CLI commands and common workflows.
 - `deployment.md`: API/node-service topologies, containers, volumes, and security.
+- `recovery.md`: restart, revocation, reset, and identity-replacement recovery.
 - `http-api.md`: HTTP routes, auth, policy, limits, and shared operations.
 - `scheduling.md`: cron scheduler lifecycle and systemd autostart.
 - `workspace.md`: workspace layout and SQLite runtime state.

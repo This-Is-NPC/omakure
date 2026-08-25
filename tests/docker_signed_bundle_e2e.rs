@@ -9,16 +9,29 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-const PROJECT: &str = "omakure-signed-bundle";
+fn bounded_command(program: &str) -> Command {
+    let mut command = Command::new("timeout");
+    command.args(["--foreground", "--kill-after=10s", "120s", program]);
+    command
+}
 const COMPOSE_FILE: &str = "compose.signed-bundle.e2e.yaml";
+
+fn compose_project() -> &'static str {
+    static PROJECT: OnceLock<String> = OnceLock::new();
+    PROJECT
+        .get_or_init(|| format!("omakure-signed-bundle-{}", std::process::id()))
+        .as_str()
+}
 
 struct ComposeGuard {
     root: PathBuf,
     _files: TempDir,
+    finalized: bool,
 }
 
 impl ComposeGuard {
@@ -36,7 +49,9 @@ impl ComposeGuard {
         let target_b_nonce = [10_u8; 16];
         let authority_nonce = [11_u8; 16];
 
-        let tokens = generate_tokens(&root, files.path());
+        let authority_management = generate_tokens(&root, files.path(), "signed-authority");
+        let target_a_management = generate_tokens(&root, files.path(), "signed-target-a");
+        let target_b_management = generate_tokens(&root, files.path(), "signed-target-b");
         let authority_token_path = files.path().join("authority.bootstrap");
         let target_a_token_path = files.path().join("target-a.bootstrap");
         let target_b_token_path = files.path().join("target-b.bootstrap");
@@ -74,6 +89,25 @@ impl ComposeGuard {
         for (name, path) in paths {
             std::env::set_var(name, path);
         }
+        for (name, path) in [
+            (
+                "OMAKURE_SIGNED_AUTHORITY_TOKENS",
+                &authority_management.tokens,
+            ),
+            ("OMAKURE_SIGNED_AUTHORITY_CURL", &authority_management.curl),
+            (
+                "OMAKURE_SIGNED_TARGET_A_TOKENS",
+                &target_a_management.tokens,
+            ),
+            ("OMAKURE_SIGNED_TARGET_A_CURL", &target_a_management.curl),
+            (
+                "OMAKURE_SIGNED_TARGET_B_TOKENS",
+                &target_b_management.tokens,
+            ),
+            ("OMAKURE_SIGNED_TARGET_B_CURL", &target_b_management.curl),
+        ] {
+            std::env::set_var(name, path);
+        }
         let bundle_paths = [
             ("OMAKURE_SIGNED_AUTHORITY_A_BUNDLE", "authority-a.bundle"),
             ("OMAKURE_SIGNED_TARGET_A_BUNDLE", "target-a.bundle"),
@@ -83,11 +117,37 @@ impl ComposeGuard {
             std::env::set_var(name, files.path().join(file));
             fs::write(files.path().join(file), []).expect("create bundle placeholder");
         }
-        std::env::set_var("OMAKURE_ENROLLMENT_TOKENS_FILE", tokens);
+        let guard = Self {
+            root,
+            _files: files,
+            finalized: false,
+        };
+        guard.start();
+        guard
+    }
 
-        compose(&root, &["down", "-v"]);
+    fn start(&self) {
+        if std::env::var_os("OMAKURE_E2E_INDUCE_PARTIAL_UP").is_some() {
+            let partial = compose(&self.root, &["up", "--build", "-d", "signed-authority"]);
+            assert!(partial.status.success(), "partial Compose setup failed");
+            let failed = compose(
+                &self.root,
+                &[
+                    "up",
+                    "--build",
+                    "-d",
+                    "signed-authority",
+                    "missing-induced-failure-service",
+                ],
+            );
+            assert!(
+                !failed.status.success(),
+                "induced Compose failure unexpectedly passed"
+            );
+            panic!("induced partial-up failure");
+        }
         let output = compose(
-            &root,
+            &self.root,
             &[
                 "up",
                 "--build",
@@ -97,24 +157,117 @@ impl ComposeGuard {
                 "signed-target-b",
             ],
         );
-        assert!(output.status.success(), "signed bundle compose up failed");
-        Self {
-            root,
-            _files: files,
+        assert!(
+            output.status.success(),
+            "signed bundle compose up failed: {}",
+            safe_stderr(&output)
+        );
+    }
+
+    fn finalize(mut self) {
+        if let Err(error) = cleanup(&self.root) {
+            panic!("signed-bundle Docker cleanup failed: {error}");
         }
+        self.finalized = true;
     }
 }
 
 impl Drop for ComposeGuard {
     fn drop(&mut self) {
-        let _ = compose(&self.root, &["down", "-v"]);
+        if !self.finalized {
+            if let Err(error) = cleanup(&self.root) {
+                eprintln!("signed-bundle Docker cleanup after panic failed: {error}");
+            }
+        }
     }
 }
 
+fn cleanup(root: &Path) -> Result<(), String> {
+    let mut failures = Vec::new();
+    let down = compose(root, &["down", "--volumes", "--remove-orphans"]);
+    if !down.status.success() {
+        failures.push(format!(
+            "compose down status={} stderr={}",
+            down.status,
+            safe_stderr(&down)
+        ));
+    }
+    for resource in ["container", "network", "volume"] {
+        let output = bounded_command("docker")
+            .args([
+                resource,
+                "ls",
+                "-q",
+                "--filter",
+                &format!("label=com.docker.compose.project={}", compose_project()),
+            ])
+            .output();
+        match output {
+            Ok(output) if !output.status.success() => failures.push(format!(
+                "inspect {resource} status={} stderr={}",
+                output.status,
+                safe_stderr(&output)
+            )),
+            Ok(output) if !String::from_utf8_lossy(&output.stdout).trim().is_empty() => {
+                failures.push(format!("project-labeled {resource} remains"));
+            }
+            Ok(_) => {}
+            Err(error) => failures.push(format!("inspect {resource}: {error}")),
+        }
+    }
+    cleanup_result(failures)
+}
+
+fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
+    }
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::cleanup_result;
+
+    #[test]
+    fn cleanup_reports_all_failures() {
+        let error = cleanup_result(vec!["down failed".into(), "container remains".into()])
+            .expect_err("cleanup failure should be returned");
+        assert!(error.contains("down failed"));
+        assert!(error.contains("container remains"));
+    }
+}
+
+#[test]
+#[ignore]
+fn cleanup_after_induced_partial_up() {
+    std::env::set_var("OMAKURE_E2E_INDUCE_PARTIAL_UP", "1");
+    let result = std::panic::catch_unwind(ComposeGuard::new);
+    std::env::remove_var("OMAKURE_E2E_INDUCE_PARTIAL_UP");
+    assert!(result.is_err(), "induced partial-up should fail");
+    cleanup(&PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        .expect("induced partial-up cleanup should leave no resources");
+}
+
+fn safe_stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).trim().to_string()
+}
+
+fn safe_generation_stderr(output: &Output) -> String {
+    let stderr = safe_stderr(output);
+    let lower = stderr.to_ascii_lowercase();
+    assert!(
+        !lower.contains("bearer ") && !lower.contains("$argon2") && !lower.contains("token ="),
+        "token generation stderr contained sensitive material"
+    );
+    stderr
+}
+
 fn compose(root: &Path, args: &[&str]) -> Output {
-    Command::new("docker")
+    bounded_command("docker")
         .current_dir(root)
-        .args(["compose", "-f", COMPOSE_FILE, "-p", PROJECT])
+        .args(["compose", "-f", COMPOSE_FILE, "-p", compose_project()])
         .args(args)
         .output()
         .expect("run Docker Compose")
@@ -122,14 +275,14 @@ fn compose(root: &Path, args: &[&str]) -> Output {
 
 fn exec(service: &str, args: &[&str]) -> Output {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    Command::new("docker")
+    bounded_command("docker")
         .current_dir(root)
         .args([
             "compose",
             "-f",
             COMPOSE_FILE,
             "-p",
-            PROJECT,
+            compose_project(),
             "exec",
             "-T",
             service,
@@ -154,14 +307,14 @@ fn write_private_token(path: &Path, token: &str) {
 
 fn copy_to_container(service: &str, source: &Path, destination: &str) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let output = Command::new("docker")
+    let output = bounded_command("docker")
         .current_dir(root)
         .args([
             "compose",
             "-f",
             COMPOSE_FILE,
             "-p",
-            PROJECT,
+            compose_project(),
             "cp",
             source.to_str().expect("UTF-8 test path"),
             &format!("{service}:{destination}"),
@@ -171,32 +324,48 @@ fn copy_to_container(service: &str, source: &Path, destination: &str) {
     assert!(output.status.success(), "copy into container failed");
 }
 
-fn generate_tokens(root: &Path, directory: &Path) -> PathBuf {
-    let output = Command::new(env!("CARGO_BIN_EXE_omakure"))
+struct ManagementFiles {
+    tokens: PathBuf,
+    curl: PathBuf,
+}
+
+fn generate_tokens(root: &Path, directory: &Path, id: &str) -> ManagementFiles {
+    let output = bounded_command(env!("CARGO_BIN_EXE_omakure"))
         .current_dir(root)
         .args([
             "--json",
             "token",
             "generate",
             "--id",
-            "signed-bundle-e2e",
+            id,
             "--scope",
             "node:read",
-            "--scope",
-            "enrollment:read",
-            "--scope",
-            "enrollment:write",
         ])
         .output()
         .expect("generate E2E auth token");
-    assert!(output.status.success(), "auth token generation failed");
+    if !output.status.success() {
+        panic!(
+            "token generation failed: status={} stderr={}",
+            output.status,
+            safe_generation_stderr(&output)
+        );
+    }
     let json: Value = serde_json::from_slice(&output.stdout).expect("token JSON");
+    let token = json["data"]["token"].as_str().expect("token value");
     let entry = json["data"]["tokens_file_entry"]
         .as_str()
         .expect("token file entry");
-    let path = directory.join("tokens.toml");
-    fs::write(&path, format!("version = 1\n\n{entry}")).expect("write E2E auth token file");
-    path
+    let tokens = directory.join(format!("{id}.tokens.toml"));
+    let client = directory.join(format!("{id}.client.token"));
+    let curl = directory.join(format!("{id}.curl.conf"));
+    fs::write(&tokens, format!("version = 1\n\n{entry}")).expect("write E2E auth token file");
+    fs::write(&client, token).expect("write E2E client token file");
+    fs::write(
+        &curl,
+        format!("header = \"Authorization: Bearer {token}\"\n"),
+    )
+    .expect("write E2E curl config");
+    ManagementFiles { tokens, curl }
 }
 
 fn signed_config(
@@ -239,8 +408,25 @@ discovery_secret_ref = ""
 }
 
 fn status(service: &str) -> Value {
-    let output = exec(service, &["omakure", "--json", "node", "status"]);
-    assert!(output.status.success(), "node status failed");
+    let output = exec(
+        service,
+        &[
+            "curl",
+            "--config",
+            "/run/secrets/curl.conf",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "10",
+            "http://127.0.0.1:7878/v1/node/status",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "node status failed: {}",
+        safe_stderr(&output)
+    );
     serde_json::from_slice(&output.stdout).expect("node status JSON")
 }
 
@@ -283,14 +469,14 @@ fn identity(status: &Value) -> (&str, &str) {
 
 fn copy_certificate(service: &str, destination: &Path) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let output = Command::new("docker")
+    let output = bounded_command("docker")
         .current_dir(root)
         .args([
             "compose",
             "-f",
             COMPOSE_FILE,
             "-p",
-            PROJECT,
+            compose_project(),
             "cp",
             &format!("{service}:/var/lib/omakure/transport.cert"),
             destination.to_str().expect("UTF-8 certificate path"),
@@ -305,7 +491,7 @@ fn container_ip(service: &str) -> String {
     let id = compose(&root, &["ps", "-q", service]);
     assert!(id.status.success(), "locate Docker service failed");
     let id = String::from_utf8_lossy(&id.stdout).trim().to_string();
-    let output = Command::new("docker")
+    let output = bounded_command("docker")
         .args([
             "inspect",
             "-f",
@@ -744,6 +930,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .status
     .success());
     assert_eq!(status("signed-target-a")["data"]["trust"], before);
+    compose_guard.finalize();
 }
 
 fn hex(bytes: &[u8]) -> String {

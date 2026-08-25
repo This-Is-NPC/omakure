@@ -284,10 +284,12 @@ Artifacts in the repo root:
 | `Dockerfile` | Multi-stage build → `omakure` binary; `ENTRYPOINT`/`CMD` run `node serve` on `0.0.0.0:7878` with `--allow-non-loopback` |
 | `.dockerignore` | Keeps build context lean |
 | `compose.yaml` | Example: workspace and tokens-file volumes, host bind `127.0.0.1:7878`, fixed uid/gid `10001` |
+| `compose.transport-certification.e2e.yaml` | Isolated four-service Linux certification topology; not a production fleet deployment |
+| `.scripts/transport-certification.sh` | Bounded canonical certification runner used locally and in Linux CI |
 
 ### Base image runtimes
 
-The default runtime image installs **bash**, **git**, and **jq** (required for
+The default runtime image installs **bash**, **git**, **jq**, and **curl** (required for
 supported scripts / `omakure doctor` required checks).
 
 **Deferred (document only):** Python and PowerShell (`pwsh`) image variants.
@@ -328,6 +330,28 @@ Compose publishes **`127.0.0.1:7878`** on the host. The container process still
 listens on `0.0.0.0:7878` so the published port works. The image always runs as
 uid/gid `10001:10001`; host bind mounts must be prepared for that principal.
 The image-owned `/etc/omakure/node.toml` remains `root:omakure` mode `0640`.
+
+## Transport certification topology
+
+The canonical Linux gate is deliberately separate from the example deployment:
+
+```bash
+mise run transport-certification
+```
+
+It builds the current image and starts `cert-a`, `cert-b`, `cert-c`, and an
+untrusted `cert-adversary` on an isolated Compose network. Each service has
+separate state, config, token, runtime, and workspace volumes. The runner uses
+production direct listeners plus authenticated management operations only for
+observation and lifecycle setup. The production-listener integration cases cover
+malformed, oversized, and downgraded frames; expired certificates (1008), forged
+certificates and envelopes (1004), identity-mismatched certificates and
+wrong-target probes (1005), exact encrypted-byte replay (1009), untrusted
+traffic, static-peer validation, partition/reconnect, revocation, and identity
+reset/replacement. Each rejection checks the matching durable redacted audit and
+full registry-state snapshot. It always removes the project, containers,
+network, and volumes on exit. The topology is for a bounded certification gate
+only and must not be treated as a general fleet launcher.
 
 ## Volume layout
 

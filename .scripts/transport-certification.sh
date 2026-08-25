@@ -1,0 +1,678 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This is the one bounded Linux certification command. It deliberately uses
+# the production node binary and direct TCP ingress; management HTTP is used
+# only for health/status observation.
+root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+compose_file="$root_dir/compose.transport-certification.e2e.yaml"
+project="${OMAKURE_CERTIFICATION_PROJECT:-omakure-transport-certification-${BASHPID}}"
+compose=(timeout --foreground --kill-after=5s 120s docker compose -f "$compose_file" -p "$project")
+docker_cmd=(timeout --foreground --kill-after=5s 120s docker)
+tmp_dir=$(mktemp -d)
+induced_failure=${OMAKURE_CERTIFICATION_INDUCE_FAILURE:-0}
+old_c_state_dir=
+
+fail() {
+    printf 'transport certification: %s\n' "$*" >&2
+    exit 1
+}
+
+cleanup() {
+    local exit_status=$?
+    trap - EXIT INT TERM
+    if (( exit_status != 0 )); then
+        "${compose[@]}" logs --no-log-prefix cert-a cert-b cert-c cert-adversary >&2 || true
+    fi
+    if ! "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1; then
+        printf 'transport certification: Compose teardown failed for %s\n' "$project" >&2
+        exit_status=1
+    fi
+    if [[ -n "${old_c_state_dir:-}" && -d "$old_c_state_dir" ]]; then
+        "${docker_cmd[@]}" run --rm --user 0 \
+            -v "$old_c_state_dir:/var/lib/omakure" \
+            --entrypoint /usr/bin/chown omakure-node:transport-certification \
+            -R "$(id -u):$(id -g)" /var/lib/omakure >/dev/null 2>&1 || true
+    fi
+    for resource in container network volume; do
+        local remaining
+        if ! remaining=$("${docker_cmd[@]}" "$resource" ls -q \
+            --filter "label=com.docker.compose.project=$project"); then
+            printf 'transport certification: unable to inspect remaining %s resources for %s\n' \
+                "$resource" "$project" >&2
+            exit_status=1
+        elif [[ -n "$remaining" ]]; then
+            printf 'transport certification: project %s resources survived teardown for %s\n' \
+                "$resource" "$project" >&2
+            exit_status=1
+        fi
+    done
+    rm -rf "$tmp_dir"
+    exit "$exit_status"
+}
+trap cleanup EXIT INT TERM
+
+command -v docker >/dev/null || fail "docker is required"
+command -v jq >/dev/null || fail "jq is required"
+command -v sqlite3 >/dev/null || fail "sqlite3 is required for durable audit inspection"
+"${docker_cmd[@]}" compose version >/dev/null || fail "Docker Compose is required"
+
+generate_auth() {
+    local service=$1
+    local tokens_path="$tmp_dir/${service}.tokens.toml"
+    local client_path="$tmp_dir/${service}.client.token"
+    local curl_path="$tmp_dir/${service}.curl.conf"
+    local stderr_path="$tmp_dir/${service}.token-generation.stderr"
+    shift
+    local token_json
+    local status
+    if token_json=$("${docker_cmd[@]}" run --rm --entrypoint /usr/local/bin/omakure omakure-node:transport-certification \
+        --json token generate --id "transport-$service" "$@" 2>"$stderr_path"); then
+        :
+    else
+        status=$?
+        generation_failure "$service" "$status" "$stderr_path"
+    fi
+    printf 'version = 1\n\n' >"$tokens_path"
+    jq -er '.data.tokens_file_entry' <<<"$token_json" >>"$tokens_path" || fail "token entry generation failed for $service"
+    jq -er '.data.token' <<<"$token_json" >"$client_path" || fail "client token generation failed for $service"
+    printf 'header = "Authorization: Bearer %s"\n' "$(<"$client_path")" >"$curl_path"
+    chmod 0600 "$tokens_path" "$client_path" "$curl_path"
+    printf '%s\n' "$tokens_path|$client_path|$curl_path"
+}
+
+generation_failure() {
+    local service=$1 status=$2 stderr_path=$3
+    local stderr
+    stderr=$(<"$stderr_path")
+    case "${stderr,,}" in
+        *"bearer "*|*'$argon2'*|*"token ="*)
+            fail "token generation failed for $service: status=$status; stderr contained sensitive material"
+            ;;
+    esac
+    fail "token generation failed for $service: status=$status; stderr=$stderr"
+}
+
+printf 'transport certification: build current image\n'
+"${docker_cmd[@]}" build --pull=false --tag omakure-node:transport-certification "$root_dir" >/dev/null
+
+auth=$(generate_auth cert-a --scope node:read --scope enrollment:read --scope enrollment:write --scope discovery:read) || fail "cert-a auth setup failed"
+IFS='|' read -r cert_a_tokens cert_a_client cert_a_curl <<<"$auth"
+auth=$(generate_auth cert-b --scope node:read --scope enrollment:read --scope enrollment:write --scope discovery:read) || fail "cert-b auth setup failed"
+IFS='|' read -r cert_b_tokens cert_b_client cert_b_curl <<<"$auth"
+auth=$(generate_auth cert-c --scope node:read --scope enrollment:read --scope enrollment:write --scope discovery:read) || fail "cert-c auth setup failed"
+IFS='|' read -r cert_c_tokens cert_c_client cert_c_curl <<<"$auth"
+auth=$(generate_auth cert-adversary --scope node:read) || fail "adversary auth setup failed"
+IFS='|' read -r adversary_tokens adversary_client adversary_curl <<<"$auth"
+export OMAKURE_CERT_A_TOKENS_FILE="$cert_a_tokens" OMAKURE_CERT_A_CLIENT_FILE="$cert_a_client" OMAKURE_CERT_A_CURL_FILE="$cert_a_curl"
+export OMAKURE_CERT_B_TOKENS_FILE="$cert_b_tokens" OMAKURE_CERT_B_CLIENT_FILE="$cert_b_client" OMAKURE_CERT_B_CURL_FILE="$cert_b_curl"
+export OMAKURE_CERT_C_TOKENS_FILE="$cert_c_tokens" OMAKURE_CERT_C_CLIENT_FILE="$cert_c_client" OMAKURE_CERT_C_CURL_FILE="$cert_c_curl"
+export OMAKURE_CERT_ADVERSARY_TOKENS_FILE="$adversary_tokens" OMAKURE_CERT_ADVERSARY_CLIENT_FILE="$adversary_client" OMAKURE_CERT_ADVERSARY_CURL_FILE="$adversary_curl"
+"${compose[@]}" build --pull=false >/dev/null
+
+run_node() {
+    local service=$1
+    shift
+    local output
+    output=$("${compose[@]}" run --rm --no-deps -T "$service" --json node "$@")
+    last_json_line <<<"$output"
+}
+
+last_json_line() {
+    local line last=''
+    while IFS= read -r line; do
+        if jq -e . <<<"$line" >/dev/null 2>&1; then
+            last=$line
+        fi
+    done
+    [[ -n "$last" ]] || fail "command did not produce a JSON envelope"
+    printf '%s\n' "$last"
+}
+
+write_config() {
+    local service=$1
+    local config=$2
+    printf '%s\n' "$config" | "${compose[@]}" run --rm --no-deps -T --user 0:0 --entrypoint /bin/sh "$service" \
+        -c 'cat > /etc/omakure/node.toml && chown root:10001 /etc/omakure/node.toml && chmod 0640 /etc/omakure/node.toml'
+}
+
+node_id() {
+    jq -er '.data.identity.node_id'
+}
+
+node_key() {
+    jq -er '.data.identity.public_key'
+}
+
+certificate() {
+    local service=$1
+    "${compose[@]}" run --rm --no-deps -T --entrypoint /bin/sh "$service" -c \
+        'od -An -tx1 -v /var/lib/omakure/transport.cert | tr -d " \n"'
+}
+
+persisted_material_hashes() {
+    local service=$1
+    "${compose[@]}" run --rm --no-deps -T --entrypoint /bin/sh "$service" -c '
+        for path in /var/lib/omakure/identity.key /var/lib/omakure/transport.key /var/lib/omakure/transport.cert; do
+            test -f "$path"
+            sha256sum "$path" | cut -d " " -f1
+        done
+    '
+}
+
+trust() {
+    local service=$1 peer_id=$2 peer_key=$3 peer_cert=$4 reason=$5
+    run_node "$service" trust --node-id "$peer_id" --public-key "$peer_key" \
+        --transport-certificate "$peer_cert" --capability remote-run --actor certification \
+        --reason "$reason" --confirmed >/dev/null || fail "trusting $peer_id from $service failed"
+}
+
+wait_service() {
+    local service=$1
+    local deadline=$((SECONDS + 45))
+    while (( SECONDS < deadline )); do
+        if "${compose[@]}" exec -T "$service" /usr/local/bin/omakure --json node status \
+            >/dev/null 2>&1; then
+            return
+        fi
+        sleep 1
+    done
+    fail "$service did not reach bounded status readiness"
+}
+
+wait_connected() {
+    local service=$1 peer_id=$2
+    local deadline=$((SECONDS + 45))
+    while (( SECONDS < deadline )); do
+        if output=$(status_http "$service" 2>/dev/null) \
+            && jq -e --arg peer "$peer_id" \
+                '.data.transport.peers | any(.[]; .node_id == $peer and .state == "connected")' \
+                <<<"$output" >/dev/null; then
+            return
+        fi
+        sleep 1
+    done
+    fail "$service did not connect to expected peer $peer_id; last status=${output:-<none>}"
+}
+
+wait_disconnected() {
+    local service=$1 peer_id=$2
+    # The production direct service's idle timeout is long; the partition
+    # sequence sends a TCP reset first, so this remains a bounded observation.
+    local output='' deadline=$((SECONDS + 75))
+    while (( SECONDS < deadline )); do
+        if output=$(status_http "$service" 2>/dev/null) \
+            && jq -e --arg peer "$peer_id" \
+                '.data.transport.peers | any(.[]; .node_id == $peer and .state == "disconnected")' \
+                <<<"$output" >/dev/null; then
+            return
+        fi
+        sleep 1
+    done
+    fail "$service did not report expected peer $peer_id disconnected; last status=${output:-<none>}"
+}
+
+status_http() {
+    local service=$1
+    "${compose[@]}" exec -T "$service" curl --config /run/secrets/curl.conf \
+        --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:7878/v1/node/status
+}
+
+peer_ip() {
+    local service=$1
+    "${compose[@]}" run --rm --no-deps -T --entrypoint /bin/sh cert-adversary -c \
+        "getent ahostsv4 $service | cut -d' ' -f1 | sort -u | head -n 1"
+}
+
+peers_http() {
+    "${compose[@]}" exec -T cert-b curl --config /run/secrets/curl.conf \
+        --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:7878/v1/node/peers
+}
+
+probe_to() {
+    local service=$1 peer_service=$2 peer_id=$3
+    local endpoint="$(peer_ip "$peer_service"):7879"
+    local output
+    if ! output=$("${compose[@]}" run --rm --no-deps -T --entrypoint /bin/sh "$service" -c \
+        "exec /usr/local/bin/omakure --json node direct-probe --endpoint \"$endpoint\" --peer-node-id $peer_id" 2>&1); then
+        fail "encrypted probe $service -> $peer_id at $endpoint failed: $output"
+    fi
+    last_json_line <<<"$output"
+}
+
+expect_probe_rejected_to() {
+    local service=$1 peer_service=$2 peer_id=$3 expected_cli_code=$4 audit_service=$5 expected_audit_code=$6
+    local endpoint="$(peer_ip "$peer_service"):7879"
+    copy_db "$service" "$tmp_dir/${service}.sqlite"
+    local before_state before_audit_id output audit_before_state audit_before_id
+    before_state=$(db_state_snapshot_file "$tmp_dir/${service}.sqlite")
+    before_audit_id=$(latest_audit_id_file "$tmp_dir/${service}.sqlite")
+    if [[ "$audit_service" == "$service" ]]; then
+        audit_before_id=$before_audit_id
+    else
+        copy_db "$audit_service" "$tmp_dir/${audit_service}.sqlite"
+        audit_before_state=$(db_state_snapshot_file "$tmp_dir/${audit_service}.sqlite")
+        audit_before_id=$(latest_audit_id_file "$tmp_dir/${audit_service}.sqlite")
+    fi
+    if output=$("${compose[@]}" run --rm --no-deps -T --entrypoint /bin/sh "$service" -c \
+        "exec /usr/local/bin/omakure --json node direct-probe --endpoint \"$endpoint\" --peer-node-id $peer_id" 2>&1); then
+        fail "unauthorized probe from $service to $peer_service was accepted"
+    fi
+    output=$(last_json_line <<<"$output")
+    jq -e --arg code "$expected_cli_code" '.ok == false and .error.code == $code' <<<"$output" >/dev/null \
+        || fail "probe $service -> $peer_service returned wrong CLI error; expected $expected_cli_code, output=$output"
+    wait_for_exact_rejection "$audit_service" "$audit_before_id" "$expected_audit_code" >/dev/null
+    copy_db "$service" "$tmp_dir/${service}.sqlite"
+    [[ "$before_state" == "$(db_state_snapshot_file "$tmp_dir/${service}.sqlite")" ]] \
+        || fail "probe $service -> $peer_service changed registry state"
+    if [[ "$audit_service" != "$service" ]]; then
+        copy_db "$audit_service" "$tmp_dir/${audit_service}.sqlite"
+        [[ "$audit_before_state" == "$(db_state_snapshot_file "$tmp_dir/${audit_service}.sqlite")" ]] \
+            || fail "probe $service -> $peer_service changed target registry state"
+    fi
+}
+
+send_raw() {
+    local frame=$1
+    local target_ip
+    target_ip=$(peer_ip cert-b)
+    "${compose[@]}" run --rm --no-deps -T --entrypoint /bin/bash cert-adversary -c \
+        "for attempt in 1 2 3 4 5; do if exec 3<>/dev/tcp/$target_ip/7879; then printf '%b' '$frame' >&3; exec 3>&-; exit 0; fi; sleep 1; done; exit 1" \
+        >/dev/null 2>&1 || fail "raw adversary injection could not reach cert-b"
+}
+
+snapshot_peers() {
+    peers_http \
+        | jq -c '[.data[] | {node_id, state, role, capabilities}] | sort_by(.node_id)'
+}
+
+copy_db() {
+    local service=$1 destination=$2
+    rm -f "$destination"
+    "${compose[@]}" cp "$service:/var/lib/omakure/node.sqlite" "$destination" >/dev/null
+}
+
+copy_b_db() {
+    copy_db cert-b "$tmp_dir/cert-b.sqlite"
+}
+
+audit_count() {
+    timeout --foreground --kill-after=2s 10s sqlite3 "$tmp_dir/cert-b.sqlite" "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'rejected' AND error_code IS NOT NULL;"
+}
+
+accepted_count() {
+    timeout --foreground --kill-after=2s 10s sqlite3 "$tmp_dir/cert-b.sqlite" "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'accepted';"
+}
+
+assert_redacted_audit() {
+    local audit
+    audit=$(timeout --foreground --kill-after=2s 10s sqlite3 "$tmp_dir/cert-b.sqlite" \
+        "SELECT event_type || '|' || node_id || '|' || outcome || '|' || COALESCE(error_code, '') FROM transport_audit ORDER BY id;")
+    [[ "$audit" != *"transport-certification"* ]] || fail "auth token leaked into transport audit"
+    [[ "$audit" != *"cert-b:7879"* ]] || fail "endpoint leaked into transport audit"
+    [[ -n "$audit" ]] || fail "transport audit is empty"
+}
+
+assert_no_log_leakage() {
+    local logs token_file token
+    logs=$("${compose[@]}" logs --no-log-prefix cert-a cert-b cert-c cert-adversary 2>&1 || true)
+    [[ "$logs" != *"Bearer "* ]] || fail "bearer value leaked into Compose logs"
+    [[ "$logs" != *'$argon2'* ]] || fail "Argon2 token hash leaked into Compose logs"
+    for token_file in "$cert_a_client" "$cert_b_client" "$cert_c_client" "$adversary_client"; do
+        token=$(<"$token_file")
+        [[ "$logs" != *"$token"* ]] || fail "bearer value from $token_file leaked into Compose logs"
+    done
+}
+
+db_state_snapshot_file() {
+    local database=$1
+    timeout --foreground --kill-after=2s 10s sqlite3 "$database" <<'SQL'
+SELECT
+  COALESCE((SELECT group_concat(value, ';') FROM (SELECT node_id || ':' || state || ':' || hex(identity_key) AS value FROM remote_identities ORDER BY node_id)), '') || '|' ||
+  COALESCE((SELECT group_concat(value, ';') FROM (SELECT node_id || ':' || state || ':' || role || ':' || hex(capabilities) AS value FROM trusted_peers ORDER BY node_id)), '') || '|' ||
+  COALESCE((SELECT group_concat(value, ';') FROM (SELECT node_id || ':' || key_epoch || ':' || state || ':' || hex(public_key) AS value FROM transport_key_epochs ORDER BY node_id, key_epoch)), '') || '|' ||
+  COALESCE((SELECT group_concat(value, ';') FROM (SELECT replay_kind || ':' || hex(replay_id) || ':' || expires_at AS value FROM enrollment_replays ORDER BY replay_kind, replay_id)), '') || '|' ||
+  COALESCE((SELECT group_concat(value, ';') FROM (SELECT hex(request_id) || ':' || node_id || ':' || state AS value FROM manual_enrollment_requests ORDER BY request_id)), '') || '|' ||
+  COALESCE((SELECT group_concat(value, ';') FROM (SELECT hex(session_id) || ':' || node_id || ':' || state || ':' || send_sequence || ':' || receive_sequence AS value FROM channel_sessions ORDER BY session_id)), '');
+SQL
+}
+
+db_state_snapshot() {
+    db_state_snapshot_file "$tmp_dir/cert-b.sqlite"
+}
+
+latest_audit_id_file() {
+    local database=$1
+    timeout --foreground --kill-after=2s 10s sqlite3 "$database" \
+        "SELECT COALESCE(MAX(id), 0) FROM transport_audit;"
+}
+
+audit_row_after() {
+    local database=$1 before_id=$2
+    timeout --foreground --kill-after=2s 10s sqlite3 -separator '|' "$database" \
+        "SELECT id, event_type, outcome, COALESCE(error_code, '') FROM transport_audit WHERE id > $before_id ORDER BY id LIMIT 1;"
+}
+
+accepted_audit_signature() {
+    local database=$1
+    timeout --foreground --kill-after=2s 10s sqlite3 -separator '|' "$database" \
+        "SELECT COALESCE(MAX(id), 0), COALESCE((SELECT hex(session_id) FROM transport_audit WHERE outcome = 'accepted' AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1), '') FROM transport_audit;"
+}
+
+assert_new_session_after_partition() {
+    local service=$1 before=$2 after=$3
+    local before_id before_session after_id after_session
+    IFS='|' read -r before_id before_session <<<"$before"
+    IFS='|' read -r after_id after_session <<<"$after"
+    (( after_id > before_id )) || fail "$service partition reconnect did not append an accepted audit"
+    [[ -n "$before_session" && -n "$after_session" && "$before_session" != "$after_session" ]] \
+        || fail "$service partition reconnect did not create a distinct accepted session"
+}
+
+wait_for_exact_rejection() {
+    local service=$1 before_id=$2 expected_code=$3
+    local deadline=$((SECONDS + 15)) row row_id event outcome code
+    while (( SECONDS < deadline )); do
+        copy_db "$service" "$tmp_dir/${service}.sqlite"
+        row=$(timeout --foreground --kill-after=2s 10s sqlite3 -separator '|' \
+            "$tmp_dir/${service}.sqlite" \
+            "SELECT id, event_type, outcome, COALESCE(error_code, '') FROM transport_audit WHERE id > $before_id AND event_type = 'probe_rejected' ORDER BY id LIMIT 1;")
+        if [[ -n "$row" ]]; then
+            IFS='|' read -r row_id event outcome code <<<"$row"
+            [[ "$event" == "probe_rejected" && "$outcome" == "rejected" && "$code" == "$expected_code" ]] \
+                || fail "$service rejection audit mismatch: expected code $expected_code, row=$row"
+            printf '%s\n' "$row"
+            return
+        fi
+        sleep 1
+    done
+    fail "$service did not record rejection audit code $expected_code after audit id $before_id"
+}
+
+latest_rejection() {
+    timeout --foreground --kill-after=2s 10s sqlite3 -separator '|' "$tmp_dir/cert-b.sqlite" \
+        "SELECT event_type, outcome, error_code FROM transport_audit WHERE outcome = 'rejected' ORDER BY id DESC LIMIT 1;"
+}
+
+rejection_count() {
+    timeout --foreground --kill-after=2s 10s sqlite3 "$tmp_dir/cert-b.sqlite" \
+        "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'rejected';"
+}
+
+run_raw_case() {
+    local name=$1 frame=$2 expected_code=$3
+    printf 'transport certification: adversary case %s\n' "$name"
+    local before_state before_audit_id before_peers after_state after_peers
+    copy_b_db
+    before_state=$(db_state_snapshot)
+    before_audit_id=$(latest_audit_id_file "$tmp_dir/cert-b.sqlite")
+    before_peers=$(snapshot_peers)
+    send_raw "$frame"
+    wait_for_exact_rejection cert-b "$before_audit_id" "$expected_code" >/dev/null
+    after_peers=$(snapshot_peers)
+    [[ "$before_peers" == "$after_peers" ]] || fail "$name changed remote peer status"
+    copy_b_db
+    after_state=$(db_state_snapshot)
+    [[ "$before_state" == "$after_state" ]] || fail "$name changed registry state"
+}
+
+for service in cert-a cert-b cert-c cert-adversary; do
+    run_node "$service" init >/dev/null || fail "$service initialization failed"
+done
+
+a_status=$(run_node cert-a status)
+b_status=$(run_node cert-b status)
+c_status=$(run_node cert-c status)
+a_id=$(node_id <<<"$a_status")
+b_id=$(node_id <<<"$b_status")
+c_id=$(node_id <<<"$c_status")
+a_key=$(node_key <<<"$a_status")
+b_key=$(node_key <<<"$b_status")
+c_key=$(node_key <<<"$c_status")
+a_cert=$(certificate cert-a)
+b_cert=$(certificate cert-b)
+c_cert=$(certificate cert-c)
+
+static_config() {
+    local display_name=$1
+    local peers=$2
+    cat <<EOF
+version = 1
+
+[node]
+display_name = "$display_name"
+
+[api]
+bind = "127.0.0.1:7878"
+
+[network]
+mode = "direct"
+relays = []
+static_peers = [$peers]
+direct_bind = "0.0.0.0:7879"
+max_message_bytes = 1048576
+
+[trust]
+enrollment = "manual"
+allow_remote_cues = false
+allow_baseline_push = false
+
+[organization]
+id = "omakure-certification"
+discovery_secret_ref = ""
+EOF
+}
+
+static_a=$(static_config certification-a "\"$b_id@cert-b:7879\"")
+static_b=$(static_config certification-b "\"$a_id@cert-a:7879\"")
+static_c=$(static_config certification-c "\"$b_id@cert-b:7879\"")
+write_config cert-a "$static_a"
+write_config cert-b "$static_b"
+write_config cert-c "$static_c"
+
+trust cert-a "$b_id" "$b_key" "$b_cert" "pretrusted static peer"
+trust cert-b "$a_id" "$a_key" "$a_cert" "pretrusted static peer"
+trust cert-b "$c_id" "$c_key" "$c_cert" "pretrusted static peer"
+trust cert-c "$b_id" "$b_key" "$b_cert" "pretrusted static peer"
+if [[ "$induced_failure" == 1 ]]; then
+    if "${compose[@]}" up --abort-on-container-exit --exit-code-from cert-induced-failure \
+        cert-a cert-induced-failure >/dev/null 2>&1; then
+        fail "induced partial-up failure unexpectedly passed"
+    fi
+    fail "induced partial-up failure"
+fi
+"${compose[@]}" up -d cert-a cert-b cert-c cert-adversary >/dev/null
+for service in cert-a cert-b cert-c; do wait_service "$service"; done
+wait_connected cert-a "$b_id"
+wait_connected cert-b "$a_id"
+
+printf 'transport certification: bidirectional encrypted probes and lifecycle\n'
+before_peers=$(snapshot_peers)
+copy_b_db
+baseline_state=$(db_state_snapshot)
+baseline_rejections=$(rejection_count)
+
+printf 'transport certification: malformed, oversize, downgrade, spoof, and trust rejection\n'
+raw_cases=(
+    'unsupported-downgrade|\x00\x00\x00\x04\x00\x01\x00\x00|1001'
+    'malformed-kind|\x00\x00\x00\x04\x01\x09\x00\x00|1002'
+    'oversized-frame|\x00\x10\x00\x05|1003'
+)
+for raw_case in "${raw_cases[@]}"; do
+    IFS='|' read -r raw_name raw_frame raw_code <<<"$raw_case"
+    run_raw_case "$raw_name" "$raw_frame" "$raw_code"
+done
+
+"${compose[@]}" stop cert-c >/dev/null
+probe_output=$(probe_to cert-c cert-b "$b_id")
+jq -e '.ok == true and .data.accepted == true' <<<"$probe_output" >/dev/null \
+    || fail "trusted cert-c -> cert-b probe did not return accepted=true"
+expect_probe_rejected_to cert-c cert-b "$a_id" transport_identity_mismatch cert-c 1005
+expect_probe_rejected_to cert-adversary cert-b "$b_id" transport_not_enrolled cert-adversary 1006
+after_peers=$(snapshot_peers)
+[[ "$before_peers" == "$after_peers" ]] || fail "adversarial traffic mutated the trust registry"
+copy_b_db
+after_state=$(db_state_snapshot)
+[[ "$baseline_state" == "$after_state" ]] || fail "adversarial traffic mutated identities, trust, epochs, replays, pending, or sessions"
+rejected_before=$(audit_count)
+accepted_before=$(accepted_count)
+(( accepted_before >= 2 )) || fail "expected durable accepted probe audits, got $accepted_before"
+assert_redacted_audit
+assert_no_log_leakage
+
+printf 'transport certification: independent restart persistence\n'
+restart_before_state=$(db_state_snapshot)
+restart_before_identity=$(node_key <<<"$(run_node cert-b status)")
+restart_before_material=$(persisted_material_hashes cert-b)
+copy_b_db
+restart_before_audit=$(latest_audit_id_file "$tmp_dir/cert-b.sqlite")
+"${compose[@]}" stop cert-b >/dev/null
+"${compose[@]}" start cert-b >/dev/null
+wait_service cert-b
+copy_b_db
+[[ "$restart_before_state" == "$(db_state_snapshot)" ]] || fail "cert-b restart changed identity, trust, epochs, pending, or session state"
+restart_after_identity=$(node_key <<<"$(run_node cert-b status)")
+[[ "$restart_before_identity" == "$restart_after_identity" ]] || fail "cert-b restart changed public identity"
+restart_after_material=$(persisted_material_hashes cert-b)
+[[ "$restart_before_material" == "$restart_after_material" ]] || fail "cert-b restart changed persisted identity or transport material"
+restart_after_audit=$(latest_audit_id_file "$tmp_dir/cert-b.sqlite")
+(( restart_after_audit >= restart_before_audit )) || fail "cert-b restart regressed audit state"
+
+printf 'transport certification: static locator mismatch and partition/reconnect\n'
+mismatched_config=$(static_config certification-a "\"$c_id@cert-b:7879\"")
+write_config cert-a "$mismatched_config"
+"${compose[@]}" stop cert-a >/dev/null
+"${compose[@]}" start cert-a >/dev/null
+sleep 3
+if output=$(status_http cert-a) \
+    && jq -e '.data.transport.expected_connected_peer_count != 0' <<<"$output" >/dev/null; then
+    fail "mismatched static locator connected"
+fi
+write_config cert-a "$static_a"
+"${compose[@]}" stop cert-a cert-b >/dev/null
+"${compose[@]}" start cert-b cert-a >/dev/null
+wait_connected cert-b "$a_id"
+wait_connected cert-a "$b_id"
+copy_db cert-a "$tmp_dir/cert-a-partition-before.sqlite"
+copy_b_db
+partition_a_before=$(accepted_audit_signature "$tmp_dir/cert-a-partition-before.sqlite")
+partition_b_before=$(accepted_audit_signature "$tmp_dir/cert-b.sqlite")
+b_container=$("${compose[@]}" ps -q cert-b)
+"${docker_cmd[@]}" kill "$b_container" >/dev/null
+"${docker_cmd[@]}" network disconnect "${project}_default" "$b_container"
+wait_disconnected cert-a "$b_id"
+copy_db cert-a "$tmp_dir/cert-a-partition-disconnected.sqlite"
+[[ "$(jq -r '.data.transport.peers[] | select(.node_id == "'"$b_id"'") | .state' <<<"$(status_http cert-a)")" == "disconnected" ]] \
+    || fail "cert-a did not report cert-b disconnected during partition"
+"${docker_cmd[@]}" network connect "${project}_default" "$b_container"
+"${compose[@]}" start cert-b >/dev/null
+wait_connected cert-a "$b_id"
+wait_connected cert-b "$a_id"
+copy_db cert-a "$tmp_dir/cert-a-partition-after.sqlite"
+copy_b_db
+partition_a_after=$(accepted_audit_signature "$tmp_dir/cert-a-partition-after.sqlite")
+partition_b_after=$(accepted_audit_signature "$tmp_dir/cert-b.sqlite")
+assert_new_session_after_partition cert-a "$partition_a_before" "$partition_a_after"
+assert_new_session_after_partition cert-b "$partition_b_before" "$partition_b_after"
+
+printf 'transport certification: revocation and identity replacement/reset\n'
+"${compose[@]}" stop cert-b >/dev/null
+run_node cert-b revoke "$a_id" --actor certification --reason "revocation lifecycle" --confirmed >/dev/null
+"${compose[@]}" start cert-b >/dev/null
+wait_service cert-b
+sleep 3
+if output=$(status_http cert-b) \
+    && jq -e --arg peer "$a_id" '.data.transport.peers | any(.[]; .node_id == $peer and .state == "connected")' <<<"$output" >/dev/null; then
+    fail "revoked peer reconnected"
+fi
+old_c_id=$c_id
+old_c_state_dir="$tmp_dir/cert-c-old-state"
+old_c_config="$tmp_dir/cert-c-old-node.toml"
+mkdir -p "$old_c_state_dir"
+"${compose[@]}" cp cert-c:/var/lib/omakure/. "$old_c_state_dir" >/dev/null
+"${compose[@]}" cp cert-c:/etc/omakure/node.toml "$old_c_config" >/dev/null
+chmod 0600 "$old_c_state_dir/identity.key" "$old_c_state_dir/transport.key" "$old_c_state_dir/transport.cert"
+old_c_material_digest=$(sha256sum \
+    "$old_c_state_dir/identity.key" "$old_c_state_dir/transport.key" "$old_c_state_dir/transport.cert" \
+    | sha256sum)
+copy_db cert-c "$tmp_dir/cert-c-before-reset.sqlite"
+old_c_registry_state=$(db_state_snapshot_file "$tmp_dir/cert-c-before-reset.sqlite")
+"${compose[@]}" stop cert-c >/dev/null
+run_node cert-c reset --confirmed >/dev/null
+"${compose[@]}" start cert-c >/dev/null
+wait_service cert-c
+new_c_status=$("${compose[@]}" exec -T cert-c /usr/local/bin/omakure --json node status)
+new_c_id=$(node_id <<<"$new_c_status")
+new_c_key=$(node_key <<<"$new_c_status")
+[[ "$old_c_id" != "$new_c_id" ]] || fail "identity reset did not replace node identity"
+[[ "$c_key" != "$new_c_key" ]] || fail "identity reset retained old public identity"
+copy_db cert-c "$tmp_dir/cert-c-after-reset-before-old-probe.sqlite"
+[[ "$(db_state_snapshot_file "$tmp_dir/cert-c-after-reset-before-old-probe.sqlite")" == "|||||" ]] \
+    || fail "identity reset retained trust, epochs, pending, or sessions"
+old_c_before_audit=$(latest_audit_id_file "$old_c_state_dir/node.sqlite")
+chmod 700 "$old_c_state_dir"
+"${docker_cmd[@]}" run --rm --user 0 \
+    -v "$old_c_state_dir:/var/lib/omakure" \
+    --entrypoint /usr/bin/chown omakure-node:transport-certification \
+    -R 10001:10001 /var/lib/omakure >/dev/null \
+    || fail "unable to prepare preserved identity ownership"
+old_c_endpoint="$(peer_ip cert-c):7879"
+if old_probe_output=$("${docker_cmd[@]}" run --rm --user 0:0 --network "${project}_default" \
+    -v "$old_c_state_dir:/var/lib/omakure" \
+    -v "$old_c_config:/etc/omakure/node.toml:ro" \
+    omakure-node:transport-certification --json node \
+    direct-probe \
+    --endpoint "$old_c_endpoint" --peer-node-id "$new_c_id" 2>&1); then
+    fail "old identity unexpectedly succeeded against post-reset production listener"
+fi
+"${docker_cmd[@]}" run --rm --user 0 \
+    -v "$old_c_state_dir:/var/lib/omakure" \
+    --entrypoint /usr/bin/chown omakure-node:transport-certification \
+    -R "$(id -u):$(id -g)" /var/lib/omakure >/dev/null \
+    || fail "unable to restore preserved identity ownership"
+if ! old_probe_output_json=$(last_json_line <<<"$old_probe_output"); then
+    fail "old identity helper did not emit JSON; output=$old_probe_output"
+fi
+old_probe_output=$old_probe_output_json
+jq -e '.ok == false and .error.code == "transport_not_enrolled"' <<<"$old_probe_output" >/dev/null \
+    || fail "old identity returned wrong stable error: $old_probe_output"
+old_c_deadline=$((SECONDS + 15))
+while (( SECONDS < old_c_deadline )); do
+    old_c_row=$(audit_row_after "$old_c_state_dir/node.sqlite" "$old_c_before_audit")
+    if [[ -n "$old_c_row" ]]; then
+        IFS='|' read -r old_c_audit_id old_c_event old_c_outcome old_c_code <<<"$old_c_row"
+        [[ "$old_c_event" == "probe_rejected" && "$old_c_outcome" == "rejected" && "$old_c_code" == "1006" ]] \
+            || fail "old identity audit mismatch: $old_c_row"
+        break
+    fi
+    sleep 1
+done
+[[ -n "${old_c_row:-}" ]] || fail "old identity did not record durable 1006 audit"
+post_reset_material_digest=$(sha256sum \
+    "$old_c_state_dir/identity.key" "$old_c_state_dir/transport.key" "$old_c_state_dir/transport.cert" \
+    | sha256sum)
+[[ "$old_c_material_digest" == "$post_reset_material_digest" ]] || fail "old reset material changed during proof"
+[[ "$old_c_registry_state" == "$(db_state_snapshot_file "$old_c_state_dir/node.sqlite")" ]] \
+    || fail "old identity proof changed trust, epochs, pending, or sessions"
+copy_db cert-c "$tmp_dir/cert-c-after-reset-old-probe.sqlite"
+[[ "$(db_state_snapshot_file "$tmp_dir/cert-c-after-reset-old-probe.sqlite")" == "|||||" ]] \
+    || fail "post-reset listener changed new identity trust state during old-material proof"
+
+"${compose[@]}" stop cert-b >/dev/null
+copy_b_db
+assert_redacted_audit
+
+printf 'transport certification: retained discovery/manual/signed-bundle suites\n'
+if [[ "${OMAKURE_CERTIFICATION_SKIP_RETAINED:-0}" == "1" ]]; then
+    printf 'transport certification: retained suites skipped for induced cleanup probe\n'
+else
+    timeout --foreground --kill-after=15s 5m cargo test --test direct_transport_e2e --locked -- --nocapture
+    timeout --foreground --kill-after=15s 15m cargo test --test docker_discovery_e2e --test docker_enrollment_e2e \
+        --test docker_signed_bundle_e2e --locked -- --ignored --nocapture docker_
+    timeout --foreground --kill-after=15s 15m cargo test --test docker_discovery_e2e --test docker_enrollment_e2e \
+        --test docker_signed_bundle_e2e --locked -- --ignored --nocapture cleanup_after_induced_partial_up
+    timeout --foreground --kill-after=15s 20m "$root_dir/.scripts/direct-transport-docker-e2e.sh"
+    OMAKURE_CERTIFICATION_SKIP_RETAINED=1 \
+        timeout --foreground --kill-after=15s 25m "$root_dir/.scripts/transport-certification-cleanup-test.sh"
+fi
+printf 'transport certification: passed\n'

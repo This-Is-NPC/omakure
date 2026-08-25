@@ -3,8 +3,10 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 compose_file="$root_dir/compose.direct-transport.e2e.yaml"
-project="omakure-direct-transport-e2e-${RANDOM}"
-compose=(docker compose -f "$compose_file" -p "$project")
+project="omakure-direct-transport-e2e-${BASHPID}"
+compose=(timeout --foreground --kill-after=5s 120s docker compose -f "$compose_file" -p "$project")
+docker_cmd=(timeout --foreground --kill-after=5s 30s docker)
+sqlite_cmd=(timeout --foreground --kill-after=5s 20s sqlite3)
 tmp_dir=$(mktemp -d)
 
 cleanup() {
@@ -12,16 +14,74 @@ cleanup() {
     if (( status != 0 )); then
         "${compose[@]}" logs --no-log-prefix direct-a direct-b direct-c >&2 || true
     fi
-    "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+    if ! "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1; then
+        printf 'direct transport Docker E2E: Compose teardown failed for %s\n' "$project" >&2
+        status=1
+    fi
+    for resource in container network volume; do
+        local remaining
+        if ! remaining=$("${docker_cmd[@]}" "$resource" ls -q \
+            --filter "label=com.docker.compose.project=$project"); then
+            printf 'direct transport Docker E2E: unable to inspect %s resources\n' "$resource" >&2
+            status=1
+        elif [[ -n "$remaining" ]]; then
+            printf 'direct transport Docker E2E: %s resources survived teardown\n' "$resource" >&2
+            status=1
+        fi
+    done
     rm -rf "$tmp_dir"
     exit "$status"
 }
 trap cleanup EXIT
 
+# Compose interpolates service volume paths even for image-only builds.
+export OMAKURE_DIRECT_A_TOKENS_FILE="$tmp_dir/direct-a.tokens.placeholder" \
+    OMAKURE_DIRECT_A_CURL_FILE="$tmp_dir/direct-a.curl.placeholder" \
+    OMAKURE_DIRECT_B_TOKENS_FILE="$tmp_dir/direct-b.tokens.placeholder" \
+    OMAKURE_DIRECT_B_CURL_FILE="$tmp_dir/direct-b.curl.placeholder" \
+    OMAKURE_DIRECT_C_TOKENS_FILE="$tmp_dir/direct-c.tokens.placeholder" \
+    OMAKURE_DIRECT_C_CURL_FILE="$tmp_dir/direct-c.curl.placeholder"
+
 run_node() {
     local service=$1
     shift
     "${compose[@]}" run --rm --no-deps -T "$service" --json node "$@"
+}
+
+generate_auth() {
+    local service=$1
+    local tokens_path="$tmp_dir/${service}.tokens.toml"
+    local client_path="$tmp_dir/${service}.client.token"
+    local curl_path="$tmp_dir/${service}.curl.conf"
+    local stderr_path="$tmp_dir/${service}.token-generation.stderr"
+    local token_json
+    local status
+    if token_json=$("${docker_cmd[@]}" run --rm --entrypoint /usr/local/bin/omakure \
+        omakure-direct-transport-e2e:local --json token generate --id "direct-$service" --scope node:read \
+        2>"$stderr_path"); then
+        :
+    else
+        status=$?
+        generation_failure "$service" "$status" "$stderr_path"
+    fi
+    printf 'version = 1\n\n' >"$tokens_path"
+    jq -er '.data.tokens_file_entry' <<<"$token_json" >>"$tokens_path"
+    jq -er '.data.token' <<<"$token_json" >"$client_path"
+    printf 'header = "Authorization: Bearer %s"\n' "$(<"$client_path")" >"$curl_path"
+    chmod 0600 "$tokens_path" "$client_path" "$curl_path"
+    printf '%s|%s|%s\n' "$tokens_path" "$client_path" "$curl_path"
+}
+
+generation_failure() {
+    local service=$1 status=$2 stderr_path=$3
+    local stderr
+    stderr=$(<"$stderr_path")
+    case "${stderr,,}" in
+        *"bearer "*|*'$argon2'*|*"token ="*)
+            fail "token generation failed for $service: status=$status; stderr contained sensitive material"
+            ;;
+    esac
+    fail "token generation failed for $service: status=$status; stderr=$stderr"
 }
 
 write_config() {
@@ -57,17 +117,17 @@ EOF"
 }
 
 status_node() {
-    local port=$1
-    curl -fsS -H 'Authorization: Bearer direct-transport-docker-e2e-token-with-enough-entropy' \
-        "http://127.0.0.1:${port}/v1/node/status"
+    local service=$1
+    "${compose[@]}" exec -T "$service" curl --config /run/secrets/curl.conf \
+        --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:7878/v1/node/status
 }
 
 wait_connected() {
-    local port=$1
+    local service=$1
     local peer_id=$2
     local deadline=$((SECONDS + 30))
     while :; do
-        if status_output=$(status_node "$port" 2>/dev/null) \
+        if status_output=$(status_node "$service" 2>/dev/null) \
             && jq -e --arg peer "$peer_id" \
                 '.data.transport.connected_peer_count == 1 and .data.transport.peers[0].node_id == $peer and .data.transport.peers[0].state == "connected"' \
                 <<<"$status_output" >/dev/null; then
@@ -75,9 +135,7 @@ wait_connected() {
         fi
         if (( SECONDS >= deadline )); then
             printf 'static peer did not connect: %s\n' "${status_output:-<no output>}" >&2
-            if [[ "$port" == "${DIRECT_B_HTTP_PORT:-17879}" ]]; then
-                printf 'other node status: %s\n' "$(status_node "${DIRECT_A_HTTP_PORT:-17878}" 2>/dev/null || true)" >&2
-            fi
+            printf 'other node status: %s\n' "$(status_node direct-a 2>/dev/null || true)" >&2
             exit 1
         fi
         sleep 1
@@ -85,6 +143,15 @@ wait_connected() {
 }
 
 "${compose[@]}" build
+auth=$(generate_auth direct-a)
+IFS='|' read -r direct_a_tokens direct_a_client direct_a_curl <<<"$auth"
+auth=$(generate_auth direct-b)
+IFS='|' read -r direct_b_tokens direct_b_client direct_b_curl <<<"$auth"
+auth=$(generate_auth direct-c)
+IFS='|' read -r direct_c_tokens direct_c_client direct_c_curl <<<"$auth"
+export OMAKURE_DIRECT_A_TOKENS_FILE="$direct_a_tokens" OMAKURE_DIRECT_A_CURL_FILE="$direct_a_curl"
+export OMAKURE_DIRECT_B_TOKENS_FILE="$direct_b_tokens" OMAKURE_DIRECT_B_CURL_FILE="$direct_b_curl"
+export OMAKURE_DIRECT_C_TOKENS_FILE="$direct_c_tokens" OMAKURE_DIRECT_C_CURL_FILE="$direct_c_curl"
 run_node direct-a init >/dev/null
 run_node direct-b init >/dev/null
 run_node direct-c init >/dev/null
@@ -140,8 +207,8 @@ write_config direct-b "$a_id" direct-a
 
 "${compose[@]}" up -d direct-a direct-b >/dev/null
 
-wait_connected "${DIRECT_A_HTTP_PORT:-17878}" "$b_id"
-wait_connected "${DIRECT_B_HTTP_PORT:-17879}" "$a_id"
+wait_connected direct-a "$b_id"
+wait_connected direct-b "$a_id"
 
 direct_b_ip=$(
     "${compose[@]}" run --rm --no-deps -T --entrypoint sh direct-c \
@@ -166,21 +233,21 @@ write_config direct-a "$c_id" direct-b
 "${compose[@]}" down --remove-orphans >/dev/null
 "${compose[@]}" up -d direct-a direct-b >/dev/null
 sleep 3
-if [[ "$(status_node "${DIRECT_A_HTTP_PORT:-17878}" | jq -r '.data.transport.expected_connected_peer_count')" != "0" ]]; then
+    if [[ "$(status_node direct-a | jq -r '.data.transport.expected_connected_peer_count')" != "0" ]]; then
     printf 'mismatched static peer unexpectedly connected\n' >&2
     exit 1
 fi
 write_config direct-a "$b_id" direct-b
 "${compose[@]}" down --remove-orphans >/dev/null
 "${compose[@]}" up -d direct-a direct-b >/dev/null
-wait_connected "${DIRECT_A_HTTP_PORT:-17878}" "$b_id"
-wait_connected "${DIRECT_B_HTTP_PORT:-17879}" "$a_id"
+wait_connected direct-a "$b_id"
+wait_connected direct-b "$a_id"
 
 b_container=$("${compose[@]}" ps -q direct-b)
-docker network disconnect "${project}_default" "$b_container"
+"${docker_cmd[@]}" network disconnect "${project}_default" "$b_container"
 sleep 3
-docker network connect "${project}_default" "$b_container"
-wait_connected "${DIRECT_A_HTTP_PORT:-17878}" "$b_id"
+"${docker_cmd[@]}" network connect "${project}_default" "$b_container"
+wait_connected direct-a "$b_id"
 
 # Revocation must prevent a fresh session. Revocations are retained and cannot
 # be silently undone by re-importing the same identity.
@@ -193,14 +260,14 @@ run_node direct-b revoke "$a_id" \
 "${compose[@]}" stop direct-a >/dev/null
 "${compose[@]}" up -d direct-a >/dev/null
 sleep 3
-if [[ "$(status_node "${DIRECT_B_HTTP_PORT:-17879}" | jq -r '.data.transport.connected_peer_count')" != "0" ]]; then
+if [[ "$(status_node direct-b | jq -r '.data.transport.connected_peer_count')" != "0" ]]; then
     printf 'revoked peer unexpectedly connected\n' >&2
     exit 1
 fi
 
 "${compose[@]}" cp direct-b:/var/lib/omakure/node.sqlite "$tmp_dir/node.sqlite" >/dev/null
-accepted=$(sqlite3 "$tmp_dir/node.sqlite" "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'accepted';")
-rejected=$(sqlite3 "$tmp_dir/node.sqlite" "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'rejected';")
+accepted=$("${sqlite_cmd[@]}" "$tmp_dir/node.sqlite" "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'accepted';")
+rejected=$("${sqlite_cmd[@]}" "$tmp_dir/node.sqlite" "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'rejected';")
 if (( accepted < 2 || rejected < 1 )); then
     printf 'unexpected transport audit counts: accepted=%s rejected=%s\n' "$accepted" "$rejected" >&2
     exit 1

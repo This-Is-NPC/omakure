@@ -5,6 +5,8 @@ use crate::node::{NodeContext, NodeError, NodePathOverrides};
 use crate::operations::node as node_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use std::error::Error;
+use std::fs;
+use std::io::Read;
 
 pub fn run(
     scripts_dir: std::path::PathBuf,
@@ -79,6 +81,9 @@ pub fn run(
                 },
             )
             .map(|result| serde_json::to_value(result).expect("peer serializes")),
+            NodeEnrollCommand::Apply(args) => apply_bundle_inputs(args)
+                .and_then(|request| node_ops::apply_signed_bundle(&context, request))
+                .map(|result| serde_json::to_value(result).expect("peer serializes")),
         },
         NodeCommand::Capabilities(args) => node_ops::update_peer_capabilities(
             &context,
@@ -105,6 +110,58 @@ pub fn run(
             .map(|result| serde_json::to_value(result).expect("node reset serializes")),
     };
     emit_result(json_output, result)
+}
+
+fn apply_bundle_inputs(
+    args: crate::cli::args::NodeEnrollApplyArgs,
+) -> OperationResult<node_ops::SignedBundleApplyRequest> {
+    let bundle = read_bounded_file(&args.bundle_file, crate::enrollment::MAX_BUNDLE_INPUT_BYTES)
+        .map_err(|_| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                "signed enrollment bundle could not be read",
+            )
+        })?;
+    let bundle_hex = if bundle.len().is_multiple_of(2)
+        && bundle
+            .iter()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        String::from_utf8(bundle).map_err(|_| {
+            OperationError::new(
+                OperationErrorCode::EnrollmentInvalid,
+                "signed enrollment bundle is invalid",
+            )
+        })?
+    } else {
+        crate::enrollment::hex_bytes(&bundle)
+    };
+    Ok(node_ops::SignedBundleApplyRequest {
+        bundle_hex,
+        bootstrap_token: String::new(),
+        bootstrap_nonce: args.bootstrap_nonce,
+        bootstrap_token_path: Some(args.bootstrap_token_file),
+    })
+}
+
+fn read_bounded_file(path: &std::path::Path, max_bytes: usize) -> std::io::Result<Vec<u8>> {
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() || metadata.len() > max_bytes as u64 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "file exceeds the configured bound",
+        ));
+    }
+    let file = fs::File::open(path)?;
+    let mut contents = Vec::with_capacity(metadata.len() as usize);
+    file.take(max_bytes as u64 + 1).read_to_end(&mut contents)?;
+    if contents.len() > max_bytes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "file exceeds the configured bound",
+        ));
+    }
+    Ok(contents)
 }
 
 fn map_direct_error(error: crate::direct_service::DirectServiceError) -> OperationError {

@@ -571,6 +571,10 @@ pub struct NodeServeArgs {
     /// Allowed secret provider ref for secrets:use. Same as `omakure api --secret-ref`.
     #[arg(long = "secret-ref")]
     pub secret_refs: Vec<String>,
+
+    /// Node-local one-time bootstrap token file for the signed-bundle API.
+    #[arg(long = "bootstrap-token-file", env = "OMAKURE_BOOTSTRAP_TOKEN_FILE")]
+    pub bootstrap_token_file: Option<std::path::PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -642,6 +646,9 @@ pub enum NodeEnrollCommand {
 
     /// Reject one pending request without activating trust
     Reject(NodeEnrollRejectArgs),
+
+    /// Apply one authority-signed unattended enrollment bundle
+    Apply(NodeEnrollApplyArgs),
 }
 
 #[derive(Args, Debug)]
@@ -706,6 +713,21 @@ pub struct NodeEnrollRejectArgs {
     /// Confirm this denial explicitly
     #[arg(long)]
     pub confirmed: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeEnrollApplyArgs {
+    /// Exact signed OMEB bundle file. The file is never echoed or persisted.
+    #[arg(long = "bundle-file")]
+    pub bundle_file: PathBuf,
+
+    /// One-time bootstrap token file. The token is never echoed or persisted.
+    #[arg(long = "bootstrap-token-file")]
+    pub bootstrap_token_file: PathBuf,
+
+    /// One-time 16-byte bootstrap nonce as lowercase hexadecimal.
+    #[arg(long = "bootstrap-nonce")]
+    pub bootstrap_nonce: String,
 }
 
 #[derive(Args, Debug)]

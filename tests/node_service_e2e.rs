@@ -2,7 +2,9 @@ mod support;
 
 use serde_json::json;
 use std::fs;
+use std::net::{TcpListener, TcpStream};
 use std::path::Path;
+use std::process::Command;
 use std::time::Duration;
 
 const API_TOKEN: &str = "node-service-e2e-token-with-enough-entropy-00001";
@@ -366,6 +368,109 @@ fn corrupt_node_state_fails_before_readiness_without_replacing_identity() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("node trust registry is invalid or corrupt"));
     assert!(!stderr.contains("corrupt node registry"));
+}
+
+#[cfg(unix)]
+#[test]
+fn bootstrap_token_recovery_failure_aborts_before_listener_readiness() {
+    let workspace = support::TestWorkspace::new("node_service_token_recovery_failure");
+    let state = workspace.path().join("state");
+    let config = workspace.path().join("node.toml");
+    let state_arg = state.to_string_lossy().to_string();
+    let config_arg = config.to_string_lossy().to_string();
+    let init = support::command_with_timeout(
+        support::omakure_command()
+            .arg("--scripts-dir")
+            .arg(workspace.path())
+            .args([
+                "node",
+                "--node-state-dir",
+                &state_arg,
+                "--node-config",
+                &config_arg,
+                "init",
+            ])
+            .env("OMAKURE_NODE_TEST_MODE", "1"),
+        Duration::from_secs(10),
+    );
+    assert!(init.status.success(), "init failed: {:?}", init.status);
+
+    let token = "startup-recovery-token-with-enough-entropy-00001";
+    let nonce = [7_u8; 16];
+    let config_text = format!(
+        r#"version = 1
+
+[node]
+display_name = "recovery-failure"
+
+[api]
+bind = "127.0.0.1:7878"
+
+[network]
+mode = "direct"
+relays = []
+static_peers = []
+max_message_bytes = 1048576
+
+[trust]
+enrollment = "signed-bundle"
+allow_remote_cues = false
+allow_baseline_push = false
+authorities = [{{ key_id = "00000000000000000000000000000000", public_key = "0000000000000000000000000000000000000000000000000000000000000000", revoked = false }}]
+bootstrap_token_hash = "{}"
+bootstrap_nonce_hash = "{}"
+
+[organization]
+id = "omakure"
+discovery_secret_ref = ""
+"#,
+        omakure::enrollment::hex_bytes(&omakure::enrollment::hash_bootstrap_token(
+            token.as_bytes(),
+        )),
+        omakure::enrollment::hex_bytes(&omakure::enrollment::hash_bootstrap_nonce(&nonce)),
+    );
+    fs::write(&config, config_text).unwrap();
+
+    let token_path = workspace.path().join("bootstrap.token");
+    let token_target = workspace.path().join("token-target");
+    fs::write(&token_target, token).unwrap();
+    let tombstone = workspace
+        .path()
+        .join(".omakure-bootstrap-token-00000000000000000000000000000000-bootstrap.token");
+    std::os::unix::fs::symlink(&token_target, &tombstone).unwrap();
+
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let address = listener.local_addr().unwrap();
+    drop(listener);
+    let output = support::command_with_timeout(
+        Command::new(support::omakure_bin())
+            .arg("--scripts-dir")
+            .arg(workspace.path())
+            .args([
+                "node",
+                "--node-state-dir",
+                &state_arg,
+                "--node-config",
+                &config_arg,
+                "serve",
+                "--bind",
+                &address.to_string(),
+                "--workers",
+                "0",
+                "--no-scheduler",
+                "--bootstrap-token-file",
+            ])
+            .arg(&token_path)
+            .env("OMAKURE_NODE_TEST_MODE", "1")
+            .env("OMAKURE_API_TOKEN", API_TOKEN),
+        Duration::from_secs(5),
+    );
+    assert!(!output.status.success());
+    assert!(TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_err());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("bootstrap token cleanup recovery failed"));
+    assert!(!stderr.contains(token));
+    assert!(!stderr.contains(workspace.path().to_string_lossy().as_ref()));
 }
 
 #[test]

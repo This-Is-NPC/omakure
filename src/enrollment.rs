@@ -6,7 +6,10 @@
 
 use crate::direct_transport::validate_x25519_public;
 use crate::node_identity::NodeIdentity;
-use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
+use k256::schnorr::{
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
+    Signature, SigningKey, VerifyingKey,
+};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
@@ -30,6 +33,15 @@ pub const PAIRING_ID_BYTES: usize = 16;
 pub const CODE_BYTES: usize = 16;
 pub const SIGNATURE_BYTES: usize = 64;
 pub const DOMAIN: &[u8] = b"omakure/manual-enrollment/v1\0";
+pub const BUNDLE_DOMAIN: &[u8] = b"omakure/enrollment-bundle/v1\0";
+pub const BUNDLE_VERSION: u8 = 1;
+pub const MAX_BUNDLE_BYTES: usize = 8_192;
+pub const MAX_BUNDLE_INPUT_BYTES: usize = MAX_BUNDLE_BYTES * 2;
+pub const MAX_BOOTSTRAP_TOKEN_BYTES: usize = 256;
+pub const BUNDLE_AUTHORITY_ID_BYTES: usize = 16;
+pub const MAX_ORGANIZATION_BYTES: usize = 128;
+pub const BUNDLE_FUTURE_SKEW_SECONDS: u64 = 300;
+pub const BUNDLE_MAX_LIFETIME_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 const MAGIC: &[u8; 4] = b"OMMA";
 const SUPPORTED_CAPABILITIES: &[&str] = &[
@@ -54,6 +66,295 @@ pub enum EnrollmentError {
     IdentityMismatch,
     #[error("manual enrollment request is too large")]
     TooLarge,
+    #[error("signed enrollment bundle authority is not trusted")]
+    AuthorityUnknown,
+    #[error("signed enrollment bundle authority is revoked")]
+    AuthorityRevoked,
+    #[error("signed enrollment bundle organization does not match local policy")]
+    OrganizationMismatch,
+    #[error("signed enrollment bundle audience does not match this node")]
+    AudienceMismatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundleAuthority {
+    pub key_id: [u8; BUNDLE_AUTHORITY_ID_BYTES],
+    pub public_key: [u8; IDENTITY_KEY_BYTES],
+    pub revoked: bool,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct SignedEnrollmentBundle {
+    pub bundle_id: [u8; REQUEST_ID_BYTES],
+    pub authority_key_id: [u8; BUNDLE_AUTHORITY_ID_BYTES],
+    pub organization: String,
+    pub audience_node_id: String,
+    pub subject_node_id: String,
+    pub subject_xonly: [u8; IDENTITY_KEY_BYTES],
+    pub subject_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
+    pub subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+    pub role: EnrollmentRole,
+    pub capabilities: Vec<String>,
+    pub issued_at: u64,
+    pub expires_at: u64,
+    pub authority_signature: [u8; SIGNATURE_BYTES],
+}
+
+impl fmt::Debug for SignedEnrollmentBundle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SignedEnrollmentBundle")
+            .field("bundle_id", &hex(&self.bundle_id))
+            .field("authority_key_id", &hex(&self.authority_key_id))
+            .field("organization", &self.organization)
+            .field("audience_node_id", &self.audience_node_id)
+            .field("subject_node_id", &self.subject_node_id)
+            .field("subject_xonly", &"<redacted-public-key>")
+            .field("subject_transport_x25519", &"<redacted-public-key>")
+            .field("subject_certificate", &"<redacted-certificate>")
+            .field("role", &self.role)
+            .field("capabilities", &self.capabilities)
+            .field("issued_at", &self.issued_at)
+            .field("expires_at", &self.expires_at)
+            .field("authority_signature", &"<redacted>")
+            .finish()
+    }
+}
+
+impl SignedEnrollmentBundle {
+    #[allow(clippy::too_many_arguments)]
+    pub fn sign_with_material(
+        authority_private_key: &[u8],
+        bundle_id: [u8; REQUEST_ID_BYTES],
+        authority_key_id: [u8; BUNDLE_AUTHORITY_ID_BYTES],
+        organization: String,
+        audience_node_id: String,
+        subject_node_id: String,
+        subject_xonly: [u8; IDENTITY_KEY_BYTES],
+        subject_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
+        subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+        role: EnrollmentRole,
+        capabilities: Vec<String>,
+        issued_at: u64,
+        expires_at: u64,
+    ) -> Result<Self, EnrollmentError> {
+        let signing_key = SigningKey::from_slice(authority_private_key)
+            .map_err(|_| EnrollmentError::IdentityMismatch)?;
+        let mut bundle = Self {
+            bundle_id,
+            authority_key_id,
+            organization,
+            audience_node_id,
+            subject_node_id,
+            subject_xonly,
+            subject_transport_x25519,
+            subject_certificate,
+            role,
+            capabilities,
+            issued_at,
+            expires_at,
+            authority_signature: [0; SIGNATURE_BYTES],
+        };
+        let digest = hash_domain(&bundle.unsigned_bytes()?, BUNDLE_DOMAIN);
+        bundle.authority_signature = signing_key
+            .sign_prehash(&digest)
+            .map_err(|_| EnrollmentError::IdentityMismatch)?
+            .to_bytes();
+        bundle.verify_shape()?;
+        Ok(bundle)
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, EnrollmentError> {
+        if bytes.len() > MAX_BUNDLE_BYTES {
+            return Err(EnrollmentError::TooLarge);
+        }
+        let mut cursor = Cursor::new(bytes);
+        if cursor.take(4)? != b"OMEB"
+            || cursor.byte()? != BUNDLE_VERSION
+            || cursor.take(2)? != [0, 0]
+        {
+            return Err(EnrollmentError::Invalid);
+        }
+        let bundle_id = cursor.array::<REQUEST_ID_BYTES>()?;
+        let authority_key_id = cursor.array::<BUNDLE_AUTHORITY_ID_BYTES>()?;
+        let organization_length = usize::from(cursor.u16()?);
+        let organization = cursor.text(organization_length)?;
+        let audience_node_id = cursor.text(NODE_ID_BYTES)?;
+        let subject_node_id = cursor.text(NODE_ID_BYTES)?;
+        let subject_xonly = cursor.array::<IDENTITY_KEY_BYTES>()?;
+        let subject_transport_x25519 = cursor.array::<TRANSPORT_KEY_BYTES>()?;
+        let subject_certificate =
+            cursor.array::<{ crate::direct_transport::MAX_CERTIFICATE_BYTES }>()?;
+        let role = EnrollmentRole::from_u8(cursor.byte()?)?;
+        let capability_count = usize::from(cursor.byte()?);
+        if capability_count > MAX_CAPABILITIES {
+            return Err(EnrollmentError::Invalid);
+        }
+        let mut capabilities = Vec::with_capacity(capability_count);
+        for _ in 0..capability_count {
+            let length = usize::from(cursor.u16()?);
+            capabilities.push(cursor.text(length)?);
+        }
+        let issued_at = cursor.u64()?;
+        let expires_at = cursor.u64()?;
+        let authority_signature = cursor.array::<SIGNATURE_BYTES>()?;
+        if cursor.remaining() != 0 {
+            return Err(EnrollmentError::Invalid);
+        }
+        let bundle = Self {
+            bundle_id,
+            authority_key_id,
+            organization,
+            audience_node_id,
+            subject_node_id,
+            subject_xonly,
+            subject_transport_x25519,
+            subject_certificate,
+            role,
+            capabilities,
+            issued_at,
+            expires_at,
+            authority_signature,
+        };
+        bundle.verify_shape()?;
+        Ok(bundle)
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        self.unsigned_bytes()
+            .expect("signed enrollment bundle must be valid")
+            .into_iter()
+            .chain(self.authority_signature)
+            .collect()
+    }
+
+    pub fn verify(
+        &self,
+        authority: &BundleAuthority,
+        organization: &str,
+        audience_node_id: &str,
+        now: u64,
+    ) -> Result<(), EnrollmentError> {
+        self.verify_shape()?;
+        if self.authority_key_id != authority.key_id {
+            return Err(EnrollmentError::AuthorityUnknown);
+        }
+        if authority.revoked {
+            return Err(EnrollmentError::AuthorityRevoked);
+        }
+        if self.organization != organization {
+            return Err(EnrollmentError::OrganizationMismatch);
+        }
+        if self.audience_node_id != audience_node_id {
+            return Err(EnrollmentError::AudienceMismatch);
+        }
+        if now.saturating_add(BUNDLE_FUTURE_SKEW_SECONDS) < self.issued_at || now >= self.expires_at
+        {
+            return Err(EnrollmentError::Expired);
+        }
+        let key = VerifyingKey::from_slice(&authority.public_key)
+            .map_err(|_| EnrollmentError::AuthorityUnknown)?;
+        let signature = Signature::from_slice(&self.authority_signature)
+            .map_err(|_| EnrollmentError::Invalid)?;
+        let digest = hash_domain(&self.unsigned_bytes()?, BUNDLE_DOMAIN);
+        key.verify_prehash(&digest, &signature)
+            .map_err(|_| EnrollmentError::IdentityMismatch)
+    }
+
+    pub fn replay_expiry(&self) -> u64 {
+        self.expires_at.saturating_add(REPLAY_RETENTION_SECONDS)
+    }
+
+    fn unsigned_bytes(&self) -> Result<Vec<u8>, EnrollmentError> {
+        self.verify_shape()?;
+        let mut bytes = Vec::with_capacity(604);
+        bytes.extend_from_slice(b"OMEB");
+        bytes.push(BUNDLE_VERSION);
+        bytes.extend_from_slice(&0_u16.to_be_bytes());
+        bytes.extend_from_slice(&self.bundle_id);
+        bytes.extend_from_slice(&self.authority_key_id);
+        bytes.extend_from_slice(
+            &u16::try_from(self.organization.len())
+                .map_err(|_| EnrollmentError::TooLarge)?
+                .to_be_bytes(),
+        );
+        bytes.extend_from_slice(self.organization.as_bytes());
+        bytes.extend_from_slice(self.audience_node_id.as_bytes());
+        bytes.extend_from_slice(self.subject_node_id.as_bytes());
+        bytes.extend_from_slice(&self.subject_xonly);
+        bytes.extend_from_slice(&self.subject_transport_x25519);
+        bytes.extend_from_slice(&self.subject_certificate);
+        bytes.push(self.role as u8);
+        bytes.push(u8::try_from(self.capabilities.len()).map_err(|_| EnrollmentError::Invalid)?);
+        for capability in &self.capabilities {
+            bytes.extend_from_slice(
+                &u16::try_from(capability.len())
+                    .map_err(|_| EnrollmentError::Invalid)?
+                    .to_be_bytes(),
+            );
+            bytes.extend_from_slice(capability.as_bytes());
+        }
+        bytes.extend_from_slice(&self.issued_at.to_be_bytes());
+        bytes.extend_from_slice(&self.expires_at.to_be_bytes());
+        if bytes.len() + SIGNATURE_BYTES > MAX_BUNDLE_BYTES {
+            return Err(EnrollmentError::TooLarge);
+        }
+        Ok(bytes)
+    }
+
+    fn verify_shape(&self) -> Result<(), EnrollmentError> {
+        if self.bundle_id == [0; REQUEST_ID_BYTES]
+            || self.authority_key_id == [0; BUNDLE_AUTHORITY_ID_BYTES]
+            || self.organization.is_empty()
+            || self.organization.len() > MAX_ORGANIZATION_BYTES
+            || self
+                .organization
+                .bytes()
+                .any(|byte| byte.is_ascii_control())
+        {
+            return Err(EnrollmentError::Invalid);
+        }
+        for node_id in [&self.audience_node_id, &self.subject_node_id] {
+            if node_id.len() != NODE_ID_BYTES
+                || !node_id.starts_with("omk1_")
+                || !node_id[5..]
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            {
+                return Err(EnrollmentError::IdentityMismatch);
+            }
+        }
+        if crate::node_identity::node_id_for_x_only_public_key(&self.subject_xonly)
+            != self.subject_node_id
+        {
+            return Err(EnrollmentError::IdentityMismatch);
+        }
+        crate::direct_transport::validate_x25519_public(&self.subject_transport_x25519)
+            .map_err(|_| EnrollmentError::Invalid)?;
+        let certificate =
+            crate::direct_transport::TransportCertificate::from_bytes(&self.subject_certificate)
+                .map_err(|_| EnrollmentError::IdentityMismatch)?;
+        if certificate.node_id() != self.subject_node_id
+            || certificate.identity_key() != &self.subject_xonly
+            || certificate.transport_public() != &self.subject_transport_x25519
+        {
+            return Err(EnrollmentError::IdentityMismatch);
+        }
+        if self.expires_at <= self.issued_at
+            || self.expires_at - self.issued_at > BUNDLE_MAX_LIFETIME_SECONDS
+        {
+            return Err(EnrollmentError::Invalid);
+        }
+        validate_capabilities(&self.capabilities)
+    }
+}
+
+pub fn hash_bootstrap_token(token: &[u8]) -> [u8; 32] {
+    hash_domain(token, b"omakure/bootstrap-token/v1\0")
+}
+
+pub fn hash_bootstrap_nonce(nonce: &[u8]) -> [u8; 32] {
+    hash_domain(nonce, b"omakure/bootstrap-nonce/v1\0")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -583,5 +884,101 @@ mod tests {
             offer.request.verify(1_700_000_600),
             Err(EnrollmentError::Expired)
         ));
+    }
+
+    #[test]
+    fn signed_bundle_is_canonical_and_binds_authority_audience_and_certificate() {
+        let manager_temp = TempDir::new().unwrap();
+        let manager_context = NodeContext::resolve_for(
+            NodePlatform::Linux,
+            NodePathOverrides::new(
+                Some(manager_temp.path().join("state")),
+                Some(manager_temp.path().join("node.toml")),
+            ),
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let manager = NodeIdentity::load_or_initialize(&manager_context).unwrap();
+        let manager_transport =
+            crate::node_transport::LocalTransport::provision_new(&manager_context, &manager)
+                .unwrap();
+        let target_temp = TempDir::new().unwrap();
+        let target_context = NodeContext::resolve_for(
+            NodePlatform::Linux,
+            NodePathOverrides::new(
+                Some(target_temp.path().join("state")),
+                Some(target_temp.path().join("node.toml")),
+            ),
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let target = NodeIdentity::load_or_initialize(&target_context).unwrap();
+        let authority_private = [2_u8; 32];
+        let authority_key = SigningKey::from_slice(&authority_private).unwrap();
+        let bundle = SignedEnrollmentBundle::sign_with_material(
+            &authority_private,
+            [7; REQUEST_ID_BYTES],
+            [8; BUNDLE_AUTHORITY_ID_BYTES],
+            "omakure".to_string(),
+            target.public_status().node_id.clone(),
+            manager.public_status().node_id.clone(),
+            decode_hex(&manager.public_status().public_key_hex).unwrap(),
+            *manager_transport.certificate().transport_public(),
+            *manager_transport.certificate().as_bytes(),
+            EnrollmentRole::Conductor,
+            vec!["baseline-push".to_string(), "remote-run".to_string()],
+            1_700_000_000,
+            1_700_000_600,
+        )
+        .unwrap();
+        assert_eq!(bundle.encode().len(), 604);
+        let parsed = SignedEnrollmentBundle::decode(&bundle.encode()).unwrap();
+        parsed
+            .verify(
+                &BundleAuthority {
+                    key_id: [8; BUNDLE_AUTHORITY_ID_BYTES],
+                    public_key: authority_key.verifying_key().to_bytes().into(),
+                    revoked: false,
+                },
+                "omakure",
+                target.public_status().node_id.as_str(),
+                1_700_000_001,
+            )
+            .unwrap();
+        assert!(matches!(
+            parsed.verify(
+                &BundleAuthority {
+                    key_id: [8; BUNDLE_AUTHORITY_ID_BYTES],
+                    public_key: authority_key.verifying_key().to_bytes().into(),
+                    revoked: false,
+                },
+                "other-org",
+                target.public_status().node_id.as_str(),
+                1_700_000_001,
+            ),
+            Err(EnrollmentError::OrganizationMismatch)
+        ));
+        assert!(matches!(
+            parsed.verify(
+                &BundleAuthority {
+                    key_id: [8; BUNDLE_AUTHORITY_ID_BYTES],
+                    public_key: authority_key.verifying_key().to_bytes().into(),
+                    revoked: true,
+                },
+                "omakure",
+                target.public_status().node_id.as_str(),
+                1_700_000_001,
+            ),
+            Err(EnrollmentError::AuthorityRevoked)
+        ));
+        let mut altered = bundle.encode();
+        altered[117] ^= 1;
+        assert!(SignedEnrollmentBundle::decode(&altered).is_err());
     }
 }

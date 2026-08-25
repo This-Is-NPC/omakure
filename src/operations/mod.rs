@@ -45,6 +45,7 @@ pub enum OperationErrorCode {
     EnrollmentReplay,
     EnrollmentMismatch,
     EnrollmentDenied,
+    EnrollmentRateLimited,
 }
 
 impl OperationErrorCode {
@@ -80,6 +81,7 @@ impl OperationErrorCode {
             Self::EnrollmentReplay => "enrollment_replay",
             Self::EnrollmentMismatch => "enrollment_mismatch",
             Self::EnrollmentDenied => "enrollment_denied",
+            Self::EnrollmentRateLimited => "enrollment_rate_limited",
         }
     }
 }

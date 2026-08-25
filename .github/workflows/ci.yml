@@ -32,6 +32,9 @@ jobs:
         run: cargo test --all-targets --locked
       - name: Test node-service lifecycle surface
         run: cargo test --test node_service_e2e --test policy_e2e --locked
+      - name: Compile platform-specific node security paths
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: cargo check --all-targets --locked
       - name: Build release binary
         run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
 

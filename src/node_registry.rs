@@ -6,7 +6,7 @@
 //! with an actor and reason recorded in the append-only audit log.
 
 use crate::direct_transport::TransportCertificate;
-use crate::enrollment::{self, ManualEnrollmentRequest};
+use crate::enrollment::{self, ManualEnrollmentRequest, SignedEnrollmentBundle};
 use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 6;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_ACTOR_BYTES: usize = 256;
 const MAX_REASON_BYTES: usize = 1024;
@@ -28,9 +28,12 @@ const NODE_ID_BYTES: usize = 69;
 const PUBLIC_KEY_BYTES: usize = 64;
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
-const MAX_ENROLLMENT_REPLAY_ROWS: i64 = 100_000;
-const MAX_ENROLLMENT_AUDIT_ROWS: i64 = 100_000;
-const MAX_ENROLLMENT_REQUEST_ROWS: i64 = 100_000;
+const MAX_ENROLLMENT_REPLAY_ROWS: i64 = 1_000_000;
+const MAX_ENROLLMENT_AUDIT_ROWS: i64 = 1_000_000;
+const MAX_ENROLLMENT_REQUEST_ROWS: i64 = 1_000_000;
+const MAX_BOOTSTRAP_PROOF_ROWS: i64 = 1_000_000;
+const MAX_ENROLLMENT_CLEANUP_ROWS: i64 = 10_000;
+const MAX_BUNDLE_ACTIVATIONS_PER_MINUTE: i64 = 4;
 type StagedManualEnrollment = (
     Option<Vec<u8>>,
     Vec<u8>,
@@ -96,6 +99,18 @@ pub enum RegistryError {
     EnrollmentCapacity,
     #[error("manual enrollment evidence does not match staged state")]
     EnrollmentMismatch,
+    #[error("signed enrollment bundle was replayed")]
+    BundleReplay,
+    #[error("signed enrollment bundle conflicts with existing trust state")]
+    BundleConflict,
+    #[error("signed enrollment replay capacity is exhausted")]
+    BundleCapacity,
+    #[error("signed enrollment bundle rate limit exceeded")]
+    BundleRateLimited,
+    #[error("signed enrollment bootstrap proof was already consumed")]
+    BootstrapProofConsumed,
+    #[error("an active conductor already exists")]
+    ConductorConflict,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -256,6 +271,14 @@ pub struct NodeRegistry {
     local_public_key: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PendingBootstrapCleanup {
+    pub organization: String,
+    pub token_hash: [u8; 32],
+    pub nonce_hash: [u8; 32],
+    pub bundle_id: [u8; 16],
+}
+
 impl NodeRegistry {
     /// Open and validate the node-owned database for the supplied public identity.
     pub(crate) fn open(
@@ -361,6 +384,128 @@ impl NodeRegistry {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub(crate) fn bootstrap_proof_consumed(
+        &self,
+        organization: &str,
+    ) -> Result<bool, RegistryError> {
+        self.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT EXISTS(
+                         SELECT 1 FROM bootstrap_proofs
+                         WHERE target_node_id = ?1 AND organization = ?2 AND consumed_at IS NOT NULL
+                     )",
+                    params![&self.local_node_id, organization],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map(|value| value != 0)
+                .map_err(RegistryError::from)
+        })
+    }
+
+    pub(crate) fn pending_bootstrap_cleanups(
+        &self,
+        organization: &str,
+        limit: usize,
+    ) -> Result<Vec<PendingBootstrapCleanup>, RegistryError> {
+        let query_limit = i64::try_from(limit.saturating_add(1))
+            .map_err(|_| RegistryError::InvalidInput("cleanup limit is too large".to_string()))?;
+        self.with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT organization, token_hash, nonce_hash, bundle_id
+                 FROM bootstrap_proofs
+                 WHERE target_node_id = ?1 AND organization = ?2
+                   AND consumed_at IS NOT NULL AND cleanup_state = 'pending'
+                 ORDER BY consumed_at, bundle_id
+                 LIMIT ?3",
+            )?;
+            let rows = statement
+                .query_map(
+                    params![&self.local_node_id, organization, query_limit],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, Vec<u8>>(1)?,
+                            row.get::<_, Vec<u8>>(2)?,
+                            row.get::<_, Vec<u8>>(3)?,
+                        ))
+                    },
+                )?
+                .collect::<Result<Vec<_>, _>>()?;
+            let rows = rows
+                .into_iter()
+                .map(|(organization, token_hash, nonce_hash, bundle_id)| {
+                    Ok(PendingBootstrapCleanup {
+                        organization,
+                        token_hash: token_hash.try_into().map_err(|_| {
+                            RegistryError::InvalidSchema(
+                                "pending bootstrap token hash has invalid length".to_string(),
+                            )
+                        })?,
+                        nonce_hash: nonce_hash.try_into().map_err(|_| {
+                            RegistryError::InvalidSchema(
+                                "pending bootstrap nonce hash has invalid length".to_string(),
+                            )
+                        })?,
+                        bundle_id: bundle_id.try_into().map_err(|_| {
+                            RegistryError::InvalidSchema(
+                                "pending bootstrap bundle ID has invalid length".to_string(),
+                            )
+                        })?,
+                    })
+                })
+                .collect::<Result<Vec<_>, RegistryError>>()?;
+            if rows.len() > limit {
+                return Err(RegistryError::InvalidSchema(
+                    "too many pending bootstrap cleanups".to_string(),
+                ));
+            }
+            Ok(rows)
+        })
+    }
+
+    pub(crate) fn complete_bootstrap_cleanup(
+        &self,
+        cleanup: &PendingBootstrapCleanup,
+        bundle_digest: Option<&[u8; 32]>,
+    ) -> Result<(), RegistryError> {
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let updated = transaction.execute(
+                "UPDATE bootstrap_proofs
+                 SET cleanup_state = 'complete'
+                 WHERE target_node_id = ?1 AND organization = ?2
+                   AND token_hash = ?3 AND nonce_hash = ?4
+                   AND bundle_id = ?5 AND consumed_at IS NOT NULL
+                   AND cleanup_state = 'pending'",
+                params![
+                    &self.local_node_id,
+                    &cleanup.organization,
+                    cleanup.token_hash.as_slice(),
+                    cleanup.nonce_hash.as_slice(),
+                    cleanup.bundle_id.as_slice(),
+                ],
+            )?;
+            if updated != 1 {
+                return Err(RegistryError::InvalidSchema(
+                    "pending bootstrap cleanup disappeared".to_string(),
+                ));
+            }
+            record_enrollment_audit_tx(
+                &transaction,
+                "cleanup_completed",
+                Some(&cleanup.bundle_id),
+                bundle_digest,
+                &self.local_node_id,
+                "accepted",
+                "bootstrap token cleanup completed",
+            )?;
+            transaction.commit()?;
+            Ok(())
+        })
     }
 
     pub fn local_node_id(&self) -> &str {
@@ -663,6 +808,233 @@ impl NodeRegistry {
             )?;
             let peer = load_peer(&transaction, &registration.node_id)?
                 .ok_or_else(|| RegistryError::Corrupt("staged enrollment disappeared".into()))?;
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    pub fn activate_signed_bundle(
+        &self,
+        bundle: &SignedEnrollmentBundle,
+        actor: &str,
+        reason: &str,
+        now: u64,
+        token_hash: &[u8; 32],
+        nonce_hash: &[u8; 32],
+    ) -> Result<PeerRecord, RegistryError> {
+        let bundle_bytes = bundle.encode();
+        let bundle_digest = digest(&bundle_bytes);
+        let result = self.activate_signed_bundle_transaction(
+            bundle,
+            actor,
+            reason,
+            now,
+            token_hash,
+            nonce_hash,
+            &bundle_digest,
+        );
+        match result {
+            Ok(peer) => Ok(peer),
+            Err(error) => match self.record_enrollment_audit(
+                bundle_failure_code(&error),
+                Some(&bundle.bundle_id),
+                Some(&bundle_digest),
+                &bundle.subject_node_id,
+                "rejected",
+                bundle_failure_detail(&error),
+            ) {
+                Ok(()) => Err(error),
+                Err(audit_error) => Err(audit_error),
+            },
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn activate_signed_bundle_transaction(
+        &self,
+        bundle: &SignedEnrollmentBundle,
+        actor: &str,
+        reason: &str,
+        now: u64,
+        token_hash: &[u8; 32],
+        nonce_hash: &[u8; 32],
+        bundle_digest: &[u8; 32],
+    ) -> Result<PeerRecord, RegistryError> {
+        if bundle.subject_node_id == self.local_node_id {
+            return Err(RegistryError::SelfTrust);
+        }
+        validate_actor_reason(actor, reason)?;
+        let role = match bundle.role {
+            crate::enrollment::EnrollmentRole::Conductor => PeerRole::Conductor,
+            crate::enrollment::EnrollmentRole::Performer => PeerRole::Performer,
+        };
+        let registration = PeerRegistration {
+            node_id: bundle.subject_node_id.clone(),
+            public_key: enrollment::hex_bytes(bundle.subject_xonly.as_slice()),
+            role,
+            capabilities: bundle.capabilities.clone(),
+            source: PeerSource::Bundle,
+            actor: actor.to_string(),
+            reason: reason.to_string(),
+        };
+        let first_seen = i64::try_from(now)
+            .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+        let replay_expiry = i64::try_from(bundle.replay_expiry())
+            .map_err(|_| RegistryError::InvalidInput("enrollment expiry is too large".into()))?;
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            cleanup_enrollment_replays(&transaction, now)?;
+            cleanup_bootstrap_proofs(&transaction, now)?;
+            let proof_exists: Option<(Option<i64>, Option<Vec<u8>>)> = transaction
+                .query_row(
+                    "SELECT consumed_at, bundle_id FROM bootstrap_proofs
+                     WHERE target_node_id = ?1 AND organization = ?2
+                       AND token_hash = ?3 AND nonce_hash = ?4",
+                    params![
+                        &self.local_node_id,
+                        &bundle.organization,
+                        token_hash.as_slice(),
+                        nonce_hash.as_slice(),
+                    ],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?;
+            if proof_exists.as_ref().is_some_and(|(consumed_at, _)| consumed_at.is_some()) {
+                return Err(RegistryError::BootstrapProofConsumed);
+            }
+            if proof_exists.is_none() {
+                let proof_count: i64 = transaction.query_row(
+                    "SELECT COUNT(*) FROM bootstrap_proofs",
+                    [],
+                    |row| row.get(0),
+                )?;
+                if proof_count >= MAX_BOOTSTRAP_PROOF_ROWS {
+                    return Err(RegistryError::BundleCapacity);
+                }
+                transaction.execute(
+                    "INSERT INTO bootstrap_proofs
+                     (target_node_id, organization, token_hash, nonce_hash, expires_at, consumed_at, bundle_id, cleanup_state)
+                     VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL)",
+                    params![
+                        &self.local_node_id,
+                        &bundle.organization,
+                        token_hash.as_slice(),
+                        nonce_hash.as_slice(),
+                        i64::try_from(bundle.replay_expiry()).map_err(|_| {
+                            RegistryError::InvalidInput("bootstrap proof expiry is too large".into())
+                        })?,
+                    ],
+                )?;
+            }
+            if transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM enrollment_replays
+                 WHERE replay_kind = 'bundle' AND replay_id = ?1)",
+                [&bundle.bundle_id[..]],
+                |row| row.get::<_, i64>(0),
+            )? != 0
+            {
+                return Err(RegistryError::BundleReplay);
+            }
+            let replay_count: i64 = transaction.query_row(
+                "SELECT COUNT(*) FROM enrollment_replays",
+                [],
+                |row| row.get(0),
+            )?;
+            if replay_count >= MAX_ENROLLMENT_REPLAY_ROWS {
+                return Err(RegistryError::BundleCapacity);
+            }
+            let rate_floor = first_seen.saturating_sub(60);
+            let recent_attempts: i64 = transaction.query_row(
+                "SELECT COUNT(*) FROM enrollment_audits
+                 WHERE event_code IN ('bundle_completed', 'concurrent', 'revoked_authority')
+                   AND occurred_at >= ?1",
+                [rate_floor],
+                |row| row.get(0),
+            )?;
+            if recent_attempts >= MAX_BUNDLE_ACTIVATIONS_PER_MINUTE {
+                return Err(RegistryError::BundleRateLimited);
+            }
+            reject_retained_revocation(
+                &transaction,
+                &registration.node_id,
+                &registration.public_key,
+            )?;
+            if peer_exists(&transaction, &registration.node_id)?
+                || public_key_exists(&transaction, &registration.public_key)?
+            {
+                return Err(RegistryError::BundleConflict);
+            }
+            if registration.role == PeerRole::Conductor
+                && transaction.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM peers WHERE role = 'conductor' AND state = 'active')",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )? != 0
+            {
+                return Err(RegistryError::ConductorConflict);
+            }
+            let timestamp = now_timestamp();
+            transaction.execute(
+                "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
+                 VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?5, NULL, 'bundle')",
+                params![
+                    registration.node_id,
+                    registration.public_key,
+                    registration.role.as_str(),
+                    capabilities_json(&registration.capabilities)?,
+                    timestamp,
+                ],
+            )?;
+            insert_v2_trust_projection(
+                &transaction,
+                &registration,
+                first_seen,
+                Some(&bundle.subject_certificate),
+            )?;
+            transaction.execute(
+                "INSERT INTO enrollment_replays (replay_kind, replay_id, expires_at, first_seen)
+                 VALUES ('bundle', ?1, ?2, ?3)",
+                params![&bundle.bundle_id[..], replay_expiry, first_seen],
+            )?;
+            transaction.execute(
+                "UPDATE bootstrap_proofs
+                 SET consumed_at = ?1, bundle_id = ?2, cleanup_state = 'pending'
+                 WHERE target_node_id = ?3 AND organization = ?4
+                   AND token_hash = ?5 AND nonce_hash = ?6 AND consumed_at IS NULL",
+                params![
+                    first_seen,
+                    &bundle.bundle_id[..],
+                    &self.local_node_id,
+                    &bundle.organization,
+                    token_hash.as_slice(),
+                    nonce_hash.as_slice(),
+                ],
+            )?;
+            record_audit(
+                &transaction,
+                AuditInput {
+                    event_type: "enrollment_completed",
+                    node_id: &registration.node_id,
+                    from_state: None,
+                    to_state: Some(PeerState::Active),
+                    actor,
+                    reason,
+                    occurred_at: &timestamp,
+                },
+            )?;
+            record_enrollment_audit_tx(
+                &transaction,
+                "bundle_completed",
+                Some(&bundle.bundle_id),
+                Some(bundle_digest),
+                &registration.node_id,
+                "accepted",
+                "signed enrollment bundle activated trust",
+            )?;
+            let peer = load_peer(&transaction, &registration.node_id)?.ok_or_else(|| {
+                RegistryError::Corrupt("signed enrollment peer disappeared".to_string())
+            })?;
             transaction.commit()?;
             Ok(peer)
         })
@@ -1622,6 +1994,14 @@ fn initialize_database(
     if version == 3 {
         migrate_v3_to_v4(connection)?;
     }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 4 {
+        migrate_v4_to_v5(connection)?;
+    }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 5 {
+        migrate_v5_to_v6(connection)?;
+    }
     validate_schema(connection, registry)
 }
 
@@ -1979,6 +2359,103 @@ fn migrate_v3_to_v4(connection: &mut Connection) -> Result<(), RegistryError> {
         [],
     )?;
     transaction.execute_batch("PRAGMA user_version = 4")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn migrate_v4_to_v5(connection: &mut Connection) -> Result<(), RegistryError> {
+    let metadata_version: String = connection.query_row(
+        "SELECT value FROM metadata WHERE key = 'schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if metadata_version != "4" {
+        return Err(RegistryError::InvalidSchema(
+            "v4 database metadata marker is invalid".to_string(),
+        ));
+    }
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    transaction.execute_batch(
+        "CREATE TABLE bootstrap_proofs (
+           target_node_id TEXT NOT NULL CHECK (length(CAST(target_node_id AS BLOB)) = 69),
+           organization TEXT NOT NULL CHECK (length(CAST(organization AS BLOB)) BETWEEN 1 AND 128),
+           token_hash BLOB NOT NULL CHECK (length(token_hash) = 32),
+           nonce_hash BLOB NOT NULL CHECK (length(nonce_hash) = 32),
+           expires_at INTEGER NOT NULL CHECK (expires_at > 0),
+           consumed_at INTEGER NULL CHECK (consumed_at IS NULL OR consumed_at > 0),
+           bundle_id BLOB NULL CHECK (bundle_id IS NULL OR length(bundle_id) = 16),
+           PRIMARY KEY (target_node_id, organization, token_hash, nonce_hash)
+         );
+         CREATE INDEX bootstrap_proofs_expiry_idx ON bootstrap_proofs(expires_at);
+         CREATE TRIGGER bootstrap_proofs_no_update
+         BEFORE UPDATE ON bootstrap_proofs
+         WHEN NEW.target_node_id <> OLD.target_node_id
+           OR NEW.organization <> OLD.organization
+           OR NEW.token_hash <> OLD.token_hash
+           OR NEW.nonce_hash <> OLD.nonce_hash
+           OR NEW.expires_at <> OLD.expires_at
+           OR (OLD.consumed_at IS NOT NULL AND (
+                NEW.consumed_at IS NOT OLD.consumed_at
+                OR NEW.bundle_id IS NOT OLD.bundle_id
+              ))
+           OR (OLD.consumed_at IS NULL AND (
+                NEW.consumed_at IS NULL OR NEW.bundle_id IS NULL
+              ))
+         BEGIN SELECT RAISE(ABORT, 'bootstrap proof identity is immutable'); END;",
+    )?;
+    transaction.execute(
+        "UPDATE metadata SET value = '5' WHERE key = 'schema_version'",
+        [],
+    )?;
+    transaction.execute_batch("PRAGMA user_version = 5")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn migrate_v5_to_v6(connection: &mut Connection) -> Result<(), RegistryError> {
+    let metadata_version: String = connection.query_row(
+        "SELECT value FROM metadata WHERE key = 'schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if metadata_version != "5" {
+        return Err(RegistryError::InvalidSchema(
+            "v5 database metadata marker is invalid".to_string(),
+        ));
+    }
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    transaction.execute_batch(
+        "ALTER TABLE bootstrap_proofs ADD COLUMN cleanup_state TEXT NULL
+           CHECK (cleanup_state IS NULL OR cleanup_state IN ('pending', 'complete'));
+         UPDATE bootstrap_proofs
+            SET cleanup_state = 'complete'
+          WHERE consumed_at IS NOT NULL;
+         DROP TRIGGER bootstrap_proofs_no_update;
+         CREATE TRIGGER bootstrap_proofs_no_update
+         BEFORE UPDATE ON bootstrap_proofs
+         WHEN NEW.target_node_id <> OLD.target_node_id
+           OR NEW.organization <> OLD.organization
+           OR NEW.token_hash <> OLD.token_hash
+           OR NEW.nonce_hash <> OLD.nonce_hash
+           OR NEW.expires_at <> OLD.expires_at
+           OR (OLD.consumed_at IS NOT NULL AND (
+                NEW.consumed_at IS NOT OLD.consumed_at
+                OR NEW.bundle_id IS NOT OLD.bundle_id
+                OR NEW.cleanup_state IS NULL
+                OR NEW.cleanup_state NOT IN ('pending', 'complete')
+                OR (OLD.cleanup_state = 'complete' AND NEW.cleanup_state <> OLD.cleanup_state)
+              ))
+           OR (OLD.consumed_at IS NULL AND (
+                NEW.consumed_at IS NULL OR NEW.bundle_id IS NULL
+                OR (NEW.cleanup_state IS NOT NULL AND NEW.cleanup_state <> 'pending')
+              ))
+         BEGIN SELECT RAISE(ABORT, 'bootstrap proof identity is immutable'); END;",
+    )?;
+    transaction.execute(
+        "UPDATE metadata SET value = '6' WHERE key = 'schema_version'",
+        [],
+    )?;
+    transaction.execute_batch("PRAGMA user_version = 6")?;
     transaction.commit()?;
     Ok(())
 }
@@ -2361,6 +2838,30 @@ fn digest(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
+fn bundle_failure_code(error: &RegistryError) -> &'static str {
+    match error {
+        RegistryError::BundleReplay | RegistryError::BootstrapProofConsumed => "replay",
+        RegistryError::ConductorConflict | RegistryError::BundleConflict => "concurrent",
+        RegistryError::Revoked(_) => "revoked_authority",
+        RegistryError::BundleCapacity => "capacity",
+        RegistryError::BundleRateLimited => "rate_limited",
+        _ => "rejected",
+    }
+}
+
+fn bundle_failure_detail(error: &RegistryError) -> &'static str {
+    match error {
+        RegistryError::BundleReplay => "signed enrollment bundle was already consumed",
+        RegistryError::BootstrapProofConsumed => "bootstrap proof was already consumed",
+        RegistryError::ConductorConflict => "an active conductor already exists",
+        RegistryError::BundleConflict => "signed enrollment conflicts with existing trust state",
+        RegistryError::Revoked(_) => "signed enrollment identity is retained as revoked",
+        RegistryError::BundleCapacity => "signed enrollment capacity is exhausted",
+        RegistryError::BundleRateLimited => "signed enrollment rate limit exceeded",
+        _ => "signed enrollment activation was rejected",
+    }
+}
+
 fn cleanup_enrollment_replays(
     transaction: &Transaction<'_>,
     now: u64,
@@ -2369,8 +2870,27 @@ fn cleanup_enrollment_replays(
         .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
     transaction.execute(
         "DELETE FROM enrollment_replays
-         WHERE replay_kind = 'manual_request' AND expires_at <= ?1",
-        [now],
+         WHERE rowid IN (
+           SELECT rowid FROM enrollment_replays
+           WHERE replay_kind IN ('manual_request', 'bundle') AND expires_at <= ?1
+           ORDER BY expires_at LIMIT ?2
+         )",
+        params![now, MAX_ENROLLMENT_CLEANUP_ROWS],
+    )?;
+    Ok(())
+}
+
+fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(), RegistryError> {
+    let now = i64::try_from(now)
+        .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+    transaction.execute(
+        "DELETE FROM bootstrap_proofs
+         WHERE rowid IN (
+           SELECT rowid FROM bootstrap_proofs
+           WHERE consumed_at IS NULL AND expires_at <= ?1
+           ORDER BY expires_at LIMIT ?2
+         )",
+        params![now, MAX_ENROLLMENT_CLEANUP_ROWS],
     )?;
     Ok(())
 }
@@ -2556,6 +3076,20 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
             "occurred_at",
         ],
     )?;
+    validate_columns(
+        connection,
+        "bootstrap_proofs",
+        &[
+            "target_node_id",
+            "organization",
+            "token_hash",
+            "nonce_hash",
+            "expires_at",
+            "consumed_at",
+            "bundle_id",
+            "cleanup_state",
+        ],
+    )?;
     let metadata: Vec<(String, String)> = connection
         .prepare("SELECT key, value FROM metadata ORDER BY key")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -2566,7 +3100,7 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
         ));
     }
     let expected = [
-        ("schema_version", "4"),
+        ("schema_version", "6"),
         ("node_id", registry.local_node_id.as_str()),
         ("public_key_encoding", "x-only-bip340-hex-lowercase"),
     ];
@@ -2590,6 +3124,10 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
         .collect::<Result<Vec<_>, _>>()?;
     let expected = vec![
         ("index".to_string(), "audit_events_node_idx".to_string()),
+        (
+            "index".to_string(),
+            "bootstrap_proofs_expiry_idx".to_string(),
+        ),
         ("index".to_string(), "channel_sessions_peer_idx".to_string()),
         (
             "index".to_string(),
@@ -2626,6 +3164,7 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
             "transport_key_epochs_state_idx".to_string(),
         ),
         ("table".to_string(), "audit_events".to_string()),
+        ("table".to_string(), "bootstrap_proofs".to_string()),
         ("table".to_string(), "channel_sessions".to_string()),
         ("table".to_string(), "enrollment_audits".to_string()),
         ("table".to_string(), "enrollment_replays".to_string()),
@@ -2644,6 +3183,10 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
         ("table".to_string(), "trusted_peers".to_string()),
         ("trigger".to_string(), "audit_events_no_delete".to_string()),
         ("trigger".to_string(), "audit_events_no_update".to_string()),
+        (
+            "trigger".to_string(),
+            "bootstrap_proofs_no_update".to_string(),
+        ),
         (
             "trigger".to_string(),
             "channel_sessions_active_requires_trust".to_string(),
@@ -2818,6 +3361,60 @@ fn validate_all_rows(connection: &Connection) -> Result<(), RegistryError> {
         if let Some(hash) = outcome_hash {
             validate_bounded_text("outcome hash", &hash, 256)
                 .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+        }
+    }
+    let has_bootstrap_proofs: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'bootstrap_proofs')",
+        [],
+        |row| row.get::<_, i64>(0),
+    )? != 0;
+    if has_bootstrap_proofs {
+        let mut proofs = connection.prepare(
+            "SELECT target_node_id, organization, token_hash, nonce_hash, expires_at,
+                    consumed_at, bundle_id, cleanup_state
+             FROM bootstrap_proofs",
+        )?;
+        for row in proofs.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Vec<u8>>(2)?,
+                row.get::<_, Vec<u8>>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, Option<i64>>(5)?,
+                row.get::<_, Option<Vec<u8>>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })? {
+            let (
+                target,
+                organization,
+                token_hash,
+                nonce_hash,
+                expires_at,
+                consumed_at,
+                bundle_id,
+                cleanup_state,
+            ) = row?;
+            validate_node_id(&target)
+                .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+            validate_bounded_text("bootstrap organization", &organization, 128)
+                .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+            if token_hash.len() != 32
+                || nonce_hash.len() != 32
+                || expires_at <= 0
+                || consumed_at.is_some_and(|value| value <= 0)
+                || bundle_id.as_ref().is_some_and(|value| value.len() != 16)
+                || cleanup_state
+                    .as_deref()
+                    .is_some_and(|value| !matches!(value, "pending" | "complete"))
+                || (consumed_at.is_none() && cleanup_state.is_some())
+                || (consumed_at.is_some() && cleanup_state.is_none())
+            {
+                return Err(RegistryError::InvalidSchema(
+                    "bootstrap proof contains invalid evidence".to_string(),
+                ));
+            }
         }
     }
     Ok(())
@@ -3774,11 +4371,52 @@ mod tests {
     }
 
     #[test]
+    fn enrollment_cleanup_is_bounded_and_caps_are_frozen() {
+        assert_eq!(MAX_ENROLLMENT_REPLAY_ROWS, 1_000_000);
+        assert_eq!(MAX_ENROLLMENT_AUDIT_ROWS, 1_000_000);
+        assert_eq!(MAX_ENROLLMENT_REQUEST_ROWS, 1_000_000);
+        assert_eq!(MAX_BOOTSTRAP_PROOF_ROWS, 1_000_000);
+        assert_eq!(MAX_ENROLLMENT_CLEANUP_ROWS, 10_000);
+
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let _registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        let mut connection = Connection::open(context.database_path()).unwrap();
+        configure_connection(&mut connection).unwrap();
+        let transaction = connection.transaction().unwrap();
+        for value in 0_u64..=10_000 {
+            let mut replay_id = [0_u8; 16];
+            replay_id[..8].copy_from_slice(&value.to_be_bytes());
+            transaction
+                .execute(
+                    "INSERT INTO enrollment_replays
+                     (replay_kind, replay_id, expires_at, first_seen)
+                     VALUES ('bundle', ?1, 1, 1)",
+                    [&replay_id[..]],
+                )
+                .unwrap();
+        }
+        cleanup_enrollment_replays(&transaction, 2).unwrap();
+        transaction.commit().unwrap();
+        assert_eq!(
+            connection
+                .query_row("SELECT COUNT(*) FROM enrollment_replays", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
     fn v3_pending_legacy_enrollment_is_terminalized_with_redacted_evidence() {
         let (_temp, context, registry, request_id, remote_node_id) = seed_v3_pending_enrollment();
         let mut connection = Connection::open(context.database_path()).unwrap();
         configure_connection(&mut connection).unwrap();
         migrate_v3_to_v4(&mut connection).unwrap();
+        migrate_v4_to_v5(&mut connection).unwrap();
+        migrate_v5_to_v6(&mut connection).unwrap();
         validate_schema(&connection, &registry).unwrap();
         set_new_database_mode(&context.database_path()).unwrap();
         drop(connection);
@@ -3926,7 +4564,7 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&ctx).unwrap();
         let database = ctx.database_path();
         let connection = Connection::open(&database).unwrap();
-        connection.execute_batch("PRAGMA user_version = 5").unwrap();
+        connection.execute_batch("PRAGMA user_version = 7").unwrap();
         assert!(matches!(
             NodeRegistry::open(&ctx, identity.public_status()),
             Err(RegistryError::InvalidSchema(_))

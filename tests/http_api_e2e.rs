@@ -215,6 +215,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_enrollment_routes"),
     ),
     (
+        ("POST", "/v1/node/enrollment/bundle"),
+        RouteCoverage::Covered("signed_bundle_enrollment_routes"),
+    ),
+    (
         ("PATCH", "/v1/node/peers/:node_id/capabilities"),
         RouteCoverage::Covered("node_management_routes"),
     ),
@@ -1005,6 +1009,7 @@ fn protected_routes_return_401_without_or_with_invalid_bearer() {
         ("POST", "/v1/node/enrollments", Some("{}")),
         ("POST", "/v1/node/enrollments/omk1_test/approve", Some("{}")),
         ("POST", "/v1/node/enrollments/omk1_test/reject", Some("{}")),
+        ("POST", "/v1/node/enrollment/bundle", Some("{}")),
         ("PATCH", "/v1/node/peers/omk1_test/capabilities", Some("{}")),
         ("POST", "/v1/node/peers/omk1_test/revoke", Some("{}")),
     ] {
@@ -1086,6 +1091,7 @@ fn node_management_routes_cover_missing_scopes_individually() {
     assert_error_code(&denied_init.json(), "forbidden");
     for (method, path) in [
         ("POST", "/v1/node/peers"),
+        ("POST", "/v1/node/enrollment/bundle"),
         ("PATCH", "/v1/node/peers/omk1_test/capabilities"),
         ("POST", "/v1/node/peers/omk1_test/revoke"),
     ] {
@@ -1319,6 +1325,47 @@ fn node_json_mutation_routes_return_413_envelopes_without_mutation() {
     assert!(
         !state.exists(),
         "oversized mutation bodies must not initialize state"
+    );
+}
+
+#[test]
+fn signed_bundle_route_has_its_own_body_bound() {
+    let workspace = support::TestWorkspace::new("http_signed_bundle_body_limit");
+    let policy = workspace.path().join("policy.toml");
+    fs::write(&policy, "version = 1\n[http]\nbody_limit_bytes = 1048576\n")
+        .expect("write body-limit policy");
+    let state = workspace.path().join("node-state");
+    let config = workspace.path().join("node.toml");
+    let state_string = state.to_string_lossy().to_string();
+    let config_string = config.to_string_lossy().to_string();
+    let envs = [
+        ("OMAKURE_NODE_TEST_MODE", "1"),
+        ("OMAKURE_NODE_STATE_DIR", state_string.as_str()),
+        ("OMAKURE_NODE_CONFIG", config_string.as_str()),
+    ];
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--policy",
+            policy.to_str().unwrap(),
+            "--capability",
+            "enrollment:write",
+        ],
+        &envs,
+        Duration::from_secs(10),
+    );
+    let oversized = json!({
+        "bundle_hex": "a".repeat(40 * 1024),
+        "bootstrap_nonce": "00".repeat(16),
+    })
+    .to_string();
+    let response = server.request("POST", "/v1/node/enrollment/bundle", Some(oversized));
+    assert_eq!(response.status, 413, "body: {}", response.safe_body());
+    assert_error_code(&response.json(), "payload_too_large");
+    assert!(
+        !state.exists(),
+        "oversized bundle must not initialize state"
     );
 }
 

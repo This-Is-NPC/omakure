@@ -81,6 +81,7 @@ const BODY_LIMIT_BYTES: usize = 1024 * 1024;
 const MAX_SEARCH_QUERY_LEN: usize = 256;
 const MAX_SEARCH_TAGS: usize = 16;
 const MAX_SEARCH_TAG_LEN: usize = 64;
+const SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES: usize = 32 * 1024;
 
 /// Shared readiness gate for `GET /v1/ready`.
 ///
@@ -606,6 +607,12 @@ struct NodeEnrollmentRejectBody {
     confirmed: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct NodeSignedBundleApplyBody {
+    bundle_hex: String,
+    bootstrap_nonce: String,
+}
+
 pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
     let boot = prepare_api_boot(&args)?;
     let workspace = Workspace::new(scripts_dir);
@@ -809,6 +816,7 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("POST", "/v1/node/enrollments"),
     ("POST", "/v1/node/enrollments/:node_id/approve"),
     ("POST", "/v1/node/enrollments/:node_id/reject"),
+    ("POST", "/v1/node/enrollment/bundle"),
     ("PATCH", "/v1/node/peers/:node_id/capabilities"),
     ("POST", "/v1/node/peers/:node_id/revoke"),
 ];
@@ -921,6 +929,12 @@ fn router_with_transport(
         .route(
             "/v1/node/enrollments/:node_id/reject",
             post(node_enrollment_reject_handler),
+        )
+        .route(
+            "/v1/node/enrollment/bundle",
+            post(node_signed_bundle_apply_handler).layer(axum::extract::DefaultBodyLimit::max(
+                SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES,
+            )),
         )
         .route(
             "/v1/node/peers/:node_id/capabilities",
@@ -1162,6 +1176,41 @@ async fn node_enrollment_reject_handler(
                 reason: body.reason,
                 confirmed: body.confirmed,
             },
+        )
+    }))
+}
+
+async fn node_signed_bundle_apply_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+        return response;
+    }
+    let body = match parse_json_body::<NodeSignedBundleApplyBody>(
+        body,
+        state
+            .deploy
+            .http
+            .body_limit_bytes
+            .min(SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES),
+    )
+    .await
+    {
+        Ok(body) => body,
+        Err(error) => return operation_error_response(error),
+    };
+    operation_response(node_context().and_then(|context| {
+        node_ops::apply_signed_bundle_from_local_token(
+            &context,
+            node_ops::SignedBundleApplyRequest {
+                bundle_hex: body.bundle_hex,
+                bootstrap_token: String::new(),
+                bootstrap_nonce: body.bootstrap_nonce,
+                bootstrap_token_path: None,
+            },
+            &auth_ctx.token_id,
         )
     }))
 }
@@ -2517,7 +2566,8 @@ fn operation_error_response(err: OperationError) -> Response {
         | OperationErrorCode::EnrollmentExpired
         | OperationErrorCode::EnrollmentReplay
         | OperationErrorCode::EnrollmentMismatch
-        | OperationErrorCode::EnrollmentDenied => StatusCode::CONFLICT,
+        | OperationErrorCode::EnrollmentDenied
+        | OperationErrorCode::EnrollmentRateLimited => StatusCode::CONFLICT,
         OperationErrorCode::UnsupportedScript => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         OperationErrorCode::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         OperationErrorCode::GitFailed

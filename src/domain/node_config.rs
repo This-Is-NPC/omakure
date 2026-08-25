@@ -16,6 +16,7 @@ const MAX_NETWORK_MODE_BYTES: usize = 64;
 const MAX_ENROLLMENT_BYTES: usize = 64;
 const MAX_DISPLAY_NAME_BYTES: usize = 128;
 const MAX_ORGANIZATION_ID_BYTES: usize = 128;
+const MAX_AUTHORITY_KEYS: usize = 64;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum NodeConfigError {
@@ -67,6 +68,21 @@ pub struct TrustSettings {
     pub enrollment: String,
     pub allow_remote_cues: bool,
     pub allow_baseline_push: bool,
+    #[serde(default)]
+    pub authorities: Vec<EnrollmentAuthority>,
+    #[serde(default)]
+    pub bootstrap_token_hash: String,
+    #[serde(default)]
+    pub bootstrap_nonce_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnrollmentAuthority {
+    pub key_id: String,
+    pub public_key: String,
+    #[serde(default)]
+    pub revoked: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,6 +113,9 @@ impl Default for NodeConfig {
                 enrollment: "disabled".to_string(),
                 allow_remote_cues: false,
                 allow_baseline_push: false,
+                authorities: Vec::new(),
+                bootstrap_token_hash: String::new(),
+                bootstrap_nonce_hash: String::new(),
             },
             organization: OrganizationSettings {
                 id: String::new(),
@@ -217,6 +236,44 @@ impl NodeConfig {
             ));
         }
         validate_secret_ref(&self.organization.discovery_secret_ref)?;
+        if self.trust.authorities.len() > MAX_AUTHORITY_KEYS {
+            return Err(NodeConfigError::Invalid(
+                "trust.authorities has too many entries".to_string(),
+            ));
+        }
+        let mut authority_ids = HashSet::new();
+        for authority in &self.trust.authorities {
+            validate_lower_hex("trust.authorities.key_id", &authority.key_id, 16)?;
+            validate_lower_hex("trust.authorities.public_key", &authority.public_key, 32)?;
+            if !authority_ids.insert(authority.key_id.as_str()) {
+                return Err(NodeConfigError::Invalid(
+                    "trust.authorities contains duplicate key IDs".to_string(),
+                ));
+            }
+        }
+        if self.trust.enrollment == "signed-bundle" {
+            if self.trust.authorities.is_empty() {
+                return Err(NodeConfigError::Invalid(
+                    "signed-bundle enrollment requires an authority".to_string(),
+                ));
+            }
+            validate_lower_hex(
+                "trust.bootstrap_token_hash",
+                &self.trust.bootstrap_token_hash,
+                32,
+            )?;
+            validate_lower_hex(
+                "trust.bootstrap_nonce_hash",
+                &self.trust.bootstrap_nonce_hash,
+                32,
+            )?;
+        } else if !self.trust.bootstrap_token_hash.is_empty()
+            || !self.trust.bootstrap_nonce_hash.is_empty()
+        {
+            return Err(NodeConfigError::Invalid(
+                "bootstrap hashes require signed-bundle enrollment".to_string(),
+            ));
+        }
         Ok(())
     }
 
@@ -242,6 +299,17 @@ fn validate_text(
         )));
     }
     if value.len() > max_bytes || value.chars().any(char::is_control) {
+        return Err(NodeConfigError::Invalid(format!("{field} is invalid")));
+    }
+    Ok(())
+}
+
+fn validate_lower_hex(field: &str, value: &str, bytes: usize) -> Result<(), NodeConfigError> {
+    if value.len() != bytes * 2
+        || value
+            .bytes()
+            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
+    {
         return Err(NodeConfigError::Invalid(format!("{field} is invalid")));
     }
     Ok(())

@@ -6,9 +6,14 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use std::env;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
+#[cfg(not(windows))]
+use std::io::{Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
+
+#[cfg(test)]
+use std::sync::atomic::{AtomicU8, Ordering};
 
 const NODE_TEST_MODE_ENV: &str = "OMAKURE_NODE_TEST_MODE";
 const NODE_STATE_DIR_ENV: &str = "OMAKURE_NODE_STATE_DIR";
@@ -127,6 +132,112 @@ pub struct NodeContext {
     test_mode: bool,
     platform: NodePlatform,
     custom_paths: bool,
+}
+
+const PRIVATE_TOKEN_TOMBSTONE_PREFIX: &str = ".omakure-bootstrap-token-";
+pub(crate) const PRIVATE_TOKEN_TOMBSTONE_RETRY_LIMIT: usize = 10;
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PrivateTokenFault {
+    None = 0,
+    Rename = 1,
+    Restore = 2,
+    Delete = 3,
+}
+
+#[cfg(test)]
+static PRIVATE_TOKEN_FAULT: AtomicU8 = AtomicU8::new(PrivateTokenFault::None as u8);
+
+#[cfg(test)]
+pub(crate) fn set_private_token_fault(fault: PrivateTokenFault) {
+    PRIVATE_TOKEN_FAULT.store(fault as u8, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+fn private_token_fault(fault: PrivateTokenFault) -> bool {
+    PRIVATE_TOKEN_FAULT.load(Ordering::SeqCst) == fault as u8
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PrivateFileCommitStatus {
+    Clean,
+    CleanupRequired,
+}
+
+pub(crate) struct PrivateTokenLease {
+    original_path: PathBuf,
+    tombstone_path: PathBuf,
+    file: fs::File,
+    contents: Vec<u8>,
+    _lock: Option<PrivateTokenLock>,
+}
+
+struct OpenedPrivateFile {
+    file: fs::File,
+    contents: Vec<u8>,
+}
+
+pub(crate) struct PrivateTokenLock {
+    _file: fs::File,
+}
+
+impl PrivateTokenLease {
+    pub(crate) fn contents(&self) -> &[u8] {
+        &self.contents
+    }
+
+    pub(crate) fn restore(self) -> Result<(), NodeError> {
+        #[cfg(test)]
+        if private_token_fault(PrivateTokenFault::Restore) {
+            return Err(NodeError::Io(io::Error::other(
+                "injected bootstrap token restore failure",
+            )));
+        }
+        if fs::symlink_metadata(&self.original_path).is_ok() {
+            return Err(NodeError::InsecurePath(
+                "bootstrap token path was recreated during enrollment".to_string(),
+            ));
+        }
+        fs::rename(&self.tombstone_path, &self.original_path)?;
+        sync_directory(self.original_path.parent().ok_or_else(|| {
+            NodeError::UnsafePath("bootstrap token parent is missing".to_string())
+        })?)?;
+        Ok(())
+    }
+
+    pub(crate) fn finish_success(mut self) -> PrivateFileCommitStatus {
+        let mut cleanup_required = false;
+        #[cfg(not(windows))]
+        if self.file.seek(SeekFrom::Start(0)).is_err()
+            || self
+                .file
+                .write_all(&vec![0_u8; self.contents.len()])
+                .is_err()
+            || self.file.set_len(0).is_err()
+            || self.file.sync_all().is_err()
+        {
+            cleanup_required = true;
+        }
+        #[cfg(all(test, not(windows)))]
+        let delete_failed = private_token_fault(PrivateTokenFault::Delete);
+        #[cfg(not(all(test, not(windows))))]
+        let delete_failed = false;
+        let deleted = !delete_failed && fs::remove_file(&self.tombstone_path).is_ok();
+        let directory_sync_failed = deleted
+            && self
+                .tombstone_path
+                .parent()
+                .map(sync_directory)
+                .transpose()
+                .is_err();
+        cleanup_required |= !deleted || directory_sync_failed;
+        if cleanup_required {
+            PrivateFileCommitStatus::CleanupRequired
+        } else {
+            PrivateFileCommitStatus::Clean
+        }
+    }
 }
 
 impl NodeContext {
@@ -495,6 +606,172 @@ impl NodeContext {
         )
     }
 
+    /// Read a node-local private file without following path reparse points or
+    /// allowing an unbounded allocation. The service owner and exact 0600
+    /// permissions are part of the file contract.
+    pub(crate) fn stage_private_bounded_file(
+        &self,
+        path: &Path,
+        max_bytes: usize,
+    ) -> Result<PrivateTokenLease, NodeError> {
+        let lock = self.acquire_private_token_lock(path)?;
+        let file = self.open_private_bounded_file(path, max_bytes)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
+        let tombstone_path = private_token_tombstone_path(path)?;
+        if fs::symlink_metadata(&tombstone_path).is_ok() {
+            return Err(NodeError::InsecurePath(
+                "bootstrap token cleanup is pending".to_string(),
+            ));
+        }
+        #[cfg(test)]
+        if private_token_fault(PrivateTokenFault::Rename) {
+            return Err(NodeError::Io(io::Error::other(
+                "injected bootstrap token rename failure",
+            )));
+        }
+        fs::rename(path, &tombstone_path)?;
+        if let Err(error) = sync_directory(parent) {
+            let _ = fs::rename(&tombstone_path, path);
+            let _ = sync_directory(parent);
+            return Err(NodeError::Io(error));
+        }
+        if let Err(error) = validate_open_file_identity(&tombstone_path, &file.file) {
+            let _ = fs::rename(&tombstone_path, path);
+            let _ = sync_directory(parent);
+            return Err(error);
+        }
+        Ok(PrivateTokenLease {
+            original_path: path.to_path_buf(),
+            tombstone_path,
+            file: file.file,
+            contents: file.contents,
+            _lock: Some(lock),
+        })
+    }
+
+    pub(crate) fn acquire_private_token_lock(
+        &self,
+        path: &Path,
+    ) -> Result<PrivateTokenLock, NodeError> {
+        validate_absolute_path(self.platform, "private file", path, true)?;
+        ensure_safe_parent(path)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
+        let lock_path = parent.join(".omakure-bootstrap-token.lock");
+        let mut options = fs::OpenOptions::new();
+        options.read(true).write(true).create(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        let file = options.open(&lock_path)?;
+        let metadata = file.metadata()?;
+        if !metadata.file_type().is_file() {
+            return Err(NodeError::UnexpectedFileType(
+                "bootstrap token lock".to_string(),
+            ));
+        }
+        validate_file_security_metadata(
+            &metadata,
+            owner_policy(self.platform, self.custom_paths, true)?,
+            self.test_mode,
+            0o600,
+        )?;
+        file.lock_exclusive()?;
+        Ok(PrivateTokenLock { _file: file })
+    }
+
+    pub(crate) fn list_private_token_tombstones(
+        &self,
+        path: &Path,
+        max_bytes: usize,
+    ) -> Result<Vec<PrivateTokenLease>, NodeError> {
+        validate_absolute_path(self.platform, "private file", path, true)?;
+        ensure_safe_parent(path)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
+        let file_name = path
+            .file_name()
+            .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?
+            .to_string_lossy();
+        let suffix = format!("-{file_name}");
+        let mut tombstones = Vec::new();
+        for entry in fs::read_dir(parent)?.take(PRIVATE_TOKEN_TOMBSTONE_RETRY_LIMIT) {
+            let entry = entry?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.starts_with(PRIVATE_TOKEN_TOMBSTONE_PREFIX) || !name.ends_with(&suffix) {
+                continue;
+            }
+            let tombstone = entry.path();
+            let file = self.open_private_bounded_file(&tombstone, max_bytes)?;
+            tombstones.push(PrivateTokenLease {
+                original_path: path.to_path_buf(),
+                tombstone_path: tombstone,
+                file: file.file,
+                contents: file.contents,
+                _lock: None,
+            });
+        }
+        Ok(tombstones)
+    }
+
+    fn open_private_bounded_file(
+        &self,
+        path: &Path,
+        max_bytes: usize,
+    ) -> Result<OpenedPrivateFile, NodeError> {
+        validate_absolute_path(self.platform, "private file", path, true)?;
+        ensure_safe_parent(path)?;
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(not(windows))]
+        options.write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+        let file = options.open(path)?;
+        let metadata = file.metadata()?;
+        if !metadata.file_type().is_file() {
+            return Err(NodeError::UnexpectedFileType(path.display().to_string()));
+        }
+        validate_file_security_metadata(
+            &metadata,
+            owner_policy(self.platform, self.custom_paths, true)?,
+            self.test_mode,
+            0o600,
+        )?;
+        validate_open_file_identity(path, &file)?;
+        #[cfg(windows)]
+        validate_windows_security_handle(path, &file, self.test_mode)?;
+        if metadata.len() > max_bytes as u64 {
+            return Err(NodeError::InsecurePath(format!(
+                "private file exceeds the {max_bytes}-byte bound"
+            )));
+        }
+        let mut limited = (&file).take(max_bytes as u64 + 1);
+        let mut contents = Vec::with_capacity(metadata.len() as usize);
+        limited.read_to_end(&mut contents)?;
+        if contents.len() > max_bytes {
+            return Err(NodeError::InsecurePath(format!(
+                "private file exceeds the {max_bytes}-byte bound"
+            )));
+        }
+        Ok(OpenedPrivateFile { file, contents })
+    }
+
     /// Open the public configuration without following a final symlink or a
     /// reparse point, then validate the opened file's security metadata.
     pub(crate) fn open_public_file(&self) -> Result<Option<fs::File>, NodeError> {
@@ -756,6 +1033,25 @@ fn ensure_safe_parent_if_present(path: &Path) -> Result<bool, NodeError> {
     Ok(true)
 }
 
+fn private_token_tombstone_path(path: &Path) -> Result<PathBuf, NodeError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?
+        .to_string_lossy();
+    let mut random = [0_u8; 16];
+    OsRng.fill_bytes(&mut random);
+    let suffix = random
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    Ok(parent.join(format!(
+        "{PRIVATE_TOKEN_TOMBSTONE_PREFIX}{suffix}-{file_name}"
+    )))
+}
+
 #[cfg(unix)]
 fn validate_open_file_identity(path: &Path, opened_file: &fs::File) -> Result<(), NodeError> {
     let path_metadata = fs::symlink_metadata(path)?;
@@ -785,6 +1081,7 @@ fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
 struct WindowsFileIdentity {
     volume_serial_number: u32,
     file_index: u64,
+    reparse_point: bool,
 }
 
 #[cfg(windows)]
@@ -825,6 +1122,11 @@ fn validate_open_file_identity(path: &Path, opened_file: &fs::File) -> Result<()
     let current_file = options.open(path).map_err(NodeError::Io)?;
     let opened_identity = windows_file_identity(opened_file)?;
     let current_identity = windows_file_identity(&current_file)?;
+    if opened_identity.reparse_point || current_identity.reparse_point {
+        return Err(NodeError::UnsafePath(
+            "node configuration path has a reparse point".to_string(),
+        ));
+    }
     if opened_identity != current_identity {
         return Err(NodeError::InsecurePath(
             "node configuration path changed while opening".to_string(),
@@ -846,6 +1148,7 @@ fn windows_file_identity(file: &fs::File) -> Result<WindowsFileIdentity, NodeErr
         volume_serial_number: information.volume_serial_number,
         file_index: (u64::from(information.file_index_high) << 32)
             | u64::from(information.file_index_low),
+        reparse_point: information.file_attributes & 0x400 != 0,
     })
 }
 
@@ -1100,7 +1403,7 @@ const ERROR_SUCCESS: u32 = 0;
 #[cfg(windows)]
 fn validate_windows_security(
     path: &Path,
-    _directory: bool,
+    directory: bool,
     test_mode: bool,
 ) -> Result<(), NodeError> {
     use std::os::windows::ffi::OsStrExt;
@@ -1133,7 +1436,14 @@ fn validate_windows_security(
             path.display()
         )));
     }
-    validate_windows_security_descriptor(path, test_mode, owner_sid, dacl, security_descriptor)
+    validate_windows_security_descriptor(
+        path,
+        directory,
+        test_mode,
+        owner_sid,
+        dacl,
+        security_descriptor,
+    )
 }
 
 #[cfg(windows)]
@@ -1166,12 +1476,20 @@ fn validate_windows_security_handle(
             path.display()
         )));
     }
-    validate_windows_security_descriptor(path, test_mode, owner_sid, dacl, security_descriptor)
+    validate_windows_security_descriptor(
+        path,
+        false,
+        test_mode,
+        owner_sid,
+        dacl,
+        security_descriptor,
+    )
 }
 
 #[cfg(windows)]
 fn validate_windows_security_descriptor(
     path: &Path,
+    directory: bool,
     test_mode: bool,
     owner_sid: *mut std::ffi::c_void,
     dacl: *mut std::ffi::c_void,
@@ -1256,10 +1574,6 @@ fn validate_windows_security_descriptor(
                     owner_sid,
                     allowed_system.as_mut_ptr() as *mut std::ffi::c_void,
                 ) == 0
-                    && EqualSid(
-                        owner_sid,
-                        allowed_service.as_mut_ptr() as *mut std::ffi::c_void,
-                    ) == 0
             }
         {
             return Err(NodeError::InsecurePath(format!(
@@ -1297,6 +1611,9 @@ fn validate_windows_security_descriptor(
                     .add(std::mem::size_of::<AceHeader>() + std::mem::size_of::<u32>())
                     as *mut std::ffi::c_void
             };
+            let mask = unsafe {
+                *((ace as *const u8).add(std::mem::size_of::<AceHeader>()) as *const u32)
+            };
             let is_system =
                 unsafe { EqualSid(sid, allowed_system.as_mut_ptr() as *mut std::ffi::c_void) != 0 };
             let is_service = unsafe {
@@ -1305,6 +1622,12 @@ fn validate_windows_security_descriptor(
             if !is_system && !is_service {
                 return Err(NodeError::InsecurePath(format!(
                     "{} grants access to an unexpected principal",
+                    path.display()
+                )));
+            }
+            if !windows_security_access_allowed(directory, is_system, is_service, mask) {
+                return Err(NodeError::InsecurePath(format!(
+                    "{} grants an invalid access mask",
                     path.display()
                 )));
             }
@@ -1323,6 +1646,22 @@ fn validate_windows_security_descriptor(
         LocalFree(security_descriptor);
     }
     result
+}
+
+#[cfg(windows)]
+fn windows_security_access_allowed(
+    directory: bool,
+    is_system: bool,
+    is_service: bool,
+    mask: u32,
+) -> bool {
+    const FILE_GENERIC_READ: u32 = 0x0012_0089;
+    const FILE_GENERIC_WRITE: u32 = 0x0012_0116;
+    if is_system == is_service || mask & FILE_GENERIC_READ != FILE_GENERIC_READ {
+        return false;
+    }
+    (is_system && mask & FILE_GENERIC_WRITE == FILE_GENERIC_WRITE)
+        || (is_service && (directory || mask & FILE_GENERIC_WRITE == 0))
 }
 
 #[cfg(windows)]
@@ -1716,6 +2055,57 @@ mod tests {
         assert!(validate_open_file_identity(&replacement_path, &file).is_err());
     }
 
+    #[cfg(all(unix, debug_assertions))]
+    #[test]
+    fn private_bounded_file_reader_enforces_path_mode_and_size() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let context = test_context(tmp.path());
+        let token = tmp.path().join("bootstrap.token");
+        fs::write(&token, b"bounded").unwrap();
+        fs::set_permissions(&token, fs::Permissions::from_mode(0o600)).unwrap();
+        let lease = context.stage_private_bounded_file(&token, 7).unwrap();
+        assert_eq!(lease.contents(), b"bounded");
+        lease.restore().unwrap();
+        assert!(context.stage_private_bounded_file(&token, 6).is_err());
+        fs::set_permissions(&token, fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(context.stage_private_bounded_file(&token, 7).is_err());
+        fs::remove_file(&token).unwrap();
+
+        let target = tmp.path().join("real.token");
+        fs::write(&target, b"secret").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        symlink(&target, &token).unwrap();
+        assert!(context.stage_private_bounded_file(&token, 6).is_err());
+    }
+
+    #[cfg(all(unix, debug_assertions))]
+    #[test]
+    fn startup_tombstone_scan_is_bounded() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let context = test_context(tmp.path());
+        let token = tmp.path().join("bootstrap.token");
+        for index in 0..11 {
+            let tombstone = tmp.path().join(format!(
+                "{PRIVATE_TOKEN_TOMBSTONE_PREFIX}{index:032x}-bootstrap.token"
+            ));
+            fs::write(&tombstone, b"t").unwrap();
+            fs::set_permissions(&tombstone, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let tombstones = context.list_private_token_tombstones(&token, 1).unwrap();
+        assert_eq!(tombstones.len(), PRIVATE_TOKEN_TOMBSTONE_RETRY_LIMIT);
+        for tombstone in tombstones {
+            fs::remove_file(tombstone.tombstone_path).unwrap();
+        }
+        for entry in fs::read_dir(tmp.path()).unwrap() {
+            let entry = entry.unwrap();
+            fs::remove_file(entry.path()).unwrap();
+        }
+    }
+
     #[cfg(all(windows, debug_assertions))]
     #[test]
     fn windows_drive_prefix_is_accepted_but_parent_components_are_not() {
@@ -1743,6 +2133,34 @@ mod tests {
             None,
         );
         assert!(unsafe_path.is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_service_acl_policy_allows_only_required_principals_and_access() {
+        const READ: u32 = 0x0012_0089;
+        const WRITE: u32 = 0x0012_0116;
+        assert!(windows_security_access_allowed(
+            false,
+            true,
+            false,
+            READ | WRITE
+        ));
+        assert!(windows_security_access_allowed(false, false, true, READ));
+        assert!(windows_security_access_allowed(
+            true,
+            false,
+            true,
+            READ | WRITE
+        ));
+        assert!(!windows_security_access_allowed(
+            false,
+            false,
+            true,
+            READ | WRITE
+        ));
+        assert!(!windows_security_access_allowed(false, false, false, READ));
+        assert!(!windows_security_access_allowed(false, true, true, READ));
     }
 
     #[cfg(not(debug_assertions))]

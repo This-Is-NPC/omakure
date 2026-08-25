@@ -1,19 +1,26 @@
 use crate::domain::{NodeConfig, NodeConfigError};
 use crate::enrollment::{self, EnrollmentError, EnrollmentRole, ManualEnrollmentRequest};
-use crate::node::{NodeContext, NodeError, NodePathOverrides};
+use crate::node::{
+    NodeContext, NodeError, NodePathOverrides, PrivateFileCommitStatus, PrivateTokenLease,
+};
 use crate::node_identity::{NodeIdentity, NodeIdentityError};
 use crate::node_registry::{
     NodeRegistry, PeerRecord, PeerRegistration, PeerRole, PeerSource, PeerState, RegistryError,
 };
 use crate::node_transport::LocalTransport;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Read};
+use std::path::PathBuf;
+use subtle::ConstantTimeEq;
 
 use super::{OperationError, OperationErrorCode, OperationResult};
 
 const PUBLIC_PEER_LIMIT: usize = 256;
 const MAX_NODE_CONFIG_BYTES: usize = 64 * 1024;
+const SIGNED_BUNDLE_ACTOR: &str = "signed-bundle-installer";
+const SIGNED_BUNDLE_REASON: &str = "unattended signed enrollment bundle";
 
 pub fn resolve_context(overrides: NodePathOverrides) -> OperationResult<NodeContext> {
     NodeContext::resolve(overrides).map_err(map_node_error)
@@ -85,6 +92,12 @@ pub struct PublicPeer {
     pub updated_at: String,
     pub last_seen: Option<String>,
     pub source: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cleanup_pending: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -146,6 +159,14 @@ pub struct ManualEnrollmentResult {
     pub state: String,
     pub reciprocal_request_hex: Option<String>,
     pub reciprocal_code: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct SignedBundleApplyRequest {
+    pub bundle_hex: String,
+    pub bootstrap_token: String,
+    pub bootstrap_nonce: String,
+    pub bootstrap_token_path: Option<PathBuf>,
 }
 
 pub fn initialize_node(
@@ -427,6 +448,422 @@ pub fn manual_enrollment_enabled(context: &NodeContext) -> OperationResult<()> {
     Ok(())
 }
 
+pub fn signed_bundle_enrollment_enabled(context: &NodeContext) -> OperationResult<NodeConfig> {
+    let config = load_node_config(context)?;
+    if config.trust.enrollment != "signed-bundle" {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentDisabled,
+            "signed-bundle enrollment is not enabled",
+        ));
+    }
+    Ok(config)
+}
+
+pub fn apply_signed_bundle(
+    context: &NodeContext,
+    request: SignedBundleApplyRequest,
+) -> OperationResult<PublicPeer> {
+    apply_signed_bundle_with_actor(context, request, SIGNED_BUNDLE_ACTOR)
+}
+
+pub fn apply_signed_bundle_authenticated(
+    context: &NodeContext,
+    request: SignedBundleApplyRequest,
+    token_id: &str,
+) -> OperationResult<PublicPeer> {
+    let actor = format!("auth-token:{token_id}");
+    apply_signed_bundle_with_actor(context, request, &actor)
+}
+
+fn apply_signed_bundle_with_actor(
+    context: &NodeContext,
+    mut request: SignedBundleApplyRequest,
+    actor: &str,
+) -> OperationResult<PublicPeer> {
+    let config = signed_bundle_enrollment_enabled(context)?;
+    let nonce = decode_fixed_hex(&request.bootstrap_nonce, 16, "bootstrap nonce")?;
+    let state_ready = context
+        .validate_existing_state_contents()
+        .map_err(map_node_error)?;
+    let identity_ready = path_is_present(&context.identity_path(), "identity.key")?;
+    let registry_ready = path_is_present(&context.database_path(), "node.sqlite")?;
+    if !state_ready || !identity_ready || !registry_ready {
+        let _ = initialize_node_nonblocking(context, &config)?;
+    }
+    let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
+    let registry = NodeRegistry::open_existing(context, identity.public_status())
+        .map_err(map_registry_error)?;
+    let mut token_lease = if let Some(path) = request.bootstrap_token_path.as_deref() {
+        recover_private_token_tombstones(context, &registry, &config.organization.id, path)?;
+        let lease = context
+            .stage_private_bounded_file(path, enrollment::MAX_BOOTSTRAP_TOKEN_BYTES)
+            .map_err(map_node_error)?;
+        let token = match String::from_utf8(lease.contents().to_vec()) {
+            Ok(token) => token,
+            Err(_) => {
+                let mut lease = Some(lease);
+                return Err(restore_token_lease(
+                    &mut lease,
+                    OperationError::new(
+                        OperationErrorCode::EnrollmentDenied,
+                        "bootstrap token is invalid",
+                    ),
+                ));
+            }
+        };
+        request.bootstrap_token = token.trim().to_string();
+        Some(lease)
+    } else {
+        None
+    };
+    if request.bootstrap_token.len() < 32
+        || request.bootstrap_token.len() > enrollment::MAX_BOOTSTRAP_TOKEN_BYTES
+        || request
+            .bootstrap_token
+            .bytes()
+            .any(|byte| byte.is_ascii_control())
+    {
+        return Err(restore_token_lease(
+            &mut token_lease,
+            OperationError::new(
+                OperationErrorCode::EnrollmentDenied,
+                "bootstrap token is invalid",
+            ),
+        ));
+    }
+    let bundle_bytes = match decode_bundle(&request.bundle_hex) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            return record_signed_bundle_failure_with_token(
+                &registry,
+                &mut token_lease,
+                None,
+                error,
+            )
+        }
+    };
+    let bundle = match enrollment::SignedEnrollmentBundle::decode(&bundle_bytes) {
+        Ok(bundle) => bundle,
+        Err(error) => {
+            return record_signed_bundle_failure_with_token(
+                &registry,
+                &mut token_lease,
+                None,
+                map_enrollment_error(error),
+            )
+        }
+    };
+    let preflight = (|| {
+        let authority = config
+            .trust
+            .authorities
+            .iter()
+            .find(|authority| authority.key_id == hash_hex(&bundle.authority_key_id))
+            .ok_or_else(|| {
+                OperationError::new(
+                    OperationErrorCode::EnrollmentInvalid,
+                    "signed enrollment authority is not configured",
+                )
+            })?;
+        let authority = enrollment::BundleAuthority {
+            key_id: enrollment::parse_hex(&authority.key_id, 16)
+                .map_err(|_| {
+                    OperationError::new(
+                        OperationErrorCode::EnrollmentInvalid,
+                        "authority key ID is invalid",
+                    )
+                })?
+                .try_into()
+                .map_err(|_| {
+                    OperationError::new(
+                        OperationErrorCode::EnrollmentInvalid,
+                        "authority key ID is invalid",
+                    )
+                })?,
+            public_key: enrollment::parse_hex(&authority.public_key, 32)
+                .map_err(|_| {
+                    OperationError::new(
+                        OperationErrorCode::EnrollmentInvalid,
+                        "authority public key is invalid",
+                    )
+                })?
+                .try_into()
+                .map_err(|_| {
+                    OperationError::new(
+                        OperationErrorCode::EnrollmentInvalid,
+                        "authority public key is invalid",
+                    )
+                })?,
+            revoked: authority.revoked,
+        };
+        let now = enrollment::now_seconds();
+        bundle
+            .verify(
+                &authority,
+                &config.organization.id,
+                identity.public_status().node_id.as_str(),
+                now,
+            )
+            .map_err(map_enrollment_error)?;
+        let certificate =
+            crate::direct_transport::TransportCertificate::from_bytes(&bundle.subject_certificate)
+                .map_err(|_| {
+                    OperationError::new(
+                        OperationErrorCode::EnrollmentInvalid,
+                        "signed enrollment certificate is invalid",
+                    )
+                })?;
+        certificate.verify_time(now).map_err(|_| {
+            OperationError::new(
+                OperationErrorCode::EnrollmentExpired,
+                "signed enrollment certificate is expired",
+            )
+        })?;
+        let token_hash = enrollment::hash_bootstrap_token(request.bootstrap_token.as_bytes());
+        let nonce_hash = enrollment::hash_bootstrap_nonce(&nonce);
+        if hash_hex(&token_hash)
+            .as_bytes()
+            .ct_eq(config.trust.bootstrap_token_hash.as_bytes())
+            .unwrap_u8()
+            != 1
+            || hash_hex(&nonce_hash)
+                .as_bytes()
+                .ct_eq(config.trust.bootstrap_nonce_hash.as_bytes())
+                .unwrap_u8()
+                != 1
+        {
+            return Err(OperationError::new(
+                OperationErrorCode::EnrollmentDenied,
+                "bootstrap proof does not match local policy",
+            ));
+        }
+        Ok((now, token_hash, nonce_hash))
+    })();
+    let (now, token_hash, nonce_hash) = match preflight {
+        Ok(value) => value,
+        Err(error) => {
+            return record_signed_bundle_failure_with_token(
+                &registry,
+                &mut token_lease,
+                Some(&bundle),
+                error,
+            )
+        }
+    };
+    let mut peer = match registry
+        .activate_signed_bundle(
+            &bundle,
+            actor,
+            SIGNED_BUNDLE_REASON,
+            now,
+            &token_hash,
+            &nonce_hash,
+        )
+        .map_err(map_registry_error)
+    {
+        Ok(peer) => public_peer(peer),
+        Err(error) => {
+            return record_signed_bundle_failure_with_token(
+                &registry,
+                &mut token_lease,
+                Some(&bundle),
+                error,
+            )
+        }
+    };
+    if let Some(lease) = token_lease.take() {
+        let bundle_digest: [u8; 32] = Sha256::digest(bundle.encode()).into();
+        peer.cleanup_pending = !complete_token_cleanup(
+            &registry,
+            lease,
+            &config.organization.id,
+            &token_hash,
+            &nonce_hash,
+            &bundle.bundle_id,
+            &bundle_digest,
+        );
+    }
+    Ok(peer)
+}
+
+pub fn apply_signed_bundle_from_local_token(
+    context: &NodeContext,
+    mut request: SignedBundleApplyRequest,
+    token_id: &str,
+) -> OperationResult<PublicPeer> {
+    let token_path = std::env::var_os("OMAKURE_BOOTSTRAP_TOKEN_FILE")
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            OperationError::new(
+                OperationErrorCode::EnrollmentDenied,
+                "local bootstrap token file is not configured",
+            )
+        })?;
+    request.bootstrap_token.clear();
+    request.bootstrap_token_path = Some(token_path);
+    apply_signed_bundle_authenticated(context, request, token_id)
+}
+
+fn restore_token_lease(
+    lease: &mut Option<PrivateTokenLease>,
+    error: OperationError,
+) -> OperationError {
+    if let Some(lease) = lease.take() {
+        if lease.restore().is_err() {
+            return OperationError::new(
+                OperationErrorCode::EnrollmentDenied,
+                "bootstrap token could not be restored",
+            );
+        }
+    }
+    error
+}
+
+fn record_signed_bundle_failure_with_token(
+    registry: &NodeRegistry,
+    lease: &mut Option<PrivateTokenLease>,
+    bundle: Option<&enrollment::SignedEnrollmentBundle>,
+    error: OperationError,
+) -> OperationResult<PublicPeer> {
+    record_signed_bundle_failure(registry, bundle, restore_token_lease(lease, error))
+}
+
+fn recover_private_token_tombstones(
+    context: &NodeContext,
+    registry: &NodeRegistry,
+    organization: &str,
+    path: &std::path::Path,
+) -> OperationResult<()> {
+    let _lock = context
+        .acquire_private_token_lock(path)
+        .map_err(map_node_error)?;
+    let pending = registry
+        .pending_bootstrap_cleanups(
+            organization,
+            crate::node::PRIVATE_TOKEN_TOMBSTONE_RETRY_LIMIT,
+        )
+        .map_err(map_registry_error)?;
+    let mut completed = vec![false; pending.len()];
+    for lease in context
+        .list_private_token_tombstones(path, enrollment::MAX_BOOTSTRAP_TOKEN_BYTES)
+        .map_err(map_node_error)?
+    {
+        let token_hash = enrollment::hash_bootstrap_token(lease.contents());
+        if let Some((index, cleanup)) = pending
+            .iter()
+            .enumerate()
+            .find(|(_, cleanup)| cleanup.token_hash == token_hash)
+        {
+            if lease.finish_success() == PrivateFileCommitStatus::CleanupRequired {
+                return Err(cleanup_recovery_error());
+            }
+            registry
+                .complete_bootstrap_cleanup(cleanup, None)
+                .map_err(|_| cleanup_recovery_error())?;
+            completed[index] = true;
+        } else if registry
+            .bootstrap_proof_consumed(organization)
+            .map_err(|_| cleanup_recovery_error())?
+        {
+            if lease.finish_success() == PrivateFileCommitStatus::CleanupRequired {
+                return Err(cleanup_recovery_error());
+            }
+        } else {
+            lease.restore().map_err(|_| cleanup_recovery_error())?;
+        }
+    }
+    for (index, cleanup) in pending.iter().enumerate() {
+        if completed[index] {
+            continue;
+        }
+        match fs::symlink_metadata(path) {
+            Ok(_) => return Err(cleanup_recovery_error()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(_) => return Err(cleanup_recovery_error()),
+        }
+        registry
+            .complete_bootstrap_cleanup(cleanup, None)
+            .map_err(|_| cleanup_recovery_error())?;
+    }
+    Ok(())
+}
+
+pub fn recover_local_bootstrap_token_tombstones(context: &NodeContext) -> OperationResult<()> {
+    let Some(path) = std::env::var_os("OMAKURE_BOOTSTRAP_TOKEN_FILE").map(PathBuf::from) else {
+        return Ok(());
+    };
+    let result = (|| {
+        let config = signed_bundle_enrollment_enabled(context)?;
+        let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
+        let registry = NodeRegistry::open_existing(context, identity.public_status())
+            .map_err(map_registry_error)?;
+        recover_private_token_tombstones(context, &registry, &config.organization.id, &path)
+    })();
+    result.map_err(|_| cleanup_recovery_error())
+}
+
+fn complete_token_cleanup(
+    registry: &NodeRegistry,
+    lease: PrivateTokenLease,
+    organization: &str,
+    token_hash: &[u8; 32],
+    nonce_hash: &[u8; 32],
+    bundle_id: &[u8; 16],
+    bundle_digest: &[u8; 32],
+) -> bool {
+    if lease.finish_success() == PrivateFileCommitStatus::CleanupRequired {
+        return false;
+    }
+    let cleanup = crate::node_registry::PendingBootstrapCleanup {
+        organization: organization.to_string(),
+        token_hash: *token_hash,
+        nonce_hash: *nonce_hash,
+        bundle_id: *bundle_id,
+    };
+    match registry.complete_bootstrap_cleanup(&cleanup, Some(bundle_digest)) {
+        Ok(()) => true,
+        Err(_) => false,
+    }
+}
+
+fn cleanup_recovery_error() -> OperationError {
+    OperationError::new(
+        OperationErrorCode::IoFailed,
+        "bootstrap token cleanup recovery failed; node service startup was aborted; repair the node state and retry",
+    )
+}
+
+fn record_signed_bundle_failure(
+    registry: &NodeRegistry,
+    bundle: Option<&enrollment::SignedEnrollmentBundle>,
+    error: OperationError,
+) -> OperationResult<PublicPeer> {
+    let (request_id, node_id, request_digest) = match bundle {
+        Some(bundle) => (
+            Some(&bundle.bundle_id),
+            bundle.subject_node_id.as_str(),
+            Some(Sha256::digest(bundle.encode()).into()),
+        ),
+        None => (None, registry.local_node_id(), None),
+    };
+    let event_code = match error.code {
+        OperationErrorCode::EnrollmentDenied => "proof_rejected",
+        OperationErrorCode::EnrollmentExpired => "expired",
+        _ => "malformed",
+    };
+    registry
+        .record_enrollment_audit(
+            event_code,
+            request_id,
+            request_digest.as_ref(),
+            node_id,
+            "rejected",
+            "signed enrollment bundle verification failed",
+        )
+        .map_err(map_registry_error)?;
+    Err(error)
+}
+
 pub fn stage_manual_enrollment(
     context: &NodeContext,
     request: &ManualEnrollmentRequest,
@@ -616,6 +1053,20 @@ fn decode_request(value: &str) -> OperationResult<Vec<u8>> {
         .collect()
 }
 
+fn decode_bundle(value: &str) -> OperationResult<Vec<u8>> {
+    if value.is_empty() || value.len() > enrollment::MAX_BUNDLE_BYTES * 2 {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentInvalid,
+            "signed enrollment bundle bytes are invalid",
+        ));
+    }
+    decode_fixed_hex(value, value.len() / 2, "signed enrollment bundle")
+}
+
+fn hash_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 fn decode_fixed_hex(value: &str, bytes: usize, label: &str) -> OperationResult<Vec<u8>> {
     enrollment::parse_hex(value, bytes).map_err(|_| {
         OperationError::new(
@@ -630,6 +1081,11 @@ fn map_enrollment_error(error: EnrollmentError) -> OperationError {
         EnrollmentError::Expired => OperationErrorCode::EnrollmentExpired,
         EnrollmentError::Replay => OperationErrorCode::EnrollmentReplay,
         EnrollmentError::IdentityMismatch => OperationErrorCode::EnrollmentMismatch,
+        EnrollmentError::AuthorityUnknown => OperationErrorCode::EnrollmentInvalid,
+        EnrollmentError::AuthorityRevoked => OperationErrorCode::EnrollmentDenied,
+        EnrollmentError::OrganizationMismatch | EnrollmentError::AudienceMismatch => {
+            OperationErrorCode::EnrollmentMismatch
+        }
         EnrollmentError::Invalid | EnrollmentError::TooLarge => {
             OperationErrorCode::EnrollmentInvalid
         }
@@ -762,6 +1218,7 @@ fn public_peer(peer: PeerRecord) -> PublicPeer {
         updated_at: peer.updated_at,
         last_seen: peer.last_seen,
         source: source_string(peer.source),
+        cleanup_pending: false,
     }
 }
 
@@ -902,6 +1359,29 @@ fn map_registry_error(error: RegistryError) -> OperationError {
             OperationErrorCode::EnrollmentMismatch,
             "manual enrollment evidence does not match staged state",
         ),
+        RegistryError::BundleReplay => OperationError::new(
+            OperationErrorCode::EnrollmentReplay,
+            "signed enrollment bundle was replayed",
+        ),
+        RegistryError::BundleConflict => OperationError::new(
+            OperationErrorCode::Conflict,
+            "signed enrollment bundle conflicts with existing trust state",
+        ),
+        RegistryError::BootstrapProofConsumed => OperationError::new(
+            OperationErrorCode::EnrollmentReplay,
+            "signed enrollment bootstrap proof was already consumed",
+        ),
+        RegistryError::ConductorConflict => OperationError::new(
+            OperationErrorCode::Conflict,
+            "an active conductor already exists",
+        ),
+        RegistryError::BundleCapacity => {
+            registry_error("signed enrollment replay capacity is exhausted")
+        }
+        RegistryError::BundleRateLimited => OperationError::new(
+            OperationErrorCode::EnrollmentRateLimited,
+            "signed enrollment bundle rate limit exceeded",
+        ),
     }
 }
 
@@ -916,9 +1396,14 @@ fn registry_error(message: impl Into<String>) -> OperationError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{NodePathOverrides, NodePlatform};
+    use crate::node::{
+        set_private_token_fault, NodePathOverrides, NodePlatform, PrivateTokenFault,
+    };
     use rusqlite::Connection;
+    use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
+
+    static TOKEN_FAULT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     fn context(temp: &TempDir) -> NodeContext {
         NodeContext::resolve_for(
@@ -955,6 +1440,113 @@ mod tests {
                      BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;",
                 )
                 .unwrap();
+        }
+    }
+
+    fn fail_cleanup_completion_audit(context: &NodeContext, enabled: bool) {
+        let connection = Connection::open(context.database_path()).unwrap();
+        if enabled {
+            connection
+                .execute_batch(
+                    "DROP TRIGGER enrollment_audits_no_update;
+                     CREATE TRIGGER enrollment_audits_no_update
+                     BEFORE INSERT ON enrollment_audits
+                     WHEN NEW.event_code = 'cleanup_completed'
+                     BEGIN SELECT RAISE(ABORT, 'injected cleanup completion audit failure'); END;",
+                )
+                .unwrap();
+        } else {
+            connection
+                .execute_batch(
+                    "DROP TRIGGER enrollment_audits_no_update;
+                     CREATE TRIGGER enrollment_audits_no_update
+                     BEFORE UPDATE ON enrollment_audits
+                     BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;",
+                )
+                .unwrap();
+        }
+    }
+
+    fn write_secure_token(path: &std::path::Path, token: &str) {
+        fs::write(path, token.as_bytes()).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+    }
+
+    struct SignedBundleFixture {
+        _target_temp: TempDir,
+        _manager_temp: TempDir,
+        target: NodeContext,
+        request: SignedBundleApplyRequest,
+        token_path: std::path::PathBuf,
+        organization: String,
+    }
+
+    fn signed_bundle_fixture(
+        authority_private: [u8; 32],
+        nonce_byte: u8,
+        bundle_byte: u8,
+    ) -> SignedBundleFixture {
+        let target_temp = TempDir::new().unwrap();
+        let target = context(&target_temp);
+        let manager_temp = TempDir::new().unwrap();
+        let manager_context = context(&manager_temp);
+        let authority_signing_key =
+            k256::schnorr::SigningKey::from_slice(&authority_private).unwrap();
+        let token = "t".repeat(32);
+        let nonce = [nonce_byte; 16];
+        let mut config = NodeConfig::default();
+        config.organization.id = "omakure".into();
+        config.trust.enrollment = "signed-bundle".into();
+        config.trust.bootstrap_token_hash =
+            hash_hex(&enrollment::hash_bootstrap_token(token.as_bytes()));
+        config.trust.bootstrap_nonce_hash = hash_hex(&enrollment::hash_bootstrap_nonce(&nonce));
+        config.trust.authorities = vec![crate::domain::EnrollmentAuthority {
+            key_id: hash_hex(&[8; 16]),
+            public_key: hash_hex(&authority_signing_key.verifying_key().to_bytes()),
+            revoked: false,
+        }];
+        initialize_node(&target, &config).unwrap();
+        let manager = NodeIdentity::load_or_initialize(&manager_context).unwrap();
+        let manager_transport = LocalTransport::provision_new(&manager_context, &manager).unwrap();
+        let target_identity = NodeIdentity::load_existing(&target).unwrap();
+        let now = enrollment::now_seconds();
+        let bundle = enrollment::SignedEnrollmentBundle::sign_with_material(
+            &authority_private,
+            [bundle_byte; enrollment::REQUEST_ID_BYTES],
+            [8; enrollment::BUNDLE_AUTHORITY_ID_BYTES],
+            "omakure".into(),
+            target_identity.public_status().node_id.clone(),
+            manager.public_status().node_id.clone(),
+            enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            *manager_transport.certificate().transport_public(),
+            *manager_transport.certificate().as_bytes(),
+            EnrollmentRole::Conductor,
+            vec!["remote-run".into()],
+            now,
+            now + 600,
+        )
+        .unwrap();
+        let token_path = target_temp.path().join("bootstrap.token");
+        write_secure_token(&token_path, &token);
+        SignedBundleFixture {
+            target,
+            request: SignedBundleApplyRequest {
+                bundle_hex: hash_hex(&bundle.encode()),
+                bootstrap_token: token,
+                bootstrap_nonce: hash_hex(&nonce),
+                bootstrap_token_path: Some(token_path.clone()),
+            },
+            token_path,
+            organization: "omakure".into(),
+            _target_temp: target_temp,
+            _manager_temp: manager_temp,
         }
     }
 
@@ -1451,5 +2043,329 @@ mod tests {
             let identity = NodeIdentity::load_existing(&context).unwrap();
             NodeRegistry::open_existing(&context, identity.public_status()).unwrap();
         }
+    }
+
+    #[test]
+    fn signed_bundle_apply_is_target_bound_atomic_and_single_use() {
+        let _fault_lock = TOKEN_FAULT_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap();
+        set_private_token_fault(PrivateTokenFault::None);
+        let target_temp = TempDir::new().unwrap();
+        let target = context(&target_temp);
+        let authority_private = [2_u8; 32];
+        let authority_signing_key =
+            k256::schnorr::SigningKey::from_slice(&authority_private).unwrap();
+        let token = "t".repeat(32);
+        let nonce = [9_u8; 16];
+        let mut config = NodeConfig::default();
+        config.organization.id = "omakure".into();
+        config.trust.enrollment = "signed-bundle".into();
+        config.trust.bootstrap_token_hash =
+            hash_hex(&enrollment::hash_bootstrap_token(token.as_bytes()));
+        config.trust.bootstrap_nonce_hash = hash_hex(&enrollment::hash_bootstrap_nonce(&nonce));
+        config.trust.authorities = vec![crate::domain::EnrollmentAuthority {
+            key_id: hash_hex(&[8; 16]),
+            public_key: hash_hex(&authority_signing_key.verifying_key().to_bytes()),
+            revoked: false,
+        }];
+
+        let manager_temp = TempDir::new().unwrap();
+        let manager_context = context(&manager_temp);
+        let manager = NodeIdentity::load_or_initialize(&manager_context).unwrap();
+        let manager_transport = LocalTransport::provision_new(&manager_context, &manager).unwrap();
+        initialize_node(&target, &config).unwrap();
+        let target_identity = NodeIdentity::load_existing(&target).unwrap();
+        let now = enrollment::now_seconds();
+        let bundle = enrollment::SignedEnrollmentBundle::sign_with_material(
+            &authority_private,
+            [7; enrollment::REQUEST_ID_BYTES],
+            [8; enrollment::BUNDLE_AUTHORITY_ID_BYTES],
+            "omakure".into(),
+            target_identity.public_status().node_id.clone(),
+            manager.public_status().node_id.clone(),
+            enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            *manager_transport.certificate().transport_public(),
+            *manager_transport.certificate().as_bytes(),
+            EnrollmentRole::Conductor,
+            vec!["remote-run".into()],
+            now,
+            now + 600,
+        )
+        .unwrap();
+        let request = SignedBundleApplyRequest {
+            bundle_hex: hash_hex(&bundle.encode()),
+            bootstrap_token: token.clone(),
+            bootstrap_nonce: hash_hex(&nonce),
+            bootstrap_token_path: Some(target_temp.path().join("bootstrap.token")),
+        };
+        fs::write(
+            request.bootstrap_token_path.as_ref().unwrap(),
+            token.as_bytes(),
+        )
+        .unwrap();
+        let mut permissions = fs::metadata(request.bootstrap_token_path.as_ref().unwrap())
+            .unwrap()
+            .permissions();
+        #[cfg(unix)]
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o600);
+        fs::set_permissions(request.bootstrap_token_path.as_ref().unwrap(), permissions).unwrap();
+        let peer = apply_signed_bundle(&target, request.clone()).unwrap();
+        assert_eq!(peer.state, "active");
+        assert!(!request.bootstrap_token_path.as_ref().unwrap().exists());
+        assert_eq!(list_trusted_peers(&target).unwrap().len(), 1);
+        let replay = apply_signed_bundle(
+            &target,
+            SignedBundleApplyRequest {
+                bootstrap_token: token,
+                bootstrap_token_path: None,
+                ..request
+            },
+        )
+        .unwrap_err();
+        assert_eq!(replay.code, OperationErrorCode::EnrollmentReplay);
+        assert_eq!(list_trusted_peers(&target).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn signed_bundle_token_consumption_faults_are_recoverable_across_restart() {
+        let _fault_lock = TOKEN_FAULT_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap();
+
+        let fixture = signed_bundle_fixture([21; 32], 31, 41);
+        set_private_token_fault(PrivateTokenFault::Rename);
+        assert!(apply_signed_bundle(&fixture.target, fixture.request.clone()).is_err());
+        set_private_token_fault(PrivateTokenFault::None);
+        assert!(fixture.token_path.exists());
+        assert!(list_trusted_peers(&fixture.target).unwrap().is_empty());
+
+        let fixture = signed_bundle_fixture([22; 32], 32, 42);
+        fail_enrollment_audits(&fixture.target, true);
+        assert!(apply_signed_bundle(&fixture.target, fixture.request.clone()).is_err());
+        fail_enrollment_audits(&fixture.target, false);
+        assert!(fixture.token_path.exists());
+        assert!(list_trusted_peers(&fixture.target).unwrap().is_empty());
+
+        let fixture = signed_bundle_fixture([23; 32], 33, 43);
+        fail_enrollment_audits(&fixture.target, true);
+        set_private_token_fault(PrivateTokenFault::Restore);
+        assert!(apply_signed_bundle(&fixture.target, fixture.request.clone()).is_err());
+        set_private_token_fault(PrivateTokenFault::None);
+        fail_enrollment_audits(&fixture.target, false);
+        assert!(!fixture.token_path.exists());
+        let identity = NodeIdentity::load_existing(&fixture.target).unwrap();
+        let registry =
+            NodeRegistry::open_existing(&fixture.target, identity.public_status()).unwrap();
+        recover_private_token_tombstones(
+            &fixture.target,
+            &registry,
+            &fixture.organization,
+            &fixture.token_path,
+        )
+        .unwrap();
+        assert!(fixture.token_path.exists());
+        assert!(list_trusted_peers(&fixture.target).unwrap().is_empty());
+
+        let fixture = signed_bundle_fixture([24; 32], 34, 44);
+        set_private_token_fault(PrivateTokenFault::Delete);
+        let applied = apply_signed_bundle(&fixture.target, fixture.request.clone()).unwrap();
+        assert!(applied.cleanup_pending);
+        set_private_token_fault(PrivateTokenFault::None);
+        assert!(!fixture.token_path.exists());
+        assert_eq!(
+            fixture
+                .target
+                .list_private_token_tombstones(
+                    &fixture.token_path,
+                    enrollment::MAX_BOOTSTRAP_TOKEN_BYTES,
+                )
+                .unwrap()
+                .len(),
+            1
+        );
+        let identity = NodeIdentity::load_existing(&fixture.target).unwrap();
+        let registry =
+            NodeRegistry::open_existing(&fixture.target, identity.public_status()).unwrap();
+        set_private_token_fault(PrivateTokenFault::Delete);
+        let recovery_error = recover_private_token_tombstones(
+            &fixture.target,
+            &registry,
+            &fixture.organization,
+            &fixture.token_path,
+        )
+        .unwrap_err();
+        assert!(recovery_error
+            .message
+            .contains("bootstrap token cleanup recovery failed"));
+        set_private_token_fault(PrivateTokenFault::None);
+        recover_private_token_tombstones(
+            &fixture.target,
+            &registry,
+            &fixture.organization,
+            &fixture.token_path,
+        )
+        .unwrap();
+        assert!(!fixture.token_path.exists());
+        assert!(fixture
+            .target
+            .list_private_token_tombstones(
+                &fixture.token_path,
+                enrollment::MAX_BOOTSTRAP_TOKEN_BYTES,
+            )
+            .unwrap()
+            .is_empty());
+        let cleanup_count: i64 = Connection::open(fixture.target.database_path())
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM enrollment_audits WHERE event_code = 'cleanup_completed'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(cleanup_count, 1);
+        set_private_token_fault(PrivateTokenFault::None);
+    }
+
+    #[test]
+    fn cleanup_completion_failure_leaves_durable_pending_proof() {
+        let _fault_lock = TOKEN_FAULT_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap();
+        set_private_token_fault(PrivateTokenFault::None);
+        let fixture = signed_bundle_fixture([25; 32], 35, 45);
+        fail_cleanup_completion_audit(&fixture.target, true);
+        let applied = apply_signed_bundle(&fixture.target, fixture.request.clone()).unwrap();
+        assert!(applied.cleanup_pending);
+        let state: String = Connection::open(fixture.target.database_path())
+            .unwrap()
+            .query_row(
+                "SELECT cleanup_state FROM bootstrap_proofs WHERE consumed_at IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(state, "pending");
+        fail_cleanup_completion_audit(&fixture.target, false);
+        recover_private_token_tombstones(
+            &fixture.target,
+            &NodeRegistry::open_existing(
+                &fixture.target,
+                NodeIdentity::load_existing(&fixture.target)
+                    .unwrap()
+                    .public_status(),
+            )
+            .unwrap(),
+            &fixture.organization,
+            &fixture.token_path,
+        )
+        .unwrap();
+        let state: String = Connection::open(fixture.target.database_path())
+            .unwrap()
+            .query_row(
+                "SELECT cleanup_state FROM bootstrap_proofs WHERE consumed_at IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(state, "complete");
+    }
+
+    #[test]
+    fn signed_bundle_distinct_conductors_have_one_transactional_winner() {
+        let _fault_lock = TOKEN_FAULT_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap();
+        set_private_token_fault(PrivateTokenFault::None);
+        let target_temp = TempDir::new().unwrap();
+        let target = context(&target_temp);
+        let authority_private = [3_u8; 32];
+        let authority = k256::schnorr::SigningKey::from_slice(&authority_private).unwrap();
+        let token = "t".repeat(32);
+        let nonce = [12_u8; 16];
+        let mut config = NodeConfig::default();
+        config.organization.id = "omakure".into();
+        config.trust.enrollment = "signed-bundle".into();
+        config.trust.bootstrap_token_hash =
+            hash_hex(&enrollment::hash_bootstrap_token(token.as_bytes()));
+        config.trust.bootstrap_nonce_hash = hash_hex(&enrollment::hash_bootstrap_nonce(&nonce));
+        config.trust.authorities = vec![crate::domain::EnrollmentAuthority {
+            key_id: hash_hex(&[8; 16]),
+            public_key: hash_hex(&authority.verifying_key().to_bytes()),
+            revoked: false,
+        }];
+        initialize_node(&target, &config).unwrap();
+
+        let manager_a_temp = TempDir::new().unwrap();
+        let manager_b_temp = TempDir::new().unwrap();
+        let manager_a_context = context(&manager_a_temp);
+        let manager_b_context = context(&manager_b_temp);
+        let manager_a = NodeIdentity::load_or_initialize(&manager_a_context).unwrap();
+        let manager_b = NodeIdentity::load_or_initialize(&manager_b_context).unwrap();
+        let transport_a = LocalTransport::provision_new(&manager_a_context, &manager_a).unwrap();
+        let transport_b = LocalTransport::provision_new(&manager_b_context, &manager_b).unwrap();
+        let target_id = NodeIdentity::load_existing(&target)
+            .unwrap()
+            .public_status()
+            .node_id
+            .clone();
+        let make_bundle =
+            |bundle_id: [u8; 16], manager: &NodeIdentity, transport: &LocalTransport| {
+                enrollment::SignedEnrollmentBundle::sign_with_material(
+                    &authority_private,
+                    bundle_id,
+                    [8; 16],
+                    "omakure".into(),
+                    target_id.clone(),
+                    manager.public_status().node_id.clone(),
+                    enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                    *transport.certificate().transport_public(),
+                    *transport.certificate().as_bytes(),
+                    EnrollmentRole::Conductor,
+                    vec!["remote-run".into()],
+                    enrollment::now_seconds(),
+                    enrollment::now_seconds() + 600,
+                )
+                .unwrap()
+            };
+        let requests = [
+            SignedBundleApplyRequest {
+                bundle_hex: hash_hex(&make_bundle([13; 16], &manager_a, &transport_a).encode()),
+                bootstrap_token: token.clone(),
+                bootstrap_nonce: hash_hex(&nonce),
+                bootstrap_token_path: None,
+            },
+            SignedBundleApplyRequest {
+                bundle_hex: hash_hex(&make_bundle([14; 16], &manager_b, &transport_b).encode()),
+                bootstrap_token: token,
+                bootstrap_nonce: hash_hex(&nonce),
+                bootstrap_token_path: None,
+            },
+        ];
+        let target_a = target.clone();
+        let target_b = target.clone();
+        let request_a = requests[0].clone();
+        let request_b = requests[1].clone();
+        let first = std::thread::spawn(move || apply_signed_bundle(&target_a, request_a));
+        let second = std::thread::spawn(move || apply_signed_bundle(&target_b, request_b));
+        let results = [first.join().unwrap(), second.join().unwrap()];
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(list_trusted_peers(&target).unwrap().len(), 1);
+        assert!(results.iter().any(|result| {
+            result.as_ref().err().is_some_and(|error| {
+                error.code == OperationErrorCode::Conflict
+                    || error.code == OperationErrorCode::EnrollmentReplay
+            })
+        }));
     }
 }

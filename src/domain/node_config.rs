@@ -36,6 +36,8 @@ pub struct NodeConfig {
     pub api: ApiSettings,
     pub network: NetworkSettings,
     pub trust: TrustSettings,
+    #[serde(default)]
+    pub discovery: DiscoverySettings,
     pub organization: OrganizationSettings,
 }
 
@@ -92,6 +94,26 @@ pub struct OrganizationSettings {
     pub discovery_secret_ref: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DiscoverySettings {
+    pub enabled: bool,
+    pub port: u16,
+    pub multicast_addr: String,
+    pub broadcast: bool,
+}
+
+impl Default for DiscoverySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            port: crate::discovery::DISCOVERY_PORT,
+            multicast_addr: crate::discovery::MULTICAST_GROUP.to_string(),
+            broadcast: true,
+        }
+    }
+}
+
 impl Default for NodeConfig {
     fn default() -> Self {
         Self {
@@ -117,6 +139,7 @@ impl Default for NodeConfig {
                 bootstrap_token_hash: String::new(),
                 bootstrap_nonce_hash: String::new(),
             },
+            discovery: DiscoverySettings::default(),
             organization: OrganizationSettings {
                 id: String::new(),
                 discovery_secret_ref: String::new(),
@@ -236,6 +259,23 @@ impl NodeConfig {
             ));
         }
         validate_secret_ref(&self.organization.discovery_secret_ref)?;
+        if self.discovery.port != crate::discovery::DISCOVERY_PORT {
+            return Err(NodeConfigError::Invalid(
+                "discovery.port must use the frozen discovery port".to_string(),
+            ));
+        }
+        let multicast = self
+            .discovery
+            .multicast_addr
+            .parse::<std::net::Ipv4Addr>()
+            .map_err(|_| {
+                NodeConfigError::Invalid("discovery.multicast_addr is invalid".to_string())
+            })?;
+        if multicast != crate::discovery::MULTICAST_GROUP {
+            return Err(NodeConfigError::Invalid(
+                "discovery.multicast_addr must use the frozen discovery group".to_string(),
+            ));
+        }
         if self.trust.authorities.len() > MAX_AUTHORITY_KEYS {
             return Err(NodeConfigError::Invalid(
                 "trust.authorities has too many entries".to_string(),
@@ -553,6 +593,13 @@ mod tests {
         config.organization.discovery_secret_ref = "secret://prod/raw/value".into();
         assert!(config.validate().is_err());
         config.organization.discovery_secret_ref = "plain-secret-value".into();
+        assert!(config.validate().is_err());
+
+        config = NodeConfig::default();
+        config.discovery.port = 0;
+        assert!(config.validate().is_err());
+        config.discovery.port = 38383;
+        config.discovery.multicast_addr = "127.0.0.1".into();
         assert!(config.validate().is_err());
     }
 

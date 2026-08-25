@@ -187,6 +187,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_management_routes"),
     ),
     (
+        ("GET", "/v1/node/discovery"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
         ("POST", "/v1/node/init"),
         RouteCoverage::Covered("node_management_routes"),
     ),

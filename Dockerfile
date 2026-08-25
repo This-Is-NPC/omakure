@@ -48,6 +48,12 @@ RUN apt-get update \
           'allow_remote_cues = false' \
           'allow_baseline_push = false' \
           '' \
+          '[discovery]' \
+          'enabled = false' \
+          'port = 38383' \
+          'multicast_addr = "239.255.42.99"' \
+          'broadcast = true' \
+          '' \
           '[organization]' \
           'id = ""' \
           'discovery_secret_ref = ""' > /etc/omakure/node.toml \

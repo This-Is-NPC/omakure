@@ -243,6 +243,10 @@ impl NodeIdentity {
         self.sign_prehash(&sha256_domain(b"omakure/transport-cert/v1\0", body))
     }
 
+    pub(crate) fn sign_discovery(&self, body: &[u8]) -> Result<Bip340Signature, NodeIdentityError> {
+        self.sign_prehash(&sha256_domain(b"omakure/lan-beacon/v1\0", body))
+    }
+
     pub(crate) fn sign_enrollment(
         &self,
         body: &[u8],

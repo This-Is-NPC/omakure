@@ -35,6 +35,13 @@ pub fn run(
             .map(|result| serde_json::to_value(result).expect("node status serializes")),
         NodeCommand::Peers => node_ops::list_trusted_peers(&context)
             .map(|result| serde_json::to_value(result).expect("peer list serializes")),
+        NodeCommand::Discovery(args) => node_ops::scan_discovery(
+            &context,
+            &scripts_dir,
+            args.wait_seconds,
+            args.include_addresses,
+        )
+        .map(|result| serde_json::to_value(result).expect("discovery status serializes")),
         NodeCommand::Trust(args) => node_ops::import_manual_trust(
             &context,
             node_ops::ManualTrustRequest {

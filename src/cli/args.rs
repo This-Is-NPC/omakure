@@ -486,6 +486,9 @@ pub enum NodeCommand {
     /// List registered peers without audit history or private state
     Peers,
 
+    /// Run one bounded in-memory LAN discovery scan
+    Discovery(NodeDiscoveryArgs),
+
     /// Explicitly import and activate one manually trusted peer
     Trust(NodeTrustArgs),
 
@@ -586,6 +589,17 @@ pub struct NodeDirectProbeArgs {
     /// Expected canonical peer node ID.
     #[arg(long = "peer-node-id")]
     pub peer_node_id: String,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeDiscoveryArgs {
+    /// Discovery scan duration in seconds, bounded to 1..=30
+    #[arg(long, default_value_t = 5)]
+    pub wait_seconds: u64,
+
+    /// Include observed source addresses in the local CLI result
+    #[arg(long)]
+    pub include_addresses: bool,
 }
 
 #[derive(Args, Debug)]

@@ -46,6 +46,18 @@ pub enum OperationErrorCode {
     EnrollmentMismatch,
     EnrollmentDenied,
     EnrollmentRateLimited,
+    DiscoveryUnsupportedVersion,
+    DiscoveryInvalidBeacon,
+    DiscoveryMessageTooLarge,
+    DiscoveryExpired,
+    DiscoveryFuture,
+    DiscoverySecretMismatch,
+    DiscoveryIdentityMismatch,
+    DiscoverySignatureInvalid,
+    DiscoveryRateLimited,
+    DiscoveryCandidateLimit,
+    DiscoveryUnsupportedPlatform,
+    DiscoveryInternal,
 }
 
 impl OperationErrorCode {
@@ -82,6 +94,18 @@ impl OperationErrorCode {
             Self::EnrollmentMismatch => "enrollment_mismatch",
             Self::EnrollmentDenied => "enrollment_denied",
             Self::EnrollmentRateLimited => "enrollment_rate_limited",
+            Self::DiscoveryUnsupportedVersion => "discovery_unsupported_version",
+            Self::DiscoveryInvalidBeacon => "discovery_invalid_beacon",
+            Self::DiscoveryMessageTooLarge => "discovery_message_too_large",
+            Self::DiscoveryExpired => "discovery_expired",
+            Self::DiscoveryFuture => "discovery_future",
+            Self::DiscoverySecretMismatch => "discovery_secret_mismatch",
+            Self::DiscoveryIdentityMismatch => "discovery_identity_mismatch",
+            Self::DiscoverySignatureInvalid => "discovery_signature_invalid",
+            Self::DiscoveryRateLimited => "discovery_rate_limited",
+            Self::DiscoveryCandidateLimit => "discovery_candidate_limit",
+            Self::DiscoveryUnsupportedPlatform => "discovery_unsupported_platform",
+            Self::DiscoveryInternal => "discovery_internal",
         }
     }
 }

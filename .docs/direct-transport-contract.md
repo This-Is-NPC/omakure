@@ -52,6 +52,114 @@ kind is therefore a post-crypto/pre-trust check, not a pre-crypto claim.
 The Noise prologue is hashed into the Noise handshake hash by both parties. A
 prologue mismatch causes authentication failure; it is never negotiated.
 
+## LAN Discovery Beacon
+
+LAN discovery is a locator only. It is not a transport handshake, an enrollment
+exchange, a trust decision, or an authorization mechanism. A received Beacon may
+produce an in-memory candidate observation; it MUST NOT create a registry row,
+transport session, pending enrollment, or active peer. The direct handshake and
+the existing trust/enrollment policy remain required before any useful direct
+communication.
+
+The Beacon contract is version `1` and uses these fixed values:
+
+| Name | Exact bytes |
+|---|---|
+| Beacon magic | ASCII `OMKB` |
+| Beacon contract ID | ASCII `omakure/lan-discovery/v1` |
+| Beacon signature domain | ASCII `omakure/lan-beacon/v1` followed by one NUL byte |
+| IPv4 multicast group | `239.255.42.99` |
+| UDP port | `38383` |
+
+All Beacon integers are unsigned big-endian. The complete datagram is at most
+`247` bytes with a discovery proof and `215` bytes without one. Receivers MUST
+read into a `512`-byte bounded buffer, reject a datagram larger than `512` bytes,
+and never allocate from an unauthenticated length field. The unsigned Beacon
+body is:
+
+```text
+OMKB:u32 || version:u8(1) || kind:u8(1) || flags:u16 ||
+node_id:69 || identity_xonly:32 || beacon_id:16 || direct_port:u16 ||
+issued_at:u64 || expires_at:u64 || sequence:u64 ||
+[discovery_proof:32 when flags bit 0 is set] ||
+signature:64
+```
+
+`flags` is zero or `1`; all other bits reject. `node_id` is the canonical
+lowercase `omk1_` value derived from `identity_xonly`. `beacon_id` is a random
+opaque process-instance identifier. `direct_port` is the node's direct TCP
+listener port; the source IP address of the UDP datagram, not any Beacon field,
+is the candidate address. `sequence` increases for each Beacon sent by that
+process. A Beacon is valid when `issued_at <= now < expires_at`, is no more than
+5 seconds in the future, and has a lifetime of at most 15 seconds.
+
+The signature is BIP-340 over:
+
+```text
+SHA-256(ASCII("omakure/lan-beacon/v1"), NUL, all Beacon bytes before signature)
+```
+
+When flags bit 0 is set, `discovery_proof` is:
+
+```text
+HMAC-SHA256(discovery_secret,
+  ASCII("omakure/lan-discovery-proof/v1"), NUL,
+  all Beacon bytes from OMKB through sequence)
+```
+
+The secret is an optional process-only value resolved from the configured
+`secret://provider/name` by the node's secret provider. It is never written to
+node config, SQLite, logs, status, HTTP responses, or Beacon error text. If a
+local discovery secret is configured, unproved or mismatched Beacons are
+discarded. Without a local secret, unproved Beacons are accepted and proved
+Beacons are discarded because they cannot be verified. Proof success is only
+evidence that the sender knows the same secret; it never authorizes the sender.
+
+The sender transmits every 3 seconds to the IPv4 multicast group and, when
+enabled by the node configuration, the IPv4 limited broadcast address and each
+enumerated interface broadcast address. The receiver joins multicast on every
+usable local IPv4 interface. Failure to enumerate or join one interface does
+not disable the others. A platform without a usable UDP/multicast facility
+reports discovery as unsupported and does not claim that discovery is active.
+
+The receiver enforces these protocol bounds before identity work:
+
+| Resource | Limit |
+|---|---:|
+| Datagram buffer | 512 bytes |
+| Global accepted/parsed datagrams | 64 per second |
+| Source-IP datagrams | 8 per second |
+| Source-IP table | 256 entries |
+| Candidate observations | 256 total |
+| Addresses per node ID | 8 |
+| Candidate retention | Until `expires_at`, then immediate expiry |
+| Send interval | 3 seconds |
+| Beacon lifetime | 15 seconds |
+| Future clock skew | 5 seconds |
+
+Rate counters and candidates are pruned on every receive pass and at least every
+second. Duplicate `(node_id, source-IP, direct_port)` observations update the
+existing bounded record only when the Beacon is newer by `(issued_at, sequence)`.
+When the candidate bound is full, a new key is dropped; it never evicts a live
+candidate in response to unauthenticated input. Expired records may be removed
+to make room. No response is sent to malformed, spoofed, stale, secret-mismatch,
+or rate-limited input.
+
+Stable discovery errors are `unsupported_version`, `invalid_beacon`,
+`message_too_large`, `expired`, `future`, `secret_mismatch`,
+`identity_mismatch`, `signature_invalid`, `rate_limited`, `candidate_limit`,
+`unsupported_platform`, and `internal`. They reveal no raw datagram, secret,
+signature, or private interface data.
+
+Discovery status and candidates are exposed only through bounded shared
+operations. Default status includes enabled/listening/support state, counts,
+limits, and redacted candidate identity/time evidence. An explicit
+`discovery:read` authorization scope may request observed source addresses;
+the default status and `node:read` status never return private interface
+topology. The CLI and authenticated HTTP surfaces use the same operation and
+scope rules. Shutdown closes the UDP socket and joins its sender/receiver
+thread; restart starts with an empty in-memory observation set.
+
 ## Identity and Transport Keys
 
 The canonical identity rules in `rebuild-omakure.md` remain binding:

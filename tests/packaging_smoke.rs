@@ -119,6 +119,7 @@ fn machine_service_installers_are_explicit_and_preserve_node_state() {
     assert!(shell.contains("RESET_NODE_STATE"));
     assert!(shell.contains("validate_native_service_binary_path"));
     assert!(shell.contains("ExecStart=${binary} node serve"));
+    assert!(shell.contains("[discovery]\nenabled = false"));
     assert!(
         shell.find("if (( UNINSTALL_NODE_SERVICE ))").unwrap()
             < shell.find("VERSION=\"$(fetch_latest_version").unwrap(),
@@ -147,6 +148,7 @@ fn machine_service_installers_are_explicit_and_preserve_node_state() {
         );
     }
     assert!(!powershell.contains("obj= \"NT SERVICE\\OmakureNode\""));
+    assert!(powershell.contains("[discovery]\nenabled = false"));
     let acl_start = powershell.find("function Set-ExactNodeAcl").unwrap();
     let acl_end = powershell[acl_start..]
         .find("function Restore-NodeAcls")

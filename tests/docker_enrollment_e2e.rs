@@ -38,6 +38,8 @@ impl ComposeGuard {
                 "enrollment:read",
                 "--scope",
                 "enrollment:write",
+                "--scope",
+                "discovery:read",
             ])
             .output()
             .expect("generate ephemeral enrollment token");

@@ -1,0 +1,587 @@
+//! Opt-in Linux/Docker acceptance test for trust-neutral discovery.
+//!
+//! Run with:
+//! `cargo test --test docker_discovery_e2e -- --ignored --nocapture`
+
+use rusqlite::Connection;
+use serde_json::Value;
+use std::fs;
+use std::net::TcpStream;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::time::{Duration, Instant};
+use tempfile::TempDir;
+
+const COMPOSE_PROJECT: &str = "omakure-discovery";
+const TARGET_API: &str = "http://127.0.0.1:17878";
+
+struct ComposeGuard {
+    root: PathBuf,
+    _tokens_dir: TempDir,
+}
+
+impl ComposeGuard {
+    fn new() -> Self {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let tokens_dir = TempDir::new().expect("create discovery token directory");
+        let tokens_path = tokens_dir.path().join("tokens.toml");
+        let generated = Command::new(env!("CARGO_BIN_EXE_omakure"))
+            .args([
+                "--json",
+                "token",
+                "generate",
+                "--id",
+                "discovery-e2e",
+                "--scope",
+                "node:read",
+                "--scope",
+                "discovery:read",
+                "--scope",
+                "enrollment:read",
+                "--scope",
+                "enrollment:write",
+            ])
+            .output()
+            .expect("generate discovery token");
+        assert!(
+            generated.status.success(),
+            "token generation failed: {}",
+            output_text(&generated)
+        );
+        let generated: Value = serde_json::from_slice(&generated.stdout).expect("token JSON");
+        let token = generated["data"]["token"]
+            .as_str()
+            .expect("generated plaintext token")
+            .to_string();
+        let entry = generated["data"]["tokens_file_entry"]
+            .as_str()
+            .expect("generated token entry");
+        fs::write(&tokens_path, format!("version = 1\n\n{entry}"))
+            .expect("write discovery token file");
+        std::env::set_var("OMAKURE_ENROLLMENT_TOKENS_FILE", &tokens_path);
+        std::env::set_var("OMAKURE_DISCOVERY_E2E_TOKEN", token);
+
+        compose(&root, &["-p", COMPOSE_PROJECT, "down", "-v"]);
+        let output = compose(
+            &root,
+            &[
+                "-p",
+                COMPOSE_PROJECT,
+                "up",
+                "--build",
+                "-d",
+                "enrollment-target",
+                "enrollment-candidate",
+            ],
+        );
+        assert!(
+            output.status.success(),
+            "docker compose up failed: {}",
+            output_text(&output)
+        );
+        Self {
+            root,
+            _tokens_dir: tokens_dir,
+        }
+    }
+}
+
+impl Drop for ComposeGuard {
+    fn drop(&mut self) {
+        let _ = compose(&self.root, &["-p", COMPOSE_PROJECT, "down", "-v"]);
+    }
+}
+
+fn compose(root: &Path, args: &[&str]) -> Output {
+    Command::new("docker")
+        .current_dir(root)
+        .args(["compose"])
+        .args(args)
+        .output()
+        .expect("run docker compose")
+}
+
+fn exec(service: &str, args: &[&str]) -> Output {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    Command::new("docker")
+        .current_dir(root)
+        .args(["compose", "-p", COMPOSE_PROJECT, "exec", "-T", service])
+        .args(args)
+        .output()
+        .expect("run docker compose exec")
+}
+
+fn output_text(output: &Output) -> String {
+    format!(
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+fn json_output(output: &Output) -> Value {
+    assert!(
+        output.status.success(),
+        "expected successful command: {}",
+        output_text(output)
+    );
+    serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("invalid JSON output ({error}): {}", output_text(output)))
+}
+
+fn container_ip(service: &str) -> String {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let id = compose(&root, &["-p", COMPOSE_PROJECT, "ps", "-q", service]);
+    assert!(
+        id.status.success(),
+        "cannot locate {service}: {}",
+        output_text(&id)
+    );
+    let id = String::from_utf8_lossy(&id.stdout).trim().to_string();
+    let output = Command::new("docker")
+        .args([
+            "inspect",
+            "-f",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+            &id,
+        ])
+        .output()
+        .expect("inspect discovery container");
+    assert!(
+        output.status.success(),
+        "inspect failed: {}",
+        output_text(&output)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn wait_for_health() {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        if TcpStream::connect(("127.0.0.1", 17878)).is_ok()
+            && TcpStream::connect(("127.0.0.1", 17879)).is_ok()
+            && transport_ready("enrollment-target")
+            && transport_ready("enrollment-candidate")
+        {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let logs = compose(
+        &root,
+        &[
+            "-p",
+            COMPOSE_PROJECT,
+            "logs",
+            "--no-color",
+            "enrollment-target",
+            "enrollment-candidate",
+        ],
+    );
+    panic!(
+        "Docker discovery services did not become ready: {}",
+        output_text(&logs)
+    );
+}
+
+fn health_port(port: u16) -> bool {
+    TcpStream::connect(("127.0.0.1", port)).is_ok()
+}
+
+fn wait_for_stopped(service: &str) {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        let output = compose(
+            &root,
+            &[
+                "-p",
+                COMPOSE_PROJECT,
+                "ps",
+                "--status",
+                "running",
+                "-q",
+                service,
+            ],
+        );
+        if output.status.success() && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    panic!("Docker service did not stop: {service}");
+}
+
+fn transport_ready(service: &str) -> bool {
+    exec(
+        service,
+        &[
+            "test",
+            "-s",
+            "/var/lib/omakure/transport.key",
+            "-a",
+            "-s",
+            "/var/lib/omakure/transport.cert",
+        ],
+    )
+    .status
+    .success()
+}
+
+fn curl(method: &str, url: &str, include_addresses: bool) -> Value {
+    curl_json(method, url, include_addresses, None)
+}
+
+fn curl_json(method: &str, url: &str, include_addresses: bool, body: Option<&str>) -> Value {
+    let token = std::env::var("OMAKURE_DISCOVERY_E2E_TOKEN").expect("discovery token configured");
+    let mut command = Command::new("curl");
+    command.args(["--fail", "--silent", "--show-error", "-X", method, url]);
+    command.args(["-H", &format!("Authorization: Bearer {token}")]);
+    if let Some(body) = body {
+        command.args(["-H", "Content-Type: application/json", "--data", body]);
+    }
+    let output = command.output().expect("run curl");
+    assert!(
+        output.status.success(),
+        "curl failed: {}",
+        output_text(&output)
+    );
+    let value: Value = serde_json::from_slice(&output.stdout).expect("curl JSON");
+    if include_addresses {
+        assert!(value["data"]["candidates"]
+            .as_array()
+            .is_some_and(|candidates| candidates
+                .iter()
+                .all(|candidate| candidate["address"].is_string())));
+    }
+    value
+}
+
+fn copy_state(service: &str, destination: &Path) {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let destination = destination.to_str().expect("temporary path is UTF-8");
+    let output = Command::new("docker")
+        .current_dir(root)
+        .args([
+            "compose",
+            "-p",
+            COMPOSE_PROJECT,
+            "cp",
+            &format!("{service}:/var/lib/omakure/node.sqlite"),
+            destination,
+        ])
+        .output()
+        .expect("copy discovery state");
+    assert!(
+        output.status.success(),
+        "docker cp failed: {}",
+        output_text(&output)
+    );
+}
+
+fn active_registry_counts(path: &Path) -> (i64, i64, i64, i64, i64) {
+    let connection = Connection::open(path).expect("open copied discovery registry");
+    let count = |sql: &str| {
+        connection
+            .query_row(sql, [], |row| row.get::<_, i64>(0))
+            .expect("query discovery registry count")
+    };
+    (
+        count("SELECT COUNT(*) FROM remote_identities WHERE state = 'active'"),
+        count("SELECT COUNT(*) FROM trusted_peers WHERE state = 'active'"),
+        count("SELECT COUNT(*) FROM transport_key_epochs WHERE state = 'active'"),
+        count("SELECT COUNT(*) FROM manual_enrollment_requests WHERE state = 'pending'"),
+        count("SELECT COUNT(*) FROM channel_sessions WHERE state = 'active'"),
+    )
+}
+
+fn lower_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn decode_hex(value: &str) -> Vec<u8> {
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|chunk| u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap())
+        .collect()
+}
+
+fn copy_from_container(service: &str, source: &str, destination: &Path) {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let destination = destination.to_str().expect("temporary path is UTF-8");
+    let output = Command::new("docker")
+        .current_dir(root)
+        .args([
+            "compose",
+            "-p",
+            COMPOSE_PROJECT,
+            "cp",
+            &format!("{service}:{source}"),
+            destination,
+        ])
+        .output()
+        .expect("copy discovery state");
+    assert!(
+        output.status.success(),
+        "docker cp failed: {}",
+        output_text(&output)
+    );
+}
+
+#[test]
+#[ignore = "requires Docker/Linux bridge broadcast or multicast"]
+fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
+    let _compose = ComposeGuard::new();
+    wait_for_health();
+    let candidate_status = json_output(&exec(
+        "enrollment-candidate",
+        &["omakure", "--json", "node", "status"],
+    ));
+    let candidate_node_id = candidate_status["data"]["identity"]["node_id"]
+        .as_str()
+        .expect("candidate node id")
+        .to_string();
+    let target_status = json_output(&exec(
+        "enrollment-target",
+        &["omakure", "--json", "node", "status"],
+    ));
+    let target_node_id = target_status["data"]["identity"]["node_id"]
+        .as_str()
+        .expect("target node id")
+        .to_string();
+    assert_eq!(target_status["data"]["trust"]["active_peer_count"], 0);
+
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let discovered = loop {
+        let output = curl(
+            "GET",
+            &format!("{TARGET_API}/v1/node/discovery?include_addresses=true"),
+            true,
+        );
+        if output["data"]["candidates"]
+            .as_array()
+            .is_some_and(|candidates| candidates.iter().any(|c| c["node_id"] == candidate_node_id))
+        {
+            break output;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "candidate was not discovered: {output}"
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    };
+    assert_eq!(discovered["data"]["secret_configured"], false);
+
+    let status = curl("GET", &format!("{TARGET_API}/v1/node/status"), false);
+    assert!(status["data"]["discovery"]["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|candidate| candidate["address"].is_null()));
+
+    let target_ip = container_ip("enrollment-target");
+    let blocked = exec(
+        "enrollment-candidate",
+        &[
+            "omakure",
+            "--json",
+            "node",
+            "direct-probe",
+            "--endpoint",
+            &format!("{target_ip}:7988"),
+            "--peer-node-id",
+            &target_node_id,
+        ],
+    );
+    assert!(
+        !blocked.status.success(),
+        "discovery authorized a direct probe"
+    );
+
+    for service in ["enrollment-target", "enrollment-candidate"] {
+        let dir = TempDir::new().expect("discovery state snapshot directory");
+        let path = dir.path().join("node.sqlite");
+        copy_state(service, &path);
+        assert_eq!(
+            active_registry_counts(&path),
+            (0, 0, 0, 0, 0),
+            "service: {service}"
+        );
+    }
+
+    let target_endpoint = format!("{}:7988", container_ip("enrollment-target"));
+    let request_output = exec(
+        "enrollment-candidate",
+        &[
+            "omakure",
+            "--json",
+            "node",
+            "enroll",
+            "request",
+            "--endpoint",
+            &target_endpoint,
+            "--capability",
+            "remote-run",
+            "--lifetime-seconds",
+            "300",
+        ],
+    );
+    assert!(
+        request_output.status.success(),
+        "manual enrollment request failed: {}",
+        output_text(&request_output)
+    );
+    let request = json_output(&request_output);
+    let pending = curl("GET", &format!("{TARGET_API}/v1/node/enrollments"), false);
+    assert_eq!(pending["data"].as_array().unwrap().len(), 1);
+    let pending_node_id = pending["data"][0]["node_id"].as_str().unwrap();
+    let request_hex = request["data"]["request_hex"].as_str().unwrap();
+    let request_bytes = decode_hex(request_hex);
+    assert_eq!(request_bytes[4], 2);
+    let certificate_dir = TempDir::new().expect("candidate certificate directory");
+    let certificate_file = certificate_dir.path().join("transport.cert");
+    copy_from_container(
+        "enrollment-candidate",
+        "/var/lib/omakure/transport.cert",
+        &certificate_file,
+    );
+    let approval_body = serde_json::json!({
+        "request_hex": request_hex,
+        "transport_certificate": lower_hex(&fs::read(&certificate_file).unwrap()),
+        "code": request["data"]["code"].as_str().unwrap(),
+        "actor": "discovery-e2e",
+        "reason": "explicit discovery follow-up enrollment",
+        "confirmed": true
+    });
+    let approved = curl_json(
+        "POST",
+        &format!("{TARGET_API}/v1/node/enrollments/{pending_node_id}/approve"),
+        false,
+        Some(&approval_body.to_string()),
+    );
+    assert_eq!(approved["data"]["state"], "active");
+
+    let target_certificate_dir = TempDir::new().expect("target certificate directory");
+    let target_certificate_file = target_certificate_dir.path().join("transport.cert");
+    copy_from_container(
+        "enrollment-target",
+        "/var/lib/omakure/transport.cert",
+        &target_certificate_file,
+    );
+    let reciprocal_body = serde_json::json!({
+        "request_hex": request["data"]["reciprocal_request_hex"].as_str().unwrap(),
+        "transport_certificate": lower_hex(&fs::read(&target_certificate_file).unwrap()),
+        "code": request["data"]["reciprocal_code"].as_str().unwrap(),
+        "actor": "discovery-e2e",
+        "reason": "explicit reciprocal discovery follow-up enrollment",
+        "confirmed": true
+    });
+    let reciprocal = curl_json(
+        "POST",
+        &format!("http://127.0.0.1:17879/v1/node/enrollments/{target_node_id}/approve"),
+        false,
+        Some(&reciprocal_body.to_string()),
+    );
+    assert_eq!(reciprocal["data"]["state"], "active");
+    let accepted = exec(
+        "enrollment-candidate",
+        &[
+            "omakure",
+            "--json",
+            "node",
+            "direct-probe",
+            "--endpoint",
+            &target_endpoint,
+            "--peer-node-id",
+            &target_node_id,
+        ],
+    );
+    assert_eq!(json_output(&accepted)["data"]["accepted"], true);
+
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    assert!(compose(
+        &root,
+        &["-p", COMPOSE_PROJECT, "stop", "enrollment-candidate"]
+    )
+    .status
+    .success());
+    wait_for_stopped("enrollment-candidate");
+    assert!(
+        compose(&root, &["-p", COMPOSE_PROJECT, "stop", "enrollment-target"])
+            .status
+            .success()
+    );
+    wait_for_stopped("enrollment-target");
+    assert!(compose(
+        &root,
+        &[
+            "-p",
+            COMPOSE_PROJECT,
+            "up",
+            "-d",
+            "--no-deps",
+            "enrollment-target"
+        ]
+    )
+    .status
+    .success());
+    let target_deadline = Instant::now() + Duration::from_secs(30);
+    while !health_port(17878) {
+        assert!(Instant::now() < target_deadline, "target did not restart");
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    let empty_after_restart = curl("GET", &format!("{TARGET_API}/v1/node/discovery"), false);
+    assert!(
+        empty_after_restart["data"]["candidates"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "observer retained or rediscovered candidates before sender restart: {empty_after_restart}"
+    );
+
+    assert!(compose(
+        &root,
+        &["-p", COMPOSE_PROJECT, "start", "enrollment-candidate"]
+    )
+    .status
+    .success());
+    wait_for_health();
+    let restart_deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let output = curl("GET", &format!("{TARGET_API}/v1/node/discovery"), false);
+        if output["data"]["candidates"]
+            .as_array()
+            .is_some_and(|candidates| {
+                candidates
+                    .iter()
+                    .any(|candidate| candidate["node_id"] == candidate_node_id)
+            })
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < restart_deadline,
+            "candidate was not rediscovered: {output}"
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    let accepted_after_restart = exec(
+        "enrollment-candidate",
+        &[
+            "omakure",
+            "--json",
+            "node",
+            "direct-probe",
+            "--endpoint",
+            &target_endpoint,
+            "--peer-node-id",
+            &target_node_id,
+        ],
+    );
+    assert_eq!(
+        json_output(&accepted_after_restart)["data"]["accepted"],
+        true
+    );
+}

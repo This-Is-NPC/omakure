@@ -107,6 +107,7 @@ pub fn run(
         .config
         .as_ref()
         .ok_or("node configuration was not initialized")?;
+    let node_config = crate::operations::node::load_node_config(&context)?;
     let configured_bind = configured.api_bind.parse()?;
     let api_args = ApiArgs {
         bind: args.bind.unwrap_or(configured_bind),
@@ -118,6 +119,9 @@ pub fn run(
     };
     // Fail before bind: policy parse, auth, non-loopback guard.
     let boot = api::prepare_api_boot(&api_args)?;
+
+    let workspace = Workspace::new(scripts_dir);
+    workspace.ensure_layout()?;
 
     let direct_bind = match (args.direct_bind, configured.direct_bind.as_deref()) {
         (Some(bind), _) => Some(bind),
@@ -145,6 +149,29 @@ pub fn run(
         None
     };
 
+    let mut discovery_service = if node_config.discovery.enabled {
+        let secret = if node_config.organization.discovery_secret_ref.is_empty() {
+            None
+        } else {
+            Some(
+                crate::secrets::resolve_secret_value(
+                    &workspace,
+                    &node_config.organization.discovery_secret_ref,
+                    &crate::secrets::SecretAccess::allow_all(),
+                )
+                .map_err(|_| "discovery_secret_invalid")?,
+            )
+        };
+        Some(crate::discovery::DiscoveryService::start(
+            node_config.discovery.clone(),
+            context.clone(),
+            direct_bind.map(|bind| bind.port()),
+            secret,
+        )?)
+    } else {
+        None
+    };
+
     let workers = args.workers.or(boot.deploy.node.workers).unwrap_or(1);
     let scheduler_enabled = if args.no_scheduler {
         false
@@ -160,9 +187,6 @@ pub fn run(
     let readiness_requires_transport =
         args.readiness_requires_transport || boot.deploy.node.readiness_requires_transport;
 
-    let workspace = Workspace::new(scripts_dir);
-    workspace.ensure_layout()?;
-
     let readiness = ReadinessGate::new_with_transport(
         readiness_requires_worker,
         readiness_requires_scheduler,
@@ -173,6 +197,7 @@ pub fn run(
     );
 
     let transport_status = direct_service.as_ref().map(|service| service.status());
+    let discovery_status = discovery_service.as_ref().map(|service| service.status());
     let transport_readiness = transport_status.clone();
     let transport_watcher = transport_status.as_ref().map(|status| {
         let status = Arc::clone(status);
@@ -239,6 +264,7 @@ pub fn run(
             boot.deploy,
             Some(readiness_for_http),
             transport_readiness,
+            discovery_status,
             cancel_for_http,
             None,
         )
@@ -253,6 +279,9 @@ pub fn run(
         let _ = watcher.join();
     }
     if let Some(service) = direct_service.as_mut() {
+        service.stop();
+    }
+    if let Some(service) = discovery_service.as_mut() {
         service.stop();
     }
     readiness.set_workers_alive(false);

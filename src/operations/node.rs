@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
+use std::time::Duration;
 use subtle::ConstantTimeEq;
 
 use super::{OperationError, OperationErrorCode, OperationResult};
@@ -34,6 +35,8 @@ pub struct NodeStatus {
     pub trust: TrustSummary,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transport: Option<crate::direct_service::TransportStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discovery: Option<crate::discovery::DiscoveryStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -56,6 +59,9 @@ pub struct PublicNodeConfig {
     pub allow_baseline_push: bool,
     pub organization_id: String,
     pub discovery_secret_configured: bool,
+    pub discovery_enabled: bool,
+    pub discovery_port: u16,
+    pub discovery_broadcast: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -253,6 +259,7 @@ pub(crate) fn initialize_node_locked(
 /// replaced with a fresh identity.
 pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> {
     let config = read_public_config(context)?;
+    let configured_discovery = configured_discovery_status(config.as_ref());
     let state_present = context
         .validate_existing_state_contents()
         .map_err(map_node_error)?;
@@ -267,6 +274,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
                 active_peer_count: 0,
             },
             transport: None,
+            discovery: Some(configured_discovery),
         });
     }
 
@@ -292,6 +300,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
                 active_peer_count: 0,
             },
             transport: None,
+            discovery: Some(configured_discovery),
         });
     }
 
@@ -309,6 +318,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
             active_peer_count: counts.active,
         },
         transport: None,
+        discovery: Some(configured_discovery),
     })
 }
 
@@ -1204,7 +1214,123 @@ fn public_config(config: NodeConfig) -> PublicNodeConfig {
         allow_baseline_push: config.trust.allow_baseline_push,
         organization_id: config.organization.id,
         discovery_secret_configured: !config.organization.discovery_secret_ref.is_empty(),
+        discovery_enabled: config.discovery.enabled,
+        discovery_port: config.discovery.port,
+        discovery_broadcast: config.discovery.broadcast,
     }
+}
+
+pub fn public_discovery_status(
+    handle: Option<&crate::discovery::DiscoveryStatusHandle>,
+    include_addresses: bool,
+) -> OperationResult<crate::discovery::DiscoveryStatus> {
+    public_discovery_status_with_config(handle, include_addresses, None)
+}
+
+pub fn public_discovery_status_with_config(
+    handle: Option<&crate::discovery::DiscoveryStatusHandle>,
+    include_addresses: bool,
+    config: Option<&PublicNodeConfig>,
+) -> OperationResult<crate::discovery::DiscoveryStatus> {
+    let Some(handle) = handle else {
+        return Ok(configured_discovery_status(config));
+    };
+    handle
+        .lock()
+        .map_err(|_| {
+            OperationError::new(OperationErrorCode::IoFailed, "discovery status unavailable")
+        })
+        .map(|mut snapshot| {
+            snapshot.public_status(include_addresses, crate::enrollment::now_seconds())
+        })
+}
+
+fn configured_discovery_status(
+    config: Option<&PublicNodeConfig>,
+) -> crate::discovery::DiscoveryStatus {
+    let settings = crate::domain::DiscoverySettings {
+        enabled: config.is_some_and(|config| config.discovery_enabled),
+        port: config
+            .map(|config| config.discovery_port)
+            .unwrap_or(crate::discovery::DISCOVERY_PORT),
+        multicast_addr: crate::discovery::MULTICAST_GROUP.to_string(),
+        broadcast: config.is_some_and(|config| config.discovery_broadcast),
+    };
+    crate::discovery::DiscoveryService::status_without_service(
+        &settings,
+        crate::discovery::platform_supported(),
+        config.is_some_and(|config| config.discovery_secret_configured),
+    )
+}
+
+pub fn scan_discovery(
+    context: &NodeContext,
+    scripts_dir: &std::path::Path,
+    wait_seconds: u64,
+    include_addresses: bool,
+) -> OperationResult<crate::discovery::DiscoveryStatus> {
+    let config = load_node_config(context)?;
+    let direct_bind = config
+        .network
+        .direct_bind
+        .as_deref()
+        .map(str::parse::<std::net::SocketAddr>)
+        .transpose()
+        .map_err(|_| {
+            OperationError::new(OperationErrorCode::InvalidInput, "direct bind is invalid")
+        })?;
+    if !config.discovery.enabled {
+        let public_config = public_config(config.clone());
+        return public_discovery_status_with_config(None, include_addresses, Some(&public_config));
+    }
+    let secret = if config.organization.discovery_secret_ref.is_empty() {
+        None
+    } else {
+        let workspace = crate::workspace::Workspace::new(scripts_dir.to_path_buf());
+        workspace.ensure_layout().map_err(|_| {
+            OperationError::new(
+                OperationErrorCode::DiscoveryInternal,
+                "discovery workspace is unavailable",
+            )
+        })?;
+        Some(
+            crate::secrets::resolve_secret_value(
+                &workspace,
+                &config.organization.discovery_secret_ref,
+                &crate::secrets::SecretAccess::allow_all(),
+            )
+            .map_err(|_| {
+                OperationError::new(
+                    OperationErrorCode::DiscoverySecretMismatch,
+                    "discovery secret could not be resolved",
+                )
+            })?,
+        )
+    };
+    let mut service = crate::discovery::DiscoveryService::start(
+        config.discovery,
+        context.clone(),
+        direct_bind.map(|bind| bind.port()),
+        secret,
+    )
+    .map_err(|error| match error {
+        crate::discovery::DiscoveryError::UnsupportedPlatform => OperationError::new(
+            OperationErrorCode::DiscoveryUnsupportedPlatform,
+            "discovery is unsupported on this platform",
+        ),
+        crate::discovery::DiscoveryError::SecretInvalid => OperationError::new(
+            OperationErrorCode::DiscoverySecretMismatch,
+            "discovery secret is invalid",
+        ),
+        _ => OperationError::new(
+            OperationErrorCode::DiscoveryInternal,
+            "discovery could not start",
+        ),
+    })?;
+    std::thread::sleep(Duration::from_secs(wait_seconds.clamp(1, 30)));
+    let result = public_discovery_status(Some(&service.status()), include_addresses);
+    service.stop();
+    result
 }
 
 fn public_peer(peer: PeerRecord) -> PublicPeer {

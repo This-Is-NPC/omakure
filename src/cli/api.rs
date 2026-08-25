@@ -183,6 +183,7 @@ struct ApiState {
     deploy: DeployPolicy,
     readiness: Option<Arc<ReadinessGate>>,
     transport: Option<TransportStatusHandle>,
+    discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
 }
 
@@ -195,6 +196,7 @@ impl Clone for ApiState {
             deploy: self.deploy.clone(),
             readiness: self.readiness.clone(),
             transport: self.transport.clone(),
+            discovery: self.discovery.clone(),
             auth_verification_gate: Arc::clone(&self.auth_verification_gate),
         }
     }
@@ -221,6 +223,7 @@ enum ApiCapability {
     TrustWrite,
     EnrollmentRead,
     EnrollmentWrite,
+    DiscoveryRead,
 }
 
 #[derive(Debug, Clone)]
@@ -251,6 +254,7 @@ impl ApiPolicy {
             ApiCapability::TrustWrite,
             ApiCapability::EnrollmentRead,
             ApiCapability::EnrollmentWrite,
+            ApiCapability::DiscoveryRead,
         ]);
         // Explicit empty allow-list: `all` does not bypass secret-ref ACLs.
         // Grant refs with repeated `--secret-ref` (or leave empty to deny provider refs).
@@ -398,6 +402,7 @@ impl ApiCapability {
             "trust:write" => Ok(Self::TrustWrite),
             "enrollment:read" => Ok(Self::EnrollmentRead),
             "enrollment:write" => Ok(Self::EnrollmentWrite),
+            "discovery:read" => Ok(Self::DiscoveryRead),
             "doctor:read" | "workspace:read" => Ok(Self::ConfigRead),
             "search:read" => Ok(Self::ScriptsRead),
             _ => Err(ApiConfigError::InvalidCapability(value.to_string())),
@@ -425,6 +430,7 @@ impl ApiCapability {
             Self::TrustWrite => "trust:write",
             Self::EnrollmentRead => "enrollment:read",
             Self::EnrollmentWrite => "enrollment:write",
+            Self::DiscoveryRead => "discovery:read",
         }
     }
 }
@@ -634,6 +640,7 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
             boot.deploy,
             None,
             None,
+            None,
             cancel_flag,
             None,
         )
@@ -700,6 +707,7 @@ pub(crate) async fn serve_http(
     deploy: DeployPolicy,
     readiness: Option<Arc<ReadinessGate>>,
     transport: Option<TransportStatusHandle>,
+    discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     cancel_flag: Arc<AtomicBool>,
     on_listening: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -709,7 +717,7 @@ pub(crate) async fn serve_http(
     }
     let body_limit = deploy.http.body_limit_bytes.max(1);
     let app = router_with_transport(
-        auth, workspace, policy, deploy, readiness, transport, body_limit,
+        auth, workspace, policy, deploy, readiness, transport, discovery, body_limit,
     );
     axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_cancel(cancel_flag))
@@ -809,6 +817,7 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("POST", "/v1/batteries/:battery_id/sync"),
     ("GET", "/v1/secrets"),
     ("GET", "/v1/node/status"),
+    ("GET", "/v1/node/discovery"),
     ("POST", "/v1/node/init"),
     ("GET", "/v1/node/peers"),
     ("POST", "/v1/node/peers"),
@@ -831,9 +840,14 @@ fn router_with_policy(
     readiness: Option<Arc<ReadinessGate>>,
     body_limit: usize,
 ) -> Router {
-    router_with_transport(auth, workspace, policy, deploy, readiness, None, body_limit)
+    router_with_transport(
+        auth, workspace, policy, deploy, readiness, None, None, body_limit,
+    )
 }
 
+// Keep transport and discovery handles explicit so test routers cannot hide
+// runtime status behind global state.
+#[allow(clippy::too_many_arguments)]
 fn router_with_transport(
     auth: Authenticator,
     workspace: Workspace,
@@ -841,6 +855,7 @@ fn router_with_transport(
     deploy: DeployPolicy,
     readiness: Option<Arc<ReadinessGate>>,
     transport: Option<TransportStatusHandle>,
+    discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     body_limit: usize,
 ) -> Router {
     let auth_verification_gate = Arc::new(tokio::sync::Semaphore::new(
@@ -856,6 +871,7 @@ fn router_with_transport(
         deploy,
         readiness,
         transport,
+        discovery,
         auth_verification_gate,
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
@@ -913,6 +929,7 @@ fn router_with_transport(
         .route("/v1/batteries/:battery_id/sync", post(sync_battery_handler))
         .route("/v1/secrets", get(list_secrets_metadata_handler))
         .route("/v1/node/status", get(node_status_handler))
+        .route("/v1/node/discovery", get(node_discovery_handler))
         .route("/v1/node/init", post(node_initialize_handler))
         .route(
             "/v1/node/peers",
@@ -1048,7 +1065,36 @@ async fn node_status_handler(
                 .transport
                 .as_ref()
                 .and_then(|transport| transport.lock().ok().map(|status| status.clone()));
+            status.discovery = node_ops::public_discovery_status_with_config(
+                state.discovery.as_ref(),
+                false,
+                status.config.as_ref(),
+            )
+            .ok();
             status
+        })
+    }))
+}
+
+async fn node_discovery_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    RawQuery(raw_query): RawQuery,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::DiscoveryRead) {
+        return response;
+    }
+    let include_addresses = query_pairs(raw_query.as_deref())
+        .ok()
+        .and_then(|pairs| query_value(&pairs, "include_addresses"))
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true"));
+    operation_response(node_context().and_then(|context| {
+        node_ops::public_node_status(&context).and_then(|status| {
+            node_ops::public_discovery_status_with_config(
+                state.discovery.as_ref(),
+                include_addresses,
+                status.config.as_ref(),
+            )
         })
     }))
 }
@@ -2510,6 +2556,7 @@ fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Re
             "trust:write" => ApiCapability::TrustWrite,
             "enrollment:read" => ApiCapability::EnrollmentRead,
             "enrollment:write" => ApiCapability::EnrollmentWrite,
+            "discovery:read" => ApiCapability::DiscoveryRead,
             _ => {
                 return Some(error_response(
                     StatusCode::FORBIDDEN,
@@ -2555,7 +2602,15 @@ fn operation_error_response(err: OperationError) -> Response {
         OperationErrorCode::InvalidInput
         | OperationErrorCode::UnsafePath
         | OperationErrorCode::ManifestInvalid
-        | OperationErrorCode::EnrollmentInvalid => StatusCode::BAD_REQUEST,
+        | OperationErrorCode::EnrollmentInvalid
+        | OperationErrorCode::DiscoveryUnsupportedVersion
+        | OperationErrorCode::DiscoveryInvalidBeacon
+        | OperationErrorCode::DiscoveryMessageTooLarge
+        | OperationErrorCode::DiscoveryExpired
+        | OperationErrorCode::DiscoveryFuture
+        | OperationErrorCode::DiscoverySecretMismatch
+        | OperationErrorCode::DiscoveryIdentityMismatch
+        | OperationErrorCode::DiscoverySignatureInvalid => StatusCode::BAD_REQUEST,
         OperationErrorCode::Forbidden | OperationErrorCode::EnrollmentDisabled => {
             StatusCode::FORBIDDEN
         }
@@ -2567,12 +2622,16 @@ fn operation_error_response(err: OperationError) -> Response {
         | OperationErrorCode::EnrollmentReplay
         | OperationErrorCode::EnrollmentMismatch
         | OperationErrorCode::EnrollmentDenied
-        | OperationErrorCode::EnrollmentRateLimited => StatusCode::CONFLICT,
+        | OperationErrorCode::EnrollmentRateLimited
+        | OperationErrorCode::DiscoveryRateLimited
+        | OperationErrorCode::DiscoveryCandidateLimit => StatusCode::CONFLICT,
         OperationErrorCode::UnsupportedScript => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        OperationErrorCode::DiscoveryUnsupportedPlatform => StatusCode::NOT_IMPLEMENTED,
         OperationErrorCode::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         OperationErrorCode::GitFailed
         | OperationErrorCode::IoFailed
         | OperationErrorCode::RegistryInvalid
+        | OperationErrorCode::DiscoveryInternal
         | OperationErrorCode::TransportUnsupportedVersion
         | OperationErrorCode::TransportInvalidFrame
         | OperationErrorCode::TransportMessageTooLarge
@@ -3669,6 +3728,40 @@ enabled = true
     }
 
     #[tokio::test]
+    async fn discovery_status_requires_its_explicit_scope_and_redacts_addresses() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let denied = router_with_policy(
+            Authenticator::legacy(TOKEN),
+            workspace.clone_for_executor(),
+            ApiPolicy::allow([ApiCapability::NodeRead]),
+            DeployPolicy::default(),
+            None,
+            BODY_LIMIT_BYTES,
+        )
+        .oneshot(authed_request("/v1/node/discovery?include_addresses=true"))
+        .await
+        .unwrap();
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+        let allowed = router_with_policy(
+            Authenticator::legacy(TOKEN),
+            workspace,
+            ApiPolicy::allow([ApiCapability::DiscoveryRead]),
+            DeployPolicy::default(),
+            None,
+            BODY_LIMIT_BYTES,
+        )
+        .oneshot(authed_request("/v1/node/discovery?include_addresses=true"))
+        .await
+        .unwrap();
+        assert_eq!(allowed.status(), StatusCode::OK);
+        let body = response_json(allowed).await;
+        assert_eq!(body["data"]["candidate_count"], 0);
+        assert_eq!(body["data"]["candidates"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
     async fn read_endpoints_accept_matching_read_capabilities() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
@@ -4048,6 +4141,18 @@ echo ok
         assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
         let body = response_json(response).await;
         assert_eq!(body["error"]["code"], "unsupported_script");
+    }
+
+    #[tokio::test]
+    async fn unsupported_discovery_platform_maps_to_501() {
+        let response = operation_error_response(OperationError::new(
+            OperationErrorCode::DiscoveryUnsupportedPlatform,
+            "discovery is unsupported on this platform",
+        ));
+
+        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], "discovery_unsupported_platform");
     }
 
     #[tokio::test]

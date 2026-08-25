@@ -106,6 +106,8 @@ services:
       - enrollment:read
       - --capability
       - enrollment:write
+      - --capability
+      - discovery:read
     volumes:
       - enrollment-target-state:/var/lib/omakure
       - enrollment-target-config:/etc/omakure
@@ -137,6 +139,8 @@ services:
       - enrollment:read
       - --capability
       - enrollment:write
+      - --capability
+      - discovery:read
     volumes:
       - enrollment-candidate-state:/var/lib/omakure
       - enrollment-candidate-config:/etc/omakure

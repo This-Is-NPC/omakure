@@ -18,6 +18,12 @@ enrollment = "manual"
 allow_remote_cues = false
 allow_baseline_push = false
 
+[discovery]
+enabled = true
+port = 38383
+multicast_addr = "239.255.42.99"
+broadcast = true
+
 [organization]
 id = "omakure-enrollment-e2e"
 discovery_secret_ref = ""

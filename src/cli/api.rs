@@ -218,6 +218,8 @@ enum ApiCapability {
     NodeRead,
     NodeWrite,
     TrustWrite,
+    EnrollmentRead,
+    EnrollmentWrite,
 }
 
 #[derive(Debug, Clone)]
@@ -246,6 +248,8 @@ impl ApiPolicy {
             ApiCapability::NodeRead,
             ApiCapability::NodeWrite,
             ApiCapability::TrustWrite,
+            ApiCapability::EnrollmentRead,
+            ApiCapability::EnrollmentWrite,
         ]);
         // Explicit empty allow-list: `all` does not bypass secret-ref ACLs.
         // Grant refs with repeated `--secret-ref` (or leave empty to deny provider refs).
@@ -391,6 +395,8 @@ impl ApiCapability {
             "node:read" => Ok(Self::NodeRead),
             "node:write" => Ok(Self::NodeWrite),
             "trust:write" => Ok(Self::TrustWrite),
+            "enrollment:read" => Ok(Self::EnrollmentRead),
+            "enrollment:write" => Ok(Self::EnrollmentWrite),
             "doctor:read" | "workspace:read" => Ok(Self::ConfigRead),
             "search:read" => Ok(Self::ScriptsRead),
             _ => Err(ApiConfigError::InvalidCapability(value.to_string())),
@@ -416,6 +422,8 @@ impl ApiCapability {
             Self::NodeRead => "node:read",
             Self::NodeWrite => "node:write",
             Self::TrustWrite => "trust:write",
+            Self::EnrollmentRead => "enrollment:read",
+            Self::EnrollmentWrite => "enrollment:write",
         }
     }
 }
@@ -570,6 +578,29 @@ struct NodeCapabilitiesBody {
 
 #[derive(Debug, Deserialize)]
 struct NodeRevokeBody {
+    actor: String,
+    reason: String,
+    confirmed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct NodeEnrollmentStageBody {
+    request_hex: String,
+    transport_certificate: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct NodeEnrollmentApprovalBody {
+    request_hex: String,
+    transport_certificate: String,
+    code: String,
+    actor: String,
+    reason: String,
+    confirmed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct NodeEnrollmentRejectBody {
     actor: String,
     reason: String,
     confirmed: bool,
@@ -774,6 +805,10 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("POST", "/v1/node/init"),
     ("GET", "/v1/node/peers"),
     ("POST", "/v1/node/peers"),
+    ("GET", "/v1/node/enrollments"),
+    ("POST", "/v1/node/enrollments"),
+    ("POST", "/v1/node/enrollments/:node_id/approve"),
+    ("POST", "/v1/node/enrollments/:node_id/reject"),
     ("PATCH", "/v1/node/peers/:node_id/capabilities"),
     ("POST", "/v1/node/peers/:node_id/revoke"),
 ];
@@ -874,6 +909,18 @@ fn router_with_transport(
         .route(
             "/v1/node/peers",
             get(node_peers_handler).post(node_trust_handler),
+        )
+        .route(
+            "/v1/node/enrollments",
+            get(node_enrollments_handler).post(node_enrollment_stage_handler),
+        )
+        .route(
+            "/v1/node/enrollments/:node_id/approve",
+            post(node_enrollment_approve_handler),
+        )
+        .route(
+            "/v1/node/enrollments/:node_id/reject",
+            post(node_enrollment_reject_handler),
         )
         .route(
             "/v1/node/peers/:node_id/capabilities",
@@ -1018,6 +1065,105 @@ async fn node_peers_handler(
         return response;
     }
     operation_response(node_context().and_then(|context| node_ops::list_trusted_peers(&context)))
+}
+
+async fn node_enrollments_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentRead) {
+        return response;
+    }
+    operation_response(
+        node_context().and_then(|context| node_ops::list_pending_enrollments(&context)),
+    )
+}
+
+async fn node_enrollment_stage_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+        return response;
+    }
+    let body =
+        match parse_json_body::<NodeEnrollmentStageBody>(body, state.deploy.http.body_limit_bytes)
+            .await
+        {
+            Ok(body) => body,
+            Err(error) => return operation_error_response(error),
+        };
+    operation_response(node_context().and_then(|context| {
+        node_ops::stage_manual_enrollment_hex(
+            &context,
+            &body.request_hex,
+            &body.transport_certificate,
+        )
+    }))
+}
+
+async fn node_enrollment_approve_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    AxumPath(node_id): AxumPath<String>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+        return response;
+    }
+    let body = match parse_json_body::<NodeEnrollmentApprovalBody>(
+        body,
+        state.deploy.http.body_limit_bytes,
+    )
+    .await
+    {
+        Ok(body) => body,
+        Err(error) => return operation_error_response(error),
+    };
+    operation_response(node_context().and_then(|context| {
+        node_ops::approve_manual_enrollment(
+            &context,
+            node_ops::ManualEnrollmentApprovalRequest {
+                request_hex: body.request_hex,
+                transport_certificate: body.transport_certificate,
+                code: body.code,
+                actor: body.actor,
+                reason: body.reason,
+                confirmed: body.confirmed,
+                expected_node_id: Some(node_id),
+            },
+        )
+    }))
+}
+
+async fn node_enrollment_reject_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    AxumPath(node_id): AxumPath<String>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+        return response;
+    }
+    let body =
+        match parse_json_body::<NodeEnrollmentRejectBody>(body, state.deploy.http.body_limit_bytes)
+            .await
+        {
+            Ok(body) => body,
+            Err(error) => return operation_error_response(error),
+        };
+    operation_response(node_context().and_then(|context| {
+        node_ops::reject_manual_enrollment(
+            &context,
+            node_ops::ManualEnrollmentRejectionRequest {
+                node_id,
+                actor: body.actor,
+                reason: body.reason,
+                confirmed: body.confirmed,
+            },
+        )
+    }))
 }
 
 async fn node_trust_handler(
@@ -2313,6 +2459,8 @@ fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Re
             "node:read" => ApiCapability::NodeRead,
             "node:write" => ApiCapability::NodeWrite,
             "trust:write" => ApiCapability::TrustWrite,
+            "enrollment:read" => ApiCapability::EnrollmentRead,
+            "enrollment:write" => ApiCapability::EnrollmentWrite,
             _ => {
                 return Some(error_response(
                     StatusCode::FORBIDDEN,
@@ -2357,12 +2505,19 @@ fn operation_error_response(err: OperationError) -> Response {
     let status = match err.code {
         OperationErrorCode::InvalidInput
         | OperationErrorCode::UnsafePath
-        | OperationErrorCode::ManifestInvalid => StatusCode::BAD_REQUEST,
-        OperationErrorCode::Forbidden => StatusCode::FORBIDDEN,
+        | OperationErrorCode::ManifestInvalid
+        | OperationErrorCode::EnrollmentInvalid => StatusCode::BAD_REQUEST,
+        OperationErrorCode::Forbidden | OperationErrorCode::EnrollmentDisabled => {
+            StatusCode::FORBIDDEN
+        }
         OperationErrorCode::NotFound => StatusCode::NOT_FOUND,
         OperationErrorCode::AlreadyExists
         | OperationErrorCode::Conflict
-        | OperationErrorCode::NotSynced => StatusCode::CONFLICT,
+        | OperationErrorCode::NotSynced
+        | OperationErrorCode::EnrollmentExpired
+        | OperationErrorCode::EnrollmentReplay
+        | OperationErrorCode::EnrollmentMismatch
+        | OperationErrorCode::EnrollmentDenied => StatusCode::CONFLICT,
         OperationErrorCode::UnsupportedScript => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         OperationErrorCode::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         OperationErrorCode::GitFailed

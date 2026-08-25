@@ -1,4 +1,4 @@
-use crate::cli::args::{NodeArgs, NodeCommand};
+use crate::cli::args::{NodeArgs, NodeCommand, NodeEnrollCommand};
 use crate::cli::json;
 use crate::domain::NodeConfig;
 use crate::node::{NodeContext, NodeError, NodePathOverrides};
@@ -47,6 +47,39 @@ pub fn run(
             },
         )
         .map(|result| serde_json::to_value(result).expect("peer serializes")),
+        NodeCommand::Enroll(args) => match args.command {
+            NodeEnrollCommand::Request(args) => node_ops::request_manual_enrollment(
+                &context,
+                args.endpoint,
+                &args.role,
+                args.capabilities,
+                args.lifetime_seconds,
+            )
+            .map(|result| serde_json::to_value(result).expect("enrollment serializes")),
+            NodeEnrollCommand::Approve(args) => node_ops::approve_manual_enrollment(
+                &context,
+                node_ops::ManualEnrollmentApprovalRequest {
+                    request_hex: args.request_hex,
+                    transport_certificate: args.transport_certificate,
+                    code: args.code,
+                    actor: args.actor,
+                    reason: args.reason,
+                    confirmed: args.confirmed,
+                    expected_node_id: None,
+                },
+            )
+            .map(|result| serde_json::to_value(result).expect("peer serializes")),
+            NodeEnrollCommand::Reject(args) => node_ops::reject_manual_enrollment(
+                &context,
+                node_ops::ManualEnrollmentRejectionRequest {
+                    node_id: args.node_id,
+                    actor: args.actor,
+                    reason: args.reason,
+                    confirmed: args.confirmed,
+                },
+            )
+            .map(|result| serde_json::to_value(result).expect("peer serializes")),
+        },
         NodeCommand::Capabilities(args) => node_ops::update_peer_capabilities(
             &context,
             node_ops::CapabilityUpdateRequest {

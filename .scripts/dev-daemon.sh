@@ -11,6 +11,7 @@ LOG="${WORKSPACE}/.omakure/dev-node.log"
 
 (cd "$REPO_DIR" && cargo build --bin omakure)
 mkdir -p "$WORKSPACE/.omakure/dev-node-state"
+chmod 700 "$WORKSPACE/.omakure/dev-node-state"
 
 TOKEN="$(openssl rand -hex 32)"
 export OMAKURE_API_TOKEN="$TOKEN"

@@ -29,14 +29,14 @@ services:
       # OMAKURE_API_TOKEN: "${OMAKURE_API_TOKEN:?set OMAKURE_API_TOKEN}"
       OMAKURE_SCRIPTS_DIR: /workspace
     volumes:
-      # Host workspace → container scripts/history/envs root.
+      # Host workspace to container scripts/history/envs root.
       - "${OMAKURE_WORKSPACE:-./workspace}:/workspace"
       # Machine-owned node trust/identity state; never place this in the workspace.
       - "${OMAKURE_NODE_STATE:-./node-state}:/var/lib/omakure"
-      # This bind mount requires the file to already exist — `docker compose up`
+      # This bind mount requires the file to already exist before `docker compose up`
       # fails to start otherwise. Create it first with `omakure token generate
       # --append secrets/omakure_tokens.toml --confirmed` (see deployment.md
-      # → Compose example); scopes come from its entries.
+      # Compose example); scopes come from its entries.
       - "${OMAKURE_TOKENS_FILE_HOST:-./secrets/omakure_tokens.toml}:/run/secrets/omakure_tokens.toml:ro"
     # Host publish stays 127.0.0.1 (above). `--allow-non-loopback` is only for
     # the container-internal 0.0.0.0 bind so Docker can forward the port.
@@ -59,3 +59,94 @@ services:
       - --capability
       - config:read
     restart: unless-stopped
+
+  # Reproducible manual-enrollment topology. Start with:
+  # `docker compose up --build enrollment-target enrollment-candidate`.
+  enrollment-target-config-init:
+    image: omakure-node:enrollment-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/node.toml /config/node.toml && chown root:10001 /config/node.toml && chmod 0640 /config/node.toml
+    volumes:
+      - enrollment-target-config:/config
+      - ./tests/fixtures/enrollment-target.toml:/input/node.toml:ro
+
+  enrollment-candidate-config-init:
+    image: omakure-node:enrollment-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/node.toml /config/node.toml && chown root:10001 /config/node.toml && chmod 0640 /config/node.toml
+    volumes:
+      - enrollment-candidate-config:/config
+      - ./tests/fixtures/enrollment-candidate.toml:/input/node.toml:ro
+
+  enrollment-target:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: omakure-node:enrollment-e2e
+    hostname: enrollment-target
+    environment:
+      "OMAKURE_TOKENS_FILE": /run/secrets/enrollment-e2e-tokens.toml
+    depends_on:
+      enrollment-target-config-init:
+        condition: service_completed_successfully
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --allow-non-loopback-direct
+      - --capability
+      - node:read
+      - --capability
+      - enrollment:read
+      - --capability
+      - enrollment:write
+    volumes:
+      - enrollment-target-state:/var/lib/omakure
+      - enrollment-target-config:/etc/omakure
+      - "${OMAKURE_ENROLLMENT_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TOKENS_FILE}:/run/secrets/enrollment-e2e-tokens.toml:ro"
+    ports:
+      - "127.0.0.1:17878:7878"
+      - "127.0.0.1:17988:7988"
+
+  enrollment-candidate:
+    image: omakure-node:enrollment-e2e
+    hostname: enrollment-candidate
+    depends_on:
+      enrollment-target:
+        condition: service_started
+      enrollment-candidate-config-init:
+        condition: service_completed_successfully
+    environment:
+      "OMAKURE_TOKENS_FILE": /run/secrets/enrollment-e2e-tokens.toml
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --allow-non-loopback-direct
+      - --capability
+      - node:read
+      - --capability
+      - enrollment:read
+      - --capability
+      - enrollment:write
+    volumes:
+      - enrollment-candidate-state:/var/lib/omakure
+      - enrollment-candidate-config:/etc/omakure
+      - "${OMAKURE_ENROLLMENT_TOKENS_FILE:?set OMAKURE_ENROLLMENT_TOKENS_FILE}:/run/secrets/enrollment-e2e-tokens.toml:ro"
+    ports:
+      - "127.0.0.1:17879:7878"
+      - "127.0.0.1:17989:7988"
+
+volumes:
+  enrollment-target-state:
+  enrollment-candidate-state:
+  enrollment-target-config:
+  enrollment-candidate-config:

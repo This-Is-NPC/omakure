@@ -6,7 +6,7 @@ use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 use std::path::Path;
 use std::process::{Command, Output};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const TOKEN: &str = "direct-transport-e2e-token-with-enough-entropy-00001";
 
@@ -55,6 +55,13 @@ fn assert_success(output: &Output) {
 fn init_node(workspace: &Path) {
     let output = run_node(workspace, &["init".to_string()]);
     assert_success(&output);
+}
+
+fn enable_manual_enrollment(workspace: &Path) {
+    let path = workspace.join("node.toml");
+    let config = std::fs::read_to_string(&path).expect("read node config");
+    let config = config.replace("enrollment = \"disabled\"", "enrollment = \"manual\"");
+    std::fs::write(path, config).expect("enable manual enrollment");
 }
 
 fn status_node(workspace: &Path) -> Value {
@@ -223,7 +230,7 @@ fn rejection_audit_snapshot(workspace: &Path) -> (i64, String, String, Option<i6
     let (event_type, outcome, error_code) = connection
         .query_row(
             "SELECT event_type, outcome, error_code
-             FROM transport_audit WHERE outcome = 'rejected'
+             FROM transport_audit WHERE outcome = 'rejected' AND error_code IS NOT NULL
              ORDER BY id DESC LIMIT 1",
             [],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
@@ -232,20 +239,39 @@ fn rejection_audit_snapshot(workspace: &Path) -> (i64, String, String, Option<i6
     (count, event_type, outcome, error_code)
 }
 
+fn protocol_rejection_count(workspace: &Path) -> i64 {
+    Connection::open(workspace.join(".node-state/node.sqlite"))
+        .expect("open node registry")
+        .query_row(
+            "SELECT COUNT(*) FROM transport_audit
+             WHERE outcome = 'rejected' AND error_code IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )
+        .expect("count protocol rejection audits")
+}
+
 fn assert_raw_rejection<F>(workspace: &Path, attack: F)
 where
     F: FnOnce(),
 {
     let before_rows = registry_snapshot(workspace);
-    let before_rejected = audit_count(workspace, "rejected");
+    let before_rejected = protocol_rejection_count(workspace);
     std::thread::sleep(Duration::from_millis(150));
     attack();
-    wait_for_audit(workspace, "rejected", before_rejected + 1);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline && protocol_rejection_count(workspace) < before_rejected + 1 {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert!(protocol_rejection_count(workspace) > before_rejected);
     assert_eq!(registry_snapshot(workspace), before_rows);
     let (_, event_type, outcome, error_code) = rejection_audit_snapshot(workspace);
     assert_eq!(event_type, "probe_rejected");
     assert_eq!(outcome, "rejected");
-    assert!(error_code.is_some());
+    assert!(
+        error_code.is_some(),
+        "rejection audit did not record a protocol error: event={event_type} outcome={outcome}"
+    );
 }
 
 fn raw_frame(version: u8, kind: u8, flags: u16, body: &[u8]) -> Vec<u8> {
@@ -375,6 +401,104 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
 
     let _ = restarted.terminate();
     let _ = first_server.terminate();
+}
+
+#[test]
+fn direct_transport_manual_enrollment_stages_then_requires_approval() {
+    let target = support::TestWorkspace::new("direct_enrollment_target");
+    let candidate = support::TestWorkspace::new("direct_enrollment_candidate");
+    init_node(target.path());
+    init_node(candidate.path());
+    enable_manual_enrollment(target.path());
+    enable_manual_enrollment(candidate.path());
+
+    let target_port = free_port();
+    let target_server = support::HttpServer::start_node_service(
+        target.path(),
+        TOKEN,
+        &[
+            "--workers",
+            "0",
+            "--no-scheduler",
+            "--direct-bind",
+            &format!("127.0.0.1:{target_port}"),
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(15),
+    );
+    let candidate_port = free_port();
+    let candidate_server = support::HttpServer::start_node_service(
+        candidate.path(),
+        TOKEN,
+        &[
+            "--workers",
+            "0",
+            "--no-scheduler",
+            "--direct-bind",
+            &format!("127.0.0.1:{candidate_port}"),
+        ],
+        &[],
+        Duration::from_secs(15),
+    );
+
+    let request = run_node(
+        candidate.path(),
+        &[
+            "enroll".into(),
+            "request".into(),
+            "--endpoint".into(),
+            format!("127.0.0.1:{target_port}"),
+            "--capability".into(),
+            "remote-run".into(),
+            "--lifetime-seconds".into(),
+            "300".into(),
+        ],
+    );
+    assert_success(&request);
+    let request_data = json(&request)["data"].clone();
+    assert_eq!(request_data["state"], "pending");
+    assert_eq!(
+        target_server.get("/v1/node/peers").json()["data"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let certificate = std::fs::read(candidate.path().join(".node-state/transport.cert"))
+        .expect("read candidate transport certificate")
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let approve = run_node(
+        target.path(),
+        &[
+            "enroll".into(),
+            "approve".into(),
+            "--request".into(),
+            request_data["request_hex"].as_str().unwrap().into(),
+            "--transport-certificate".into(),
+            certificate,
+            "--code".into(),
+            request_data["code"].as_str().unwrap().into(),
+            "--actor".into(),
+            "e2e".into(),
+            "--reason".into(),
+            "approved after out-of-band verification".into(),
+            "--confirmed".into(),
+        ],
+    );
+    assert_success(&approve);
+    assert_eq!(json(&approve)["data"]["state"], "active");
+    assert_eq!(
+        target_server.get("/v1/node/peers").json()["data"][0]["state"],
+        "active"
+    );
+
+    let _ = candidate_server.terminate();
+    let _ = target_server.terminate();
 }
 
 #[test]

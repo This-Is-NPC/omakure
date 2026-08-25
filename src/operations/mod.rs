@@ -39,6 +39,12 @@ pub enum OperationErrorCode {
     TransportReplay,
     TransportRateLimited,
     TransportInternal,
+    EnrollmentDisabled,
+    EnrollmentInvalid,
+    EnrollmentExpired,
+    EnrollmentReplay,
+    EnrollmentMismatch,
+    EnrollmentDenied,
 }
 
 impl OperationErrorCode {
@@ -68,6 +74,12 @@ impl OperationErrorCode {
             Self::TransportReplay => "transport_replay",
             Self::TransportRateLimited => "transport_rate_limited",
             Self::TransportInternal => "transport_internal",
+            Self::EnrollmentDisabled => "enrollment_disabled",
+            Self::EnrollmentInvalid => "enrollment_invalid",
+            Self::EnrollmentExpired => "enrollment_expired",
+            Self::EnrollmentReplay => "enrollment_replay",
+            Self::EnrollmentMismatch => "enrollment_mismatch",
+            Self::EnrollmentDenied => "enrollment_denied",
         }
     }
 }

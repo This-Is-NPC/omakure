@@ -88,6 +88,7 @@ pub struct RoutesPolicy {
     pub writes: bool,
     pub node: bool,
     pub trust: bool,
+    pub enrollment: bool,
     pub battery: bool,
     pub battery_install: bool,
     pub run_enqueue: bool,
@@ -105,6 +106,7 @@ impl Default for RoutesPolicy {
             writes: true,
             node: true,
             trust: true,
+            enrollment: true,
             battery: true,
             battery_install: true,
             run_enqueue: true,
@@ -362,11 +364,15 @@ impl RoutesPolicy {
         let is_battery = path == "/v1/batteries" || path.starts_with("/v1/batteries/");
         let is_node = path == "/v1/node" || path.starts_with("/v1/node/");
         let is_trust = is_node && path.contains("/peers");
+        let is_enrollment = is_node && path.contains("/enrollment");
 
         if is_node && !self.node {
             return false;
         }
         if is_trust && is_write && !self.trust {
+            return false;
+        }
+        if is_enrollment && is_write && !self.enrollment {
             return false;
         }
         if is_battery && !self.battery {
@@ -545,6 +551,24 @@ mod tests {
             .routes
             .allows("PATCH", "/v1/node/peers/omk1_test/capabilities"));
         assert!(!p.routes.allows("POST", "/v1/node/peers/omk1_test/revoke"));
+    }
+
+    #[test]
+    fn enrollment_route_group_is_independent_from_trust() {
+        let mut p = DeployPolicy::default();
+        assert!(p.routes.allows("GET", "/v1/node/enrollments"));
+        assert!(p.routes.allows("POST", "/v1/node/enrollments"));
+        p.routes.enrollment = false;
+        assert!(p.routes.allows("GET", "/v1/node/enrollments"));
+        assert!(!p.routes.allows("POST", "/v1/node/enrollments"));
+        assert!(!p
+            .routes
+            .allows("POST", "/v1/node/enrollments/omk1_test/approve"));
+        p.routes.enrollment = true;
+        p.routes.trust = false;
+        assert!(p
+            .routes
+            .allows("POST", "/v1/node/enrollments/omk1_test/approve"));
     }
 
     #[test]

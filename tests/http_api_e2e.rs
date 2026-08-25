@@ -199,6 +199,22 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_management_routes"),
     ),
     (
+        ("GET", "/v1/node/enrollments"),
+        RouteCoverage::Covered("node_enrollment_routes"),
+    ),
+    (
+        ("POST", "/v1/node/enrollments"),
+        RouteCoverage::Covered("node_enrollment_routes"),
+    ),
+    (
+        ("POST", "/v1/node/enrollments/:node_id/approve"),
+        RouteCoverage::Covered("node_enrollment_routes"),
+    ),
+    (
+        ("POST", "/v1/node/enrollments/:node_id/reject"),
+        RouteCoverage::Covered("node_enrollment_routes"),
+    ),
+    (
         ("PATCH", "/v1/node/peers/:node_id/capabilities"),
         RouteCoverage::Covered("node_management_routes"),
     ),
@@ -984,7 +1000,11 @@ fn protected_routes_return_401_without_or_with_invalid_bearer() {
         ("GET", "/v1/node/status", None),
         ("POST", "/v1/node/init", Some("{}")),
         ("GET", "/v1/node/peers", None),
+        ("GET", "/v1/node/enrollments", None),
         ("POST", "/v1/node/peers", Some("{}")),
+        ("POST", "/v1/node/enrollments", Some("{}")),
+        ("POST", "/v1/node/enrollments/omk1_test/approve", Some("{}")),
+        ("POST", "/v1/node/enrollments/omk1_test/reject", Some("{}")),
         ("PATCH", "/v1/node/peers/omk1_test/capabilities", Some("{}")),
         ("POST", "/v1/node/peers/omk1_test/revoke", Some("{}")),
     ] {
@@ -1027,6 +1047,10 @@ fn node_management_routes_cover_missing_scopes_individually() {
             "node:write",
             "--capability",
             "trust:write",
+            "--capability",
+            "enrollment:read",
+            "--capability",
+            "enrollment:write",
         ],
         &[],
         Duration::from_secs(10),
@@ -1114,6 +1138,10 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
             "node:write",
             "--capability",
             "trust:write",
+            "--capability",
+            "enrollment:read",
+            "--capability",
+            "enrollment:write",
         ],
         &envs,
         Duration::from_secs(10),
@@ -1127,6 +1155,42 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     assert_eq!(init.status, 200, "body: {}", init.safe_body());
     assert_eq!(init.json()["data"]["status"]["initialized"], true);
     init.assert_no_secret("private_key");
+
+    let node_config = fs::read_to_string(&config).expect("read node config");
+    fs::write(
+        &config,
+        node_config.replace("enrollment = \"disabled\"", "enrollment = \"manual\""),
+    )
+    .expect("enable manual enrollment");
+    let pending = server.get("/v1/node/enrollments");
+    assert_eq!(pending.status, 200, "body: {}", pending.safe_body());
+    assert!(pending.json()["data"].as_array().unwrap().is_empty());
+
+    let staged = server.post_json(
+        "/v1/node/enrollments",
+        &json!({"request_hex":"00","transport_certificate":"00"}),
+    );
+    assert_eq!(staged.status, 400, "body: {}", staged.safe_body());
+    assert_error_code(&staged.json(), "enrollment_invalid");
+    let approved = server.post_json(
+        "/v1/node/enrollments/omk1_test/approve",
+        &json!({
+            "request_hex":"00",
+            "transport_certificate":"00",
+            "code":"00",
+            "actor":"operator",
+            "reason":"test",
+            "confirmed":true
+        }),
+    );
+    assert_eq!(approved.status, 400, "body: {}", approved.safe_body());
+    assert_error_code(&approved.json(), "enrollment_invalid");
+    let rejected = server.post_json(
+        "/v1/node/enrollments/omk1_0000000000000000000000000000000000000000000000000000000000000000/reject",
+        &json!({"actor":"operator","reason":"test","confirmed":true}),
+    );
+    assert_eq!(rejected.status, 404, "body: {}", rejected.safe_body());
+    assert_error_code(&rejected.json(), "not_found");
 
     let status = server.get("/v1/node/status");
     assert_eq!(status.status, 200, "body: {}", status.safe_body());

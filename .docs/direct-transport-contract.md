@@ -357,30 +357,42 @@ unsorted, unsupported, empty, or oversized values reject.
 
 ### Manual enrollment
 
-Both operators must approve the same request on their local node. The request
-record is the following fixed binary value:
+Manual pairing uses two direction-specific signed OMMA requests. A single
+16-byte `pairing_id` links the requests: node A stages node B's request and
+node B stages node A's request. Each local operator approves only the exact
+request proposed by the remote node. A one-sided approval activates only that
+direction's remote identity, trusted peer, and transport epoch; it cannot
+authorize application traffic in the opposite direction. Bidirectional
+application traffic is authorized only after both local approvals complete.
+
+The request record is the following fixed binary value:
 
 ```text
-OMMA:u32 || version:u8(1) || request_id:16 || proposer_node_id:69 ||
+OMMA:u32 || version:u8(2) || pairing_id:16 || request_id:16 || proposer_node_id:69 ||
 proposer_xonly:32 || proposer_transport_x25519:32 || role:u8 ||
 capability_count:u8 || repeated(capability_len:u16 || capability_utf8) ||
 created_at:u64 || expires_at:u64 || code_hash:32 || proposer_bip340_signature:64
 ```
 
-`OMMA` is ASCII. The request is limited to 2,048 bytes; capabilities are
-sorted and unique. The displayed approval code is 16 random bytes encoded as
+`OMMA` is ASCII and version `2` is the only accepted manual request version.
+The request is limited to 2,048 bytes; capabilities are sorted and unique.
+`pairing_id` is random, non-zero, and identical in both direction-specific
+requests. It is included in the signed body and is not itself a replay key.
+The displayed approval code is 16 random bytes encoded as
 32 lowercase hexadecimal characters. `code_hash` is
 `SHA-256(ASCII("omakure/manual-enrollment/v1"), NUL, code_bytes)`. The code
 is an out-of-band confirmation value, not a bearer credential and not proof of
 identity. The proposer signature covers every byte through `code_hash`,
 preceded by the same manual-enrollment domain. The receiver derives the
 proposer identity key from the request's x-only field, derives and checks its
-`node_id`, and verifies this signature before staging. Each operator confirms
-the displayed node ID, x-only key, role, capabilities, expiry, and code locally.
-Only the second local approval can atomically activate the peer, and the first
-completed enrollment for a node wins.
+`node_id`, and verifies this signature before staging. A node rejects a request
+proposed by itself. Each operator confirms the displayed pairing ID, remote node
+ID, x-only key, role, capabilities, expiry, and code locally. Each approval
+atomically activates only the remote request's direction; the first completed
+approval for each direction wins.
 
-The executable public vector uses request ID
+The executable public vector uses pairing ID
+`00000000000000000000000000000002`, request ID
 `00000000000000000000000000000001`, code bytes
 `000102030405060708090a0b0c0d0e0f`, and code hash
 `e9380fb38041d9a4cb70fbca9631da6d796fea839738fbd6e7015d829ccd54f7`.

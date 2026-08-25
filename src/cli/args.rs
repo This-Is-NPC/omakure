@@ -489,6 +489,9 @@ pub enum NodeCommand {
     /// Explicitly import and activate one manually trusted peer
     Trust(NodeTrustArgs),
 
+    /// Request and explicitly approve or reject manual enrollment
+    Enroll(NodeEnrollArgs),
+
     /// Update one peer's capability allow-list with confirmation and evidence
     Capabilities(NodeCapabilitiesArgs),
 
@@ -619,6 +622,88 @@ pub struct NodeTrustArgs {
     pub reason: String,
 
     /// Confirm this trust mutation explicitly
+    #[arg(long)]
+    pub confirmed: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeEnrollArgs {
+    #[command(subcommand)]
+    pub command: NodeEnrollCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NodeEnrollCommand {
+    /// Create and send one signed manual enrollment request
+    Request(NodeEnrollRequestArgs),
+
+    /// Approve one pending request after checking the out-of-band code
+    Approve(NodeEnrollApproveArgs),
+
+    /// Reject one pending request without activating trust
+    Reject(NodeEnrollRejectArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct NodeEnrollRequestArgs {
+    /// Peer direct transport address
+    #[arg(long)]
+    pub endpoint: std::net::SocketAddr,
+
+    /// Requested peer role
+    #[arg(long, default_value = "performer")]
+    pub role: String,
+
+    /// Requested capability (repeatable; sorted unique values are required)
+    #[arg(long = "capability")]
+    pub capabilities: Vec<String>,
+
+    /// Request lifetime in seconds, at most 30 days
+    #[arg(long, default_value_t = 600)]
+    pub lifetime_seconds: u64,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeEnrollApproveArgs {
+    /// Exact signed OMMA request as lowercase hexadecimal bytes
+    #[arg(long = "request")]
+    pub request_hex: String,
+
+    /// Candidate transport certificate as lowercase hexadecimal bytes
+    #[arg(long)]
+    pub transport_certificate: String,
+
+    /// Out-of-band 16-byte approval code as lowercase hexadecimal
+    #[arg(long)]
+    pub code: String,
+
+    /// Audit actor
+    #[arg(long)]
+    pub actor: String,
+
+    /// Audit reason/evidence
+    #[arg(long)]
+    pub reason: String,
+
+    /// Confirm this trust mutation explicitly
+    #[arg(long)]
+    pub confirmed: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeEnrollRejectArgs {
+    /// Pending candidate node identifier
+    pub node_id: String,
+
+    /// Audit actor
+    #[arg(long)]
+    pub actor: String,
+
+    /// Audit reason/evidence
+    #[arg(long)]
+    pub reason: String,
+
+    /// Confirm this denial explicitly
     #[arg(long)]
     pub confirmed: bool,
 }

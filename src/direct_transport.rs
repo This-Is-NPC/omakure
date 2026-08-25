@@ -475,6 +475,10 @@ impl TransportCertificate {
     pub fn not_after(&self) -> u64 {
         u64::from_be_bytes(self.bytes[157..165].try_into().unwrap())
     }
+
+    pub fn certificate_id(&self) -> &[u8; 16] {
+        self.bytes[165..181].try_into().unwrap()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -935,7 +939,65 @@ pub fn sign_probe(
     nonce: [u8; 16],
     now: u64,
 ) -> Result<SignedEnvelope, TransportError> {
-    sign_envelope(identity, "probe", session_id, nonce, now)
+    sign_envelope(
+        identity,
+        "probe",
+        session_id,
+        nonce,
+        Value::Object(serde_json::Map::new()),
+        now,
+    )
+}
+
+pub fn sign_manual_request(
+    identity: &NodeIdentity,
+    session_id: &[u8; 32],
+    nonce: [u8; 16],
+    request: &[u8],
+    now: u64,
+) -> Result<SignedEnvelope, TransportError> {
+    if request.len() > crate::enrollment::MAX_REQUEST_BYTES {
+        return Err(TransportError::MessageTooLarge);
+    }
+    let mut payload = serde_json::Map::new();
+    payload.insert("request".into(), Value::from(hex(request)));
+    sign_envelope(
+        identity,
+        "manual_request",
+        session_id,
+        nonce,
+        Value::Object(payload),
+        now,
+    )
+}
+
+pub fn sign_manual_ack(
+    identity: &NodeIdentity,
+    session_id: &[u8; 32],
+    nonce: [u8; 16],
+    accepted: bool,
+    reciprocal_request: Option<&[u8]>,
+    reciprocal_code: Option<&[u8]>,
+    now: u64,
+) -> Result<SignedEnvelope, TransportError> {
+    let mut payload = serde_json::Map::new();
+    payload.insert("accepted".into(), Value::from(accepted));
+    match (accepted, reciprocal_request, reciprocal_code) {
+        (true, Some(request), Some(code)) => {
+            payload.insert("request".into(), Value::from(hex(request)));
+            payload.insert("code".into(), Value::from(hex(code)));
+        }
+        (false, None, None) => {}
+        _ => return Err(TransportError::InvalidFrame),
+    }
+    sign_envelope(
+        identity,
+        "manual_ack",
+        session_id,
+        nonce,
+        Value::Object(payload),
+        now,
+    )
 }
 
 pub fn sign_ack(
@@ -944,7 +1006,14 @@ pub fn sign_ack(
     nonce: [u8; 16],
     now: u64,
 ) -> Result<SignedEnvelope, TransportError> {
-    sign_envelope(identity, "ack", session_id, nonce, now)
+    sign_envelope(
+        identity,
+        "ack",
+        session_id,
+        nonce,
+        Value::Object(serde_json::Map::new()),
+        now,
+    )
 }
 
 pub fn verify_envelope(
@@ -988,6 +1057,88 @@ pub fn verify_envelope(
         .map_err(|_| TransportError::HandshakeFailed)
 }
 
+pub fn enrollment_request_bytes(encoded: &[u8]) -> Result<Vec<u8>, TransportError> {
+    if encoded.len() < 64 {
+        return Err(TransportError::InvalidFrame);
+    }
+    let canonical = &encoded[..encoded.len() - 64];
+    let value: Value =
+        serde_json::from_slice(canonical).map_err(|_| TransportError::InvalidFrame)?;
+    let request = value
+        .get("payload")
+        .and_then(Value::as_object)
+        .and_then(|payload| payload.get("request"))
+        .and_then(Value::as_str)
+        .ok_or(TransportError::InvalidFrame)?;
+    if request.len() > crate::enrollment::MAX_REQUEST_BYTES * 2 {
+        return Err(TransportError::MessageTooLarge);
+    }
+    decode_hex(request).ok_or(TransportError::InvalidFrame)
+}
+
+pub fn enrollment_ack_accepted(encoded: &[u8]) -> Result<bool, TransportError> {
+    if encoded.len() < 64 {
+        return Err(TransportError::InvalidFrame);
+    }
+    let value: Value = serde_json::from_slice(&encoded[..encoded.len() - 64])
+        .map_err(|_| TransportError::InvalidFrame)?;
+    let payload = value
+        .get("payload")
+        .and_then(Value::as_object)
+        .ok_or(TransportError::InvalidFrame)?;
+    let accepted = payload
+        .get("accepted")
+        .and_then(Value::as_bool)
+        .ok_or(TransportError::InvalidFrame)?;
+    if accepted {
+        let request = payload
+            .get("request")
+            .and_then(Value::as_str)
+            .ok_or(TransportError::InvalidFrame)?;
+        let code = payload
+            .get("code")
+            .and_then(Value::as_str)
+            .ok_or(TransportError::InvalidFrame)?;
+        if decode_hex(request).is_none() || decode_hex(code).is_none() {
+            return Err(TransportError::InvalidFrame);
+        }
+    } else if payload.len() != 1 {
+        return Err(TransportError::InvalidFrame);
+    }
+    Ok(accepted)
+}
+
+pub fn enrollment_ack_offer(encoded: &[u8]) -> Result<(Vec<u8>, Vec<u8>), TransportError> {
+    if encoded.len() < 64 {
+        return Err(TransportError::InvalidFrame);
+    }
+    let value: Value = serde_json::from_slice(&encoded[..encoded.len() - 64])
+        .map_err(|_| TransportError::InvalidFrame)?;
+    let payload = value
+        .get("payload")
+        .and_then(Value::as_object)
+        .ok_or(TransportError::InvalidFrame)?;
+    if payload.get("accepted").and_then(Value::as_bool) != Some(true) || payload.len() != 3 {
+        return Err(TransportError::InvalidFrame);
+    }
+    let request = payload
+        .get("request")
+        .and_then(Value::as_str)
+        .and_then(decode_hex)
+        .ok_or(TransportError::InvalidFrame)?;
+    let code = payload
+        .get("code")
+        .and_then(Value::as_str)
+        .and_then(decode_hex)
+        .ok_or(TransportError::InvalidFrame)?;
+    if request.len() > crate::enrollment::MAX_REQUEST_BYTES
+        || code.len() != crate::enrollment::CODE_BYTES
+    {
+        return Err(TransportError::InvalidFrame);
+    }
+    Ok((request, code))
+}
+
 pub fn envelope_nonce(encoded: &[u8]) -> Result<[u8; 16], TransportError> {
     if encoded.len() < 64 {
         return Err(TransportError::InvalidFrame);
@@ -1007,13 +1158,14 @@ fn sign_envelope(
     kind: &str,
     session_id: &[u8; 32],
     nonce: [u8; 16],
+    payload: Value,
     now: u64,
 ) -> Result<SignedEnvelope, TransportError> {
     let mut object = serde_json::Map::new();
     object.insert("created_at".into(), Value::from(now));
     object.insert("kind".into(), Value::from(kind));
     object.insert("nonce".into(), Value::from(hex(&nonce)));
-    object.insert("payload".into(), Value::Object(serde_json::Map::new()));
+    object.insert("payload".into(), payload);
     object.insert(
         "sender".into(),
         Value::from(identity.public_status().node_id.clone()),

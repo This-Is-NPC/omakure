@@ -5,16 +5,19 @@
 //! enrollment behavior.  Trust changes are explicit, transactional operations
 //! with an actor and reason recorded in the append-only audit log.
 
+use crate::direct_transport::TransportCertificate;
+use crate::enrollment::{self, ManualEnrollmentRequest};
 use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction, TransactionBehavior};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 4;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_ACTOR_BYTES: usize = 256;
 const MAX_REASON_BYTES: usize = 1024;
@@ -25,6 +28,27 @@ const NODE_ID_BYTES: usize = 69;
 const PUBLIC_KEY_BYTES: usize = 64;
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
+const MAX_ENROLLMENT_REPLAY_ROWS: i64 = 100_000;
+const MAX_ENROLLMENT_AUDIT_ROWS: i64 = 100_000;
+const MAX_ENROLLMENT_REQUEST_ROWS: i64 = 100_000;
+type StagedManualEnrollment = (
+    Option<Vec<u8>>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    i64,
+    i64,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    i64,
+    i64,
+    i64,
+    String,
+    String,
+);
 
 const SUPPORTED_CAPABILITIES: &[&str] = &[
     "backup-orchestration",
@@ -64,6 +88,14 @@ pub enum RegistryError {
     Unchanged(String),
     #[error("transport audit capacity is exhausted")]
     AuditCapacity,
+    #[error("manual enrollment request was replayed")]
+    EnrollmentReplay,
+    #[error("manual enrollment request conflicts with existing trust state")]
+    EnrollmentConflict,
+    #[error("manual enrollment replay capacity is exhausted")]
+    EnrollmentCapacity,
+    #[error("manual enrollment evidence does not match staged state")]
+    EnrollmentMismatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -341,6 +373,14 @@ impl NodeRegistry {
         &self,
         registration: PeerRegistration,
     ) -> Result<PeerRecord, RegistryError> {
+        self.register_pending_with_transport(registration, None)
+    }
+
+    pub fn register_pending_with_transport(
+        &self,
+        registration: PeerRegistration,
+        certificate: Option<&[u8]>,
+    ) -> Result<PeerRecord, RegistryError> {
         validate_registration(&registration, &self.local_node_id, &self.local_public_key)?;
         let now = now_timestamp();
         self.with_connection(|connection| {
@@ -374,6 +414,14 @@ impl NodeRegistry {
                 timestamp_seconds(&now)?,
                 "authenticated_untrusted",
             )?;
+            if let Some(certificate) = certificate {
+                insert_v2_pending_transport_projection(
+                    &transaction,
+                    &registration,
+                    timestamp_seconds(&now)?,
+                    certificate,
+                )?;
+            }
             record_audit(
                 &transaction,
                 AuditInput {
@@ -388,6 +436,498 @@ impl NodeRegistry {
             )?;
             let peer = load_peer(&transaction, &registration.node_id)?
                 .ok_or_else(|| RegistryError::Corrupt("inserted peer disappeared".to_string()))?;
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    pub fn stage_manual_enrollment(
+        &self,
+        request: &ManualEnrollmentRequest,
+        certificate: &[u8],
+        actor: &str,
+        reason: &str,
+        now: u64,
+    ) -> Result<PeerRecord, RegistryError> {
+        if let Err(error) = request.verify(now) {
+            self.record_enrollment_audit(
+                if matches!(error, crate::enrollment::EnrollmentError::Replay) {
+                    "replay"
+                } else if matches!(error, crate::enrollment::EnrollmentError::Expired) {
+                    "expired"
+                } else {
+                    "malformed"
+                },
+                Some(&request.request_id),
+                None,
+                &self.local_node_id,
+                "rejected",
+                "request verification failed",
+            )?;
+            return Err(RegistryError::InvalidInput(error.to_string()));
+        }
+        if request.proposer_node_id == self.local_node_id {
+            self.record_enrollment_audit(
+                "self_request",
+                Some(&request.request_id),
+                Some(&digest(&request.encode())),
+                &request.proposer_node_id,
+                "rejected",
+                "a node may stage only a remote enrollment request",
+            )?;
+            return Err(RegistryError::SelfTrust);
+        }
+        validate_actor_reason(actor, reason)?;
+        let registration = registration_from_manual(request, actor, reason)?;
+        let certificate = TransportCertificate::from_bytes(certificate)
+            .map_err(|_| RegistryError::InvalidInput("transport certificate is invalid".into()))?;
+        certificate
+            .verify_time(now)
+            .map_err(|_| RegistryError::InvalidInput("transport certificate is expired".into()))?;
+        if certificate.node_id() != registration.node_id
+            || certificate.identity_key().as_slice()
+                != decode_hex(&registration.public_key)?.as_slice()
+            || certificate.transport_public() != &request.proposer_transport_x25519
+        {
+            return Err(RegistryError::InvalidInput(
+                "transport certificate does not match manual enrollment identity".into(),
+            ));
+        }
+        let first_seen = i64::try_from(now)
+            .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+        let expires_at = i64::try_from(request.replay_expiry())
+            .map_err(|_| RegistryError::InvalidInput("enrollment expiry is too large".into()))?;
+        let request_bytes = request.encode();
+        let request_digest = digest(&request_bytes);
+        let certificate_digest = digest(certificate.as_bytes());
+        let capabilities = capabilities_json(&registration.capabilities)?.into_bytes();
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            cleanup_enrollment_replays(&transaction, now)?;
+            let replay_count: i64 = transaction.query_row(
+                "SELECT COUNT(*) FROM enrollment_replays WHERE replay_kind = 'manual_request'",
+                [],
+                |row| row.get(0),
+            )?;
+            if replay_count >= MAX_ENROLLMENT_REPLAY_ROWS {
+                return Err(RegistryError::EnrollmentCapacity);
+            }
+            let request_count: i64 = transaction.query_row(
+                "SELECT COUNT(*) FROM manual_enrollment_requests WHERE state = 'pending'",
+                [],
+                |row| row.get(0),
+            )?;
+            if request_count >= MAX_ENROLLMENT_REQUEST_ROWS {
+                return Err(RegistryError::EnrollmentCapacity);
+            }
+            if transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM enrollment_replays WHERE replay_kind = 'manual_request' AND replay_id = ?1)",
+                [&request.request_id[..]],
+                |row| row.get::<_, i64>(0),
+            )? != 0 {
+                record_enrollment_audit_tx(
+                    &transaction,
+                    "replay",
+                    Some(&request.request_id),
+                    Some(&request_digest),
+                    &registration.node_id,
+                    "rejected",
+                    "request replay was already retained",
+                )?;
+                return Err(RegistryError::EnrollmentReplay);
+            }
+            reject_retained_revocation(
+                &transaction,
+                &registration.node_id,
+                &registration.public_key,
+            )?;
+            if let Some((state, source)) = transaction
+                .query_row(
+                    "SELECT state, source FROM peers WHERE node_id = ?1",
+                    [&registration.node_id],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                )
+                .optional()?
+            {
+                let error = if source == "manual" && state == "pending" {
+                    RegistryError::EnrollmentReplay
+                } else {
+                    RegistryError::EnrollmentConflict
+                };
+                record_enrollment_audit_tx(
+                    &transaction,
+                    if matches!(error, RegistryError::EnrollmentReplay) {
+                        "replay"
+                    } else {
+                        "concurrent"
+                    },
+                    Some(&request.request_id),
+                    Some(&request_digest),
+                    &registration.node_id,
+                    "rejected",
+                    "request conflicts with existing state",
+                )?;
+                return Err(error);
+            }
+            if public_key_exists(&transaction, &registration.public_key)? {
+                record_enrollment_audit_tx(
+                    &transaction,
+                    "concurrent",
+                    Some(&request.request_id),
+                    Some(&request_digest),
+                    &registration.node_id,
+                    "rejected",
+                    "request identity conflicts with existing state",
+                )?;
+                return Err(RegistryError::EnrollmentConflict);
+            }
+            transaction.execute(
+                "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
+                 VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?5, NULL, 'manual')",
+                params![
+                    registration.node_id,
+                    registration.public_key,
+                    registration.role.as_str(),
+                    capabilities_json(&registration.capabilities)?,
+                    now_timestamp(),
+                ],
+            )?;
+            insert_v2_identity_projection(
+                &transaction,
+                &registration,
+                first_seen,
+                "authenticated_untrusted",
+            )?;
+            insert_v2_pending_transport_projection(
+                &transaction,
+                &registration,
+                first_seen,
+                certificate.as_bytes(),
+            )?;
+            transaction.execute(
+                "INSERT INTO manual_enrollment_requests
+                 (pairing_id, request_id, request_bytes, request_digest, code_hash, node_id, identity_key,
+                  transport_key, role, capabilities, request_created_at, request_expires_at,
+                  certificate, certificate_digest, certificate_id, key_epoch, not_before, not_after,
+                  state, source, staged_at, resolved_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+                         'pending', 'manual', ?19, NULL)",
+                params![
+                    &request.pairing_id[..],
+                    &request.request_id[..],
+                    &request_bytes,
+                    &request_digest[..],
+                    &request.code_hash[..],
+                    &registration.node_id,
+                    &request.proposer_xonly[..],
+                    &request.proposer_transport_x25519[..],
+                    request.role as u8,
+                    capabilities,
+                    i64::try_from(request.created_at).map_err(|_| RegistryError::InvalidInput("request timestamp is too large".into()))?,
+                    i64::try_from(request.expires_at).map_err(|_| RegistryError::InvalidInput("request timestamp is too large".into()))?,
+                    certificate.as_bytes(),
+                    &certificate_digest[..],
+                    certificate.certificate_id().as_slice(),
+                    i64::try_from(certificate.key_epoch()).map_err(|_| RegistryError::InvalidInput("certificate epoch is too large".into()))?,
+                    i64::try_from(certificate.not_before()).map_err(|_| RegistryError::InvalidInput("certificate timestamp is too large".into()))?,
+                    i64::try_from(certificate.not_after()).map_err(|_| RegistryError::InvalidInput("certificate timestamp is too large".into()))?,
+                    first_seen,
+                ],
+            )?;
+            transaction.execute(
+                "INSERT INTO enrollment_replays (replay_kind, replay_id, expires_at, first_seen)
+                 VALUES ('manual_request', ?1, ?2, ?3)",
+                params![&request.request_id[..], expires_at, first_seen],
+            )?;
+            record_audit(
+                &transaction,
+                AuditInput {
+                    event_type: "enrollment_pending",
+                    node_id: &registration.node_id,
+                    from_state: None,
+                    to_state: Some(PeerState::Pending),
+                    actor,
+                    reason,
+                    occurred_at: &now_timestamp(),
+                },
+            )?;
+            record_enrollment_audit_tx(
+                &transaction,
+                "pending",
+                Some(&request.request_id),
+                Some(&request_digest),
+                &registration.node_id,
+                "staged",
+                "manual enrollment request staged for local approval",
+            )?;
+            let peer = load_peer(&transaction, &registration.node_id)?
+                .ok_or_else(|| RegistryError::Corrupt("staged enrollment disappeared".into()))?;
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    pub fn approve_manual_enrollment(
+        &self,
+        request: &ManualEnrollmentRequest,
+        certificate: &[u8],
+        code: &[u8],
+        actor: &str,
+        reason: &str,
+        now: u64,
+    ) -> Result<PeerRecord, RegistryError> {
+        if let Err(error) = request.verify(now) {
+            self.record_enrollment_audit(
+                if matches!(error, crate::enrollment::EnrollmentError::Expired) {
+                    "expired"
+                } else {
+                    "malformed"
+                },
+                Some(&request.request_id),
+                Some(&digest(&request.encode())),
+                &request.proposer_node_id,
+                "rejected",
+                "approval request verification failed",
+            )?;
+            return Err(RegistryError::InvalidInput(error.to_string()));
+        }
+        if let Err(error) = request.verify_code(code) {
+            let request_bytes = request.encode();
+            let request_digest = digest(&request_bytes);
+            self.record_enrollment_audit(
+                "wrong_code",
+                Some(&request.request_id),
+                Some(&request_digest),
+                &request.proposer_node_id,
+                "rejected",
+                "approval code did not match staged code hash",
+            )?;
+            return Err(RegistryError::InvalidInput(error.to_string()));
+        }
+        validate_actor_reason(actor, reason)?;
+        let registration = registration_from_manual(request, actor, reason)?;
+        let certificate = TransportCertificate::from_bytes(certificate)
+            .map_err(|_| RegistryError::InvalidInput("transport certificate is invalid".into()))?;
+        if certificate.node_id() != registration.node_id
+            || certificate.identity_key().as_slice()
+                != decode_hex(&registration.public_key)?.as_slice()
+            || certificate.transport_public() != &request.proposer_transport_x25519
+        {
+            return Err(RegistryError::InvalidInput(
+                "transport certificate does not match manual enrollment identity".into(),
+            ));
+        }
+        certificate
+            .verify_time(now)
+            .map_err(|_| RegistryError::InvalidInput("transport certificate is expired".into()))?;
+        let request_bytes = request.encode();
+        let request_digest = digest(&request_bytes);
+        let certificate_digest = digest(certificate.as_bytes());
+        let now_timestamp = now_timestamp();
+        let now_seconds = i64::try_from(now)
+            .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current = load_peer(&transaction, &registration.node_id)?
+                .ok_or_else(|| RegistryError::NotFound(registration.node_id.clone()))?;
+            let staged: Option<StagedManualEnrollment> = transaction
+                .query_row(
+                    "SELECT pairing_id, request_bytes, request_digest, code_hash, identity_key, transport_key,
+                            request_created_at, request_expires_at, certificate, certificate_digest,
+                            certificate_id, key_epoch, not_before, not_after, state, source
+                     FROM manual_enrollment_requests WHERE request_id = ?1",
+                    [&request.request_id[..]],
+                    |row| {
+                        Ok((
+                            row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?,
+                            row.get(5)?, row.get(6)?, row.get(7)?, row.get(8)?, row.get(9)?,
+                            row.get(10)?, row.get(11)?, row.get(12)?, row.get(13)?, row.get(14)?,
+                            row.get(15)?,
+                        ))
+                    },
+                )
+                .optional()?;
+            let Some((
+                staged_pairing_id,
+                staged_bytes,
+                staged_digest,
+                staged_code_hash,
+                staged_identity_key,
+                staged_transport_key,
+                staged_created_at,
+                staged_expires_at,
+                staged_certificate,
+                staged_certificate_digest,
+                staged_certificate_id,
+                staged_key_epoch,
+                staged_not_before,
+                staged_not_after,
+                staged_state,
+                staged_source,
+            )) = staged
+            else {
+                return Err(RegistryError::NotFound(registration.node_id.clone()));
+            };
+            if staged_source != "manual" || staged_state != "pending" {
+                return Err(RegistryError::EnrollmentConflict);
+            }
+            if staged_pairing_id.as_deref() != Some(request.pairing_id.as_slice())
+                || staged_bytes != request_bytes
+                || staged_digest != request_digest
+                || staged_code_hash != request.code_hash
+                || staged_identity_key != request.proposer_xonly
+                || staged_transport_key != request.proposer_transport_x25519
+                || staged_created_at != i64::try_from(request.created_at).unwrap_or_default()
+                || staged_expires_at != i64::try_from(request.expires_at).unwrap_or_default()
+                || staged_certificate != certificate.as_bytes()
+                || staged_certificate_digest != certificate_digest
+                || staged_certificate_id != certificate.certificate_id()
+                || staged_key_epoch != i64::try_from(certificate.key_epoch()).unwrap_or_default()
+                || staged_not_before != i64::try_from(certificate.not_before()).unwrap_or_default()
+                || staged_not_after != i64::try_from(certificate.not_after()).unwrap_or_default()
+            {
+                return Err(RegistryError::EnrollmentMismatch);
+            }
+            if current.source != PeerSource::Manual {
+                return Err(RegistryError::EnrollmentConflict);
+            }
+            if current.public_key != registration.public_key
+                || current.role != registration.role
+                || current.capabilities != registration.capabilities
+            {
+                return Err(RegistryError::InvalidInput(
+                    "manual enrollment request does not match pending identity".into(),
+                ));
+            }
+            if current.state != PeerState::Pending {
+                return Err(RegistryError::InvalidTransition {
+                    from: current.state,
+                    to: PeerState::Active,
+                });
+            }
+            reject_retained_revocation(
+                &transaction,
+                &registration.node_id,
+                &registration.public_key,
+            )?;
+            let pending_transport: Option<Vec<u8>> = transaction
+                .query_row(
+                    "SELECT public_key FROM transport_key_epochs WHERE node_id = ?1 AND state = 'pending'",
+                    [&registration.node_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if pending_transport.as_deref() != Some(certificate.transport_public().as_slice()) {
+                return Err(RegistryError::InvalidInput(
+                    "manual enrollment transport key does not match pending identity".into(),
+                ));
+            }
+            transaction.execute(
+                "UPDATE peers SET state = 'active', updated_at = ?1 WHERE node_id = ?2 AND state = 'pending'",
+                params![now_timestamp, registration.node_id],
+            )?;
+            transaction.execute(
+                "UPDATE manual_enrollment_requests SET state = 'approved', resolved_at = ?1
+                 WHERE request_id = ?2 AND state = 'pending'",
+                params![now_seconds, &request.request_id[..]],
+            )?;
+            project_v2_transition(&transaction, &current, PeerState::Active, now_seconds)?;
+            record_audit(
+                &transaction,
+                AuditInput {
+                    event_type: "enrollment_approved",
+                    node_id: &registration.node_id,
+                    from_state: Some(PeerState::Pending),
+                    to_state: Some(PeerState::Active),
+                    actor,
+                    reason,
+                    occurred_at: &now_timestamp,
+                },
+            )?;
+            record_enrollment_audit_tx(
+                &transaction,
+                "approved",
+                Some(&request.request_id),
+                Some(&request_digest),
+                &registration.node_id,
+                "approved",
+                "manual enrollment activated after explicit approval",
+            )?;
+            let peer = load_peer(&transaction, &registration.node_id)?
+                .ok_or_else(|| RegistryError::Corrupt("approved enrollment disappeared".into()))?;
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    pub fn reject_manual_enrollment(
+        &self,
+        node_id: &str,
+        actor: &str,
+        reason: &str,
+    ) -> Result<PeerRecord, RegistryError> {
+        validate_actor_reason(actor, reason)?;
+        let now = now_timestamp();
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current = load_peer(&transaction, node_id)?
+                .ok_or_else(|| RegistryError::NotFound(node_id.to_string()))?;
+            if current.source != PeerSource::Manual || current.state != PeerState::Pending {
+                return Err(RegistryError::EnrollmentConflict);
+            }
+            let (request_id, request_digest): (Vec<u8>, Vec<u8>) = transaction.query_row(
+                "SELECT request_id, request_digest
+                 FROM manual_enrollment_requests
+                 WHERE node_id = ?1 AND source = 'manual' AND state = 'pending'",
+                [node_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            let request_id: [u8; enrollment::REQUEST_ID_BYTES] =
+                request_id.try_into().map_err(|_| {
+                    RegistryError::Corrupt("manual request ID has invalid length".into())
+                })?;
+            let request_digest: [u8; 32] = request_digest.try_into().map_err(|_| {
+                RegistryError::Corrupt("manual request digest has invalid length".into())
+            })?;
+            transaction.execute(
+                "UPDATE peers SET state = 'suspended', updated_at = ?1
+                 WHERE node_id = ?2 AND state = 'pending' AND source = 'manual'",
+                params![now, node_id],
+            )?;
+            let changed = transaction.execute(
+                "UPDATE manual_enrollment_requests SET state = 'rejected', resolved_at = ?1
+                 WHERE node_id = ?2 AND source = 'manual' AND state = 'pending'",
+                params![timestamp_seconds(&now)?, node_id],
+            )?;
+            if changed != 1 {
+                return Err(RegistryError::EnrollmentConflict);
+            }
+            record_audit(
+                &transaction,
+                AuditInput {
+                    event_type: "enrollment_rejected",
+                    node_id,
+                    from_state: Some(PeerState::Pending),
+                    to_state: Some(PeerState::Suspended),
+                    actor,
+                    reason,
+                    occurred_at: &now,
+                },
+            )?;
+            record_enrollment_audit_tx(
+                &transaction,
+                "rejected",
+                Some(&request_id),
+                Some(&request_digest),
+                node_id,
+                "rejected",
+                "manual enrollment request rejected by local operator",
+            )?;
+            let peer = load_peer(&transaction, node_id)?
+                .ok_or_else(|| RegistryError::Corrupt("rejected enrollment disappeared".into()))?;
             transaction.commit()?;
             Ok(peer)
         })
@@ -919,6 +1459,36 @@ impl NodeRegistry {
         })
     }
 
+    pub fn record_enrollment_audit(
+        &self,
+        event_code: &str,
+        request_id: Option<&[u8; 16]>,
+        request_digest: Option<&[u8; 32]>,
+        node_id: &str,
+        outcome: &str,
+        detail: &str,
+    ) -> Result<(), RegistryError> {
+        validate_bounded_text("enrollment event code", event_code, 64)?;
+        validate_node_id(node_id)?;
+        validate_bounded_text("enrollment outcome", outcome, 32)?;
+        validate_bounded_text("enrollment detail", detail, 256)?;
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            record_enrollment_audit_tx(
+                &transaction,
+                event_code,
+                request_id,
+                request_digest,
+                node_id,
+                outcome,
+                detail,
+            )?;
+            transaction.commit()?;
+            Ok(())
+        })
+    }
+
     fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
@@ -927,6 +1497,39 @@ impl NodeRegistry {
         configure_connection(&mut connection)?;
         operation(&mut connection)
     }
+}
+
+fn record_enrollment_audit_tx(
+    transaction: &Transaction<'_>,
+    event_code: &str,
+    request_id: Option<&[u8; 16]>,
+    request_digest: Option<&[u8; 32]>,
+    node_id: &str,
+    outcome: &str,
+    detail: &str,
+) -> Result<(), RegistryError> {
+    let count: i64 =
+        transaction.query_row("SELECT COUNT(*) FROM enrollment_audits", [], |row| {
+            row.get(0)
+        })?;
+    if count >= MAX_ENROLLMENT_AUDIT_ROWS {
+        return Err(RegistryError::AuditCapacity);
+    }
+    transaction.execute(
+        "INSERT INTO enrollment_audits
+         (event_code, request_id, request_digest, node_id, outcome, detail, occurred_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            event_code,
+            request_id.map(|value| value.as_slice()),
+            request_digest.map(|value| value.as_slice()),
+            node_id,
+            outcome,
+            detail,
+            Utc::now().timestamp(),
+        ],
+    )?;
+    Ok(())
 }
 
 fn validate_database_security(context: &NodeContext, path: &Path) -> Result<(), RegistryError> {
@@ -1010,6 +1613,14 @@ fn initialize_database(
     let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     if version == 1 {
         migrate_v1_to_v2(connection, registry)?;
+    }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 2 {
+        migrate_v2_to_v3(connection)?;
+    }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 3 {
+        migrate_v3_to_v4(connection)?;
     }
     validate_schema(connection, registry)
 }
@@ -1224,6 +1835,152 @@ fn migrate_v1_to_v2(
     transaction.execute_batch("PRAGMA user_version = 2")?;
     transaction.commit()?;
     validate_v2_invariants(connection, registry)
+}
+
+fn migrate_v2_to_v3(connection: &mut Connection) -> Result<(), RegistryError> {
+    let metadata_version: String = connection.query_row(
+        "SELECT value FROM metadata WHERE key = 'schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if metadata_version != "2" {
+        return Err(RegistryError::InvalidSchema(
+            "v2 database metadata marker is invalid".to_string(),
+        ));
+    }
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    create_v3_schema(&transaction)?;
+    transaction.execute(
+        "UPDATE metadata SET value = '3' WHERE key = 'schema_version'",
+        [],
+    )?;
+    transaction.execute_batch("PRAGMA user_version = 3")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn migrate_v3_to_v4(connection: &mut Connection) -> Result<(), RegistryError> {
+    let metadata_version: String = connection.query_row(
+        "SELECT value FROM metadata WHERE key = 'schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if metadata_version != "3" {
+        return Err(RegistryError::InvalidSchema(
+            "v3 database metadata marker is invalid".to_string(),
+        ));
+    }
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    transaction.execute_batch(
+        "ALTER TABLE manual_enrollment_requests ADD COLUMN pairing_id BLOB NULL
+             CHECK (pairing_id IS NULL OR length(pairing_id) = 16);
+         CREATE INDEX manual_enrollment_requests_pairing_idx
+             ON manual_enrollment_requests(pairing_id);",
+    )?;
+    transaction.execute_batch(
+        "DROP TRIGGER manual_enrollment_request_immutable;
+         CREATE TRIGGER manual_enrollment_request_immutable
+         BEFORE UPDATE ON manual_enrollment_requests
+          WHEN NEW.request_id <> OLD.request_id
+            OR COALESCE(NEW.pairing_id, X'') <> COALESCE(OLD.pairing_id, X'')
+            OR NEW.request_bytes <> OLD.request_bytes
+           OR NEW.request_digest <> OLD.request_digest
+           OR NEW.code_hash <> OLD.code_hash
+           OR NEW.node_id <> OLD.node_id
+           OR NEW.identity_key <> OLD.identity_key
+           OR NEW.transport_key <> OLD.transport_key
+           OR NEW.role <> OLD.role
+           OR NEW.capabilities <> OLD.capabilities
+           OR NEW.request_created_at <> OLD.request_created_at
+           OR NEW.request_expires_at <> OLD.request_expires_at
+           OR NEW.certificate <> OLD.certificate
+           OR NEW.certificate_digest <> OLD.certificate_digest
+           OR NEW.certificate_id <> OLD.certificate_id
+           OR NEW.key_epoch <> OLD.key_epoch
+           OR NEW.not_before <> OLD.not_before
+           OR NEW.not_after <> OLD.not_after
+           OR NEW.source <> OLD.source
+           OR NEW.staged_at <> OLD.staged_at
+         BEGIN SELECT RAISE(ABORT, 'manual enrollment evidence is immutable'); END;",
+    )?;
+    let migration_now = Utc::now().timestamp().max(1);
+    let migration_timestamp = now_timestamp();
+    let legacy_pending: Vec<([u8; 16], [u8; 32], String)> = {
+        let mut statement = transaction.prepare(
+            "SELECT request_id, request_digest, node_id
+             FROM manual_enrollment_requests
+             WHERE state = 'pending'
+             ORDER BY request_id",
+        )?;
+        let rows = statement
+            .query_map([], |row| {
+                let request_id: Vec<u8> = row.get(0)?;
+                let request_digest: Vec<u8> = row.get(1)?;
+                let node_id: String = row.get(2)?;
+                let request_id = request_id.try_into().map_err(|_| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        16,
+                        rusqlite::types::Type::Blob,
+                        Box::new(RegistryError::InvalidSchema(
+                            "legacy enrollment request ID has invalid length".to_string(),
+                        )),
+                    )
+                })?;
+                let request_digest = request_digest.try_into().map_err(|_| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        32,
+                        rusqlite::types::Type::Blob,
+                        Box::new(RegistryError::InvalidSchema(
+                            "legacy enrollment request digest has invalid length".to_string(),
+                        )),
+                    )
+                })?;
+                Ok((request_id, request_digest, node_id))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        rows
+    };
+    for (request_id, request_digest, node_id) in &legacy_pending {
+        record_enrollment_audit_tx(
+            &transaction,
+            "legacy_expired",
+            Some(request_id),
+            Some(request_digest),
+            node_id,
+            "rejected",
+            "legacy manual enrollment request expired during schema migration",
+        )?;
+        let current = load_peer(&transaction, node_id)?.ok_or_else(|| {
+            RegistryError::InvalidSchema(
+                "legacy pending enrollment is missing its peer projection".to_string(),
+            )
+        })?;
+        if current.source != PeerSource::Manual || current.state != PeerState::Pending {
+            return Err(RegistryError::InvalidSchema(
+                "legacy pending enrollment has inconsistent peer state".to_string(),
+            ));
+        }
+        project_v2_transition(&transaction, &current, PeerState::Suspended, migration_now)?;
+        transaction.execute(
+            "UPDATE peers SET state = 'suspended', updated_at = ?1
+             WHERE node_id = ?2 AND state = 'pending' AND source = 'manual'",
+            params![migration_timestamp, node_id],
+        )?;
+    }
+    transaction.execute(
+        "UPDATE manual_enrollment_requests
+         SET state = 'rejected',
+             resolved_at = CASE WHEN staged_at > ?1 THEN staged_at ELSE ?1 END
+         WHERE state = 'pending'",
+        [migration_now],
+    )?;
+    transaction.execute(
+        "UPDATE metadata SET value = '4' WHERE key = 'schema_version'",
+        [],
+    )?;
+    transaction.execute_batch("PRAGMA user_version = 4")?;
+    transaction.commit()?;
+    Ok(())
 }
 
 fn validate_v1_preflight(
@@ -1487,6 +2244,77 @@ fn create_v2_schema(transaction: &Transaction<'_>) -> Result<(), RegistryError> 
     Ok(())
 }
 
+fn create_v3_schema(transaction: &Transaction<'_>) -> Result<(), RegistryError> {
+    transaction.execute_batch(
+        "CREATE TABLE manual_enrollment_requests (
+           request_id BLOB PRIMARY KEY CHECK (length(request_id) = 16),
+           request_bytes BLOB NOT NULL CHECK (length(request_bytes) BETWEEN 1 AND 2048),
+           request_digest BLOB NOT NULL CHECK (length(request_digest) = 32),
+           code_hash BLOB NOT NULL CHECK (length(code_hash) = 32),
+           node_id TEXT NOT NULL CHECK (length(CAST(node_id AS BLOB)) = 69),
+           identity_key BLOB NOT NULL CHECK (length(identity_key) = 32),
+           transport_key BLOB NOT NULL CHECK (length(transport_key) = 32),
+           role INTEGER NOT NULL CHECK (role IN (1, 2)),
+           capabilities BLOB NOT NULL CHECK (length(capabilities) <= 4096),
+           request_created_at INTEGER NOT NULL CHECK (request_created_at > 0),
+           request_expires_at INTEGER NOT NULL CHECK (request_expires_at > request_created_at),
+           certificate BLOB NOT NULL CHECK (length(certificate) = 245),
+           certificate_digest BLOB NOT NULL CHECK (length(certificate_digest) = 32),
+           certificate_id BLOB NOT NULL CHECK (length(certificate_id) = 16),
+           key_epoch INTEGER NOT NULL CHECK (key_epoch > 0),
+           not_before INTEGER NOT NULL CHECK (not_before > 0),
+           not_after INTEGER NOT NULL CHECK (not_after > not_before),
+           state TEXT NOT NULL CHECK (state IN ('pending', 'approved', 'rejected')),
+           source TEXT NOT NULL CHECK (source = 'manual'),
+           staged_at INTEGER NOT NULL CHECK (staged_at > 0),
+           resolved_at INTEGER NULL CHECK (resolved_at IS NULL OR resolved_at >= staged_at)
+         );
+         CREATE TABLE enrollment_audits (
+           id INTEGER PRIMARY KEY,
+           event_code TEXT NOT NULL CHECK (length(CAST(event_code AS BLOB)) BETWEEN 1 AND 64),
+           request_id BLOB NULL CHECK (request_id IS NULL OR length(request_id) = 16),
+           request_digest BLOB NULL CHECK (request_digest IS NULL OR length(request_digest) = 32),
+           node_id TEXT NOT NULL,
+           outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
+           detail TEXT NOT NULL CHECK (length(CAST(detail AS BLOB)) <= 256),
+           occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
+         );
+         CREATE INDEX manual_enrollment_requests_state_idx
+           ON manual_enrollment_requests(state, node_id);
+         CREATE INDEX enrollment_audits_node_idx ON enrollment_audits(node_id, id);
+         CREATE INDEX enrollment_audits_request_idx ON enrollment_audits(request_id, id);
+         CREATE TRIGGER manual_enrollment_request_immutable
+         BEFORE UPDATE ON manual_enrollment_requests
+          WHEN NEW.request_id <> OLD.request_id
+            OR NEW.request_bytes <> OLD.request_bytes
+           OR NEW.request_digest <> OLD.request_digest
+           OR NEW.code_hash <> OLD.code_hash
+           OR NEW.node_id <> OLD.node_id
+           OR NEW.identity_key <> OLD.identity_key
+           OR NEW.transport_key <> OLD.transport_key
+           OR NEW.role <> OLD.role
+           OR NEW.capabilities <> OLD.capabilities
+           OR NEW.request_created_at <> OLD.request_created_at
+           OR NEW.request_expires_at <> OLD.request_expires_at
+           OR NEW.certificate <> OLD.certificate
+           OR NEW.certificate_digest <> OLD.certificate_digest
+           OR NEW.certificate_id <> OLD.certificate_id
+           OR NEW.key_epoch <> OLD.key_epoch
+           OR NEW.not_before <> OLD.not_before
+           OR NEW.not_after <> OLD.not_after
+           OR NEW.source <> OLD.source
+           OR NEW.staged_at <> OLD.staged_at
+         BEGIN SELECT RAISE(ABORT, 'manual enrollment evidence is immutable'); END;
+         CREATE TRIGGER enrollment_audits_no_update
+         BEFORE UPDATE ON enrollment_audits
+         BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;
+         CREATE TRIGGER enrollment_audits_no_delete
+         BEFORE DELETE ON enrollment_audits
+         BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;",
+    )?;
+    Ok(())
+}
+
 fn validate_v2_invariants(
     connection: &Connection,
     _registry: &NodeRegistry,
@@ -1527,6 +2355,24 @@ fn validate_capabilities_json_bytes(value: &str) -> Result<(), RegistryError> {
         RegistryError::InvalidSchema("v1 capabilities are not valid JSON".to_string())
     })?;
     validate_capabilities(&capabilities)
+}
+
+fn digest(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
+}
+
+fn cleanup_enrollment_replays(
+    transaction: &Transaction<'_>,
+    now: u64,
+) -> Result<(), RegistryError> {
+    let now = i64::try_from(now)
+        .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+    transaction.execute(
+        "DELETE FROM enrollment_replays
+         WHERE replay_kind = 'manual_request' AND expires_at <= ?1",
+        [now],
+    )?;
+    Ok(())
 }
 
 fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(), RegistryError> {
@@ -1668,6 +2514,48 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
             "occurred_at",
         ],
     )?;
+    validate_columns(
+        connection,
+        "manual_enrollment_requests",
+        &[
+            "request_id",
+            "request_bytes",
+            "request_digest",
+            "code_hash",
+            "node_id",
+            "identity_key",
+            "transport_key",
+            "role",
+            "capabilities",
+            "request_created_at",
+            "request_expires_at",
+            "certificate",
+            "certificate_digest",
+            "certificate_id",
+            "key_epoch",
+            "not_before",
+            "not_after",
+            "state",
+            "source",
+            "staged_at",
+            "resolved_at",
+            "pairing_id",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "enrollment_audits",
+        &[
+            "id",
+            "event_code",
+            "request_id",
+            "request_digest",
+            "node_id",
+            "outcome",
+            "detail",
+            "occurred_at",
+        ],
+    )?;
     let metadata: Vec<(String, String)> = connection
         .prepare("SELECT key, value FROM metadata ORDER BY key")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -1678,7 +2566,7 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
         ));
     }
     let expected = [
-        ("schema_version", "2"),
+        ("schema_version", "4"),
         ("node_id", registry.local_node_id.as_str()),
         ("public_key_encoding", "x-only-bip340-hex-lowercase"),
     ];
@@ -1705,7 +2593,23 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
         ("index".to_string(), "channel_sessions_peer_idx".to_string()),
         (
             "index".to_string(),
+            "enrollment_audits_node_idx".to_string(),
+        ),
+        (
+            "index".to_string(),
+            "enrollment_audits_request_idx".to_string(),
+        ),
+        (
+            "index".to_string(),
             "enrollment_replays_expiry_idx".to_string(),
+        ),
+        (
+            "index".to_string(),
+            "manual_enrollment_requests_pairing_idx".to_string(),
+        ),
+        (
+            "index".to_string(),
+            "manual_enrollment_requests_state_idx".to_string(),
         ),
         ("index".to_string(), "peers_state_idx".to_string()),
         (
@@ -1723,8 +2627,13 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
         ),
         ("table".to_string(), "audit_events".to_string()),
         ("table".to_string(), "channel_sessions".to_string()),
+        ("table".to_string(), "enrollment_audits".to_string()),
         ("table".to_string(), "enrollment_replays".to_string()),
         ("table".to_string(), "inbox".to_string()),
+        (
+            "table".to_string(),
+            "manual_enrollment_requests".to_string(),
+        ),
         ("table".to_string(), "metadata".to_string()),
         ("table".to_string(), "peers".to_string()),
         ("table".to_string(), "remote_identities".to_string()),
@@ -1742,6 +2651,18 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
         (
             "trigger".to_string(),
             "channel_sessions_active_update_requires_trust".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "enrollment_audits_no_delete".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "enrollment_audits_no_update".to_string(),
+        ),
+        (
+            "trigger".to_string(),
+            "manual_enrollment_request_immutable".to_string(),
         ),
         (
             "trigger".to_string(),
@@ -2218,6 +3139,65 @@ fn insert_v2_identity_projection(
     Ok(())
 }
 
+fn insert_v2_pending_transport_projection(
+    transaction: &Transaction<'_>,
+    registration: &PeerRegistration,
+    now: i64,
+    certificate: &[u8],
+) -> Result<(), RegistryError> {
+    let certificate = TransportCertificate::from_bytes(certificate)
+        .map_err(|_| RegistryError::InvalidInput("transport certificate is invalid".into()))?;
+    let identity_key = decode_hex(&registration.public_key)?;
+    if certificate.node_id() != registration.node_id
+        || certificate.identity_key().as_slice() != identity_key.as_slice()
+    {
+        return Err(RegistryError::InvalidInput(
+            "transport certificate does not match trusted identity".into(),
+        ));
+    }
+    let key_epoch = certificate.key_epoch();
+    if key_epoch == 0 {
+        return Err(RegistryError::InvalidInput(
+            "transport certificate epoch must be positive".into(),
+        ));
+    }
+    transaction.execute(
+        "INSERT INTO transport_key_epochs
+         (node_id, key_epoch, public_key, certificate, state, added_at, retired_at)
+         VALUES (?1, ?2, ?3, ?4, 'pending', ?5, NULL)",
+        params![
+            registration.node_id,
+            i64::try_from(key_epoch).map_err(|_| {
+                RegistryError::InvalidInput("transport certificate epoch is too large".into())
+            })?,
+            certificate.transport_public().as_slice(),
+            certificate.as_bytes().as_slice(),
+            now,
+        ],
+    )?;
+    Ok(())
+}
+
+fn registration_from_manual(
+    request: &ManualEnrollmentRequest,
+    actor: &str,
+    reason: &str,
+) -> Result<PeerRegistration, RegistryError> {
+    let role = match request.role {
+        crate::enrollment::EnrollmentRole::Conductor => PeerRole::Conductor,
+        crate::enrollment::EnrollmentRole::Performer => PeerRole::Performer,
+    };
+    Ok(PeerRegistration {
+        node_id: request.proposer_node_id.clone(),
+        public_key: request.public_key_hex(),
+        role,
+        capabilities: request.capabilities.clone(),
+        source: PeerSource::Manual,
+        actor: actor.to_string(),
+        reason: reason.to_string(),
+    })
+}
+
 fn project_v2_transition(
     transaction: &Transaction<'_>,
     current: &PeerRecord,
@@ -2523,6 +3503,105 @@ mod tests {
         .unwrap()
     }
 
+    fn seed_v3_pending_enrollment() -> (TempDir, NodeContext, NodeRegistry, [u8; 16], String) {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        fs::remove_file(context.database_path()).unwrap();
+
+        let mut connection = Connection::open(context.database_path()).unwrap();
+        configure_connection(&mut connection).unwrap();
+        let transaction = connection.transaction().unwrap();
+        create_schema(&transaction, &registry).unwrap();
+        transaction
+            .execute_batch("PRAGMA user_version = 1")
+            .unwrap();
+        transaction.commit().unwrap();
+        migrate_v1_to_v2(&mut connection, &registry).unwrap();
+        migrate_v2_to_v3(&mut connection).unwrap();
+
+        let remote_key = k256::schnorr::SigningKey::from_slice(&[3; 32]).unwrap();
+        let remote_xonly = remote_key.verifying_key().to_bytes();
+        let remote_public_key = remote_xonly
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let remote_node_id = node_id_for_x_only_public_key(&remote_xonly);
+        let request_id = [0x11; 16];
+        let transport_key = [9u8; 32];
+        let certificate = [0u8; 245];
+        let code_hash = [7u8; 32];
+        let certificate_digest = [8u8; 32];
+        let certificate_id = [6u8; 16];
+        let request_bytes = b"OMMA legacy v1 request".to_vec();
+        let request_digest = digest(&request_bytes);
+        let capabilities = "[\"remote-run\"]";
+        let now = now_timestamp();
+        let transaction = connection.transaction().unwrap();
+        transaction
+            .execute(
+                "INSERT INTO peers
+                 (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
+                 VALUES (?1, ?2, 'performer', 'pending', ?3, ?4, ?4, NULL, 'manual')",
+                params![remote_node_id, remote_public_key, capabilities, now],
+            )
+            .unwrap();
+        transaction
+            .execute(
+                "INSERT INTO remote_identities
+                 (node_id, identity_key, state, first_seen, revoked_at)
+                 VALUES (?1, ?2, 'authenticated_untrusted', 100, NULL)",
+                params![remote_node_id, remote_xonly.as_slice()],
+            )
+            .unwrap();
+        transaction
+            .execute(
+                "INSERT INTO transport_key_epochs
+                 (node_id, key_epoch, public_key, certificate, state, added_at, retired_at)
+                 VALUES (?1, 1, ?2, ?3, 'pending', 100, NULL)",
+                params![
+                    remote_node_id,
+                    transport_key.as_slice(),
+                    certificate.as_slice()
+                ],
+            )
+            .unwrap();
+        transaction
+            .execute(
+                "INSERT INTO manual_enrollment_requests
+                 (request_id, request_bytes, request_digest, code_hash, node_id, identity_key,
+                  transport_key, role, capabilities, request_created_at, request_expires_at,
+                  certificate, certificate_digest, certificate_id, key_epoch, not_before, not_after,
+                  state, source, staged_at, resolved_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 2, ?8, 100, 200, ?9, ?10, ?11, 1, 100, 200,
+                         'pending', 'manual', 100, NULL)",
+                params![
+                    request_id.as_slice(),
+                    &request_bytes,
+                    request_digest.as_slice(),
+                    code_hash.as_slice(),
+                    remote_node_id,
+                    remote_xonly.as_slice(),
+                    transport_key.as_slice(),
+                    capabilities.as_bytes(),
+                    certificate.as_slice(),
+                    certificate_digest.as_slice(),
+                    certificate_id.as_slice(),
+                ],
+            )
+            .unwrap();
+        transaction
+            .execute(
+                "INSERT INTO enrollment_replays (replay_kind, replay_id, expires_at, first_seen)
+                 VALUES ('manual_request', ?1, 1000, 100)",
+                [request_id.as_slice()],
+            )
+            .unwrap();
+        transaction.commit().unwrap();
+        (temp, context, registry, request_id, remote_node_id)
+    }
+
     fn registration(identity: &NodeIdentity, scalar: u8) -> PeerRegistration {
         let key = k256::schnorr::SigningKey::from_slice(&[scalar; 32]).unwrap();
         let public_key = key.verifying_key().to_bytes();
@@ -2695,13 +3774,159 @@ mod tests {
     }
 
     #[test]
+    fn v3_pending_legacy_enrollment_is_terminalized_with_redacted_evidence() {
+        let (_temp, context, registry, request_id, remote_node_id) = seed_v3_pending_enrollment();
+        let mut connection = Connection::open(context.database_path()).unwrap();
+        configure_connection(&mut connection).unwrap();
+        migrate_v3_to_v4(&mut connection).unwrap();
+        validate_schema(&connection, &registry).unwrap();
+        set_new_database_mode(&context.database_path()).unwrap();
+        drop(connection);
+
+        let identity = NodeIdentity::load_existing(&context).unwrap();
+        let reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        let peer = reopened.peer(&remote_node_id).unwrap().unwrap();
+        assert_eq!(peer.state, PeerState::Suspended);
+
+        let connection = Connection::open(context.database_path()).unwrap();
+        let request_state: (String, Option<Vec<u8>>) = connection
+            .query_row(
+                "SELECT state, pairing_id FROM manual_enrollment_requests WHERE request_id = ?1",
+                [request_id.as_slice()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(request_state.0, "rejected");
+        assert!(request_state.1.is_none());
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM manual_enrollment_requests WHERE state = 'pending'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM enrollment_replays WHERE replay_kind = 'manual_request' AND replay_id = ?1",
+                    [request_id.as_slice()],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            1
+        );
+        let audit: (String, String, String, Vec<u8>) = connection
+            .query_row(
+                "SELECT event_code, outcome, detail, request_digest
+                 FROM enrollment_audits WHERE request_id = ?1",
+                [request_id.as_slice()],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(audit.0, "legacy_expired");
+        assert_eq!(audit.1, "rejected");
+        assert_eq!(
+            audit.2,
+            "legacy manual enrollment request expired during schema migration"
+        );
+        assert_eq!(audit.3.len(), 32);
+        assert!(!audit.2.contains("OMMA"));
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM remote_identities WHERE state = 'active'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM trusted_peers WHERE state = 'active'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn v3_migration_rolls_back_when_legacy_audit_cannot_be_recorded() {
+        let (_temp, context, registry, request_id, remote_node_id) = seed_v3_pending_enrollment();
+        let connection = Connection::open(context.database_path()).unwrap();
+        connection
+            .execute_batch(
+                "DROP TRIGGER enrollment_audits_no_update;
+                 CREATE TRIGGER enrollment_audits_no_update
+                 BEFORE INSERT ON enrollment_audits
+                 BEGIN SELECT RAISE(ABORT, 'injected migration audit failure'); END;",
+            )
+            .unwrap();
+        drop(connection);
+
+        let mut connection = Connection::open(context.database_path()).unwrap();
+        configure_connection(&mut connection).unwrap();
+        assert!(migrate_v3_to_v4(&mut connection).is_err());
+        assert_eq!(
+            connection
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            3
+        );
+        assert!(connection
+            .query_row(
+                "SELECT 1 FROM pragma_table_info('manual_enrollment_requests') WHERE name = 'pairing_id'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT state FROM manual_enrollment_requests WHERE request_id = ?1",
+                    [request_id.as_slice()],
+                    |row| row.get::<_, String>(0),
+                )
+                .unwrap(),
+            "pending"
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT state FROM peers WHERE node_id = ?1",
+                    [&remote_node_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .unwrap(),
+            "pending"
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT COUNT(*) FROM enrollment_audits", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .unwrap(),
+            0
+        );
+        assert!(registry.path().exists());
+    }
+
+    #[test]
     fn future_schema_corruption_and_metadata_downgrade_fail_closed() {
         let temp = TempDir::new().unwrap();
         let ctx = context(&temp);
         let identity = NodeIdentity::load_or_initialize(&ctx).unwrap();
         let database = ctx.database_path();
         let connection = Connection::open(&database).unwrap();
-        connection.execute_batch("PRAGMA user_version = 3").unwrap();
+        connection.execute_batch("PRAGMA user_version = 5").unwrap();
         assert!(matches!(
             NodeRegistry::open(&ctx, identity.public_status()),
             Err(RegistryError::InvalidSchema(_))

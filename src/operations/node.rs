@@ -1,4 +1,5 @@
 use crate::domain::{NodeConfig, NodeConfigError};
+use crate::enrollment::{self, EnrollmentError, EnrollmentRole, ManualEnrollmentRequest};
 use crate::node::{NodeContext, NodeError, NodePathOverrides};
 use crate::node_identity::{NodeIdentity, NodeIdentityError};
 use crate::node_registry::{
@@ -115,6 +116,36 @@ pub struct RevocationRequest {
     pub actor: String,
     pub reason: String,
     pub confirmed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ManualEnrollmentApprovalRequest {
+    pub request_hex: String,
+    pub transport_certificate: String,
+    pub code: String,
+    pub actor: String,
+    pub reason: String,
+    pub confirmed: bool,
+    pub expected_node_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ManualEnrollmentRejectionRequest {
+    pub node_id: String,
+    pub actor: String,
+    pub reason: String,
+    pub confirmed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ManualEnrollmentResult {
+    pub pairing_id: String,
+    pub request_id: String,
+    pub request_hex: String,
+    pub code: String,
+    pub state: String,
+    pub reciprocal_request_hex: Option<String>,
+    pub reciprocal_code: Option<String>,
 }
 
 pub fn initialize_node(
@@ -384,6 +415,270 @@ pub fn revoke_peer(
         .map(public_peer)
 }
 
+pub fn manual_enrollment_enabled(context: &NodeContext) -> OperationResult<()> {
+    let config = read_node_config(context)?
+        .ok_or_else(|| registry_error("node configuration is missing"))?;
+    if config.trust.enrollment != "manual" {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentDisabled,
+            "manual enrollment is not enabled",
+        ));
+    }
+    Ok(())
+}
+
+pub fn stage_manual_enrollment(
+    context: &NodeContext,
+    request: &ManualEnrollmentRequest,
+    transport_certificate: &[u8],
+) -> OperationResult<PublicPeer> {
+    manual_enrollment_enabled(context)?;
+    request
+        .verify(enrollment::now_seconds())
+        .map_err(map_enrollment_error)?;
+    let registry = open_initialized_registry(context)?;
+    registry
+        .stage_manual_enrollment(
+            request,
+            transport_certificate,
+            "authenticated-untrusted",
+            "authenticated manual enrollment request",
+            enrollment::now_seconds(),
+        )
+        .map_err(map_registry_error)
+        .map(public_peer)
+}
+
+pub fn stage_manual_enrollment_hex(
+    context: &NodeContext,
+    request_hex: &str,
+    transport_certificate_hex: &str,
+) -> OperationResult<PublicPeer> {
+    let request_bytes = decode_request(request_hex)?;
+    let request = ManualEnrollmentRequest::decode(&request_bytes).map_err(map_enrollment_error)?;
+    let certificate = decode_fixed_hex(
+        transport_certificate_hex,
+        crate::direct_transport::MAX_CERTIFICATE_BYTES,
+        "transport certificate",
+    )?;
+    stage_manual_enrollment(context, &request, &certificate)
+}
+
+pub fn approve_manual_enrollment(
+    context: &NodeContext,
+    request: ManualEnrollmentApprovalRequest,
+) -> OperationResult<PublicPeer> {
+    require_confirmation(request.confirmed)?;
+    manual_enrollment_enabled(context)?;
+    let request_bytes = decode_request(&request.request_hex)?;
+    let enrollment_request =
+        ManualEnrollmentRequest::decode(&request_bytes).map_err(map_enrollment_error)?;
+    if request
+        .expected_node_id
+        .as_deref()
+        .is_some_and(|node_id| node_id != enrollment_request.proposer_node_id.as_str())
+    {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentMismatch,
+            "enrollment path node ID does not match request identity",
+        ));
+    }
+    let certificate = decode_fixed_hex(
+        &request.transport_certificate,
+        crate::direct_transport::MAX_CERTIFICATE_BYTES,
+        "transport certificate",
+    )?;
+    let code = decode_fixed_hex(&request.code, enrollment::CODE_BYTES, "approval code")?;
+    let registry = open_initialized_registry(context)?;
+    registry
+        .approve_manual_enrollment(
+            &enrollment_request,
+            &certificate,
+            &code,
+            &request.actor,
+            &request.reason,
+            enrollment::now_seconds(),
+        )
+        .map_err(map_registry_error)
+        .map(public_peer)
+}
+
+pub fn reject_manual_enrollment(
+    context: &NodeContext,
+    request: ManualEnrollmentRejectionRequest,
+) -> OperationResult<PublicPeer> {
+    require_confirmation(request.confirmed)?;
+    manual_enrollment_enabled(context)?;
+    let registry = open_initialized_registry(context)?;
+    registry
+        .reject_manual_enrollment(&request.node_id, &request.actor, &request.reason)
+        .map_err(|error| {
+            if matches!(error, RegistryError::InvalidTransition { .. }) {
+                OperationError::new(OperationErrorCode::EnrollmentDenied, error.to_string())
+            } else {
+                map_registry_error(error)
+            }
+        })
+        .map(public_peer)
+}
+
+pub fn request_manual_enrollment(
+    context: &NodeContext,
+    endpoint: std::net::SocketAddr,
+    role: &str,
+    capabilities: Vec<String>,
+    lifetime_seconds: u64,
+) -> OperationResult<ManualEnrollmentResult> {
+    manual_enrollment_enabled(context)?;
+    let role = parse_enrollment_role(role)?;
+    let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
+    let transport = LocalTransport::load_existing(context, &identity).map_err(|error| {
+        OperationError::new(
+            OperationErrorCode::RegistryInvalid,
+            format!("transport state is invalid or insecure: {error}"),
+        )
+    })?;
+    let offer = enrollment::ManualEnrollmentRequest::create(
+        &identity,
+        *transport.certificate().transport_public(),
+        role,
+        capabilities,
+        enrollment::now_seconds(),
+        lifetime_seconds,
+    )
+    .map_err(map_enrollment_error)?;
+    let reciprocal = crate::direct_service::request_manual_enrollment(
+        endpoint,
+        context,
+        &offer.request.encode(),
+    )
+    .map_err(map_direct_enrollment_error)?;
+    if reciprocal.is_none() {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentDenied,
+            "remote node did not stage the manual enrollment request",
+        ));
+    }
+    let (reciprocal_request_hex, reciprocal_code) = reciprocal
+        .map(|(request, code)| {
+            (
+                enrollment::hex_bytes(&request),
+                enrollment::hex_bytes(&code),
+            )
+        })
+        .unzip();
+    Ok(ManualEnrollmentResult {
+        pairing_id: offer.request.pairing_id_hex(),
+        request_id: offer.request.request_id_hex(),
+        request_hex: offer.request_hex(),
+        code: offer.code_hex(),
+        state: "pending".to_string(),
+        reciprocal_request_hex,
+        reciprocal_code,
+    })
+}
+
+pub fn list_pending_enrollments(context: &NodeContext) -> OperationResult<Vec<PublicPeer>> {
+    manual_enrollment_enabled(context)?;
+    Ok(list_trusted_peers(context)?
+        .into_iter()
+        .filter(|peer| peer.state == "pending" && peer.source == "manual")
+        .collect())
+}
+
+fn decode_request(value: &str) -> OperationResult<Vec<u8>> {
+    if value.is_empty() || value.len() > enrollment::MAX_REQUEST_BYTES * 2 {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentInvalid,
+            "manual enrollment request bytes are invalid",
+        ));
+    }
+    if !value.len().is_multiple_of(2)
+        || value
+            .bytes()
+            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
+    {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentInvalid,
+            "manual enrollment request bytes must be lowercase hexadecimal",
+        ));
+    }
+    (0..value.len())
+        .step_by(2)
+        .map(|index| {
+            u8::from_str_radix(&value[index..index + 2], 16).map_err(|_| {
+                OperationError::new(
+                    OperationErrorCode::EnrollmentInvalid,
+                    "manual enrollment request bytes are invalid",
+                )
+            })
+        })
+        .collect()
+}
+
+fn decode_fixed_hex(value: &str, bytes: usize, label: &str) -> OperationResult<Vec<u8>> {
+    enrollment::parse_hex(value, bytes).map_err(|_| {
+        OperationError::new(
+            OperationErrorCode::EnrollmentInvalid,
+            format!("{label} must be lowercase hexadecimal bytes"),
+        )
+    })
+}
+
+fn map_enrollment_error(error: EnrollmentError) -> OperationError {
+    let code = match error {
+        EnrollmentError::Expired => OperationErrorCode::EnrollmentExpired,
+        EnrollmentError::Replay => OperationErrorCode::EnrollmentReplay,
+        EnrollmentError::IdentityMismatch => OperationErrorCode::EnrollmentMismatch,
+        EnrollmentError::Invalid | EnrollmentError::TooLarge => {
+            OperationErrorCode::EnrollmentInvalid
+        }
+    };
+    OperationError::new(code, error.to_string())
+}
+
+fn map_direct_enrollment_error(error: crate::direct_service::DirectServiceError) -> OperationError {
+    let code = match error {
+        crate::direct_service::DirectServiceError::Protocol(ref error) => match error.code() {
+            crate::direct_transport::ProtocolErrorCode::UnsupportedVersion => {
+                OperationErrorCode::TransportUnsupportedVersion
+            }
+            crate::direct_transport::ProtocolErrorCode::InvalidFrame => {
+                OperationErrorCode::TransportInvalidFrame
+            }
+            crate::direct_transport::ProtocolErrorCode::MessageTooLarge => {
+                OperationErrorCode::TransportMessageTooLarge
+            }
+            crate::direct_transport::ProtocolErrorCode::HandshakeFailed => {
+                OperationErrorCode::TransportHandshakeFailed
+            }
+            crate::direct_transport::ProtocolErrorCode::IdentityMismatch => {
+                OperationErrorCode::TransportIdentityMismatch
+            }
+            crate::direct_transport::ProtocolErrorCode::NotEnrolled => {
+                OperationErrorCode::TransportNotEnrolled
+            }
+            crate::direct_transport::ProtocolErrorCode::Revoked => {
+                OperationErrorCode::TransportRevoked
+            }
+            crate::direct_transport::ProtocolErrorCode::Expired => {
+                OperationErrorCode::TransportExpired
+            }
+            crate::direct_transport::ProtocolErrorCode::Replay => {
+                OperationErrorCode::TransportReplay
+            }
+            crate::direct_transport::ProtocolErrorCode::RateLimited => {
+                OperationErrorCode::TransportRateLimited
+            }
+            crate::direct_transport::ProtocolErrorCode::Internal => {
+                OperationErrorCode::TransportInternal
+            }
+        },
+        _ => OperationErrorCode::TransportInternal,
+    };
+    OperationError::new(code, error.to_string())
+}
+
 fn open_initialized_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
     NodeRegistry::open_existing(context, identity.public_status()).map_err(map_registry_error)
@@ -476,6 +771,17 @@ fn parse_role(value: &str) -> OperationResult<PeerRole> {
         "performer" => Ok(PeerRole::Performer),
         _ => Err(OperationError::new(
             OperationErrorCode::InvalidInput,
+            "role must be conductor or performer",
+        )),
+    }
+}
+
+fn parse_enrollment_role(value: &str) -> OperationResult<EnrollmentRole> {
+    match value {
+        "conductor" => Ok(EnrollmentRole::Conductor),
+        "performer" => Ok(EnrollmentRole::Performer),
+        _ => Err(OperationError::new(
+            OperationErrorCode::EnrollmentInvalid,
             "role must be conductor or performer",
         )),
     }
@@ -581,6 +887,21 @@ fn map_registry_error(error: RegistryError) -> OperationError {
         RegistryError::SelfTrust => {
             OperationError::new(OperationErrorCode::Conflict, "peer cannot trust itself")
         }
+        RegistryError::EnrollmentReplay => OperationError::new(
+            OperationErrorCode::EnrollmentReplay,
+            "manual enrollment request was replayed",
+        ),
+        RegistryError::EnrollmentConflict => OperationError::new(
+            OperationErrorCode::Conflict,
+            "manual enrollment conflicts with existing trust state",
+        ),
+        RegistryError::EnrollmentCapacity => {
+            registry_error("manual enrollment replay capacity is exhausted")
+        }
+        RegistryError::EnrollmentMismatch => OperationError::new(
+            OperationErrorCode::EnrollmentMismatch,
+            "manual enrollment evidence does not match staged state",
+        ),
     }
 }
 
@@ -596,6 +917,7 @@ fn registry_error(message: impl Into<String>) -> OperationError {
 mod tests {
     use super::*;
     use crate::node::{NodePathOverrides, NodePlatform};
+    use rusqlite::Connection;
     use tempfile::TempDir;
 
     fn context(temp: &TempDir) -> NodeContext {
@@ -611,6 +933,29 @@ mod tests {
             None,
         )
         .unwrap()
+    }
+
+    fn fail_enrollment_audits(context: &NodeContext, enabled: bool) {
+        let connection = Connection::open(context.database_path()).unwrap();
+        if enabled {
+            connection
+                .execute_batch(
+                    "DROP TRIGGER enrollment_audits_no_update;
+                     CREATE TRIGGER enrollment_audits_no_update
+                     BEFORE INSERT ON enrollment_audits
+                     BEGIN SELECT RAISE(ABORT, 'injected enrollment audit failure'); END;",
+                )
+                .unwrap();
+        } else {
+            connection
+                .execute_batch(
+                    "DROP TRIGGER enrollment_audits_no_update;
+                     CREATE TRIGGER enrollment_audits_no_update
+                     BEFORE UPDATE ON enrollment_audits
+                     BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;",
+                )
+                .unwrap();
+        }
     }
 
     fn peer_request(identity: &NodeIdentity) -> ManualTrustRequest {
@@ -744,6 +1089,148 @@ mod tests {
             },
         )
         .is_err());
+    }
+
+    #[test]
+    fn manual_enrollment_stages_requires_code_and_promotes_atomically() {
+        let target_temp = TempDir::new().unwrap();
+        let candidate_temp = TempDir::new().unwrap();
+        let target = context(&target_temp);
+        let candidate = context(&candidate_temp);
+        let mut target_config = NodeConfig::default();
+        target_config.trust.enrollment = "manual".into();
+        initialize_node(&target, &target_config).unwrap();
+        initialize_node(&candidate, &NodeConfig::default()).unwrap();
+
+        let candidate_identity = NodeIdentity::load_existing(&candidate).unwrap();
+        let candidate_transport =
+            crate::node_transport::LocalTransport::load_existing(&candidate, &candidate_identity)
+                .unwrap();
+        let offer = ManualEnrollmentRequest::create(
+            &candidate_identity,
+            *candidate_transport.certificate().transport_public(),
+            EnrollmentRole::Performer,
+            vec!["remote-run".into()],
+            enrollment::now_seconds(),
+            300,
+        )
+        .unwrap();
+        let certificate_hex = candidate_transport
+            .certificate()
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+
+        fail_enrollment_audits(&target, true);
+        let stage_error = stage_manual_enrollment(
+            &target,
+            &offer.request,
+            candidate_transport.certificate().as_bytes(),
+        )
+        .unwrap_err();
+        assert_eq!(stage_error.code, OperationErrorCode::RegistryInvalid);
+        assert!(list_pending_enrollments(&target).unwrap().is_empty());
+        fail_enrollment_audits(&target, false);
+
+        let pending = stage_manual_enrollment(
+            &target,
+            &offer.request,
+            candidate_transport.certificate().as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(pending.state, "pending");
+        assert_eq!(list_pending_enrollments(&target).unwrap().len(), 1);
+
+        fail_enrollment_audits(&target, true);
+        let denied = approve_manual_enrollment(
+            &target,
+            ManualEnrollmentApprovalRequest {
+                request_hex: offer.request_hex(),
+                transport_certificate: certificate_hex.clone(),
+                code: [0u8; enrollment::CODE_BYTES]
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect(),
+                actor: "operator".into(),
+                reason: "wrong code".into(),
+                confirmed: true,
+                expected_node_id: None,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(denied.code, OperationErrorCode::RegistryInvalid);
+        assert_eq!(list_pending_enrollments(&target).unwrap().len(), 1);
+        fail_enrollment_audits(&target, false);
+
+        let approved = approve_manual_enrollment(
+            &target,
+            ManualEnrollmentApprovalRequest {
+                request_hex: offer.request_hex(),
+                transport_certificate: certificate_hex,
+                code: offer
+                    .code
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect(),
+                actor: "operator".into(),
+                reason: "approved manually".into(),
+                confirmed: true,
+                expected_node_id: Some(offer.request.proposer_node_id.clone()),
+            },
+        )
+        .unwrap();
+        assert_eq!(approved.state, "active");
+        assert!(list_pending_enrollments(&target).unwrap().is_empty());
+        assert_eq!(list_trusted_peers(&target).unwrap()[0].state, "active");
+    }
+
+    #[test]
+    fn manual_enrollment_rejection_audit_failure_is_atomic() {
+        let target_temp = TempDir::new().unwrap();
+        let candidate_temp = TempDir::new().unwrap();
+        let target = context(&target_temp);
+        let candidate = context(&candidate_temp);
+        let mut target_config = NodeConfig::default();
+        target_config.trust.enrollment = "manual".into();
+        initialize_node(&target, &target_config).unwrap();
+        initialize_node(&candidate, &NodeConfig::default()).unwrap();
+
+        let candidate_identity = NodeIdentity::load_existing(&candidate).unwrap();
+        let candidate_transport =
+            crate::node_transport::LocalTransport::load_existing(&candidate, &candidate_identity)
+                .unwrap();
+        let offer = ManualEnrollmentRequest::create(
+            &candidate_identity,
+            *candidate_transport.certificate().transport_public(),
+            EnrollmentRole::Performer,
+            vec!["remote-run".into()],
+            enrollment::now_seconds(),
+            300,
+        )
+        .unwrap();
+        let pending = stage_manual_enrollment(
+            &target,
+            &offer.request,
+            candidate_transport.certificate().as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(pending.state, "pending");
+
+        fail_enrollment_audits(&target, true);
+        let error = reject_manual_enrollment(
+            &target,
+            ManualEnrollmentRejectionRequest {
+                node_id: offer.request.proposer_node_id.clone(),
+                actor: "operator".into(),
+                reason: "reject test".into(),
+                confirmed: true,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.code, OperationErrorCode::RegistryInvalid);
+        assert_eq!(list_pending_enrollments(&target).unwrap().len(), 1);
+        fail_enrollment_audits(&target, false);
     }
 
     #[test]

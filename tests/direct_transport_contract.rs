@@ -3,9 +3,13 @@ use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
 };
+use omakure::enrollment::{EnrollmentRole, ManualEnrollmentRequest};
+use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
+use omakure::node_identity::NodeIdentity;
 use sha2::{Digest, Sha256};
 use snow::{params::NoiseParams, Builder, HandshakeState, TransportState};
 use std::collections::BTreeSet;
+use tempfile::TempDir;
 
 const CERT_MAGIC: &[u8; 4] = b"OMTC";
 const CERT_DOMAIN: &[u8] = b"omakure/transport-cert/v1\0";
@@ -415,11 +419,57 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
     let initiator_vector = vector_by_name(&fixture, "public-initiator-vector");
     let initiator_certificate = certificate(initiator_vector);
     let signed_manual = signed_manual_request(&fixture, initiator_vector);
-    assert!(verify_signed_manual_request(initiator_vector, &signed_manual).is_ok());
+    assert!(verify_signed_manual_request(&fixture, initiator_vector, &signed_manual).is_ok());
+    let production_manual = production_manual_request(&fixture, initiator_vector);
+    assert_eq!(production_manual, bytes(&fixture, "manual_request_hex"));
+    assert_eq!(
+        hex(&production_manual[production_manual.len() - 64..]),
+        fixture["manual_signature_hex"].as_str().unwrap()
+    );
+    let parsed_manual = ManualEnrollmentRequest::decode(&production_manual).unwrap();
+    parsed_manual
+        .verify(u64_value(&fixture, "manual_created_at"))
+        .unwrap();
+    assert_eq!(parsed_manual.encode(), production_manual);
+    for offset in 5..21 {
+        let mut mutated = production_manual.clone();
+        mutated[offset] ^= 1;
+        let parsed = ManualEnrollmentRequest::decode(&mutated).unwrap();
+        assert!(parsed
+            .verify(u64_value(&fixture, "manual_created_at"))
+            .is_err());
+
+        let mut pairing = bytes(&fixture, "manual_pairing_id_hex");
+        pairing[offset - 5] ^= 1;
+        let resigned = production_manual_request_with_pairing(
+            &fixture,
+            initiator_vector,
+            pairing.try_into().unwrap(),
+        );
+        let resigned = ManualEnrollmentRequest::decode(&resigned.unwrap()).unwrap();
+        resigned
+            .verify(u64_value(&fixture, "manual_created_at"))
+            .unwrap();
+        assert_ne!(resigned.signature, parsed_manual.signature);
+    }
+    let mut zero_pairing = bytes(&fixture, "manual_pairing_id_hex");
+    zero_pairing.fill(0);
+    assert!(production_manual_request_with_pairing(
+        &fixture,
+        initiator_vector,
+        zero_pairing.try_into().unwrap(),
+    )
+    .is_err());
+    let mut wrong_version = production_manual.clone();
+    wrong_version[4] = 1;
+    assert!(ManualEnrollmentRequest::decode(&wrong_version).is_err());
+    assert!(
+        ManualEnrollmentRequest::decode(&[production_manual.clone(), vec![0]].concat()).is_err()
+    );
     for offset in [4, 21, 90, 122, 154, 171, 179, 187] {
         let mut mutated = signed_manual.clone();
         mutated[offset] ^= 1;
-        assert!(verify_signed_manual_request(initiator_vector, &mutated).is_err());
+        assert!(verify_signed_manual_request(&fixture, initiator_vector, &mutated).is_err());
     }
     let signed_bundle_bytes = signed_bundle(initiator_vector, &initiator_certificate);
     assert_eq!(signed_bundle_bytes.len(), 604);
@@ -545,6 +595,51 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
         mutated[offset] ^= 1;
         assert!(verify_signed_bundle(vector, &mutated).is_err());
     }
+}
+
+fn production_manual_request(fixture: &toml::Value, vector: &toml::Value) -> Vec<u8> {
+    production_manual_request_with_pairing(
+        fixture,
+        vector,
+        bytes(fixture, "manual_pairing_id_hex").try_into().unwrap(),
+    )
+    .unwrap()
+}
+
+fn production_manual_request_with_pairing(
+    fixture: &toml::Value,
+    vector: &toml::Value,
+    pairing_id: [u8; 16],
+) -> Result<Vec<u8>, omakure::enrollment::EnrollmentError> {
+    let temp = TempDir::new().unwrap();
+    let context = NodeContext::resolve_for(
+        NodePlatform::Linux,
+        NodePathOverrides::new(
+            Some(temp.path().join("state")),
+            Some(temp.path().join("node.toml")),
+        ),
+        true,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let identity =
+        NodeIdentity::import(&context, &bytes(vector, "identity_private_key_hex")).unwrap();
+    let offer = ManualEnrollmentRequest::create_with_material(
+        &identity,
+        bytes(vector, "transport_public_key_hex")
+            .try_into()
+            .unwrap(),
+        EnrollmentRole::Conductor,
+        vec!["baseline-push".to_string()],
+        u64_value(fixture, "manual_created_at"),
+        u64_value(fixture, "manual_expires_at") - u64_value(fixture, "manual_created_at"),
+        pairing_id,
+        bytes(fixture, "manual_request_id_hex").try_into().unwrap(),
+        bytes(fixture, "manual_code_hex").try_into().unwrap(),
+    )?;
+    Ok(offer.request.encode())
 }
 
 #[test]
@@ -1104,7 +1199,8 @@ impl WriteFailureModel {
 fn signed_manual_request(fixture: &toml::Value, vector: &toml::Value) -> Vec<u8> {
     let mut body = Vec::new();
     body.extend_from_slice(b"OMMA");
-    body.push(1);
+    body.push(2);
+    body.extend_from_slice(&bytes(fixture, "manual_pairing_id_hex"));
     body.extend_from_slice(&bytes(fixture, "manual_request_id_hex"));
     body.extend_from_slice(vector["node_id"].as_str().unwrap().as_bytes());
     body.extend_from_slice(&bytes(vector, "identity_x_only_public_key_hex"));
@@ -1125,39 +1221,46 @@ fn signed_manual_request(fixture: &toml::Value, vector: &toml::Value) -> Vec<u8>
     body
 }
 
-fn verify_signed_manual_request(vector: &toml::Value, request: &[u8]) -> Result<(), &'static str> {
+fn verify_signed_manual_request(
+    fixture: &toml::Value,
+    vector: &toml::Value,
+    request: &[u8],
+) -> Result<(), &'static str> {
     if request.len() > 2_048 || request.len() < 64 || &request[..4] != b"OMMA" {
         return Err("manual_shape");
     }
-    if request[4] != 1 || request.len() != 283 {
+    if request[4] != 2 || request.len() != 299 {
         return Err("manual_version_or_length");
     }
-    if request[5..21] != decode_hex("00000000000000000000000000000001")[..] {
+    if request[5..21] != bytes(fixture, "manual_pairing_id_hex")[..] {
+        return Err("manual_pairing_id");
+    }
+    if request[21..37] != decode_hex("00000000000000000000000000000001")[..] {
         return Err("manual_request_id");
     }
-    let proposer_node_id = std::str::from_utf8(&request[21..90]).map_err(|_| "manual_node_id")?;
+    let proposer_node_id = std::str::from_utf8(&request[37..106]).map_err(|_| "manual_node_id")?;
     if proposer_node_id != vector["node_id"].as_str().unwrap() {
         return Err("manual_node_id");
     }
-    let proposer_key = &request[90..122];
+    let proposer_key = &request[106..138];
     if node_id_from_public(proposer_key) != proposer_node_id {
         return Err("manual_identity_mismatch");
     }
     if proposer_key != bytes(vector, "identity_x_only_public_key_hex")
-        || request[122..154] != bytes(vector, "transport_public_key_hex")[..]
-        || role_result(request[154]) == "invalid_role"
-        || request[155] != 1
-        || u16::from_be_bytes(request[156..158].try_into().unwrap()) != 13
-        || &request[158..171] != b"baseline-push"
+        || request[138..170] != bytes(vector, "transport_public_key_hex")[..]
+        || role_result(request[170]) == "invalid_role"
+        || request[171] != 1
+        || u16::from_be_bytes(request[172..174].try_into().unwrap()) != 13
+        || &request[174..187] != b"baseline-push"
     {
         return Err("manual_fields");
     }
-    if u64::from_be_bytes(request[171..179].try_into().unwrap()) != 1_700_000_000
-        || u64::from_be_bytes(request[179..187].try_into().unwrap()) != 1_702_592_000
-        || u64::from_be_bytes(request[179..187].try_into().unwrap())
-            <= u64::from_be_bytes(request[171..179].try_into().unwrap())
-        || u64::from_be_bytes(request[179..187].try_into().unwrap())
-            - u64::from_be_bytes(request[171..179].try_into().unwrap())
+    if u64::from_be_bytes(request[187..195].try_into().unwrap()) != 1_700_000_000
+        || u64::from_be_bytes(request[195..203].try_into().unwrap()) != 1_702_592_000
+        || u64::from_be_bytes(request[195..203].try_into().unwrap())
+            <= u64::from_be_bytes(request[187..195].try_into().unwrap())
+        || u64::from_be_bytes(request[195..203].try_into().unwrap())
+            - u64::from_be_bytes(request[187..195].try_into().unwrap())
             > 30 * 24 * 60 * 60
     {
         return Err("manual_validity");
@@ -1169,7 +1272,7 @@ fn verify_signed_manual_request(vector: &toml::Value, request: &[u8]) -> Result<
         ]
         .concat(),
     );
-    if request[187..219] != code_hash[..] {
+    if request[203..235] != code_hash[..] {
         return Err("manual_code_hash");
     }
     verify_bip340(

@@ -1,6 +1,7 @@
 use crate::auth::{self, AuthContext, Authenticator};
 use crate::cli::args::ApiArgs;
 use crate::cli::json;
+use crate::direct_service::TransportStatusHandle;
 use crate::operations::battery as battery_ops;
 use crate::operations::config as config_ops;
 use crate::operations::core;
@@ -91,24 +92,49 @@ pub(crate) struct ReadinessGate {
     pub requires_scheduler: bool,
     pub workers_configured: bool,
     pub scheduler_configured: bool,
+    pub requires_transport: bool,
+    pub transport_configured: bool,
     pub workers_alive: AtomicBool,
     pub scheduler_alive: AtomicBool,
+    pub transport_alive: AtomicBool,
 }
 
 impl ReadinessGate {
+    #[cfg(test)]
     pub(crate) fn new(
         requires_worker: bool,
         requires_scheduler: bool,
         workers_configured: bool,
         scheduler_configured: bool,
     ) -> Arc<Self> {
+        Self::new_with_transport(
+            requires_worker,
+            requires_scheduler,
+            workers_configured,
+            scheduler_configured,
+            false,
+            false,
+        )
+    }
+
+    pub(crate) fn new_with_transport(
+        requires_worker: bool,
+        requires_scheduler: bool,
+        workers_configured: bool,
+        scheduler_configured: bool,
+        requires_transport: bool,
+        transport_configured: bool,
+    ) -> Arc<Self> {
         Arc::new(Self {
             requires_worker,
             requires_scheduler,
             workers_configured,
             scheduler_configured,
+            requires_transport,
+            transport_configured,
             workers_alive: AtomicBool::new(false),
             scheduler_alive: AtomicBool::new(false),
+            transport_alive: AtomicBool::new(!transport_configured),
         })
     }
 
@@ -125,6 +151,12 @@ impl ReadinessGate {
         {
             return false;
         }
+        if self.requires_transport
+            && self.transport_configured
+            && !self.transport_alive.load(Ordering::SeqCst)
+        {
+            return false;
+        }
         true
     }
 
@@ -134,6 +166,10 @@ impl ReadinessGate {
 
     pub(crate) fn set_scheduler_alive(&self, alive: bool) {
         self.scheduler_alive.store(alive, Ordering::SeqCst);
+    }
+
+    pub(crate) fn set_transport_alive(&self, alive: bool) {
+        self.transport_alive.store(alive, Ordering::SeqCst);
     }
 }
 
@@ -145,6 +181,7 @@ struct ApiState {
     /// Deploy-time route-group gates (before scopes).
     deploy: DeployPolicy,
     readiness: Option<Arc<ReadinessGate>>,
+    transport: Option<TransportStatusHandle>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
 }
 
@@ -156,6 +193,7 @@ impl Clone for ApiState {
             policy: self.policy.clone(),
             deploy: self.deploy.clone(),
             readiness: self.readiness.clone(),
+            transport: self.transport.clone(),
             auth_verification_gate: Arc::clone(&self.auth_verification_gate),
         }
     }
@@ -438,6 +476,9 @@ struct AdminReadinessDetails {
     scheduler_configured: bool,
     workers_alive: bool,
     scheduler_alive: bool,
+    requires_transport: bool,
+    transport_configured: bool,
+    transport_alive: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -554,6 +595,7 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
             boot.api_policy,
             boot.deploy,
             None,
+            None,
             cancel_flag,
             None,
         )
@@ -619,6 +661,7 @@ pub(crate) async fn serve_http(
     policy: ApiPolicy,
     deploy: DeployPolicy,
     readiness: Option<Arc<ReadinessGate>>,
+    transport: Option<TransportStatusHandle>,
     cancel_flag: Arc<AtomicBool>,
     on_listening: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -627,7 +670,9 @@ pub(crate) async fn serve_http(
         let _ = tx.send(());
     }
     let body_limit = deploy.http.body_limit_bytes.max(1);
-    let app = router_with_policy(auth, workspace, policy, deploy, readiness, body_limit);
+    let app = router_with_transport(
+        auth, workspace, policy, deploy, readiness, transport, body_limit,
+    );
     axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_cancel(cancel_flag))
         .await?;
@@ -734,12 +779,25 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
 ];
 // OMAKURE_HTTP_ROUTE_INVENTORY_END
 
+#[cfg(test)]
 fn router_with_policy(
     auth: Authenticator,
     workspace: Workspace,
     policy: ApiPolicy,
     deploy: DeployPolicy,
     readiness: Option<Arc<ReadinessGate>>,
+    body_limit: usize,
+) -> Router {
+    router_with_transport(auth, workspace, policy, deploy, readiness, None, body_limit)
+}
+
+fn router_with_transport(
+    auth: Authenticator,
+    workspace: Workspace,
+    policy: ApiPolicy,
+    deploy: DeployPolicy,
+    readiness: Option<Arc<ReadinessGate>>,
+    transport: Option<TransportStatusHandle>,
     body_limit: usize,
 ) -> Router {
     let auth_verification_gate = Arc::new(tokio::sync::Semaphore::new(
@@ -754,6 +812,7 @@ fn router_with_policy(
         policy,
         deploy,
         readiness,
+        transport,
         auth_verification_gate,
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
@@ -874,6 +933,9 @@ async fn admin_status_handler(
                 scheduler_configured: gate.scheduler_configured,
                 workers_alive: gate.workers_alive.load(Ordering::SeqCst),
                 scheduler_alive: gate.scheduler_alive.load(Ordering::SeqCst),
+                requires_transport: gate.requires_transport,
+                transport_configured: gate.transport_configured,
+                transport_alive: gate.transport_alive.load(Ordering::SeqCst),
             },
         ),
         None => (
@@ -885,6 +947,9 @@ async fn admin_status_handler(
                 scheduler_configured: false,
                 workers_alive: false,
                 scheduler_alive: false,
+                requires_transport: false,
+                transport_configured: false,
+                transport_alive: false,
             },
         ),
     };
@@ -916,7 +981,15 @@ async fn node_status_handler(
     if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
-    operation_response(node_context().and_then(|context| node_ops::public_node_status(&context)))
+    operation_response(node_context().and_then(|context| {
+        node_ops::public_node_status(&context).map(|mut status| {
+            status.transport = state
+                .transport
+                .as_ref()
+                .and_then(|transport| transport.lock().ok().map(|status| status.clone()));
+            status
+        })
+    }))
 }
 
 async fn node_initialize_handler(

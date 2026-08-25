@@ -98,13 +98,12 @@ pub fn run(
         &crate::domain::NodeConfig::default(),
         state_was_present,
     )?;
-    let configured_bind = initialized
+    let configured = initialized
         .status
         .config
         .as_ref()
-        .ok_or("node configuration was not initialized")?
-        .api_bind
-        .parse()?;
+        .ok_or("node configuration was not initialized")?;
+    let configured_bind = configured.api_bind.parse()?;
     let api_args = ApiArgs {
         bind: args.bind.unwrap_or(configured_bind),
         allow_non_loopback: args.allow_non_loopback,
@@ -116,10 +115,31 @@ pub fn run(
     // Fail before bind: policy parse, auth, non-loopback guard.
     let boot = api::prepare_api_boot(&api_args)?;
 
-    let direct_listener = args
-        .direct_bind
-        .map(|bind| crate::direct_service::DirectListener::start(bind, context.clone()))
-        .transpose()?;
+    let direct_bind = match (args.direct_bind, configured.direct_bind.as_deref()) {
+        (Some(bind), _) => Some(bind),
+        (None, Some(bind)) => Some(bind.parse()?),
+        (None, None) => None,
+    };
+    let allow_non_loopback_direct =
+        args.allow_non_loopback_direct || boot.deploy.node.allow_non_loopback_direct;
+    if let Some(bind) = direct_bind {
+        if !bind.ip().is_loopback() && !allow_non_loopback_direct {
+            return Err(format!(
+                "refusing to bind direct transport {bind}; pass --allow-non-loopback-direct to opt in"
+            )
+            .into());
+        }
+    }
+    let static_peers = configured.static_peers.clone();
+    let mut direct_service = if direct_bind.is_some() || !static_peers.is_empty() {
+        Some(crate::direct_service::DirectService::start(
+            direct_bind,
+            &static_peers,
+            context.clone(),
+        )?)
+    } else {
+        None
+    };
 
     let workers = args.workers.or(boot.deploy.node.workers).unwrap_or(1);
     let scheduler_enabled = if args.no_scheduler {
@@ -133,16 +153,40 @@ pub fn run(
         args.readiness_requires_worker || boot.deploy.node.readiness_requires_worker;
     let readiness_requires_scheduler =
         args.readiness_requires_scheduler || boot.deploy.node.readiness_requires_scheduler;
+    let readiness_requires_transport =
+        args.readiness_requires_transport || boot.deploy.node.readiness_requires_transport;
 
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
 
-    let readiness = ReadinessGate::new(
+    let readiness = ReadinessGate::new_with_transport(
         readiness_requires_worker,
         readiness_requires_scheduler,
         workers >= 1,
         scheduler_enabled,
+        readiness_requires_transport,
+        !static_peers.is_empty(),
     );
+
+    let transport_status = direct_service.as_ref().map(|service| service.status());
+    let transport_readiness = transport_status.clone();
+    let transport_watcher = transport_status.as_ref().map(|status| {
+        let status = Arc::clone(status);
+        let readiness = Arc::clone(&readiness);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_for_thread = Arc::clone(&cancel);
+        let handle = thread::spawn(move || {
+            while !cancel_for_thread.load(Ordering::SeqCst) {
+                let connected = status.lock().ok().is_some_and(|status| {
+                    status.expected_peer_count == 0
+                        || status.expected_connected_peer_count == status.expected_peer_count
+                });
+                readiness.set_transport_alive(connected);
+                thread::sleep(Duration::from_millis(100));
+            }
+        });
+        (cancel, handle)
+    });
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
     queue::install_signal_handlers(Arc::clone(&cancel_flag));
@@ -190,17 +234,23 @@ pub fn run(
             boot.api_policy,
             boot.deploy,
             Some(readiness_for_http),
+            transport_readiness,
             cancel_for_http,
             None,
         )
         .await
     });
 
-    drop(direct_listener);
-
     // HTTP stopped (cancel or error). Ensure cancel is set so loops exit, then
     // join scheduler and workers (stop scheduling → stop claiming → drain).
     cancel_flag.store(true, Ordering::SeqCst);
+    if let Some((watcher_cancel, watcher)) = transport_watcher {
+        watcher_cancel.store(true, Ordering::SeqCst);
+        let _ = watcher.join();
+    }
+    if let Some(service) = direct_service.as_mut() {
+        service.stop();
+    }
     readiness.set_workers_alive(false);
     readiness.set_scheduler_alive(false);
 

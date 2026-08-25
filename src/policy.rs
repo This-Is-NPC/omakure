@@ -77,6 +77,8 @@ pub struct NodeServicePolicy {
     pub readiness_requires_worker: bool,
     pub scheduler: Option<bool>,
     pub readiness_requires_scheduler: bool,
+    pub readiness_requires_transport: bool,
+    pub allow_non_loopback_direct: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

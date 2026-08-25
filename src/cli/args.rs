@@ -250,7 +250,7 @@ pub struct ApiArgs {
     #[arg(long, default_value = "127.0.0.1:7878")]
     pub bind: std::net::SocketAddr,
 
-    /// Explicitly allow binding to non-loopback addresses
+    /// Explicitly allow the HTTP API to bind to non-loopback addresses
     #[arg(long)]
     pub allow_non_loopback: bool,
 
@@ -513,6 +513,10 @@ pub struct NodeServeArgs {
     #[arg(long)]
     pub allow_non_loopback: bool,
 
+    /// Explicitly allow the direct transport to bind to non-loopback addresses
+    #[arg(long = "allow-non-loopback-direct")]
+    pub allow_non_loopback_direct: bool,
+
     /// Deploy-only policy.toml. Same as `omakure api --policy`.
     #[arg(long = "policy", env = "OMAKURE_POLICY_FILE")]
     pub policy: Option<std::path::PathBuf>,
@@ -548,6 +552,10 @@ pub struct NodeServeArgs {
     /// Fail `/v1/ready` when the scheduler is enabled but not alive
     #[arg(long)]
     pub readiness_requires_scheduler: bool,
+
+    /// Fail `/v1/ready` while configured static peers are not connected
+    #[arg(long)]
+    pub readiness_requires_transport: bool,
 
     /// Multi-token TOML file. Same as `omakure api --tokens-file`.
     #[arg(long = "tokens-file", env = "OMAKURE_TOKENS_FILE")]
@@ -1182,6 +1190,7 @@ mod tests {
             "--scheduler",
             "--readiness-requires-worker",
             "--readiness-requires-scheduler",
+            "--allow-non-loopback-direct",
             "--worker-actor-filter",
             "agent",
             "--worker-script-filter",
@@ -1201,10 +1210,26 @@ mod tests {
                     assert!(!args.no_scheduler);
                     assert!(args.readiness_requires_worker);
                     assert!(args.readiness_requires_scheduler);
+                    assert!(args.allow_non_loopback_direct);
                     assert_eq!(args.worker_actor_filter.as_deref(), Some("agent"));
                     assert_eq!(args.worker_script_filter.as_deref(), Some("tools/"));
                     assert_eq!(args.capabilities, vec!["runs:write".to_string()]);
                     assert_eq!(args.secret_refs, vec!["secret://env/*".to_string()]);
+                }
+                _ => panic!("expected node serve"),
+            },
+            _ => panic!("expected Node"),
+        }
+    }
+
+    #[test]
+    fn node_serve_direct_non_loopback_flag_is_separate_from_http_flag() {
+        let cli = parse(&["node", "serve", "--allow-non-loopback-direct"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Node(args) => match args.command {
+                NodeCommand::Serve(args) => {
+                    assert!(args.allow_non_loopback_direct);
+                    assert!(!args.allow_non_loopback);
                 }
                 _ => panic!("expected node serve"),
             },

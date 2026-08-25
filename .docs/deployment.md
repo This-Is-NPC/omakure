@@ -38,7 +38,7 @@ Deploy-only file via `--policy` / `OMAKURE_POLICY_FILE`. **Not** workspace
    `[routes]` / `[auth]` gates.
 3. Explicit CLI flags win when provided (`--bind`, `--workers`,
    `--scheduler` / `--no-scheduler`, readiness flags, `--tokens-file`,
-   `--allow-non-loopback`).
+    `--allow-non-loopback`, `--allow-non-loopback-direct`).
 4. Workspace `omakure.toml` is never consulted for deploy policy.
 
 Deploy route groups are checked **before** token scopes: a `*` token cannot
@@ -68,6 +68,8 @@ workers = 2                    # used when --workers omitted
 scheduler = true               # used when neither --scheduler nor --no-scheduler
 readiness_requires_worker = true
 readiness_requires_scheduler = true
+readiness_requires_transport = true
+allow_non_loopback_direct = false
 
 [routes]
 read = true
@@ -127,6 +129,24 @@ max_concurrent_verifications = 2      # default; see Hard gates below
 | `auth.legacy_env_token = false` | Rejects `OMAKURE_API_TOKEN`; requires tokens file |
 | `auth.max_concurrent_verifications` | Caps in-flight Argon2id bearer verifications (default `2`, maximum `8`) |
 | `http.allow_non_loopback = true` | Same as CLI `--allow-non-loopback` |
+| `node.allow_non_loopback_direct = true` | Allows `network.direct_bind` or `--direct-bind` on a non-loopback address; independent of the HTTP bind policy and CLI `--allow-non-loopback` |
+
+The direct transport listener is loopback-only unless the explicit direct
+transport flag or policy setting is enabled. Static peers are validated for
+unique node IDs and unique locators before the service starts. When
+`readiness_requires_transport` is enabled, readiness requires every configured
+static peer, not merely an equal-or-greater connection count.
+
+Direct static-peer DNS uses the pure-Rust `hickory-resolver` async resolver with
+the host system's DNS configuration (`/etc/resolv.conf` on Unix and the system
+configuration on Windows). It is enabled only with its `system-config` and
+`tokio` features, so it does not use libc `getaddrinfo`, an OS blocking worker,
+or optional DNS-over-TLS/HTTPS/QUIC stacks. Each node service owns one bounded
+resolver queue and runtime worker; service shutdown cancels queued and active
+lookups, joins every resolver task, and then joins the worker. A lookup returns
+all A and AAAA addresses, and the dialer tries them under the same absolute
+10-second connect budget. This preserves Docker service-name resolution while
+making timeout and restart lifetimes bounded and observable.
 
 Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 `credentials:use`, plus matching `--secret-ref` entries. Secrets metadata needs

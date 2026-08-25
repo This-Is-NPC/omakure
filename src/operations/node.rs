@@ -24,6 +24,8 @@ pub struct NodeStatus {
     pub identity: Option<PublicIdentity>,
     pub config: Option<PublicNodeConfig>,
     pub trust: TrustSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport: Option<crate::direct_service::TransportStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -39,6 +41,7 @@ pub struct PublicNodeConfig {
     pub network_mode: String,
     pub relays: Vec<String>,
     pub static_peers: Vec<String>,
+    pub direct_bind: Option<String>,
     pub max_message_bytes: u64,
     pub enrollment: String,
     pub allow_remote_cues: bool,
@@ -211,6 +214,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
                 peer_count: 0,
                 active_peer_count: 0,
             },
+            transport: None,
         });
     }
 
@@ -235,6 +239,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
                 peer_count: 0,
                 active_peer_count: 0,
             },
+            transport: None,
         });
     }
 
@@ -251,6 +256,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
             peer_count: counts.total,
             active_peer_count: counts.active,
         },
+        transport: None,
     })
 }
 
@@ -440,6 +446,7 @@ fn public_config(config: NodeConfig) -> PublicNodeConfig {
         network_mode: config.network.mode,
         relays: config.network.relays,
         static_peers: config.network.static_peers,
+        direct_bind: config.network.direct_bind,
         max_message_bytes: config.network.max_message_bytes,
         enrollment: config.trust.enrollment,
         allow_remote_cues: config.trust.allow_remote_cues,

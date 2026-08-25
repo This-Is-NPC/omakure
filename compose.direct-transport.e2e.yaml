@@ -6,37 +6,45 @@ services:
     image: omakure-direct-transport-e2e:local
     environment:
       OMAKURE_API_TOKEN: direct-transport-docker-e2e-token-with-enough-entropy
+    ports:
+      - "127.0.0.1:${DIRECT_A_HTTP_PORT:-17878}:7878"
     command:
       - node
       - serve
       - --bind
       - 0.0.0.0:7878
       - --allow-non-loopback
+      - --allow-non-loopback-direct
       - --workers
       - "0"
       - --no-scheduler
-      - --direct-bind
-      - 0.0.0.0:7879
+      - --capability
+      - node:read
     volumes:
       - direct-a-state:/var/lib/omakure
+      - direct-a-config:/etc/omakure
 
   direct-b:
     image: omakure-direct-transport-e2e:local
     environment:
       OMAKURE_API_TOKEN: direct-transport-docker-e2e-token-with-enough-entropy
+    ports:
+      - "127.0.0.1:${DIRECT_B_HTTP_PORT:-17879}:7878"
     command:
       - node
       - serve
       - --bind
       - 0.0.0.0:7878
       - --allow-non-loopback
+      - --allow-non-loopback-direct
       - --workers
       - "0"
       - --no-scheduler
-      - --direct-bind
-      - 0.0.0.0:7879
+      - --capability
+      - node:read
     volumes:
       - direct-b-state:/var/lib/omakure
+      - direct-b-config:/etc/omakure
 
   direct-c:
     image: omakure-direct-transport-e2e:local
@@ -48,4 +56,6 @@ services:
 volumes:
   direct-a-state:
   direct-b-state:
+  direct-a-config:
+  direct-b-config:
   direct-c-state:

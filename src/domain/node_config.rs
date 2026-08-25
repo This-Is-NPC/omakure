@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use thiserror::Error;
@@ -55,6 +56,8 @@ pub struct NetworkSettings {
     pub mode: String,
     pub relays: Vec<String>,
     pub static_peers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direct_bind: Option<String>,
     pub max_message_bytes: u64,
 }
 
@@ -87,6 +90,7 @@ impl Default for NodeConfig {
                 mode: "direct".to_string(),
                 relays: Vec::new(),
                 static_peers: Vec::new(),
+                direct_bind: None,
                 max_message_bytes: 1_048_576,
             },
             trust: TrustSettings {
@@ -171,6 +175,25 @@ impl NodeConfig {
         for peer in &self.network.static_peers {
             validate_static_peer(peer)?;
         }
+        let mut peer_ids = HashSet::new();
+        let mut peer_endpoints = HashSet::new();
+        for peer in &self.network.static_peers {
+            let (node_id, endpoint) = peer.split_once('@').expect("validated static peer");
+            if !peer_ids.insert(node_id) {
+                return Err(NodeConfigError::Invalid(
+                    "network.static_peers contains duplicate node ids".to_string(),
+                ));
+            }
+            if !peer_endpoints.insert(endpoint) {
+                return Err(NodeConfigError::Invalid(
+                    "network.static_peers contains duplicate endpoints".to_string(),
+                ));
+            }
+        }
+        if let Some(bind) = &self.network.direct_bind {
+            validate_text("network.direct_bind", bind, MAX_BIND_BYTES, false)?;
+            validate_direct_bind(bind)?;
+        }
 
         validate_text(
             "trust.enrollment",
@@ -230,6 +253,18 @@ fn validate_bind(value: &str) -> Result<(), NodeConfigError> {
     if !address.ip().is_loopback() || address.port() == 0 {
         return Err(NodeConfigError::Invalid(
             "api.bind must use a loopback address and a non-zero port".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_direct_bind(value: &str) -> Result<(), NodeConfigError> {
+    let address = SocketAddr::from_str(value).map_err(|_| {
+        NodeConfigError::Invalid("network.direct_bind must be a socket address".to_string())
+    })?;
+    if address.port() == 0 {
+        return Err(NodeConfigError::Invalid(
+            "network.direct_bind must use a non-zero port".to_string(),
         ));
     }
     Ok(())
@@ -462,6 +497,32 @@ mod tests {
         config.organization.discovery_secret_ref = "secret://prod/discovery_key".into();
         config.trust.enrollment = "manual".into();
         config.validate().unwrap();
+    }
+
+    #[test]
+    fn validation_rejects_duplicate_static_peer_ids_and_endpoints() {
+        let mut config = NodeConfig::default();
+        let first_id = "a".repeat(64);
+        let second_id = "b".repeat(64);
+        config.network.static_peers = vec![
+            format!("omk1_{first_id}@127.0.0.1:7879"),
+            format!("omk1_{first_id}@127.0.0.1:7880"),
+        ];
+        assert!(config
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("node ids"));
+
+        config.network.static_peers = vec![
+            format!("omk1_{first_id}@127.0.0.1:7879"),
+            format!("omk1_{second_id}@127.0.0.1:7879"),
+        ];
+        assert!(config
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("endpoints"));
     }
 
     #[test]

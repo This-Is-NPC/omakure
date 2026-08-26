@@ -134,9 +134,16 @@ fn latest_audit_id() -> i64 {
 ///
 /// Bounded: the row must appear inside [`AUDIT_WINDOW`] or the case fails.
 fn await_audit(after_id: i64, code: HealthCode, label: &str) -> (String, String, String) {
-    let deadline = Instant::now() + AUDIT_WINDOW;
+    let started = Instant::now();
+    let deadline = started + AUDIT_WINDOW;
+    // Each poll copies the Conductor's registry out of its container, which is
+    // not cheap, so a timeout has two very different explanations: the row was
+    // never written, or the window only ever afforded a couple of looks. They
+    // demand opposite responses, so count the polls and report them.
+    let mut polls = 0_u32;
     loop {
         let connection = conductor_registry();
+        polls += 1;
         let row = connection
             .query_row(
                 "SELECT event_code, message_kind, outcome FROM health_audit
@@ -161,9 +168,13 @@ fn await_audit(after_id: i64, code: HealthCode, label: &str) -> (String, String,
         }
         assert!(
             Instant::now() < deadline,
-            "{label}: the Conductor recorded no durable audit row with code {} ({:?}) within {AUDIT_WINDOW:?}",
+            "{label}: the Conductor recorded no durable audit row with code {} ({:?}) \
+             within {AUDIT_WINDOW:?}; {polls} poll(s) in {:?}, so each registry copy \
+             cost about {:?}",
             code.code(),
-            code
+            code,
+            started.elapsed(),
+            started.elapsed() / polls.max(1)
         );
         std::thread::sleep(Duration::from_millis(500));
     }
@@ -478,9 +489,43 @@ fn signal_payload(
 // The matrix.
 // ---------------------------------------------------------------------------
 
+/// The number of contracted steps the matrix below performs, numbered `1.`
+/// through `20.` in its own comments.
+///
+/// Every step records itself as it runs and the test asserts the complete set
+/// was seen, so a step that is deleted -- or skipped, or duplicated by a bad
+/// merge -- fails here instead of quietly passing as a smaller matrix. A new
+/// step means bumping this in the same edit, which is the point: the count sits
+/// beside the steps it counts. A count held anywhere else, in a shell script or
+/// an image CMD, is the decoupled constant that let an earlier phase report
+/// success having run nothing at all.
+const CONTRACTED_CASES: usize = 20;
+
+/// Records which contracted steps actually executed.
+#[derive(Default)]
+struct CaseLog(Vec<usize>);
+
+impl CaseLog {
+    fn mark(&mut self, number: usize, label: &str) {
+        eprintln!("adversary case {number}: {label}");
+        self.0.push(number);
+    }
+
+    fn assert_complete(&self) {
+        let mut seen = self.0.clone();
+        seen.sort_unstable();
+        let expected: Vec<usize> = (1..=CONTRACTED_CASES).collect();
+        assert_eq!(
+            seen, expected,
+            "the contracted matrix must perform every numbered step exactly once"
+        );
+    }
+}
+
 #[test]
 #[ignore = "requires the live topology started by .scripts/health-plane-certification.sh"]
 fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
+    let mut cases = CaseLog::default();
     let state_dir = PathBuf::from(env("OMAKURE_HP_ADVERSARY_STATE"));
     let conductor_id = env("OMAKURE_HP_CONDUCTOR_ID");
     let adversary_id = env("OMAKURE_HP_ADVERSARY_ID");
@@ -492,6 +537,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
 
     // 1. Wrong target: a syntactically valid third-party node ID is rejected
     //    before any state is read or written, and never answered.
+    cases.mark(
+        1,
+        "Wrong target: a syntactically valid third-party node ID is rejected",
+    );
     let mark = latest_audit_id();
     assert_dropped(
         exchange(
@@ -509,6 +558,7 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 2. Future beyond the frozen 60-second skew.
+    cases.mark(2, "Future beyond the frozen 60-second skew.");
     assert_error(
         exchange(
             &mut stream,
@@ -524,6 +574,7 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 3. Stale beyond the frozen 120-second age.
+    cases.mark(3, "Stale beyond the frozen 120-second age.");
     assert_error(
         exchange(
             &mut stream,
@@ -539,6 +590,7 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 4. An unknown field smuggled into the closed schema.
+    cases.mark(4, "An unknown field smuggled into the closed schema.");
     let mark = latest_audit_id();
     let mut unknown = profile_payload(&conductor_id, &message_id(0x04), 1);
     unknown["profile"]["hostname"] = json!("workshop.local");
@@ -558,6 +610,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 5. A grammar violation that would smuggle a filesystem path.
+    cases.mark(
+        5,
+        "A grammar violation that would smuggle a filesystem path.",
+    );
     let mark = latest_audit_id();
     let mut malformed = profile_payload(&conductor_id, &message_id(0x05), 1);
     malformed["profile"]["display_name"] = json!("/etc/shadow");
@@ -577,6 +633,7 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 6. Oversized past the frozen per-kind canonical cap.
+    cases.mark(6, "Oversized past the frozen per-kind canonical cap.");
     let mark = latest_audit_id();
     let mut oversized = profile_payload(&conductor_id, &message_id(0x06), 1);
     oversized["profile"]["runtimes"] = json!((0..64)
@@ -602,6 +659,7 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 7. A forged signature over an otherwise perfect envelope.
+    cases.mark(7, "A forged signature over an otherwise perfect envelope.");
     let mark = latest_audit_id();
     let mut forged = sign_health_envelope(
         &identity,
@@ -624,6 +682,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
 
     // 8. A spoofed sender: the envelope claims to come from the Conductor
     //    itself while riding the adversary's authenticated session.
+    cases.mark(
+        8,
+        "A spoofed sender: the envelope claims to come from the Conductor",
+    );
     let mark = latest_audit_id();
     let spoofed = spoofed_envelope(
         &conductor_id,
@@ -641,6 +703,7 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 9. An envelope bound to a different session.
+    cases.mark(9, "An envelope bound to a different session.");
     let mark = latest_audit_id();
     let other_session = [0x99_u8; 32];
     let cross_session = sign_health_envelope(
@@ -662,6 +725,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
 
     // 10. An authorized Profile is accepted, and the same `message_id` replayed
     //     immediately afterwards is not.
+    cases.mark(
+        10,
+        "An authorized Profile is accepted, and the same `message_id` replayed",
+    );
     let base_revision = unix_seconds();
     assert_accepted(
         exchange(
@@ -690,6 +757,7 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 11. A Profile revision that does not strictly increase.
+    cases.mark(11, "A Profile revision that does not strictly increase.");
     assert_error(
         exchange(
             &mut stream,
@@ -714,6 +782,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     //     mutates nothing. The step used here is deliberately inside the frozen
     //     120-second freshness window; a larger backward step is simply
     //     rejected earlier as `health_stale`.
+    cases.mark(
+        12,
+        "An authorized Pulse is accepted, and a Pulse whose sequence stepped",
+    );
     let base_sequence = unix_seconds();
     assert_accepted(
         exchange(
@@ -766,6 +838,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 13. A Signal past the frozen reorder buffer is refused outright.
+    cases.mark(
+        13,
+        "A Signal past the frozen reorder buffer is refused outright.",
+    );
     assert_error(
         exchange(
             &mut stream,
@@ -788,6 +864,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
 
     // 14. A Signal inside the reorder buffer is held, and the acknowledged
     //     cursor does not advance past the gap.
+    cases.mark(
+        14,
+        "A Signal inside the reorder buffer is held, and the acknowledged",
+    );
     let cursor = assert_accepted(
         exchange(
             &mut stream,
@@ -813,6 +893,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
 
     // 15. The frozen per-Performer inbox is full, so the next in-order Signal
     //     is refused rather than stored.
+    cases.mark(
+        15,
+        "The frozen per-Performer inbox is full, so the next in-order Signal",
+    );
     assert_eq!(
         stored_signal_count(&adversary_id),
         SIGNAL_INBOX_CAPACITY,
@@ -844,6 +928,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     );
 
     // 16. Flood: past the frozen per-peer allowance and its burst.
+    cases.mark(
+        16,
+        "Flood: past the frozen per-peer allowance and its burst.",
+    );
     let mut rate_limited = false;
     for index in 0..FLOOD_CEILING {
         let seed = 0x20_u8.wrapping_add(index as u8);
@@ -878,6 +966,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     //     still report Profile and Pulse but its Signals are refused. Steps 8
     //     and 9 of the frozen receive order run before the rate check, so the
     //     flood above cannot mask this outcome.
+    cases.mark(
+        17,
+        "Capability: the Conductor withdraws `notifications`, so this peer may",
+    );
     let mark = latest_audit_id();
     conductor_admin(&[
         "capabilities",
@@ -916,6 +1008,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     //     its own real production session, because the shipped `node trust`
     //     refuses to re-register an existing peer and a role is therefore not
     //     something an adversary can flip on a peer it already controls.
+    cases.mark(
+        18,
+        "Role: a peer the Conductor trusts in the *conductor* role may not",
+    );
     let role_state = PathBuf::from(env("OMAKURE_HP_ROLE_STATE"));
     let mark = latest_audit_id();
     let (mut role_stream, mut role_session, role_identity) = production_session(&role_state);
@@ -943,6 +1039,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     // 19. Revocation on the live session: trust is re-read per message, so an
     //     operator revocation excludes the peer immediately, without waiting
     //     for the session to end.
+    cases.mark(
+        19,
+        "Revocation on the live session: trust is re-read per message, so an",
+    );
     let mark = latest_audit_id();
     conductor_admin(&[
         "revoke",
@@ -972,6 +1072,10 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
 
     // 20. Nothing an adversary sent produced an unrecognised outcome, and the
     //     audit trail carries only the frozen redacted columns.
+    cases.mark(
+        20,
+        "Nothing an adversary sent produced an unrecognised outcome, and the",
+    );
     let connection = conductor_registry();
     let unknown_codes: i64 = connection
         .query_row(
@@ -1006,6 +1110,8 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
         "adversarial traffic caused an authorization or validity rejection to be \
          attributed to an honest Performer"
     );
+
+    cases.assert_complete();
 }
 
 // ---------------------------------------------------------------------------
@@ -1058,4 +1164,53 @@ fn spoofed_envelope(
     let mut encoded = serde_jcs::to_vec(&envelope).expect("canonicalize the spoofed envelope");
     encoded.extend_from_slice(&[0_u8; 64]);
     encoded
+}
+
+/// The recorder is the only thing standing between a deleted contracted step
+/// and a green matrix, so it is tested rather than assumed. These run in the
+/// ordinary suite; they need no Docker topology.
+#[cfg(test)]
+mod case_log {
+    use super::{CaseLog, CONTRACTED_CASES};
+
+    fn complete() -> CaseLog {
+        let mut log = CaseLog::default();
+        for number in 1..=CONTRACTED_CASES {
+            log.mark(number, "step");
+        }
+        log
+    }
+
+    #[test]
+    fn a_complete_run_is_accepted() {
+        complete().assert_complete();
+    }
+
+    #[test]
+    #[should_panic(expected = "every numbered step exactly once")]
+    fn a_deleted_step_is_rejected() {
+        let mut log = CaseLog::default();
+        for number in 1..=CONTRACTED_CASES {
+            if number != 7 {
+                log.mark(number, "step");
+            }
+        }
+        log.assert_complete();
+    }
+
+    #[test]
+    #[should_panic(expected = "every numbered step exactly once")]
+    fn a_duplicated_step_is_rejected() {
+        let mut log = complete();
+        log.mark(7, "step again");
+        log.assert_complete();
+    }
+
+    #[test]
+    #[should_panic(expected = "every numbered step exactly once")]
+    fn an_unnumbered_extra_step_is_rejected() {
+        let mut log = complete();
+        log.mark(CONTRACTED_CASES + 1, "step off the end");
+        log.assert_complete();
+    }
 }

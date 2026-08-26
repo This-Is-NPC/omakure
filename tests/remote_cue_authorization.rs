@@ -117,3 +117,88 @@ fn unknown_kinds_are_still_not_claimed_by_the_health_plane() {
         "the Health Plane must still claim its own traffic"
     );
 }
+
+// ---------------------------------------------------------------------------
+// In-session duplicate handling
+// ---------------------------------------------------------------------------
+
+use omakure::remote_cue::{CueCode, CueOutcome, CuePolicy, CueSession, GateDecision};
+
+fn session_over<'a>(registry: &'a NodeRegistry) -> CueSession<'a> {
+    CueSession::new(
+        registry,
+        "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+        CuePolicy {
+            enabled: true,
+            declared_scripts: vec!["deploy.sh".to_string()],
+        },
+    )
+}
+
+/// A retransmission on a live connection is the realistic duplicate, and it is
+/// answered from the first decision rather than re-evaluated.
+#[test]
+fn a_repeated_cue_id_on_one_session_is_decided_once() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (_identity, registry) = identity_and_registry(dir.path());
+    let mut session = session_over(&registry);
+
+    let first = session.decide(Some("0123456789abcdef0123456789abcdef"));
+    let second = session.decide(Some("0123456789abcdef0123456789abcdef"));
+
+    // The peer is unknown to this registry, so the trust gate refuses. What
+    // matters here is that the *first* call reached a decision at all and the
+    // second did not repeat it.
+    assert_eq!(
+        first,
+        CueOutcome::Decided(GateDecision::Rejected(CueCode::NotActiveConductor))
+    );
+    assert_eq!(
+        second,
+        CueOutcome::Repeat,
+        "a retransmission must be answered from the first decision, not re-evaluated"
+    );
+}
+
+/// Distinct ids are distinct decisions; the guard must not collapse them.
+#[test]
+fn different_cue_ids_are_decided_separately() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (_identity, registry) = identity_and_registry(dir.path());
+    let mut session = session_over(&registry);
+
+    assert!(matches!(
+        session.decide(Some("0123456789abcdef0123456789abcdef")),
+        CueOutcome::Decided(_)
+    ));
+    assert!(
+        matches!(
+            session.decide(Some("fedcba9876543210fedcba9876543210")),
+            CueOutcome::Decided(_)
+        ),
+        "a different cue id is a different instruction and must be decided"
+    );
+}
+
+/// The guard is per session, and says so rather than implying durability.
+#[test]
+fn a_new_session_does_not_inherit_the_seen_set() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (_identity, registry) = identity_and_registry(dir.path());
+
+    let mut first = session_over(&registry);
+    assert!(matches!(
+        first.decide(Some("0123456789abcdef0123456789abcdef")),
+        CueOutcome::Decided(_)
+    ));
+    drop(first);
+
+    // A fresh session decides it again. Durable at-most-once arrives with the
+    // run row, whose primary key is derived from the cue id.
+    let mut second = session_over(&registry);
+    assert_eq!(
+        second.decide(Some("0123456789abcdef0123456789abcdef")),
+        CueOutcome::Decided(GateDecision::Rejected(CueCode::NotActiveConductor)),
+        "the guard is per session and does not pretend to be durable"
+    );
+}

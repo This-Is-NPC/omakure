@@ -295,14 +295,41 @@ pub struct CueSession<'a> {
     remote_node_id: String,
     remote_cues_enabled: bool,
     declared_scripts: Vec<String>,
+    /// Cue ids already decided on this session.
+    ///
+    /// Deliberately in-session only. It covers the realistic duplicate — a
+    /// retransmission on a live connection — and nothing else, which is honest
+    /// about what it is.
+    ///
+    /// Durable at-most-once does not belong here, because in this wave
+    /// "accepting" writes an audit row and nothing more: a duplicate is a
+    /// cosmetic repeat in a log, not a repeated side effect. It starts
+    /// mattering when acceptance causes work, and at that point the natural key
+    /// already exists -- `runs.run_id` is a TEXT PRIMARY KEY derived from the
+    /// cue id, so the database refuses the second insert itself.
+    ///
+    /// Reusing `health_replay_keys` was considered and rejected: it evicts rows
+    /// older than the 180-second replay security floor, while a Cue may live
+    /// 300 seconds, so a still-valid cue id could be evicted under capacity
+    /// pressure. The numbers do not fit.
+    seen_cue_ids: std::collections::HashSet<String>,
 }
 
 /// What the dispatcher should do with an inbound Cue frame.
+///
+/// The decision is carried out rather than collapsed into "handled". A caller
+/// that cannot tell a fresh decision from a repeat cannot assert on either, and
+/// a test written against such a type passes for reasons unrelated to what it
+/// claims to check.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CueOutcome {
     /// Not Cue traffic; the dispatcher keeps its existing behaviour.
     NotCue,
-    /// Decided and audited. Nothing is sent back.
-    Handled,
+    /// Decided and audited for the first time on this session.
+    Decided(GateDecision),
+    /// A cue id already decided on this session; answered from the first
+    /// decision rather than evaluated again.
+    Repeat,
 }
 
 /// Read `trust.allow_remote_cues` from this node's own configuration.
@@ -350,6 +377,7 @@ impl<'a> CueSession<'a> {
             remote_node_id: remote_node_id.to_string(),
             remote_cues_enabled: policy.enabled,
             declared_scripts: policy.declared_scripts,
+            seen_cue_ids: std::collections::HashSet::new(),
         }
     }
 
@@ -366,6 +394,30 @@ impl<'a> CueSession<'a> {
         if !kind.starts_with(crate::direct_transport::CUE_KIND_PREFIX) {
             return CueOutcome::NotCue;
         }
+        self.decide(None)
+    }
+
+    /// Decide one Cue, optionally identified so a retransmission on this
+    /// session is answered from the first decision rather than re-evaluated.
+    ///
+    /// Re-evaluating would not be unsafe -- the gates are pure over local state
+    /// and would reach the same answer -- but it would write a second audit row
+    /// for one instruction, which makes the trail harder to read for no gain.
+    pub fn decide(&mut self, cue_id: Option<&str>) -> CueOutcome {
+        if let Some(cue_id) = cue_id {
+            if !self.seen_cue_ids.insert(cue_id.to_string()) {
+                let _ = self.registry.record_transport_audit(
+                    "cue_rejected",
+                    &self.remote_node_id,
+                    None,
+                    None,
+                    0,
+                    "rejected",
+                    Some(CueCode::Duplicate.code()),
+                );
+                return CueOutcome::Repeat;
+            }
+        }
 
         let authority = LocalAuthority {
             remote_cues_enabled: self.remote_cues_enabled,
@@ -377,7 +429,8 @@ impl<'a> CueSession<'a> {
                 .flatten(),
         };
 
-        let (outcome, code) = match evaluate_gates(&authority) {
+        let decision = evaluate_gates(&authority);
+        let (outcome, code) = match decision {
             GateDecision::Accepted => ("accepted", None),
             GateDecision::Rejected(code) => ("rejected", Some(code)),
         };
@@ -399,7 +452,7 @@ impl<'a> CueSession<'a> {
             code.map(CueCode::code),
         );
 
-        CueOutcome::Handled
+        CueOutcome::Decided(decision)
     }
 }
 

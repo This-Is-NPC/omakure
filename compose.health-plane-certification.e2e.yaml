@@ -97,8 +97,6 @@ services:
       - enrollment:read
       - --capability
       - enrollment:write
-    extra_hosts: &node-extra-hosts
-      - "host.docker.internal:host-gateway"
     networks:
       - hp-net
     ports:
@@ -118,7 +116,6 @@ services:
         condition: service_completed_successfully
     environment: *node-environment
     command: *node-command
-    extra_hosts: *node-extra-hosts
     networks:
       - hp-net
     ports:
@@ -138,7 +135,6 @@ services:
         condition: service_completed_successfully
     environment: *node-environment
     command: *node-command
-    extra_hosts: *node-extra-hosts
     networks:
       - hp-net
     ports:
@@ -158,7 +154,6 @@ services:
         condition: service_completed_successfully
     environment: *node-environment
     command: *node-command
-    extra_hosts: *node-extra-hosts
     networks:
       - hp-net
     ports:
@@ -179,9 +174,14 @@ services:
   #
   # The runner owns `/harness`: it supplies the adversary's node material there
   # and reads back the readiness marker the harness publishes once its listener
-  # is accepting. The defaults below exist only so that every earlier Compose
-  # invocation interpolates cleanly; the service is never started until the
-  # runner has set all three.
+  # is accepting.
+  #
+  # The uid and the bind-mount path are `:?` rather than defaulted. A default
+  # would be `0:0` and `/tmp`, i.e. root with a host directory mounted in, and
+  # nothing but the token guards would stop a stray `docker compose up` from
+  # arming exactly that. The runner exports both before its first Compose call.
+  # The two node ids stay optional because they are only known once roles are
+  # ranked in Phase 1, and an empty one merely fails the harness assertion.
   hp-harness:
     image: omakure-node-harness:health-plane-certification
     hostname: hp-harness
@@ -189,7 +189,7 @@ services:
     # from the running process (`validate_directory_security`), so the harness
     # runs as the host user that owns the bind-mounted material rather than as
     # root. The runner supplies the real value.
-    user: "${OMAKURE_HP_HARNESS_USER:-0:0}"
+    user: "${OMAKURE_HP_HARNESS_USER:?set OMAKURE_HP_HARNESS_USER}"
     environment:
       OMAKURE_HP_EXHAUSTION_BIND: "0.0.0.0:7879"
       OMAKURE_HP_EXHAUSTION_READY: "/harness/exhaustion.ready"
@@ -200,7 +200,7 @@ services:
     networks:
       - hp-net
     volumes:
-      - "${OMAKURE_HP_HARNESS_DIR:-/tmp}:/harness"
+      - "${OMAKURE_HP_HARNESS_DIR:?set OMAKURE_HP_HARNESS_DIR}:/harness"
 
   # Used only by the induced cleanup test. Compose creates hp-node-1 resources,
   # then this service exits non-zero while --abort-on-container-exit is active.

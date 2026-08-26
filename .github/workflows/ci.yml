@@ -61,6 +61,18 @@ jobs:
           components: clippy, rustfmt
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo fmt --check
+      # The certification gates are ~1,400 lines of bash and ~240 of YAML that
+      # nothing else type-checks; a syntax error in them only surfaces as a
+      # mid-run failure minutes into a Docker job.
+      - name: Shell and YAML static validation
+        run: |
+          set -euo pipefail
+          for script in .scripts/*.sh; do bash -n "$script"; done
+          python3 -c "$(printf '%s\n' \
+            'import glob, sys, yaml' \
+            'for path in sorted(glob.glob("compose*.yaml")) + sorted(glob.glob(".github/workflows/*.yml")):' \
+            '    yaml.safe_load(open(path))' \
+            '    print("ok", path)')"
 
   packaging:
     runs-on: ubuntu-latest
@@ -173,7 +185,10 @@ jobs:
   health-plane-certification:
     name: Linux canonical multi-node Health Plane certification
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The job budget must contain every step ceiling below, not just the
+    # longest one: 45m for the gate plus 30m for the cleanup test plus setup.
+    # A 60m job cannot hold them and dies part-way through the cleanup test.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -183,8 +198,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run the bounded Health Plane gate
         run: timeout --foreground --kill-after=15s 45m ./.scripts/health-plane-certification.sh
+      # ~10m observed: two induced shapes plus an interrupt whose teardown is
+      # bounded at 1080s by the script itself. 30m is a 3x margin.
       - name: Verify cleanup after induced failure and interrupt
-        run: timeout --foreground --kill-after=15s 60m ./.scripts/health-plane-certification-cleanup-test.sh
+        run: timeout --foreground --kill-after=15s 30m ./.scripts/health-plane-certification-cleanup-test.sh
       - name: Verify no Health Plane certification Docker resources survived
         if: always()
         shell: bash

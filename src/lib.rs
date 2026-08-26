@@ -18,6 +18,8 @@ pub mod operations;
 mod policy;
 mod ports;
 pub mod redaction;
+/// The receive half of the Remote Cue plane: authorization only, no execution.
+pub mod remote_cue;
 mod run_executor;
 mod runs;
 /// Run provenance and the lease window, needed by the frozen Remote Cue

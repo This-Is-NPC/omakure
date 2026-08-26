@@ -1068,6 +1068,8 @@ pub fn verify_envelope(
 
 /// The `kind` prefix that marks an envelope as a Health Plane message.
 pub const HEALTH_KIND_PREFIX: &str = "health_";
+/// The Remote Cue kind namespace, disjoint from the Health Plane's.
+pub const CUE_KIND_PREFIX: &str = "cue_";
 
 /// Bytes scanned when reading `kind` without parsing the document.
 ///
@@ -1156,6 +1158,32 @@ pub fn sign_health_envelope(
     now: u64,
 ) -> Result<SignedEnvelope, TransportError> {
     if !kind.starts_with(HEALTH_KIND_PREFIX) || kind.len() > MAX_ENVELOPE_KIND_BYTES {
+        return Err(TransportError::InvalidFrame);
+    }
+    if !payload.is_object() {
+        return Err(TransportError::InvalidFrame);
+    }
+    sign_envelope(identity, kind, session_id, nonce, payload, now)
+}
+
+/// The Remote Cue signer, sibling to `sign_health_envelope`.
+///
+/// Both wrap the same private, kind-agnostic `sign_envelope`, and both refuse a
+/// kind outside their own namespace. That symmetry is the point: neither
+/// wrapper can be used to sign for the other's plane, so a bug or a future
+/// caller in one cannot become a signing oracle for the other.
+///
+/// The envelope, its domain, the signature construction, and the inner frame
+/// are all unchanged. A Cue is new traffic over frozen carriage.
+pub fn sign_cue_envelope(
+    identity: &NodeIdentity,
+    kind: &str,
+    session_id: &[u8; 32],
+    nonce: [u8; 16],
+    payload: Value,
+    now: u64,
+) -> Result<SignedEnvelope, TransportError> {
+    if !kind.starts_with(CUE_KIND_PREFIX) || kind.len() > MAX_ENVELOPE_KIND_BYTES {
         return Err(TransportError::InvalidFrame);
     }
     if !payload.is_object() {
@@ -1422,6 +1450,45 @@ mod tests {
                 matches!(result, Err(TransportError::InvalidFrame)),
                 "sign_health_envelope must refuse {foreign:?}"
             );
+        }
+    }
+
+    /// And the symmetry: the Cue signer must refuse health kinds just as
+    /// firmly, or the separation only holds in one direction.
+    #[test]
+    fn sign_cue_envelope_refuses_a_foreign_plane_kind() {
+        let dir = TempDir::new().unwrap();
+        let identity = identity(&dir);
+        for foreign in ["health_profile", "health_signal", "probe", ""] {
+            let result = sign_cue_envelope(
+                &identity,
+                foreign,
+                &[7u8; 32],
+                [9u8; 16],
+                serde_json::json!({"version": 1}),
+                1_800_000_000,
+            );
+            assert!(
+                matches!(result, Err(TransportError::InvalidFrame)),
+                "sign_cue_envelope must refuse {foreign:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sign_cue_envelope_signs_its_own_namespace() {
+        let dir = TempDir::new().unwrap();
+        let identity = identity(&dir);
+        for own in ["cue_dispatch", "cue_ack"] {
+            sign_cue_envelope(
+                &identity,
+                own,
+                &[7u8; 32],
+                [9u8; 16],
+                serde_json::json!({"version": 1}),
+                1_800_000_000,
+            )
+            .unwrap_or_else(|_| panic!("sign_cue_envelope must sign {own}"));
         }
     }
 

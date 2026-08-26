@@ -22,6 +22,14 @@ run = "./.scripts/transport-certification.sh"
 description = "Verify certification cleanup after an induced failure"
 run = "./.scripts/transport-certification-cleanup-test.sh"
 
+[tasks.health-plane-certification]
+description = "Run the complete bounded Linux Health Plane certification"
+run = "./.scripts/health-plane-certification.sh"
+
+[tasks.health-plane-certification-cleanup-test]
+description = "Verify Health Plane certification cleanup after induced failure and interrupt"
+run = "./.scripts/health-plane-certification-cleanup-test.sh"
+
 [tasks.build]
 description = "Build the project in debug mode"
 run = "cargo build"

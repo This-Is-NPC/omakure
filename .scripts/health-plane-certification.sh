@@ -489,8 +489,16 @@ assert_no_log_leakage() {
     local logs token_file token
     # hp-harness is included: it holds real node material and its panics are
     # forwarded to stderr, so it is exactly as capable of leaking as a node.
+    # Fail closed. This is the run's only leakage gate, and `|| true` on the
+    # capture made it fail *open*: if the Compose call itself failed, `$logs`
+    # held the error text and every check below passed having scanned nothing.
     logs=$("${compose[@]}" logs --no-log-prefix \
-        hp-node-1 hp-node-2 hp-node-3 hp-node-4 hp-harness 2>&1 || true)
+        hp-node-1 hp-node-2 hp-node-3 hp-node-4 hp-harness 2>&1) \
+        || fail "unable to read Compose logs for the leakage scan"
+    # Positive control: the harness always announces the connection it accepted,
+    # so its absence means the capture is not the logs it is supposed to be.
+    [[ "$logs" == *"harness: accepted a connection"* ]] \
+        || fail "the leakage scan captured no harness output; it scanned the wrong thing"
     [[ "$logs" != *"Bearer "* ]] || fail "bearer value leaked into Compose logs"
     [[ "$logs" != *'$argon2'* ]] || fail "Argon2 token hash leaked into Compose logs"
     for token_file in "$tmp_dir"/*.client.token; do

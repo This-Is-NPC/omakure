@@ -81,6 +81,19 @@ pub struct TrustSettings {
     /// with nobody having declared it.
     #[serde(default)]
     pub remote_cue_scripts: Vec<String>,
+    /// Batteries whose installed scripts this node will run on another node's
+    /// orders.
+    ///
+    /// Declaring a battery is declaring its scripts, which is why the unit is
+    /// the battery rather than each file: a battery is a versioned set with
+    /// recorded provenance, so "everything from this source" is a statement
+    /// someone can actually verify. Empty means none.
+    ///
+    /// Note what this does *not* grant: a remote peer still cannot install a
+    /// battery. Installing remains a local act, so remote management can select
+    /// among code the node already has and can never introduce more.
+    #[serde(default)]
+    pub remote_cue_batteries: Vec<String>,
     pub allow_baseline_push: bool,
     #[serde(default)]
     pub authorities: Vec<EnrollmentAuthority>,
@@ -147,6 +160,7 @@ impl Default for NodeConfig {
                 enrollment: "disabled".to_string(),
                 allow_remote_cues: false,
                 remote_cue_scripts: Vec::new(),
+                remote_cue_batteries: Vec::new(),
                 allow_baseline_push: false,
                 authorities: Vec::new(),
                 bootstrap_token_hash: String::new(),

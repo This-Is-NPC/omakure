@@ -69,6 +69,8 @@ carries_script_content = false
 # ever subtract, so disagreement fails closed.
 allowlist = "trust.remote_cue_scripts, intersected with the .omakureignore-honouring listing"
 declared_allowlist_required = true
+declared_battery_grants_its_installed_scripts = true
+remote_peer_can_install_a_battery = false
 empty_declaration_denies_everything = true
 not_declared_is_reported_as_unresolvable = true
 requires_regular_file = true

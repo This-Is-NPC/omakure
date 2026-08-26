@@ -857,6 +857,43 @@ fn cache_path_for_battery(workspace: &Workspace, name: &str) -> OperationResult<
     Ok(path)
 }
 
+/// Which battery installed the script at `installed_path`, if any.
+///
+/// Answered here rather than by the caller reading the provenance files
+/// directly, because this module owns that format. A caller that parsed it
+/// itself would be coupled to a layout it does not control, and would drift
+/// silently the day it changes.
+///
+/// Only the batteries in `considered` are scanned. That keeps the cost
+/// proportional to what a node declared rather than to everything it ever
+/// installed, and it means an undeclared battery is not even looked at.
+pub fn installing_battery(
+    workspace: &Workspace,
+    considered: &[String],
+    installed_path: &Path,
+) -> Option<String> {
+    let paths = BatteryPaths::for_workspace(workspace);
+    for battery in considered {
+        let dir = paths.installed_root.join(sanitize_file_component(battery));
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(contents) = fs::read_to_string(entry.path()) else {
+                continue;
+            };
+            let Ok(provenance) = serde_json::from_str::<InstalledScriptProvenance>(&contents)
+            else {
+                continue;
+            };
+            if provenance.installed_path == installed_path {
+                return Some(provenance.battery_name);
+            }
+        }
+    }
+    None
+}
+
 fn installed_root_for_workspace(workspace: &Workspace) -> OperationResult<PathBuf> {
     let paths = BatteryPaths::for_workspace(workspace);
     safe_battery_metadata_dir(workspace, &paths.installed_root, "installed")

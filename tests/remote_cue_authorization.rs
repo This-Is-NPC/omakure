@@ -131,6 +131,7 @@ fn session_over<'a>(registry: &'a NodeRegistry) -> CueSession<'a> {
         CuePolicy {
             enabled: true,
             declared_scripts: vec!["deploy.sh".to_string()],
+            declared_batteries: Vec::new(),
         },
     )
 }

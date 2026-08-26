@@ -113,7 +113,7 @@ and configuration only. A Cue is accepted if and only if **all five** pass.
 | **B** | The sender is a peer with role `conductor` and `state = 'active'` | `1202` |
 | **C** | That peer holds the `remote-run` capability | `1203` |
 | **D** | That peer also holds `notifications` | `1204` |
-| **E** | The named script is listed in `trust.remote_cue_scripts` | `1212`, reported as `1206` |
+| **E** | The script is in `trust.remote_cue_scripts`, or was installed by a battery in `trust.remote_cue_batteries` | `1212`, reported as `1206` |
 
 Role is the shipped `INTEGER` encoding, `ROLE_CONDUCTOR = 1` /
 `ROLE_PERFORMER = 2` (`src/health_plane/bounds.rs:13-15`). It is **not** the
@@ -140,7 +140,22 @@ deliberately.
 [trust]
 allow_remote_cues = true
 remote_cue_scripts = ["deploy.sh", "restart.lua"]
+remote_cue_batteries = ["azure"]
 ```
+
+A battery may be declared instead of naming each of its scripts. The unit is
+the battery rather than the file because a battery is a versioned set with
+recorded provenance — "everything from this source at this commit" is a
+statement someone can verify, unlike a wildcard. Membership is read from the
+local install record written at install time, never from the message.
+
+Declaring a battery grants nothing beyond what is already installed. **A remote
+peer cannot install a battery**, so remote management still selects among code
+the node already has and can never introduce more. Making installation itself
+remotely triggerable would hand whoever controls the Conductor the power to
+choose what code exists on the node, not merely which of it runs, and that
+requires publisher signatures rather than transport trust — deferred to the MDM
+phase with its own owner decision.
 
 An earlier draft of this contract treated the `.omakureignore`-honouring
 workspace listing as the allow-list. It is not one. It is a deny-list over an

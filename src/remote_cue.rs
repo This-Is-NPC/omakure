@@ -130,6 +130,9 @@ pub struct LocalAuthority {
     /// `trust.remote_cue_scripts`: what this node has declared it will run on
     /// another node's orders. Empty means nothing.
     pub declared_scripts: Vec<String>,
+    /// `trust.remote_cue_batteries`: batteries whose installed scripts count as
+    /// declared. Empty means none.
+    pub declared_batteries: Vec<String>,
 }
 
 /// The gate decision. `Accepted` means the four gates passed; it does not mean
@@ -198,6 +201,33 @@ pub fn is_declared(name: &str, declared: &[String]) -> Result<(), CueCode> {
         Ok(())
     } else {
         Err(CueCode::NotDeclared)
+    }
+}
+
+/// Gate E, both forms: named outright, or installed by a declared battery.
+///
+/// A battery is a versioned set with recorded provenance, so declaring one is a
+/// verifiable statement about a source rather than a wildcard. The provenance
+/// is read from the local install record, never from the message.
+pub fn is_declared_or_from_declared_battery(
+    name: &str,
+    resolved: &std::path::Path,
+    policy: &CuePolicy,
+    workspace: &crate::workspace::Workspace,
+) -> Result<(), CueCode> {
+    if is_declared(name, &policy.declared_scripts).is_ok() {
+        return Ok(());
+    }
+    if policy.declared_batteries.is_empty() {
+        return Err(CueCode::NotDeclared);
+    }
+    match crate::operations::battery::installing_battery(
+        workspace,
+        &policy.declared_batteries,
+        resolved,
+    ) {
+        Some(_) => Ok(()),
+        None => Err(CueCode::NotDeclared),
     }
 }
 
@@ -295,6 +325,7 @@ pub struct CueSession<'a> {
     remote_node_id: String,
     remote_cues_enabled: bool,
     declared_scripts: Vec<String>,
+    declared_batteries: Vec<String>,
     /// Cue ids already decided on this session.
     ///
     /// Deliberately in-session only. It covers the realistic duplicate — a
@@ -342,6 +373,7 @@ pub enum CueOutcome {
 pub struct CuePolicy {
     pub enabled: bool,
     pub declared_scripts: Vec<String>,
+    pub declared_batteries: Vec<String>,
 }
 
 /// Read the declared remote-execution policy from this node's own config.
@@ -362,6 +394,7 @@ pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy {
         .map(|config| CuePolicy {
             enabled: config.trust.allow_remote_cues,
             declared_scripts: config.trust.remote_cue_scripts,
+            declared_batteries: config.trust.remote_cue_batteries,
         })
         .unwrap_or_default()
 }
@@ -377,6 +410,7 @@ impl<'a> CueSession<'a> {
             remote_node_id: remote_node_id.to_string(),
             remote_cues_enabled: policy.enabled,
             declared_scripts: policy.declared_scripts,
+            declared_batteries: policy.declared_batteries,
             seen_cue_ids: std::collections::HashSet::new(),
         }
     }
@@ -422,6 +456,7 @@ impl<'a> CueSession<'a> {
         let authority = LocalAuthority {
             remote_cues_enabled: self.remote_cues_enabled,
             declared_scripts: self.declared_scripts.clone(),
+            declared_batteries: self.declared_batteries.clone(),
             authorization: self
                 .registry
                 .health_authorization(&self.remote_node_id)
@@ -477,6 +512,7 @@ mod tests {
         LocalAuthority {
             remote_cues_enabled: true,
             declared_scripts: vec!["deploy.sh".to_string()],
+            declared_batteries: Vec::new(),
             authorization: Some(authorization(
                 PeerRole::Conductor,
                 PeerState::Active,
@@ -692,6 +728,130 @@ mod tests {
     }
 
     /// Audited distinctly, reported indistinguishably.
+    fn workspace_with_battery_script(
+        battery: &str,
+        script_name: &str,
+    ) -> (
+        tempfile::TempDir,
+        crate::workspace::Workspace,
+        std::path::PathBuf,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = crate::workspace::Workspace::new(dir.path().to_path_buf());
+        let installed = dir.path().join(script_name);
+        std::fs::write(&installed, "#!/usr/bin/env bash\n").unwrap();
+
+        let record_dir = workspace
+            .omakure_dir()
+            .join("batteries")
+            .join("installed")
+            .join(battery);
+        std::fs::create_dir_all(&record_dir).unwrap();
+        std::fs::write(
+            record_dir.join("record.json"),
+            serde_json::json!({
+                "battery_name": battery,
+                "script_id": format!("{battery}.{script_name}"),
+                "git_url": "https://example.invalid/b.git",
+                "requested_ref": "main",
+                "resolved_commit": "0".repeat(40),
+                "source_path": script_name,
+                "installed_path": installed,
+            })
+            .to_string(),
+        )
+        .unwrap();
+        (dir, workspace, installed)
+    }
+
+    fn policy(scripts: &[&str], batteries: &[&str]) -> CuePolicy {
+        CuePolicy {
+            enabled: true,
+            declared_scripts: scripts.iter().map(|s| s.to_string()).collect(),
+            declared_batteries: batteries.iter().map(|b| b.to_string()).collect(),
+        }
+    }
+
+    /// Declaring a battery declares its installed scripts.
+    #[test]
+    fn a_script_from_a_declared_battery_passes_without_being_named() {
+        let (_dir, workspace, installed) = workspace_with_battery_script("azure", "rg-list.sh");
+        assert_eq!(
+            is_declared_or_from_declared_battery(
+                "rg-list.sh",
+                &installed,
+                &policy(&[], &["azure"]),
+                &workspace
+            ),
+            Ok(())
+        );
+    }
+
+    /// And declaring one battery does not declare another.
+    #[test]
+    fn a_script_from_an_undeclared_battery_is_refused() {
+        let (_dir, workspace, installed) = workspace_with_battery_script("azure", "rg-list.sh");
+        assert_eq!(
+            is_declared_or_from_declared_battery(
+                "rg-list.sh",
+                &installed,
+                &policy(&[], &["aws"]),
+                &workspace
+            ),
+            Err(CueCode::NotDeclared)
+        );
+    }
+
+    /// A hand-written script that no battery installed stays undeclared, even
+    /// when it sits beside battery scripts in the same workspace.
+    #[test]
+    fn a_script_with_no_provenance_is_refused_despite_a_declared_battery() {
+        let (dir, workspace, _installed) = workspace_with_battery_script("azure", "rg-list.sh");
+        let local = dir.path().join("local.sh");
+        std::fs::write(&local, "#!/usr/bin/env bash\n").unwrap();
+        assert_eq!(
+            is_declared_or_from_declared_battery(
+                "local.sh",
+                &local,
+                &policy(&[], &["azure"]),
+                &workspace
+            ),
+            Err(CueCode::NotDeclared)
+        );
+    }
+
+    /// Naming a script still works, with or without batteries in play.
+    #[test]
+    fn an_explicitly_named_script_needs_no_battery() {
+        let (dir, workspace, _installed) = workspace_with_battery_script("azure", "rg-list.sh");
+        let local = dir.path().join("deploy.sh");
+        std::fs::write(&local, "#!/usr/bin/env bash\n").unwrap();
+        assert_eq!(
+            is_declared_or_from_declared_battery(
+                "deploy.sh",
+                &local,
+                &policy(&["deploy.sh"], &[]),
+                &workspace
+            ),
+            Ok(())
+        );
+    }
+
+    /// Declaring nothing still denies everything.
+    #[test]
+    fn an_empty_policy_denies_even_battery_scripts() {
+        let (_dir, workspace, installed) = workspace_with_battery_script("azure", "rg-list.sh");
+        assert_eq!(
+            is_declared_or_from_declared_battery(
+                "rg-list.sh",
+                &installed,
+                &policy(&[], &[]),
+                &workspace
+            ),
+            Err(CueCode::NotDeclared)
+        );
+    }
+
     #[test]
     fn not_declared_is_reported_as_unresolvable() {
         assert_eq!(

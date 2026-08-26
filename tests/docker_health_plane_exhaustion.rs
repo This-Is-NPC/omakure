@@ -200,19 +200,23 @@ fn an_unacknowledged_profile_stops_at_the_frozen_attempt_budget_on_one_session()
     };
 
     // A stray costs a *dial* attempt (`MAX_RETRY_ATTEMPTS` in the shipped
-    // dialer), not a Health Plane ack retry. It therefore threatens this
-    // phase's setup rather than its measurement: the send count asserted below
-    // is taken on the session that did handshake. Exhausting the dial budget
-    // would show up as a failed accept, loudly, not as a wrong count.
+    // dialer), not a Health Plane ack retry. It threatens this phase's setup
+    // rather than its measurement: the send count asserted below is taken on
+    // the session that did handshake.
     //
-    // So this is a bound, not a zero-tolerance check - but it is still a
-    // failure, because the shipped dialer opening a socket and abandoning it
-    // before its first write is real behaviour that has to stay visible.
+    // The bound is `- 1` and that is the whole point. The shipped dialer
+    // retires itself once `attempts` reaches the budget, and `attempts` only
+    // resets on a successful dial, so reaching this line at all already proves
+    // at most `BUDGET - 1` strays occurred. Asserting against the raw budget
+    // would be indistinguishable from deleting the assertion. One stray is
+    // tolerated because it does not corrupt the measurement and the shipped
+    // dialer is known to produce them; two means the very next failure retires
+    // the dialer for the lifetime of the process, which is worth failing on.
     assert!(
-        (strays as usize) < DIAL_ATTEMPT_BUDGET,
+        (strays as usize) < DIAL_ATTEMPT_BUDGET - 1,
         "the Performer opened {strays} connection(s) that sent no handshake frame, \
-         at or beyond the shipped dial budget of {DIAL_ATTEMPT_BUDGET}; the next \
-         outage would leave it unable to reconnect at all"
+         leaving only one of its {DIAL_ATTEMPT_BUDGET} dial attempts; one more \
+         failure and it could not reconnect at all for the life of the process"
     );
 
     // The shipped responder path, verbatim: three handshake messages, then the

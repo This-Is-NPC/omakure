@@ -275,7 +275,11 @@ fn decode_key(hex: &str) -> [u8; 32] {
         .step_by(2)
         .map(|index| u8::from_str_radix(&hex[index..index + 2], 16).expect("hex byte"))
         .collect();
-    bytes.try_into().expect("32-byte key")
+    // Same reason the transport key is not read with `try_into().expect(...)`:
+    // the error value is the Vec itself. This one only ever decodes a public
+    // key today, but `decode_key` reads as a generic helper.
+    <[u8; 32]>::try_from(bytes.as_slice())
+        .unwrap_or_else(|_| panic!("expected a 32-byte key, got {} bytes", bytes.len()))
 }
 
 fn hex(bytes: &[u8]) -> String {

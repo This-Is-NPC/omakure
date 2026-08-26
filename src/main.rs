@@ -137,7 +137,72 @@ fn scripts_dir() -> PathBuf {
     default_dir
 }
 
+/// Run a Lua script in the embedded runtime and exit.
+///
+/// Invoked only via the argv marker that `runtime::command_for_script_with_env`
+/// spawns, and intercepted before clap so omakure's global `--json` and
+/// `--scripts-dir` can never swallow a script's own arguments.
+///
+/// Everything after the script path is forwarded verbatim into Lua's `arg`
+/// table, with `arg[0]` set to the script path as the standalone interpreter
+/// does. A failure of the *host* exits with `LUA_HOST_FAILURE_EXIT` so it stays
+/// distinguishable from the script's own `os.exit`.
+fn run_embedded_lua(script: &std::path::Path, args: &[String]) -> ! {
+    let source = match std::fs::read_to_string(script) {
+        Ok(source) => source,
+        Err(err) => {
+            eprintln!("error: cannot read {}: {err}", script.display());
+            std::process::exit(omakure::LUA_HOST_FAILURE_EXIT);
+        }
+    };
+
+    let lua = mlua::Lua::new();
+    let arg_table = match lua.create_table() {
+        Ok(table) => table,
+        Err(err) => {
+            eprintln!("error: cannot initialise the Lua runtime: {err}");
+            std::process::exit(omakure::LUA_HOST_FAILURE_EXIT);
+        }
+    };
+    let mut failed = arg_table
+        .set(0, script.to_string_lossy().to_string())
+        .is_err();
+    for (index, value) in args.iter().enumerate() {
+        failed |= arg_table.set(index as i64 + 1, value.clone()).is_err();
+    }
+    failed |= lua.globals().set("arg", arg_table).is_err();
+    if failed {
+        eprintln!("error: cannot populate the Lua argument table");
+        std::process::exit(omakure::LUA_HOST_FAILURE_EXIT);
+    }
+
+    match lua
+        .load(&source)
+        .set_name(script.to_string_lossy().as_ref())
+        .exec()
+    {
+        Ok(()) => std::process::exit(0),
+        // A script calling `os.exit` unwinds as this variant; honour its code
+        // rather than reporting it as a runtime error.
+        Err(mlua::Error::RuntimeError(message)) => {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
+    }
+}
+
 fn main() {
+    // Before `Cli::parse`, deliberately: see `run_embedded_lua`.
+    let argv: Vec<String> = env::args().collect();
+    if argv.len() >= 3 && argv[1] == omakure::LUA_HOST_ARG {
+        let script = PathBuf::from(&argv[2]);
+        run_embedded_lua(&script, &argv[3..]);
+    }
+
     if let Err(err) = run() {
         // Top-level errors are rendered via Display so users see the
         // configured error messages instead of Rust's `Debug` rendering.

@@ -52,6 +52,9 @@ fn ensure_runtime_for(script: &Path) -> AppResult<()> {
         ScriptKind::PowerShell => {
             ensure_powershell_installed()?;
         }
+        // Nothing to ensure: the Lua runtime is compiled into this binary, so
+        // there is no host dependency that could be missing.
+        ScriptKind::Lua => {}
         ScriptKind::Python => {
             ensure_python_installed()?;
         }

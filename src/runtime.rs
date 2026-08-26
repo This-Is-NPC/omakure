@@ -7,6 +7,8 @@ pub enum ScriptKind {
     Bash,
     PowerShell,
     Python,
+    /// Executed by a Lua runtime embedded in this binary; no host interpreter.
+    Lua,
 }
 
 pub fn script_kind(path: &Path) -> Option<ScriptKind> {
@@ -15,12 +17,51 @@ pub fn script_kind(path: &Path) -> Option<ScriptKind> {
         "bash" | "sh" => Some(ScriptKind::Bash),
         "ps1" => Some(ScriptKind::PowerShell),
         "py" => Some(ScriptKind::Python),
+        "lua" => Some(ScriptKind::Lua),
         _ => None,
     }
 }
 
+/// Supported script extensions, in resolution precedence order.
+///
+/// This doubles as the precedence list for extensionless lookups
+/// (`operations::core`, `cli::run`), so `lua` is appended last: `omakure run
+/// deploy` keeps resolving `deploy.sh` when both it and `deploy.lua` exist.
 pub fn script_extensions() -> &'static [&'static str] {
-    &["bash", "sh", "ps1", "py"]
+    &["bash", "sh", "ps1", "py", "lua"]
+}
+
+/// The argv marker that puts this binary into embedded-Lua host mode.
+///
+/// Intercepted in `main` before clap runs. It is not a subcommand: `--json` and
+/// `--scripts-dir` are declared global, so a subcommand would let omakure's own
+/// parser consume a script's arguments, and `--help` would print omakure's help
+/// and exit 0.
+pub const LUA_HOST_ARG: &str = "--__omakure-lua-host";
+
+/// Exit code for a failure of the Lua *host*, as opposed to the script.
+///
+/// A script's own `os.exit(1)` must stay distinguishable from "the host could
+/// not start". 126 follows the shell convention for "found but not executable".
+pub const LUA_HOST_FAILURE_EXIT: i32 = 126;
+
+/// Resolve the binary that will host embedded Lua.
+///
+/// `current_exe()` only. No environment override and no `PATH` fallback: this
+/// is a spawn path inside a process that runs as a service, and either would be
+/// an arbitrary-binary-execution vector. Note that `cli::update` replaces the
+/// binary at this path via rename, so a worker that survives a self-update will
+/// exec the replaced file; the error below is what makes that legible.
+fn lua_host_binary() -> Result<PathBuf, ScriptError> {
+    let exe = std::env::current_exe().map_err(|err| ScriptError::HostBinaryUnavailable {
+        reason: err.to_string(),
+    })?;
+    if !exe.is_file() {
+        return Err(ScriptError::HostBinaryUnavailable {
+            reason: format!("{} is not a file", exe.display()),
+        });
+    }
+    Ok(exe)
 }
 
 /// Build a command while honoring an injected environment when choosing the
@@ -50,10 +91,21 @@ pub fn command_for_script_with_env(
     env: &[(String, String)],
 ) -> Result<Command, ScriptError> {
     let kind = script_kind(script).ok_or(ScriptError::UnsupportedType)?;
+
+    // Lua is embedded, so there is no interpreter to look up. Returning before
+    // `resolve_interpreter` keeps the Bash/PowerShell/Python construction
+    // byte-identical, which is what makes the regression surface here zero.
+    if kind == ScriptKind::Lua {
+        let mut command = Command::new(lua_host_binary()?);
+        command.arg(LUA_HOST_ARG).arg(script);
+        return Ok(command);
+    }
+
     let program: &str = match kind {
         ScriptKind::Bash => "bash",
         ScriptKind::PowerShell => powershell_program(),
         ScriptKind::Python => python_program(),
+        ScriptKind::Lua => unreachable!("Lua returns before interpreter resolution"),
     };
 
     // Resolve to an absolute path only when an injected PATH is present and
@@ -70,6 +122,7 @@ pub fn command_for_script_with_env(
         ScriptKind::PowerShell => {
             command.arg("-NoProfile").arg("-File").arg(script);
         }
+        ScriptKind::Lua => unreachable!("handled before interpreter resolution"),
     }
 
     Ok(command)
@@ -207,7 +260,37 @@ mod tests {
         assert!(exts.contains(&"sh"));
         assert!(exts.contains(&"ps1"));
         assert!(exts.contains(&"py"));
-        assert_eq!(exts.len(), 4);
+        assert!(exts.contains(&"lua"));
+        assert_eq!(exts.len(), 5);
+    }
+
+    #[test]
+    fn lua_resolves_last_so_existing_extensionless_lookups_do_not_change() {
+        // This list doubles as the precedence order for `omakure run deploy`.
+        // Appending `lua` last is what keeps `deploy.sh` winning over
+        // `deploy.lua` for callers that predate this kind.
+        let exts = script_extensions();
+        assert_eq!(exts.last(), Some(&"lua"));
+        let lua = exts.iter().position(|e| *e == "lua").unwrap();
+        for earlier in ["bash", "sh", "ps1", "py"] {
+            assert!(exts.iter().position(|e| *e == earlier).unwrap() < lua);
+        }
+    }
+
+    #[test]
+    fn lua_builds_a_self_exec_command_without_touching_the_interpreter_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("job.lua");
+        std::fs::write(&script, "print('x')").unwrap();
+
+        let command = command_for_script_with_env(&script, &[]).unwrap();
+        assert_eq!(
+            command.get_program(),
+            std::env::current_exe().unwrap().as_os_str(),
+            "Lua must re-execute this binary rather than resolve an interpreter"
+        );
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, vec![LUA_HOST_ARG.as_ref(), script.as_os_str()]);
     }
 
     #[cfg(not(windows))]

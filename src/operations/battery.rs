@@ -2885,6 +2885,7 @@ fn validate_script_schema_from_file(path: &Path, file: &mut File) -> OperationRe
         Some(ScriptKind::Bash) => vec!["#"],
         Some(ScriptKind::PowerShell) => vec!["#", ";"],
         Some(ScriptKind::Python) => vec!["#"],
+        Some(ScriptKind::Lua) => vec!["--"],
         None => {
             return Err(OperationError::new(
                 OperationErrorCode::UnsupportedScript,

@@ -53,6 +53,10 @@ pub fn doctor_report(workspace: &Workspace) -> OperationResult<DoctorReport> {
         required_check("jq", ensure_jq_installed()),
         optional_check("powershell", ensure_powershell_installed()),
         optional_check("python", ensure_python_installed()),
+        // Lua is deliberately absent. This list reports *host* dependencies
+        // that can be missing; the Lua runtime is compiled into this binary, so
+        // an entry here would always pass and would read as a dependency the
+        // operator has to satisfy. Do not add one.
     ];
     let workspace_paths = vec![
         workspace_path("workspace_root", workspace.root()),

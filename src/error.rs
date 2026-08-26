@@ -59,6 +59,14 @@ pub enum ScriptError {
 
     #[error("{name} found, but check failed: {message}")]
     DependencyCheckFailed { name: String, message: String },
+
+    /// The embedded Lua host could not locate the running `omakure` binary.
+    ///
+    /// Distinct from a generic spawn failure on purpose: a Lua script runs by
+    /// re-executing this binary, so this is a broken installation rather than a
+    /// broken script, and the two must not be confused at the exit code.
+    #[error("the running omakure binary could not be resolved to execute Lua: {reason}")]
+    HostBinaryUnavailable { reason: String },
 }
 
 /// Errors related to environment configuration.

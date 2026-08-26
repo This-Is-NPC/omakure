@@ -372,12 +372,20 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
     let cargo = read("Cargo.toml").to_lowercase();
     assert!(cargo.contains("name = \"omakure-installer\""));
     assert!(root.join("src/installer.rs").is_file());
-    for removed_dependency in ["crossterm", "ratatui", "rattles", "mlua"] {
+    // `mlua` was on this list while Lua was a TUI-era leftover. Roadmap item 5
+    // reintroduces it deliberately, as the embedded runtime that lets a node
+    // execute `.lua` with no system Lua installed, so it is no longer a
+    // regression to guard against. The rest of the list is still TUI wreckage.
+    for removed_dependency in ["crossterm", "ratatui", "rattles"] {
         assert!(
             !cargo.contains(removed_dependency),
             "headless package must not declare {removed_dependency}"
         );
     }
+    assert!(
+        cargo.contains("mlua"),
+        "the embedded Lua runtime is required by the .lua script kind"
+    );
 
     let help = Command::new(env!("CARGO_BIN_EXE_omakure"))
         .arg("--help")

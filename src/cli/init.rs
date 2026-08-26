@@ -98,6 +98,7 @@ pub fn run_with_format(
                 ScriptKind::Bash => "bash".into(),
                 ScriptKind::PowerShell => "powershell".into(),
                 ScriptKind::Python => "python".into(),
+                ScriptKind::Lua => "lua".into(),
             },
         };
         json::print_ok(payload);
@@ -134,11 +135,13 @@ fn build_with_schema(schema_text: &str, body: Option<&str>, kind: ScriptKind) ->
     let prefix = match kind {
         ScriptKind::Bash | ScriptKind::Python => "#",
         ScriptKind::PowerShell => "#",
+        ScriptKind::Lua => "--",
     };
     let header = match kind {
         ScriptKind::Bash => "#!/usr/bin/env bash\nset -euo pipefail\n\n",
         ScriptKind::Python => "#!/usr/bin/env python3\n\n",
         ScriptKind::PowerShell => "",
+        ScriptKind::Lua => "",
     };
     let mut out = String::new();
     out.push_str(header);
@@ -212,6 +215,7 @@ fn build_template(script_id: &str, kind: ScriptKind) -> String {
         ScriptKind::Bash => build_bash_template(script_id),
         ScriptKind::PowerShell => build_powershell_template(script_id),
         ScriptKind::Python => build_python_template(script_id),
+        ScriptKind::Lua => build_lua_template(script_id),
     }
 }
 
@@ -351,6 +355,35 @@ args = parser.parse_args()
 target = args.target or input("Target (optional): ")
 
 print(f"TODO: implement {script_id}")
+"#,
+        script_id = script_id
+    )
+}
+
+fn build_lua_template(script_id: &str) -> String {
+    format!(
+        r#"-- OMAKURE_SCHEMA_START
+-- {{
+--   "Name": "{script_id}",
+--   "Description": "Describe what this script does.",
+--   "Tags": [],
+--   "Fields": [
+--     {{
+--       "Name": "target",
+--       "Prompt": "Target (optional)",
+--       "Type": "string",
+--       "Order": 1,
+--       "Required": false
+--     }}
+--   ]
+-- }}
+-- OMAKURE_SCHEMA_END
+
+-- Field values arrive as environment variables, exactly as they do for the
+-- other script kinds. Command-line arguments arrive in `arg`.
+local target = os.getenv("target") or arg[1] or ""
+
+print("TODO: implement {script_id}" .. (target ~= "" and (" for " .. target) or ""))
 "#,
         script_id = script_id
     )

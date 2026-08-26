@@ -67,6 +67,7 @@ impl ScriptRepository for FsWorkspaceRepository {
             Some(ScriptKind::Bash) => vec!["#"],
             Some(ScriptKind::PowerShell) => vec!["#", ";"],
             Some(ScriptKind::Python) => vec!["#"],
+            Some(ScriptKind::Lua) => vec!["--"],
             None => return Err(ScriptError::UnsupportedType.into()),
         };
 

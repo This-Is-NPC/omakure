@@ -21,6 +21,11 @@ pub mod redaction;
 mod run_executor;
 mod runs;
 mod runtime;
+/// The two constants the binary needs to enter embedded-Lua host mode.
+///
+/// Re-exported narrowly rather than making `runtime` public: nothing else in
+/// the module is part of the crate's contract.
+pub use runtime::{LUA_HOST_ARG, LUA_HOST_FAILURE_EXIT};
 mod search_index;
 pub mod secrets;
 mod use_cases;

@@ -8,6 +8,7 @@ process.
 
 - `../rebuild-omakure.md`: canonical future product direction and node contract
 - `direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
+- `health-plane-contract.md`: frozen Profile/Pulse/Signal wire, authorization, and bounds contract (pending owner review)
 - `installation.md`: install, update, uninstall, and version pinning.
 - `usage.md`: CLI commands and common workflows.
 - `deployment.md`: API/node-service topologies, containers, volumes, and security.

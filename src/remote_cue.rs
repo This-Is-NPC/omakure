@@ -377,6 +377,35 @@ impl CueDispatch {
 /// The frozen upper bound on a Cue's human-readable reason.
 pub const MAX_REASON_BYTES: usize = 128;
 
+/// What gate E authorized: which file, and exactly which bytes.
+///
+/// Carried from the gate to the accept transition so the two can be compared.
+/// A name is not enough -- the whole point is that the *content* authorized is
+/// the content enqueued.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScriptBinding {
+    path: std::path::PathBuf,
+    content_hash: String,
+}
+
+/// SHA-256 of a script's bytes, or `None` if it cannot be read.
+///
+/// Unreadable is not "unchanged": a missing or unreadable file must fail the
+/// comparison rather than pass it, so the caller treats `None` as a mismatch.
+fn content_hash(path: &std::path::Path) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    let bytes = std::fs::read(path).ok()?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Some(
+        hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+    )
+}
+
 /// UTC Unix seconds, for the second validity check at the accept transition.
 fn unix_now() -> i64 {
     std::time::SystemTime::now()
@@ -572,9 +601,10 @@ impl<'a> CueSession<'a> {
         if let GateDecision::Rejected(code) = evaluate_gates(&self.authority()) {
             return self.refuse(Some(&dispatch), code, now);
         }
-        if let Err(code) = self.authorize_script(&dispatch.script) {
-            return self.refuse(Some(&dispatch), code, now);
-        }
+        let binding = match self.authorize_script(&dispatch.script) {
+            Ok(binding) => binding,
+            Err(code) => return self.refuse(Some(&dispatch), code, now),
+        };
 
         // Checked again at the accept transition. The gates above read the
         // registry and walk the workspace; a Cue that expired while they ran
@@ -583,6 +613,17 @@ impl<'a> CueSession<'a> {
         if let Err(code) =
             within_validity_window(dispatch.not_before, dispatch.expires_at, at_accept)
         {
+            return self.refuse(Some(&dispatch), code, at_accept);
+        }
+
+        // The gates walked the filesystem and read a schema. Re-check the file
+        // that was authorized is still the file that will be enqueued, so a
+        // swap during that walk cannot ride an authorization granted for
+        // different content.
+        if content_hash(&binding.path).as_deref() != Some(binding.content_hash.as_str()) {
+            return self.refuse(Some(&dispatch), CueCode::ScriptUnresolvable, at_accept);
+        }
+        if let GateDecision::Rejected(code) = evaluate_gates(&self.authority()) {
             return self.refuse(Some(&dispatch), code, at_accept);
         }
 
@@ -605,7 +646,7 @@ impl<'a> CueSession<'a> {
     /// absent" and "present but undeclared" both end at the same reported
     /// code; the audited codes still differ, so the owner can tell them apart
     /// locally while the sender cannot.
-    fn authorize_script(&self, script: &str) -> Result<(), CueCode> {
+    fn authorize_script(&self, script: &str) -> Result<ScriptBinding, CueCode> {
         let workspace = self.workspace.as_ref().ok_or(CueCode::ScriptUnresolvable)?;
         let repo = crate::adapters::workspace_repository::FsWorkspaceRepository::new(
             workspace.scripts_root().to_path_buf(),
@@ -633,7 +674,10 @@ impl<'a> CueSession<'a> {
         if declares_secret_field(&schema) {
             return Err(CueCode::ScriptDeclaresSecrets);
         }
-        Ok(())
+        Ok(ScriptBinding {
+            path: resolved.to_path_buf(),
+            content_hash: content_hash(resolved).ok_or(CueCode::ScriptUnresolvable)?,
+        })
     }
 
     fn authority(&self) -> LocalAuthority {
@@ -1394,5 +1438,33 @@ mod tests {
                 "{bad:?} should be invalid"
             );
         }
+    }
+
+    /// A file swapped after gate E must not be enqueued under that decision.
+    ///
+    /// Written against `content_hash` directly because the swap window is
+    /// inside one function call; a test that tried to race it would be a test
+    /// of the scheduler, not of the guard.
+    #[test]
+    fn a_swapped_script_no_longer_matches_what_the_gate_authorized() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let script = dir.path().join("deploy.sh");
+        std::fs::write(&script, "echo original\n").expect("write");
+        let authorized = content_hash(&script).expect("hash the authorized bytes");
+
+        std::fs::write(&script, "echo swapped\n").expect("swap");
+        assert_ne!(
+            content_hash(&script).as_deref(),
+            Some(authorized.as_str()),
+            "the accept transition must be able to see the swap"
+        );
+
+        // And a file that vanished must fail the comparison, not pass it.
+        std::fs::remove_file(&script).expect("remove");
+        assert_eq!(
+            content_hash(&script),
+            None,
+            "unreadable must never compare equal to authorized"
+        );
     }
 }

@@ -89,8 +89,16 @@ remote_peer_can_install_a_battery = false
 empty_declaration_denies_everything = true
 not_declared_is_reported_as_unresolvable = true
 requires_regular_file = true
+# The content authorized by gate E is hashed, and the hash is re-checked at the
+# accept->run transition, so a swap during the gate walk cannot ride an
+# authorization granted for different bytes.
 hash_recorded_at_accept = true
-hash_reverified_at_exec = true
+hash_reverified_at_accept_transition = true
+# NOT re-verified again inside the executor. That would need a new `runs`
+# column and a Cue-specific branch in `run_executor`, and it only defends
+# against an attacker who can already write to the workspace this node runs
+# code from -- who does not need a Cue. Recorded as a deviation for the owner.
+hash_reverified_at_exec = false
 missing_and_excluded_share_a_code = true
 
 [idempotency]

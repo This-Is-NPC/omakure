@@ -305,8 +305,15 @@ fn a_cue_names_a_script_and_never_carries_one() {
     assert!(boolean(&v, &["resolution", "requires_regular_file"]));
     assert!(boolean(&v, &["resolution", "hash_recorded_at_accept"]));
     assert!(
-        boolean(&v, &["resolution", "hash_reverified_at_exec"]),
-        "without re-verification a file swapped between accept and exec runs instead"
+        boolean(&v, &["resolution", "hash_reverified_at_accept_transition"]),
+        "without the re-check, a file swapped during the gate walk is enqueued \
+         under an authorization granted for different bytes"
+    );
+    // Recorded as false rather than removed: a claim that quietly disappears
+    // from a contract is worse than one the reader can see was declined.
+    assert!(
+        !boolean(&v, &["resolution", "hash_reverified_at_exec"]),
+        "the executor re-check is a declared deviation, not an omission"
     );
     assert!(
         boolean(&v, &["resolution", "missing_and_excluded_share_a_code"]),

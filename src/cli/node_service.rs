@@ -158,6 +158,12 @@ pub fn run(
             scheduler_enabled,
         ),
     )));
+    // Before the transport can accept anything. A Cue accepted first and
+    // completed fast would otherwise land inside the reporter's own first
+    // harvest, which seeds and returns nothing -- the Conductor would wait on
+    // an outcome that was never going to be sent.
+    health_reporter.seed_run_watermark();
+
     let mut direct_service = if direct_bind.is_some() || !static_peers.is_empty() {
         Some(crate::direct_service::DirectService::start(
             direct_bind,

@@ -1380,6 +1380,7 @@ async fn node_revoke_handler(
     operation_response(node_context().and_then(|context| {
         node_ops::revoke_peer(
             &context,
+            &state.workspace,
             node_ops::RevocationRequest {
                 node_id,
                 actor: body.actor,

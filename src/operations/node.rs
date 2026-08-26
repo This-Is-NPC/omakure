@@ -434,16 +434,27 @@ pub fn update_peer_capabilities(
         .map(public_peer)
 }
 
+/// Revoke a peer, and stop the work it already caused.
+///
+/// The revocation is written first and is never made conditional on the run
+/// log: withdrawing trust must not be blocked because a workspace database is
+/// missing or busy. Cancelling in-flight Cue runs is a best-effort follow-up
+/// whose whole mechanism is the row transition -- the executor heartbeat kills
+/// the child as soon as the row leaves `running`.
 pub fn revoke_peer(
     context: &NodeContext,
+    workspace: &crate::workspace::Workspace,
     request: RevocationRequest,
 ) -> OperationResult<PublicPeer> {
     require_confirmation(request.confirmed)?;
     let registry = open_initialized_registry(context)?;
-    registry
+    let peer = registry
         .revoke_peer(&request.node_id, &request.actor, &request.reason)
-        .map_err(map_registry_error)
-        .map(public_peer)
+        .map_err(map_registry_error)?;
+    if let Ok(conn) = crate::runs::open(workspace) {
+        let _ = crate::runs::cancel_cue_runs_for_actor(&conn, &request.node_id);
+    }
+    Ok(public_peer(peer))
 }
 
 pub fn manual_enrollment_enabled(context: &NodeContext) -> OperationResult<()> {
@@ -1786,8 +1797,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(updated.capabilities, vec!["notifications"]);
+        let workspace = crate::workspace::Workspace::new(temp.path().join("workspace"));
         let revoked = revoke_peer(
             &context,
+            &workspace,
             RevocationRequest {
                 node_id: node_id.clone(),
                 actor: "operator".into(),
@@ -1799,6 +1812,7 @@ mod tests {
         assert_eq!(revoked.state, "revoked");
         assert!(revoke_peer(
             &context,
+            &workspace,
             RevocationRequest {
                 node_id,
                 actor: "operator".into(),

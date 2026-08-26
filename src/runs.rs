@@ -1186,6 +1186,48 @@ pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, Stri
     Ok(ids)
 }
 
+/// Cancel every unfinished Cue-origin run this peer caused.
+///
+/// Withdrawing trust must reach work already in flight, not just future
+/// instructions. Cancelling the row is the whole mechanism: the executor's
+/// heartbeat already kills the child as soon as the row leaves `running`, so
+/// there is no new cancel plumbing and no second way to stop a run.
+///
+/// Scoped to `trigger = 'cue'` on purpose. A revoked peer's name may also
+/// appear on locally-initiated work, and revoking a peer is not a licence to
+/// cancel what this node's own owner started.
+pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, String> {
+    let mut statement = conn
+        .prepare(
+            "SELECT run_id FROM runs
+              WHERE trigger = ?1
+                AND actor = ?2
+                AND state IN ('queued', 'running')",
+        )
+        .map_err(|err| format!("Prepare cue revocation failed: {}", err))?;
+    let ids: Vec<String> = statement
+        .query_map(params![RunTrigger::Cue.as_str(), actor], |row| row.get(0))
+        .map_err(|err| format!("Query cue revocation failed: {}", err))?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|err| format!("Read cue revocation failed: {}", err))?;
+    drop(statement);
+
+    let mut cancelled = Vec::new();
+    for run_id in ids {
+        if cancel(
+            conn,
+            &run_id,
+            Some("the peer that asked for this run was revoked".to_string()),
+            None,
+        )
+        .is_ok()
+        {
+            cancelled.push(run_id);
+        }
+    }
+    Ok(cancelled)
+}
+
 /// Mark a `running` row as `timed_out` after the worker killed the
 /// process for exceeding its `--timeout`.
 pub fn time_out(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String> {
@@ -1845,6 +1887,91 @@ mod tests {
     /// remote instruction must not be, because the side effect may already have
     /// happened and the caller cannot tell it happened twice.
     ///
+    /// Revoking a peer reaches the work it already caused, and stops there.
+    ///
+    /// The second half is the one worth having: a peer's node id can appear on
+    /// locally-initiated work too, and revoking trust in a peer is not a
+    /// licence to cancel what this node's owner started.
+    #[test]
+    fn revoking_a_peer_cancels_its_cue_runs_and_nothing_else() {
+        let ws = unique_workspace("cue_revocation_cancels");
+        let conn = open(&ws).expect("open");
+        let peer = "omk1_peer";
+
+        let queued = enqueue(
+            &conn,
+            "/x/deploy.sh",
+            &[],
+            EnqueueOptions {
+                trigger: RunTrigger::Cue,
+                actor: peer.into(),
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        let running = enqueue(
+            &conn,
+            "/x/deploy.sh",
+            &[],
+            EnqueueOptions {
+                trigger: RunTrigger::Cue,
+                actor: peer.into(),
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        // Local work carrying the same actor name, and a Cue from someone else.
+        let local = enqueue(
+            &conn,
+            "/x/deploy.sh",
+            &[],
+            EnqueueOptions {
+                actor: peer.into(),
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        let other_peer = enqueue(
+            &conn,
+            "/x/deploy.sh",
+            &[],
+            EnqueueOptions {
+                trigger: RunTrigger::Cue,
+                actor: "omk1_other".into(),
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE runs SET state = 'running', started_at = ?1 WHERE run_id = ?2",
+            rusqlite::params![current_unix_ms(), running.run_id],
+        )
+        .unwrap();
+
+        let cancelled = cancel_cue_runs_for_actor(&conn, peer).unwrap();
+        assert_eq!(
+            cancelled.len(),
+            2,
+            "both the queued and the running Cue run must be cancelled"
+        );
+
+        for run_id in [&queued.run_id, &running.run_id] {
+            assert_eq!(
+                get_run(&conn, run_id).unwrap().unwrap().state,
+                RunState::Cancelled,
+                "a revoked peer's in-flight Cue must not survive the revocation"
+            );
+        }
+        for run_id in [&local.run_id, &other_peer.run_id] {
+            assert_eq!(
+                get_run(&conn, run_id).unwrap().unwrap().state,
+                RunState::Queued,
+                "revocation must not reach work it was not asked to stop"
+            );
+        }
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
     /// Without the exclusion this test fails by *succeeding* — `claim_next`
     /// hands the row back and the script runs a second time.
     #[test]

@@ -237,9 +237,17 @@ Resolution is never a string comparison on the name. The resolved path must be a
 regular file by `symlink_metadata`, following the rejection pattern already used
 at `src/node.rs:1057`, so a symlink cannot redirect a Cue outside the workspace.
 
-The resolved file's content hash is recorded at accept and **re-verified at
-exec**. Without this, a Cue accepted against one file could execute a different
-one swapped in between the two transitions.
+The resolved file's content hash is recorded when gate E authorizes it and
+**re-verified at the accept→run transition**. The gates walk the filesystem and
+read a schema; without the re-check, a file swapped during that walk would be
+enqueued under an authorization granted for different bytes.
+
+**Deviation from the original draft, for owner review.** This does not extend to
+a third check inside `run_executor`. Doing so needs a new `runs` column and a
+Cue-specific branch in the executor, and it defends only against an attacker who
+can already write into the workspace this node runs code from — who has no need
+of a Cue. `hash_reverified_at_exec = false` in the frozen vectors records the
+choice rather than hiding it.
 
 Failure to resolve is `1206`. The reply never distinguishes "no such script" from
 "excluded from discovery": both are `1206` with identical timing-insensitive

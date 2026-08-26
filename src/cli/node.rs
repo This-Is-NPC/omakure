@@ -138,6 +138,7 @@ pub fn run(
         .map(|result| serde_json::to_value(result).expect("peer serializes")),
         NodeCommand::Revoke(args) => node_ops::revoke_peer(
             &context,
+            &crate::workspace::Workspace::new(scripts_dir.clone()),
             node_ops::RevocationRequest {
                 node_id: args.node_id,
                 actor: args.actor,

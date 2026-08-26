@@ -232,28 +232,10 @@ impl HealthReporter {
     /// oldest first, bounded by the frozen outbox capacity.
     pub fn run_signals(&self) -> Vec<RunFact> {
         let capacity = SIGNAL_OUTBOX_CAPACITY as usize;
-        let mut runs: Vec<RunFact> = self
-            .facts
-            .terminal_runs(capacity)
-            .into_iter()
-            .filter_map(|mut run| sanitize_signal_run(&mut run).then_some(run))
-            .collect();
-        runs.sort_by(|left, right| {
-            left.finished_at
-                .cmp(&right.finished_at)
-                .then_with(|| left.run_id.cmp(&right.run_id))
-        });
-        runs.truncate(capacity);
+        let runs = self.sanitized_terminal_runs(capacity);
         let mut state = self.state.lock().expect("health reporter state");
         let Some(watermark) = state.run_watermark else {
-            let newest = runs.last().map(|run| run.finished_at).unwrap_or(0);
-            state.run_watermark = Some(newest);
-            state.run_watermark_ids = runs
-                .iter()
-                .filter(|run| run.finished_at == newest)
-                .map(|run| run.run_id.clone())
-                .collect();
-            state.run_watermark_ids.truncate(capacity);
+            seed_watermark(&mut state, &runs, capacity);
             return Vec::new();
         };
         let mut emitted = Vec::new();
@@ -276,6 +258,56 @@ impl HealthReporter {
         }
         emitted
     }
+
+    /// Seed the run watermark now, without consuming anything.
+    ///
+    /// The first `run_signals` call seeds and returns nothing, so a run that
+    /// reaches a terminal result before that call is swallowed forever. That is
+    /// correct for history a restarting Performer must not replay, and wrong
+    /// for a run some *other* node asked for and is waiting on. Seeding at
+    /// service start, before the transport can accept anything, makes the two
+    /// cases distinguishable by time rather than by luck.
+    ///
+    /// Idempotent under the same lock that guards the watermark, so a second
+    /// caller cannot turn this into a silent harvest.
+    pub fn seed_run_watermark(&self) {
+        let capacity = SIGNAL_OUTBOX_CAPACITY as usize;
+        let runs = self.sanitized_terminal_runs(capacity);
+        let mut state = self.state.lock().expect("health reporter state");
+        if state.run_watermark.is_some() {
+            return;
+        }
+        seed_watermark(&mut state, &runs, capacity);
+    }
+
+    /// The terminal runs a Signal may describe, sanitized and oldest first.
+    fn sanitized_terminal_runs(&self, capacity: usize) -> Vec<RunFact> {
+        let mut runs: Vec<RunFact> = self
+            .facts
+            .terminal_runs(capacity)
+            .into_iter()
+            .filter_map(|mut run| sanitize_signal_run(&mut run).then_some(run))
+            .collect();
+        runs.sort_by(|left, right| {
+            left.finished_at
+                .cmp(&right.finished_at)
+                .then_with(|| left.run_id.cmp(&right.run_id))
+        });
+        runs.truncate(capacity);
+        runs
+    }
+}
+
+/// Record the newest terminal result as already reported.
+fn seed_watermark(state: &mut ReporterState, runs: &[RunFact], capacity: usize) {
+    let newest = runs.last().map(|run| run.finished_at).unwrap_or(0);
+    state.run_watermark = Some(newest);
+    state.run_watermark_ids = runs
+        .iter()
+        .filter(|run| run.finished_at == newest)
+        .map(|run| run.run_id.clone())
+        .collect();
+    state.run_watermark_ids.truncate(capacity);
 }
 
 /// The frozen Signal payload object.
@@ -1157,6 +1189,59 @@ mod tests {
         };
         let reporter = HealthReporter::new(Box::new(facts));
         assert!(reporter.run_signals().is_empty());
+    }
+
+    /// Seeding up front is what keeps a remotely-requested outcome from being
+    /// swallowed by the reporter's own first harvest.
+    ///
+    /// The control matters more than the assertion: without the seed, the very
+    /// same run vanishes, which is exactly the shipped hazard.
+    #[test]
+    fn a_run_finishing_after_an_explicit_seed_is_still_reported() {
+        let shared = std::sync::Arc::new(SharedFacts::default());
+        let reporter = HealthReporter::new(Box::new(std::sync::Arc::clone(&shared)));
+        shared.push(run_fact(&"1".repeat(32), "history", 1_699_999_000));
+
+        reporter.seed_run_watermark();
+        shared.push(run_fact(&"2".repeat(32), "cue-origin", 1_700_000_000));
+
+        let harvested = reporter.run_signals();
+        assert_eq!(
+            harvested
+                .iter()
+                .map(|run| run.script.as_str())
+                .collect::<Vec<_>>(),
+            vec!["cue-origin"],
+            "history must stay unreplayed and the new run must be reported"
+        );
+
+        // The control: no seed, and the first harvest is the seed, so the run
+        // that someone is waiting on is consumed and never sent.
+        let unseeded_shared = std::sync::Arc::new(SharedFacts::default());
+        let unseeded = HealthReporter::new(Box::new(std::sync::Arc::clone(&unseeded_shared)));
+        unseeded_shared.push(run_fact(&"1".repeat(32), "history", 1_699_999_000));
+        unseeded_shared.push(run_fact(&"2".repeat(32), "cue-origin", 1_700_000_000));
+        assert!(
+            unseeded.run_signals().is_empty(),
+            "the hazard this seed exists to close"
+        );
+    }
+
+    /// Seeding twice must not become a silent harvest.
+    #[test]
+    fn seeding_again_never_consumes_a_pending_outcome() {
+        let shared = std::sync::Arc::new(SharedFacts::default());
+        let reporter = HealthReporter::new(Box::new(std::sync::Arc::clone(&shared)));
+        reporter.seed_run_watermark();
+
+        shared.push(run_fact(&"2".repeat(32), "cue-origin", 1_700_000_000));
+        reporter.seed_run_watermark();
+
+        assert_eq!(
+            reporter.run_signals().len(),
+            1,
+            "a second seed must be a no-op, not a harvest"
+        );
     }
 
     #[test]

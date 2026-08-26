@@ -173,7 +173,7 @@ fn there_are_exactly_two_kinds_and_the_outcome_is_not_one_of_them() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn all_four_gates_are_frozen_and_read_only_from_the_local_registry() {
+fn all_five_gates_are_frozen_and_read_only_from_local_state() {
     let v = vectors();
     let gates: Vec<&str> = v["authorization"]["gates"]
         .as_array()
@@ -187,8 +187,10 @@ fn all_four_gates_are_frozen_and_read_only_from_the_local_registry() {
             "allow_remote_cues",
             "active_conductor_role",
             "remote_run_capability",
-            "notifications_capability"
-        ]
+            "notifications_capability",
+            "declared_script"
+        ],
+        "gate E is what makes remote execution declarative rather than inferred"
     );
 
     // The single most important property in this document.
@@ -311,6 +313,28 @@ fn a_cue_names_a_script_and_never_carries_one() {
     );
 }
 
+/// The property the owner asked for: what may run is written down.
+#[test]
+fn what_may_run_remotely_is_declared_not_inferred() {
+    let v = vectors();
+    assert!(
+        boolean(&v, &["resolution", "declared_allowlist_required"]),
+        "a discoverable-minus-ignored listing is a deny-list over an implicit \
+         allow-all, not a declaration"
+    );
+    assert!(
+        boolean(&v, &["resolution", "empty_declaration_denies_everything"]),
+        "enabling remote Cues must grant nothing on its own"
+    );
+    assert!(
+        boolean(
+            &v,
+            &["resolution", "not_declared_is_reported_as_unresolvable"]
+        ),
+        "distinguishing them lets an authorized peer enumerate the workspace"
+    );
+}
+
 #[test]
 fn idempotency_rests_on_the_database_primary_key() {
     let v = vectors();
@@ -381,7 +405,7 @@ fn error_codes_are_unique_and_in_a_disjoint_band() {
         .map(|e| e["code"].as_integer().expect("code integer"))
         .collect();
 
-    assert_eq!(codes.len(), 11, "every documented code must be vectored");
+    assert_eq!(codes.len(), 12, "every documented code must be vectored");
     let unique: HashSet<i64> = codes.iter().copied().collect();
     assert_eq!(unique.len(), codes.len(), "codes must be unique");
 

@@ -27,6 +27,7 @@ pub enum CueCode {
     NotActiveConductor,
     MissingRemoteRun,
     MissingNotifications,
+    NotDeclared,
     ScriptDeclaresSecrets,
     ScriptUnresolvable,
     Expired,
@@ -45,6 +46,7 @@ impl CueCode {
             CueCode::NotActiveConductor => 1202,
             CueCode::MissingRemoteRun => 1203,
             CueCode::MissingNotifications => 1204,
+            CueCode::NotDeclared => 1212,
             CueCode::ScriptDeclaresSecrets => 1205,
             CueCode::ScriptUnresolvable => 1206,
             CueCode::Expired => 1207,
@@ -61,6 +63,7 @@ impl CueCode {
             CueCode::NotActiveConductor => "cue_not_active_conductor",
             CueCode::MissingRemoteRun => "cue_missing_remote_run",
             CueCode::MissingNotifications => "cue_missing_notifications",
+            CueCode::NotDeclared => "cue_script_not_declared",
             CueCode::ScriptDeclaresSecrets => "cue_script_declares_secrets",
             CueCode::ScriptUnresolvable => "cue_script_unresolvable",
             CueCode::Expired => "cue_expired",
@@ -68,6 +71,23 @@ impl CueCode {
             CueCode::RateLimited => "cue_rate_limited",
             CueCode::RunAlreadyInFlight => "cue_run_already_in_flight",
             CueCode::InvalidMessage => "cue_invalid_message",
+        }
+    }
+
+    /// The code this refusal is *reported* as, which is not always the code it
+    /// is *audited* as.
+    ///
+    /// `NotDeclared` is audited distinctly, because the operator of the
+    /// receiving node genuinely wants to know that someone asked for a script
+    /// they never declared. It is reported as `ScriptUnresolvable`, because
+    /// telling an authorized Conductor the difference between "exists but is
+    /// not declared" and "does not exist" lets it enumerate the workspace by
+    /// elimination — the same oracle the contract already closed by collapsing
+    /// missing and ignored into one code.
+    pub fn reply_code(self) -> CueCode {
+        match self {
+            CueCode::NotDeclared => CueCode::ScriptUnresolvable,
+            other => other,
         }
     }
 
@@ -107,6 +127,9 @@ pub struct LocalAuthority {
     pub remote_cues_enabled: bool,
     /// The sender's authorization as this node records it, if it knows the peer.
     pub authorization: Option<HealthAuthorization>,
+    /// `trust.remote_cue_scripts`: what this node has declared it will run on
+    /// another node's orders. Empty means nothing.
+    pub declared_scripts: Vec<String>,
 }
 
 /// The gate decision. `Accepted` means the four gates passed; it does not mean
@@ -159,6 +182,23 @@ fn holds(authorization: &HealthAuthorization, capability: &str) -> bool {
         .capabilities
         .iter()
         .any(|held| held == capability)
+}
+
+/// Gate E: the named script must be declared in `trust.remote_cue_scripts`.
+///
+/// Evaluated only after the four trust gates have passed, so an unauthorized
+/// peer cannot use rejection codes to learn which scripts a node declares.
+///
+/// Deny-by-default: an empty or absent list means nothing runs remotely, no
+/// matter what else is configured. This is the switch that makes "what may run"
+/// a thing someone wrote down rather than a consequence of what happens to be
+/// in a directory.
+pub fn is_declared(name: &str, declared: &[String]) -> Result<(), CueCode> {
+    if declared.iter().any(|entry| entry == name) {
+        Ok(())
+    } else {
+        Err(CueCode::NotDeclared)
+    }
 }
 
 /// Whether a Cue is inside its own validity window.
@@ -254,6 +294,7 @@ pub struct CueSession<'a> {
     registry: &'a crate::node_registry::NodeRegistry,
     remote_node_id: String,
     remote_cues_enabled: bool,
+    declared_scripts: Vec<String>,
 }
 
 /// What the dispatcher should do with an inbound Cue frame.
@@ -269,29 +310,46 @@ pub enum CueOutcome {
 /// Read per session rather than cached at service start, so turning Cues off
 /// takes effect on the next session instead of requiring a restart. Any failure
 /// to read is `false`: a node that cannot prove it opted in has not opted in.
-pub fn remote_cues_enabled(context: &crate::node::NodeContext) -> bool {
+/// What this node has declared about remote execution.
+#[derive(Debug, Clone, Default)]
+pub struct CuePolicy {
+    pub enabled: bool,
+    pub declared_scripts: Vec<String>,
+}
+
+/// Read the declared remote-execution policy from this node's own config.
+///
+/// Read per session rather than cached at start, so a change takes effect on
+/// the next session instead of requiring a restart. Any failure to read yields
+/// the default, which denies everything: a node that cannot prove what it
+/// declared has declared nothing.
+pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy {
     let Ok(Some(mut file)) = context.open_public_file() else {
-        return false;
+        return CuePolicy::default();
     };
     let mut contents = String::new();
     if std::io::Read::read_to_string(&mut file, &mut contents).is_err() {
-        return false;
+        return CuePolicy::default();
     }
     crate::domain::NodeConfig::parse(&contents)
-        .map(|config| config.trust.allow_remote_cues)
-        .unwrap_or(false)
+        .map(|config| CuePolicy {
+            enabled: config.trust.allow_remote_cues,
+            declared_scripts: config.trust.remote_cue_scripts,
+        })
+        .unwrap_or_default()
 }
 
 impl<'a> CueSession<'a> {
     pub fn new(
         registry: &'a crate::node_registry::NodeRegistry,
         remote_node_id: &str,
-        remote_cues_enabled: bool,
+        policy: CuePolicy,
     ) -> Self {
         Self {
             registry,
             remote_node_id: remote_node_id.to_string(),
-            remote_cues_enabled,
+            remote_cues_enabled: policy.enabled,
+            declared_scripts: policy.declared_scripts,
         }
     }
 
@@ -311,6 +369,7 @@ impl<'a> CueSession<'a> {
 
         let authority = LocalAuthority {
             remote_cues_enabled: self.remote_cues_enabled,
+            declared_scripts: self.declared_scripts.clone(),
             authorization: self
                 .registry
                 .health_authorization(&self.remote_node_id)
@@ -364,6 +423,7 @@ mod tests {
     fn passing() -> LocalAuthority {
         LocalAuthority {
             remote_cues_enabled: true,
+            declared_scripts: vec!["deploy.sh".to_string()],
             authorization: Some(authorization(
                 PeerRole::Conductor,
                 PeerState::Active,
@@ -486,6 +546,7 @@ mod tests {
             );
         }
         for code in [
+            CueCode::NotDeclared,
             CueCode::ScriptUnresolvable,
             CueCode::Expired,
             CueCode::Duplicate,
@@ -505,6 +566,7 @@ mod tests {
             CueCode::NotActiveConductor,
             CueCode::MissingRemoteRun,
             CueCode::MissingNotifications,
+            CueCode::NotDeclared,
             CueCode::ScriptDeclaresSecrets,
             CueCode::ScriptUnresolvable,
             CueCode::Expired,
@@ -518,7 +580,102 @@ mod tests {
             assert!(seen.insert(code.code()), "duplicate code {}", code.code());
             assert!((1201..=1299).contains(&code.code()));
         }
-        assert_eq!(seen.len(), 11);
+        assert_eq!(seen.len(), 12);
+    }
+
+    /// Nothing runs remotely unless someone wrote it down.
+    #[test]
+    fn an_undeclared_script_is_refused_even_with_every_trust_gate_passing() {
+        assert_eq!(
+            is_declared("deploy.sh", &["restart.lua".to_string()]),
+            Err(CueCode::NotDeclared)
+        );
+    }
+
+    /// The switch that matters most: enabling remote Cues grants nothing on its
+    /// own. Two independent deliberate acts are required.
+    #[test]
+    fn an_empty_declaration_denies_everything() {
+        assert_eq!(is_declared("deploy.sh", &[]), Err(CueCode::NotDeclared));
+        assert_eq!(is_declared("", &[]), Err(CueCode::NotDeclared));
+    }
+
+    #[test]
+    fn a_declared_script_passes_the_fifth_gate() {
+        let declared = vec!["deploy.sh".to_string(), "restart.lua".to_string()];
+        assert_eq!(is_declared("deploy.sh", &declared), Ok(()));
+        assert_eq!(is_declared("restart.lua", &declared), Ok(()));
+    }
+
+    /// Declaration is an exact match, so a near-miss cannot slip through.
+    #[test]
+    fn declaration_is_not_a_prefix_or_suffix_match() {
+        let declared = vec!["deploy.sh".to_string()];
+        for near in [
+            "deploy",
+            "deploy.sh.bak",
+            "Deploy.sh",
+            "xdeploy.sh",
+            "deploy.sh ",
+        ] {
+            assert_eq!(
+                is_declared(near, &declared),
+                Err(CueCode::NotDeclared),
+                "{near:?} must not match a declaration of deploy.sh"
+            );
+        }
+    }
+
+    /// A node that cannot read its own config has declared nothing.
+    #[test]
+    fn the_default_policy_denies_everything() {
+        let policy = CuePolicy::default();
+        assert!(!policy.enabled);
+        assert!(policy.declared_scripts.is_empty());
+        assert_eq!(
+            is_declared("deploy.sh", &policy.declared_scripts),
+            Err(CueCode::NotDeclared)
+        );
+    }
+
+    /// Audited distinctly, reported indistinguishably.
+    #[test]
+    fn not_declared_is_reported_as_unresolvable() {
+        assert_eq!(
+            CueCode::NotDeclared.reply_code(),
+            CueCode::ScriptUnresolvable,
+            "the difference would let an authorized peer enumerate the workspace"
+        );
+        assert_ne!(
+            CueCode::NotDeclared.code(),
+            CueCode::ScriptUnresolvable.code(),
+            "but the receiving operator must still see which one it was"
+        );
+    }
+
+    /// Every other code reports as itself; only the enumeration case collapses.
+    #[test]
+    fn no_other_code_is_disguised() {
+        for code in [
+            CueCode::Disabled,
+            CueCode::NotActiveConductor,
+            CueCode::MissingRemoteRun,
+            CueCode::MissingNotifications,
+            CueCode::ScriptDeclaresSecrets,
+            CueCode::ScriptUnresolvable,
+            CueCode::Expired,
+            CueCode::Duplicate,
+            CueCode::RateLimited,
+            CueCode::RunAlreadyInFlight,
+            CueCode::InvalidMessage,
+        ] {
+            assert_eq!(
+                code.reply_code(),
+                code,
+                "{} must report as itself",
+                code.name()
+            );
+        }
     }
 
     #[test]

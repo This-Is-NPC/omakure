@@ -1278,7 +1278,7 @@ fn connect_and_hold(
     let cue = crate::remote_cue::CueSession::new(
         &registry,
         remote.node_id(),
-        crate::remote_cue::remote_cues_enabled(context),
+        crate::remote_cue::read_policy(context),
     );
     hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
 }
@@ -1732,7 +1732,7 @@ fn serve_connection(
         let cue = crate::remote_cue::CueSession::new(
             &registry,
             remote.node_id(),
-            crate::remote_cue::remote_cues_enabled(context),
+            crate::remote_cue::read_policy(context),
         );
         hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
             .map_err(DirectServiceError::Protocol)?;

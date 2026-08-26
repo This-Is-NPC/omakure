@@ -69,6 +69,18 @@ pub struct NetworkSettings {
 pub struct TrustSettings {
     pub enrollment: String,
     pub allow_remote_cues: bool,
+    /// The scripts this node will run on another node's orders.
+    ///
+    /// Declarative and deny-by-default: empty or absent means nothing is
+    /// remotely executable, even with `allow_remote_cues = true`. Two
+    /// independent switches, both of which must be set deliberately.
+    ///
+    /// Without this, "what may run remotely" would be every discoverable
+    /// script minus `.omakureignore` — allow-by-default, whose failure mode is
+    /// silent: a new file in the workspace would become remotely executable
+    /// with nobody having declared it.
+    #[serde(default)]
+    pub remote_cue_scripts: Vec<String>,
     pub allow_baseline_push: bool,
     #[serde(default)]
     pub authorities: Vec<EnrollmentAuthority>,
@@ -134,6 +146,7 @@ impl Default for NodeConfig {
             trust: TrustSettings {
                 enrollment: "disabled".to_string(),
                 allow_remote_cues: false,
+                remote_cue_scripts: Vec::new(),
                 allow_baseline_push: false,
                 authorities: Vec::new(),
                 bootstrap_token_hash: String::new(),

@@ -48,7 +48,7 @@ reason_max_bytes = 128
 # Every authorization input is read from the receiver's own registry. No inbound
 # field contributes to the decision.
 [authorization]
-gates = ["allow_remote_cues", "active_conductor_role", "remote_run_capability", "notifications_capability"]
+gates = ["allow_remote_cues", "active_conductor_role", "remote_run_capability", "notifications_capability", "declared_script"]
 role_encoding = "integer"
 role_conductor = 1
 role_performer = 2
@@ -65,7 +65,12 @@ secret_bearing_script_is_rejected = true
 
 [resolution]
 carries_script_content = false
-allowlist = ".omakureignore-honouring workspace listing"
+# Declared allow-list AND discoverable listing. Both apply; the listing can only
+# ever subtract, so disagreement fails closed.
+allowlist = "trust.remote_cue_scripts, intersected with the .omakureignore-honouring listing"
+declared_allowlist_required = true
+empty_declaration_denies_everything = true
+not_declared_is_reported_as_unresolvable = true
 requires_regular_file = true
 hash_recorded_at_accept = true
 hash_reverified_at_exec = true
@@ -142,3 +147,7 @@ name = "cue_run_already_in_flight"
 [[error_code]]
 code = 1211
 name = "cue_invalid_message"
+
+[[error_code]]
+code = 1212
+name = "cue_script_not_declared"

@@ -104,8 +104,8 @@ one of those would be an input the receiver's owner did not write.
 
 ## Authorization Mapping
 
-Four gates, all fail-closed, all evaluated against the receiver's local registry
-only. A Cue is accepted if and only if **all four** pass.
+Five gates, all fail-closed, all evaluated against the receiver's own registry
+and configuration only. A Cue is accepted if and only if **all five** pass.
 
 | Gate | Condition | Failure code |
 |---|---|---|
@@ -113,6 +113,7 @@ only. A Cue is accepted if and only if **all four** pass.
 | **B** | The sender is a peer with role `conductor` and `state = 'active'` | `1202` |
 | **C** | That peer holds the `remote-run` capability | `1203` |
 | **D** | That peer also holds `notifications` | `1204` |
+| **E** | The named script is listed in `trust.remote_cue_scripts` | `1212`, reported as `1206` |
 
 Role is the shipped `INTEGER` encoding, `ROLE_CONDUCTOR = 1` /
 `ROLE_PERFORMER = 2` (`src/health_plane/bounds.rs:13-15`). It is **not** the
@@ -127,6 +128,36 @@ regardless of how trusted the sender is.
 `remote-run` requires **no capability-list amendment**: it already ships in all
 three hand-duplicated copies (`src/health_plane/bounds.rs:23`,
 `src/node_registry.rs:70`, `src/enrollment.rs:47`).
+
+### Gate E: what may run is declared, not inferred
+
+`trust.remote_cue_scripts` lists the scripts this node will run on another
+node's orders. Empty or absent means **nothing**, even with
+`allow_remote_cues = true`: two independent switches, both of which must be set
+deliberately.
+
+```toml
+[trust]
+allow_remote_cues = true
+remote_cue_scripts = ["deploy.sh", "restart.lua"]
+```
+
+An earlier draft of this contract treated the `.omakureignore`-honouring
+workspace listing as the allow-list. It is not one. It is a deny-list over an
+implicit allow-all, and its failure mode is silent and privilege-granting: a new
+file in the workspace would become remotely executable with nobody having
+declared it. Privilege would be granted by forgetting rather than by acting.
+
+Both mechanisms now apply, and they cannot conflict dangerously: a script must
+be **both** discoverable and declared, so `.omakureignore` can only ever
+subtract. Disagreement fails closed.
+
+Gate E is evaluated **after** the four trust gates, so an unauthorized peer
+cannot use rejection codes to learn what a node declares. And a refusal is
+*audited* as `1212` but *reported* as `1206`, identically to an unresolvable
+script: telling an authorized Conductor the difference between "exists but is
+not declared" and "does not exist" would let it enumerate the workspace by
+elimination.
 
 ## The Secret Rule
 
@@ -235,6 +266,7 @@ Band `1201..` inside the existing `transport_audit.error_code` range
 | `1209` | Cue rate bound exceeded |
 | `1210` | A Cue-origin run for this peer is already in flight |
 | `1211` | Malformed payload, size, or grammar violation |
+| `1212` | Script is not declared in `trust.remote_cue_scripts` (reported as `1206`) |
 
 Every rejection writes a durable redacted audit row. `reason` is recorded;
 nothing derived from the sender is ever interpolated into a command.
@@ -260,7 +292,3 @@ Requiring a further owner-approved amendment:
   second state machine would need a `node.sqlite` bump that is a compile error
   until the frozen bound, the fixture, and this contract move together.
 - Baselines, MDM, fan-out to more than one peer per dispatch, and scheduling.
-- A `trust.remote_cue_scripts` allow-list. `.omakureignore` already is one; a
-  second list that can disagree with the first is a way to be wrong twice. This
-  was requested during shaping and is recorded as an open owner decision rather
-  than silently settled.

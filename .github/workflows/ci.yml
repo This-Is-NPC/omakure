@@ -40,6 +40,10 @@ jobs:
       # native coverage instead: the frozen contract vectors, the bounded state
       # and migration suite, the Signal lifecycle, and the multi-node reporting
       # path that runs in-process rather than in containers.
+      #
+      # This adds no coverage over `--all-targets` above and is not meant to.
+      # Like the two steps before it, it names the platform guarantee the docs
+      # claim so a failure points at the claim instead of at a 900-test run.
       - name: Native Health Plane protocol/migration/lifecycle matrix (no Docker)
         run: >-
           cargo test --test health_plane_contract --test health_plane_state
@@ -67,12 +71,22 @@ jobs:
       - name: Shell and YAML static validation
         run: |
           set -euo pipefail
-          for script in .scripts/*.sh; do bash -n "$script"; done
-          python3 -c "$(printf '%s\n' \
-            'import glob, sys, yaml' \
-            'for path in sorted(glob.glob("compose*.yaml")) + sorted(glob.glob(".github/workflows/*.yml")):' \
-            '    yaml.safe_load(open(path))' \
-            '    print("ok", path)')"
+          shopt -s nullglob
+          scripts=(.scripts/*.sh)
+          (( ${#scripts[@]} >= 4 )) || { echo "expected the certification scripts; found ${#scripts[@]}" >&2; exit 1; }
+          for script in "${scripts[@]}"; do bash -n "$script"; done
+          # Fails on zero matches as well as on a parse error: a compose file
+          # renamed or moved would otherwise leave this step green having
+          # checked nothing.
+          python3 - <<'PY'
+          import glob, sys, yaml
+          paths = sorted(glob.glob("compose*.yaml")) + sorted(glob.glob(".github/workflows/*.yml"))
+          if len(paths) < 5:
+              sys.exit(f"expected at least 5 YAML files to validate, found {len(paths)}")
+          for path in paths:
+              yaml.safe_load(open(path))
+              print("ok", path)
+          PY
 
   packaging:
     runs-on: ubuntu-latest
@@ -186,9 +200,13 @@ jobs:
     name: Linux canonical multi-node Health Plane certification
     runs-on: ubuntu-latest
     # The job budget must contain every step ceiling below, not just the
-    # longest one: 45m for the gate plus 30m for the cleanup test plus setup.
-    # A 60m job cannot hold them and dies part-way through the cleanup test.
-    timeout-minutes: 90
+    # longest one: 45m for the gate plus 60m for the cleanup test plus setup.
+    #
+    # `--kill-after` on those steps is 300s, not seconds. GNU timeout arms it
+    # whenever it forwards or raises a signal, so a small value truncates the
+    # gate's teardown and the always() sweep below then reports resources the
+    # kill orphaned rather than a real cleanup defect.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -197,11 +215,11 @@ jobs:
       - name: Install certification inspection tools
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run the bounded Health Plane gate
-        run: timeout --foreground --kill-after=15s 45m ./.scripts/health-plane-certification.sh
+        run: timeout --foreground --kill-after=300s 45m ./.scripts/health-plane-certification.sh
       # ~10m observed: two induced shapes plus an interrupt whose teardown is
       # bounded at 1080s by the script itself. 30m is a 3x margin.
       - name: Verify cleanup after induced failure and interrupt
-        run: timeout --foreground --kill-after=15s 30m ./.scripts/health-plane-certification-cleanup-test.sh
+        run: timeout --foreground --kill-after=300s 60m ./.scripts/health-plane-certification-cleanup-test.sh
       - name: Verify no Health Plane certification Docker resources survived
         if: always()
         shell: bash

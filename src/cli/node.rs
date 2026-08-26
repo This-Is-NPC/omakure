@@ -35,6 +35,10 @@ pub fn run(
             .map(|result| serde_json::to_value(result).expect("node status serializes")),
         NodeCommand::Peers => node_ops::list_trusted_peers(&context)
             .map(|result| serde_json::to_value(result).expect("peer list serializes")),
+        // Thin adapter: the protocol-neutral operation decides everything and
+        // this arm only renders it. The identical value backs `GET /v1/node/health`.
+        NodeCommand::Health => crate::operations::health::fleet_status(&context)
+            .map(|result| serde_json::to_value(result).expect("fleet status serializes")),
         NodeCommand::Discovery(args) => node_ops::scan_discovery(
             &context,
             &scripts_dir,

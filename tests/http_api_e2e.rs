@@ -195,6 +195,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_management_routes"),
     ),
     (
+        ("GET", "/v1/node/health"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
         ("GET", "/v1/node/peers"),
         RouteCoverage::Covered("node_management_routes"),
     ),
@@ -1072,7 +1076,7 @@ fn node_management_routes_cover_missing_scopes_individually() {
         &[],
         Duration::from_secs(10),
     );
-    for path in ["/v1/node/status", "/v1/node/peers"] {
+    for path in ["/v1/node/status", "/v1/node/peers", "/v1/node/health"] {
         let denied = node_write_only.request("GET", path, None);
         assert_eq!(denied.status, 403, "GET {path}: {}", denied.safe_body());
         assert_error_code(&denied.json(), "forbidden");
@@ -1250,6 +1254,27 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
         1
     );
 
+    // The Health Plane projection lists an actively trusted peer that has
+    // never reported, with the frozen `unknown` presence and no Profile or
+    // Pulse. Nothing a management client can send changes that: no route
+    // writes health state, and the only writer is the node-to-node exchange.
+    let health = server.get("/v1/node/health");
+    assert_eq!(health.status, 200, "body: {}", health.safe_body());
+    let body = health.json();
+    assert_eq!(body["data"]["enabled"], true);
+    assert_eq!(body["data"]["presence"]["unknown"], 1);
+    assert_eq!(body["data"]["presence"]["online"], 0);
+    assert_eq!(body["data"]["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        body["data"]["nodes"][0]["node_id"],
+        "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92"
+    );
+    assert_eq!(body["data"]["nodes"][0]["presence"], "unknown");
+    assert_eq!(body["data"]["nodes"][0]["profile"], json!(null));
+    assert_eq!(body["data"]["nodes"][0]["pulse"], json!(null));
+    assert_eq!(body["data"]["nodes"][0]["trust_state"], "active");
+    health.assert_no_secret("identity.key");
+
     let malformed = server.patch_json(
         "/v1/node/peers/omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92/capabilities",
         &json!({"capabilities":["remote-run","notifications"],"actor":"operator","reason":"bad order","confirmed":true}),
@@ -1280,6 +1305,40 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     );
     assert_eq!(repeated_revoke.status, 409);
     assert_error_code(&repeated_revoke.json(), "conflict");
+
+    // Revocation is immediate in the projection: a revoked peer is no longer
+    // an actively trusted node and therefore no longer a fleet row.
+    let after_revoke = server.get("/v1/node/health");
+    assert_eq!(
+        after_revoke.status,
+        200,
+        "body: {}",
+        after_revoke.safe_body()
+    );
+    assert!(after_revoke.json()["data"]["nodes"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(after_revoke.json()["data"]["presence"]["total"], 0);
+}
+
+/// The management API can read the Health Plane projection and nothing else.
+///
+/// This is the structural half of "no management HTTP call can substitute for
+/// or forge the production node-to-node health exchange": there is exactly one
+/// Health Plane route, it is a GET, and it is gated by the pre-existing
+/// `node:read` capability rather than by any new scheme.
+#[test]
+fn no_http_route_can_write_health_plane_state() {
+    let health_routes: Vec<_> = omakure::cli::api::HTTP_ROUTE_INVENTORY
+        .iter()
+        .filter(|(_, route)| route.contains("node/health"))
+        .collect();
+    assert_eq!(
+        health_routes,
+        vec![&("GET", "/v1/node/health")],
+        "the Health Plane must expose exactly one read-only management route"
+    );
 }
 
 #[test]

@@ -216,6 +216,12 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/direct_transport_e2e.rs"),
     },
     CommandCoverage {
+        command: "node health",
+        coverage: Coverage::Covered(
+            "tests/cli_surface_e2e.rs + tests/health_plane_transport_e2e.rs",
+        ),
+    },
+    CommandCoverage {
         command: "node init",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
@@ -317,6 +323,7 @@ fn command_surface_inventory_maps_all_current_commands() {
         "node direct-probe",
         "node discovery",
         "node enroll",
+        "node health",
         "node init",
         "node peers",
         "node reset",
@@ -623,6 +630,41 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     );
     assert_success(&peers);
     assert_eq!(json(&peers)["data"].as_array().unwrap().len(), 1);
+
+    // `node health` is the CLI half of the fleet-status projection. It renders
+    // the same protocol-neutral operation the HTTP route renders, so an
+    // actively trusted peer that has never reported appears exactly once with
+    // the frozen `unknown` presence and no Profile or Pulse.
+    let health = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            node_args[0],
+            "--node-config",
+            node_args[1],
+            "health",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&health);
+    let health_body = json(&health);
+    assert_eq!(health_body["data"]["enabled"], true);
+    assert_eq!(health_body["data"]["presence"]["unknown"], 1);
+    assert_eq!(health_body["data"]["presence"]["total"], 1);
+    assert_eq!(health_body["data"]["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(health_body["data"]["nodes"][0]["presence"], "unknown");
+    assert_eq!(health_body["data"]["nodes"][0]["role"], "performer");
+    assert!(health_body["data"]["nodes"][0]["profile"].is_null());
+    assert!(health_body["data"]["nodes"][0]["pulse"].is_null());
+    // Current status only: the projection has no history, series, or log key.
+    for forbidden in ["history", "series", "logs", "alerts"] {
+        assert!(
+            health_body["data"].get(forbidden).is_none(),
+            "fleet status must not expose `{forbidden}`"
+        );
+    }
 }
 
 #[test]

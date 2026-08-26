@@ -1057,6 +1057,113 @@ pub fn verify_envelope(
         .map_err(|_| TransportError::HandshakeFailed)
 }
 
+// ---------------------------------------------------------------------------
+// Health Plane carriage
+//
+// The Health Plane adds envelope `kind` values only. It reuses `sign_envelope`
+// verbatim, so the frozen BIP-340 construction, the RFC-8785 canonical prehash,
+// the certificate, the Noise handshake, and the framing are all unchanged.
+// See `.docs/health-plane-contract.md` "Production carriage feasibility".
+// ---------------------------------------------------------------------------
+
+/// The `kind` prefix that marks an envelope as a Health Plane message.
+pub const HEALTH_KIND_PREFIX: &str = "health_";
+
+/// Bytes scanned when reading `kind` without parsing the document.
+///
+/// RFC-8785 sorts the seven frozen envelope keys, so `kind` always precedes
+/// `payload`. A bounded prefix scan therefore reads the real top-level `kind`
+/// before any attacker-controlled body, which lets the receiver apply the
+/// frozen per-kind size cap *before* JSON parsing allocates anything
+/// proportional to the declared content.
+const KIND_SCAN_LIMIT: usize = 256;
+
+/// Read the envelope `kind` without parsing the envelope.
+///
+/// Returns `None` when the prefix does not contain a syntactically plausible
+/// `kind`. A hint that disagrees with the real top-level `kind` cannot be
+/// exploited: `verify_envelope` re-encodes canonically and compares `kind`
+/// against the same expectation, so a mismatch is a bounded rejection.
+pub fn envelope_kind_hint(encoded: &[u8]) -> Option<&str> {
+    if encoded.len() < 64 {
+        return None;
+    }
+    let canonical = &encoded[..encoded.len() - 64];
+    let window = &canonical[..canonical.len().min(KIND_SCAN_LIMIT)];
+    let marker = b"\"kind\":\"";
+    let start = window
+        .windows(marker.len())
+        .position(|candidate| candidate == marker)?
+        + marker.len();
+    let rest = window.get(start..)?;
+    let end = rest.iter().position(|byte| *byte == b'"')?;
+    if end > MAX_ENVELOPE_KIND_BYTES {
+        return None;
+    }
+    std::str::from_utf8(&rest[..end]).ok()
+}
+
+/// The longest envelope `kind` the shipped protocol defines.
+const MAX_ENVELOPE_KIND_BYTES: usize = 32;
+
+/// The read-only view a Health Plane receiver needs after `verify_envelope`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HealthEnvelopeView {
+    /// The envelope `created_at`, in UTC Unix seconds.
+    pub created_at: i64,
+    /// The envelope `payload` object.
+    pub payload: Value,
+}
+
+/// Read `created_at` and `payload` out of an already-verified envelope.
+///
+/// This is a read-only projection. It performs no signature, session, or
+/// authorization work: `verify_envelope` owns all of that and must be called
+/// first, and the Health Plane shared operations own everything after it.
+pub fn health_envelope_view(encoded: &[u8]) -> Result<HealthEnvelopeView, TransportError> {
+    if encoded.len() < 64 {
+        return Err(TransportError::InvalidFrame);
+    }
+    let value: Value = serde_json::from_slice(&encoded[..encoded.len() - 64])
+        .map_err(|_| TransportError::InvalidFrame)?;
+    let object = value.as_object().ok_or(TransportError::InvalidFrame)?;
+    let created_at = object
+        .get("created_at")
+        .and_then(Value::as_i64)
+        .ok_or(TransportError::InvalidFrame)?;
+    let payload = object
+        .get("payload")
+        .cloned()
+        .ok_or(TransportError::InvalidFrame)?;
+    Ok(HealthEnvelopeView {
+        created_at,
+        payload,
+    })
+}
+
+/// Sign one Health Plane message with the frozen envelope construction.
+///
+/// The only thing this adds over `sign_probe` and its siblings is the `kind`
+/// string and the payload object; the signing construction itself is untouched.
+/// Kinds outside the closed Health Plane set are refused here so this wrapper
+/// can never become a generic envelope-signing oracle.
+pub fn sign_health_envelope(
+    identity: &NodeIdentity,
+    kind: &str,
+    session_id: &[u8; 32],
+    nonce: [u8; 16],
+    payload: Value,
+    now: u64,
+) -> Result<SignedEnvelope, TransportError> {
+    if !kind.starts_with(HEALTH_KIND_PREFIX) || kind.len() > MAX_ENVELOPE_KIND_BYTES {
+        return Err(TransportError::InvalidFrame);
+    }
+    if !payload.is_object() {
+        return Err(TransportError::InvalidFrame);
+    }
+    sign_envelope(identity, kind, session_id, nonce, payload, now)
+}
+
 pub fn enrollment_request_bytes(encoded: &[u8]) -> Result<Vec<u8>, TransportError> {
     if encoded.len() < 64 {
         return Err(TransportError::InvalidFrame);

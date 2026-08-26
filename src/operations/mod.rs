@@ -3,6 +3,7 @@ pub mod config;
 pub mod core;
 pub mod doctor;
 pub mod envs;
+pub mod health;
 pub mod node;
 pub mod scripts;
 pub mod search;

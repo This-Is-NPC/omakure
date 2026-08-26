@@ -2,6 +2,7 @@ mod adapters;
 mod app_meta;
 pub mod auth;
 pub mod cli;
+pub mod direct_health;
 pub mod direct_service;
 pub mod direct_transport;
 pub mod discovery;

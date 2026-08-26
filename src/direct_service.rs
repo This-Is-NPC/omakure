@@ -1,11 +1,13 @@
 //! Socket adapter for the direct transport core.
 
+use crate::direct_health::{HealthOutcome, HealthSession};
 use crate::direct_transport::{
     authorize_peer, enrollment_ack_accepted, enrollment_ack_offer, enrollment_request_bytes,
     envelope_nonce, sign_ack, sign_manual_ack, sign_manual_request, sign_probe, unix_seconds,
     verify_envelope, Frame, HandshakeRole, TransportError, TransportSession, ENVELOPE_KIND,
 };
 use crate::enrollment::{EnrollmentRole, ManualEnrollmentRequest};
+use crate::health_plane::report::HealthReporter;
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::{NodeRegistry, PeerState, RegistryError, TransportPeer};
@@ -140,6 +142,11 @@ struct ConnectionState {
     active: Mutex<HashMap<String, ActiveConnection>>,
     status: TransportStatusHandle,
     admission: Arc<AdmissionController>,
+    /// The Performer-side Health Plane reporter, when this node serves health.
+    ///
+    /// `None` leaves every session behaving exactly as it did before the
+    /// Health Plane existed: application frames are decrypted and discarded.
+    reporter: Option<Arc<HealthReporter>>,
 }
 
 impl ConnectionState {
@@ -149,6 +156,7 @@ impl ConnectionState {
         stop: Arc<AtomicBool>,
         listening: bool,
         admission: Arc<AdmissionController>,
+        reporter: Option<Arc<HealthReporter>>,
     ) -> Arc<Self> {
         let expected = static_peers
             .iter()
@@ -177,6 +185,7 @@ impl ConnectionState {
             active: Mutex::new(HashMap::new()),
             status,
             admission,
+            reporter,
         })
     }
 
@@ -315,6 +324,7 @@ impl DirectService {
         bind: Option<SocketAddr>,
         static_peer_values: &[String],
         context: NodeContext,
+        reporter: Option<Arc<HealthReporter>>,
     ) -> Result<Self, DirectServiceError> {
         let static_peers = static_peer_values
             .iter()
@@ -335,6 +345,7 @@ impl DirectService {
             Arc::clone(&stop),
             bind.is_some(),
             Arc::clone(&admission),
+            reporter,
         );
         let listener = bind
             .map(|bind| DirectListener::start_with_state(bind, context.clone(), Arc::clone(&state)))
@@ -969,7 +980,7 @@ impl DirectListener {
         let admission = Arc::new(AdmissionController {
             state: Mutex::new(AdmissionState::default()),
         });
-        let state = ConnectionState::new(&identity, &[], Arc::clone(&stop), true, admission);
+        let state = ConnectionState::new(&identity, &[], Arc::clone(&stop), true, admission, None);
         Self::start_with_state_and_stop(bind, context, state, stop)
     }
 
@@ -1256,10 +1267,98 @@ fn connect_and_hold(
             None,
         )
         .map_err(|_| TransportError::Internal)?;
-    hold_session(&mut stream, &mut session, state)
+    let health = HealthSession::new(
+        &identity,
+        &registry,
+        remote.node_id(),
+        remote.identity_key(),
+        session_id,
+        state.reporter.clone(),
+    );
+    hold_session(&mut stream, &mut session, state, Some(health))
 }
 
+/// The single shared steady-state receive loop for both connection directions.
+///
+/// With `health` absent the loop keeps its original behavior exactly: it
+/// decrypts each application frame and discards the plaintext, and it returns
+/// when the peer goes idle for `IDLE_TIMEOUT`.
+///
+/// With `health` present the loop additionally dispatches Health Plane
+/// envelopes into the Wave 2 shared operations and runs the Performer emission
+/// schedule. It waits on a short readability tick rather than a long blocking
+/// read so a cadence, a retry, a revocation, or a stop request is observed
+/// promptly; the tick never consumes bytes, so a partially arrived frame can
+/// never desynchronize the stream.
 fn hold_session(
+    stream: &mut TcpStream,
+    session: &mut TransportSession,
+    state: &Arc<ConnectionState>,
+    mut health: Option<HealthSession<'_>>,
+) -> Result<(), TransportError> {
+    if health.as_ref().is_some_and(|health| !health.engaged()) {
+        health = None;
+    }
+    let Some(health) = health.as_mut() else {
+        return hold_session_idle(stream, session, state);
+    };
+    stream
+        .set_read_timeout(Some(crate::direct_health::TICK))
+        .map_err(|_| TransportError::Internal)?;
+    let mut last_activity = Instant::now();
+    while !state.stop.load(Ordering::SeqCst) {
+        if let Some(outbound) = health.tick() {
+            let deadline = Instant::now() + IDLE_TIMEOUT;
+            write_bytes(stream, &session.write(ENVELOPE_KIND, &outbound)?, deadline)
+                .map_err(error_to_transport)?;
+            last_activity = Instant::now();
+        }
+        match wait_readable(stream, crate::direct_health::TICK) {
+            Readiness::Readable => {}
+            Readiness::Idle => {
+                if last_activity.elapsed() >= IDLE_TIMEOUT {
+                    return Ok(());
+                }
+                continue;
+            }
+            Readiness::Closed => return Ok(()),
+            Readiness::Failed(error) => return Err(error),
+        }
+        let deadline = Instant::now() + IDLE_TIMEOUT;
+        let encoded = match read_frame(stream, deadline) {
+            Ok(encoded) => encoded,
+            Err(DirectServiceError::Io(error))
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) =>
+            {
+                return Ok(());
+            }
+            Err(error) => return Err(error_to_transport(error)),
+        };
+        let frame = Frame::parse(&encoded)?;
+        if frame.kind != 2 {
+            return Err(TransportError::InvalidFrame);
+        }
+        let message = session.read(&encoded)?;
+        last_activity = Instant::now();
+        if message.kind != ENVELOPE_KIND {
+            continue;
+        }
+        match health.handle_envelope(&message.body) {
+            HealthOutcome::NotHealth | HealthOutcome::Handled => {}
+            HealthOutcome::Reply(reply) => {
+                write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
+                    .map_err(error_to_transport)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The pre-Health-Plane steady-state loop, unchanged.
+fn hold_session_idle(
     stream: &mut TcpStream,
     session: &mut TransportSession,
     state: &Arc<ConnectionState>,
@@ -1289,6 +1388,35 @@ fn hold_session(
         }
     }
     Ok(())
+}
+
+/// The result of one non-consuming readability probe.
+enum Readiness {
+    Readable,
+    Idle,
+    Closed,
+    Failed(TransportError),
+}
+
+/// Wait up to `tick` for the peer to send something, without consuming it.
+fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness {
+    if stream.set_read_timeout(Some(tick)).is_err() {
+        return Readiness::Failed(TransportError::Internal);
+    }
+    let mut probe = [0u8; 1];
+    match stream.peek(&mut probe) {
+        Ok(0) => Readiness::Closed,
+        Ok(_) => Readiness::Readable,
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+            ) =>
+        {
+            Readiness::Idle
+        }
+        Err(_) => Readiness::Closed,
+    }
 }
 
 fn error_to_transport(error: DirectServiceError) -> TransportError {
@@ -1569,7 +1697,16 @@ fn serve_connection(
             &session.write(ENVELOPE_KIND, &encoded_ack)?,
             deadline,
         )?;
-        hold_session(&mut stream, &mut session, state).map_err(DirectServiceError::Protocol)?;
+        let health = HealthSession::new(
+            &identity,
+            &registry,
+            remote.node_id(),
+            remote.identity_key(),
+            session_id,
+            state.reporter.clone(),
+        );
+        hold_session(&mut stream, &mut session, state, Some(health))
+            .map_err(DirectServiceError::Protocol)?;
         Ok(())
     })();
     let rejection_audit = if let Err(error) = &result {
@@ -1902,6 +2039,7 @@ mod tests {
             admission: Arc::new(AdmissionController {
                 state: Mutex::new(AdmissionState::default()),
             }),
+            reporter: None,
         });
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
@@ -1986,6 +2124,7 @@ mod tests {
                 None,
                 &["zzzz@blocked.invalid:7879".to_string()],
                 context.clone(),
+                None,
             )
             .unwrap();
             assert_eq!(

@@ -1406,7 +1406,7 @@ fn map_config_error(error: NodeConfigError) -> OperationError {
     OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
 }
 
-fn map_node_error(error: NodeError) -> OperationError {
+pub(crate) fn map_node_error(error: NodeError) -> OperationError {
     match error {
         NodeError::Config(error) => map_config_error(error),
         NodeError::InvalidPath { .. }
@@ -1427,7 +1427,7 @@ fn map_node_error(error: NodeError) -> OperationError {
     }
 }
 
-fn map_identity_error(error: NodeIdentityError) -> OperationError {
+pub(crate) fn map_identity_error(error: NodeIdentityError) -> OperationError {
     match error {
         NodeIdentityError::Node(error) => map_node_error(error),
         NodeIdentityError::Registry(error) => map_registry_error(error),
@@ -1442,7 +1442,7 @@ fn map_identity_error(error: NodeIdentityError) -> OperationError {
     }
 }
 
-fn map_registry_error(error: RegistryError) -> OperationError {
+pub(crate) fn map_registry_error(error: RegistryError) -> OperationError {
     match error {
         RegistryError::InvalidInput(error) => {
             OperationError::new(OperationErrorCode::InvalidInput, error)
@@ -1515,7 +1515,7 @@ fn map_io_error(error: io::Error) -> OperationError {
     OperationError::new(OperationErrorCode::IoFailed, error.to_string())
 }
 
-fn registry_error(message: impl Into<String>) -> OperationError {
+pub(crate) fn registry_error(message: impl Into<String>) -> OperationError {
     OperationError::new(OperationErrorCode::RegistryInvalid, message)
 }
 

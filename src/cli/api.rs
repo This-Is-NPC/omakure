@@ -819,6 +819,7 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("GET", "/v1/node/status"),
     ("GET", "/v1/node/discovery"),
     ("POST", "/v1/node/init"),
+    ("GET", "/v1/node/health"),
     ("GET", "/v1/node/peers"),
     ("POST", "/v1/node/peers"),
     ("GET", "/v1/node/enrollments"),
@@ -931,6 +932,7 @@ fn router_with_transport(
         .route("/v1/node/status", get(node_status_handler))
         .route("/v1/node/discovery", get(node_discovery_handler))
         .route("/v1/node/init", post(node_initialize_handler))
+        .route("/v1/node/health", get(node_health_handler))
         .route(
             "/v1/node/peers",
             get(node_peers_handler).post(node_trust_handler),
@@ -1115,6 +1117,25 @@ async fn node_initialize_handler(
     operation_response(node_context().and_then(|context| {
         node_ops::initialize_node_nonblocking(&context, &crate::domain::NodeConfig::default())
     }))
+}
+
+/// Thin adapter over the protocol-neutral fleet-status operation.
+///
+/// It adds no business logic and no new authorization scheme: the existing
+/// `node:read` management capability gates it, exactly as it gates
+/// `GET /v1/node/status` and `GET /v1/node/peers`. A management call can read
+/// this projection; it can never write it, because the only writer is the
+/// authenticated node-to-node Health Plane exchange.
+async fn node_health_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+        return response;
+    }
+    operation_response(
+        node_context().and_then(|context| crate::operations::health::fleet_status(&context)),
+    )
 }
 
 async fn node_peers_handler(

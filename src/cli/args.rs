@@ -486,6 +486,9 @@ pub enum NodeCommand {
     /// List registered peers without audit history or private state
     Peers,
 
+    /// Show current fleet health: presence, profile, and runner status
+    Health,
+
     /// Run one bounded in-memory LAN discovery scan
     Discovery(NodeDiscoveryArgs),
 

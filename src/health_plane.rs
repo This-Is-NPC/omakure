@@ -11,6 +11,7 @@
 
 pub mod bounds;
 pub mod model;
+pub mod report;
 pub mod schema;
 
 use crate::node_registry::health::{

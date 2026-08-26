@@ -139,11 +139,31 @@ pub fn run(
         }
     }
     let static_peers = configured.static_peers.clone();
+    let workers = args.workers.or(boot.deploy.node.workers).unwrap_or(1);
+    let scheduler_enabled = if args.no_scheduler {
+        false
+    } else if args.scheduler {
+        true
+    } else {
+        boot.deploy.node.scheduler.unwrap_or(true)
+    };
+    // The Performer-side Health Plane reporter. It reads only local facts and
+    // only ever reports to a peer the local registry records as an active
+    // trusted Conductor; the transport decides nothing about authorization.
+    let health_reporter = Arc::new(crate::health_plane::report::HealthReporter::new(Box::new(
+        crate::operations::health::NodeHealthFacts::new(
+            Workspace::new(workspace.root().to_path_buf()),
+            node_config.node.display_name.clone(),
+            u64::from(workers),
+            scheduler_enabled,
+        ),
+    )));
     let mut direct_service = if direct_bind.is_some() || !static_peers.is_empty() {
         Some(crate::direct_service::DirectService::start(
             direct_bind,
             &static_peers,
             context.clone(),
+            Some(Arc::clone(&health_reporter)),
         )?)
     } else {
         None
@@ -172,14 +192,6 @@ pub fn run(
         None
     };
 
-    let workers = args.workers.or(boot.deploy.node.workers).unwrap_or(1);
-    let scheduler_enabled = if args.no_scheduler {
-        false
-    } else if args.scheduler {
-        true
-    } else {
-        boot.deploy.node.scheduler.unwrap_or(true)
-    };
     let readiness_requires_worker =
         args.readiness_requires_worker || boot.deploy.node.readiness_requires_worker;
     let readiness_requires_scheduler =

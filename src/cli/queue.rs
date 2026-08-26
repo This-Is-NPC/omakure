@@ -212,6 +212,26 @@ pub(crate) fn worker_loop(
         actor: actor_filter,
         script: script_filter,
     };
+
+    // Resolve remote runs abandoned by a previous worker, before claiming any
+    // new work.
+    //
+    // A Cue-origin row is deliberately not lease-stealable, so a crash leaves it
+    // `running` with nothing willing to touch it. Without this it would stay
+    // that way forever and the Conductor would wait on a result that can never
+    // arrive. Recovery marks it terminal; it never re-runs the script.
+    //
+    // Best effort on purpose: a worker that cannot open the database has bigger
+    // problems than an unresolved row, and failing to start over it would take
+    // out the queue as well.
+    if let Ok(conn) = runs::open(&workspace) {
+        if let Ok(recovered) = runs::recover_abandoned_cue_runs(&conn) {
+            for run_id in recovered {
+                eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");
+            }
+        }
+    }
+
     loop {
         if cancel_flag.load(Ordering::SeqCst) {
             return;

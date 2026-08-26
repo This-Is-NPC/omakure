@@ -1131,6 +1131,61 @@ pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Resul
     finalize(conn, run_id, RunState::Failed, &completion)
 }
 
+/// Resolve Cue-origin runs abandoned by a crashed worker, without re-running.
+///
+/// A Cue-origin row is excluded from the worker lease steal on purpose, so a
+/// crash leaves it `running` with a lapsed lease and nothing will ever pick it
+/// up again. That is the correct trade — running a remote instruction twice is
+/// worse than not knowing whether it finished — but the row still has to reach
+/// a terminal state, or the Conductor waits forever and the node reports a run
+/// that is permanently in flight.
+///
+/// Each such row becomes `failed` with an explicit reason. `failed` rather than
+/// `cancelled` because nobody cancelled it, and rather than `completed` because
+/// nobody observed a result. The honest answer is that the outcome is unknown,
+/// and of the shipped terminal states `failed` is the one that does not claim
+/// otherwise.
+///
+/// Returns the run ids it resolved.
+pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, String> {
+    let now = current_unix_ms();
+    let mut statement = conn
+        .prepare(
+            "SELECT run_id FROM runs
+              WHERE state = 'running'
+                AND trigger = ?1
+                AND lease_until IS NOT NULL
+                AND lease_until < ?2",
+        )
+        .map_err(|err| format!("Prepare cue recovery failed: {}", err))?;
+    let ids: Vec<String> = statement
+        .query_map(params![RunTrigger::Cue.as_str(), now], |row| row.get(0))
+        .map_err(|err| format!("Query cue recovery failed: {}", err))?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|err| format!("Read cue recovery failed: {}", err))?;
+    drop(statement);
+
+    for run_id in &ids {
+        finalize(
+            conn,
+            run_id,
+            RunState::Failed,
+            &RunCompletion {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+                success: false,
+                error: Some(
+                    "the worker holding this remote run stopped; it was not re-run because a \
+                     remote instruction must execute at most once"
+                        .to_string(),
+                ),
+            },
+        )?;
+    }
+    Ok(ids)
+}
+
 /// Mark a `running` row as `timed_out` after the worker killed the
 /// process for exceeding its `--timeout`.
 pub fn time_out(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String> {
@@ -1823,6 +1878,121 @@ mod tests {
                 .unwrap()
                 .is_none(),
             "a lapsed Cue-origin lease must not be stolen; the script would run twice"
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    /// The full blocker scenario the plan named, end to end.
+    ///
+    /// A Cue runs, the worker dies mid-flight, the databases are closed and
+    /// reopened to model a real restart, and recovery runs. The row must end
+    /// terminal and the side effect must have happened exactly once.
+    ///
+    /// The side effect is counted with a file the "script" appends to, so the
+    /// assertion is about observable work rather than about row states agreeing
+    /// with each other.
+    #[test]
+    fn a_crashed_cue_run_recovers_terminal_with_its_effect_seen_exactly_once() {
+        let ws = unique_workspace("cue_recovery");
+        let effects = ws.root().join("effects.log");
+
+        // One "execution": the claim, then the side effect.
+        {
+            let conn = open(&ws).expect("open");
+            let row = enqueue(
+                &conn,
+                "/x/deploy.sh",
+                &[],
+                EnqueueOptions {
+                    run_id: Some("run-from-cue".into()),
+                    trigger: RunTrigger::Cue,
+                    ..enqueue_opts()
+                },
+            )
+            .unwrap();
+            claim_next(&conn, "w", &ClaimFilters::default())
+                .unwrap()
+                .expect("claimed once");
+            fs::write(&effects, "ran\n").unwrap();
+
+            // The worker dies holding the lease.
+            conn.execute(
+                "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
+                rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, row.run_id],
+            )
+            .unwrap();
+        }
+
+        // Restart: everything reopened from disk.
+        let conn = open(&ws).expect("reopen");
+
+        assert!(
+            claim_next(&conn, "w2", &ClaimFilters::default())
+                .unwrap()
+                .is_none(),
+            "a restarted worker must not pick the run up again"
+        );
+
+        let recovered = recover_abandoned_cue_runs(&conn).unwrap();
+        assert_eq!(recovered, vec!["run-from-cue".to_string()]);
+
+        let loaded = get_run(&conn, "run-from-cue").unwrap().unwrap();
+        assert_eq!(
+            loaded.state,
+            RunState::Failed,
+            "the row must reach a terminal state or the Conductor waits forever"
+        );
+        assert!(loaded.error.unwrap_or_default().contains("at most once"));
+
+        assert_eq!(
+            fs::read_to_string(&effects).unwrap(),
+            "ran\n",
+            "the side effect must have happened exactly once"
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    /// Recovery is scoped: it must not resolve a live run, nor a queued one,
+    /// nor an ordinary crashed job the worker is entitled to retry.
+    #[test]
+    fn recovery_touches_only_abandoned_cue_runs() {
+        let ws = unique_workspace("cue_recovery_scope");
+        let conn = open(&ws).expect("open");
+
+        // A live Cue run, lease still valid.
+        enqueue(
+            &conn,
+            "/x/live.sh",
+            &[],
+            EnqueueOptions {
+                run_id: Some("live-cue".into()),
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .unwrap();
+
+        // A crashed ordinary job, which the worker may retry itself.
+        let queued = enqueue(&conn, "/x/queued.sh", &[], enqueue_opts()).unwrap();
+        claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .unwrap();
+        conn.execute(
+            "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
+            rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, queued.run_id],
+        )
+        .unwrap();
+
+        assert!(
+            recover_abandoned_cue_runs(&conn).unwrap().is_empty(),
+            "recovery must not resolve a live cue run or an ordinary crashed job"
+        );
+        assert_eq!(
+            get_run(&conn, "live-cue").unwrap().unwrap().state,
+            RunState::Running
         );
         let _ = fs::remove_dir_all(ws.root());
     }

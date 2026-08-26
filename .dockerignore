@@ -1,5 +1,9 @@
 # Build context hygiene for the official engine image.
 # Required for `cargo build --bin omakure`: Cargo.toml, Cargo.lock, src/
+#
+# `tests/` is excluded from the default context but re-admitted below, because
+# the `harness` stage compiles the Health Plane attempt-exhaustion harness from
+# it. The `runtime` stage never copies it, so the shipped image is unchanged.
 
 target/
 .git/
@@ -13,6 +17,7 @@ target/
 release-notes/
 scripts/
 tests/
+!tests/
 *.log
 *.tmp
 tarpaulin-report.html

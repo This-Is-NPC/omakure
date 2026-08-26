@@ -15,6 +15,45 @@ COPY src ./src
 RUN cargo build --release --bin omakure \
     && strip target/release/omakure
 
+# The Health Plane attempt-exhaustion harness. It is built here, rather than on
+# the host, so that `.scripts/health-plane-certification.sh` can run it as a
+# container on the certification network instead of as a host process. A host
+# process would need the Performer's container to dial the host, which any
+# default-deny INPUT firewall drops; inside the network the phase depends on
+# nothing but Docker itself.
+#
+# These stages are deliberately placed before `runtime` so that the default
+# build target stays `runtime` for every other caller. BuildKit skips them
+# unless they are requested with `--target harness`.
+FROM builder AS harness-builder
+
+COPY tests ./tests
+
+# Built in the debug profile deliberately, exactly like the host-side adversary
+# harness. `NodeContext::resolve` refuses the state-directory override outside
+# `cfg!(debug_assertions)` (src/node.rs), which is a security property of the
+# shipped binary; a release harness cannot read the adversary's node material.
+# Only the harness is affected -- the node under test is the release `runtime`
+# image, unchanged.
+#
+# `cargo test --no-run` names the binary with a content hash, so resolve it
+# rather than guessing. Exactly one non-`.d` file matches.
+RUN cargo test --locked --test docker_health_plane_exhaustion --no-run \
+    && harness=$(find target/debug/deps -maxdepth 1 -type f \
+        -name 'docker_health_plane_exhaustion-*' ! -name '*.d' -print | head -n 1) \
+    && [ -n "$harness" ] \
+    && install -m 0755 "$harness" /usr/local/bin/health-plane-exhaustion-harness
+
+FROM debian@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS harness
+
+COPY --from=harness-builder /usr/local/bin/health-plane-exhaustion-harness /usr/local/bin/health-plane-exhaustion-harness
+
+# The harness writes its readiness marker and reads the adversary's node
+# material through a bind mount the runner owns; it needs no persistent state.
+ENTRYPOINT ["/usr/local/bin/health-plane-exhaustion-harness"]
+CMD ["--ignored", "--nocapture", "--exact", \
+     "an_unacknowledged_profile_stops_at_the_frozen_attempt_budget_on_one_session"]
+
 FROM debian@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS runtime
 
 RUN apt-get update \

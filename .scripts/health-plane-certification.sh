@@ -34,6 +34,12 @@ compose=(timeout --foreground --kill-after=5s 180s docker compose -f "$compose_f
 docker_cmd=(timeout --foreground --kill-after=5s 120s docker)
 sqlite=(timeout --foreground --kill-after=2s 30s sqlite3)
 tmp_dir=$(mktemp -d)
+# The attempt-exhaustion harness bind-mounts this directory and runs as this
+# uid. Both are exported before the first Compose call so the service can guard
+# them with `:?` instead of defaulting to root with a host path mounted in.
+harness_dir="$tmp_dir/harness"
+export OMAKURE_HP_HARNESS_DIR="$harness_dir"
+export OMAKURE_HP_HARNESS_USER="$(id -u):$(id -g)"
 induced_failure=${OMAKURE_HEALTH_CERTIFICATION_INDUCE_FAILURE:-0}
 
 # ---------------------------------------------------------------------------
@@ -82,6 +88,19 @@ step() {
     printf 'health-plane certification: %s\n' "$*"
 }
 
+# A zero exit is not proof that anything ran. libtest exits 0 when its filter
+# matches no test, so a renamed test - or one that loses `#[ignore]`, which
+# makes `--ignored` match nothing - would leave its phase green having
+# certified nothing at all. Both Noise harnesses are a single test invoked
+# through a name that lives outside the Rust source (a Compose image CMD and a
+# `--test` argument), so both must prove the test actually ran.
+assert_single_test_ran() {
+    local output=$1 what=$2
+    printf '%s\n' "$output" | grep -q 'test result: ok\. 1 passed' && return 0
+    printf '%s\n' "$output" >&2
+    fail "$what reported success without running its test"
+}
+
 cleanup() {
     local exit_status=$?
     trap - EXIT INT TERM
@@ -115,15 +134,29 @@ cleanup() {
     rm -rf "$tmp_dir"
     exit "$exit_status"
 }
-# An interrupt must never be reported as success: the signal handler exits with
-# the conventional signal status, which then runs the EXIT trap exactly once.
+# An interrupt must never be reported as success: the handler exits with the
+# conventional 128+signal status, which then runs the EXIT trap exactly once.
+#
+# Caveat worth knowing before relying on the INT half. A shell cannot trap a
+# signal that was ignored when it was exec'd, and bash forces SIGINT (and
+# SIGQUIT) to ignored for asynchronous commands when job control is off. So a
+# runner that launches this script with `&` from a non-interactive shell gets a
+# process whose /proc status shows SIGINT in SigIgn and only SIGTERM in SigCgt:
+# the INT trap below silently does nothing. Terminal Ctrl+C is unaffected, and
+# SIGTERM always works. Automation should send SIGTERM.
 on_signal() {
+    local signal=$1
     trap - INT TERM
-    printf 'health-plane certification: interrupted; tearing down\n' >&2
-    exit 130
+    printf 'health-plane certification: interrupted by SIG%s; tearing down\n' "$signal" >&2
+    case "$signal" in
+        INT) exit 130 ;;
+        TERM) exit 143 ;;
+        *) exit 1 ;;
+    esac
 }
 trap cleanup EXIT
-trap on_signal INT TERM
+trap 'on_signal INT' INT
+trap 'on_signal TERM' TERM
 
 command -v docker >/dev/null || fail "docker is required"
 command -v jq >/dev/null || fail "jq is required"
@@ -454,7 +487,10 @@ assert_no_p1_leakage() {
 
 assert_no_log_leakage() {
     local logs token_file token
-    logs=$("${compose[@]}" logs --no-log-prefix hp-node-1 hp-node-2 hp-node-3 hp-node-4 2>&1 || true)
+    # hp-harness is included: it holds real node material and its panics are
+    # forwarded to stderr, so it is exactly as capable of leaking as a node.
+    logs=$("${compose[@]}" logs --no-log-prefix \
+        hp-node-1 hp-node-2 hp-node-3 hp-node-4 hp-harness 2>&1 || true)
     [[ "$logs" != *"Bearer "* ]] || fail "bearer value leaked into Compose logs"
     [[ "$logs" != *'$argon2'* ]] || fail "Argon2 token hash leaked into Compose logs"
     for token_file in "$tmp_dir"/*.client.token; do
@@ -999,7 +1035,9 @@ OMAKURE_HP_ROLE_STATE="$role_material" \
 OMAKURE_HP_TMP="$tmp_dir" \
     timeout --foreground --kill-after=30s 20m \
     cargo test --test docker_health_plane_adversary --locked -- --ignored --nocapture \
+    2>&1 | tee "$tmp_dir/adversary-matrix.log" \
     || fail "the production Noise adversary matrix failed"
+assert_single_test_ran "$(<"$tmp_dir/adversary-matrix.log")" 'the adversary matrix'
 
 copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
 [[ "$alpha_trust_before" == "$(peer_trust_snapshot "$tmp_dir/conductor.sqlite" "$alpha_id")" ]] \
@@ -1202,13 +1240,10 @@ write_config "$alpha_svc" \
 # The harness reads the adversary's node material, and publishes its readiness
 # marker, through a directory the runner owns and bind-mounts. The material is
 # already on the host from the adversarial phase.
-harness_dir="$tmp_dir/harness"
 mkdir -p "$harness_dir"
 cp -a "$adversary_material" "$harness_dir/adversary-material"
 exhaust_ready="$harness_dir/exhaustion.ready"
 rm -f "$exhaust_ready"
-export OMAKURE_HP_HARNESS_DIR="$harness_dir"
-export OMAKURE_HP_HARNESS_USER="$(id -u):$(id -g)"
 export OMAKURE_HP_ADVERSARY_ID="$adversary_id"
 export OMAKURE_HP_PERFORMER_ID="$alpha_id"
 
@@ -1236,21 +1271,22 @@ fi
 harness_status=$(timeout --foreground --kill-after=15s 6m \
     docker wait "$harness_container") \
     || fail "waiting for the attempt-exhaustion harness exceeded its bound"
+harness_output=$("${compose[@]}" logs --no-log-prefix hp-harness 2>/dev/null || true)
 # Surface what the harness saw on the wire even on success. A stray connection
 # that the accept loop tolerated is invisible otherwise, and the difference
 # between "tolerated one" and "never saw one" is the difference between a gate
 # that is reliable and one that is quietly racing.
 while IFS= read -r harness_line; do
     [[ -n "$harness_line" ]] && step "$harness_line"
-done < <("${compose[@]}" logs --no-log-prefix hp-harness 2>/dev/null \
-    | grep '^harness: ' || true)
+done < <(printf '%s\n' "$harness_output" | grep '^harness: ' || true)
 if [[ "$harness_status" != "0" ]]; then
     # Both sides, or the failure is only half-legible: the harness says what it
     # saw on the wire, the Performer says what it tried to dial.
-    "${compose[@]}" logs --no-log-prefix hp-harness >&2 || true
+    printf '%s\n' "$harness_output" >&2
     "${compose[@]}" logs --no-log-prefix "$alpha_svc" >&2 || true
     fail "attempt exhaustion over one real session was not certified"
 fi
+assert_single_test_ran "$harness_output" 'the attempt-exhaustion harness'
 
 # ---------------------------------------------------------------------------
 # Phase 13: final bounds, redaction, and leakage scans.

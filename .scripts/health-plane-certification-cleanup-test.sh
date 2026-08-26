@@ -6,8 +6,17 @@ set -euo pipefail
 #   1. partial startup - Compose creates the first node's resources and then a
 #      sidecar exits non-zero under --abort-on-container-exit;
 #   2. failure - the certification script exits non-zero from that point;
-#   3. interrupt - the same run is sent SIGINT part-way through and must still
-#      remove everything through its EXIT/INT/TERM trap.
+#   3. interrupt - the same run is signalled part-way through and must still
+#      remove everything through its EXIT/INT/TERM trap, and must not report
+#      success.
+#
+# The interrupt is SIGTERM, not SIGINT, and that is load-bearing. The gate is
+# started here with `&` from a non-interactive shell, and bash forces SIGINT to
+# ignored for asynchronous commands when job control is off. A signal ignored at
+# exec cannot be trapped, so the gate's INT trap would never fire and the run
+# would sail on to completion and exit 0 - which is exactly what this shape is
+# supposed to catch. /proc/<pid>/status confirms it: SIGINT in SigIgn, only
+# SIGTERM in SigCgt.
 #
 # The success shape is verified by the certification command itself, which
 # fails if any project resource survives its own teardown.
@@ -64,24 +73,33 @@ while (( SECONDS < deadline )); do
     sleep 5
 done
 if (( started == 0 )); then
-    kill -INT "$run_pid" 2>/dev/null || true
+    kill -TERM "$run_pid" 2>/dev/null || true
     wait "$run_pid" 2>/dev/null || true
     printf 'health-plane certification cleanup test: the interrupt run never started containers\n' >&2
     exit 1
 fi
-kill -INT "$run_pid" 2>/dev/null || true
-# Bash runs a trap only between commands, so a SIGINT that lands while the gate
+kill -TERM "$run_pid" 2>/dev/null || true
+# Bash runs a trap only between commands, so a signal that lands while the gate
 # is inside a bounded Docker command is not observed until that command
-# returns. The ceiling is therefore the longest single in-flight command (the
-# 180s Compose bound) plus the whole teardown path: `compose down` (180s), the
-# reclaim `docker run` (120s), and the three resource sweeps (120s each).
+# returns. The ceiling covers the longest single in-flight command plus every
+# bounded step the teardown then runs:
 #
-# Measured, not guessed: a SIGINT delivered during the Phase 1 `compose run`
-# exits after ~360s and removes every container, network, and volume. The old
-# 180s ceiling was below the cost of a single deferred command and failed a
-# correct teardown. This is a ceiling, not a wait - the loop breaks as soon as
-# the process is gone.
-interrupt_deadline=$((SECONDS + 900))
+#    180  the deferred in-flight Compose command
+#    180  `compose logs`, which always runs because the interrupt exits non-zero
+#    180  `compose down --volumes`
+#    120  the reclaim `docker run` that hands host-side state back
+#    360  three resource sweeps at 120s each
+#   ----
+#   1020  worst case, rounded to 1080 for headroom
+#
+# It cannot mask a hang, because every teardown command carries its own
+# `timeout`; the loop breaks as soon as the process is gone.
+#
+# Observed, for calibration: with a signal that actually reaches the gate the
+# whole three-shape run finishes in ~71s. A ceiling anywhere near that would be
+# tuned to the happy path, so the worst case above is what is encoded. If this
+# ever approaches the ceiling, the teardown regressed - do not just raise it.
+interrupt_deadline=$((SECONDS + 1080))
 while (( SECONDS < interrupt_deadline )); do
     kill -0 "$run_pid" 2>/dev/null || break
     sleep 2
@@ -89,10 +107,17 @@ done
 if kill -0 "$run_pid" 2>/dev/null; then
     kill -TERM "$run_pid" 2>/dev/null || true
     wait "$run_pid" 2>/dev/null || true
-    printf 'health-plane certification cleanup test: the interrupted run did not exit within its bound\n' >&2
+    printf 'health-plane certification cleanup test: the signalled run did not exit within its bound\n' >&2
     exit 1
 fi
-wait "$run_pid" 2>/dev/null || true
+# The gate's own contract is that an interrupt is never reported as success
+# (`on_signal` exits 130). Assert it, or the shape only proves teardown.
+interrupt_status=0
+wait "$run_pid" 2>/dev/null || interrupt_status=$?
+if (( interrupt_status == 0 )); then
+    printf 'health-plane certification cleanup test: the signalled run reported success\n' >&2
+    exit 1
+fi
 assert_removed "$interrupt_project" "an interrupt"
 
 printf 'health-plane certification cleanup test: passed\n'

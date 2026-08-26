@@ -71,6 +71,26 @@ set -euo pipefail
 printf 'hello from omakure\n'
 ```
 
+## Minimal Lua script
+
+`.lua` needs no interpreter installed. The Lua runtime is embedded in the
+`omakure` binary, so the same script runs on a node with nothing on it.
+
+```lua
+-- OMAKURE_SCHEMA_START
+-- { "Name": "hello", "Description": "Print a greeting", "Fields": [] }
+-- OMAKURE_SCHEMA_END
+
+print("hello from omakure")
+```
+
+Field values arrive as environment variables and arguments arrive in `arg`,
+exactly as they do for the other kinds.
+
+Note that extensionless names resolve `.bash`, `.sh`, `.ps1`, `.py`, `.lua` in
+that order, so `omakure run hello` picks `hello.sh` over `hello.lua` when both
+exist. Name the file explicitly if you mean the Lua one.
+
 Validate and run it through named, headless commands:
 
 ```bash

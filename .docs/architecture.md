@@ -57,7 +57,7 @@ src/
 ├── runs.rs                  SQLite state machine and structured traces
 ├── run_executor.rs          shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index
-├── runtime.rs               Bash/PowerShell/Python detection and commands
+├── runtime.rs               Script-kind detection and command construction
 ├── workspace.rs             one workspace root and metadata layout
 ├── auth.rs                  token-file and legacy token authentication
 ├── policy.rs                deploy-time route and runtime policy
@@ -89,7 +89,17 @@ src/
   prevents overlapping fires, and records scheduler provenance in SQLite.
 - A workspace is one filesystem root. `--scripts-dir` selects it; positional
   paths are not a command mode. Metadata is created only below that root.
-- Script discovery supports `.bash`, `.sh`, `.ps1`, and `.py`; `.omakureignore`
+- `.lua` is executed by a Lua runtime embedded in the binary, so a node runs
+  Lua automation with nothing installed. It works by re-executing `omakure`
+  itself as a Lua host, entered through an argv marker intercepted in `main`
+  before the CLI parser. That marker is a maintainer-facing implementation
+  detail: it is deliberately not a subcommand, because the global `--json` and
+  `--scripts-dir` flags would otherwise consume a script's own arguments, and
+  because a discoverable verb that executes an arbitrary file path is the wrong
+  shape to expose ahead of authorized remote execution. Because the host is an
+  ordinary child process, `run_executor` needed no change at all: timeout,
+  cancel, heartbeat, capture, env injection and redaction apply unchanged.
+- Script discovery supports `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`; `.omakureignore`
   rules and metadata-directory exclusions are shared by CLI and HTTP listings.
 - HTTP handlers never open SQLite or call CLI handlers directly. They call the
   same operations used by the CLI and map operation errors to HTTP statuses.

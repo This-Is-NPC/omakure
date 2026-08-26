@@ -242,6 +242,10 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/node_service_e2e.rs"),
     },
     CommandCoverage {
+        command: "node signals",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs + tests/health_plane_signals.rs"),
+    },
+    CommandCoverage {
         command: "node status",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
@@ -329,6 +333,7 @@ fn command_surface_inventory_maps_all_current_commands() {
         "node reset",
         "node revoke",
         "node serve",
+        "node signals",
         "node status",
         "node trust",
         "queue add",
@@ -663,6 +668,52 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
         assert!(
             health_body["data"].get(forbidden).is_none(),
             "fleet status must not expose `{forbidden}`"
+        );
+    }
+
+    // `node signals` is the CLI half of the closed Signal feed. Trusting the
+    // peer above was an authoritative local trust transition, so exactly one
+    // `enrolled` Signal is visible, bounded and newest first.
+    let signals = omakure_with_env(
+        workspace.path(),
+        &[
+            "--json",
+            "node",
+            "--node-state-dir",
+            node_args[0],
+            "--node-config",
+            node_args[1],
+            "signals",
+        ],
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
+    assert_success(&signals);
+    let signals_body = json(&signals)["data"].clone();
+    assert_eq!(signals_body["enabled"], true);
+    assert_eq!(signals_body["gap"], false);
+    assert_eq!(signals_body["limit"], 64);
+    assert_eq!(signals_body["retention_seconds"], 604_800);
+    let entries = signals_body["signals"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["kind"], "enrolled");
+    assert_eq!(entries[0]["source"], "local");
+    assert!(entries[0]["run"].is_null());
+    assert_eq!(
+        entries[0]["subject"],
+        health_body["data"]["nodes"][0]["node_id"]
+    );
+    // A closed feed: three kinds, no subscription, webhook, alert, or history.
+    for forbidden in [
+        "history",
+        "series",
+        "logs",
+        "alerts",
+        "subscriptions",
+        "webhooks",
+    ] {
+        assert!(
+            signals_body.get(forbidden).is_none(),
+            "the Signal feed must not expose `{forbidden}`"
         );
     }
 }

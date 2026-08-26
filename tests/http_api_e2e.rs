@@ -199,6 +199,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_management_routes"),
     ),
     (
+        ("GET", "/v1/node/signals"),
+        RouteCoverage::Covered("node_management_routes"),
+    ),
+    (
         ("GET", "/v1/node/peers"),
         RouteCoverage::Covered("node_management_routes"),
     ),
@@ -1076,7 +1080,12 @@ fn node_management_routes_cover_missing_scopes_individually() {
         &[],
         Duration::from_secs(10),
     );
-    for path in ["/v1/node/status", "/v1/node/peers", "/v1/node/health"] {
+    for path in [
+        "/v1/node/status",
+        "/v1/node/peers",
+        "/v1/node/health",
+        "/v1/node/signals",
+    ] {
         let denied = node_write_only.request("GET", path, None);
         assert_eq!(denied.status, 403, "GET {path}: {}", denied.safe_body());
         assert_error_code(&denied.json(), "forbidden");
@@ -1275,6 +1284,27 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     assert_eq!(body["data"]["nodes"][0]["trust_state"], "active");
     health.assert_no_secret("identity.key");
 
+    // The closed Signal feed is the second half of the same read surface.
+    // Importing trust was an authoritative local transition, so it is visible
+    // as exactly one `enrolled` Signal, bounded and newest first.
+    let signals = server.get("/v1/node/signals");
+    assert_eq!(signals.status, 200, "body: {}", signals.safe_body());
+    let feed = signals.json();
+    assert_eq!(feed["data"]["enabled"], true);
+    assert_eq!(feed["data"]["gap"], false);
+    assert_eq!(feed["data"]["limit"], 64);
+    assert_eq!(feed["data"]["retention_seconds"], 604_800);
+    let entries = feed["data"]["signals"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["kind"], "enrolled");
+    assert_eq!(entries[0]["source"], "local");
+    assert_eq!(
+        entries[0]["subject"],
+        "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92"
+    );
+    assert_eq!(entries[0]["run"], json!(null));
+    signals.assert_no_secret("identity.key");
+
     let malformed = server.patch_json(
         "/v1/node/peers/omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92/capabilities",
         &json!({"capabilities":["remote-run","notifications"],"actor":"operator","reason":"bad order","confirmed":true}),
@@ -1320,6 +1350,20 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
         .unwrap()
         .is_empty());
     assert_eq!(after_revoke.json()["data"]["presence"]["total"], 0);
+
+    // The local revocation Signal survives the revocation it records, which is
+    // exactly what a Health Plane row keyed to the revoked peer could not do.
+    let after_signals = server.get("/v1/node/signals");
+    assert_eq!(after_signals.status, 200);
+    let feed = after_signals.json();
+    let kinds: Vec<&str> = feed["data"]["signals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|signal| signal["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, vec!["revoked", "enrolled"]);
+    assert!(feed["data"]["cursors"].as_array().unwrap().is_empty());
 }
 
 /// The management API can read the Health Plane projection and nothing else.
@@ -1332,12 +1376,12 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
 fn no_http_route_can_write_health_plane_state() {
     let health_routes: Vec<_> = omakure::cli::api::HTTP_ROUTE_INVENTORY
         .iter()
-        .filter(|(_, route)| route.contains("node/health"))
+        .filter(|(_, route)| route.contains("node/health") || route.contains("node/signals"))
         .collect();
     assert_eq!(
         health_routes,
-        vec![&("GET", "/v1/node/health")],
-        "the Health Plane must expose exactly one read-only management route"
+        vec![&("GET", "/v1/node/health"), &("GET", "/v1/node/signals")],
+        "the Health Plane must expose exactly two read-only management routes"
     );
 }
 

@@ -46,6 +46,14 @@ const TOKEN: &str = "health-plane-transport-token-with-enough-entropy-01";
 const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
 /// How long a bounded real wait may run before the certification fails.
 const REACH_TIMEOUT: Duration = Duration::from_secs(45);
+/// One frozen 60-second admission window plus slack, for a certification
+/// client that has to share a source address with a reconnecting fleet.
+const ADMISSION_WINDOW_TIMEOUT: Duration = Duration::from_secs(90);
+/// The bounded wait the three-node certification uses. It runs one more
+/// service than the two-node suite and shares a host with every other suite,
+/// so it waits longer - but still strictly inside the frozen 120-second
+/// freshness window it then asserts against.
+const FLEET_REACH_TIMEOUT: Duration = Duration::from_secs(110);
 
 // ---------------------------------------------------------------------------
 // Node lifecycle helpers.
@@ -126,13 +134,20 @@ fn trust_peer(
 }
 
 fn configure_direct(workspace: &Path, direct_port: u16, peer_node_id: &str, peer_port: u16) {
+    configure_direct_peers(workspace, direct_port, &[(peer_node_id, peer_port)]);
+}
+
+/// Bind the production direct listener and point it at every static peer.
+fn configure_direct_peers(workspace: &Path, direct_port: u16, peers: &[(&str, u16)]) {
+    let locators = peers
+        .iter()
+        .map(|(node_id, port)| format!("\"{node_id}@127.0.0.1:{port}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
     let path = workspace.join("node.toml");
     let config = std::fs::read_to_string(&path).expect("read node config");
     let config = config
-        .replace(
-            "static_peers = []",
-            &format!("static_peers = [\"{peer_node_id}@127.0.0.1:{peer_port}\"]"),
-        )
+        .replace("static_peers = []", &format!("static_peers = [{locators}]"))
         .replace(
             "static_peers = [",
             &format!("direct_bind = \"127.0.0.1:{direct_port}\"\nstatic_peers = ["),
@@ -183,6 +198,45 @@ fn fleet_status_cli(workspace: &Path) -> Value {
     assert_success(&run_node(workspace, &["health".to_string()]))
 }
 
+fn signal_feed_http(server: &support::HttpServer) -> Value {
+    let response = server.get("/v1/node/signals");
+    assert_eq!(response.status, 200, "body: {}", response.safe_body());
+    response.json()["data"].clone()
+}
+
+fn signal_feed_cli(workspace: &Path) -> Value {
+    assert_success(&run_node(workspace, &["signals".to_string()]))
+}
+
+/// Every Signal in the feed reported by one source with one kind.
+fn signals_from<'a>(feed: &'a Value, source: &str, kind: &str) -> Vec<&'a Value> {
+    feed["signals"]
+        .as_array()
+        .map(|signals| {
+            signals
+                .iter()
+                .filter(|signal| signal["source"] == source && signal["kind"] == kind)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Poll the Conductor's own HTTP feed until one Signal of `kind` arrives from
+/// `source`, and return how long the bounded real wait actually took.
+fn wait_for_signal(server: &support::HttpServer, source: &str, kind: &str) -> (Value, Duration) {
+    let started = Instant::now();
+    let deadline = started + FLEET_REACH_TIMEOUT;
+    let mut last = Value::Null;
+    while Instant::now() < deadline {
+        last = signal_feed_http(server);
+        if !signals_from(&last, source, kind).is_empty() {
+            return (last, started.elapsed());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    panic!("no {kind} Signal ever arrived from {source}; last feed: {last}");
+}
+
 fn node_row<'a>(status: &'a Value, node_id: &str) -> Option<&'a Value> {
     status["nodes"]
         .as_array()?
@@ -211,7 +265,16 @@ fn wait_for_pulse_after(server: &support::HttpServer, node_id: &str, sequence: u
 
 /// Poll the Conductor's own HTTP projection until `node_id` reaches `presence`.
 fn wait_for_presence(server: &support::HttpServer, node_id: &str, presence: &str) -> Value {
-    let deadline = Instant::now() + REACH_TIMEOUT;
+    wait_for_presence_within(server, node_id, presence, REACH_TIMEOUT)
+}
+
+fn wait_for_presence_within(
+    server: &support::HttpServer,
+    node_id: &str,
+    presence: &str,
+    timeout: Duration,
+) -> Value {
+    let deadline = Instant::now() + timeout;
     let mut last = Value::Null;
     while Instant::now() < deadline {
         last = fleet_status_http(server);
@@ -315,6 +378,82 @@ fn production_session(
     )
     .expect("the production listener must acknowledge an authorized peer");
     (stream, session, identity)
+}
+
+/// Complete one production handshake and probe/ack round trip, returning
+/// `None` when the listener refused the attempt.
+fn try_production_session(
+    endpoint: &str,
+    workspace: &Path,
+    remote_node_id: &str,
+    remote_identity_key: &[u8; 32],
+) -> Option<(TcpStream, TransportSession, NodeIdentity)> {
+    let (identity, private, certificate) = node_material(workspace);
+    let mut handshake = NoiseHandshake::new(HandshakeRole::Initiator, private, certificate).ok()?;
+    let mut stream = TcpStream::connect(endpoint).ok()?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .ok()?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(10)))
+        .ok()?;
+    stream.write_all(&handshake.write_next().ok()?).ok()?;
+    let response = try_read_frame(&mut stream)?;
+    handshake.read_next(&response, unix_seconds()).ok()?;
+    stream.write_all(&handshake.write_next().ok()?).ok()?;
+    let mut session = handshake.into_session().ok()?;
+
+    let nonce = [0x5a_u8; 16];
+    let probe = sign_probe(&identity, session.session_id(), nonce, unix_seconds()).ok()?;
+    let frame = session.write(ENVELOPE_KIND, &probe.encoded()).ok()?;
+    stream.write_all(&frame).ok()?;
+    let ack_frame = try_read_frame(&mut stream)?;
+    let ack = session.read(&ack_frame).ok()?;
+    verify_envelope(
+        &ack.body,
+        remote_node_id,
+        remote_identity_key,
+        "ack",
+        session.session_id(),
+        &nonce,
+    )
+    .ok()?;
+    Some((stream, session, identity))
+}
+
+fn try_read_frame(stream: &mut TcpStream) -> Option<Vec<u8>> {
+    let mut prefix = [0_u8; 4];
+    stream.read_exact(&mut prefix).ok()?;
+    let length = u32::from_be_bytes(prefix) as usize;
+    let mut encoded = vec![0_u8; length + 4];
+    encoded[..4].copy_from_slice(&prefix);
+    stream.read_exact(&mut encoded[4..]).ok()?;
+    Some(encoded)
+}
+
+/// The frozen admission controller accepts a bounded number of handshakes per
+/// source per minute. A certification client that arrives while a fleet is
+/// reconnecting must therefore wait for that window rather than assume a
+/// refusal is a defect, so this retries across one full frozen window.
+fn production_session_within_admission_window(
+    endpoint: &str,
+    workspace: &Path,
+    remote_node_id: &str,
+    remote_identity_key: &[u8; 32],
+) -> (TcpStream, TransportSession, NodeIdentity) {
+    let deadline = Instant::now() + ADMISSION_WINDOW_TIMEOUT;
+    loop {
+        if let Some(session) =
+            try_production_session(endpoint, workspace, remote_node_id, remote_identity_key)
+        {
+            return session;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the production listener never admitted a session within {ADMISSION_WINDOW_TIMEOUT:?}"
+        );
+        std::thread::sleep(Duration::from_secs(2));
+    }
 }
 
 fn message_id(seed: u8) -> String {
@@ -1172,4 +1311,335 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
     );
 
     let _ = conductor_server.terminate();
+}
+
+// ---------------------------------------------------------------------------
+// Wave 4 SMART gate: three real nodes, one real run, one redacted Signal.
+// ---------------------------------------------------------------------------
+
+/// The frozen capability that authorizes the closed Signal feed.
+const CAPABILITY_SIGNAL: &str = "notifications";
+
+/// Create one real, runnable local script on a node's workspace.
+fn install_script(workspace: &Path, relative: &str, name: &str) {
+    let schema = format!(
+        r#"{{"Name":"{name}","Description":"health plane wave 4 certification","Fields":[]}}"#
+    );
+    let output = Command::new(support::omakure_bin())
+        .arg("--scripts-dir")
+        .arg(workspace)
+        .arg("--json")
+        .arg("init")
+        .arg(relative)
+        .arg("--schema-json")
+        .arg(&schema)
+        .output()
+        .expect("install certification script");
+    assert!(
+        output.status.success(),
+        "init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// Execute one real local script and return its local run id.
+fn run_script(workspace: &Path, relative: &str) -> String {
+    let output = Command::new(support::omakure_bin())
+        .arg("--scripts-dir")
+        .arg(workspace)
+        .arg("--json")
+        .arg("run")
+        .arg(relative)
+        .output()
+        .expect("run certification script");
+    assert!(
+        output.status.success(),
+        "run failed: stdout={:?} stderr={:?}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let envelope = support::json_envelope(&output.stdout);
+    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
+    envelope["data"]["run_id"]
+        .as_str()
+        .expect("run id")
+        .to_string()
+}
+
+#[test]
+fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
+    // Three real nodes. Roles are assigned *after* their identities exist,
+    // because the shipped transport resolves dial ownership deterministically
+    // from the node ids: a node only accepts an inbound connection from a
+    // static peer whose id sorts below its own. Making the Conductor the
+    // highest id therefore puts it on the responder side of the whole fleet,
+    // which is what lets both Performers dial in and lets the certification
+    // client below replay one Signal from a Performer's own identity. Node ids
+    // are freshly generated per run, so choosing here is what makes the
+    // certification deterministic rather than a coin flip.
+    let mut nodes: Vec<(support::TestWorkspace, Value)> =
+        ["health_signal_a", "health_signal_b", "health_signal_c"]
+            .into_iter()
+            .map(|label| {
+                let workspace = support::TestWorkspace::new(label);
+                let status = init_node(workspace.path());
+                (workspace, status)
+            })
+            .collect();
+    nodes.sort_by_key(|(_, status)| {
+        status["identity"]["node_id"]
+            .as_str()
+            .expect("node id")
+            .to_string()
+    });
+    let (conductor, conductor_status) = nodes.pop().expect("conductor workspace");
+    let (worker, worker_status) = nodes.pop().expect("worker workspace");
+    let (idle, idle_status) = nodes.pop().expect("idle workspace");
+    let conductor_id = conductor_status["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let worker_id = worker_status["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let idle_id = idle_status["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        conductor_id > worker_id && conductor_id > idle_id,
+        "the Conductor must sort above both Performers for deterministic dial ownership"
+    );
+
+    // One Conductor, two independently stateful Performers. Both are granted
+    // the frozen Signal capability; only one of them will actually run work.
+    let capabilities = [CAPABILITY_PROFILE_PULSE, CAPABILITY_SIGNAL];
+    trust_peer(
+        conductor.path(),
+        worker.path(),
+        &worker_status,
+        "performer",
+        &capabilities,
+    );
+    trust_peer(
+        conductor.path(),
+        idle.path(),
+        &idle_status,
+        "performer",
+        &capabilities,
+    );
+    trust_peer(
+        worker.path(),
+        conductor.path(),
+        &conductor_status,
+        "conductor",
+        &capabilities,
+    );
+    trust_peer(
+        idle.path(),
+        conductor.path(),
+        &conductor_status,
+        "conductor",
+        &capabilities,
+    );
+
+    let conductor_port = support::unique_loopback_port();
+    let worker_port = support::unique_loopback_port();
+    let idle_port = support::unique_loopback_port();
+    configure_direct_peers(
+        conductor.path(),
+        conductor_port,
+        &[(&worker_id, worker_port), (&idle_id, idle_port)],
+    );
+    configure_direct_peers(
+        worker.path(),
+        worker_port,
+        &[(&conductor_id, conductor_port)],
+    );
+    configure_direct_peers(idle.path(), idle_port, &[(&conductor_id, conductor_port)]);
+
+    let conductor_server = serve(conductor.path());
+
+    // Trusting each Performer was an authoritative local transition on this
+    // Conductor, so both are already visible as `enrolled` Signals before any
+    // node reports anything at all.
+    let cold = signal_feed_http(&conductor_server);
+    assert_eq!(cold["enabled"], true);
+    assert_eq!(cold["gap"], false);
+    let enrolled = signals_from(&cold, "local", "enrolled");
+    assert_eq!(enrolled.len(), 2, "one activation per Performer: {cold}");
+    let subjects: Vec<&str> = enrolled
+        .iter()
+        .map(|signal| signal["subject"].as_str().expect("subject"))
+        .collect();
+    assert!(subjects.contains(&worker_id.as_str()));
+    assert!(subjects.contains(&idle_id.as_str()));
+
+    let mut worker_server = Some(serve(worker.path()));
+    let mut idle_server = Some(serve(idle.path()));
+
+    // Both Performers reach the fleet over production Noise before any run.
+    wait_for_presence_within(&conductor_server, &worker_id, "online", FLEET_REACH_TIMEOUT);
+    wait_for_presence_within(&conductor_server, &idle_id, "online", FLEET_REACH_TIMEOUT);
+    assert!(
+        signals_from(
+            &signal_feed_http(&conductor_server),
+            &worker_id,
+            "run-completed"
+        )
+        .is_empty(),
+        "a Performer that has run nothing must report no run-completed Signal"
+    );
+
+    // A real local script, executed by the shipped runner on one Performer.
+    install_script(worker.path(), "tools/deploy.sh", "deploy");
+    let local_run_id = run_script(worker.path(), "tools/deploy.sh");
+
+    // SMART: the Signal must reach the Conductor inside the frozen freshness
+    // window, because a Signal older than that is rejected as stale.
+    let (feed, elapsed) = wait_for_signal(&conductor_server, &worker_id, "run-completed");
+    assert!(
+        elapsed.as_secs() as i64 <= MAX_AGE_SECONDS,
+        "the run-completed Signal took {elapsed:?}, beyond the frozen {MAX_AGE_SECONDS}s window"
+    );
+
+    let carried = signals_from(&feed, &worker_id, "run-completed");
+    assert_eq!(carried.len(), 1, "exactly one Signal for one terminal run");
+    let signal = carried[0];
+    assert_eq!(signal["sequence"], 1, "the first Signal starts the cursor");
+    assert!(signal["subject"].is_null());
+    let run = signal["run"].as_object().expect("run object");
+    assert_eq!(run.len(), 5, "the frozen Signal run object has five fields");
+    assert_eq!(run["script"], "deploy", "only the schema name is carried");
+    assert_eq!(run["state"], "completed");
+    assert_eq!(run["exit_code"], 0);
+    assert_eq!(run["finished_at"], signal["occurred_at"]);
+
+    // Redaction, proven against the real local run: the wire identifier is
+    // opaque, and nothing from the workspace, the process, or the output
+    // crosses the boundary.
+    let opaque = run["run_id"].as_str().expect("run id");
+    assert_eq!(opaque.len(), 32);
+    assert!(opaque
+        .bytes()
+        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    assert_ne!(opaque, local_run_id, "the local run id is never carried");
+    let encoded = feed.to_string();
+    for forbidden in [
+        local_run_id.as_str(),
+        "tools/deploy.sh",
+        ".sh",
+        "stdout",
+        "stderr",
+        "args",
+        "worker_id",
+        "secret://",
+        worker.path().to_str().expect("workspace path"),
+    ] {
+        assert!(
+            !encoded.contains(forbidden),
+            "the Signal feed leaked {forbidden}: {encoded}"
+        );
+    }
+
+    // The frozen cursor state is exposed, and no feed is stalled.
+    assert_eq!(feed["gap"], false);
+    let cursor = feed["cursors"]
+        .as_array()
+        .expect("cursors")
+        .iter()
+        .find(|entry| entry["node_id"] == worker_id.as_str())
+        .expect("worker cursor");
+    assert_eq!(cursor["cursor"], 1);
+    assert_eq!(cursor["stored"], 1);
+    assert_eq!(cursor["held"], 0);
+    assert_eq!(cursor["gap"], false);
+
+    // Both adapters render the same operation, so they always agree.
+    let cli = signal_feed_cli(conductor.path());
+    assert_eq!(
+        signals_from(&cli, &worker_id, "run-completed").len(),
+        1,
+        "CLI and HTTP must agree: {cli}"
+    );
+
+    // Duplicate delivery over a real production session. The Performer's own
+    // service is stopped first, because the frozen transport keeps exactly one
+    // registered connection per peer; the replay is then delivered the same
+    // way the Performer itself would deliver it after a lost acknowledgement.
+    stop_cleanly(&mut worker_server);
+    let signal_id = signal["signal_id"].as_str().expect("signal id").to_string();
+    let occurred_at = signal["occurred_at"].as_u64().expect("occurred at");
+    let conductor_key = identity_key_bytes(&conductor_status);
+    let (mut stream, mut session, worker_identity) = production_session_within_admission_window(
+        &format!("127.0.0.1:{conductor_port}"),
+        worker.path(),
+        &conductor_id,
+        &conductor_key,
+    );
+    let duplicate = json!({
+        "health_version": 1,
+        "message_id": message_id(0xd1),
+        "signal": {
+            "kind": "run-completed",
+            "occurred_at": occurred_at,
+            "run": {
+                "exit_code": run["exit_code"],
+                "finished_at": occurred_at,
+                "run_id": opaque,
+                "script": "deploy",
+                "state": "completed"
+            },
+            "sequence": 1,
+            "signal_id": signal_id,
+            "subject": Value::Null
+        },
+        "target": conductor_id,
+    });
+    let replayed = exchange(
+        &mut stream,
+        &mut session,
+        &worker_identity,
+        "health_signal",
+        duplicate,
+        unix_seconds(),
+        0xd1,
+    );
+    assert_error(replayed, HealthCode::Replay);
+    assert_eq!(
+        signals_from(
+            &signal_feed_http(&conductor_server),
+            &worker_id,
+            "run-completed"
+        )
+        .len(),
+        1,
+        "a replayed Signal must never become a second stored Signal"
+    );
+    drop(stream);
+
+    // Sender restart: the Performer is started again. It must not replay its
+    // own run history into the Conductor's bounded inbox.
+    let mut worker_server = Some(serve(worker.path()));
+    wait_for_presence_within(&conductor_server, &worker_id, "online", FLEET_REACH_TIMEOUT);
+    let after_restart = signal_feed_http(&conductor_server);
+    assert_eq!(
+        signals_from(&after_restart, &worker_id, "run-completed").len(),
+        1,
+        "a Performer restart must stay idempotent: {after_restart}"
+    );
+
+    // The whole fleet view stays closed: three kinds, nothing else.
+    for entry in after_restart["signals"].as_array().expect("signals") {
+        let kind = entry["kind"].as_str().expect("kind");
+        assert!(
+            ["enrolled", "revoked", "run-completed"].contains(&kind),
+            "the Signal vocabulary is closed; found {kind}"
+        );
+    }
+
+    stop_cleanly(&mut worker_server);
+    stop_cleanly(&mut idle_server);
+    drop(conductor_server);
 }

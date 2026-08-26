@@ -47,6 +47,8 @@ must be updated in the same change.
 | NFR-006 | Release CI tests all targets, denies clippy warnings, checks formatting, verifies binary-only archives, and requires matching release notes. | `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `tests/packaging_smoke.rs` |
 | NFR-007 | The shipped package contains no TUI/theme/widget code or removed direct dependencies. | `tests/packaging_smoke.rs`, `Cargo.toml` |
 | NFR-008 | Linux CI runs the bounded four-service transport certification; Linux, macOS, and Windows CI run native protocol/build/lifecycle coverage without Docker assumptions. | `.scripts/transport-certification.sh`, `.github/workflows/ci.yml` |
+| NFR-009 | Linux CI runs the bounded four-node Health Plane certification over production Noise, with management HTTP loopback-only so it can never be the node-to-node data path; macOS and Windows CI run the native Health Plane protocol, migration, and lifecycle suites without Docker assumptions. | `.scripts/health-plane-certification.sh`, `compose.health-plane-certification.e2e.yaml`, `tests/docker_health_plane_adversary.rs`, `tests/docker_health_plane_exhaustion.rs`, `.github/workflows/ci.yml` |
+| NFR-010 | Every certification wait, retry, Docker command, curl, and sqlite query is explicitly bounded, and cleanup is verified after success, failure, interrupt, and partial startup. | `.scripts/health-plane-certification.sh`, `.scripts/health-plane-certification-cleanup-test.sh` |
 
 ## Business rules
 

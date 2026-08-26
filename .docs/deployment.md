@@ -286,6 +286,9 @@ Artifacts in the repo root:
 | `compose.yaml` | Example: workspace and tokens-file volumes, host bind `127.0.0.1:7878`, fixed uid/gid `10001` |
 | `compose.transport-certification.e2e.yaml` | Isolated four-service Linux certification topology; not a production fleet deployment |
 | `.scripts/transport-certification.sh` | Bounded canonical certification runner used locally and in Linux CI |
+| `compose.health-plane-certification.e2e.yaml` | Isolated four-node Health Plane certification topology; not a production fleet deployment |
+| `.scripts/health-plane-certification.sh` | Bounded canonical Health Plane gate used locally and in Linux CI |
+| `.scripts/health-plane-certification-cleanup-test.sh` | Verifies Health Plane certification cleanup after induced failure and after interrupt |
 
 ### Base image runtimes
 
@@ -352,6 +355,45 @@ reset/replacement. Each rejection checks the matching durable redacted audit and
 full registry-state snapshot. It always removes the project, containers,
 network, and volumes on exit. The topology is for a bounded certification gate
 only and must not be treated as a general fleet launcher.
+
+## Health Plane certification topology
+
+The Health Plane has its own bounded Linux gate, separate again from both the
+example deployment and the transport gate:
+
+```bash
+mise run health-plane-certification
+```
+
+It builds the current image and starts `hp-node-1` through `hp-node-4` on one
+dedicated Compose network. Each service owns separate identity/trust (`state`),
+config, workspace, token, and runtime volumes. Fleet roles are assigned at
+runtime from the freshly generated canonical node IDs, because the shipped
+transport resolves dial ownership deterministically from them: ranked ascending,
+the two lowest IDs become the Performers, the third becomes the untrusted
+adversary, and the highest becomes the Conductor.
+
+Management HTTP binds `127.0.0.1:7878` inside every container and is never
+published, so it is structurally incapable of carrying node-to-node data; the
+gate asserts that peer-to-peer HTTP is unreachable and that only the direct
+transport port `7879` is published. Every Health Plane message therefore crosses
+production Noise.
+
+The gate proves Profile, Pulse, fleet aggregation through both the CLI and HTTP
+read surfaces, all three Signal kinds, one idempotent `run-completed` Signal
+from a real manual `omakure run`, `online` → `stale` → recovery across a real
+network partition, restart persistence, revocation exclusion plus retention
+purge, identity replacement, and frozen attempt exhaustion over one continuously
+connected session. Adversarial cases are injected over real production Noise
+sessions by `tests/docker_health_plane_adversary.rs`, which dials into the
+published transport listeners from the host. The attempt-exhaustion harness is
+the one case where the Performer must be the initiator, so it runs as the
+`hp-harness` container on the same dedicated network rather than as a host
+process; no phase requires container-to-host reachability, and the gate is
+therefore unaffected by a default-deny host firewall. It always removes the
+project, containers, network, and volumes on exit, and fails if any survive.
+The topology is a bounded certification gate only and must not be treated as a
+general fleet launcher.
 
 ## Volume layout
 

@@ -96,14 +96,29 @@ src/
 - The portable node foundation includes direct Noise transport, trust-neutral LAN
   discovery, manual enrollment, signed-bundle enrollment, static-peer lifecycle,
   revocation, replay protection, and bounded transport audit events. Nostr,
-  Pulses, Profiles, Signals, remote Cues, campaigns, MDM, and Lua remain future
-  features.
+  remote Cues, campaigns, MDM, and Lua remain future features.
+- The minimal Health Plane adds five application message kinds inside the frozen
+  direct envelope — `health_profile`, `health_pulse`, `health_signal`,
+  `health_ack`, `health_error` — and no new transport, signature construction,
+  key material, or capability. `src/direct_health.rs` is the only seam between
+  the shipped session and `src/health_plane/`, which owns authorization,
+  ordering, idempotency, capacity, retention, and every bound.
+  `src/operations/health.rs` projects the Conductor-local fleet-status and
+  Signal-feed reports that `omakure node health` / `node signals` and
+  `GET /v1/node/health` / `GET /v1/node/signals` both render. Health state is
+  written only by the authenticated node-to-node exchange; CLI and HTTP are read
+  surfaces and have no write path. Every quantitative bound is frozen in
+  `.docs/health-plane-contract.md` and asserted by
+  `tests/health_plane_contract.rs`.
 
 ## Release and tests
 
-CI runs all targets, the native protocol/build/lifecycle matrix, the bounded
-Linux multi-node transport certification, clippy with warnings denied, formatting,
-packaging checks, and release-readiness validation. Release archives contain
+CI runs all targets, the native protocol/build/lifecycle matrix, the native
+Health Plane protocol/migration/lifecycle matrix, the bounded Linux multi-node
+transport certification, the bounded Linux four-node Health Plane certification,
+clippy with warnings denied, formatting, packaging checks, and release-readiness
+validation. The two multi-container gates run on hosted Linux only; macOS and
+Windows keep native coverage and never claim a container result. Release archives contain
 only the matching `omakure` executable (or `omakure.exe` on Windows). See
 `release-artifacts.md` and `headless-release.md`.
 

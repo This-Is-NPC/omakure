@@ -9,10 +9,16 @@ queryable SQLite database.
 ## Certification command
 
 `help-ai` remains generated from the compiled CLI command tree and is unchanged
-by the repository-level transport certification runner. The bounded Linux gate
-is invoked through `mise run transport-certification` or
-`.scripts/transport-certification.sh`; it is not an AI-facing node verb and does
-not add a second protocol surface.
+by the repository-level certification runners. The bounded Linux gates are
+invoked through `mise run transport-certification` /
+`.scripts/transport-certification.sh` and `mise run health-plane-certification` /
+`.scripts/health-plane-certification.sh`; neither is an AI-facing node verb and
+neither adds a second protocol surface.
+
+The AI-facing Health Plane read surfaces stay exactly the two `--json` verbs the
+Signal wave shipped, `node health` and `node signals`. Health data is written
+only by the authenticated node-to-node exchange over the direct transport;
+management HTTP and the CLI can read that state and can never write it.
 
 ## Trust model
 

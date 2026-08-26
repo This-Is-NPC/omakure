@@ -38,7 +38,14 @@ cargo test --test direct_transport_contract --locked
 cargo test --test direct_transport_e2e --locked
 cargo tree --edges normal
 mise run transport-certification
+mise run health-plane-certification
 ```
+
+`mise run health-plane-certification` is the Health Plane release gate. It runs
+on hosted Linux, where Docker networking is available. macOS and Windows CI keep
+honest native coverage instead — the frozen contract vectors, the bounded state
+and migration suite, the closed Signal lifecycle, and the multi-node reporting
+path that runs in-process — and never claim the multi-container result.
 
 The dependency tree must not reintroduce `ratatui`, `crossterm`, `rattles`, or
 `mlua` for the headless baseline. Release archives contain only the platform

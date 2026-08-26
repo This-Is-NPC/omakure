@@ -31,6 +31,8 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | `mise run node-service-check` | focused CLI/HTTP/node-service integration tests |
 | `mise run transport-certification` | one bounded Linux command covering canonical Compose, production tests, retained Docker suites, direct Docker transport, and induced-failure cleanup |
 | `mise run transport-certification-cleanup-test` | internal/diagnostic induced-failure cleanup verification |
+| `mise run health-plane-certification` | one bounded Linux command covering the four-node Health Plane gate: Profile/Pulse, all three Signals, presence transitions, restart persistence, revocation, identity replacement, the adversarial matrix over production Noise, and verified teardown |
+| `mise run health-plane-certification-cleanup-test` | internal/diagnostic cleanup verification for induced partial startup, failure, and interrupt |
 | `mise run coverage` | tarpaulin coverage report |
 | `mise run install` | `cargo install --path .` |
 
@@ -67,6 +69,7 @@ cargo test --test packaging_smoke
 cargo test --test direct_transport_contract
 cargo test --test direct_transport_e2e
 mise run transport-certification
+mise run health-plane-certification
 ```
 
 ## Certification toolchain

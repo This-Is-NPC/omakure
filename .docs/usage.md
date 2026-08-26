@@ -179,8 +179,41 @@ mise run transport-certification
 ```
 
 This is a development and CI gate, not a general fleet launcher. Nostr, remote
-Cues, campaigns, MDM, and Lua are outside its scope; the Health Plane has its
-own certification in `tests/health_plane_transport_e2e.rs`.
+Cues, campaigns, MDM, and Lua are outside its scope.
+
+## Health Plane certification
+
+The Health Plane has its own bounded Linux gate over four independently stateful
+packaged nodes on one dedicated network — one Conductor, two Performers, and an
+untrusted adversary:
+
+```bash
+mise run health-plane-certification
+```
+
+It proves Profile and Pulse over production Noise, fleet aggregation through
+both `omakure node health --json` and `GET /v1/node/health`, all three Signal
+kinds including one idempotent `run-completed` Signal from a real manual
+`omakure run`, `online` → `stale` → recovery across a real network partition,
+Health Plane persistence across a Conductor restart, immediate exclusion after
+revocation plus the bounded retention purge, identity replacement, corrupt-row
+quarantine and recovery, and the frozen retry budget over one continuously
+connected session.
+
+The adversarial matrix is injected over real production Noise sessions and
+covers wrong target (1104), future (1109), stale (1108), unknown field (1114),
+malformed (1102), oversized (1103), forged signature (1102), spoofed sender
+(1102), cross-session binding (1110), replayed `message_id` (1110), non-increasing
+Profile revision and Pulse sequence (1110), reordering past the buffer (1111),
+inbox overflow (1113), flood (1112), missing capability (1106), wrong role
+(1105), and revocation on a live session (1107), plus corrupt stored state
+(1115). Each case asserts the exact stable code, the frozen reply policy, a
+durable redacted audit row, and unchanged trust and health state.
+
+Management HTTP binds loopback inside each container and is never published, so
+it cannot be the node-to-node data path; the gate asserts that directly. Nostr,
+remote Cues, baselines, dashboards, alerting, arbitrary metrics, MDM, and Lua
+are all outside its scope.
 
 ## Scheduling and local lifecycle
 

@@ -169,7 +169,15 @@ provide — scoped to operational management, **never surveillance**:
    enrollment, unattended signed-bundle enrollment, revocation, replay
    protection, and reset/replacement recovery. Nostr fallback and later fleet
    planes are not included in this phase.
-4. **Health plane** — Pulse, Profile, Signal, and Conductor fleet status.
+4. **Health plane — complete for the minimal bounded plane** — versioned
+   Profile, Pulse, and a closed three-kind Signal feed (`enrolled`, `revoked`,
+   `run-completed`) carried inside the frozen direct envelope, bounded current
+   health state with latest-state-only retention, and a Conductor fleet-status
+   projection read through `omakure node health` / `GET /v1/node/health` and
+   `omakure node signals` / `GET /v1/node/signals`. Contracts and every
+   quantitative bound are frozen in `.docs/health-plane-contract.md`. Baselines,
+   dashboards, alert engines, arbitrary metrics, long-term telemetry, and remote
+   Cues are not included in this phase.
 5. **Script execution** — Lua as an embedded first-class script kind; retain
    Bash, PowerShell, and Python through host runtimes.
 6. **Remote management** — delegation, authorized idempotent Cues, remote run,
@@ -570,7 +578,9 @@ and productivity scoring are excluded.
 | Malicious relay or replay | End-to-end authenticated envelopes, expiry, nonces, local replay keys, durable Cue IDs, and direct-channel preference. |
 
 Future implementation tasks must add tests for these failure modes before any
-health-plane, remote-management, or MDM feature is accepted. This document
-freezes the node foundation and future direction; direct transport, discovery,
-and enrollment are shipped only within the bounded foundation described above.
-The direct transport gate is the authoritative stop record for this phase.
+remote-management or MDM feature is accepted. This document freezes the node
+foundation and future direction; direct transport, discovery, enrollment, and
+the minimal Health Plane are shipped only within the bounded foundation
+described above. The direct transport gate and the Health Plane gate
+(`mise run transport-certification` and `mise run health-plane-certification`)
+are the authoritative stop records for this phase.

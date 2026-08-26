@@ -1399,6 +1399,32 @@ mod tests {
         NodeIdentity::load_or_initialize(&context).unwrap()
     }
 
+    /// The health signer must stay a health signer.
+    ///
+    /// The Remote Cue plane is a sibling that reuses the private, kind-agnostic
+    /// `sign_envelope`. If `sign_health_envelope` ever accepted a `cue_` kind it
+    /// would become a generic signing oracle for a plane it does not govern, and
+    /// the separation the Cue contract rests on would be gone.
+    #[test]
+    fn sign_health_envelope_refuses_a_foreign_plane_kind() {
+        let dir = TempDir::new().unwrap();
+        let identity = identity(&dir);
+        for foreign in ["cue_dispatch", "cue_ack", "probe", ""] {
+            let result = sign_health_envelope(
+                &identity,
+                foreign,
+                &[7u8; 32],
+                [9u8; 16],
+                serde_json::json!({"version": 1}),
+                1_800_000_000,
+            );
+            assert!(
+                matches!(result, Err(TransportError::InvalidFrame)),
+                "sign_health_envelope must refuse {foreign:?}"
+            );
+        }
+    }
+
     #[test]
     fn frame_parser_is_bounded_and_exact() {
         let frame = Frame::handshake(1, &[7; 32]).unwrap().encode().unwrap();

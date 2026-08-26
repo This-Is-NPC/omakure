@@ -20,6 +20,14 @@ mod ports;
 pub mod redaction;
 mod run_executor;
 mod runs;
+/// Run provenance and the lease window, needed by the frozen Remote Cue
+/// contract.
+///
+/// Re-exported narrowly rather than making `runs` public. The contract pins
+/// both against the shipped values on purpose: a frozen number that lives only
+/// in a fixture is a decoupled constant, and drifting from the code it claims
+/// to describe is exactly how such a number stops meaning anything.
+pub use runs::{RunTrigger, HEARTBEAT_MS};
 mod runtime;
 /// The two constants the binary needs to enter embedded-Lua host mode.
 ///

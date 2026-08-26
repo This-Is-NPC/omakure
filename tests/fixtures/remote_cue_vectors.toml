@@ -1,0 +1,144 @@
+# Frozen public vectors for the Remote Cue contract.
+#
+# Every value here mirrors a normative number in `.docs/remote-cue-contract.md`
+# and is asserted by `tests/remote_cue_contract.rs`. The scalars referenced by
+# the vectors are the published test inputs from
+# `tests/fixtures/node_identity_vectors.toml`; they are explicitly not
+# production secrets.
+
+format_version = 1
+contract_id = "omakure/remote-cue/v1"
+contract_document = ".docs/remote-cue-contract.md"
+status = "frozen-pending-owner-review"
+cue_version = 1
+envelope_version = 1
+envelope_signature_domain_hex = "6f6d616b7572652f6469726563742d656e76656c6f70652f763100"
+run_id_domain_hex = "6f6d616b7572652f6375652d72756e2d69642f763100"
+signing_algorithm = "BIP-340-Schnorr"
+canonicalization = "RFC-8785"
+carriage = "direct envelope, encrypted transport inner_kind=1, Noise_XX_25519_ChaChaPoly_SHA256"
+identity_construction_changed = false
+transport_code_changed = false
+
+# The Cue plane is a sibling of the Health Plane, not an extension of it.
+kind_prefix = "cue_"
+health_kind_prefix = "health_"
+health_kinds_remain = 5
+signal_kinds_remain = 3
+registry_schema_version = 7
+
+# Exactly two kinds. A terminal outcome is NOT a Cue message: it rides the
+# existing `run-completed` Signal, correlated by the derived run id.
+kinds = ["cue_dispatch", "cue_ack"]
+outcome_carrier = "health_signal:run-completed"
+signal_field_added = false
+
+[sizes]
+max_kind_bytes = 32
+max_canonical_cue_dispatch = 512
+max_canonical_cue_ack = 384
+
+[grammar]
+cue_id_hex_chars = 32
+script_pattern = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
+max_script_bytes = 64
+reason_min_bytes = 1
+reason_max_bytes = 128
+
+# Every authorization input is read from the receiver's own registry. No inbound
+# field contributes to the decision.
+[authorization]
+gates = ["allow_remote_cues", "active_conductor_role", "remote_run_capability", "notifications_capability"]
+role_encoding = "integer"
+role_conductor = 1
+role_performer = 2
+required_capabilities = ["remote-run", "notifications"]
+capabilities_allowlist_amended = false
+reads_authorization_from_message = false
+
+[secrets]
+# `None` writes ALLOW-ALL and a lookup error also grants allow-all, so a
+# Cue-origin run must always be written with an explicit empty policy.
+cue_run_policy = "explicit-empty-deny-all"
+none_means_allow_all = true
+secret_bearing_script_is_rejected = true
+
+[resolution]
+carries_script_content = false
+allowlist = ".omakureignore-honouring workspace listing"
+requires_regular_file = true
+hash_recorded_at_accept = true
+hash_reverified_at_exec = true
+missing_and_excluded_share_a_code = true
+
+[idempotency]
+run_id_is_derived_from_cue_id = true
+durable_key = "runs.run_id TEXT PRIMARY KEY"
+conductor_computes_expected_opaque_run_id = true
+
+[at_most_once]
+# `claim_next` re-claims expired-lease `running` rows after HEARTBEAT_MS.
+# A Cue-origin run must be excluded from that path.
+heartbeat_ms = 60000
+cue_runs_are_lease_stealable = false
+expired_lease_terminal_state = "failed"
+
+[liveness]
+gates_reevaluated_in_accept_transaction = true
+revocation_cancels_in_flight_run = true
+pre_revocation_cue_ids_permanently_rejected = true
+expiry_checked_at_both_transitions = true
+
+[bounds]
+concurrent_cue_runs_per_peer = 1
+cues_per_peer_per_minute = 10
+rate_burst_allowance = 5
+retained_cue_records_per_peer = 64
+cue_retention_seconds = 604800
+max_lifetime_seconds = 300
+
+# Disjoint from transport 1001..=1011/1020 and Health 1101..=1115, inside the
+# existing transport_audit.error_code range 1000..=1999.
+[[error_code]]
+code = 1201
+name = "cue_disabled"
+
+[[error_code]]
+code = 1202
+name = "cue_not_active_conductor"
+
+[[error_code]]
+code = 1203
+name = "cue_missing_remote_run"
+
+[[error_code]]
+code = 1204
+name = "cue_missing_notifications"
+
+[[error_code]]
+code = 1205
+name = "cue_script_declares_secrets"
+
+[[error_code]]
+code = 1206
+name = "cue_script_unresolvable"
+
+[[error_code]]
+code = 1207
+name = "cue_expired"
+
+[[error_code]]
+code = 1208
+name = "cue_duplicate"
+
+[[error_code]]
+code = 1209
+name = "cue_rate_limited"
+
+[[error_code]]
+code = 1210
+name = "cue_run_already_in_flight"
+
+[[error_code]]
+code = 1211
+name = "cue_invalid_message"

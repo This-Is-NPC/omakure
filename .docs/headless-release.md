@@ -15,8 +15,15 @@ accurately recorded without being presented as current product guidance.
 - Deployment: scoped tokens-file auth is preferred; legacy local token auth is
   retained for migration.
 - Node transport: direct encrypted transport, trust-neutral discovery, manual
-  enrollment, and signed-bundle enrollment are shipped. Nostr, Pulses, Profiles,
-  Signals, campaigns, and MDM remain outside this release.
+  enrollment, and signed-bundle enrollment are shipped. Nostr, campaigns, and
+  MDM remain outside this release.
+- Health Plane: Profiles, Pulses, and the closed three-kind Signal feed are
+  shipped.
+- Remote Cues: shipped, default off, behind five fail-closed gates read only
+  from the receiving node's own registry and configuration. A Cue names a script
+  the Performer already declared and never carries one, runs with an explicit
+  deny-all secret policy, executes at most once, and reports its provenance as
+  `cue`. Baseline push, campaigns, and fan-out remain outside this release.
 
 ## Intentional breaking removals
 

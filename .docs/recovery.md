@@ -29,6 +29,28 @@ Inspect the node audit output after the operation and confirm the revoked peer
 cannot establish a useful direct session. Do not delete the node database to
 work around a revocation.
 
+Revocation also reaches work that peer already caused: queued and running
+Cue-origin runs are cancelled, and the executor heartbeat kills the child as
+soon as the row leaves `running`. It is scoped to `trigger = 'cue'` — revoking
+a peer is not a licence to cancel what this node's own owner started. The
+revocation itself is written first and is never made conditional on the run log,
+so withdrawing trust cannot be blocked by a busy or missing workspace database.
+
+## A worker that died holding a remote run
+
+A Cue-origin run is deliberately excluded from the worker lease steal. Where an
+ordinary abandoned run is re-claimed and re-executed after the heartbeat lapses,
+a remote instruction must execute at most once, so its row is instead resolved
+to `failed` by the recovery pass that runs at worker startup. Expect to find:
+
+```bash
+omakure runs list --state failed
+```
+
+with the error `the worker holding this remote run stopped; it was not re-run
+because a remote instruction must execute at most once`. Re-dispatch it
+deliberately if it should happen again; nothing will do so on its own.
+
 ## Identity replacement
 
 Use `node reset --confirmed` only when the machine identity and trust registry

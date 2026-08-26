@@ -103,6 +103,50 @@ curl http://127.0.0.1:7878/v1/ready
 All other routes require `Authorization: Bearer <token>`. See `http-api.md`
 for routes and `deployment.md` for policy and container operation.
 
+## Remote Cues
+
+A Cue asks a trusted Performer to run a script that Performer already declared.
+It names a script and never carries one, so remote management can select among
+code a node already has and can never introduce more.
+
+Default off, and off in two independent places. The Performer opts in:
+
+```toml
+[trust]
+enrollment = "manual"          # remote capabilities require enrollment enabled
+allow_remote_cues = true
+remote_cue_scripts = ["deploy.sh"]
+remote_cue_batteries = []
+```
+
+An empty `remote_cue_scripts` with `remote_cue_batteries` empty denies
+everything, even with `allow_remote_cues = true`. Declaring a battery grants the
+scripts that battery installed, read from the local install record.
+
+The Conductor dispatches:
+
+```bash
+omakure node cue --endpoint 127.0.0.1:7879 --peer-node-id omk1_… \
+  --script deploy.sh --reason "roll out 1.4.2"
+```
+
+The reply reports `answered`, `accepted`, and `code` separately. A Performer
+that refuses on trust, role, or capability says nothing at all, so `answered:
+false` is a legitimate answer rather than an error — an unauthorized sender does
+not learn that the feature exists.
+
+The outcome arrives as an ordinary `run-completed` Signal, correlated by a run
+id both sides derive from the Cue id; no message carries a correlation field.
+`omakure node cue` stays on the session it opened to receive it, bounded by
+`--wait-seconds` (default 120, `0` to return immediately). It waits there rather
+than relying on a standing session because a Performer that already holds one
+with this Conductor refuses the dial. `expected_run_id` in the reply is what to
+match in `omakure node signals`.
+
+Cue-origin runs execute with an explicit deny-all secret policy, and a script
+whose schema declares a secret field is refused at the gate rather than run
+without its secrets. See `remote-cue-contract.md`.
+
 ## Fleet health
 
 An enrolled Performer reports a Profile on connect or material change and a

@@ -12,6 +12,7 @@ use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::{NodeRegistry, PeerState, RegistryError, TransportPeer};
 use crate::node_transport::{LocalTransport, NodeTransportError};
+use crate::remote_cue::CueOutcome;
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::TokioResolver;
@@ -1297,7 +1298,10 @@ fn connect_and_hold(
     );
     let cue = crate::remote_cue::CueSession::new(
         &registry,
+        &identity,
         remote.node_id(),
+        *remote.identity_key(),
+        session_id,
         crate::remote_cue::read_policy(context),
         state
             .workspace_root
@@ -1383,12 +1387,16 @@ fn hold_session(
             // that answers unknown kinds.
             HealthOutcome::NotHealth => {
                 if let Some(cue) = cue.as_mut() {
-                    // The hint is only used to route. It is never trusted as
-                    // authorization: the gates read the local registry, and a
-                    // hint disagreeing with the signed `kind` cannot widen
-                    // anything, because every gate input is local.
-                    if let Some(kind) = crate::direct_transport::envelope_kind_hint(&message.body) {
-                        let _ = cue.handle_envelope(kind);
+                    // The Cue session verifies the envelope against the same
+                    // handshake identity and session id the Health Plane uses;
+                    // nothing here decides anything.
+                    if cue.handle_envelope(&message.body, unix_seconds() as i64)
+                        != CueOutcome::NotCue
+                    {
+                        if let Some(reply) = cue.take_reply() {
+                            write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
+                                .map_err(error_to_transport)?;
+                        }
                     }
                 }
             }
@@ -1565,7 +1573,7 @@ pub fn dispatch_cue(
     script: &str,
     reason: &str,
     context: &NodeContext,
-) -> Result<String, DirectServiceError> {
+) -> Result<CueDispatchOutcome, DirectServiceError> {
     if !crate::remote_cue::is_well_formed_script_name(script) {
         return Err(TransportError::InvalidFrame.into());
     }
@@ -1596,7 +1604,38 @@ pub fn dispatch_cue(
     if remote.node_id() != expected_node_id {
         return Err(TransportError::IdentityMismatch.into());
     }
+    let trusted = registry.transport_peer(remote.node_id(), &hex(remote.identity_key()))?;
+    authorize_peer(
+        &remote,
+        trusted.as_ref().map(peer_authorization),
+        unix_seconds(),
+    )?;
     let mut session = handshake.into_session()?;
+
+    // The responder's steady-state loop is only reachable through the existing
+    // probe/ack entry. A Cue is new traffic *inside* an established session,
+    // not a new way to open one, so the ritual is performed unchanged rather
+    // than given a second door that would need its own review.
+    let mut probe_nonce = [0u8; 16];
+    OsRng.fill_bytes(&mut probe_nonce);
+    let probe = sign_probe(&identity, session.session_id(), probe_nonce, unix_seconds())?;
+    write_bytes(
+        &mut stream,
+        &session.write(ENVELOPE_KIND, &probe.encoded())?,
+        deadline,
+    )?;
+    let response = session.read(&read_frame(&mut stream, deadline)?)?;
+    if response.kind != ENVELOPE_KIND {
+        return Err(TransportError::InvalidFrame.into());
+    }
+    verify_envelope(
+        &response.body,
+        remote.node_id(),
+        remote.identity_key(),
+        "ack",
+        session.session_id(),
+        &probe_nonce,
+    )?;
 
     let mut cue_id_bytes = [0u8; 16];
     OsRng.fill_bytes(&mut cue_id_bytes);
@@ -1606,7 +1645,7 @@ pub fn dispatch_cue(
     OsRng.fill_bytes(&mut nonce);
     let dispatch = crate::direct_transport::sign_cue_envelope(
         &identity,
-        "cue_dispatch",
+        crate::remote_cue::KIND_DISPATCH,
         session.session_id(),
         nonce,
         serde_json::json!({
@@ -1625,6 +1664,12 @@ pub fn dispatch_cue(
         deadline,
     )?;
 
+    // A refusal the sender is not authorized to hear is silent by design, so
+    // the absence of an ack is a legitimate answer and not an error. It is
+    // reported as `answered: false` rather than being turned into a code the
+    // Performer never sent.
+    let acknowledgement = read_cue_ack(&mut stream, &mut session, &remote, &cue_id, deadline);
+
     registry.record_transport_audit(
         "cue_dispatched",
         remote.node_id(),
@@ -1634,7 +1679,89 @@ pub fn dispatch_cue(
         "accepted",
         None,
     )?;
-    Ok(cue_id)
+    Ok(CueDispatchOutcome {
+        cue_id,
+        answered: acknowledgement.is_some(),
+        accepted: acknowledgement.is_some_and(|code| code == 0),
+        code: acknowledgement.unwrap_or(0),
+    })
+}
+
+/// What the Conductor can honestly say about one dispatch.
+///
+/// `answered` is separate from `accepted` on purpose: a Performer that refuses
+/// on trust, role, or capability says nothing at all, so "no answer" and
+/// "refused with a code" are different facts and collapsing them would invent
+/// a verdict nobody sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CueDispatchOutcome {
+    pub cue_id: String,
+    pub answered: bool,
+    pub accepted: bool,
+    pub code: u16,
+}
+
+/// Read one `cue_ack` for this cue id, or `None` if none arrives in budget.
+///
+/// The session is shared with the Health Plane, whose reporter greets a trusted
+/// Conductor with a Profile the moment the connection opens, so the ack is very
+/// often not the first frame. Anything that is not this cue's ack is skipped:
+/// a one-shot dispatcher holds no Health session and has no business answering
+/// Health traffic.
+///
+/// Bounded twice over -- by the connection deadline and by a frame count -- so
+/// a peer cannot hold the dispatcher open by talking.
+fn read_cue_ack(
+    stream: &mut TcpStream,
+    session: &mut TransportSession,
+    remote: &crate::direct_transport::TransportCertificate,
+    cue_id: &str,
+    deadline: Instant,
+) -> Option<u16> {
+    /// Enough for a Profile, a Pulse, and a Signal to precede the ack.
+    const MAX_FRAMES_BEFORE_ACK: usize = 8;
+
+    for _ in 0..MAX_FRAMES_BEFORE_ACK {
+        if Instant::now() >= deadline {
+            return None;
+        }
+        let frame = read_frame(stream, deadline).ok()?;
+        let message = session.read(&frame).ok()?;
+        if message.kind != ENVELOPE_KIND {
+            continue;
+        }
+        if crate::direct_transport::envelope_kind_hint(&message.body)
+            != Some(crate::remote_cue::KIND_ACK)
+        {
+            continue;
+        }
+        let nonce = envelope_nonce(&message.body).ok()?;
+        verify_envelope(
+            &message.body,
+            remote.node_id(),
+            remote.identity_key(),
+            crate::remote_cue::KIND_ACK,
+            session.session_id(),
+            &nonce,
+        )
+        .ok()?;
+        let view = crate::direct_transport::envelope_view(&message.body).ok()?;
+        let ack = view.payload.as_object()?;
+        // An ack for a different cue id is not an answer to this dispatch.
+        if ack.get("cue_id").and_then(serde_json::Value::as_str) != Some(cue_id) {
+            return None;
+        }
+        if ack.get("accepted").and_then(serde_json::Value::as_bool)? {
+            return Some(0);
+        }
+        let code = ack
+            .get("error")?
+            .get("code")
+            .and_then(serde_json::Value::as_u64)?;
+        // Zero is how acceptance is spelled, so a refusal must never land on it.
+        return u16::try_from(code).ok().filter(|code| *code != 0);
+    }
+    None
 }
 
 pub fn request_manual_enrollment(
@@ -1843,7 +1970,10 @@ fn serve_connection(
         );
         let cue = crate::remote_cue::CueSession::new(
             &registry,
+            &identity,
             remote.node_id(),
+            *remote.identity_key(),
+            session_id,
             crate::remote_cue::read_policy(context),
             state
                 .workspace_root

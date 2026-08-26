@@ -15,6 +15,9 @@
 
 use crate::node_registry::health::HealthAuthorization;
 use crate::node_registry::{PeerRole, PeerState};
+use crate::ports::ScriptRepository;
+use rand::rngs::OsRng;
+use rand::RngCore;
 
 /// Stable rejection codes, frozen in `.docs/remote-cue-contract.md`.
 ///
@@ -315,6 +318,73 @@ pub fn declares_secret_field(schema: &crate::domain::Schema) -> bool {
     schema.fields.iter().any(|field| field.is_secret())
 }
 
+/// The two kinds of the Cue plane, frozen by the contract.
+pub const KIND_DISPATCH: &str = "cue_dispatch";
+pub const KIND_ACK: &str = "cue_ack";
+
+/// The `cue_dispatch` payload, after shape validation.
+///
+/// Parsing is total and rejects anything outside the frozen grammar, so every
+/// field below is already within its bound by the time a gate reads it. None of
+/// them is an authorization input: they say *what* was asked for, never whether
+/// it is allowed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CueDispatch {
+    cue_id: String,
+    script: String,
+    not_before: i64,
+    expires_at: i64,
+    reason: String,
+}
+
+impl CueDispatch {
+    fn parse(payload: &serde_json::Value) -> Option<Self> {
+        let object = payload.as_object()?;
+        if object.get("version").and_then(serde_json::Value::as_u64) != Some(1) {
+            return None;
+        }
+        let cue_id = object.get("cue_id")?.as_str()?.to_string();
+        if cue_id.len() != crate::health_plane::bounds::OPAQUE_ID_HEX_CHARS
+            || !cue_id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return None;
+        }
+        let script = object.get("script")?.as_str()?.to_string();
+        if !is_well_formed_script_name(&script) {
+            return None;
+        }
+        let reason = object.get("reason")?.as_str()?.to_string();
+        if reason.is_empty() || reason.len() > MAX_REASON_BYTES {
+            return None;
+        }
+        let not_before = object.get("not_before")?.as_i64()?;
+        let expires_at = object.get("expires_at")?.as_i64()?;
+        if not_before < 1 || expires_at < 1 {
+            return None;
+        }
+        Some(Self {
+            cue_id,
+            script,
+            not_before,
+            expires_at,
+            reason,
+        })
+    }
+}
+
+/// The frozen upper bound on a Cue's human-readable reason.
+pub const MAX_REASON_BYTES: usize = 128;
+
+/// UTC Unix seconds, for the second validity check at the accept transition.
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or_default()
+}
+
 /// The receive-side Cue session.
 ///
 /// Holds only what the gates read, all of it local. It is constructed beside a
@@ -322,6 +392,16 @@ pub fn declares_secret_field(schema: &crate::domain::Schema) -> bool {
 /// registry rather than owning a channel to anything that can run work.
 pub struct CueSession<'a> {
     registry: &'a crate::node_registry::NodeRegistry,
+    /// This node's own signing identity, used only to sign a `cue_ack`.
+    identity: &'a crate::node_identity::NodeIdentity,
+    /// The sender's identity key, as the *handshake* established it. Envelope
+    /// verification is anchored to this rather than to anything the message
+    /// says about itself.
+    remote_identity_key: [u8; 32],
+    /// The transport session this Cue must belong to. An envelope minted for a
+    /// different session fails verification, so a captured Cue cannot be
+    /// replayed onto a new connection.
+    session_id: [u8; 32],
     /// The workspace whose declared scripts a Cue may name.
     ///
     /// `None` means decide and audit but never enqueue: a node with no
@@ -349,6 +429,9 @@ pub struct CueSession<'a> {
     /// 300 seconds, so a still-valid cue id could be evicted under capacity
     /// pressure. The numbers do not fit.
     seen_cue_ids: std::collections::HashSet<String>,
+    /// A signed `cue_ack` the dispatcher should write back, if the refusal is
+    /// one this sender is allowed to be told about.
+    pending_reply: Option<Vec<u8>>,
 }
 
 /// What the dispatcher should do with an inbound Cue frame.
@@ -405,37 +488,224 @@ pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy {
 }
 
 impl<'a> CueSession<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         registry: &'a crate::node_registry::NodeRegistry,
+        identity: &'a crate::node_identity::NodeIdentity,
         remote_node_id: &str,
+        remote_identity_key: [u8; 32],
+        session_id: [u8; 32],
         policy: CuePolicy,
         workspace: Option<crate::workspace::Workspace>,
     ) -> Self {
         Self {
             registry,
+            identity,
+            remote_identity_key,
+            session_id,
             workspace,
             remote_node_id: remote_node_id.to_string(),
             remote_cues_enabled: policy.enabled,
             declared_scripts: policy.declared_scripts,
             declared_batteries: policy.declared_batteries,
             seen_cue_ids: std::collections::HashSet::new(),
+            pending_reply: None,
         }
     }
 
-    /// Decide an inbound envelope.
+    /// Decide one inbound envelope, end to end.
     ///
     /// Returns `NotCue` for anything outside the `cue_` namespace so the
     /// dispatcher's existing fall-through is preserved exactly.
     ///
-    /// This wave decides and audits; it never runs anything. There is no path
-    /// from here into the executor, and the acceptance side is intentionally
-    /// left as an audited decision so the security boundary can be reviewed
-    /// before anything can act on it.
-    pub fn handle_envelope(&mut self, kind: &str) -> CueOutcome {
+    /// Everything a decision reads is either local -- the registry, this node's
+    /// own config, its own workspace listing -- or bound to the transport
+    /// session by `verify_envelope`. The message supplies the *subject* of the
+    /// decision, which script and which cue id, and never an input to it.
+    pub fn handle_envelope(&mut self, encoded: &[u8], now: i64) -> CueOutcome {
+        let Some(kind) = crate::direct_transport::envelope_kind_hint(encoded) else {
+            return CueOutcome::NotCue;
+        };
         if !kind.starts_with(crate::direct_transport::CUE_KIND_PREFIX) {
             return CueOutcome::NotCue;
         }
-        self.decide(None)
+        // A `cue_ack` is the Conductor's half of the protocol. A Performer
+        // receiving one has been sent a message for the other direction, which
+        // is malformed traffic rather than an instruction.
+        if kind != KIND_DISPATCH {
+            return self.refuse(None, CueCode::InvalidMessage, now);
+        }
+
+        // Verification is anchored to the handshake identity and this session
+        // id, so a Cue captured from one connection cannot be replayed onto
+        // another, and a signature from anyone but the peer we handshook with
+        // is not a Cue at all.
+        let verified = crate::direct_transport::envelope_nonce(encoded).and_then(|nonce| {
+            crate::direct_transport::verify_envelope(
+                encoded,
+                &self.remote_node_id,
+                &self.remote_identity_key,
+                kind,
+                &self.session_id,
+                &nonce,
+            )
+        });
+        if verified.is_err() {
+            return self.refuse(None, CueCode::InvalidMessage, now);
+        }
+
+        let Ok(view) = crate::direct_transport::envelope_view(encoded) else {
+            return self.refuse(None, CueCode::InvalidMessage, now);
+        };
+        let Some(dispatch) = CueDispatch::parse(&view.payload) else {
+            return self.refuse(None, CueCode::InvalidMessage, now);
+        };
+
+        if !self.seen_cue_ids.insert(dispatch.cue_id.clone()) {
+            self.audit("cue_rejected", "rejected", Some(CueCode::Duplicate));
+            return CueOutcome::Repeat;
+        }
+
+        if let Err(code) = within_validity_window(dispatch.not_before, dispatch.expires_at, now) {
+            return self.refuse(Some(&dispatch), code, now);
+        }
+        if let GateDecision::Rejected(code) = evaluate_gates(&self.authority()) {
+            return self.refuse(Some(&dispatch), code, now);
+        }
+        if let Err(code) = self.authorize_script(&dispatch.script) {
+            return self.refuse(Some(&dispatch), code, now);
+        }
+
+        // Checked again at the accept transition. The gates above read the
+        // registry and walk the workspace; a Cue that expired while they ran
+        // must land `Expired`, not become a run.
+        let at_accept = unix_now();
+        if let Err(code) =
+            within_validity_window(dispatch.not_before, dispatch.expires_at, at_accept)
+        {
+            return self.refuse(Some(&dispatch), code, at_accept);
+        }
+
+        match self.enqueue_accepted(&dispatch.cue_id, &dispatch.script, &dispatch.reason) {
+            Ok(_) => {
+                self.audit("cue_accepted", "accepted", None);
+                self.queue_reply(&dispatch.cue_id, None, at_accept);
+                CueOutcome::Decided(GateDecision::Accepted)
+            }
+            // The run id is derived from the cue id and is the table's primary
+            // key, so a refused insert means this Cue already became a run.
+            // Failing here is the at-most-once guarantee working.
+            Err(code) => self.refuse(Some(&dispatch), code, at_accept),
+        }
+    }
+
+    /// Gate E, in the order that leaks least.
+    ///
+    /// Resolution runs before the declaration check so that "declared but
+    /// absent" and "present but undeclared" both end at the same reported
+    /// code; the audited codes still differ, so the owner can tell them apart
+    /// locally while the sender cannot.
+    fn authorize_script(&self, script: &str) -> Result<(), CueCode> {
+        let workspace = self.workspace.as_ref().ok_or(CueCode::ScriptUnresolvable)?;
+        let repo = crate::adapters::workspace_repository::FsWorkspaceRepository::new(
+            workspace.scripts_root().to_path_buf(),
+        );
+        let listing = repo
+            .list_scripts_recursive()
+            .map_err(|_| CueCode::ScriptUnresolvable)?;
+        let resolved = resolve_in_listing(script, &listing)?;
+        if !is_regular_file(resolved) {
+            return Err(CueCode::ScriptUnresolvable);
+        }
+        is_declared_or_from_declared_battery(
+            script,
+            resolved,
+            &CuePolicy {
+                enabled: self.remote_cues_enabled,
+                declared_scripts: self.declared_scripts.clone(),
+                declared_batteries: self.declared_batteries.clone(),
+            },
+            workspace,
+        )?;
+        let schema = repo
+            .read_schema(resolved)
+            .map_err(|_| CueCode::ScriptUnresolvable)?;
+        if declares_secret_field(&schema) {
+            return Err(CueCode::ScriptDeclaresSecrets);
+        }
+        Ok(())
+    }
+
+    fn authority(&self) -> LocalAuthority {
+        LocalAuthority {
+            remote_cues_enabled: self.remote_cues_enabled,
+            declared_scripts: self.declared_scripts.clone(),
+            declared_batteries: self.declared_batteries.clone(),
+            authorization: self
+                .registry
+                .health_authorization(&self.remote_node_id)
+                .ok()
+                .flatten(),
+        }
+    }
+
+    fn audit(&self, event: &str, outcome: &str, code: Option<CueCode>) {
+        let _ = self.registry.record_transport_audit(
+            event,
+            &self.remote_node_id,
+            Some(&self.session_id),
+            None,
+            0,
+            outcome,
+            code.map(CueCode::code),
+        );
+    }
+
+    /// Audit the true code, report the narrowed one, and only to a sender
+    /// already authorized to have been evaluated.
+    fn refuse(&mut self, dispatch: Option<&CueDispatch>, code: CueCode, now: i64) -> CueOutcome {
+        self.audit("cue_rejected", "rejected", Some(code));
+        if code.is_reportable() {
+            if let Some(dispatch) = dispatch {
+                let reported = code.reply_code();
+                self.queue_reply(&dispatch.cue_id, Some(reported), now);
+            }
+        }
+        CueOutcome::Decided(GateDecision::Rejected(code))
+    }
+
+    fn queue_reply(&mut self, cue_id: &str, code: Option<CueCode>, now: i64) {
+        let Ok(created_at) = u64::try_from(now) else {
+            return;
+        };
+        let mut nonce = [0u8; 16];
+        OsRng.fill_bytes(&mut nonce);
+        // The shape is the frozen reference vector in
+        // `tests/remote_cue_contract.rs`: flat, with `error` present only on a
+        // refusal, so "accepted" is never expressed as a code of zero.
+        let mut payload = serde_json::json!({
+            "version": 1,
+            "cue_id": cue_id,
+            "accepted": code.is_none(),
+        });
+        if let Some(code) = code {
+            payload["error"] = serde_json::json!({ "code": code.code() });
+        }
+        self.pending_reply = crate::direct_transport::sign_cue_envelope(
+            self.identity,
+            KIND_ACK,
+            &self.session_id,
+            nonce,
+            payload,
+            created_at,
+        )
+        .ok()
+        .map(|envelope| envelope.encoded());
+    }
+
+    /// The signed `cue_ack` this session owes the sender, if any.
+    pub fn take_reply(&mut self) -> Option<Vec<u8>> {
+        self.pending_reply.take()
     }
 
     /// Decide one Cue, optionally identified so a retransmission on this

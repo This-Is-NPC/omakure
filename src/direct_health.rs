@@ -20,8 +20,8 @@
 //! ingest at all.
 
 use crate::direct_transport::{
-    envelope_kind_hint, envelope_nonce, health_envelope_view, sign_health_envelope,
-    verify_envelope, TransportError, HEALTH_KIND_PREFIX,
+    envelope_kind_hint, envelope_nonce, envelope_view, sign_health_envelope, verify_envelope,
+    TransportError, HEALTH_KIND_PREFIX,
 };
 use crate::health_plane::bounds::{
     ACK_TIMEOUT_SECONDS, CAPABILITY_SIGNAL, MAX_RETRIES, MAX_SIGNALS_PER_PEER_PER_MINUTE,
@@ -225,7 +225,7 @@ impl<'a> HealthSession<'a> {
             self.audit_transport_failure(&kind_text, encoded.len(), error, now);
             return HealthOutcome::Handled;
         }
-        let Ok(view) = health_envelope_view(encoded) else {
+        let Ok(view) = envelope_view(encoded) else {
             self.audit_transport_failure(
                 &kind_text,
                 encoded.len(),
@@ -756,7 +756,7 @@ mod tests {
     // exercised at its exact boundary with no real waiting.
     // -----------------------------------------------------------------------
 
-    use crate::direct_transport::{envelope_kind_hint, health_envelope_view, verify_envelope};
+    use crate::direct_transport::{envelope_kind_hint, envelope_view, verify_envelope};
     use crate::health_plane::model::RunFact;
     use crate::health_plane::model::RunnerFact;
     use crate::health_plane::report::{HealthFactsSource, ProfileFacts, PulseFacts};
@@ -1011,7 +1011,7 @@ mod tests {
             .unwrap();
         verify_envelope(encoded, &local.node_id, &key, &kind, &SESSION_ID, &nonce)
             .expect("emitted envelope must satisfy the frozen verifier");
-        let view = health_envelope_view(encoded).expect("view");
+        let view = envelope_view(encoded).expect("view");
         (kind, view.payload)
     }
 

@@ -38,7 +38,18 @@ pub fn run(
             &args.reason,
             &context,
         )
-        .map(|cue_id| serde_json::json!({"dispatched": true, "cue_id": cue_id}))
+        // `answered` and `accepted` are reported apart because a Performer
+        // that refuses on trust, role, or capability says nothing, and
+        // "no answer" must not be printed as a verdict.
+        .map(|outcome| {
+            serde_json::json!({
+                "dispatched": true,
+                "cue_id": outcome.cue_id,
+                "answered": outcome.answered,
+                "accepted": outcome.accepted,
+                "code": outcome.code,
+            })
+        })
         .map_err(map_direct_error),
         NodeCommand::Init => {
             node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())

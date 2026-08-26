@@ -102,6 +102,39 @@ There is no argument list, no environment map, no working directory, no timeout
 override, and no payload of any kind. A Cue selects; it does not configure. Every
 one of those would be an input the receiver's owner did not write.
 
+## `cue_ack` Payload
+
+| Field | Type | Bound |
+|---|---|---|
+| `version` | integer | Exactly `1` |
+| `cue_id` | string | The `cue_id` being answered, echoed verbatim |
+| `accepted` | boolean | Whether the five gates all passed |
+| `error` | object | Present **only** when `accepted` is `false`; `{"code": <error code>}` |
+
+Acceptance is not spelled as a code of zero. `error` is absent on the accept
+path, so there is no value a reader can mistake for a verdict.
+
+An ack is sent only when the refusal is one the sender is authorized to hear.
+Gates A–D — remote Cues off, not an active Conductor, missing `remote-run`,
+missing `notifications` — are answered with **silence**, following the Health
+Plane precedent: a peer that is not authorized learns nothing, not even that
+this node has the feature. The Conductor therefore distinguishes three outcomes,
+not two: answered-and-accepted, answered-and-refused, and unanswered.
+
+## Carriage and Sequence
+
+A Cue is new traffic **inside** an established session, never a new way to open
+one. The dispatcher performs the existing `probe`/`ack` entry unchanged and only
+then writes the `cue_dispatch`; the receiver handles it in the same steady-state
+loop that already carries Health Plane traffic. There is no second door into the
+responder, so no second admission, rate-limit, or authorization surface to keep
+in step.
+
+Because the session is shared, the ack is frequently not the next frame — the
+Health Plane reporter greets a trusted Conductor with a Profile as soon as the
+connection opens. The dispatcher skips anything that is not this cue's ack, and
+bounds the wait by both the connection deadline and a frame count.
+
 ## Authorization Mapping
 
 Five gates, all fail-closed, all evaluated against the receiver's own registry

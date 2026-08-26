@@ -33,6 +33,21 @@ kinds = ["cue_dispatch", "cue_ack"]
 outcome_carrier = "health_signal:run-completed"
 signal_field_added = false
 
+# The ack is flat and omits `error` entirely on the accept path, so acceptance
+# is never spelled as a code of zero.
+[ack]
+accepted_omits_error = true
+# Refusals a sender is not authorized to hear are silent, following the Health
+# Plane precedent. Three outcomes, not two.
+silent_codes = [1201, 1202, 1203, 1204]
+outcomes = ["answered-accepted", "answered-refused", "unanswered"]
+
+# A Cue is new traffic inside an established session, never a new way to open
+# one. No second admission, rate-limit, or authorization surface.
+[carriage_sequence]
+enters_through_existing_probe_ack = true
+opens_no_second_responder_path = true
+
 [sizes]
 max_kind_bytes = 32
 max_canonical_cue_dispatch = 512

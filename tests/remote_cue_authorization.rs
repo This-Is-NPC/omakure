@@ -124,10 +124,13 @@ fn unknown_kinds_are_still_not_claimed_by_the_health_plane() {
 
 use omakure::remote_cue::{CueCode, CueOutcome, CuePolicy, CueSession, GateDecision};
 
-fn session_over<'a>(registry: &'a NodeRegistry) -> CueSession<'a> {
+fn session_over<'a>(registry: &'a NodeRegistry, identity: &'a NodeIdentity) -> CueSession<'a> {
     CueSession::new(
         registry,
+        identity,
         "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+        [3u8; 32],
+        [7u8; 32],
         CuePolicy {
             enabled: true,
             declared_scripts: vec!["deploy.sh".to_string()],
@@ -142,8 +145,8 @@ fn session_over<'a>(registry: &'a NodeRegistry) -> CueSession<'a> {
 #[test]
 fn a_repeated_cue_id_on_one_session_is_decided_once() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let (_identity, registry) = identity_and_registry(dir.path());
-    let mut session = session_over(&registry);
+    let (identity, registry) = identity_and_registry(dir.path());
+    let mut session = session_over(&registry, &identity);
 
     let first = session.decide(Some("0123456789abcdef0123456789abcdef"));
     let second = session.decide(Some("0123456789abcdef0123456789abcdef"));
@@ -166,8 +169,8 @@ fn a_repeated_cue_id_on_one_session_is_decided_once() {
 #[test]
 fn different_cue_ids_are_decided_separately() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let (_identity, registry) = identity_and_registry(dir.path());
-    let mut session = session_over(&registry);
+    let (identity, registry) = identity_and_registry(dir.path());
+    let mut session = session_over(&registry, &identity);
 
     assert!(matches!(
         session.decide(Some("0123456789abcdef0123456789abcdef")),
@@ -186,9 +189,9 @@ fn different_cue_ids_are_decided_separately() {
 #[test]
 fn a_new_session_does_not_inherit_the_seen_set() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let (_identity, registry) = identity_and_registry(dir.path());
+    let (identity, registry) = identity_and_registry(dir.path());
 
-    let mut first = session_over(&registry);
+    let mut first = session_over(&registry, &identity);
     assert!(matches!(
         first.decide(Some("0123456789abcdef0123456789abcdef")),
         CueOutcome::Decided(_)
@@ -197,7 +200,7 @@ fn a_new_session_does_not_inherit_the_seen_set() {
 
     // A fresh session decides it again. Durable at-most-once arrives with the
     // run row, whose primary key is derived from the cue id.
-    let mut second = session_over(&registry);
+    let mut second = session_over(&registry, &identity);
     assert_eq!(
         second.decide(Some("0123456789abcdef0123456789abcdef")),
         CueOutcome::Decided(GateDecision::Rejected(CueCode::NotActiveConductor)),

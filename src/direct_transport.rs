@@ -1108,9 +1108,14 @@ pub fn envelope_kind_hint(encoded: &[u8]) -> Option<&str> {
 /// The longest envelope `kind` the shipped protocol defines.
 const MAX_ENVELOPE_KIND_BYTES: usize = 32;
 
-/// The read-only view a Health Plane receiver needs after `verify_envelope`.
+/// The read-only view a receiver needs after `verify_envelope`.
+///
+/// Plane-agnostic on purpose: both the Health Plane and the Cue plane read the
+/// same two fields out of the same frozen envelope. Naming it for one plane
+/// would mean the other reads through a helper named for rules that did not
+/// apply to it, which is how a reviewer loses track of which check ran.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HealthEnvelopeView {
+pub struct EnvelopeView {
     /// The envelope `created_at`, in UTC Unix seconds.
     pub created_at: i64,
     /// The envelope `payload` object.
@@ -1121,8 +1126,8 @@ pub struct HealthEnvelopeView {
 ///
 /// This is a read-only projection. It performs no signature, session, or
 /// authorization work: `verify_envelope` owns all of that and must be called
-/// first, and the Health Plane shared operations own everything after it.
-pub fn health_envelope_view(encoded: &[u8]) -> Result<HealthEnvelopeView, TransportError> {
+/// first, and each plane owns everything after it.
+pub fn envelope_view(encoded: &[u8]) -> Result<EnvelopeView, TransportError> {
     if encoded.len() < 64 {
         return Err(TransportError::InvalidFrame);
     }
@@ -1137,7 +1142,7 @@ pub fn health_envelope_view(encoded: &[u8]) -> Result<HealthEnvelopeView, Transp
         .get("payload")
         .cloned()
         .ok_or(TransportError::InvalidFrame)?;
-    Ok(HealthEnvelopeView {
+    Ok(EnvelopeView {
         created_at,
         payload,
     })

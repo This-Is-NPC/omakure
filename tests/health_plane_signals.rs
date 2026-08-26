@@ -14,7 +14,7 @@
 mod support;
 
 use omakure::direct_health::{HealthOutcome, HealthSession};
-use omakure::direct_transport::{envelope_kind_hint, health_envelope_view, sign_health_envelope};
+use omakure::direct_transport::{envelope_kind_hint, envelope_view, sign_health_envelope};
 use omakure::health_plane::bounds::{
     MAX_AGE_SECONDS, MAX_FUTURE_SKEW_SECONDS, MAX_SIGNALS_PER_PEER_PER_MINUTE,
     RATE_MINUTE_WINDOW_SECONDS, REORDER_BUFFER_ENTRIES, REORDER_BUFFER_SECONDS,
@@ -1151,7 +1151,7 @@ fn decode_envelope(encoded: &[u8]) -> (String, Value, usize) {
     let kind = envelope_kind_hint(encoded)
         .expect("envelope kind")
         .to_string();
-    let view = health_envelope_view(encoded).expect("envelope view");
+    let view = envelope_view(encoded).expect("envelope view");
     (kind, view.payload, encoded.len().saturating_sub(64))
 }
 

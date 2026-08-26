@@ -18,6 +18,7 @@
 
 use k256::schnorr::{signature::hazmat::PrehashSigner, SigningKey};
 use omakure::direct_transport::{envelope_nonce, verify_envelope};
+use omakure::remote_cue::CueCode;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -564,4 +565,57 @@ fn a_dispatch_cannot_be_replayed_into_another_session() {
         &read_nonce,
     );
     assert!(result.is_err(), "session must be bound by the signature");
+}
+
+/// Silence is part of the contract, not an implementation accident.
+///
+/// A refusal on trust, role, or capability tells the sender nothing — not even
+/// that this node has the feature. The frozen list of silent codes and the
+/// shipped `is_reportable` must agree, in both directions: a code that became
+/// reportable would leak, and one that stopped being reportable would make a
+/// legitimate refusal look like a dead peer.
+#[test]
+fn refusals_the_sender_may_not_hear_are_frozen() {
+    let vectors = vectors();
+    let silent: Vec<i64> = vectors["ack"]["silent_codes"]
+        .as_array()
+        .expect("silent_codes is an array")
+        .iter()
+        .map(|value| value.as_integer().expect("a silent code is an integer"))
+        .collect();
+
+    let all = [
+        CueCode::Disabled,
+        CueCode::NotActiveConductor,
+        CueCode::MissingRemoteRun,
+        CueCode::MissingNotifications,
+        CueCode::NotDeclared,
+        CueCode::ScriptDeclaresSecrets,
+        CueCode::ScriptUnresolvable,
+        CueCode::Expired,
+        CueCode::Duplicate,
+        CueCode::RateLimited,
+        CueCode::RunAlreadyInFlight,
+        CueCode::InvalidMessage,
+    ];
+    for code in all {
+        assert_eq!(
+            !code.is_reportable(),
+            silent.contains(&i64::from(code.code())),
+            "{} disagrees with the frozen silent set",
+            code.name()
+        );
+    }
+    assert_eq!(
+        vectors["ack"]["outcomes"]
+            .as_array()
+            .expect("outcomes is an array")
+            .len(),
+        3,
+        "a Conductor distinguishes accepted, refused, and unanswered"
+    );
+    assert!(
+        boolean(&vectors, &["ack", "accepted_omits_error"]),
+        "acceptance must not be spelled as a code of zero"
+    );
 }

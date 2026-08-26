@@ -110,7 +110,9 @@ Retained runtime dependencies include `clap`, `clap_complete`, `serde`,
 `serde_json`, `toml`, `rusqlite`, `axum`, `tokio`, `tower`, `thiserror`, `cron`,
 `chrono`, `signal-hook`, `daemonize`, `humantime`, `dirs`, `fs2`, `argon2`,
 `subtle`, `sha2`, `rand`, and Windows-only `winreg`. The headless package must
-not reintroduce `ratatui`, `crossterm`, `rattles`, or `mlua`.
+not reintroduce `ratatui`, `crossterm`, or `rattles`. `mlua` is declared
+deliberately and must stay: it is the embedded runtime for the `.lua` script
+kind, which is a different Lua from the removed TUI widget runtime.
 
 ## Script schema
 

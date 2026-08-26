@@ -372,20 +372,16 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
     let cargo = read("Cargo.toml").to_lowercase();
     assert!(cargo.contains("name = \"omakure-installer\""));
     assert!(root.join("src/installer.rs").is_file());
-    // `mlua` was on this list while Lua was a TUI-era leftover. Roadmap item 5
-    // reintroduces it deliberately, as the embedded runtime that lets a node
-    // execute `.lua` with no system Lua installed, so it is no longer a
-    // regression to guard against. The rest of the list is still TUI wreckage.
+    // `mlua` used to be on this list, but it does not belong to this test's
+    // contract. This test guards the removal of the TUI *widget* runtime, which
+    // is a different Lua from the script kind roadmap item 5 introduced. The
+    // widget stays gone; the script runtime is asserted present separately.
     for removed_dependency in ["crossterm", "ratatui", "rattles"] {
         assert!(
             !cargo.contains(removed_dependency),
             "headless package must not declare {removed_dependency}"
         );
     }
-    assert!(
-        cargo.contains("mlua"),
-        "the embedded Lua runtime is required by the .lua script kind"
-    );
 
     let help = Command::new(env!("CARGO_BIN_EXE_omakure"))
         .arg("--help")
@@ -445,5 +441,32 @@ fn release_tarball_contains_only_the_required_binary() {
         String::from_utf8_lossy(&listing.stdout),
         "omakure\n",
         "release archive must contain exactly the root binary"
+    );
+}
+
+/// The embedded Lua runtime must stay declared and vendored.
+///
+/// Deliberately separate from the TUI-removal test above. That one guards the
+/// `lua_widget` runtime, which is still gone; this one guards the script kind,
+/// which is now shipped. Conflating them would let a future edit satisfy one
+/// contract by breaking the other.
+///
+/// `vendored` is the load-bearing half: without it the binary would link
+/// against a system Lua and the whole point — a node that needs no Lua
+/// installed — would quietly disappear.
+#[test]
+fn headless_package_declares_the_vendored_lua_script_runtime() {
+    let cargo = read("Cargo.toml").to_lowercase();
+    assert!(
+        cargo.contains("mlua"),
+        "the .lua script kind requires the embedded Lua runtime"
+    );
+    assert!(
+        cargo.contains("vendored"),
+        "mlua must be vendored, or the binary depends on a system Lua"
+    );
+    assert!(
+        !std::path::Path::new("src/lua_widget.rs").exists(),
+        "the TUI Lua widget runtime must stay removed"
     );
 }

@@ -46,7 +46,7 @@ mise run transport-certification
 
 That gate verifies partition/reconnect, revocation, reset/replacement, durable
 audit records, and cleanup of all temporary Docker volumes. It does not claim
-Nostr, remote Cues, campaigns, MDM, or Lua behavior.
+Nostr, remote Cues, campaigns, or MDM behavior.
 
 Health Plane recovery has its own bounded Linux gate:
 
@@ -64,4 +64,4 @@ Performer re-reporting a fresh Profile; revocation excluding a Performer from
 the fleet immediately and the bounded retention pass purging its Health Plane
 rows; and a replaced identity rejoining with a fresh Signal cursor while the old
 identity holds no Health Plane state. It does not claim Nostr, remote Cues,
-baselines, campaigns, MDM, or Lua behavior.
+baselines, campaigns, or MDM behavior.

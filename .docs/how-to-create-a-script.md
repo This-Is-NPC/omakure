@@ -56,6 +56,7 @@ secret references are described in `environments.md` and `ai-interface.md`.
 - `.bash`/`.sh`: `#`
 - `.ps1`: `#` or `;`
 - `.py`: `#`
+- `.lua`: `--`
 
 ## Minimal Bash script
 

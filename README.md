@@ -15,6 +15,7 @@ state, and structured traces are recorded in SQLite under the workspace.
 - Git, Bash, and `jq` for the required runtime checks
 - Optional PowerShell (`pwsh`) for `.ps1` scripts
 - Optional Python 3 for `.py` scripts
+- Nothing for `.lua` scripts: the Lua runtime is embedded in the binary
 
 The default workspace is `~/Documents/omakure-scripts` on Linux/macOS and
 `%USERPROFILE%\Documents\omakure-scripts` on Windows. Set

@@ -150,6 +150,29 @@ jobs:
                sleep 1
              done
            done
+      # Self-containment, falsifiable rather than asserted. The runtime image
+      # installs only bash, ca-certificates, curl, git, jq and tini, so if
+      # `command -v lua` ever succeeds the base image gained a Lua package and
+      # this proof has silently become decoration. Checking the absence first is
+      # what keeps the second half meaningful.
+      - name: Prove .lua runs with no system Lua in the image
+        run: |
+          set -euo pipefail
+          if timeout --foreground --kill-after=5s 30s docker run --rm \
+            --entrypoint /bin/sh omakure-node:ci -c 'command -v lua'; then
+            echo "the runtime image now ships a system Lua; the embedded-runtime proof below is void" >&2
+            exit 1
+          fi
+          output="$(timeout --foreground --kill-after=5s 60s docker run --rm \
+            --entrypoint /bin/sh omakure-node:ci -c \
+            'printf "print(\"lua runs: \" .. _VERSION)\n" > /tmp/probe.lua \
+             && omakure --__omakure-lua-host /tmp/probe.lua')"
+          echo "$output"
+          case "$output" in
+            "lua runs: Lua 5.4"*) ;;
+            *) echo "the embedded Lua runtime did not execute the script" >&2; exit 1 ;;
+          esac
+
       - name: Cleanup and verify Docker smoke resources
         if: always()
         shell: bash

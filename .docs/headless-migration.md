@@ -13,8 +13,16 @@ features and are intentionally unchanged.
   workspace metadata.
 - The `theme` command, TOML theme configuration, built-in `themes/` assets,
   Omarchy theme import, and theme-only spinner dependencies.
-- Directory `index.lua` widgets and their Lua runtime dependency. `.lua` files
-  are not a supported script extension in this baseline.
+- Directory `index.lua` widgets and their Lua runtime dependency. The widget
+  runtime stays removed.
+
+  `.lua` was not a supported script extension in this baseline, but it is now:
+  roadmap item 5 added `.lua` as a first-class script kind executed by a Lua
+  runtime embedded in the binary. That is a different Lua from the widget
+  runtime above. A leftover `index.lua` in a workspace is therefore discovered
+  as an ordinary script, and `describe` will fail on it for lack of a schema
+  block, exactly as a schemaless `.sh` does today. Delete it, or give it a
+  schema.
 - TUI-only abstractions, snapshots, and UI documentation.
 
 These are removals, not compatibility aliases. Do not restore them in docs,

@@ -22,7 +22,9 @@ machine-owned single-process `node serve` service.
 | Windows | winreg 0.52 | Documents path and install-path handling |
 
 Direct dependencies are intentionally limited to the retained headless surface.
-The package does not declare `ratatui`, `crossterm`, `rattles`, or `mlua`.
+The package does not declare `ratatui`, `crossterm`, or `rattles`. It does
+declare `mlua` (`lua54`, `vendored`), the embedded runtime for the `.lua`
+script kind; the removed TUI widget runtime is unrelated and stays removed.
 
 ## Source structure
 
@@ -96,7 +98,7 @@ src/
 - The portable node foundation includes direct Noise transport, trust-neutral LAN
   discovery, manual enrollment, signed-bundle enrollment, static-peer lifecycle,
   revocation, replay protection, and bounded transport audit events. Nostr,
-  remote Cues, campaigns, MDM, and Lua remain future features.
+  remote Cues, campaigns, and MDM remain future features.
 - The minimal Health Plane adds five application message kinds inside the frozen
   direct envelope — `health_profile`, `health_pulse`, `health_signal`,
   `health_ack`, `health_error` — and no new transport, signature construction,

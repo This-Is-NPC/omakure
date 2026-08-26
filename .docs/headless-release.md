@@ -16,7 +16,7 @@ accurately recorded without being presented as current product guidance.
   retained for migration.
 - Node transport: direct encrypted transport, trust-neutral discovery, manual
   enrollment, and signed-bundle enrollment are shipped. Nostr, Pulses, Profiles,
-  Signals, remote Cues, campaigns, MDM, and Lua remain outside this release.
+  Signals, remote Cues, campaigns, and MDM remain outside this release.
 
 ## Intentional breaking removals
 
@@ -81,3 +81,21 @@ The snapshot above predates the version-only `0.3.0` bump. The resulting local
 Linux `v0.3.0` release binary measured 8,812,016 bytes and its binary-only
 archive measured 3,379,153 bytes; these figures are not substituted into the
 post-removal comparison above.
+
+Roadmap item 5 added `.lua` as a script kind backed by a Lua runtime embedded in
+the binary. Measured locally on Linux, the release binary grew from 13,991,000
+to 14,491,152 bytes, a delta of 500,152 bytes. As above, these figures are
+appended rather than substituted into the earlier comparison.
+
+This deliberately reverses one trade recorded earlier in this document, which
+credited *removing* `mlua` as a bundle win. That removal was correct for the TUI
+widget runtime and it stays removed. Half a megabyte is the price of a control
+plane that can execute automation on a node with no interpreter installed, which
+`rebuild-omakure.md` requires; the win was real, and it is being spent on
+purpose.
+
+A caveat worth knowing if you re-measure: the number only appears once something
+references the runtime. At the commit that added the dependency alone, the
+linker discarded it entirely and the binary came out 1,688 bytes *smaller*, with
+zero `lua_` symbols. Check `nm target/release/omakure | grep -c lua_` before
+trusting a delta.

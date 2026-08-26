@@ -33,7 +33,10 @@ omakure --json run tools/deploy.py --env-file ./prod.env --no-prompt -- --target
 
 Schemas use PascalCase keys and comment markers. See
 `how-to-create-a-script.md`. Supported script extensions are `.bash`, `.sh`,
-`.ps1`, and `.py`.
+`.ps1`, `.py`, and `.lua`. Bash, PowerShell, and Python need their interpreter
+installed; `.lua` does not, because the Lua runtime is embedded in the binary.
+Extensionless names resolve in that order, so `omakure run deploy` picks
+`deploy.sh` over `deploy.lua`.
 
 ## Queue and history
 
@@ -179,7 +182,7 @@ mise run transport-certification
 ```
 
 This is a development and CI gate, not a general fleet launcher. Nostr, remote
-Cues, campaigns, MDM, and Lua are outside its scope.
+Cues, campaigns, and MDM are outside its scope.
 
 ## Health Plane certification
 
@@ -214,7 +217,7 @@ as a whole rather than after every individual case.
 
 Management HTTP binds loopback inside each container and is never published, so
 it cannot be the node-to-node data path; the gate asserts that directly. Nostr,
-remote Cues, baselines, dashboards, alerting, arbitrary metrics, MDM, and Lua
+remote Cues, baselines, dashboards, alerting, arbitrary metrics, and MDM
 are all outside its scope.
 
 ## Scheduling and local lifecycle

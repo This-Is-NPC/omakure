@@ -1,9 +1,13 @@
 # Build context hygiene for the official engine image.
 # Required for `cargo build --bin omakure`: Cargo.toml, Cargo.lock, src/
 #
-# `tests/` is excluded from the default context but re-admitted below, because
-# the `harness` stage compiles the Health Plane attempt-exhaustion harness from
-# it. The `runtime` stage never copies it, so the shipped image is unchanged.
+# `tests/` is deliberately IN the context: the `harness` stage compiles the
+# Health Plane attempt-exhaustion harness from it. The `runtime` stage never
+# copies it, so the shipped image is unchanged.
+#
+# Note that the patterns below are context-root-scoped, so they do not filter
+# anything under `tests/` -- a `tests/*.log` or `tests/**/.env` would reach the
+# build context. Nothing of the sort exists today; keep it that way.
 
 target/
 .git/
@@ -16,8 +20,6 @@ target/
 .omaken/
 release-notes/
 scripts/
-tests/
-!tests/
 *.log
 *.tmp
 tarpaulin-report.html

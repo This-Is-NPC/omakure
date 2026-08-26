@@ -45,7 +45,7 @@ assert_removed() {
 induced_project="omakure-health-plane-certification-induced-${BASHPID}"
 if OMAKURE_HEALTH_CERTIFICATION_PROJECT="$induced_project" \
     OMAKURE_HEALTH_CERTIFICATION_INDUCE_FAILURE=1 \
-    timeout --foreground --kill-after=10s 30m "$root_dir/.scripts/health-plane-certification.sh"; then
+    timeout --foreground --kill-after=900s 20m "$root_dir/.scripts/health-plane-certification.sh"; then
     printf 'health-plane certification cleanup test: induced failure unexpectedly passed\n' >&2
     exit 1
 fi
@@ -54,7 +54,7 @@ assert_removed "$induced_project" "an induced partial startup and failure"
 # 3: interrupt part-way through a real run.
 interrupt_project="omakure-health-plane-certification-interrupt-${BASHPID}"
 OMAKURE_HEALTH_CERTIFICATION_PROJECT="$interrupt_project" \
-    timeout --foreground --kill-after=10s 30m "$root_dir/.scripts/health-plane-certification.sh" \
+    timeout --foreground --kill-after=1200s 20m "$root_dir/.scripts/health-plane-certification.sh" \
     >/dev/null 2>&1 &
 run_pid=$!
 # Bounded: interrupt once the fleet is genuinely up, and never wait forever for
@@ -79,13 +79,22 @@ if (( started == 0 )); then
     exit 1
 fi
 kill -TERM "$run_pid" 2>/dev/null || true
+# `--kill-after` above is deliberately larger than this ceiling. GNU timeout
+# arms alarm(kill_after) whenever it *forwards* a signal, not only when its own
+# limit expires, so a small value silently caps how long the gate gets to tear
+# down: at `--kill-after=10s` the gate was SIGKILLed 10s after the TERM, mid
+# `cleanup()`, and the parent saw 137. That was invisible while this test sent
+# SIGINT, because SIGINT was never forwarded and no alarm was ever armed.
+#
 # Bash runs a trap only between commands, so a signal that lands while the gate
 # is inside a bounded Docker command is not observed until that command
-# returns. The ceiling covers the longest single in-flight command plus every
-# bounded step the teardown then runs:
+# returns. This test signals as soon as the first containers exist, which is
+# Phase 1, where the in-flight command is a `compose run` bounded at 180s. The
+# gate does have longer bounded commands elsewhere - the adversary matrix runs
+# under 20m - but they cannot be in flight at this signal point.
 #
-#    180  the deferred in-flight Compose command
-#    180  `compose logs`, which always runs because the interrupt exits non-zero
+#    180  the deferred Phase 1 Compose command
+#    180  `compose logs`, which always runs because the signal exits non-zero
 #    180  `compose down --volumes`
 #    120  the reclaim `docker run` that hands host-side state back
 #    360  three resource sweeps at 120s each

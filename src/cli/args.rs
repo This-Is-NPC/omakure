@@ -619,6 +619,16 @@ pub struct NodeCueArgs {
     /// Why this is being asked for. Recorded in the Performer's audit trail.
     #[arg(long)]
     pub reason: String,
+
+    /// How long to stay on the session waiting for the `run-completed` Signal.
+    ///
+    /// The outcome is read on the connection this dial already opened, because
+    /// a Performer that holds a standing session with this Conductor refuses
+    /// the dial outright — the configuration that would deliver the Signal is
+    /// the one in which the Cue could not be sent. `0` dispatches and returns
+    /// immediately; the run still happens and still reports.
+    #[arg(long = "wait-seconds", default_value_t = 120)]
+    pub wait_seconds: u32,
 }
 
 #[derive(Args, Debug)]

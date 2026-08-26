@@ -345,6 +345,17 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         derived_run_id(dispatched["cue_id"].as_str().unwrap()),
         "both sides must derive the same run id from the same cue id"
     );
+
+    // And the outcome came home on the session the dial already opened, with
+    // no standing session and no correlation field on any message.
+    assert_eq!(
+        dispatched["outcome_seen"], true,
+        "the run-completed Signal must reach the Conductor: {dispatched}"
+    );
+    assert!(
+        wait_for_signal(conductor, &expected),
+        "the Conductor's own Signal feed must show the outcome it correlated"
+    );
 }
 
 /// The Conductor-side derivation, computed independently of the dispatcher.
@@ -360,15 +371,10 @@ fn derived_run_id(cue_id: &str) -> String {
 /// Read through the shipped CLI rather than the database, so what is asserted
 /// is what an operator would actually see.
 ///
-/// **Not yet called, and the reason is load-bearing.** Delivering the outcome
-/// needs a standing session between the two nodes, and a Performer holding one
-/// with this Conductor refuses the one-shot Cue dial with `1010`: `register`
-/// rejects a Responder connection from a peer it owns the dial to, and rejects
-/// any second connection to a peer it already has. So the configuration that
-/// delivers the Signal is exactly the configuration in which a Cue cannot be
-/// sent. `omakure node direct-probe` shares the collision by construction --
-/// both enter through the same probe ritual. Raised for an owner decision.
-#[allow(dead_code)]
+/// The Signal is delivered on the session the dial opened, not a standing one:
+/// a Performer already holding a session with this Conductor refuses the dial
+/// with `1010`, so the configuration that would deliver a Signal the ordinary
+/// way is the one in which the Cue could not be sent.
 fn wait_for_signal(conductor: &Path, expected_run_id: &str) -> bool {
     let deadline = Instant::now() + SIGNAL_TIMEOUT;
     while Instant::now() < deadline {

@@ -1572,6 +1572,7 @@ pub fn dispatch_cue(
     expected_node_id: &str,
     script: &str,
     reason: &str,
+    wait_seconds: u32,
     context: &NodeContext,
 ) -> Result<CueDispatchOutcome, DirectServiceError> {
     if !crate::remote_cue::is_well_formed_script_name(script) {
@@ -1684,13 +1685,125 @@ pub fn dispatch_cue(
     // carries a correlation field; both sides derive it.
     let expected_run_id =
         crate::health_plane::report::opaque_run_id(&crate::remote_cue::derive_run_id(&cue_id));
+
+    // Wait for the outcome on the session already open, rather than requiring a
+    // standing one. A Performer that already holds a session with this
+    // Conductor refuses this dial outright -- `register` will not accept from a
+    // peer it owns the dial to, nor a second connection to a peer it already
+    // has -- so the configuration that would deliver the Signal is exactly the
+    // one in which the Cue could not be sent. The Performer already pushes
+    // Health traffic down this session unprompted; this reads it.
+    let outcome_seen = if wait_seconds > 0 && acknowledgement == Some(0) {
+        let until = Instant::now() + Duration::from_secs(u64::from(wait_seconds));
+        set_stream_timeouts(&stream, until)?;
+        await_cue_outcome(
+            &mut stream,
+            &mut session,
+            &remote,
+            &identity,
+            &registry,
+            &expected_run_id,
+            until,
+        )
+    } else {
+        false
+    };
+
     Ok(CueDispatchOutcome {
         expected_run_id,
         cue_id,
         answered: acknowledgement.is_some(),
         accepted: acknowledgement.is_some_and(|code| code == 0),
         code: acknowledgement.unwrap_or(0),
+        outcome_seen,
     })
+}
+
+/// Read Health traffic on this session until the Cue's outcome shows up.
+///
+/// The dispatcher behaves as an ordinary Conductor receiver for the duration:
+/// the `HealthSession` verifies, records, and acknowledges exactly as the
+/// service would, so nothing here is a second, looser path into the Health
+/// Plane. The stop condition is read back from the registry after the session
+/// recorded it, never from an unverified payload.
+#[allow(clippy::too_many_arguments)]
+fn await_cue_outcome(
+    stream: &mut TcpStream,
+    session: &mut TransportSession,
+    remote: &crate::direct_transport::TransportCertificate,
+    identity: &NodeIdentity,
+    registry: &NodeRegistry,
+    expected_run_id: &str,
+    until: Instant,
+) -> bool {
+    let mut health = HealthSession::new(
+        identity,
+        registry,
+        remote.node_id(),
+        remote.identity_key(),
+        *session.session_id(),
+        None,
+    );
+    let plane = crate::health_plane::HealthPlane::new(registry);
+    loop {
+        if signal_recorded(&plane, remote.node_id(), expected_run_id) {
+            return true;
+        }
+        if Instant::now() >= until {
+            return false;
+        }
+        match wait_readable(stream, crate::direct_health::TICK) {
+            Readiness::Readable => {}
+            Readiness::Idle => continue,
+            Readiness::Closed | Readiness::Failed(_) => {
+                // One last look: the Signal may have landed on the frame that
+                // arrived immediately before the peer hung up.
+                return signal_recorded(&plane, remote.node_id(), expected_run_id);
+            }
+        }
+        let Ok(encoded) = read_frame(stream, until) else {
+            return signal_recorded(&plane, remote.node_id(), expected_run_id);
+        };
+        let Ok(message) = session.read(&encoded) else {
+            return false;
+        };
+        if message.kind != ENVELOPE_KIND {
+            continue;
+        }
+        if let crate::direct_health::HealthOutcome::Reply(reply) =
+            health.handle_envelope(&message.body)
+        {
+            let Ok(frame) = session.write(ENVELOPE_KIND, &reply) else {
+                return false;
+            };
+            if write_bytes(stream, &frame, Instant::now() + IDLE_TIMEOUT).is_err() {
+                return false;
+            }
+        }
+    }
+}
+
+/// Whether this peer's recorded Signals already carry the awaited run.
+fn signal_recorded(
+    plane: &crate::health_plane::HealthPlane<'_>,
+    node_id: &str,
+    expected_run_id: &str,
+) -> bool {
+    plane
+        .signals(
+            node_id,
+            crate::health_plane::bounds::SIGNAL_INBOX_CAPACITY as usize,
+        )
+        .map(|signals| {
+            signals.iter().any(|signal| {
+                signal.kind == crate::health_plane::model::SignalKind::RunCompleted
+                    && signal
+                        .run
+                        .as_ref()
+                        .is_some_and(|run| run.run_id == expected_run_id)
+            })
+        })
+        .unwrap_or(false)
 }
 
 /// What the Conductor can honestly say about one dispatch.
@@ -1707,6 +1820,10 @@ pub struct CueDispatchOutcome {
     pub answered: bool,
     pub accepted: bool,
     pub code: u16,
+    /// Whether the `run-completed` Signal for this Cue arrived before the wait
+    /// budget ran out. `false` is not a failure -- the run may simply still be
+    /// going, and the Signal will reach a standing session later.
+    pub outcome_seen: bool,
 }
 
 /// Read one `cue_ack` for this cue id, or `None` if none arrives in budget.

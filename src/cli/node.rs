@@ -36,6 +36,7 @@ pub fn run(
             &args.peer_node_id,
             &args.script,
             &args.reason,
+            args.wait_seconds,
             &context,
         )
         // `answered` and `accepted` are reported apart because a Performer
@@ -49,6 +50,7 @@ pub fn run(
                 "answered": outcome.answered,
                 "accepted": outcome.accepted,
                 "code": outcome.code,
+                "outcome_seen": outcome.outcome_seen,
             })
         })
         .map_err(map_direct_error),

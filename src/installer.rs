@@ -112,7 +112,7 @@ fn install_windows_node_service(binary: &Path, tokens_source: &Path) -> Result<(
         if !config.exists() {
             fs::write(
                 &config,
-                "version = 1\n\n[node]\ndisplay_name = \"\"\n\n[api]\nbind = \"127.0.0.1:7878\"\n\n[network]\nmode = \"direct\"\nrelays = []\nstatic_peers = []\nmax_message_bytes = 1048576\n\n[trust]\nenrollment = \"disabled\"\nallow_remote_cues = false\nallow_baseline_push = false\n\n[discovery]\nenabled = false\nport = 38383\nmulticast_addr = \"239.255.42.99\"\nbroadcast = true\n\n[organization]\nid = \"\"\ndiscovery_secret_ref = \"\"\n",
+                "version = 1\n\n[node]\ndisplay_name = \"\"\n\n[api]\nbind = \"127.0.0.1:7878\"\n\n[network]\nmode = \"direct\"\nrelays = []\nstatic_peers = []\nmax_message_bytes = 1048576\n\n[trust]\nenrollment = \"disabled\"\nallow_remote_cues = false\nremote_cue_scripts = []\nremote_cue_batteries = []\nallow_baseline_push = false\nauthorities = []\nbootstrap_token_hash = \"\"\nbootstrap_nonce_hash = \"\"\n\n[discovery]\nenabled = false\nport = 38383\nmulticast_addr = \"239.255.42.99\"\nbroadcast = true\n\n[organization]\nid = \"\"\ndiscovery_secret_ref = \"\"\n",
             )?;
         }
         fs::copy(tokens_source, &tokens)?;

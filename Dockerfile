@@ -87,7 +87,12 @@ RUN apt-get update \
           '[trust]' \
           'enrollment = "disabled"' \
           'allow_remote_cues = false' \
+          'remote_cue_scripts = []' \
+          'remote_cue_batteries = []' \
           'allow_baseline_push = false' \
+          'authorities = []' \
+          'bootstrap_token_hash = ""' \
+          'bootstrap_nonce_hash = ""' \
           '' \
           '[discovery]' \
           'enabled = false' \

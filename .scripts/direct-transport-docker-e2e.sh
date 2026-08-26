@@ -108,6 +108,8 @@ max_message_bytes = 1048576
 [trust]
 enrollment = \"disabled\"
 allow_remote_cues = false
+remote_cue_scripts = []
+remote_cue_batteries = []
 allow_baseline_push = false
 
 [organization]

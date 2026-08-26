@@ -192,6 +192,57 @@ pub fn is_well_formed_script_name(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
+/// Resolve a Cue's script name against the discoverable workspace listing.
+///
+/// The listing **is** the allow-list. It is produced by the workspace
+/// repository, which already honours `.omakureignore`, so a script the owner
+/// excluded from discovery is not remotely runnable and there is no second
+/// mechanism that could drift out of step with the first.
+///
+/// Resolution is a match against that set, never a string check on the name and
+/// never a path join. A name cannot therefore address anything the owner did not
+/// already publish, and traversal, absolute paths, and nested paths fail on the
+/// grammar before they are ever compared.
+///
+/// `listing` is expected to contain absolute paths as the repository produces
+/// them; only the final component is compared.
+pub fn resolve_in_listing<'a>(
+    name: &str,
+    listing: &'a [std::path::PathBuf],
+) -> Result<&'a std::path::Path, CueCode> {
+    if !is_well_formed_script_name(name) {
+        return Err(CueCode::InvalidMessage);
+    }
+    listing
+        .iter()
+        .find(|candidate| {
+            candidate
+                .file_name()
+                .and_then(|component| component.to_str())
+                .is_some_and(|component| component == name)
+        })
+        .map(std::path::PathBuf::as_path)
+        .ok_or(CueCode::ScriptUnresolvable)
+}
+
+/// Reject anything that is not a regular file.
+///
+/// `symlink_metadata` does not follow links, so a symlink inside the workspace
+/// cannot redirect a Cue to a file outside it. Directories, sockets, and FIFOs
+/// fail here too.
+pub fn is_regular_file(path: &std::path::Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
+}
+
+/// Whether a script's schema asks for any secret.
+///
+/// Such a script is refused at the gate rather than executed without its
+/// secrets. A remote caller does not get to decide that a secret-consuming
+/// script should run in a degraded form.
+pub fn declares_secret_field(schema: &crate::domain::Schema) -> bool {
+    schema.fields.iter().any(|field| field.is_secret())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,6 +442,108 @@ mod tests {
             within_validity_window(400, 100, 150),
             Err(CueCode::InvalidMessage)
         );
+    }
+
+    fn listing(names: &[&str]) -> Vec<std::path::PathBuf> {
+        names
+            .iter()
+            .map(|name| std::path::PathBuf::from("/ws").join(name))
+            .collect()
+    }
+
+    #[test]
+    fn a_listed_script_resolves() {
+        let scripts = listing(&["deploy.sh", "backup.lua"]);
+        let resolved = resolve_in_listing("deploy.sh", &scripts).expect("should resolve");
+        assert_eq!(resolved, std::path::Path::new("/ws/deploy.sh"));
+    }
+
+    /// The listing is the allow-list, so anything absent is simply unrunnable.
+    #[test]
+    fn a_script_absent_from_the_listing_is_unresolvable() {
+        let scripts = listing(&["deploy.sh"]);
+        assert_eq!(
+            resolve_in_listing("secret.sh", &scripts),
+            Err(CueCode::ScriptUnresolvable)
+        );
+    }
+
+    /// An `.omakureignore`d script never appears in the listing, so exclusion
+    /// from discovery is exclusion from remote execution with no second
+    /// mechanism to keep in step.
+    #[test]
+    fn an_ignored_script_is_unresolvable_because_it_is_not_listed() {
+        let scripts = listing(&["public.sh"]);
+        assert_eq!(
+            resolve_in_listing("private.sh", &scripts),
+            Err(CueCode::ScriptUnresolvable)
+        );
+    }
+
+    /// Traversal and absolute paths die on the grammar, before any comparison.
+    #[test]
+    fn traversal_and_absolute_names_never_reach_resolution() {
+        let scripts = listing(&["deploy.sh"]);
+        for hostile in [
+            "../deploy.sh",
+            "../../etc/passwd",
+            "/etc/passwd",
+            "sub/deploy.sh",
+            "./deploy.sh",
+        ] {
+            assert_eq!(
+                resolve_in_listing(hostile, &scripts),
+                Err(CueCode::InvalidMessage),
+                "{hostile:?} must fail the grammar"
+            );
+        }
+    }
+
+    /// A name matching a listed *directory* component must not resolve.
+    #[test]
+    fn only_the_final_component_is_compared() {
+        let scripts = vec![std::path::PathBuf::from("/ws/tools/deploy.sh")];
+        assert_eq!(
+            resolve_in_listing("tools", &scripts),
+            Err(CueCode::ScriptUnresolvable)
+        );
+        assert!(resolve_in_listing("deploy.sh", &scripts).is_ok());
+    }
+
+    #[test]
+    fn a_symlink_is_not_a_regular_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("real.sh");
+        std::fs::write(&target, "#!/usr/bin/env bash\n").unwrap();
+        let link = dir.path().join("link.sh");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        assert!(is_regular_file(&target));
+        #[cfg(unix)]
+        assert!(
+            !is_regular_file(&link),
+            "a symlink must not resolve; it could redirect outside the workspace"
+        );
+        assert!(!is_regular_file(dir.path()), "a directory is not a script");
+        assert!(!is_regular_file(&dir.path().join("absent.sh")));
+    }
+
+    #[test]
+    fn a_secret_declaring_schema_is_detected() {
+        let with_secret: crate::domain::Schema = serde_json::from_value(serde_json::json!({
+            "Name": "deploy",
+            "Fields": [{ "Name": "token", "Type": "secret", "Required": true }]
+        }))
+        .unwrap();
+        assert!(declares_secret_field(&with_secret));
+
+        let without: crate::domain::Schema = serde_json::from_value(serde_json::json!({
+            "Name": "deploy",
+            "Fields": [{ "Name": "target", "Type": "string", "Required": false }]
+        }))
+        .unwrap();
+        assert!(!declares_secret_field(&without));
     }
 
     #[test]

@@ -147,6 +147,14 @@ struct ConnectionState {
     /// `None` leaves every session behaving exactly as it did before the
     /// Health Plane existed: application frames are decrypted and discarded.
     reporter: Option<Arc<HealthReporter>>,
+    /// Root of the workspace whose scripts a Cue may name, when this node
+    /// serves runs.
+    ///
+    /// Held as a path rather than a `Workspace` so the shared state stays
+    /// cheaply shareable across session threads. `None` means an accepted Cue is
+    /// decided and audited but never enqueued, which is what a node with no
+    /// workspace should do: it has nothing to run.
+    workspace_root: Option<std::path::PathBuf>,
 }
 
 impl ConnectionState {
@@ -157,6 +165,7 @@ impl ConnectionState {
         listening: bool,
         admission: Arc<AdmissionController>,
         reporter: Option<Arc<HealthReporter>>,
+        workspace_root: Option<std::path::PathBuf>,
     ) -> Arc<Self> {
         let expected = static_peers
             .iter()
@@ -186,6 +195,7 @@ impl ConnectionState {
             status,
             admission,
             reporter,
+            workspace_root,
         })
     }
 
@@ -325,6 +335,7 @@ impl DirectService {
         static_peer_values: &[String],
         context: NodeContext,
         reporter: Option<Arc<HealthReporter>>,
+        workspace_root: Option<std::path::PathBuf>,
     ) -> Result<Self, DirectServiceError> {
         let static_peers = static_peer_values
             .iter()
@@ -346,6 +357,7 @@ impl DirectService {
             bind.is_some(),
             Arc::clone(&admission),
             reporter,
+            workspace_root,
         );
         let listener = bind
             .map(|bind| DirectListener::start_with_state(bind, context.clone(), Arc::clone(&state)))
@@ -980,7 +992,15 @@ impl DirectListener {
         let admission = Arc::new(AdmissionController {
             state: Mutex::new(AdmissionState::default()),
         });
-        let state = ConnectionState::new(&identity, &[], Arc::clone(&stop), true, admission, None);
+        let state = ConnectionState::new(
+            &identity,
+            &[],
+            Arc::clone(&stop),
+            true,
+            admission,
+            None,
+            None,
+        );
         Self::start_with_state_and_stop(bind, context, state, stop)
     }
 
@@ -1279,6 +1299,10 @@ fn connect_and_hold(
         &registry,
         remote.node_id(),
         crate::remote_cue::read_policy(context),
+        state
+            .workspace_root
+            .as_ref()
+            .map(|root| crate::workspace::Workspace::new(root.clone())),
     );
     hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
 }
@@ -1821,6 +1845,10 @@ fn serve_connection(
             &registry,
             remote.node_id(),
             crate::remote_cue::read_policy(context),
+            state
+                .workspace_root
+                .as_ref()
+                .map(|root| crate::workspace::Workspace::new(root.clone())),
         );
         hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
             .map_err(DirectServiceError::Protocol)?;
@@ -2157,6 +2185,7 @@ mod tests {
                 state: Mutex::new(AdmissionState::default()),
             }),
             reporter: None,
+            workspace_root: None,
         });
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
@@ -2241,6 +2270,7 @@ mod tests {
                 None,
                 &["zzzz@blocked.invalid:7879".to_string()],
                 context.clone(),
+                None,
                 None,
             )
             .unwrap();

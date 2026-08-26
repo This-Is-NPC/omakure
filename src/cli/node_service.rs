@@ -164,6 +164,7 @@ pub fn run(
             &static_peers,
             context.clone(),
             Some(Arc::clone(&health_reporter)),
+            Some(workspace.root().to_path_buf()),
         )?)
     } else {
         None

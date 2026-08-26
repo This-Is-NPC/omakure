@@ -322,6 +322,11 @@ pub fn declares_secret_field(schema: &crate::domain::Schema) -> bool {
 /// registry rather than owning a channel to anything that can run work.
 pub struct CueSession<'a> {
     registry: &'a crate::node_registry::NodeRegistry,
+    /// The workspace whose declared scripts a Cue may name.
+    ///
+    /// `None` means decide and audit but never enqueue: a node with no
+    /// workspace has nothing to run, and should say so rather than pretend.
+    workspace: Option<crate::workspace::Workspace>,
     remote_node_id: String,
     remote_cues_enabled: bool,
     declared_scripts: Vec<String>,
@@ -404,9 +409,11 @@ impl<'a> CueSession<'a> {
         registry: &'a crate::node_registry::NodeRegistry,
         remote_node_id: &str,
         policy: CuePolicy,
+        workspace: Option<crate::workspace::Workspace>,
     ) -> Self {
         Self {
             registry,
+            workspace,
             remote_node_id: remote_node_id.to_string(),
             remote_cues_enabled: policy.enabled,
             declared_scripts: policy.declared_scripts,
@@ -489,6 +496,60 @@ impl<'a> CueSession<'a> {
 
         CueOutcome::Decided(decision)
     }
+
+    /// Turn an accepted decision into one run.
+    ///
+    /// Separated from `decide` so the security boundary and the act of running
+    /// stay reviewable apart: everything above answers "may this happen", and
+    /// only this answers "make it happen".
+    ///
+    /// The run id is supplied by the caller and derived from the cue id, so the
+    /// primary key refuses a second insert. Enqueue therefore *failing* is the
+    /// success path for a duplicate, not an error to paper over.
+    pub fn enqueue_accepted(
+        &self,
+        cue_id: &str,
+        script: &str,
+        reason: &str,
+    ) -> Result<String, CueCode> {
+        let workspace = self.workspace.as_ref().ok_or(CueCode::ScriptUnresolvable)?;
+        let run_id = derive_run_id(cue_id);
+        crate::operations::core::enqueue_cue_run(
+            workspace,
+            crate::operations::core::EnqueueRunRequest {
+                script: script.to_string(),
+                args: Vec::new(),
+                env: None,
+                secret_fields: Vec::new(),
+                run_id: Some(run_id.clone()),
+                actor: self.remote_node_id.clone(),
+                reason: Some(reason.to_string()),
+                priority: 0,
+                timeout_ms: None,
+                parent_run_id: None,
+                cron_schedule_id: None,
+            },
+        )
+        .map(|_| run_id)
+        .map_err(|_| CueCode::Duplicate)
+    }
+}
+
+/// The local run id for a Cue, under its own domain separator.
+///
+/// Deterministic so the Conductor can compute the opaque run id it will see on
+/// the `run-completed` Signal without any message carrying a correlation field,
+/// and so the database primary key is the durable at-most-once guard.
+///
+/// The domain separator is what stops a cue id being replayable as a preimage
+/// in any other construction that hashes ids.
+pub fn derive_run_id(cue_id: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(b"omakure/cue-run-id/v1\0");
+    hasher.update(cue_id.as_bytes());
+    let digest = hasher.finalize();
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[cfg(test)]
@@ -849,6 +910,31 @@ mod tests {
                 &workspace
             ),
             Err(CueCode::NotDeclared)
+        );
+    }
+
+    /// Deterministic, so the Conductor computes the same id the Performer will
+    /// use, without any message carrying a correlation field.
+    #[test]
+    fn the_run_id_is_a_deterministic_function_of_the_cue_id() {
+        let a = derive_run_id("0123456789abcdef0123456789abcdef");
+        assert_eq!(a, derive_run_id("0123456789abcdef0123456789abcdef"));
+        assert_ne!(a, derive_run_id("fedcba9876543210fedcba9876543210"));
+        assert_eq!(a.len(), 64, "a full SHA-256 in hex");
+    }
+
+    /// The domain separator is load-bearing: without it a cue id would hash the
+    /// same here as in any other construction that hashes ids.
+    #[test]
+    fn the_run_id_is_domain_separated() {
+        use sha2::{Digest, Sha256};
+        let undomained: String = Sha256::digest(b"0123456789abcdef0123456789abcdef")
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        assert_ne!(
+            derive_run_id("0123456789abcdef0123456789abcdef"),
+            undomained
         );
     }
 

@@ -1525,6 +1525,94 @@ pub fn probe(
     Ok(())
 }
 
+/// Ask one trusted Performer to run a script it has already declared.
+///
+/// A one-shot dial mirroring `probe`, deliberately with no Conductor-side
+/// durable outbox: a Cue is an instruction with a short validity window, and a
+/// queue of instructions that outlive their window is a way to deliver
+/// surprises. If the dial fails, the operator dials again with a new id.
+///
+/// Returns the minted `cue_id`, from which the Conductor can compute the opaque
+/// run id it will later see on the `run-completed` Signal — which is why no
+/// correlation field is added to any message.
+pub fn dispatch_cue(
+    endpoint: SocketAddr,
+    expected_node_id: &str,
+    script: &str,
+    reason: &str,
+    context: &NodeContext,
+) -> Result<String, DirectServiceError> {
+    if !crate::remote_cue::is_well_formed_script_name(script) {
+        return Err(TransportError::InvalidFrame.into());
+    }
+    if reason.is_empty() || reason.len() > 128 {
+        return Err(TransportError::InvalidFrame.into());
+    }
+
+    let identity = NodeIdentity::load_existing(context)?;
+    let local = LocalTransport::load_existing(context, &identity)?;
+    let registry = NodeRegistry::open_existing(context, identity.public_status())?;
+    let deadline = initiator_deadline(Instant::now());
+    let mut stream = TcpStream::connect_timeout(
+        &endpoint,
+        deadline
+            .checked_duration_since(Instant::now())
+            .ok_or(TransportError::Internal)?,
+    )?;
+    set_stream_timeouts(&stream, deadline)?;
+
+    let mut handshake = local.handshake(HandshakeRole::Initiator)?;
+    write_bytes(&mut stream, &handshake.write_next()?, deadline)?;
+    handshake.read_next(&read_frame(&mut stream, deadline)?, unix_seconds())?;
+    write_bytes(&mut stream, &handshake.write_next()?, deadline)?;
+    let remote = handshake
+        .remote_certificate()
+        .cloned()
+        .ok_or(TransportError::HandshakeFailed)?;
+    if remote.node_id() != expected_node_id {
+        return Err(TransportError::IdentityMismatch.into());
+    }
+    let mut session = handshake.into_session()?;
+
+    let mut cue_id_bytes = [0u8; 16];
+    OsRng.fill_bytes(&mut cue_id_bytes);
+    let cue_id = hex(&cue_id_bytes);
+    let now = unix_seconds();
+    let mut nonce = [0u8; 16];
+    OsRng.fill_bytes(&mut nonce);
+    let dispatch = crate::direct_transport::sign_cue_envelope(
+        &identity,
+        "cue_dispatch",
+        session.session_id(),
+        nonce,
+        serde_json::json!({
+            "version": 1,
+            "cue_id": cue_id,
+            "script": script,
+            "not_before": now,
+            "expires_at": now + crate::remote_cue::MAX_LIFETIME_SECONDS as u64,
+            "reason": reason,
+        }),
+        now,
+    )?;
+    write_bytes(
+        &mut stream,
+        &session.write(ENVELOPE_KIND, &dispatch.encoded())?,
+        deadline,
+    )?;
+
+    registry.record_transport_audit(
+        "cue_dispatched",
+        remote.node_id(),
+        Some(session.session_id()),
+        Some(0),
+        dispatch.encoded().len(),
+        "accepted",
+        None,
+    )?;
+    Ok(cue_id)
+}
+
 pub fn request_manual_enrollment(
     endpoint: SocketAddr,
     context: &NodeContext,

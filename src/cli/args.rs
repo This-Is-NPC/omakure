@@ -477,6 +477,9 @@ pub enum NodeCommand {
     /// Establish a direct encrypted probe with one explicitly trusted peer
     DirectProbe(NodeDirectProbeArgs),
 
+    /// Ask one trusted Performer to run a script it has already declared
+    Cue(NodeCueArgs),
+
     /// Explicitly initialize public config, identity, and local trust state
     Init,
 
@@ -595,6 +598,27 @@ pub struct NodeDirectProbeArgs {
     /// Expected canonical peer node ID.
     #[arg(long = "peer-node-id")]
     pub peer_node_id: String,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeCueArgs {
+    /// Peer direct transport address.
+    #[arg(long)]
+    pub endpoint: std::net::SocketAddr,
+
+    /// Expected canonical peer node ID.
+    #[arg(long = "peer-node-id")]
+    pub peer_node_id: String,
+
+    /// Script name as the Performer declared it. A path is not accepted: the
+    /// Performer resolves the name against what it published, and a Cue never
+    /// carries a location.
+    #[arg(long)]
+    pub script: String,
+
+    /// Why this is being asked for. Recorded in the Performer's audit trail.
+    #[arg(long)]
+    pub reason: String,
 }
 
 #[derive(Args, Debug)]

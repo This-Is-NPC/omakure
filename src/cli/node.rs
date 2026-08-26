@@ -27,6 +27,19 @@ pub fn run(
                 .map(|()| serde_json::json!({"accepted": true}))
                 .map_err(map_direct_error)
         }
+        // Deliberately CLI-only. `.docs/cli-http-parity.md` records the status;
+        // an HTTP route would be a fifth authorization surface to keep in step
+        // for no safety gain, ahead of a feature whose whole point is bounding
+        // what a remote caller can reach.
+        NodeCommand::Cue(args) => crate::direct_service::dispatch_cue(
+            args.endpoint,
+            &args.peer_node_id,
+            &args.script,
+            &args.reason,
+            &context,
+        )
+        .map(|cue_id| serde_json::json!({"dispatched": true, "cue_id": cue_id}))
+        .map_err(map_direct_error),
         NodeCommand::Init => {
             node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
                 .map(|result| serde_json::to_value(result).expect("node initialization serializes"))

@@ -184,7 +184,7 @@ impl HealthReporter {
 }
 
 /// The frozen Profile payload object.
-pub fn profile_payload(
+fn profile_payload(
     target: &str,
     message_id: &str,
     facts: &ProfileFacts,
@@ -223,7 +223,7 @@ pub fn profile_payload(
 }
 
 /// The frozen Pulse payload object.
-pub fn pulse_payload(
+fn pulse_payload(
     target: &str,
     message_id: &str,
     facts: &PulseFacts,

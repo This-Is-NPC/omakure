@@ -225,8 +225,9 @@ impl FromStr for RunTrigger {
         match s {
             "Manual" => Ok(RunTrigger::Manual),
             "Scheduled" => Ok(RunTrigger::Scheduled),
+            "Cue" => Ok(RunTrigger::Cue),
             other => Err(format!(
-                "invalid run trigger '{}': expected Manual or Scheduled",
+                "invalid run trigger '{}': expected Manual, Scheduled or Cue",
                 other
             )),
         }
@@ -969,10 +970,23 @@ pub fn claim_next(
     let now = current_unix_ms();
     // Build the inner SELECT with optional filters. The outer UPDATE always
     // sets state='running'.
-    let mut where_clauses = vec![
-        "(state = 'queued' OR (state = 'running' AND lease_until IS NOT NULL AND lease_until < :now))"
-            .to_string(),
-    ];
+    // A Cue-origin run is claimable once, like anything else, but is never
+    // lease-stolen afterwards.
+    //
+    // Re-claiming an expired-lease `running` row is right for a queued job: the
+    // worker died, nobody saw a result, run it again. It is wrong for a remote
+    // instruction, because the side effect may well have happened and the caller
+    // has no way to know it happened twice. That silently turns at-most-once
+    // into at-least-once on the one path where the guarantee was promised.
+    //
+    // The exclusion therefore belongs to the lease-steal branch alone. A crashed
+    // Cue-origin row is resolved to a terminal state by recovery instead,
+    // without re-executing.
+    let mut where_clauses = vec![format!(
+        "(state = 'queued' OR (state = 'running' AND lease_until IS NOT NULL \
+          AND lease_until < :now AND trigger <> '{}'))",
+        RunTrigger::Cue.as_str()
+    )];
     let mut named_params: Vec<(&str, Box<dyn rusqlite::ToSql>)> = Vec::new();
     named_params.push((":now", Box::new(now)));
     named_params.push((":worker_id", Box::new(worker_id.to_string())));
@@ -1767,6 +1781,75 @@ mod tests {
         // Suppress unused warning for `mut conn` (insert_trace path uses it
         // elsewhere).
         let _ = &mut conn;
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    /// The blocker this wave exists to close.
+    ///
+    /// A queued job whose worker died should be re-run: nobody saw a result. A
+    /// remote instruction must not be, because the side effect may already have
+    /// happened and the caller cannot tell it happened twice.
+    ///
+    /// Without the exclusion this test fails by *succeeding* — `claim_next`
+    /// hands the row back and the script runs a second time.
+    #[test]
+    fn a_crashed_cue_run_is_never_reclaimed_by_a_worker() {
+        let ws = unique_workspace("cue_no_lease_steal");
+        let conn = open(&ws).expect("open");
+
+        let row = enqueue(
+            &conn,
+            "/x/deploy.sh",
+            &[],
+            EnqueueOptions {
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .expect("the first claim runs it once");
+
+        // The worker dies. Its lease lapses.
+        conn.execute(
+            "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
+            rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, row.run_id],
+        )
+        .unwrap();
+
+        assert!(
+            claim_next(&conn, "w2", &ClaimFilters::default())
+                .unwrap()
+                .is_none(),
+            "a lapsed Cue-origin lease must not be stolen; the script would run twice"
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    /// The control: an ordinary queued job *is* still re-claimed, so the
+    /// exclusion above is narrow rather than a blanket change to the worker.
+    #[test]
+    fn a_crashed_queued_run_is_still_reclaimed() {
+        let ws = unique_workspace("queued_lease_steal");
+        let conn = open(&ws).expect("open");
+
+        let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
+        claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .unwrap();
+        conn.execute(
+            "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
+            rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, row.run_id],
+        )
+        .unwrap();
+
+        assert!(
+            claim_next(&conn, "w2", &ClaimFilters::default())
+                .unwrap()
+                .is_some(),
+            "queued work must still recover from a dead worker"
+        );
         let _ = fs::remove_dir_all(ws.root());
     }
 

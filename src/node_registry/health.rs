@@ -677,6 +677,37 @@ impl NodeRegistry {
         })
     }
 
+    /// Give every Signal queued for one peer a fresh delivery budget.
+    ///
+    /// The frozen contract says a Signal that spent its retries is *retained in
+    /// the outbox within its 64-entry and 7-day bounds and resent on the next
+    /// session*. `attempts` is therefore a per-session counter, and the only
+    /// event that clears it is a newly established session to that peer. This
+    /// resets exactly that counter for exactly that target: it never deletes a
+    /// Signal, never renumbers a sequence, never touches `signal_id`, and never
+    /// widens the 3-attempt bound the column already enforces.
+    ///
+    /// Returns how many queued Signals were re-armed.
+    pub fn health_reset_outbox_attempts(
+        &self,
+        target_node_id: &str,
+        now: i64,
+    ) -> Result<u64, RegistryError> {
+        validate_node_id(target_node_id)?;
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let reset = transaction.execute(
+                "UPDATE health_outbox
+                 SET attempts = 0, last_message_id = NULL, updated_at = ?2
+                 WHERE target_node_id = ?1 AND attempts > 0",
+                params![target_node_id, now],
+            )?;
+            transaction.commit()?;
+            Ok(reset as u64)
+        })
+    }
+
     /// Count of Signals dropped by outbox overflow since this node was created.
     pub fn health_signals_dropped(&self) -> Result<i64, RegistryError> {
         self.with_connection(|connection| {

@@ -13,12 +13,17 @@
 
 mod support;
 
+use omakure::direct_health::{HealthOutcome, HealthSession};
+use omakure::direct_transport::{envelope_kind_hint, health_envelope_view, sign_health_envelope};
 use omakure::health_plane::bounds::{
     MAX_AGE_SECONDS, MAX_FUTURE_SKEW_SECONDS, MAX_SIGNALS_PER_PEER_PER_MINUTE,
     RATE_MINUTE_WINDOW_SECONDS, REORDER_BUFFER_ENTRIES, REORDER_BUFFER_SECONDS,
     SIGNAL_INBOX_CAPACITY, SIGNAL_OUTBOX_CAPACITY, SIGNAL_RETENTION_SECONDS, STORAGE_CEILING_BYTES,
 };
-use omakure::health_plane::model::{HealthCode, HealthDecision, SignalKind};
+use omakure::health_plane::model::{HealthCode, HealthDecision, RunFact, RunnerFact, SignalKind};
+use omakure::health_plane::report::{
+    ack_payload as ack_body, HealthFactsSource, HealthReporter, ProfileFacts, PulseFacts,
+};
 use omakure::health_plane::{HealthClock, HealthPlane, HealthReply, InboundHealthMessage};
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
@@ -63,6 +68,7 @@ struct Node {
     context: NodeContext,
     clock: Arc<FixedClock>,
     local_node_id: String,
+    public_key: String,
 }
 
 impl Node {
@@ -74,6 +80,10 @@ impl Node {
         let local_node_id = status["identity"]["node_id"]
             .as_str()
             .expect("local node id")
+            .to_string();
+        let public_key = status["identity"]["public_key"]
+            .as_str()
+            .expect("local public key")
             .to_string();
         let context = NodeContext::resolve_for(
             NodePlatform::current(),
@@ -93,7 +103,20 @@ impl Node {
             context,
             clock: Arc::new(FixedClock(AtomicI64::new(BASE_NOW))),
             local_node_id,
+            public_key,
         }
+    }
+
+    /// The 32-byte x-only identity key the frozen envelope verifier expects.
+    fn identity_key(&self) -> [u8; 32] {
+        (0..32)
+            .map(|index| {
+                u8::from_str_radix(&self.public_key[index * 2..index * 2 + 2], 16)
+                    .expect("identity key hex")
+            })
+            .collect::<Vec<u8>>()
+            .try_into()
+            .expect("identity key length")
     }
 
     /// Reopen the shipped registry exactly the way a restart does.
@@ -194,6 +217,31 @@ fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> Strin
     let data = assert_success(&run_node(&node.workspace, &args));
     assert_eq!(data["state"], "active");
     node_id
+}
+
+/// Trust one *real* node from another, using its live identity rather than a
+/// synthetic key, so both sides can complete a production Health Plane exchange.
+fn trust_real_peer(node: &Node, peer: &Node, role: &str, capabilities: &[&str]) {
+    let mut args = vec![
+        "trust".to_string(),
+        "--node-id".to_string(),
+        peer.local_node_id.clone(),
+        "--public-key".to_string(),
+        peer.public_key.clone(),
+        "--role".to_string(),
+        role.to_string(),
+        "--actor".to_string(),
+        "health-plane-signal-tests".to_string(),
+        "--reason".to_string(),
+        "closed signal lifecycle certification peer".to_string(),
+        "--confirmed".to_string(),
+    ];
+    for capability in capabilities {
+        args.push("--capability".to_string());
+        args.push((*capability).to_string());
+    }
+    let data = assert_success(&run_node(&node.workspace, &args));
+    assert_eq!(data["state"], "active");
 }
 
 fn revoke_peer(node: &Node, node_id: &str) {
@@ -1029,6 +1077,271 @@ fn outbox_overflow_drops_the_oldest_signal_and_the_queue_survives_a_restart() {
     let report = plane.prune().expect("prune");
     assert_eq!(report.expired_outbox_signals, SIGNAL_OUTBOX_CAPACITY as u64);
     assert!(plane.outbox(1_000).expect("outbox").is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// The frozen "resent on the next session" rule, end to end across two nodes.
+// ---------------------------------------------------------------------------
+
+/// A local fact source whose terminal run log the test controls.
+#[derive(Default)]
+struct SignalFacts {
+    terminal: std::sync::Mutex<Vec<RunFact>>,
+}
+
+impl SignalFacts {
+    fn finish_run(&self, run_id: &str, script: &str, finished_at: i64) {
+        self.terminal.lock().expect("terminal runs").insert(
+            0,
+            RunFact {
+                exit_code: Some(0),
+                finished_at,
+                run_id: run_id.to_string(),
+                script: script.to_string(),
+                started_at: None,
+                state: "completed".to_string(),
+                trigger: None,
+            },
+        );
+    }
+}
+
+/// Newtype so the fact source can be implemented from this test crate.
+struct SharedFacts(Arc<SignalFacts>);
+
+impl HealthFactsSource for SharedFacts {
+    fn profile_facts(&self) -> ProfileFacts {
+        ProfileFacts {
+            agent_version: "0.3.0".to_string(),
+            arch: "x86_64".to_string(),
+            capabilities: Vec::new(),
+            display_name: "certification".to_string(),
+            distro_id: "arch".to_string(),
+            distro_version: "rolling".to_string(),
+            omarchy_channel: "stable".to_string(),
+            omarchy_version: "2.1.0".to_string(),
+            platform: "linux".to_string(),
+            runtimes: Vec::new(),
+        }
+    }
+
+    fn pulse_facts(&self) -> PulseFacts {
+        PulseFacts {
+            runner: RunnerFact {
+                queue_depth: 0,
+                scheduler: "running".to_string(),
+                state: "idle".to_string(),
+                workers_busy: 0,
+                workers_configured: 1,
+            },
+            last_run: None,
+            uptime_seconds: 60,
+        }
+    }
+
+    fn terminal_runs(&self, limit: usize) -> Vec<RunFact> {
+        let mut runs = self.0.terminal.lock().expect("terminal runs").clone();
+        runs.truncate(limit);
+        runs
+    }
+}
+
+/// Decode one envelope a production session emitted.
+fn decode_envelope(encoded: &[u8]) -> (String, Value, usize) {
+    let kind = envelope_kind_hint(encoded)
+        .expect("envelope kind")
+        .to_string();
+    let view = health_envelope_view(encoded).expect("envelope view");
+    (kind, view.payload, encoded.len().saturating_sub(64))
+}
+
+#[test]
+fn an_exhausted_signal_is_resent_on_the_next_session_and_stays_one_at_the_conductor() {
+    let performer = Node::start();
+    let conductor = Node::start();
+    let capabilities = ["inventory-health", "notifications"];
+    trust_real_peer(&conductor, &performer, "performer", &capabilities);
+    trust_real_peer(&performer, &conductor, "conductor", &capabilities);
+
+    let performer_registry = performer.registry();
+    let conductor_registry = conductor.registry();
+    let conductor_plane = open_plane(&conductor, &conductor_registry);
+    let performer_identity =
+        NodeIdentity::load_existing(&performer.context).expect("performer identity");
+    let conductor_identity =
+        NodeIdentity::load_existing(&conductor.context).expect("conductor identity");
+    let conductor_key = conductor.identity_key();
+    let session_id = [0x33_u8; 32];
+    let facts = Arc::new(SignalFacts::default());
+
+    // Acknowledge one Profile or Pulse the way the real Conductor would, with a
+    // real signed `health_ack` over the production envelope construction.
+    let ack = |session: &mut HealthSession<'_>, acked: &str, nonce: u8| {
+        let payload = ack_body(
+            &performer.local_node_id,
+            &hex16(u64::from(nonce) + 8_000),
+            acked,
+            0,
+        );
+        let envelope = sign_health_envelope(
+            &conductor_identity,
+            "health_ack",
+            &session_id,
+            [nonce; 16],
+            payload,
+            u64::try_from(performer.now()).expect("clock"),
+        )
+        .expect("sign ack");
+        assert_eq!(
+            session.handle_envelope(&envelope.encoded()),
+            HealthOutcome::Handled
+        );
+    };
+
+    let open_session = || {
+        let reporter = Arc::new(HealthReporter::new(Box::new(SharedFacts(Arc::clone(
+            &facts,
+        )))));
+        HealthSession::with_clock(
+            &performer_identity,
+            &performer_registry,
+            &conductor.local_node_id,
+            &conductor_key,
+            session_id,
+            Some(reporter),
+            Arc::new(SharedClock(Arc::clone(&performer.clock))) as Arc<dyn HealthClock>,
+        )
+    };
+
+    let signal_id;
+    let mut message_ids: Vec<String> = Vec::new();
+    let mut nonce_seed = 0x40_u8;
+    {
+        let mut session = open_session();
+        // Profile, then Pulse, each acknowledged, so the Signal feed is next.
+        for _ in 0..2 {
+            let encoded = session.tick().expect("profile or pulse");
+            let (_, payload, _) = decode_envelope(&encoded);
+            nonce_seed += 1;
+            ack(
+                &mut session,
+                payload["message_id"].as_str().expect("message id"),
+                nonce_seed,
+            );
+        }
+
+        facts.finish_run(&hex16(4_711), "deploy", performer.now());
+        performer.advance(1);
+        let encoded = session.tick().expect("first Signal attempt");
+        let (kind, payload, canonical_len) = decode_envelope(&encoded);
+        assert_eq!(kind, "health_signal");
+        signal_id = payload["signal"]["signal_id"]
+            .as_str()
+            .expect("signal id")
+            .to_string();
+        message_ids.push(payload["message_id"].as_str().unwrap().to_string());
+
+        // The Conductor accepts the first attempt but its acknowledgement is
+        // lost, which is exactly the case that used to strand the Signal.
+        conductor.set_now(performer.now());
+        let outcome = conductor_plane
+            .ingest(InboundHealthMessage {
+                sender: &performer.local_node_id,
+                kind: "health_signal",
+                created_at: performer.now(),
+                canonical_len,
+                payload: &payload,
+            })
+            .expect("ingest first attempt");
+        assert_eq!(outcome.decision, HealthDecision::Accepted { cursor: 1 });
+
+        // Spend the frozen three attempts for this session with no reply.
+        for backoff in [1, 2] {
+            performer.advance(5 + backoff);
+            let encoded = session.tick().expect("retry inside the session");
+            let (_, payload, _) = decode_envelope(&encoded);
+            message_ids.push(payload["message_id"].as_str().unwrap().to_string());
+        }
+        performer.advance(5 + 4);
+        assert!(
+            session.tick().is_none(),
+            "the frozen bound is three attempts per session"
+        );
+        let outbox = performer_registry.health_outbox(64).expect("outbox");
+        assert_eq!(outbox.len(), 1, "the Signal is retained, never dropped");
+        assert_eq!(outbox[0].attempts, 3);
+    }
+    assert_eq!(message_ids.len(), 3);
+
+    // The next session re-arms the delivery budget and resends the very same
+    // logical Signal. Without this the Signal would sit until its 7-day expiry.
+    let mut session = open_session();
+    for _ in 0..2 {
+        let encoded = session.tick().expect("profile or pulse");
+        let (_, payload, _) = decode_envelope(&encoded);
+        nonce_seed += 1;
+        ack(
+            &mut session,
+            payload["message_id"].as_str().expect("message id"),
+            nonce_seed,
+        );
+    }
+    performer.advance(1);
+    let encoded = session
+        .tick()
+        .expect("the exhausted Signal must be resent on the next session");
+    let (kind, payload, canonical_len) = decode_envelope(&encoded);
+    assert_eq!(kind, "health_signal");
+    assert_eq!(payload["signal"]["signal_id"], signal_id);
+    assert_eq!(payload["signal"]["sequence"], 1);
+    let resent_message_id = payload["message_id"].as_str().unwrap().to_string();
+    assert!(
+        !message_ids.contains(&resent_message_id),
+        "a resend must use a fresh message_id"
+    );
+
+    // And it still converges to exactly one stored Signal at the Conductor.
+    conductor.set_now(performer.now());
+    let outcome = conductor_plane
+        .ingest(InboundHealthMessage {
+            sender: &performer.local_node_id,
+            kind: "health_signal",
+            created_at: performer.now(),
+            canonical_len,
+            payload: &payload,
+        })
+        .expect("ingest the resend");
+    assert_eq!(
+        outcome.decision,
+        HealthDecision::Rejected(HealthCode::Replay),
+        "the frozen idempotency key refuses the resend"
+    );
+    let stored = conductor_plane
+        .signals(&performer.local_node_id, 64)
+        .expect("stored signals");
+    assert_eq!(
+        stored.len(),
+        1,
+        "exactly one stored Signal after the resend"
+    );
+    assert_eq!(stored[0].signal_id, signal_id);
+    let status = conductor_plane
+        .node_status(&performer.local_node_id)
+        .expect("status")
+        .expect("performer row");
+    assert_eq!(status.signal_cursor, 1);
+    assert_eq!(status.stored_signals, 1);
+    assert_eq!(status.held_signals, 0);
+
+    // Re-armed, not widened: this session also stops after three attempts.
+    let outbox = performer_registry.health_outbox(64).expect("outbox");
+    assert_eq!(outbox.len(), 1);
+    assert_eq!(outbox[0].attempts, 1);
+    assert_eq!(
+        outbox[0].expires_at - outbox[0].enqueued_at,
+        SIGNAL_RETENTION_SECONDS,
+        "re-arming never extends the frozen 7-day retention"
+    );
 }
 
 // ---------------------------------------------------------------------------

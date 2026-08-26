@@ -374,6 +374,17 @@ impl<'registry> HealthPlane<'registry> {
             .health_mark_signal_sent(signal_id, message_id, self.clock.unix_seconds())
     }
 
+    /// Re-arm the delivery budget of every Signal queued for one peer.
+    ///
+    /// The frozen retry bound is per message *per session*: a Signal that
+    /// spent its three attempts is retained in the bounded outbox and resent on
+    /// the next session. Callers invoke this once, when a session to that peer
+    /// is established; it re-arms nothing else and widens no bound.
+    pub fn reset_outbox_attempts(&self, target_node_id: &str) -> Result<u64, RegistryError> {
+        self.registry
+            .health_reset_outbox_attempts(target_node_id, self.clock.unix_seconds())
+    }
+
     /// How many Signals outbox overflow has dropped on this node.
     pub fn signals_dropped(&self) -> Result<i64, RegistryError> {
         self.registry.health_signals_dropped()

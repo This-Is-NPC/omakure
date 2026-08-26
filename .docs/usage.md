@@ -154,9 +154,12 @@ the finish time, the terminal state, and the exit code. Script paths,
 arguments, environment values, stdout, stderr, and secret references are
 forbidden by the closed schema and are rejected rather than redacted.
 
-Delivery is bounded and idempotent. Each Signal has a stable id, so a
-duplicate, a reconnect, a restart, or a lost acknowledgement still produces
-exactly one visible Signal. The feed is newest first, capped at 64 entries,
+Delivery is bounded, durable, and idempotent. Each Signal has a stable id, so
+a duplicate, a reconnect, a restart, or a lost acknowledgement still produces
+exactly one visible Signal. An undelivered Signal is retried at most three
+times per session and is then kept in the queue and resent on the next
+session, so a Conductor restart or a brief partition delays a Signal rather
+than losing it. The feed is newest first, capped at 64 entries,
 kept for seven days, and stalls rather than admitting a hole if a Signal goes
 missing - `gap` and the per-node `cursor` in the response say so explicitly.
 There are no subscriptions, webhooks, alerts, or user-defined Signal kinds.

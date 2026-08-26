@@ -121,6 +121,14 @@ pub struct HealthSession<'a> {
     /// per-peer-per-minute Signal bound so this node can never manufacture a
     /// `health_rate_limited` rejection against itself.
     signals_in_window: i64,
+    /// Whether this session has already re-armed the outbox delivery budget.
+    ///
+    /// The frozen retry bound is three attempts per message *per session*, and
+    /// a Signal that spent them is resent on the next session. Re-arming
+    /// exactly once, before this session has sent anything, is what makes both
+    /// halves of that rule true: the budget is fresh for a new session and can
+    /// never be refreshed mid-session into an unbounded retry loop.
+    outbox_rearmed: bool,
 }
 
 /// What the caller must do with the result of one inbound envelope.
@@ -181,6 +189,7 @@ impl<'a> HealthSession<'a> {
             suppressed_until: None,
             signal_window_start: None,
             signals_in_window: 0,
+            outbox_rearmed: false,
         }
     }
 
@@ -284,6 +293,15 @@ impl<'a> HealthSession<'a> {
         if self.suppressed_until.is_some_and(|until| now < until) {
             return None;
         }
+        // A newly established session to this Conductor re-arms the delivery
+        // budget of everything still queued for it, which is the frozen
+        // "resent on the next session" rule. It happens once, before this
+        // session has sent anything, so the frozen three-attempt bound still
+        // holds for every message inside the session.
+        if !self.outbox_rearmed {
+            self.outbox_rearmed = true;
+            let _ = self.plane().reset_outbox_attempts(&self.remote_node_id);
+        }
         // Terminal runs become durable outbox entries before anything is sent,
         // so a `run-completed` Signal survives this session, this connection,
         // and this process. Nothing here starts, schedules, or cancels work:
@@ -384,8 +402,10 @@ impl<'a> HealthSession<'a> {
     /// fresh `message_id` and a fresh nonce keep it outside the replay window.
     fn send_signal(&mut self, entry: &HealthOutboxEntry, now: i64) -> Option<Vec<u8>> {
         // The durable attempt counter is the authority. The frozen bound is
-        // three attempts per message; the outbox column enforces the same
-        // ceiling, so exceeding it is refused here rather than at the database.
+        // three attempts per message per session; the outbox column enforces
+        // the same ceiling, so exceeding it is refused here rather than at the
+        // database. The counter is re-armed once when the next session is
+        // established, never mid-session.
         if entry.attempts >= MAX_RETRIES {
             return None;
         }
@@ -460,7 +480,7 @@ impl<'a> HealthSession<'a> {
             // would turn one unreachable Conductor into an unbounded Profile
             // loop that the frozen 12-per-hour bound forbids. A Signal is
             // instead retained in the durable outbox within its 64-entry and
-            // 7-day bounds; see `retry_signal`.
+            // 7-day bounds and resent on the next session; see `retry_signal`.
             self.pending = None;
             return Some(None);
         }
@@ -513,8 +533,9 @@ impl<'a> HealthSession<'a> {
     /// The outbox is the single source of truth. When the entry is gone the
     /// Conductor already acknowledged it and the Wave 2 apply step removed it,
     /// so there is nothing to retry. When it is still there but has spent its
-    /// frozen three attempts, it is left in the outbox within its 64-entry and
-    /// 7-day bounds rather than resent forever.
+    /// frozen three attempts for *this* session, it stays in the outbox within
+    /// its 64-entry and 7-day bounds and is resent on the next session, which
+    /// re-arms it once on connect.
     fn retry_signal(&mut self, now: i64) -> Option<Vec<u8>> {
         let signal_id = self.pending.as_ref().and_then(|pending| {
             pending
@@ -1307,6 +1328,91 @@ mod tests {
         assert_eq!(
             outbox[0].expires_at - outbox[0].enqueued_at,
             crate::health_plane::bounds::SIGNAL_RETENTION_SECONDS
+        );
+    }
+
+    #[test]
+    fn an_exhausted_signal_is_resent_on_the_next_session() {
+        let fixture = fixture();
+        grant_notifications(&fixture);
+        let signal_id;
+        let mut message_ids: Vec<String> = Vec::new();
+        {
+            let mut session = fixture.conductor_session();
+            settle(&fixture, &mut session);
+            fixture
+                .facts
+                .finish_run(&"f".repeat(32), "deploy", BASE_NOW + 1);
+            fixture.clock.advance(1);
+            let (_, first) = decode(&fixture, &session.tick().expect("first attempt"));
+            signal_id = first["signal"]["signal_id"].as_str().unwrap().to_string();
+            message_ids.push(first["message_id"].as_str().unwrap().to_string());
+
+            // Spend the frozen three attempts for this session.
+            for backoff in [RETRY_BACKOFF_SECONDS[0], RETRY_BACKOFF_SECONDS[1]] {
+                fixture.clock.advance(ACK_TIMEOUT_SECONDS + backoff);
+                let (_, retry) = decode(&fixture, &session.tick().expect("retry"));
+                message_ids.push(retry["message_id"].as_str().unwrap().to_string());
+            }
+            fixture
+                .clock
+                .advance(ACK_TIMEOUT_SECONDS + RETRY_BACKOFF_SECONDS[2]);
+            assert!(
+                session.tick().is_none(),
+                "the frozen bound is three attempts per session"
+            );
+            let outbox = session.plane().outbox(64).expect("outbox");
+            assert_eq!(outbox.len(), 1, "the Signal is retained, never dropped");
+            assert_eq!(outbox[0].attempts, MAX_RETRIES);
+        }
+        assert_eq!(message_ids.len(), MAX_RETRIES as usize);
+
+        // A new session re-arms the delivery budget exactly once, which is the
+        // frozen "resent on the next session" rule.
+        let mut next = fixture.conductor_session();
+        settle(&fixture, &mut next);
+        fixture.clock.advance(1);
+        let (kind, resent) = decode(&fixture, &next.tick().expect("resend on the next session"));
+        assert_eq!(kind, "health_signal");
+        assert_eq!(
+            resent["signal"]["signal_id"], signal_id,
+            "a resend reuses the frozen idempotency key"
+        );
+        assert_eq!(resent["signal"]["sequence"], 1, "and the same sequence");
+        let resent_message_id = resent["message_id"].as_str().unwrap().to_string();
+        assert!(
+            !message_ids.contains(&resent_message_id),
+            "a resend must use a fresh message_id"
+        );
+
+        // Re-armed, not widened: the new session gets three attempts, not four,
+        // and the outbox still holds exactly one bounded entry.
+        let outbox = next.plane().outbox(64).expect("outbox");
+        assert_eq!(outbox.len(), 1);
+        assert_eq!(outbox[0].attempts, 1, "one attempt spent in this session");
+        assert_eq!(
+            outbox[0].expires_at - outbox[0].enqueued_at,
+            crate::health_plane::bounds::SIGNAL_RETENTION_SECONDS,
+            "re-arming never extends the frozen 7-day retention"
+        );
+
+        // The budget is re-armed on connect, never mid-session: this session
+        // still stops after its own three attempts.
+        let mut sent = 1;
+        for backoff in [RETRY_BACKOFF_SECONDS[0], RETRY_BACKOFF_SECONDS[1]] {
+            fixture.clock.advance(ACK_TIMEOUT_SECONDS + backoff);
+            if next.tick().is_some() {
+                sent += 1;
+            }
+        }
+        fixture
+            .clock
+            .advance(ACK_TIMEOUT_SECONDS + RETRY_BACKOFF_SECONDS[2]);
+        assert!(next.tick().is_none());
+        assert_eq!(sent, MAX_RETRIES, "still three attempts inside one session");
+        assert_eq!(
+            next.plane().outbox(64).expect("outbox")[0].attempts,
+            MAX_RETRIES
         );
     }
 

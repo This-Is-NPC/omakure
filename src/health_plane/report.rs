@@ -1010,6 +1010,46 @@ mod tests {
         assert_eq!(runtimes[1]["name"], "sh");
     }
 
+    /// Regression pin for why the operations layer must always supply a
+    /// script name.
+    ///
+    /// The frozen `run.script` field is 1..=64 bytes, so an empty name makes
+    /// the whole `last_run` unrepresentable and it is dropped rather than
+    /// guessed at. The shipped run log only records `script_name` for
+    /// scheduler-enqueued runs, which is why the operations layer derives the
+    /// name from the script's own file stem for every other run.
+    #[test]
+    fn a_run_without_a_script_name_is_unrepresentable_and_is_dropped() {
+        let mut pulse = sample_pulse();
+        let named = run_fact(&"a".repeat(32), "deploy", 1_699_999_990);
+        pulse.last_run = Some(RunFact {
+            script: String::new(),
+            ..named.clone()
+        });
+        let reporter = reporter(sample_profile(), pulse);
+        let message = reporter
+            .pulse(TARGET, MESSAGE_ID, 1_700_000_000)
+            .expect("pulse builds");
+        assert_eq!(
+            message.payload["pulse"]["last_run"],
+            Value::Null,
+            "a run with no schema name cannot be expressed inside the closed schema"
+        );
+
+        let mut unnamed = RunFact {
+            script: String::new(),
+            ..named.clone()
+        };
+        assert!(
+            !sanitize_signal_run(&mut unnamed),
+            "and it produces no Signal either"
+        );
+
+        let mut still_named = named;
+        assert!(sanitize_signal_run(&mut still_named));
+        assert_eq!(still_named.script, "deploy");
+    }
+
     #[test]
     fn a_signal_payload_validates_against_the_frozen_closed_schema() {
         let signal = SignalRecord {

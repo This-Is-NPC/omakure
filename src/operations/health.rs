@@ -546,9 +546,11 @@ fn terminal_runs(connection: &rusqlite::Connection, limit: usize) -> Vec<RunFact
 /// The frozen `run.script` value for one run row.
 ///
 /// The contract permits the script *schema name* and nothing else. The shipped
-/// run log records `script_name` only when a caller supplied one, so the file
-/// stem - the very token `omakure init` derives a script's canonical id from -
-/// is the fallback. A stem is the script's name, not its location: the
+/// run log records `script_name` only for scheduler-enqueued runs
+/// (`src/cli/serve.rs`); a manual `omakure run`, a queue enqueue, and
+/// `POST /v1/runs` all record `None`, which would leave the frozen field empty
+/// and make the whole run unrepresentable. The file stem - the very token
+/// `omakure init` derives a script's canonical id from - is the fallback. A stem is the script's name, not its location: the
 /// directory and the extension are dropped here, and the frozen grammar admits
 /// no `/`, `\`, `:`, or `@`, so no path fragment can survive into a message.
 fn run_script_name(script_name: Option<String>, script_path: &str) -> String {

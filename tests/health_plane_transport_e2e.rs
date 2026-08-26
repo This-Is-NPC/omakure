@@ -522,6 +522,45 @@ fn trust_snapshot(workspace: &Path) -> String {
         .join("\n")
 }
 
+/// Ask a running node service to stop and assert it exits cleanly and promptly.
+///
+/// On Unix this is a real SIGTERM against the live process, which is the only
+/// way to prove the Health Plane tick loop honors cancellation rather than
+/// holding the shutdown open until its next cadence. Elsewhere the portable
+/// terminate path is used, which still proves the process is reaped.
+fn stop_cleanly(server: &mut Option<support::HttpServer>) {
+    let Some(mut running) = server.take() else {
+        return;
+    };
+    #[cfg(unix)]
+    {
+        let pid = running.child_id();
+        // SAFETY: libc::kill is the standard way to signal a child process.
+        let rc = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+        assert_eq!(rc, 0, "kill(SIGTERM) failed");
+        let started = Instant::now();
+        // The deadline is deliberately longer than the assertion below: if the
+        // service ever held shutdown open, `wait_exit` would fall back to a
+        // hard kill at 10 s and the elapsed assertion would catch it rather
+        // than the run silently passing on a killed process.
+        let status = running.wait_exit(Duration::from_secs(10));
+        assert!(
+            status.success() || status.code() == Some(0) || status.code().is_none(),
+            "a reporting node must stop cleanly, got {status:?}"
+        );
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(8),
+            "a reporting node held shutdown open for {elapsed:?}; the Health Plane \
+             tick must not park cancellation behind its cadence"
+        );
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = running.terminate();
+    }
+}
+
 /// A settable clock, so the frozen presence windows are exercised exactly.
 #[derive(Debug)]
 struct FixedClock(AtomicI64);
@@ -655,7 +694,7 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
         assert!(row["last_pulse_at"].is_null());
     }
 
-    let performer_server = serve(performer.path());
+    let mut performer_server = Some(serve(performer.path()));
 
     // 1. SMART: the Performer reaches `online` inside the Wave 1 window.
     let started = Instant::now();
@@ -726,10 +765,14 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
         );
     }
 
-    // 4. Isolation. The Performer stops; the accepted state stays, and the
-    //    presence windows are exercised at their exact frozen boundaries by
+    // 4. Cancellation, then isolation. The Performer is asked to stop while a
+    //    Health Plane session is live and reporting, and must exit cleanly
+    //    inside a bounded window: the steady-state loop now waits on a one
+    //    second readability tick, so a stop request cannot be parked behind a
+    //    long blocking read. The accepted state stays, and the presence
+    //    windows are then exercised at their exact frozen boundaries by
     //    replaying the real state through the production projection.
-    let _ = performer_server.terminate();
+    stop_cleanly(&mut performer_server);
     let pulse_at = last_pulse_at(conductor.path(), &performer_id);
     for (offset, expected) in [
         (0, Presence::Online),
@@ -755,7 +798,7 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
         ["profile_revision"]
         .as_u64()
         .expect("profile revision");
-    let performer_server = serve(performer.path());
+    let mut performer_server = Some(serve(performer.path()));
     let recovered = wait_for_pulse_after(&conductor_server, &performer_id, previous_sequence);
     let row = node_row(&recovered, &performer_id).expect("performer row");
     assert_eq!(
@@ -796,7 +839,7 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
         "revoking one peer must not disturb another"
     );
 
-    let _ = performer_server.terminate();
+    stop_cleanly(&mut performer_server);
     let _ = conductor_server.terminate();
 }
 

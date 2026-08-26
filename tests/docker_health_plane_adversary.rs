@@ -502,12 +502,17 @@ fn signal_payload(
 const CONTRACTED_CASES: usize = 20;
 
 /// Records which contracted steps actually executed.
-#[derive(Default)]
-struct CaseLog(Vec<usize>);
+struct CaseLog(Vec<usize>, std::time::Instant);
+
+impl Default for CaseLog {
+    fn default() -> Self {
+        Self(Vec::new(), std::time::Instant::now())
+    }
+}
 
 impl CaseLog {
     fn mark(&mut self, number: usize, label: &str) {
-        eprintln!("adversary case {number}: {label}");
+        eprintln!("adversary case {number} [{:?}]: {label}", self.1.elapsed());
         self.0.push(number);
     }
 

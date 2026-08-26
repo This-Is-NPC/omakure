@@ -84,8 +84,11 @@ fail() {
     exit 1
 }
 
+# Elapsed time is appended, not prefixed, so anything matching on the message
+# still matches. This gate spends most of its wall clock waiting on frozen
+# protocol timers rather than on work, and that is invisible without it.
 step() {
-    printf 'health-plane certification: %s\n' "$*"
+    printf 'health-plane certification: %s [%ds]\n' "$*" "$SECONDS"
 }
 
 # A zero exit is not proof that anything ran. libtest exits 0 when its filter

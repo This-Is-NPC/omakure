@@ -19,6 +19,9 @@ use std::time::{Duration, Instant};
 const TOKEN: &str = "remote-cue-e2e-token-with-enough-entropy-000001";
 /// A Cue that is going to be authorized should be decided in well under this.
 const CUE_EFFECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// The Signal rides the Performer's standing reporting session, which has its
+/// own tick, so this is deliberately looser than the effect timeout.
+const SIGNAL_TIMEOUT: Duration = Duration::from_secs(90);
 
 fn run_node(workspace: &Path, args: &[String]) -> Output {
     let output = Command::new(support::omakure_bin())
@@ -126,7 +129,13 @@ fn trust_peer(
 /// The declaration is the point of the test as much as the transport is: a node
 /// that has not written down what it will run must refuse, and one that has
 /// must accept exactly that.
-fn configure(workspace: &Path, direct_port: u16, allow_cues: bool, declared: &[&str]) {
+fn configure(
+    workspace: &Path,
+    direct_port: u16,
+    peer: Option<(&str, u16)>,
+    allow_cues: bool,
+    declared: &[&str],
+) {
     let path = workspace.join("node.toml");
     let config = std::fs::read_to_string(&path).expect("read node config");
     let declared_list = declared
@@ -146,12 +155,20 @@ fn configure(workspace: &Path, direct_port: u16, allow_cues: bool, declared: &[&
         .replace("enrollment = \"disabled\"", "enrollment = \"manual\"")
         .replace(
             "static_peers = []",
-            // Deliberately no static peer. A Cue is a one-shot dial with an
-            // explicit endpoint, and a standing Health Plane session to the
-            // same node would already hold the single connection each peer is
-            // allowed, so the dispatch would be refused for a reason that has
-            // nothing to do with Cues.
-            &format!("direct_bind = \"127.0.0.1:{direct_port}\"\nstatic_peers = []"),
+            // Static peers point one way only. A Cue is a one-shot dial with
+            // an explicit endpoint, and if the *Conductor* also held a standing
+            // session to the Performer it would already occupy the single
+            // connection that peer is allowed, so the dispatch would be refused
+            // for a reason that has nothing to do with Cues. The Performer's
+            // standing session is the one that matters: it is how the outcome
+            // Signal gets home.
+            &format!(
+                "direct_bind = \"127.0.0.1:{direct_port}\"\nstatic_peers = [{}]",
+                match peer {
+                    Some((node_id, port)) => format!("\"{node_id}@127.0.0.1:{port}\""),
+                    None => String::new(),
+                }
+            ),
         )
         .replace(
             "allow_remote_cues = false",
@@ -255,8 +272,13 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         "performer",
         &["inventory-health", "notifications", "remote-run"],
     );
-    configure(performer, performer_port, true, &["deploy.sh"]);
-    configure(conductor, conductor_port, false, &[]);
+    // No static peer on either side, and that is a limitation rather than a
+    // preference: a Performer that already holds a session with this Conductor
+    // refuses the one-shot dial with `1010`, because the responder must not
+    // accept from a peer it owns the dial to. See the note above
+    // `wait_for_signal`.
+    configure(performer, performer_port, None, true, &["deploy.sh"]);
+    configure(conductor, conductor_port, None, false, &[]);
 
     let _performer_service = serve(performer);
     let _conductor_service = serve(conductor);
@@ -308,6 +330,62 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         1,
         "an authorized Cue must run the script exactly once"
     );
+
+    // The correlation half: the Conductor derives the run id it will see from
+    // the cue id it minted, with no message carrying a correlation field. The
+    // *derivation* is asserted here; that the Signal arrives is not yet, and
+    // the reason is a real limitation rather than an oversight -- see below.
+    let expected = dispatched["expected_run_id"]
+        .as_str()
+        .expect("the dispatcher must return the run id it will look for")
+        .to_string();
+    assert_eq!(expected.len(), 32, "an opaque run id is 16 bytes of hex");
+    assert_eq!(
+        expected,
+        derived_run_id(dispatched["cue_id"].as_str().unwrap()),
+        "both sides must derive the same run id from the same cue id"
+    );
+}
+
+/// The Conductor-side derivation, computed independently of the dispatcher.
+///
+/// Recomputed here rather than read back, so the assertion compares two
+/// derivations instead of comparing a value to itself.
+fn derived_run_id(cue_id: &str) -> String {
+    omakure::health_plane::report::opaque_run_id(&omakure::remote_cue::derive_run_id(cue_id))
+}
+
+/// Poll the Conductor's own Signal feed for a `run-completed` carrying this id.
+///
+/// Read through the shipped CLI rather than the database, so what is asserted
+/// is what an operator would actually see.
+///
+/// **Not yet called, and the reason is load-bearing.** Delivering the outcome
+/// needs a standing session between the two nodes, and a Performer holding one
+/// with this Conductor refuses the one-shot Cue dial with `1010`: `register`
+/// rejects a Responder connection from a peer it owns the dial to, and rejects
+/// any second connection to a peer it already has. So the configuration that
+/// delivers the Signal is exactly the configuration in which a Cue cannot be
+/// sent. `omakure node direct-probe` shares the collision by construction --
+/// both enter through the same probe ritual. Raised for an owner decision.
+#[allow(dead_code)]
+fn wait_for_signal(conductor: &Path, expected_run_id: &str) -> bool {
+    let deadline = Instant::now() + SIGNAL_TIMEOUT;
+    while Instant::now() < deadline {
+        let feed = run_node(conductor, &["signals".to_string()]);
+        if feed.status.success() {
+            let envelope = support::json_envelope(&feed.stdout);
+            if let Some(signals) = envelope["data"]["signals"].as_array() {
+                if signals.iter().any(|entry| {
+                    entry["kind"] == "run-completed" && entry["run"]["run_id"] == expected_run_id
+                }) {
+                    return true;
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    false
 }
 
 /// The refusal half, on the same real topology.
@@ -349,8 +427,8 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
         &["inventory-health", "notifications", "remote-run"],
     );
     // Cues enabled, full trust, full capabilities — and nothing declared.
-    configure(performer, performer_port, true, &[]);
-    configure(conductor, conductor_port, false, &[]);
+    configure(performer, performer_port, None, true, &[]);
+    configure(conductor, conductor_port, None, false, &[]);
 
     let _performer_service = serve(performer);
     let _conductor_service = serve(conductor);

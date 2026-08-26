@@ -1679,7 +1679,13 @@ pub fn dispatch_cue(
         "accepted",
         None,
     )?;
+    // The Conductor computes the opaque run id it will see on the
+    // `run-completed` Signal from the cue id it just minted. No message
+    // carries a correlation field; both sides derive it.
+    let expected_run_id =
+        crate::health_plane::report::opaque_run_id(&crate::remote_cue::derive_run_id(&cue_id));
     Ok(CueDispatchOutcome {
+        expected_run_id,
         cue_id,
         answered: acknowledgement.is_some(),
         accepted: acknowledgement.is_some_and(|code| code == 0),
@@ -1696,6 +1702,8 @@ pub fn dispatch_cue(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CueDispatchOutcome {
     pub cue_id: String,
+    /// The `run.run_id` the matching `run-completed` Signal will carry.
+    pub expected_run_id: String,
     pub answered: bool,
     pub accepted: bool,
     pub code: u16,

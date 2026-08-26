@@ -45,6 +45,7 @@ pub fn run(
             serde_json::json!({
                 "dispatched": true,
                 "cue_id": outcome.cue_id,
+                "expected_run_id": outcome.expected_run_id,
                 "answered": outcome.answered,
                 "accepted": outcome.accepted,
                 "code": outcome.code,

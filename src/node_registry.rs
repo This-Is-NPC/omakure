@@ -17,7 +17,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 6;
+pub mod health;
+
+pub const SCHEMA_VERSION: i64 = 7;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_ACTOR_BYTES: usize = 256;
 const MAX_REASON_BYTES: usize = 1024;
@@ -28,6 +30,14 @@ const NODE_ID_BYTES: usize = 69;
 const PUBLIC_KEY_BYTES: usize = 64;
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
+const HEALTH_PLANE_DISABLED: &str = "disabled";
+/// Test-only fault injection for the Health Plane migration, so the
+/// "migration failed, keep serving with the plane disabled" path can be proven
+/// without leaving unexpected schema objects behind.
+#[cfg(test)]
+static HEALTH_MIGRATION_FAULT: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+const HEALTH_PLANE_ENABLED: &str = "enabled";
 const MAX_ENROLLMENT_REPLAY_ROWS: i64 = 1_000_000;
 const MAX_ENROLLMENT_AUDIT_ROWS: i64 = 1_000_000;
 const MAX_ENROLLMENT_REQUEST_ROWS: i64 = 1_000_000;
@@ -2002,7 +2012,57 @@ fn initialize_database(
     if version == 5 {
         migrate_v5_to_v6(connection)?;
     }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 6 {
+        apply_health_plane_migration(connection)?;
+    }
     validate_schema(connection, registry)
+}
+
+/// Attempt the Health Plane migration to schema version 7.
+///
+/// The migration is forward-only and runs in one transaction. A failure rolls
+/// back completely, leaves the database at version 6, records a
+/// `health_corrupt_state` (1115) transport audit, and marks the Health Plane
+/// disabled so transport, enrollment, HTTP, and runs keep serving. Retry is
+/// never automatic; an operator clears the marker explicitly.
+fn apply_health_plane_migration(connection: &mut Connection) -> Result<(), RegistryError> {
+    let blocked: Option<String> = connection
+        .query_row(
+            "SELECT value FROM metadata WHERE key = 'health_plane'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if blocked.as_deref() == Some(HEALTH_PLANE_DISABLED) {
+        return Ok(());
+    }
+    match migrate_v6_to_v7(connection) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            transaction.execute(
+                "INSERT OR REPLACE INTO metadata (key, value) VALUES ('health_plane', ?1)",
+                [HEALTH_PLANE_DISABLED],
+            )?;
+            let audit_count: i64 =
+                transaction
+                    .query_row("SELECT COUNT(*) FROM transport_audit", [], |row| row.get(0))?;
+            if audit_count < MAX_TRANSPORT_AUDIT_ROWS {
+                transaction.execute(
+                    "INSERT INTO transport_audit
+                     (event_type, node_id, session_id, bundle_id, direction, byte_count,
+                      outcome, error_code, occurred_at)
+                     VALUES ('health_plane_migration', (SELECT value FROM metadata WHERE key = 'node_id'),
+                             NULL, NULL, NULL, 0, 'rejected', 1115, ?1)",
+                    params![Utc::now().timestamp()],
+                )?;
+            }
+            transaction.commit()?;
+            Ok(())
+        }
+    }
 }
 
 fn configure_connection(connection: &mut Connection) -> Result<(), RegistryError> {
@@ -2460,6 +2520,159 @@ fn migrate_v5_to_v6(connection: &mut Connection) -> Result<(), RegistryError> {
     Ok(())
 }
 
+/// Create the bounded Health Plane tables. The migration is additive: it never
+/// mutates, drops, or rewrites a row created by schema versions 1 through 6.
+fn migrate_v6_to_v7(connection: &mut Connection) -> Result<(), RegistryError> {
+    #[cfg(test)]
+    if HEALTH_MIGRATION_FAULT.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err(RegistryError::InvalidSchema(
+            "injected health plane migration failure".to_string(),
+        ));
+    }
+    let metadata_version: String = connection.query_row(
+        "SELECT value FROM metadata WHERE key = 'schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if metadata_version != "6" {
+        return Err(RegistryError::InvalidSchema(
+            "v6 database metadata marker is invalid".to_string(),
+        ));
+    }
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    transaction.execute_batch(HEALTH_PLANE_SCHEMA)?;
+    transaction.execute(
+        "UPDATE metadata SET value = '7' WHERE key = 'schema_version'",
+        [],
+    )?;
+    transaction.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('health_plane', ?1)",
+        [HEALTH_PLANE_ENABLED],
+    )?;
+    transaction.execute_batch("PRAGMA user_version = 7")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// The complete schema version 7 Health Plane object set.
+const HEALTH_PLANE_SCHEMA: &str = "
+    CREATE TABLE health_peers (
+      node_id TEXT PRIMARY KEY REFERENCES remote_identities(node_id),
+      role INTEGER NOT NULL CHECK (role IN (1, 2)),
+      cursor INTEGER NOT NULL DEFAULT 0 CHECK (cursor >= 0),
+      last_profile_revision INTEGER NOT NULL DEFAULT 0 CHECK (last_profile_revision >= 0),
+      last_pulse_sequence INTEGER NOT NULL DEFAULT 0 CHECK (last_pulse_sequence >= 0),
+      last_pulse_at INTEGER NULL,
+      version_incompatible_at INTEGER NULL,
+      minute_window_start INTEGER NOT NULL DEFAULT 0,
+      minute_messages INTEGER NOT NULL DEFAULT 0 CHECK (minute_messages >= 0),
+      minute_signals INTEGER NOT NULL DEFAULT 0 CHECK (minute_signals >= 0),
+      hour_window_start INTEGER NOT NULL DEFAULT 0,
+      hour_profiles INTEGER NOT NULL DEFAULT 0 CHECK (hour_profiles >= 0),
+      first_seen INTEGER NOT NULL CHECK (first_seen > 0),
+      updated_at INTEGER NOT NULL CHECK (updated_at >= first_seen)
+    );
+    CREATE TABLE health_profiles (
+      node_id TEXT PRIMARY KEY REFERENCES health_peers(node_id),
+      profile_revision INTEGER NOT NULL CHECK (profile_revision >= 1),
+      agent_version TEXT NOT NULL CHECK (length(agent_version) BETWEEN 1 AND 32),
+      arch TEXT NOT NULL CHECK (arch IN ('x86_64', 'aarch64', 'unknown')),
+      capabilities TEXT NOT NULL CHECK (length(capabilities) <= 2048),
+      display_name TEXT NOT NULL CHECK (length(display_name) <= 64),
+      distro_id TEXT NOT NULL CHECK (length(distro_id) <= 32),
+      distro_version TEXT NOT NULL CHECK (length(distro_version) <= 32),
+      omarchy_channel TEXT NOT NULL CHECK (omarchy_channel IN ('', 'stable', 'dev')),
+      omarchy_version TEXT NOT NULL CHECK (length(omarchy_version) <= 32),
+      platform TEXT NOT NULL CHECK (platform IN ('linux', 'macos', 'windows')),
+      role TEXT NOT NULL CHECK (role = 'performer'),
+      runtimes TEXT NOT NULL CHECK (length(runtimes) <= 512),
+      message_bytes INTEGER NOT NULL CHECK (message_bytes BETWEEN 1 AND 2112),
+      received_at INTEGER NOT NULL CHECK (received_at > 0)
+    );
+    CREATE TABLE health_pulses (
+      node_id TEXT PRIMARY KEY REFERENCES health_peers(node_id),
+      sequence INTEGER NOT NULL CHECK (sequence >= 1),
+      emitted_at INTEGER NOT NULL CHECK (emitted_at > 0),
+      profile_revision INTEGER NOT NULL CHECK (profile_revision >= 0),
+      runner_state TEXT NOT NULL
+        CHECK (runner_state IN ('idle', 'busy', 'paused', 'degraded', 'stopped')),
+      scheduler_state TEXT NOT NULL CHECK (scheduler_state IN ('running', 'disabled')),
+      queue_depth INTEGER NOT NULL CHECK (queue_depth BETWEEN 0 AND 65535),
+      workers_busy INTEGER NOT NULL CHECK (workers_busy BETWEEN 0 AND 255),
+      workers_configured INTEGER NOT NULL CHECK (workers_configured BETWEEN 0 AND 255),
+      uptime_seconds INTEGER NOT NULL CHECK (uptime_seconds BETWEEN 0 AND 4294967295),
+      last_run TEXT NULL CHECK (last_run IS NULL OR length(last_run) <= 512),
+      message_bytes INTEGER NOT NULL CHECK (message_bytes BETWEEN 1 AND 1344),
+      received_at INTEGER NOT NULL CHECK (received_at > 0)
+    );
+    CREATE TABLE health_signals (
+      node_id TEXT NOT NULL REFERENCES health_peers(node_id),
+      signal_id BLOB NOT NULL CHECK (length(signal_id) = 16),
+      sequence INTEGER NOT NULL CHECK (sequence >= 1),
+      state TEXT NOT NULL CHECK (state IN ('applied', 'held')),
+      kind TEXT NOT NULL CHECK (kind IN ('enrolled', 'revoked', 'run-completed')),
+      occurred_at INTEGER NOT NULL CHECK (occurred_at > 0),
+      subject TEXT NULL CHECK (subject IS NULL OR length(subject) = 69),
+      run TEXT NULL CHECK (run IS NULL OR length(run) <= 512),
+      message_bytes INTEGER NOT NULL CHECK (message_bytes BETWEEN 1 AND 1088),
+      received_at INTEGER NOT NULL CHECK (received_at > 0),
+      expires_at INTEGER NOT NULL CHECK (expires_at > received_at),
+      PRIMARY KEY (node_id, signal_id),
+      UNIQUE (node_id, sequence)
+    );
+    CREATE TABLE health_outbox (
+      signal_id BLOB PRIMARY KEY CHECK (length(signal_id) = 16),
+      target_node_id TEXT NOT NULL CHECK (length(target_node_id) = 69),
+      sequence INTEGER NOT NULL UNIQUE CHECK (sequence >= 1),
+      kind TEXT NOT NULL CHECK (kind IN ('enrolled', 'revoked', 'run-completed')),
+      occurred_at INTEGER NOT NULL CHECK (occurred_at > 0),
+      subject TEXT NULL CHECK (subject IS NULL OR length(subject) = 69),
+      run TEXT NULL CHECK (run IS NULL OR length(run) <= 512),
+      message_bytes INTEGER NOT NULL CHECK (message_bytes BETWEEN 1 AND 1088),
+      attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 3),
+      last_message_id BLOB NULL CHECK (last_message_id IS NULL OR length(last_message_id) = 16),
+      enqueued_at INTEGER NOT NULL CHECK (enqueued_at > 0),
+      updated_at INTEGER NOT NULL CHECK (updated_at >= enqueued_at),
+      expires_at INTEGER NOT NULL CHECK (expires_at > enqueued_at)
+    );
+    CREATE TABLE health_replay_keys (
+      message_id BLOB PRIMARY KEY CHECK (length(message_id) = 16),
+      node_id TEXT NOT NULL CHECK (length(node_id) = 69),
+      first_seen INTEGER NOT NULL CHECK (first_seen > 0),
+      expires_at INTEGER NOT NULL CHECK (expires_at > first_seen)
+    );
+    CREATE TABLE health_audit (
+      id INTEGER PRIMARY KEY,
+      event_code TEXT NOT NULL CHECK (length(event_code) BETWEEN 1 AND 64),
+      node_id TEXT NOT NULL CHECK (length(node_id) = 69),
+      message_kind TEXT NOT NULL CHECK (length(message_kind) BETWEEN 1 AND 64),
+      byte_count INTEGER NOT NULL CHECK (byte_count >= 0),
+      outcome TEXT NOT NULL CHECK (outcome IN ('accepted', 'held', 'rejected', 'dropped', 'purged')),
+      error_code INTEGER NULL CHECK (error_code IS NULL OR error_code BETWEEN 1000 AND 1999),
+      occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
+    );
+    CREATE TABLE health_local (
+      key TEXT PRIMARY KEY CHECK (key IN ('signal_sequence', 'signals_dropped')),
+      value INTEGER NOT NULL CHECK (value >= 0)
+    );
+    CREATE INDEX health_audit_expiry_idx ON health_audit(occurred_at);
+    CREATE INDEX health_outbox_order_idx ON health_outbox(sequence);
+    CREATE INDEX health_replay_keys_expiry_idx ON health_replay_keys(expires_at);
+    CREATE INDEX health_signals_expiry_idx ON health_signals(expires_at);
+    CREATE INDEX health_signals_order_idx ON health_signals(node_id, state, sequence);
+    CREATE TRIGGER health_audit_no_update
+    BEFORE UPDATE ON health_audit
+    BEGIN SELECT RAISE(ABORT, 'health audit rows are append-only'); END;
+    CREATE TRIGGER health_peers_require_active_trust
+    BEFORE INSERT ON health_peers
+    WHEN NOT EXISTS (
+      SELECT 1 FROM trusted_peers t JOIN remote_identities r ON r.node_id = t.node_id
+      WHERE t.node_id = NEW.node_id AND t.state = 'active' AND r.state = 'active'
+    )
+    BEGIN SELECT RAISE(ABORT, 'health state requires an active trusted peer'); END;
+    INSERT INTO health_local (key, value) VALUES ('signal_sequence', 0), ('signals_dropped', 0);
+";
+
 fn validate_v1_preflight(
     connection: &Connection,
     registry: &NodeRegistry,
@@ -2897,12 +3110,25 @@ fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(
 
 fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(), RegistryError> {
     let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version != SCHEMA_VERSION {
-        return Err(RegistryError::InvalidSchema(format!(
-            "database schema marker is {version}, expected {SCHEMA_VERSION}"
-        )));
-    }
-    validate_objects(connection)?;
+    let health_plane: Option<String> = connection
+        .query_row(
+            "SELECT value FROM metadata WHERE key = 'health_plane'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    // A node whose Health Plane migration failed stays at version 6 with the
+    // plane disabled and keeps serving transport, enrollment, HTTP, and runs.
+    let health_plane_present = match (version, health_plane.as_deref()) {
+        (SCHEMA_VERSION, Some(HEALTH_PLANE_ENABLED)) => true,
+        (6, Some(HEALTH_PLANE_DISABLED)) => false,
+        _ => {
+            return Err(RegistryError::InvalidSchema(format!(
+                "database schema marker is {version}, expected {SCHEMA_VERSION}"
+            )))
+        }
+    };
+    validate_objects(connection, health_plane_present)?;
     validate_columns(connection, "metadata", &["key", "value"])?;
     validate_columns(
         connection,
@@ -3090,17 +3316,31 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
             "cleanup_state",
         ],
     )?;
+    if health_plane_present {
+        validate_health_plane_columns(connection)?;
+    }
     let metadata: Vec<(String, String)> = connection
         .prepare("SELECT key, value FROM metadata ORDER BY key")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
         .collect::<Result<Vec<_>, _>>()?;
-    if metadata.len() != 3 {
+    if metadata.len() != 4 {
         return Err(RegistryError::InvalidSchema(
             "metadata contains unexpected keys".to_string(),
         ));
     }
     let expected = [
-        ("schema_version", "6"),
+        (
+            "schema_version",
+            if health_plane_present { "7" } else { "6" },
+        ),
+        (
+            "health_plane",
+            if health_plane_present {
+                HEALTH_PLANE_ENABLED
+            } else {
+                HEALTH_PLANE_DISABLED
+            },
+        ),
         ("node_id", registry.local_node_id.as_str()),
         ("public_key_encoding", "x-only-bip340-hex-lowercase"),
     ];
@@ -3114,7 +3354,10 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
     validate_all_rows(connection)
 }
 
-fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
+fn validate_objects(
+    connection: &Connection,
+    health_plane_present: bool,
+) -> Result<(), RegistryError> {
     let actual: Vec<(String, String)> = connection
         .prepare(
             "SELECT type, name FROM sqlite_master
@@ -3122,7 +3365,7 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
         )?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
         .collect::<Result<Vec<_>, _>>()?;
-    let expected = vec![
+    let mut expected = vec![
         ("index".to_string(), "audit_events_node_idx".to_string()),
         (
             "index".to_string(),
@@ -3259,6 +3502,14 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
             "trusted_peers_require_known_identity".to_string(),
         ),
     ];
+    if health_plane_present {
+        expected.extend(
+            HEALTH_PLANE_OBJECTS
+                .iter()
+                .map(|(object_type, name)| ((*object_type).to_string(), (*name).to_string())),
+        );
+        expected.sort();
+    }
     if actual != expected {
         return Err(RegistryError::InvalidSchema(
             "database contains unexpected or missing schema objects".to_string(),
@@ -3266,6 +3517,144 @@ fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
     }
     Ok(())
 }
+
+fn validate_health_plane_columns(connection: &Connection) -> Result<(), RegistryError> {
+    validate_columns(
+        connection,
+        "health_peers",
+        &[
+            "node_id",
+            "role",
+            "cursor",
+            "last_profile_revision",
+            "last_pulse_sequence",
+            "last_pulse_at",
+            "version_incompatible_at",
+            "minute_window_start",
+            "minute_messages",
+            "minute_signals",
+            "hour_window_start",
+            "hour_profiles",
+            "first_seen",
+            "updated_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "health_profiles",
+        &[
+            "node_id",
+            "profile_revision",
+            "agent_version",
+            "arch",
+            "capabilities",
+            "display_name",
+            "distro_id",
+            "distro_version",
+            "omarchy_channel",
+            "omarchy_version",
+            "platform",
+            "role",
+            "runtimes",
+            "message_bytes",
+            "received_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "health_pulses",
+        &[
+            "node_id",
+            "sequence",
+            "emitted_at",
+            "profile_revision",
+            "runner_state",
+            "scheduler_state",
+            "queue_depth",
+            "workers_busy",
+            "workers_configured",
+            "uptime_seconds",
+            "last_run",
+            "message_bytes",
+            "received_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "health_signals",
+        &[
+            "node_id",
+            "signal_id",
+            "sequence",
+            "state",
+            "kind",
+            "occurred_at",
+            "subject",
+            "run",
+            "message_bytes",
+            "received_at",
+            "expires_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "health_outbox",
+        &[
+            "signal_id",
+            "target_node_id",
+            "sequence",
+            "kind",
+            "occurred_at",
+            "subject",
+            "run",
+            "message_bytes",
+            "attempts",
+            "last_message_id",
+            "enqueued_at",
+            "updated_at",
+            "expires_at",
+        ],
+    )?;
+    validate_columns(
+        connection,
+        "health_replay_keys",
+        &["message_id", "node_id", "first_seen", "expires_at"],
+    )?;
+    validate_columns(
+        connection,
+        "health_audit",
+        &[
+            "id",
+            "event_code",
+            "node_id",
+            "message_kind",
+            "byte_count",
+            "outcome",
+            "error_code",
+            "occurred_at",
+        ],
+    )?;
+    validate_columns(connection, "health_local", &["key", "value"])
+}
+
+/// Every object the schema version 7 Health Plane migration creates.
+const HEALTH_PLANE_OBJECTS: [(&str, &str); 15] = [
+    ("index", "health_audit_expiry_idx"),
+    ("index", "health_outbox_order_idx"),
+    ("index", "health_replay_keys_expiry_idx"),
+    ("index", "health_signals_expiry_idx"),
+    ("index", "health_signals_order_idx"),
+    ("table", "health_audit"),
+    ("table", "health_local"),
+    ("table", "health_outbox"),
+    ("table", "health_peers"),
+    ("table", "health_profiles"),
+    ("table", "health_pulses"),
+    ("table", "health_replay_keys"),
+    ("table", "health_signals"),
+    ("trigger", "health_audit_no_update"),
+    ("trigger", "health_peers_require_active_trust"),
+];
 
 fn validate_columns(
     connection: &Connection,
@@ -4417,6 +4806,7 @@ mod tests {
         migrate_v3_to_v4(&mut connection).unwrap();
         migrate_v4_to_v5(&mut connection).unwrap();
         migrate_v5_to_v6(&mut connection).unwrap();
+        migrate_v6_to_v7(&mut connection).unwrap();
         validate_schema(&connection, &registry).unwrap();
         set_new_database_mode(&context.database_path()).unwrap();
         drop(connection);
@@ -4558,13 +4948,108 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_health_plane_migration_keeps_the_node_serving_with_the_plane_disabled() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        fs::remove_file(context.database_path()).unwrap();
+        let mut connection = Connection::open(context.database_path()).unwrap();
+        configure_connection(&mut connection).unwrap();
+        let transaction = connection.transaction().unwrap();
+        create_schema(&transaction, &registry).unwrap();
+        transaction
+            .execute_batch("PRAGMA user_version = 1")
+            .unwrap();
+        transaction.commit().unwrap();
+        migrate_v1_to_v2(&mut connection, &registry).unwrap();
+        migrate_v2_to_v3(&mut connection).unwrap();
+        migrate_v3_to_v4(&mut connection).unwrap();
+        migrate_v4_to_v5(&mut connection).unwrap();
+        migrate_v5_to_v6(&mut connection).unwrap();
+        set_new_database_mode(&context.database_path()).unwrap();
+        drop(connection);
+
+        HEALTH_MIGRATION_FAULT.store(true, std::sync::atomic::Ordering::SeqCst);
+        let identity = NodeIdentity::load_existing(&context).unwrap();
+        let degraded = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        assert!(!degraded.health_plane_enabled().unwrap());
+
+        let connection = Connection::open(context.database_path()).unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 6, "the database stays at version 6");
+        let audits: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM transport_audit
+                 WHERE event_type = 'health_plane_migration' AND error_code = 1115",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(audits, 1, "the failure is audited once");
+        let health_tables: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'health!_%' ESCAPE '!'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(health_tables, 0, "the failed migration left nothing behind");
+        drop(connection);
+
+        // Trust operations keep working while the Health Plane is disabled.
+        let remote = k256::schnorr::SigningKey::from_slice(&[5; 32]).unwrap();
+        let xonly = remote.verifying_key().to_bytes();
+        let public_key: String = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+        degraded
+            .import_manual_peer(PeerRegistration {
+                node_id: node_id_for_x_only_public_key(&xonly),
+                public_key,
+                role: PeerRole::Performer,
+                capabilities: vec!["inventory-health".to_string()],
+                source: PeerSource::Manual,
+                actor: "operator".to_string(),
+                reason: "degraded mode still serves trust".to_string(),
+            })
+            .unwrap();
+
+        // A restart never retries the migration on its own.
+        let reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        assert!(!reopened.health_plane_enabled().unwrap());
+        let connection = Connection::open(context.database_path()).unwrap();
+        let audits: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM transport_audit
+                 WHERE event_type = 'health_plane_migration' AND error_code = 1115",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(audits, 1, "retry is never automatic");
+        drop(connection);
+
+        // An explicit operator retry moves the registry forward.
+        HEALTH_MIGRATION_FAULT.store(false, std::sync::atomic::Ordering::SeqCst);
+        assert!(reopened.clear_health_plane_migration_block().unwrap());
+        let repaired = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        assert!(repaired.health_plane_enabled().unwrap());
+        let connection = Connection::open(context.database_path()).unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
     fn future_schema_corruption_and_metadata_downgrade_fail_closed() {
         let temp = TempDir::new().unwrap();
         let ctx = context(&temp);
         let identity = NodeIdentity::load_or_initialize(&ctx).unwrap();
         let database = ctx.database_path();
         let connection = Connection::open(&database).unwrap();
-        connection.execute_batch("PRAGMA user_version = 7").unwrap();
+        connection.execute_batch("PRAGMA user_version = 8").unwrap();
         assert!(matches!(
             NodeRegistry::open(&ctx, identity.public_status()),
             Err(RegistryError::InvalidSchema(_))

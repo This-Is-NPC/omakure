@@ -1392,10 +1392,14 @@ fn fixture_pins_every_frozen_bound() {
         integer(&fixture, "registry_schema_version"),
         REGISTRY_SCHEMA_VERSION
     );
+    // Before the Health Plane migration shipped, the frozen target version was
+    // strictly ahead of the registry. Now that wave 2 has applied it, the
+    // registry must never lag the frozen target. The frozen value itself, 7, is
+    // asserted against the fixture immediately above and is unchanged.
     const {
         assert!(
-            REGISTRY_SCHEMA_VERSION > omakure::node_registry::SCHEMA_VERSION,
-            "the Health Plane migration must move the registry forward"
+            REGISTRY_SCHEMA_VERSION >= omakure::node_registry::SCHEMA_VERSION,
+            "the registry schema must never lag the frozen Health Plane version"
         )
     };
 

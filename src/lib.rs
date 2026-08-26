@@ -8,6 +8,7 @@ pub mod discovery;
 pub mod domain;
 pub mod enrollment;
 mod error;
+pub mod health_plane;
 pub mod node;
 pub mod node_identity;
 pub mod node_registry;

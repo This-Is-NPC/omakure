@@ -187,12 +187,19 @@ impl FromStr for RunStateSet {
 // RunTrigger
 // ---------------------------------------------------------------------------
 
-/// Provenance of a run row: did a human launch it, or did the scheduler?
+/// Provenance of a run row: did a human launch it, did the scheduler, or did an
+/// authorized Conductor?
+///
+/// `Cue` is not cosmetic. It is the discriminator that keeps a remotely
+/// initiated run out of the lease-steal path, and without it the Health Plane
+/// reports such a run as `manual` — a false audit record in exactly the feature
+/// whose purpose is distributed audit outcomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum RunTrigger {
     #[default]
     Manual,
     Scheduled,
+    Cue,
 }
 
 impl RunTrigger {
@@ -200,6 +207,7 @@ impl RunTrigger {
         match self {
             RunTrigger::Manual => "Manual",
             RunTrigger::Scheduled => "Scheduled",
+            RunTrigger::Cue => "Cue",
         }
     }
 }

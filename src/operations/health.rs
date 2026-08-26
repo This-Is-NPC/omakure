@@ -505,6 +505,7 @@ fn last_terminal_run(connection: &rusqlite::Connection) -> Option<RunFact> {
         trigger: Some(match row.trigger {
             runs::RunTrigger::Scheduled => "scheduled".to_string(),
             runs::RunTrigger::Manual => "manual".to_string(),
+            runs::RunTrigger::Cue => "cue".to_string(),
         }),
     })
 }

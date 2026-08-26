@@ -25,7 +25,7 @@ const RUN_STATES: [&str; 5] = [
     "timed_out",
     "dead_letter",
 ];
-const RUN_TRIGGERS: [&str; 3] = ["manual", "scheduled", "queue"];
+const RUN_TRIGGERS: [&str; 4] = ["manual", "scheduled", "queue", "cue"];
 const RUNTIME_NAMES: [&str; 4] = ["bash", "powershell", "python", "sh"];
 const RUNNER_STATES: [&str; 5] = ["idle", "busy", "paused", "degraded", "stopped"];
 const SCHEDULER_STATES: [&str; 2] = ["running", "disabled"];

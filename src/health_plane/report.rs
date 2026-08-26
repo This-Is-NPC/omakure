@@ -633,6 +633,7 @@ fn sanitize_pulse(facts: &mut PulseFacts) {
     run.trigger = Some(match trigger.as_str() {
         "scheduled" => "scheduled".to_string(),
         "queue" => "queue".to_string(),
+        "cue" => "cue".to_string(),
         _ => "manual".to_string(),
     });
 }

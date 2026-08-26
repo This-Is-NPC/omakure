@@ -228,7 +228,7 @@ Pulse row per Performer and replaces it in place.
 | `last_run.script` | string | 1..=64 bytes, `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; the schema `Name` only |
 | `last_run.started_at` | integer | Unix seconds, 1..=9007199254740991 |
 | `last_run.state` | string | Exactly one of `completed`, `failed`, `cancelled`, `timed_out`, `dead_letter` |
-| `last_run.trigger` | string | Exactly one of `manual`, `scheduled`, `queue` |
+| `last_run.trigger` | string | Exactly one of `manual`, `scheduled`, `queue`, `cue` |
 | `profile_revision` | integer | 0..=9007199254740991; the `profile_revision` this Pulse corresponds to, `0` before any Profile was sent |
 | `runner.queue_depth` | integer | 0..=65535 |
 | `runner.scheduler` | string | Exactly one of `running`, `disabled` |
@@ -782,7 +782,6 @@ The following are explicitly out of scope for the Health Plane and for plan
 `health-plane-foundation`. Implementing any of them requires a new owner-approved
 contract.
 
-- Remote Cues, remote execution, and any message that causes work to run.
 - Nostr transport, relays, gift wrapping, and any non-direct delivery backend.
 - Lua and any embedded script runtime.
 - Baselines and baseline push.

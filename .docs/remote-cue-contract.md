@@ -102,6 +102,15 @@ There is no argument list, no environment map, no working directory, no timeout
 override, and no payload of any kind. A Cue selects; it does not configure. Every
 one of those would be an input the receiver's owner did not write.
 
+**Deviation from the plan's council resolution, for owner review.** That
+resolution allowed *schema-declared fields* on the wire, on the grounds that a
+script with a required field is otherwise un-cueable. This contract carries none.
+A field is still an input chosen off-box, and the resolution's own safety
+argument — deny-all secrets, plus rejecting any script whose schema declares a
+secret — is what makes fields safe, not what makes them necessary. Scripts meant
+to be run remotely can declare no required field; the ones that cannot are, for
+now, not remotely runnable. Recorded rather than quietly implemented either way.
+
 ## `cue_ack` Payload
 
 | Field | Type | Bound |

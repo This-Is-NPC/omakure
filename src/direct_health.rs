@@ -28,14 +28,16 @@ use crate::health_plane::bounds::{
 };
 use crate::health_plane::model::{HealthCode, HealthKind};
 use crate::health_plane::report::{ack_payload, error_payload, HealthReporter};
-use crate::health_plane::{HealthPlane, HealthReply, InboundHealthMessage};
+use crate::health_plane::{
+    HealthClock, HealthPlane, HealthReply, InboundHealthMessage, SystemHealthClock,
+};
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::{NodeRegistry, PeerRole, PeerState};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde_json::Value;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// How often the loop re-reads authorization and re-checks the schedule.
 ///
@@ -59,8 +61,29 @@ enum LocalRole {
 struct Pending {
     kind: HealthKind,
     message_id: String,
-    sent_at: Instant,
+    /// The UTC Unix second the attempt left this node.
+    sent_at: i64,
     attempts: i64,
+}
+
+/// A clock shared between the emission schedule and the shared operations.
+///
+/// The schedule is expressed in UTC Unix seconds rather than in monotonic
+/// instants because the frozen contract already ties `pulse.sequence` and
+/// `emitted_at` to the wall clock. One injected clock therefore drives the
+/// cadence, the acknowledgement timeout, the retry backoff, the version
+/// backoff, and every timestamp on the wire, which is what makes the schedule
+/// deterministically testable.
+struct SharedClock(Arc<dyn HealthClock>);
+
+impl HealthClock for SharedClock {
+    fn unix_seconds(&self) -> i64 {
+        self.0.unix_seconds()
+    }
+
+    fn monotonic_millis(&self) -> u64 {
+        self.0.monotonic_millis()
+    }
 }
 
 /// The Health Plane state attached to one established direct session.
@@ -71,15 +94,16 @@ pub struct HealthSession<'a> {
     remote_identity_key: [u8; 32],
     session_id: [u8; 32],
     reporter: Option<Arc<HealthReporter>>,
+    clock: Arc<dyn HealthClock>,
     pending: Option<Pending>,
     /// When the next Profile should be built, if one is due.
     profile_due: bool,
-    /// The instant the next Pulse is due.
-    next_pulse: Instant,
-    /// The instant the last Pulse actually left this node.
-    last_pulse_sent: Option<Instant>,
+    /// The UTC Unix second at which the next Pulse is due.
+    next_pulse: Option<i64>,
+    /// The UTC Unix second the last Pulse actually left this node.
+    last_pulse_sent: Option<i64>,
     /// Set when the Conductor answered `health_unsupported_version` (1101).
-    suppressed_until: Option<Instant>,
+    suppressed_until: Option<i64>,
 }
 
 /// What the caller must do with the result of one inbound envelope.
@@ -103,6 +127,28 @@ impl<'a> HealthSession<'a> {
         session_id: [u8; 32],
         reporter: Option<Arc<HealthReporter>>,
     ) -> Self {
+        Self::with_clock(
+            identity,
+            registry,
+            remote_node_id,
+            remote_identity_key,
+            session_id,
+            reporter,
+            Arc::new(SystemHealthClock::new()),
+        )
+    }
+
+    /// Attach Health Plane carriage over an injected clock.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_clock(
+        identity: &'a NodeIdentity,
+        registry: &'a NodeRegistry,
+        remote_node_id: &str,
+        remote_identity_key: &[u8; 32],
+        session_id: [u8; 32],
+        reporter: Option<Arc<HealthReporter>>,
+        clock: Arc<dyn HealthClock>,
+    ) -> Self {
         Self {
             identity,
             registry,
@@ -110,12 +156,21 @@ impl<'a> HealthSession<'a> {
             remote_identity_key: *remote_identity_key,
             session_id,
             reporter,
+            clock,
             pending: None,
             profile_due: true,
-            next_pulse: Instant::now(),
+            next_pulse: None,
             last_pulse_sent: None,
             suppressed_until: None,
         }
+    }
+
+    /// The Wave 2 shared operations over this session's clock.
+    fn plane(&self) -> HealthPlane<'_> {
+        HealthPlane::with_clock(
+            self.registry,
+            Box::new(SharedClock(Arc::clone(&self.clock))),
+        )
     }
 
     /// Handle one decrypted application envelope.
@@ -132,7 +187,7 @@ impl<'a> HealthSession<'a> {
         }
         let kind_text = kind_text.to_string();
         let canonical_len = encoded.len().saturating_sub(64);
-        let plane = HealthPlane::new(self.registry);
+        let plane = self.plane();
         let now = plane.now();
 
         // Step 1: the frozen transport verification path. A failure here is
@@ -200,21 +255,17 @@ impl<'a> HealthSession<'a> {
     pub fn tick(&mut self) -> Option<Vec<u8>> {
         let reporter = self.reporter.clone()?;
         let authorization = self.authorization();
+        let now = self.clock.unix_seconds();
         if authorization.0 != LocalRole::Performer {
             // Not (or no longer) reporting to this peer. Any pending send is
             // abandoned rather than retried against an unauthorized peer.
             self.pending = None;
             return None;
         }
-        if self
-            .suppressed_until
-            .is_some_and(|until| Instant::now() < until)
-        {
+        if self.suppressed_until.is_some_and(|until| now < until) {
             return None;
         }
-        let plane = HealthPlane::new(self.registry);
-        let now = plane.now();
-        if let Some(retry) = self.retry_due() {
+        if let Some(retry) = self.retry_due(now) {
             return retry;
         }
         if self.pending.is_some() {
@@ -229,13 +280,12 @@ impl<'a> HealthSession<'a> {
             self.profile_due = false;
             return self.send(HealthKind::Profile, message.payload, now);
         }
-        if Instant::now() < self.next_pulse {
+        if self.next_pulse.is_some_and(|due| now < due) {
             return None;
         }
         let message = reporter.pulse(&self.remote_node_id, &fresh_id(), now)?;
-        self.next_pulse = Instant::now()
-            + Duration::from_secs(HealthReporter::pulse_interval_seconds().max(1) as u64);
-        self.last_pulse_sent = Some(Instant::now());
+        self.next_pulse = Some(now.saturating_add(HealthReporter::pulse_interval_seconds()));
+        self.last_pulse_sent = Some(now);
         self.send(HealthKind::Pulse, message.payload, now)
     }
 
@@ -251,43 +301,41 @@ impl<'a> HealthSession<'a> {
     /// rules reject a byte-identical resend. A Pulse retry is additionally held
     /// back to the frozen minimum accepted Pulse interval, so the retry
     /// schedule can never manufacture a `health_rate_limited` rejection.
-    fn retry_due(&mut self) -> Option<Option<Vec<u8>>> {
+    fn retry_due(&mut self, now: i64) -> Option<Option<Vec<u8>>> {
         let pending = self.pending.as_ref()?;
-        if pending.sent_at.elapsed() < Duration::from_secs(ACK_TIMEOUT_SECONDS.max(0) as u64) {
+        let waited = now.saturating_sub(pending.sent_at);
+        if waited < ACK_TIMEOUT_SECONDS {
             return Some(None);
         }
         let attempts = pending.attempts;
         let kind = pending.kind;
         if attempts >= MAX_RETRIES {
-            // Final retry exhausted. The next scheduled Profile or Pulse
-            // supersedes it; nothing is queued and nothing is appended.
+            // Final retry exhausted. The frozen rule is that the send is
+            // dropped and the next *scheduled* Profile or Pulse supersedes it.
+            // A Profile is scheduled by a material change or by a new session,
+            // never by its own failure, so re-arming it here would turn one
+            // unreachable Conductor into an unbounded Profile loop that the
+            // frozen 12-per-hour bound forbids.
             self.pending = None;
-            if kind == HealthKind::Profile {
-                self.profile_due = true;
-            }
             return Some(None);
         }
         let backoff = RETRY_BACKOFF_SECONDS
             .get(attempts as usize)
             .copied()
             .unwrap_or(*RETRY_BACKOFF_SECONDS.last().unwrap_or(&1));
-        let mut wait = Duration::from_secs(backoff.max(0) as u64);
+        let mut wait = backoff;
         if kind == HealthKind::Pulse {
-            let floor = Duration::from_secs(MIN_PULSE_INTERVAL_SECONDS.max(0) as u64);
             let since = self
                 .last_pulse_sent
-                .map(|sent| sent.elapsed())
-                .unwrap_or(floor);
-            wait = wait.max(floor.saturating_sub(since));
+                .map(|sent| now.saturating_sub(sent))
+                .unwrap_or(MIN_PULSE_INTERVAL_SECONDS);
+            wait = wait.max(MIN_PULSE_INTERVAL_SECONDS.saturating_sub(since));
         }
-        if pending.sent_at.elapsed() < Duration::from_secs(ACK_TIMEOUT_SECONDS.max(0) as u64) + wait
-        {
+        if waited < ACK_TIMEOUT_SECONDS.saturating_add(wait) {
             return Some(None);
         }
         let reporter = self.reporter.clone()?;
         let authorization = self.authorization();
-        let plane = HealthPlane::new(self.registry);
-        let now = plane.now();
         let payload = match kind {
             HealthKind::Profile => Some(
                 reporter
@@ -303,7 +351,7 @@ impl<'a> HealthSession<'a> {
             return Some(None);
         };
         if kind == HealthKind::Pulse {
-            self.last_pulse_sent = Some(Instant::now());
+            self.last_pulse_sent = Some(now);
         }
         let encoded = self.send(kind, payload, now);
         if let Some(pending) = self.pending.as_mut() {
@@ -322,7 +370,7 @@ impl<'a> HealthSession<'a> {
         self.pending = Some(Pending {
             kind,
             message_id,
-            sent_at: Instant::now(),
+            sent_at: now,
             attempts: 0,
         });
         Some(encoded)
@@ -387,8 +435,9 @@ impl<'a> HealthSession<'a> {
         let code = body.get("code").and_then(Value::as_u64);
         if code == Some(u64::from(HealthCode::UnsupportedVersion.code())) {
             self.suppressed_until = Some(
-                Instant::now()
-                    + Duration::from_secs(VERSION_INCOMPATIBLE_BACKOFF_SECONDS.max(0) as u64),
+                self.clock
+                    .unix_seconds()
+                    .saturating_add(VERSION_INCOMPATIBLE_BACKOFF_SECONDS),
             );
         }
     }
@@ -502,5 +551,438 @@ mod tests {
     fn the_tick_is_shorter_than_every_frozen_cadence() {
         assert!(TICK.as_secs() as i64 <= ACK_TIMEOUT_SECONDS);
         assert!(TICK.as_secs() as i64 <= MIN_PULSE_INTERVAL_SECONDS);
+    }
+
+    // -----------------------------------------------------------------------
+    // Emission schedule, over an injected clock so every frozen interval is
+    // exercised at its exact boundary with no real waiting.
+    // -----------------------------------------------------------------------
+
+    use crate::direct_transport::{envelope_kind_hint, health_envelope_view, verify_envelope};
+    use crate::health_plane::model::RunnerFact;
+    use crate::health_plane::report::{HealthFactsSource, ProfileFacts, PulseFacts};
+    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+    use crate::node_registry::{PeerRegistration, PeerSource};
+    use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+    use std::sync::Mutex as StdMutex;
+    use tempfile::TempDir;
+
+    const BASE_NOW: i64 = 1_700_000_000;
+    const SESSION_ID: [u8; 32] = [0x5a; 32];
+
+    #[derive(Debug, Default)]
+    struct TestClock {
+        seconds: AtomicI64,
+        millis: AtomicU64,
+    }
+
+    impl TestClock {
+        fn at(seconds: i64) -> Arc<Self> {
+            Arc::new(Self {
+                seconds: AtomicI64::new(seconds),
+                millis: AtomicU64::new(0),
+            })
+        }
+
+        fn set(&self, seconds: i64) {
+            self.seconds.store(seconds, Ordering::SeqCst);
+        }
+
+        fn advance(&self, seconds: i64) {
+            self.seconds.fetch_add(seconds, Ordering::SeqCst);
+        }
+    }
+
+    impl HealthClock for TestClock {
+        fn unix_seconds(&self) -> i64 {
+            self.seconds.load(Ordering::SeqCst)
+        }
+
+        fn monotonic_millis(&self) -> u64 {
+            self.millis.load(Ordering::SeqCst)
+        }
+    }
+
+    /// A fact source whose display name the test can change, which is the
+    /// smallest possible material Profile change.
+    struct MutableFacts {
+        display_name: StdMutex<String>,
+    }
+
+    impl MutableFacts {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                display_name: StdMutex::new("workshop".to_string()),
+            })
+        }
+    }
+
+    impl HealthFactsSource for Arc<MutableFacts> {
+        fn profile_facts(&self) -> ProfileFacts {
+            ProfileFacts {
+                agent_version: "0.3.0".to_string(),
+                arch: "x86_64".to_string(),
+                capabilities: Vec::new(),
+                display_name: self.display_name.lock().unwrap().clone(),
+                distro_id: "arch".to_string(),
+                distro_version: "rolling".to_string(),
+                omarchy_channel: "stable".to_string(),
+                omarchy_version: "2.1.0".to_string(),
+                platform: "linux".to_string(),
+                runtimes: Vec::new(),
+            }
+        }
+
+        fn pulse_facts(&self) -> PulseFacts {
+            PulseFacts {
+                runner: RunnerFact {
+                    queue_depth: 0,
+                    scheduler: "running".to_string(),
+                    state: "idle".to_string(),
+                    workers_busy: 0,
+                    workers_configured: 1,
+                },
+                last_run: None,
+                uptime_seconds: 60,
+            }
+        }
+    }
+
+    struct Fixture {
+        _temp: TempDir,
+        identity: NodeIdentity,
+        registry: NodeRegistry,
+        conductor: String,
+        conductor_key: [u8; 32],
+        performer: String,
+        clock: Arc<TestClock>,
+        facts: Arc<MutableFacts>,
+    }
+
+    fn scalar(seed: u32) -> [u8; 32] {
+        let mut value = [0_u8; 32];
+        value[28..].copy_from_slice(&seed.saturating_add(1).to_be_bytes());
+        value
+    }
+
+    fn peer_identity(seed: u32) -> (String, String, [u8; 32]) {
+        let key = k256::schnorr::SigningKey::from_slice(&scalar(seed)).unwrap();
+        let xonly: [u8; 32] = key
+            .verifying_key()
+            .to_bytes()
+            .as_slice()
+            .try_into()
+            .unwrap();
+        let public_key = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+        (
+            crate::node_identity::node_id_for_x_only_public_key(&xonly),
+            public_key,
+            xonly,
+        )
+    }
+
+    fn fixture() -> Fixture {
+        let temp = TempDir::new().unwrap();
+        let context = NodeContext::resolve_for(
+            NodePlatform::Linux,
+            NodePathOverrides::new(
+                Some(temp.path().join("state")),
+                Some(temp.path().join("node.toml")),
+            ),
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        let trust = |seed: u32, role: PeerRole, capabilities: &[&str]| {
+            let (node_id, public_key, xonly) = peer_identity(seed);
+            registry
+                .import_manual_peer(PeerRegistration {
+                    node_id: node_id.clone(),
+                    public_key,
+                    role,
+                    capabilities: capabilities.iter().map(|entry| entry.to_string()).collect(),
+                    source: PeerSource::Manual,
+                    actor: "direct-health-tests".to_string(),
+                    reason: "health plane carriage test peer".to_string(),
+                })
+                .unwrap();
+            (node_id, xonly)
+        };
+        let (conductor, conductor_key) = trust(11, PeerRole::Conductor, &["inventory-health"]);
+        let (performer, _) = trust(12, PeerRole::Performer, &["inventory-health"]);
+        Fixture {
+            _temp: temp,
+            identity,
+            registry,
+            conductor,
+            conductor_key,
+            performer,
+            clock: TestClock::at(BASE_NOW),
+            facts: MutableFacts::new(),
+        }
+    }
+
+    impl Fixture {
+        fn session(&self, peer: &str, peer_key: [u8; 32]) -> HealthSession<'_> {
+            let reporter = Arc::new(HealthReporter::new(Box::new(Arc::clone(&self.facts))));
+            HealthSession::with_clock(
+                &self.identity,
+                &self.registry,
+                peer,
+                &peer_key,
+                SESSION_ID,
+                Some(reporter),
+                Arc::clone(&self.clock) as Arc<dyn HealthClock>,
+            )
+        }
+
+        fn conductor_session(&self) -> HealthSession<'_> {
+            self.session(&self.conductor, self.conductor_key)
+        }
+    }
+
+    /// Decode one emitted envelope, verifying it with the frozen verifier so a
+    /// test can never assert on bytes the production receiver would reject.
+    fn decode(fixture: &Fixture, encoded: &[u8]) -> (String, Value) {
+        let kind = envelope_kind_hint(encoded).expect("kind hint").to_string();
+        let nonce = crate::direct_transport::envelope_nonce(encoded).expect("nonce");
+        let local = fixture.identity.public_status();
+        let key: [u8; 32] = (0..32)
+            .map(|index| {
+                u8::from_str_radix(&local.public_key_hex[index * 2..index * 2 + 2], 16).unwrap()
+            })
+            .collect::<Vec<u8>>()
+            .try_into()
+            .unwrap();
+        verify_envelope(encoded, &local.node_id, &key, &kind, &SESSION_ID, &nonce)
+            .expect("emitted envelope must satisfy the frozen verifier");
+        let view = health_envelope_view(encoded).expect("view");
+        (kind, view.payload)
+    }
+
+    #[test]
+    fn a_performer_sends_profile_first_then_pulse_at_the_frozen_cadence() {
+        let fixture = fixture();
+        let mut session = fixture.conductor_session();
+
+        let profile = session.tick().expect("profile on connect");
+        let (kind, payload) = decode(&fixture, &profile);
+        assert_eq!(kind, "health_profile");
+        assert_eq!(payload["profile"]["role"], "performer");
+        assert_eq!(payload["target"], fixture.conductor);
+        // Display-only echo of what this Conductor granted us locally.
+        assert_eq!(
+            payload["profile"]["capabilities"],
+            serde_json::json!(["inventory-health"])
+        );
+
+        // Nothing more leaves the node until the Profile is acknowledged.
+        assert!(session.tick().is_none());
+        ack(&mut session, &payload);
+
+        let pulse = session.tick().expect("pulse immediately after the profile");
+        let (kind, payload) = decode(&fixture, &pulse);
+        assert_eq!(kind, "health_pulse");
+        assert_eq!(payload["pulse"]["sequence"], BASE_NOW);
+        assert_eq!(payload["pulse"]["emitted_at"], BASE_NOW);
+        ack(&mut session, &payload);
+
+        // One second before the frozen interval: silence.
+        fixture
+            .clock
+            .set(BASE_NOW + HealthReporter::pulse_interval_seconds() - 1);
+        assert!(session.tick().is_none());
+
+        // Exactly at the frozen interval: the next Pulse.
+        fixture
+            .clock
+            .set(BASE_NOW + HealthReporter::pulse_interval_seconds());
+        let pulse = session.tick().expect("pulse at the frozen cadence");
+        let (_, payload) = decode(&fixture, &pulse);
+        assert_eq!(
+            payload["pulse"]["sequence"],
+            BASE_NOW + HealthReporter::pulse_interval_seconds()
+        );
+    }
+
+    /// Feed the session the acknowledgement its own Conductor would return, so
+    /// the pending send resolves without a socket.
+    fn ack(session: &mut HealthSession<'_>, payload: &Value) {
+        let acked = payload["message_id"].as_str().expect("message id");
+        session.absorb_reply(
+            &serde_json::json!({
+                "ack": {"accepted": true, "acked_message_id": acked, "cursor": 0}
+            }),
+            Some(HealthKind::Ack),
+            true,
+        );
+    }
+
+    #[test]
+    fn a_material_profile_change_re_emits_a_profile_with_a_higher_revision() {
+        let fixture = fixture();
+        let mut session = fixture.conductor_session();
+        let (_, first) = decode(&fixture, &session.tick().expect("first profile"));
+        ack(&mut session, &first);
+        let revision = first["profile"]["profile_revision"].as_u64().unwrap();
+
+        // No change: only Pulses flow, however many ticks pass.
+        for step in 0..3 {
+            fixture
+                .clock
+                .set(BASE_NOW + HealthReporter::pulse_interval_seconds() * step);
+            if let Some(encoded) = session.tick() {
+                let (kind, payload) = decode(&fixture, &encoded);
+                assert_eq!(kind, "health_pulse", "unexpected {kind} without a change");
+                ack(&mut session, &payload);
+            }
+        }
+
+        *fixture.facts.display_name.lock().unwrap() = "workbench".to_string();
+        fixture.clock.advance(1);
+        let (kind, second) = decode(&fixture, &session.tick().expect("profile after change"));
+        assert_eq!(kind, "health_profile");
+        assert_eq!(second["profile"]["display_name"], "workbench");
+        assert!(
+            second["profile"]["profile_revision"].as_u64().unwrap() > revision,
+            "a material change must strictly advance profile_revision"
+        );
+    }
+
+    #[test]
+    fn an_unacknowledged_profile_retries_finitely_then_is_superseded() {
+        let fixture = fixture();
+        let mut session = fixture.conductor_session();
+        assert!(session.tick().is_some(), "first profile attempt");
+
+        // Walk the frozen 5-second acknowledgement timeout plus the 1/2/4
+        // second backoff one second at a time, never acknowledging, and stop
+        // when the send is finally dropped.
+        let mut retries = 0;
+        let mut elapsed = 0;
+        while session.pending.is_some() && elapsed < 120 {
+            elapsed += 1;
+            fixture.clock.set(BASE_NOW + elapsed);
+            if session.tick().is_some() {
+                retries += 1;
+            }
+        }
+        assert_eq!(
+            retries, MAX_RETRIES,
+            "exactly the frozen retry count, then the send is dropped"
+        );
+        assert!(
+            session.pending.is_none(),
+            "the final retry must leave nothing queued"
+        );
+        // 5 s timeout, then 5+1, 5+2, 5+4: the frozen backoff, and finite.
+        assert_eq!(elapsed, 6 + 7 + 9 + 5);
+
+        // A dropped Profile must not re-arm itself: an unreachable Conductor
+        // can never be turned into an unbounded Profile loop.
+        fixture
+            .clock
+            .set(BASE_NOW + elapsed + HealthReporter::pulse_interval_seconds());
+        let next = session.tick().expect("the schedule continues with a Pulse");
+        let (kind, _) = decode(&fixture, &next);
+        assert_eq!(kind, "health_pulse");
+    }
+
+    #[test]
+    fn revoking_the_conductor_stops_emission_on_the_next_tick() {
+        let fixture = fixture();
+        let mut session = fixture.conductor_session();
+        let (_, profile) = decode(&fixture, &session.tick().expect("first profile"));
+        ack(&mut session, &profile);
+
+        fixture
+            .registry
+            .revoke_peer(
+                &fixture.conductor,
+                "direct-health-tests",
+                "revoked mid-session",
+            )
+            .expect("revoke the conductor");
+
+        fixture
+            .clock
+            .advance(HealthReporter::pulse_interval_seconds());
+        assert!(
+            session.tick().is_none(),
+            "a revoked Conductor must stop receiving health immediately"
+        );
+        assert!(
+            session.authorization().0 == LocalRole::None,
+            "a revoked peer must project no local role at all"
+        );
+    }
+
+    #[test]
+    fn a_performer_peer_never_receives_profile_or_pulse_from_this_node() {
+        let fixture = fixture();
+        let (_, _, performer_key) = peer_identity(12);
+        let mut session = fixture.session(&fixture.performer, performer_key);
+        for step in 0..4 {
+            fixture
+                .clock
+                .set(BASE_NOW + HealthReporter::pulse_interval_seconds() * step);
+            assert!(
+                session.tick().is_none(),
+                "this node is the Conductor for that peer and must never report to it"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unsupported_version_error_opens_the_frozen_backoff() {
+        let fixture = fixture();
+        let mut session = fixture.conductor_session();
+        let (_, profile) = decode(&fixture, &session.tick().expect("first profile"));
+        let acked = profile["message_id"].as_str().unwrap();
+        session.absorb_reply(
+            &serde_json::json!({
+                "error": {
+                    "accepted": false,
+                    "acked_message_id": acked,
+                    "code": HealthCode::UnsupportedVersion.code(),
+                    "reason": HealthCode::UnsupportedVersion.name(),
+                }
+            }),
+            Some(HealthKind::Error),
+            true,
+        );
+        fixture
+            .clock
+            .advance(VERSION_INCOMPATIBLE_BACKOFF_SECONDS - 1);
+        assert!(
+            session.tick().is_none(),
+            "the frozen 300-second version backoff must silence this node"
+        );
+        fixture.clock.advance(1);
+        assert!(
+            session.tick().is_some(),
+            "the node retries once the frozen backoff expires"
+        );
+    }
+
+    #[test]
+    fn a_non_health_envelope_is_left_to_the_existing_steady_state_behavior() {
+        let fixture = fixture();
+        let mut session = fixture.conductor_session();
+        let probe = crate::direct_transport::sign_probe(
+            &fixture.identity,
+            &SESSION_ID,
+            [0x11; 16],
+            BASE_NOW as u64,
+        )
+        .expect("sign probe");
+        assert_eq!(
+            session.handle_envelope(&probe.encoded()),
+            HealthOutcome::NotHealth
+        );
     }
 }

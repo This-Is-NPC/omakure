@@ -15,16 +15,28 @@ serializes the operation result.
 ## Node management
 
 Node routes use the shared machine-state operations and never access
-`.history/runs.sqlite`. `node:read` permits public status and bounded peer
-listing; `node:write` permits explicit initialization; `trust:write` permits
-manual import, capability updates, and revocation. Trust mutation bodies must
-include `confirmed: true`, a non-empty `actor`, and a non-empty `reason`.
+`.history/runs.sqlite`. `node:read` permits public status, bounded peer
+listing, and the bounded fleet-health projection; `node:write` permits explicit
+initialization; `trust:write` permits manual import, capability updates, and
+revocation. Trust mutation bodies must include `confirmed: true`, a non-empty
+`actor`, and a non-empty `reason`.
 
-Routes are `GET /v1/node/status`, `POST /v1/node/init`, `GET` and `POST
-/v1/node/peers`, `PATCH /v1/node/peers/:node_id/capabilities`, and `POST
+Routes are `GET /v1/node/status`, `POST /v1/node/init`, `GET /v1/node/health`,
+`GET` and `POST /v1/node/peers`, `PATCH
+/v1/node/peers/:node_id/capabilities`, and `POST
 /v1/node/peers/:node_id/revoke`. Responses use the standard JSON envelope.
 Private keys, plaintext secret values, revocation reasons, and unbounded audit
 history are never returned.
+
+`GET /v1/node/health` returns the Health Plane fleet-status projection: one row
+per actively trusted peer with its presence (`unknown`, `online`, `stale`,
+`offline`), its latest Profile, and its latest Pulse. It is current status
+only - there is no history, no series, and no alert surface - and it renders
+exactly the same protocol-neutral operation as `omakure node health --json`. It
+is read-only: no HTTP route writes Health Plane state, and the only writer is
+the authenticated node-to-node exchange over the direct transport. See
+`.docs/health-plane-contract.md` for the frozen presence windows, bounds, and
+privacy classes.
 
 ## Non-Goals
 

@@ -100,6 +100,32 @@ curl http://127.0.0.1:7878/v1/ready
 All other routes require `Authorization: Bearer <token>`. See `http-api.md`
 for routes and `deployment.md` for policy and container operation.
 
+## Fleet health
+
+An enrolled Performer reports a Profile on connect or material change and a
+Pulse on a bounded cadence, over the same authenticated direct transport it
+already uses. Reporting needs no flag: it starts when `node serve` has a peer
+trusted in the `conductor` role with the `inventory-health` capability, and it
+stops the moment that trust is revoked or narrowed.
+
+On the Conductor, one bounded view answers "which of my nodes are up":
+
+```bash
+omakure node health --json
+curl -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
+  http://127.0.0.1:7878/v1/node/health
+```
+
+Both render the same operation, so they always agree. Each actively trusted
+peer appears once with its presence (`unknown` before it has ever reported,
+then `online`, `stale`, or `offline`), its platform and runtime facts, its
+runner and scheduler state, and its last completed run.
+
+This is current status only. There is no chart, alert rule, host inventory,
+raw log, or history API, and no HTTP call can write health state: the only
+writer is the node-to-node exchange. `.docs/health-plane-contract.md` holds the
+frozen windows, bounds, error codes, and privacy classes.
+
 ## Transport certification
 
 The repository's bounded Linux certification uses four isolated Compose services
@@ -114,8 +140,9 @@ signed-bundle suites.
 mise run transport-certification
 ```
 
-This is a development and CI gate, not a general fleet launcher. Nostr, Pulses,
-Profiles, Signals, remote Cues, campaigns, MDM, and Lua are outside this scope.
+This is a development and CI gate, not a general fleet launcher. Nostr, remote
+Cues, campaigns, MDM, and Lua are outside its scope; the Health Plane has its
+own certification in `tests/health_plane_transport_e2e.rs`.
 
 ## Scheduling and local lifecycle
 

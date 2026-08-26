@@ -92,6 +92,14 @@ pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport>
         Vec::new()
     };
     if enabled {
+        // The fleet is the set of *actively trusted* peers. A peer whose trust
+        // was revoked, suspended, or replaced is no longer part of it, so its
+        // retained Health Plane row must not keep reporting a presence: that
+        // is what makes a revocation change the operator's view immediately.
+        // The decision uses the `trust_state` the Wave 2 projection already
+        // computed from the local registry; nothing is re-derived here.
+        nodes.retain(|node| node.trust_state == "active");
+
         // A peer that has never reported has no Health Plane row at all, so the
         // shared projection cannot see it. Enumerate the trusted peers and fill
         // in the never-seen ones, deciding trust *only* through the Wave 2

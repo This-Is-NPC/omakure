@@ -1415,7 +1415,10 @@ fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness {
         {
             Readiness::Idle
         }
-        Err(_) => Readiness::Closed,
+        // Anything other than an orderly close or a tick expiry is the same
+        // failure the blocking loop reported before the tick existed, so it
+        // stays an error and stays audited.
+        Err(_) => Readiness::Failed(TransportError::Internal),
     }
 }
 

@@ -1275,7 +1275,12 @@ fn connect_and_hold(
         session_id,
         state.reporter.clone(),
     );
-    hold_session(&mut stream, &mut session, state, Some(health))
+    let cue = crate::remote_cue::CueSession::new(
+        &registry,
+        remote.node_id(),
+        crate::remote_cue::remote_cues_enabled(context),
+    );
+    hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
 }
 
 /// The single shared steady-state receive loop for both connection directions.
@@ -1295,6 +1300,7 @@ fn hold_session(
     session: &mut TransportSession,
     state: &Arc<ConnectionState>,
     mut health: Option<HealthSession<'_>>,
+    mut cue: Option<crate::remote_cue::CueSession<'_>>,
 ) -> Result<(), TransportError> {
     if health.as_ref().is_some_and(|health| !health.engaged()) {
         health = None;
@@ -1347,7 +1353,22 @@ fn hold_session(
             continue;
         }
         match health.handle_envelope(&message.body) {
-            HealthOutcome::NotHealth | HealthOutcome::Handled => {}
+            // A non-health envelope used to be discarded here without a trace.
+            // Cue traffic is decided and audited instead; anything else keeps
+            // the original silence, so the dispatcher never becomes an oracle
+            // that answers unknown kinds.
+            HealthOutcome::NotHealth => {
+                if let Some(cue) = cue.as_mut() {
+                    // The hint is only used to route. It is never trusted as
+                    // authorization: the gates read the local registry, and a
+                    // hint disagreeing with the signed `kind` cannot widen
+                    // anything, because every gate input is local.
+                    if let Some(kind) = crate::direct_transport::envelope_kind_hint(&message.body) {
+                        let _ = cue.handle_envelope(kind);
+                    }
+                }
+            }
+            HealthOutcome::Handled => {}
             HealthOutcome::Reply(reply) => {
                 write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
                     .map_err(error_to_transport)?;
@@ -1708,7 +1729,12 @@ fn serve_connection(
             session_id,
             state.reporter.clone(),
         );
-        hold_session(&mut stream, &mut session, state, Some(health))
+        let cue = crate::remote_cue::CueSession::new(
+            &registry,
+            remote.node_id(),
+            crate::remote_cue::remote_cues_enabled(context),
+        );
+        hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
             .map_err(DirectServiceError::Protocol)?;
         Ok(())
     })();

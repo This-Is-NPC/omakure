@@ -37,7 +37,9 @@ pub enum CueCode {
 }
 
 impl CueCode {
-    pub fn code(self) -> i64 {
+    /// The stable code, typed to the width of the `transport_audit` column it
+    /// is written to so no cast can silently truncate it.
+    pub fn code(self) -> u16 {
         match self {
             CueCode::Disabled => 1201,
             CueCode::NotActiveConductor => 1202,
@@ -241,6 +243,105 @@ pub fn is_regular_file(path: &std::path::Path) -> bool {
 /// script should run in a degraded form.
 pub fn declares_secret_field(schema: &crate::domain::Schema) -> bool {
     schema.fields.iter().any(|field| field.is_secret())
+}
+
+/// The receive-side Cue session.
+///
+/// Holds only what the gates read, all of it local. It is constructed beside a
+/// `HealthSession` from the same session facts, and it deliberately borrows the
+/// registry rather than owning a channel to anything that can run work.
+pub struct CueSession<'a> {
+    registry: &'a crate::node_registry::NodeRegistry,
+    remote_node_id: String,
+    remote_cues_enabled: bool,
+}
+
+/// What the dispatcher should do with an inbound Cue frame.
+pub enum CueOutcome {
+    /// Not Cue traffic; the dispatcher keeps its existing behaviour.
+    NotCue,
+    /// Decided and audited. Nothing is sent back.
+    Handled,
+}
+
+/// Read `trust.allow_remote_cues` from this node's own configuration.
+///
+/// Read per session rather than cached at service start, so turning Cues off
+/// takes effect on the next session instead of requiring a restart. Any failure
+/// to read is `false`: a node that cannot prove it opted in has not opted in.
+pub fn remote_cues_enabled(context: &crate::node::NodeContext) -> bool {
+    let Ok(Some(mut file)) = context.open_public_file() else {
+        return false;
+    };
+    let mut contents = String::new();
+    if std::io::Read::read_to_string(&mut file, &mut contents).is_err() {
+        return false;
+    }
+    crate::domain::NodeConfig::parse(&contents)
+        .map(|config| config.trust.allow_remote_cues)
+        .unwrap_or(false)
+}
+
+impl<'a> CueSession<'a> {
+    pub fn new(
+        registry: &'a crate::node_registry::NodeRegistry,
+        remote_node_id: &str,
+        remote_cues_enabled: bool,
+    ) -> Self {
+        Self {
+            registry,
+            remote_node_id: remote_node_id.to_string(),
+            remote_cues_enabled,
+        }
+    }
+
+    /// Decide an inbound envelope.
+    ///
+    /// Returns `NotCue` for anything outside the `cue_` namespace so the
+    /// dispatcher's existing fall-through is preserved exactly.
+    ///
+    /// This wave decides and audits; it never runs anything. There is no path
+    /// from here into the executor, and the acceptance side is intentionally
+    /// left as an audited decision so the security boundary can be reviewed
+    /// before anything can act on it.
+    pub fn handle_envelope(&mut self, kind: &str) -> CueOutcome {
+        if !kind.starts_with(crate::direct_transport::CUE_KIND_PREFIX) {
+            return CueOutcome::NotCue;
+        }
+
+        let authority = LocalAuthority {
+            remote_cues_enabled: self.remote_cues_enabled,
+            authorization: self
+                .registry
+                .health_authorization(&self.remote_node_id)
+                .ok()
+                .flatten(),
+        };
+
+        let (outcome, code) = match evaluate_gates(&authority) {
+            GateDecision::Accepted => ("accepted", None),
+            GateDecision::Rejected(code) => ("rejected", Some(code)),
+        };
+
+        // Audit every decision, including acceptance. A remote instruction that
+        // left no trace would defeat the point of the roadmap item it belongs
+        // to, whose scope is distributed audit outcomes.
+        let _ = self.registry.record_transport_audit(
+            if code.is_some() {
+                "cue_rejected"
+            } else {
+                "cue_accepted"
+            },
+            &self.remote_node_id,
+            None,
+            None,
+            0,
+            outcome,
+            code.map(CueCode::code),
+        );
+
+        CueOutcome::Handled
+    }
 }
 
 #[cfg(test)]

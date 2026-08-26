@@ -173,6 +173,96 @@ jobs:
             *) echo "the embedded Lua runtime did not execute the script" >&2; exit 1 ;;
           esac
 
+      # One authorized Cue on the packaged image. The in-process e2e proves the
+      # protocol; this proves the *artifact* -- two containers of the shipped
+      # image, on a real network, exchanging trust and carrying one instruction
+      # to its outcome. It is one step by design: no new compose file, no new
+      # .scripts entry, no new mise task.
+      - name: Carry one authorized Cue end to end between two containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          net=omakure-cue-ci
+          tok='ci-node-service-token-with-enough-entropy-00001'
+          d() { timeout --foreground --kill-after=10s "$@"; }
+          cleanup() {
+            for n in conductor performer; do
+              d 30s docker logs "omakure-cue-${n}" 2>&1 | tail -20 || true
+              d 30s docker rm -f "omakure-cue-${n}" >/dev/null 2>&1 || true
+              d 30s docker volume rm "omakure-cue-ws-${n}" "omakure-cue-state-${n}" \
+                "omakure-cue-etc-${n}" >/dev/null 2>&1 || true
+            done
+            d 30s docker network rm "$net" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          d 30s docker network create "$net" >/dev/null
+          for n in conductor performer; do
+            for v in ws state etc; do d 30s docker volume create "omakure-cue-${v}-${n}" >/dev/null; done
+            d 60s docker run --rm --user 0 \
+              --volume "omakure-cue-ws-${n}:/workspace" \
+              --volume "omakure-cue-state-${n}:/var/lib/omakure" \
+              --volume "omakure-cue-etc-${n}:/etc/omakure" \
+              --entrypoint /bin/sh omakure-node:ci -c \
+              'chown 10001:10001 /workspace /var/lib/omakure /etc/omakure \
+               && chmod 0750 /workspace /etc/omakure && chmod 0700 /var/lib/omakure'
+          done
+          one() { n="$1"; shift; d 60s docker run --rm --network "$net" \
+            --env OMAKURE_API_TOKEN="$tok" \
+            --volume "omakure-cue-ws-${n}:/workspace" \
+            --volume "omakure-cue-state-${n}:/var/lib/omakure" \
+            --volume "omakure-cue-etc-${n}:/etc/omakure" omakure-node:ci "$@"; }
+          sh_in() { n="$1"; shift; d 60s docker run --rm --user 0 \
+            --volume "omakure-cue-ws-${n}:/workspace" \
+            --volume "omakure-cue-state-${n}:/var/lib/omakure" \
+            --volume "omakure-cue-etc-${n}:/etc/omakure" \
+            --entrypoint /bin/sh omakure-node:ci -c "$*"; }
+          for n in conductor performer; do one "$n" --json node init >/dev/null; done
+          for n in conductor performer; do
+            eval "${n}_id=$(one "$n" --json node status | jq -r '.data.identity.node_id')"
+            eval "${n}_pk=$(one "$n" --json node status | jq -r '.data.identity.public_key')"
+            eval "${n}_cert=$(sh_in "$n" "od -An -v -tx1 /var/lib/omakure/transport.cert | tr -d ' \n'")"
+          done
+          one performer node trust --node-id "$conductor_id" --public-key "$conductor_pk" \
+            --transport-certificate "$conductor_cert" --role conductor --actor ci \
+            --reason "cue smoke" --confirmed --capability inventory-health \
+            --capability notifications --capability remote-run >/dev/null
+          one conductor node trust --node-id "$performer_id" --public-key "$performer_pk" \
+            --transport-certificate "$performer_cert" --role performer --actor ci \
+            --reason "cue smoke" --confirmed --capability inventory-health \
+            --capability notifications --capability remote-run >/dev/null
+          # Declared, not inferred: the Performer writes down the one script a
+          # Conductor may name. Enrollment must be enabled for any remote
+          # capability, which is a pre-existing rule rather than a Cue rule.
+          sh_in performer "sed -i \
+            -e 's|enrollment = \"disabled\"|enrollment = \"manual\"|' \
+            -e 's|allow_remote_cues = false|allow_remote_cues = true|' \
+            -e 's|remote_cue_scripts = \[\]|remote_cue_scripts = [\"deploy.sh\"]|' \
+            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = []|' \
+            /etc/omakure/node.toml"
+          sh_in conductor "sed -i 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = []|' /etc/omakure/node.toml"
+          sh_in performer "printf '#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"deploy\",\"Description\":\"cue smoke\",\"Fields\":[]}\n# OMAKURE_SCHEMA_END\necho cue-ran\n' > /workspace/deploy.sh \
+             && chmod 0755 /workspace/deploy.sh && chown 10001:10001 /workspace/deploy.sh"
+          for n in conductor performer; do
+            d 60s docker run --detach --name "omakure-cue-${n}" --network "$net" \
+              --network-alias "$n" --env OMAKURE_API_TOKEN="$tok" \
+              --volume "omakure-cue-ws-${n}:/workspace" \
+              --volume "omakure-cue-state-${n}:/var/lib/omakure" \
+              --volume "omakure-cue-etc-${n}:/etc/omakure" \
+              omakure-node:ci node serve --bind 0.0.0.0:7878 --allow-non-loopback \
+              --allow-non-loopback-direct --workers 1 --no-scheduler >/dev/null
+          done
+          sleep 8
+          # `--endpoint` takes a socket address, not a hostname, so the network
+          # alias is resolved here rather than by the CLI.
+          performer_ip="$(d 30s docker inspect \
+            -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' omakure-cue-performer)"
+          out="$(d 180s docker exec omakure-cue-conductor omakure --json node cue \
+            --endpoint "${performer_ip}:7879" --peer-node-id "$performer_id" \
+            --script deploy.sh --reason "cue smoke" --wait-seconds 90)"
+          echo "$out"
+          echo "$out" | jq -e '.ok == true and .data.accepted == true and .data.outcome_seen == true' >/dev/null \
+            || { echo "the packaged image did not carry one authorized Cue to its outcome" >&2; exit 1; }
+
       - name: Cleanup and verify Docker smoke resources
         if: always()
         shell: bash
@@ -181,7 +271,10 @@ jobs:
           failures=0
           timeout --foreground --kill-after=5s 30s docker rm -f omakure-node-ci >/dev/null 2>&1 || true
           timeout --foreground --kill-after=5s 30s docker volume rm omakure-workspace-ci omakure-node-state-ci >/dev/null 2>&1 || true
-          for name in omakure-node-ci omakure-workspace-ci omakure-node-state-ci; do
+          for name in omakure-node-ci omakure-workspace-ci omakure-node-state-ci \
+            omakure-cue-conductor omakure-cue-performer omakure-cue-ci \
+            omakure-cue-ws-conductor omakure-cue-state-conductor omakure-cue-etc-conductor \
+            omakure-cue-ws-performer omakure-cue-state-performer omakure-cue-etc-performer; do
             for resource in container network volume; do
               if ! remaining="$(timeout --foreground --kill-after=5s 30s docker "$resource" ls -q \
                 --filter name="$name")"; then

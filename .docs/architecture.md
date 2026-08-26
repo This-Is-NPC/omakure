@@ -108,7 +108,15 @@ src/
 - The portable node foundation includes direct Noise transport, trust-neutral LAN
   discovery, manual enrollment, signed-bundle enrollment, static-peer lifecycle,
   revocation, replay protection, and bounded transport audit events. Nostr,
-  remote Cues, campaigns, and MDM remain future features.
+  campaigns and MDM remain future features.
+- Remote Cues ship behind five fail-closed gates, every input read from the
+  receiving node's own registry and config. A Cue names a script the Performer
+  already declared in `trust.remote_cue_scripts` or `trust.remote_cue_batteries`
+  and never carries one, so remote management can select among code a node
+  already has and can never introduce more. Cue-origin runs execute with an
+  explicit deny-all secret policy, are excluded from the worker lease steal so
+  they run at most once, and report their provenance as `cue` rather than
+  `manual`. See `.docs/remote-cue-contract.md`.
 - The minimal Health Plane adds five application message kinds inside the frozen
   direct envelope — `health_profile`, `health_pulse`, `health_signal`,
   `health_ack`, `health_error` — and no new transport, signature construction,

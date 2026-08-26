@@ -16,7 +16,7 @@ accurately recorded without being presented as current product guidance.
   retained for migration.
 - Node transport: direct encrypted transport, trust-neutral discovery, manual
   enrollment, and signed-bundle enrollment are shipped. Nostr, Pulses, Profiles,
-  Signals, remote Cues, campaigns, and MDM remain outside this release.
+  Signals, campaigns, and MDM remain outside this release.
 
 ## Intentional breaking removals
 

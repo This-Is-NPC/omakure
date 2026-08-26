@@ -180,8 +180,12 @@ provide — scoped to operational management, **never surveillance**:
    Cues are not included in this phase.
 5. **Script execution** — Lua as an embedded first-class script kind; retain
    Bash, PowerShell, and Python through host runtimes.
-6. **Remote management** — delegation, authorized idempotent Cues, remote run,
-   revocation, and distributed audit outcomes.
+6. **Remote management — complete for authorized Cues** — a trusted Conductor
+   asks a Performer to run a script that Performer already declared, behind five
+   fail-closed gates read only from the receiver's own registry and config. A
+   Cue names a script and never carries one, runs with deny-all secret access,
+   executes at most once, and reports its outcome on the existing
+   `run-completed` Signal. Broader delegation and campaign fan-out remain open.
 7. **Omarchy-first experience** — unattended public-data provisioning, rich
    Profile, hooks, notifications, and optional Shell/Menu integrations.
 8. **MDM basics** — signed/versioned baseline push, drift status, rollback, and
@@ -250,8 +254,9 @@ implemented.
   trust management, service lifecycle, reset, and platform path validation.
 - Direct transport, trust-neutral discovery, manual enrollment, signed-bundle
   enrollment, static-peer lifecycle, revocation, replay protection, and
-  reset/replacement recovery are shipped. Nostr, Pulses, Profiles, Signals,
-  remote Cues, campaigns, MDM, and Lua remain future work.
+  reset/replacement recovery are shipped, as are Profiles, Pulses, the closed
+  Signal feed, and authorized remote Cues. Nostr, campaigns, and MDM remain
+  future work.
 - The production identity implementation is the reviewed RustCrypto `k256`
   BIP-340 adapter documented below; no second identity implementation exists.
 

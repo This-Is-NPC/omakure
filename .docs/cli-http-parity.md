@@ -60,6 +60,7 @@ through shared operations and the HTTP management API.
 | `omakure init <script>` | Script creation is local CLI-only. |
 | `omakure trace` | Trace writes are script-authored CLI calls using `OMAKURE_RUN_ID`. |
 | `omakure serve` lifecycle | Host process control is CLI-only. |
+| `omakure node cue` | Dispatching a Cue is CLI-only. An HTTP route would be a fifth authorization surface to keep in step, for no safety gain, on a feature whose point is bounding what a remote caller can reach. |
 | `omakure queue worker` | Long-running daemon process, not request/response API behavior. |
 | `omakure update` | Replaces binary and copies release scripts. |
 | `omakure uninstall` | Destructive local operation. |

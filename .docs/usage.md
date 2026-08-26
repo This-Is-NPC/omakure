@@ -182,7 +182,7 @@ mise run transport-certification
 ```
 
 This is a development and CI gate, not a general fleet launcher. Nostr, remote
-Cues, campaigns, and MDM are outside its scope.
+campaigns and MDM are outside its scope.
 
 ## Health Plane certification
 
@@ -217,7 +217,7 @@ as a whole rather than after every individual case.
 
 Management HTTP binds loopback inside each container and is never published, so
 it cannot be the node-to-node data path; the gate asserts that directly. Nostr,
-remote Cues, baselines, dashboards, alerting, arbitrary metrics, and MDM
+baselines, dashboards, alerting, arbitrary metrics, and MDM
 are all outside its scope.
 
 ## Scheduling and local lifecycle

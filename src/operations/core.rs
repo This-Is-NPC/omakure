@@ -327,6 +327,71 @@ pub fn enqueue_run_with_access(
     .map_err(io_error_string)
 }
 
+/// Enqueue a run that a remote Conductor asked for.
+///
+/// Separate from `enqueue_run_with_access` rather than a flag on it, because
+/// the two guarantees this path owes cannot be optional:
+///
+/// * the row is `RunTrigger::Cue`, which is what keeps it out of the worker's
+///   lease steal and makes the Health Plane report its provenance honestly
+///   rather than as `manual`;
+/// * secret access is an explicit empty policy, meaning deny-all.
+///
+/// The second is why this is a function and not a parameter. `None` writes
+/// ALLOW-ALL (`runs.rs`), and a policy *lookup error* also grants allow-all
+/// (`run_executor.rs`), so a caller who forgot the field would hand a remote
+/// instruction every secret the node holds. Here there is no field to forget:
+/// the signature cannot express allow-all.
+///
+/// A script declaring secret fields is refused at the gate before reaching this
+/// point, so the empty policy denies nothing the script legitimately needed.
+pub fn enqueue_cue_run(
+    workspace: &Workspace,
+    request: EnqueueRunRequest,
+) -> OperationResult<RunRow> {
+    let path = resolve_script_path(&request.script, workspace.scripts_root())?;
+    let canonical = std::fs::canonicalize(&path).unwrap_or(path);
+    // No environment is injected and no secret is resolvable: an empty scope
+    // set with an empty allowed-ref set is deny-all.
+    let deny_all = crate::secrets::SecretAccess::new(Vec::<String>::new(), Vec::<String>::new());
+    let resolved_args = crate::secrets::resolve_args_with_access(
+        workspace,
+        &canonical,
+        &request.args,
+        &[],
+        &request.secret_fields,
+        &deny_all,
+    )
+    .map_err(|(field, message)| {
+        OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("{field}: {message}"),
+        )
+    })?;
+
+    let conn = runs::open(workspace).map_err(io_error_string)?;
+    runs::enqueue(
+        &conn,
+        canonical.to_string_lossy().as_ref(),
+        &resolved_args.persisted_args,
+        EnqueueOptions {
+            run_id: request.run_id,
+            actor: request.actor,
+            reason: request.reason,
+            priority: request.priority,
+            timeout_ms: request.timeout_ms,
+            parent_run_id: None,
+            cron_schedule_id: None,
+            script_name: None,
+            omakure_version: app_meta::APP_VERSION.to_string(),
+            trigger: runs::RunTrigger::Cue,
+            env_name: None,
+            allowed_secret_refs: Some(Vec::new()),
+        },
+    )
+    .map_err(io_error_string)
+}
+
 pub fn cancel_run(workspace: &Workspace, request: CancelRunRequest) -> OperationResult<RunRow> {
     let conn = runs::open(workspace).map_err(io_error_string)?;
     require_run(&conn, &request.run_id)?;
@@ -540,6 +605,92 @@ mod tests {
         let ws = Workspace::new(dir.path().to_path_buf());
         ws.ensure_layout().unwrap();
         ws
+    }
+
+    fn cue_request() -> EnqueueRunRequest {
+        EnqueueRunRequest {
+            script: "deploy.sh".into(),
+            args: Vec::new(),
+            env: None,
+            secret_fields: Vec::new(),
+            run_id: Some("cue-derived-run-id".into()),
+            actor: "conductor".into(),
+            reason: Some("contract test".into()),
+            priority: 0,
+            timeout_ms: None,
+            parent_run_id: None,
+            cron_schedule_id: None,
+        }
+    }
+
+    /// Asserted against what landed in the database, not inferred from the call.
+    ///
+    /// `None` writes ALLOW-ALL and a policy *lookup error* also grants
+    /// allow-all, so "we pass an empty vec" is a claim worth checking. If this
+    /// ever reads `None`, a remote instruction is receiving every secret the
+    /// node holds.
+    #[test]
+    fn a_cue_run_stores_an_explicit_deny_all_secret_policy() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "deploy.sh", &[]);
+
+        let row = enqueue_cue_run(&ws, cue_request()).expect("enqueue the cue run");
+
+        let conn = runs::open(&ws).unwrap();
+        assert_eq!(
+            runs::get_run_secret_refs(&conn, &row.run_id).unwrap(),
+            Some(Vec::new()),
+            "an empty policy is deny-all; None would have meant allow-all"
+        );
+    }
+
+    /// The provenance that keeps it out of the worker lease steal and stops the
+    /// Health Plane reporting it as `manual`.
+    #[test]
+    fn a_cue_run_is_recorded_as_cue_originated() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "deploy.sh", &[]);
+
+        let row = enqueue_cue_run(&ws, cue_request()).expect("enqueue the cue run");
+
+        assert_eq!(row.trigger, runs::RunTrigger::Cue);
+    }
+
+    /// The caller supplies a run id derived from the cue id, so the primary key
+    /// is the durable at-most-once guard rather than a separate dedup store.
+    #[test]
+    fn the_same_cue_derived_run_id_cannot_be_enqueued_twice() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "deploy.sh", &[]);
+
+        assert!(enqueue_cue_run(&ws, cue_request()).is_ok());
+        assert!(
+            enqueue_cue_run(&ws, cue_request()).is_err(),
+            "the primary key is what makes a repeated cue id run at most once"
+        );
+    }
+
+    /// The ordinary path is unchanged: it still resolves declared secrets.
+    #[test]
+    fn the_manual_enqueue_path_still_records_its_own_policy() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "deploy.sh", &[]);
+
+        let row = enqueue_run_with_access(
+            &ws,
+            EnqueueRunRequest {
+                run_id: Some("manual-run".into()),
+                ..cue_request()
+            },
+            &crate::secrets::SecretAccess::allow_all(),
+        )
+        .expect("enqueue a manual run");
+
+        assert_eq!(row.trigger, runs::RunTrigger::Manual);
     }
 
     fn write_script(root: &Path, path: &str, tags: &[&str]) {

@@ -196,10 +196,12 @@ fn node_material(state_dir: &Path) -> (NodeIdentity, [u8; 32], TransportCertific
     )
     .expect("resolve the harness node context");
     let identity = NodeIdentity::load_existing(&context).expect("load the harness node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
+    // Not `try_into().expect(...)`: the `TryInto<[u8; 32]>` error value *is* the
+    // Vec, so that spelling prints the raw private key into the panic message,
+    // which the runner forwards to stderr and CI captures. Report the length.
+    let raw_private = std::fs::read(context.transport_key_path()).expect("read transport key");
+    let private: [u8; 32] = <[u8; 32]>::try_from(raw_private.as_slice())
+        .unwrap_or_else(|_| panic!("transport key length: {} bytes", raw_private.len()));
     let certificate = TransportCertificate::from_bytes(
         &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
     )

@@ -18,9 +18,10 @@
 //! Run with:
 //! `cargo test --test docker_health_plane_exhaustion -- --ignored --nocapture`
 
+use omakure::direct_service::MAX_RETRY_ATTEMPTS;
 use omakure::direct_transport::{
     envelope_nonce, sign_ack, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
-    TransportCertificate, ENVELOPE_KIND,
+    TransportCertificate, ENVELOPE_KIND, MAX_FRAME_LENGTH,
 };
 use omakure::health_plane::bounds::{ACK_TIMEOUT_SECONDS, MAX_RETRIES, RETRY_BACKOFF_SECONDS};
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
@@ -40,6 +41,11 @@ const FRAME_TIMEOUT: Duration = Duration::from_secs(15);
 /// The frozen number of sends for one message: the first attempt plus the
 /// frozen retry budget.
 const EXPECTED_PROFILE_SENDS: usize = MAX_RETRIES as usize + 1;
+
+/// The shipped transport's dial-retry budget, which is a *different* frozen
+/// three from the Health Plane's ack-retry budget above. A connection that
+/// opens and sends nothing consumes one of these, never one of those.
+const DIAL_ATTEMPT_BUDGET: usize = MAX_RETRY_ATTEMPTS;
 
 /// The observation window, derived from the frozen schedule rather than picked.
 ///
@@ -82,10 +88,12 @@ fn node_material(state_dir: &Path) -> (NodeIdentity, [u8; 32], TransportCertific
     )
     .expect("resolve the harness node context");
     let identity = NodeIdentity::load_existing(&context).expect("load the harness node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
+    // Not `try_into().expect(...)`: the `TryInto<[u8; 32]>` error value *is* the
+    // Vec, so that spelling prints the raw private key into the panic message,
+    // which the runner forwards to stderr and CI captures. Report the length.
+    let raw_private = std::fs::read(context.transport_key_path()).expect("read transport key");
+    let private: [u8; 32] = <[u8; 32]>::try_from(raw_private.as_slice())
+        .unwrap_or_else(|_| panic!("transport key length: {} bytes", raw_private.len()));
     let certificate = TransportCertificate::from_bytes(
         &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
     )
@@ -105,6 +113,14 @@ fn read_frame_detailed(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
     let mut prefix = [0_u8; 4];
     stream.read_exact(&mut prefix)?;
     let length = u32::from_be_bytes(prefix) as usize;
+    // The prefix is unauthenticated at this point, so bound the allocation the
+    // way the shipped reader does rather than trusting it.
+    if !(4..=MAX_FRAME_LENGTH).contains(&length) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("frame length {length} is outside the shipped bound"),
+        ));
+    }
     let mut encoded = vec![0_u8; length + 4];
     encoded[..4].copy_from_slice(&prefix);
     stream.read_exact(&mut encoded[4..])?;
@@ -139,10 +155,15 @@ fn an_unacknowledged_profile_stops_at_the_frozen_attempt_budget_on_one_session()
     // fails rather than waiting forever.
     //
     // A connection that opens and hangs up without sending a first handshake
-    // frame is not the Performer's Noise dial, and must not be mistaken for
-    // one. The shipped dialer retries on its frozen 1/2/4-second backoff, so
-    // the useful behaviour is to log the stray, drop it, and keep accepting
-    // inside the same budget rather than failing the phase on it.
+    // frame is not the Performer's Noise dial. On this network the repointed
+    // Performer is the only peer configured toward the harness, so a stray *is*
+    // the shipped dialer opening a socket and abandoning it before its first
+    // write - `connect_and_hold` has five fallible steps between the TCP
+    // connect and that write, and any of them drops the stream silently.
+    //
+    // Accepting past it preserves the measurement, which is taken on whichever
+    // session does handshake. The count is bounded below rather than required
+    // to be zero, because a stray spends a dial attempt, not an ack retry.
     let deadline = Instant::now() + ACCEPT_BUDGET;
     let mut strays = 0_u32;
     let (mut stream, frame) = loop {
@@ -177,6 +198,22 @@ fn an_unacknowledged_profile_stops_at_the_frozen_attempt_budget_on_one_session()
             }
         }
     };
+
+    // A stray costs a *dial* attempt (`MAX_RETRY_ATTEMPTS` in the shipped
+    // dialer), not a Health Plane ack retry. It therefore threatens this
+    // phase's setup rather than its measurement: the send count asserted below
+    // is taken on the session that did handshake. Exhausting the dial budget
+    // would show up as a failed accept, loudly, not as a wrong count.
+    //
+    // So this is a bound, not a zero-tolerance check - but it is still a
+    // failure, because the shipped dialer opening a socket and abandoning it
+    // before its first write is real behaviour that has to stay visible.
+    assert!(
+        (strays as usize) < DIAL_ATTEMPT_BUDGET,
+        "the Performer opened {strays} connection(s) that sent no handshake frame, \
+         at or beyond the shipped dial budget of {DIAL_ATTEMPT_BUDGET}; the next \
+         outage would leave it unable to reconnect at all"
+    );
 
     // The shipped responder path, verbatim: three handshake messages, then the
     // production probe and its acknowledgement.

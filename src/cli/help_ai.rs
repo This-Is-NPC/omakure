@@ -172,7 +172,7 @@ fn build_payload() -> HelpAiPayload {
                 "error": null,
                 "schema_version": SCHEMA_VERSION,
             }),
-            "node": "Public node status, bounded trust-neutral LAN discovery, explicit initialization, bounded peer listing, current fleet health for trusted peers, and confirmed trust mutations; private identity material, discovery secrets, and audit history are never returned.",
+            "node": "Public node status, bounded trust-neutral LAN discovery, explicit initialization, bounded peer listing, current fleet health for trusted peers, the bounded newest-first closed Signal feed (enrolled, revoked, run-completed only), and confirmed trust mutations; private identity material, discovery secrets, script arguments, run output, and audit history are never returned.",
         }),
     }
 }

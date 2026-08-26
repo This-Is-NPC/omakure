@@ -39,6 +39,11 @@ pub fn run(
         // this arm only renders it. The identical value backs `GET /v1/node/health`.
         NodeCommand::Health => crate::operations::health::fleet_status(&context)
             .map(|result| serde_json::to_value(result).expect("fleet status serializes")),
+        // Thin adapter, same shape: the bounded Signal feed is decided by the
+        // protocol-neutral operation and only rendered here. The identical
+        // value backs `GET /v1/node/signals`.
+        NodeCommand::Signals => crate::operations::health::signal_feed(&context)
+            .map(|result| serde_json::to_value(result).expect("signal feed serializes")),
         NodeCommand::Discovery(args) => node_ops::scan_discovery(
             &context,
             &scripts_dir,

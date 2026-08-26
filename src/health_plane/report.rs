@@ -12,10 +12,12 @@
 
 use super::bounds::{
     CAPABILITY_ALLOWLIST, HEALTH_VERSION, MAX_AGENT_VERSION_BYTES, MAX_DISPLAY_NAME_BYTES,
-    MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES, MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT,
-    MAX_SCRIPT_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, NOMINAL_PULSE_INTERVAL_SECONDS,
+    MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_QUEUE_DEPTH,
+    MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES, MAX_STORED_SIGNAL_BYTES,
+    MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, NOMINAL_PULSE_INTERVAL_SECONDS,
+    OPAQUE_ID_HEX_CHARS, SIGNAL_OUTBOX_CAPACITY, SIGNATURE_BYTES,
 };
-use super::model::{RunFact, RunnerFact, RuntimeFact};
+use super::model::{HealthKind, RunFact, RunnerFact, RuntimeFact, SignalRecord};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
@@ -27,6 +29,25 @@ use std::sync::Mutex;
 /// under a dedicated domain yields a stable, opaque, P0 identifier that leaks
 /// no host fact and still correlates two Pulses about the same run.
 const RUN_ID_DOMAIN: &[u8] = b"omakure/health-run-id/v1\0";
+
+/// Domain separator for the stable Signal idempotency key.
+///
+/// `signal_id` must be identical for every retransmission of one logical
+/// Signal, including after a Performer restart, because the frozen contract
+/// makes it the application idempotency key. Deriving it from the already
+/// opaque run identifier under a dedicated domain gives exactly that, with no
+/// extra durable state and no host fact.
+const SIGNAL_ID_DOMAIN: &[u8] = b"omakure/health-signal-id/v1\0";
+
+/// The fixed-width envelope fields used when measuring a Signal's real size.
+///
+/// Every direct-envelope field except `payload` is constant width: `nonce` is
+/// 32 hex characters, `session_id` is 64, `sender` is a 69-byte node ID,
+/// `version` is one digit, and `created_at` is a ten-digit Unix second until
+/// the year 2286. Measuring the canonical bytes of that shape therefore yields
+/// the real encoded size without needing a signing key.
+const SIZE_PROBE_CREATED_AT: u64 = 1_700_000_000;
+const SESSION_ID_HEX_CHARS: usize = 64;
 
 /// The four runtime names the closed schema permits, in frozen sorted order.
 pub const RUNTIME_NAMES: [&str; MAX_RUNTIME_COUNT] = ["bash", "powershell", "python", "sh"];
@@ -63,6 +84,15 @@ pub trait HealthFactsSource: Send + Sync {
     fn profile_facts(&self) -> ProfileFacts;
     /// The current liveness facts.
     fn pulse_facts(&self) -> PulseFacts;
+
+    /// The bounded, newest-first set of runs that already reached a terminal
+    /// result in the local run log.
+    ///
+    /// Implementations read the local run log only and map each row onto the
+    /// frozen five-field `run` object. The script path, the arguments, stdout,
+    /// stderr, the error text, the actor, and the worker id are privacy class
+    /// P1 and never cross this boundary.
+    fn terminal_runs(&self, limit: usize) -> Vec<RunFact>;
 }
 
 /// One Profile ready to sign, with the revision it was assigned.
@@ -86,6 +116,13 @@ struct ReporterState {
     current: Option<ProfileFacts>,
     profile_revision: u64,
     last_pulse_sequence: u64,
+    /// The newest `finished_at` this reporter has already turned into a
+    /// `run-completed` Signal. `None` until the first harvest seeds it.
+    run_watermark: Option<i64>,
+    /// The opaque run ids already harvested at exactly `run_watermark`, so two
+    /// runs that finish inside the same Unix second both produce a Signal and
+    /// neither produces two. Bounded by the frozen outbox capacity.
+    run_watermark_ids: Vec<String>,
 }
 
 /// Builds the Profile and Pulse payloads one Performer sends to its Conductor.
@@ -181,7 +218,185 @@ impl HealthReporter {
             sequence,
         })
     }
+
+    /// Harvest the terminal runs that still need a `run-completed` Signal.
+    ///
+    /// The frozen contract emits this Signal *only after* the existing run
+    /// state reaches a terminal result, so the run log is the sole trigger and
+    /// nothing here starts, schedules, or observes live work.
+    ///
+    /// The first call seeds the watermark from whatever the run log already
+    /// holds and returns nothing: a Performer that restarts must not replay its
+    /// own history into a Conductor's bounded Signal inbox. Every later call
+    /// returns only the runs that reached a terminal result after that point,
+    /// oldest first, bounded by the frozen outbox capacity.
+    pub fn run_signals(&self) -> Vec<RunFact> {
+        let capacity = SIGNAL_OUTBOX_CAPACITY as usize;
+        let mut runs: Vec<RunFact> = self
+            .facts
+            .terminal_runs(capacity)
+            .into_iter()
+            .filter_map(|mut run| sanitize_signal_run(&mut run).then_some(run))
+            .collect();
+        runs.sort_by(|left, right| {
+            left.finished_at
+                .cmp(&right.finished_at)
+                .then_with(|| left.run_id.cmp(&right.run_id))
+        });
+        runs.truncate(capacity);
+        let mut state = self.state.lock().expect("health reporter state");
+        let Some(watermark) = state.run_watermark else {
+            let newest = runs.last().map(|run| run.finished_at).unwrap_or(0);
+            state.run_watermark = Some(newest);
+            state.run_watermark_ids = runs
+                .iter()
+                .filter(|run| run.finished_at == newest)
+                .map(|run| run.run_id.clone())
+                .collect();
+            state.run_watermark_ids.truncate(capacity);
+            return Vec::new();
+        };
+        let mut emitted = Vec::new();
+        for run in runs {
+            if run.finished_at < watermark {
+                continue;
+            }
+            if run.finished_at == watermark && state.run_watermark_ids.contains(&run.run_id) {
+                continue;
+            }
+            if run.finished_at > state.run_watermark.unwrap_or(watermark) {
+                state.run_watermark = Some(run.finished_at);
+                state.run_watermark_ids.clear();
+            }
+            state.run_watermark_ids.push(run.run_id.clone());
+            if state.run_watermark_ids.len() > capacity {
+                state.run_watermark_ids.remove(0);
+            }
+            emitted.push(run);
+        }
+        emitted
+    }
 }
+
+/// The frozen Signal payload object.
+///
+/// All six `signal` fields are always present and the one that does not apply
+/// to this kind is explicitly `null`, because the frozen closed schema rejects
+/// an omitted field with `health_unknown_field` (1114). The `run` object
+/// carries exactly the five fields the Signal schema names: it has no
+/// `started_at` and no `trigger`, which the Pulse `last_run` object does.
+pub fn signal_payload(target: &str, message_id: &str, signal: &SignalRecord) -> Value {
+    let run = match &signal.run {
+        Some(run) => json!({
+            "exit_code": run.exit_code,
+            "finished_at": run.finished_at,
+            "run_id": run.run_id,
+            "script": run.script,
+            "state": run.state,
+        }),
+        None => Value::Null,
+    };
+    json!({
+        "health_version": HEALTH_VERSION,
+        "message_id": message_id,
+        "target": target,
+        "signal": {
+            "kind": signal.kind.wire(),
+            "occurred_at": signal.occurred_at,
+            "run": run,
+            "sequence": signal.sequence,
+            "signal_id": signal.signal_id,
+            "subject": signal.subject,
+        }
+    })
+}
+
+/// The encoded byte count one Signal occupies on the wire and in storage.
+///
+/// The result is the canonical envelope length plus the 64-byte signature,
+/// measured from the real payload, and is clamped into the frozen stored-row
+/// range so a hostile fact can never widen the storage accounting.
+///
+/// The measurement always uses the widest permitted `sequence`, because the
+/// outbox assigns the real sequence after the size is recorded. The stored
+/// accounting is therefore never optimistic.
+pub fn signal_encoded_bytes(target: &str, signal: &SignalRecord) -> i64 {
+    let widest = SignalRecord {
+        sequence: MAX_SAFE_INTEGER,
+        ..signal.clone()
+    };
+    let payload = signal_payload(target, &"0".repeat(OPAQUE_ID_HEX_CHARS), &widest);
+    let mut object = serde_json::Map::new();
+    object.insert("created_at".into(), Value::from(SIZE_PROBE_CREATED_AT));
+    object.insert("kind".into(), Value::from(HealthKind::Signal.wire()));
+    object.insert("nonce".into(), Value::from("0".repeat(OPAQUE_ID_HEX_CHARS)));
+    object.insert("payload".into(), payload);
+    object.insert("sender".into(), Value::from(target));
+    object.insert(
+        "session_id".into(),
+        Value::from("0".repeat(SESSION_ID_HEX_CHARS)),
+    );
+    object.insert("version".into(), Value::from(1_u8));
+    let canonical = serde_jcs::to_vec(&Value::Object(object)).unwrap_or_default();
+    let bytes = canonical.len().saturating_add(SIGNATURE_BYTES) as i64;
+    bytes.clamp(1, MAX_STORED_SIGNAL_BYTES)
+}
+
+/// The stable `signal_id` of the `run-completed` Signal for one opaque run id.
+///
+/// It is a pure function of the run, so a retransmission, a reconnect, or a
+/// Performer restart reproduces exactly the same idempotency key and a
+/// Conductor can never store the same terminal run twice.
+pub fn run_signal_id(run_id: &str) -> String {
+    let digest = Sha256::digest(
+        [
+            SIGNAL_ID_DOMAIN,
+            crate::health_plane::model::SignalKind::RunCompleted
+                .wire()
+                .as_bytes(),
+            b"\0",
+            run_id.as_bytes(),
+        ]
+        .concat(),
+    );
+    hex_lower(&digest[..16])
+}
+
+/// Force one run fact into the frozen five-field Signal `run` grammar.
+///
+/// Returns `false` when the run cannot be expressed inside the closed schema,
+/// in which case no Signal is produced at all. The sender redacts and the
+/// receiver rejects; neither ever stores a value it had to guess at.
+pub fn sanitize_signal_run(run: &mut RunFact) -> bool {
+    run.script = clamp(&run.script, MAX_SCRIPT_BYTES, "._-", false);
+    run.started_at = None;
+    run.trigger = None;
+    run.exit_code = run
+        .exit_code
+        .filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));
+    run_fact_is_valid(run)
+}
+
+/// Whether one run fact already satisfies the frozen `run` grammar.
+fn run_fact_is_valid(run: &RunFact) -> bool {
+    !run.script.is_empty()
+        && run.run_id.len() == OPAQUE_ID_HEX_CHARS
+        && run
+            .run_id
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        && run.finished_at >= 1
+        && RUN_STATES.contains(&run.state.as_str())
+}
+
+/// The five terminal run states the frozen schema permits.
+const RUN_STATES: [&str; 5] = [
+    "completed",
+    "failed",
+    "cancelled",
+    "timed_out",
+    "dead_letter",
+];
 
 /// The frozen Profile payload object.
 fn profile_payload(
@@ -405,26 +620,15 @@ fn sanitize_pulse(facts: &mut PulseFacts) {
         return;
     };
     run.script = clamp(&run.script, MAX_SCRIPT_BYTES, "._-", false);
-    let valid = !run.script.is_empty()
-        && run.run_id.len() == 32
-        && run.run_id.bytes().all(|byte| byte.is_ascii_hexdigit())
-        && run.run_id.bytes().all(|byte| !byte.is_ascii_uppercase())
-        && run.finished_at >= 1
-        && [
-            "completed",
-            "failed",
-            "cancelled",
-            "timed_out",
-            "dead_letter",
-        ]
-        .contains(&run.state.as_str());
-    if !valid {
+    if !run_fact_is_valid(run) {
         facts.last_run = None;
         return;
     }
     let started = run.started_at.unwrap_or(run.finished_at).max(1);
     run.started_at = Some(started.min(run.finished_at));
-    run.exit_code = run.exit_code.filter(|code| (-256..=255).contains(code));
+    run.exit_code = run
+        .exit_code
+        .filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));
     let trigger = run.trigger.clone().unwrap_or_default();
     run.trigger = Some(match trigger.as_str() {
         "scheduled" => "scheduled".to_string(),
@@ -470,7 +674,7 @@ fn clamp(value: &str, max: usize, extra: &str, allow_empty: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::health_plane::model::HealthKind;
+    use crate::health_plane::model::{HealthKind, SignalKind};
     use crate::health_plane::schema;
 
     const TARGET: &str = "omk1_0000000000000000000000000000000000000000000000000000000000000001";
@@ -479,6 +683,7 @@ mod tests {
     struct FixedFacts {
         profile: ProfileFacts,
         pulse: PulseFacts,
+        terminal: Mutex<Vec<RunFact>>,
     }
 
     impl HealthFactsSource for FixedFacts {
@@ -488,6 +693,12 @@ mod tests {
 
         fn pulse_facts(&self) -> PulseFacts {
             self.pulse.clone()
+        }
+
+        fn terminal_runs(&self, limit: usize) -> Vec<RunFact> {
+            let mut runs = self.terminal.lock().expect("terminal runs").clone();
+            runs.truncate(limit);
+            runs
         }
     }
 
@@ -532,7 +743,52 @@ mod tests {
     }
 
     fn reporter(profile: ProfileFacts, pulse: PulseFacts) -> HealthReporter {
-        HealthReporter::new(Box::new(FixedFacts { profile, pulse }))
+        HealthReporter::new(Box::new(FixedFacts {
+            profile,
+            pulse,
+            terminal: Mutex::new(Vec::new()),
+        }))
+    }
+
+    /// A fact source whose terminal run log the test can grow, newest first,
+    /// exactly like the real run log.
+    #[derive(Default)]
+    struct SharedFacts {
+        terminal: Mutex<Vec<RunFact>>,
+    }
+
+    impl SharedFacts {
+        fn push(&self, run: RunFact) {
+            self.terminal.lock().expect("terminal runs").insert(0, run);
+        }
+    }
+
+    impl HealthFactsSource for std::sync::Arc<SharedFacts> {
+        fn profile_facts(&self) -> ProfileFacts {
+            sample_profile()
+        }
+
+        fn pulse_facts(&self) -> PulseFacts {
+            sample_pulse()
+        }
+
+        fn terminal_runs(&self, limit: usize) -> Vec<RunFact> {
+            let mut runs = self.terminal.lock().expect("terminal runs").clone();
+            runs.truncate(limit);
+            runs
+        }
+    }
+
+    fn run_fact(run_id: &str, script: &str, finished_at: i64) -> RunFact {
+        RunFact {
+            exit_code: Some(0),
+            finished_at,
+            run_id: run_id.to_string(),
+            script: script.to_string(),
+            started_at: None,
+            state: "completed".to_string(),
+            trigger: None,
+        }
     }
 
     #[test]
@@ -752,6 +1008,178 @@ mod tests {
         assert_eq!(runtimes.len(), 2);
         assert_eq!(runtimes[0]["name"], "bash");
         assert_eq!(runtimes[1]["name"], "sh");
+    }
+
+    #[test]
+    fn a_signal_payload_validates_against_the_frozen_closed_schema() {
+        let signal = SignalRecord {
+            kind: SignalKind::RunCompleted,
+            occurred_at: 1_700_000_000,
+            run: Some(run_fact(&"a".repeat(32), "deploy", 1_700_000_000)),
+            sequence: 1,
+            signal_id: "0000000000000000000000000000000b".to_string(),
+            subject: None,
+        };
+        let payload = signal_payload(TARGET, MESSAGE_ID, &signal);
+        let validated = schema::validate_payload(HealthKind::Signal, &payload, 1_700_000_000)
+            .expect("signal payload must satisfy the frozen closed schema");
+        match validated.body {
+            crate::health_plane::model::HealthBody::Signal(record) => {
+                assert_eq!(record, signal);
+                // The Signal `run` object has exactly five fields: no
+                // `started_at` and no `trigger`, unlike the Pulse `last_run`.
+                assert_eq!(payload["signal"]["run"].as_object().unwrap().len(), 5);
+                assert!(payload["signal"]["subject"].is_null());
+            }
+            other => panic!("unexpected body: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_lifecycle_signal_payload_validates_and_carries_no_run() {
+        let signal = SignalRecord {
+            kind: SignalKind::Enrolled,
+            occurred_at: 1_700_000_000,
+            run: None,
+            sequence: 7,
+            signal_id: "0000000000000000000000000000000c".to_string(),
+            subject: Some(TARGET.to_string()),
+        };
+        let payload = signal_payload(TARGET, MESSAGE_ID, &signal);
+        schema::validate_payload(HealthKind::Signal, &payload, 1_700_000_000)
+            .expect("lifecycle signal payload must satisfy the frozen closed schema");
+        assert!(payload["signal"]["run"].is_null());
+    }
+
+    #[test]
+    fn the_measured_signal_size_stays_inside_the_frozen_stored_row_cap() {
+        let signal = SignalRecord {
+            kind: SignalKind::RunCompleted,
+            occurred_at: 1_700_000_000,
+            run: Some(run_fact(&"f".repeat(32), &"s".repeat(64), 1_700_000_000)),
+            sequence: 1,
+            signal_id: "0".repeat(32),
+            subject: None,
+        };
+        let measured = signal_encoded_bytes(TARGET, &signal);
+        assert!(measured >= 1);
+        assert!(
+            measured <= MAX_STORED_SIGNAL_BYTES,
+            "worst-case Signal measured {measured} bytes, cap is {MAX_STORED_SIGNAL_BYTES}"
+        );
+        // The measurement is sequence-independent, because the outbox assigns
+        // the real sequence only after the size is recorded.
+        let wider = SignalRecord {
+            sequence: MAX_SAFE_INTEGER,
+            ..signal.clone()
+        };
+        assert_eq!(measured, signal_encoded_bytes(TARGET, &wider));
+    }
+
+    #[test]
+    fn a_run_signal_id_is_stable_per_run_and_distinct_across_runs() {
+        let first = run_signal_id("run-a");
+        assert_eq!(first, run_signal_id("run-a"));
+        assert_ne!(first, run_signal_id("run-b"));
+        assert_ne!(first, opaque_run_id("run-a"));
+        assert_eq!(first.len(), 32);
+        assert!(first
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn the_first_harvest_seeds_the_watermark_and_never_replays_history() {
+        let facts = FixedFacts {
+            profile: sample_profile(),
+            pulse: sample_pulse(),
+            terminal: Mutex::new(vec![
+                run_fact(&"1".repeat(32), "deploy", 1_700_000_000),
+                run_fact(&"2".repeat(32), "backup", 1_699_999_000),
+            ]),
+        };
+        let reporter = HealthReporter::new(Box::new(facts));
+        assert!(
+            reporter.run_signals().is_empty(),
+            "a restarting Performer must not replay its own run history"
+        );
+        assert!(reporter.run_signals().is_empty());
+    }
+
+    #[test]
+    fn a_new_terminal_run_is_harvested_exactly_once() {
+        let terminal = Mutex::new(vec![run_fact(&"1".repeat(32), "deploy", 1_700_000_000)]);
+        let facts = FixedFacts {
+            profile: sample_profile(),
+            pulse: sample_pulse(),
+            terminal,
+        };
+        let reporter = HealthReporter::new(Box::new(facts));
+        assert!(reporter.run_signals().is_empty());
+    }
+
+    #[test]
+    fn concurrent_terminal_runs_in_one_second_each_produce_one_signal() {
+        let shared = std::sync::Arc::new(SharedFacts::default());
+        let reporter = HealthReporter::new(Box::new(std::sync::Arc::clone(&shared)));
+        shared.push(run_fact(&"1".repeat(32), "seed", 1_699_999_000));
+        assert!(reporter.run_signals().is_empty(), "the first call seeds");
+
+        shared.push(run_fact(&"2".repeat(32), "alpha", 1_700_000_000));
+        shared.push(run_fact(&"3".repeat(32), "beta", 1_700_000_000));
+        let harvested = reporter.run_signals();
+        assert_eq!(harvested.len(), 2, "both concurrent runs must be seen");
+        assert!(
+            reporter.run_signals().is_empty(),
+            "a harvested run is never harvested twice"
+        );
+
+        shared.push(run_fact(&"4".repeat(32), "gamma", 1_700_000_001));
+        let later = reporter.run_signals();
+        assert_eq!(later.len(), 1);
+        assert_eq!(later[0].script, "gamma");
+        assert!(harvested.iter().all(|run| run.script != "gamma"));
+    }
+
+    #[test]
+    fn a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped() {
+        let shared = std::sync::Arc::new(SharedFacts::default());
+        let reporter = HealthReporter::new(Box::new(std::sync::Arc::clone(&shared)));
+        assert!(reporter.run_signals().is_empty());
+
+        let mut hostile = run_fact(&"5".repeat(32), "/etc/passwd; rm -rf /", 1_700_000_100);
+        hostile.started_at = Some(1);
+        hostile.trigger = Some("manual".to_string());
+        hostile.exit_code = Some(9_000);
+        shared.push(hostile);
+        let mut unusable = run_fact("not-hex", "deploy", 1_700_000_101);
+        unusable.state = "running".to_string();
+        shared.push(unusable);
+
+        let harvested = reporter.run_signals();
+        assert_eq!(harvested.len(), 1, "the unusable run must be dropped");
+        assert_eq!(harvested[0].script, "etcpasswdrm-rf");
+        assert_eq!(harvested[0].exit_code, None);
+        assert_eq!(harvested[0].started_at, None);
+        assert_eq!(harvested[0].trigger, None);
+    }
+
+    #[test]
+    fn the_harvest_is_bounded_by_the_frozen_outbox_capacity() {
+        let shared = std::sync::Arc::new(SharedFacts::default());
+        let reporter = HealthReporter::new(Box::new(std::sync::Arc::clone(&shared)));
+        assert!(reporter.run_signals().is_empty());
+        for index in 0..(SIGNAL_OUTBOX_CAPACITY as usize + 40) {
+            shared.push(run_fact(
+                &format!("{index:032x}"),
+                "deploy",
+                1_700_000_000 + index as i64,
+            ));
+        }
+        assert_eq!(
+            reporter.run_signals().len(),
+            SIGNAL_OUTBOX_CAPACITY as usize
+        );
     }
 
     #[test]

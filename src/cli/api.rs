@@ -820,6 +820,7 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("GET", "/v1/node/discovery"),
     ("POST", "/v1/node/init"),
     ("GET", "/v1/node/health"),
+    ("GET", "/v1/node/signals"),
     ("GET", "/v1/node/peers"),
     ("POST", "/v1/node/peers"),
     ("GET", "/v1/node/enrollments"),
@@ -933,6 +934,7 @@ fn router_with_transport(
         .route("/v1/node/discovery", get(node_discovery_handler))
         .route("/v1/node/init", post(node_initialize_handler))
         .route("/v1/node/health", get(node_health_handler))
+        .route("/v1/node/signals", get(node_signals_handler))
         .route(
             "/v1/node/peers",
             get(node_peers_handler).post(node_trust_handler),
@@ -1135,6 +1137,25 @@ async fn node_health_handler(
     }
     operation_response(
         node_context().and_then(|context| crate::operations::health::fleet_status(&context)),
+    )
+}
+
+/// Thin adapter over the protocol-neutral Signal feed operation.
+///
+/// Same posture as `GET /v1/node/health`: no business logic, no new
+/// authorization scheme, and no write path. The existing `node:read`
+/// management capability gates it, and the only writer of the underlying
+/// Signals is the authenticated node-to-node Health Plane exchange plus this
+/// node's own append-only trust log.
+async fn node_signals_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+) -> Response {
+    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+        return response;
+    }
+    operation_response(
+        node_context().and_then(|context| crate::operations::health::signal_feed(&context)),
     )
 }
 

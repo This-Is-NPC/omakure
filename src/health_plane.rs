@@ -10,6 +10,7 @@
 //! into [`bounds`]; none of them is derived, negotiated, or widened at runtime.
 
 pub mod bounds;
+pub mod lifecycle;
 pub mod model;
 pub mod report;
 pub mod schema;
@@ -312,6 +313,18 @@ impl<'registry> HealthPlane<'registry> {
     pub fn signals(&self, node_id: &str, limit: usize) -> Result<Vec<SignalRecord>, RegistryError> {
         self.registry
             .health_signals(node_id, limit, self.clock.unix_seconds())
+    }
+
+    /// The bounded, newest-first Conductor-local lifecycle Signal feed.
+    ///
+    /// `enrolled` and `revoked` are decided by this node, so they are
+    /// projected from the append-only trust audit rather than received,
+    /// stored, or re-derived. Nothing is written by this call. See
+    /// [`lifecycle`] for why projection is the only revocation-safe shape.
+    pub fn local_signals(&self, limit: usize) -> Result<Vec<SignalRecord>, RegistryError> {
+        let now = self.clock.unix_seconds();
+        let events = self.registry.lifecycle_trust_events(usize::MAX)?;
+        Ok(lifecycle::project(&events, now, limit))
     }
 
     /// The read-only authorization projection for one peer.

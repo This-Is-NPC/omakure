@@ -22,7 +22,7 @@ revocation. Trust mutation bodies must include `confirmed: true`, a non-empty
 `actor`, and a non-empty `reason`.
 
 Routes are `GET /v1/node/status`, `POST /v1/node/init`, `GET /v1/node/health`,
-`GET` and `POST /v1/node/peers`, `PATCH
+`GET /v1/node/signals`, `GET` and `POST /v1/node/peers`, `PATCH
 /v1/node/peers/:node_id/capabilities`, and `POST
 /v1/node/peers/:node_id/revoke`. Responses use the standard JSON envelope.
 Private keys, plaintext secret values, revocation reasons, and unbounded audit
@@ -37,6 +37,18 @@ is read-only: no HTTP route writes Health Plane state, and the only writer is
 the authenticated node-to-node exchange over the direct transport. See
 `.docs/health-plane-contract.md` for the frozen presence windows, bounds, and
 privacy classes.
+
+`GET /v1/node/signals` returns the closed lifecycle Signal feed: at most 64
+entries, newest first, retained for seven days, across exactly three kinds
+(`enrolled`, `revoked`, `run-completed`). `enrolled` and `revoked` are
+projected from this node's authoritative append-only trust log and carry
+`source: "local"`; `run-completed` is reported by a Performer over the direct
+transport and carries that peer's node id as its `source`. The response also
+carries the per-Performer `cursor`, `stored`, `held`, and `gap` state, because
+the ordering rules stall a feed rather than admit a hole. It is read-only,
+gated by the same `node:read` capability, and renders exactly the same
+protocol-neutral operation as `omakure node signals --json`. There are no
+subscriptions, webhooks, alert routes, or user-defined Signal kinds.
 
 ## Non-Goals
 

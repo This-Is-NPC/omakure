@@ -126,6 +126,41 @@ raw log, or history API, and no HTTP call can write health state: the only
 writer is the node-to-node exchange. `.docs/health-plane-contract.md` holds the
 frozen windows, bounds, error codes, and privacy classes.
 
+## Lifecycle Signals
+
+Alongside current status, a Conductor keeps a small closed feed of notable
+lifecycle changes:
+
+```bash
+omakure node signals --json
+curl -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
+  http://127.0.0.1:7878/v1/node/signals
+```
+
+There are exactly three Signal kinds and no way to add a fourth:
+
+- `enrolled` and `revoked` are decided by the Conductor itself and are read
+  straight from its authoritative append-only trust log, so a revocation and
+  its Signal can never disagree and the revocation Signal survives the
+  revocation it records.
+- `run-completed` is emitted by a Performer *after* one of its runs reaches a
+  terminal result, and travels over the same authenticated direct transport.
+  It needs the `notifications` capability: a Performer whose Conductor granted
+  `inventory-health` but not `notifications` reports Profile and Pulse and
+  sends no Signals at all.
+
+A `run-completed` Signal carries only the run's schema name, an opaque run id,
+the finish time, the terminal state, and the exit code. Script paths,
+arguments, environment values, stdout, stderr, and secret references are
+forbidden by the closed schema and are rejected rather than redacted.
+
+Delivery is bounded and idempotent. Each Signal has a stable id, so a
+duplicate, a reconnect, a restart, or a lost acknowledgement still produces
+exactly one visible Signal. The feed is newest first, capped at 64 entries,
+kept for seven days, and stalls rather than admitting a hole if a Signal goes
+missing - `gap` and the per-node `cursor` in the response say so explicitly.
+There are no subscriptions, webhooks, alerts, or user-defined Signal kinds.
+
 ## Transport certification
 
 The repository's bounded Linux certification uses four isolated Compose services

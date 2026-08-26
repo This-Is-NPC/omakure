@@ -254,6 +254,18 @@ pub fn run(
         }
     }
 
+    // Health Plane retention. The frozen bounds - 64 Signals per Performer,
+    // the 7-day Signal window, the 60-second reorder-buffer lifetime, the
+    // replay table, the audit window, and revocation cleanup - are all enforced
+    // by the Wave 2 shared operations; this loop only asks them to run on a
+    // bounded cadence so a long-lived node stays inside the frozen storage
+    // ceiling without operator action.
+    let health_maintenance = {
+        let context = context.clone();
+        let flag = Arc::clone(&cancel_flag);
+        thread::spawn(move || health_maintenance_loop(context, flag))
+    };
+
     let scheduler_handle = if scheduler_enabled {
         let ws = workspace.clone_for_executor();
         let flag = Arc::clone(&cancel_flag);
@@ -302,11 +314,64 @@ pub fn run(
     if let Some(h) = scheduler_handle {
         let _ = h.join();
     }
+    let _ = health_maintenance.join();
     for h in worker_handles {
         let _ = h.join();
     }
 
     http_result
+}
+
+/// Cadence between Health Plane retention passes.
+///
+/// One minute is the frozen Health Plane rate window and is far shorter than
+/// every retention bound it enforces, so no bound can be exceeded between two
+/// passes.
+const HEALTH_MAINTENANCE_INTERVAL: Duration =
+    Duration::from_secs(crate::health_plane::bounds::RATE_MINUTE_WINDOW_SECONDS as u64);
+
+/// Slice between cancellation checks inside one maintenance wait.
+const HEALTH_MAINTENANCE_SLICE: Duration = Duration::from_millis(200);
+
+/// Run the frozen Health Plane retention rules on a bounded cadence.
+///
+/// Every decision belongs to the Wave 2 shared operations: this loop chooses
+/// nothing, writes no Health Plane row itself, and never touches identity,
+/// trust, revocation, or run state. A failure is a bounded no-op that is
+/// retried on the next pass rather than a reason to stop serving.
+fn health_maintenance_loop(context: crate::node::NodeContext, cancel_flag: Arc<AtomicBool>) {
+    loop {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return;
+        }
+        run_health_maintenance(&context);
+        let deadline = std::time::Instant::now() + HEALTH_MAINTENANCE_INTERVAL;
+        while std::time::Instant::now() < deadline {
+            if cancel_flag.load(Ordering::SeqCst) {
+                return;
+            }
+            thread::sleep(HEALTH_MAINTENANCE_SLICE);
+        }
+    }
+}
+
+fn run_health_maintenance(context: &crate::node::NodeContext) {
+    let Ok(identity) = crate::node_identity::NodeIdentity::load_existing(context) else {
+        return;
+    };
+    let Ok(registry) =
+        crate::node_registry::NodeRegistry::open_existing(context, identity.public_status())
+    else {
+        return;
+    };
+    let plane = crate::health_plane::HealthPlane::new(&registry);
+    if !plane.enabled().unwrap_or(false) {
+        return;
+    }
+    // Revocation cleanup first: a peer that is no longer actively trusted must
+    // stop occupying Health Plane capacity before retention is measured.
+    let _ = plane.purge_revoked();
+    let _ = plane.prune();
 }
 
 fn scheduler_loop(workspace: Workspace, cancel_flag: Arc<AtomicBool>) {

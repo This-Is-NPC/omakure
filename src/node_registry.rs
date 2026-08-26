@@ -30,6 +30,10 @@ const NODE_ID_BYTES: usize = 69;
 const PUBLIC_KEY_BYTES: usize = 64;
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
+/// Newest audit rows scanned when projecting Conductor-local lifecycle
+/// Signals. The projection itself is bounded by the frozen Signal capacity;
+/// this only bounds how far back a single read may look.
+const MAX_LIFECYCLE_SCAN_ROWS: usize = 4_096;
 const HEALTH_PLANE_DISABLED: &str = "disabled";
 /// Test-only fault injection for the Health Plane migration, so the
 /// "migration failed, keep serving with the plane disabled" path can be proven
@@ -1697,6 +1701,29 @@ impl NodeRegistry {
             drop(statement);
             transaction.commit()?;
             Ok(events)
+        })
+    }
+
+    /// The bounded, newest-first trust transitions the Health Plane projects
+    /// into Conductor-local `enrolled` and `revoked` Signals.
+    ///
+    /// This is a **read-only** projection over the existing append-only
+    /// `audit_events` table. It adds no table, no trigger, no write path, and
+    /// no new trust state: the authoritative local record of a peer becoming
+    /// trusted or being revoked already exists, and the Health Plane only
+    /// reads it. Rows whose `to_state` is neither `active` nor `revoked` are
+    /// not lifecycle transitions and never leave the registry.
+    pub fn lifecycle_trust_events(&self, limit: usize) -> Result<Vec<AuditEvent>, RegistryError> {
+        let limit = limit.min(MAX_LIFECYCLE_SCAN_ROWS) as i64;
+        self.with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT id, event_type, node_id, from_state, to_state, actor, reason, occurred_at
+                 FROM audit_events
+                 WHERE to_state IN ('active', 'revoked')
+                 ORDER BY id DESC LIMIT ?1",
+            )?;
+            let rows = statement.query_map(params![limit], audit_from_row)?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
         })
     }
 

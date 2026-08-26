@@ -489,6 +489,9 @@ pub enum NodeCommand {
     /// Show current fleet health: presence, profile, and runner status
     Health,
 
+    /// Show the bounded newest-first closed Signal feed: enrolled, revoked, run-completed
+    Signals,
+
     /// Run one bounded in-memory LAN discovery scan
     Discovery(NodeDiscoveryArgs),
 

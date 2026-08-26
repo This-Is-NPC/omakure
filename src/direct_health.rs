@@ -8,30 +8,35 @@
 //!   calling [`HealthPlane::ingest`], and nothing else;
 //! * signing the frozen `health_ack` / `health_error` reply the shared
 //!   operations chose;
-//! * the Performer-side emission schedule for Profile and Pulse.
+//! * the Performer-side emission schedule for Profile, Pulse, and the bounded
+//!   `run-completed` Signal outbox.
 //!
 //! It deliberately does **not** own authorization, presence, ordering,
-//! idempotency, capacity, or any Health Plane table. Wave 2 is the single
-//! fail-closed owner of all of those, and every inbound message reaches it
-//! through `HealthPlane::ingest` with no shortcut, no cache, and no second
-//! opinion. The only registry call made here is the redacted audit row for a
-//! transport-layer failure, which happens before a message can reach ingest at
-//! all.
+//! idempotency, capacity, Signal storage, or any Health Plane table. Wave 2 is
+//! the single fail-closed owner of all of those, and every inbound message
+//! reaches it through `HealthPlane::ingest` with no shortcut, no cache, and no
+//! second opinion. The only registry call made here is the redacted audit row
+//! for a transport-layer failure, which happens before a message can reach
+//! ingest at all.
 
 use crate::direct_transport::{
     envelope_kind_hint, envelope_nonce, health_envelope_view, sign_health_envelope,
     verify_envelope, TransportError, HEALTH_KIND_PREFIX,
 };
 use crate::health_plane::bounds::{
-    ACK_TIMEOUT_SECONDS, MAX_RETRIES, MIN_PULSE_INTERVAL_SECONDS, RETRY_BACKOFF_SECONDS,
-    VERSION_INCOMPATIBLE_BACKOFF_SECONDS,
+    ACK_TIMEOUT_SECONDS, CAPABILITY_SIGNAL, MAX_RETRIES, MAX_SIGNALS_PER_PEER_PER_MINUTE,
+    MIN_PULSE_INTERVAL_SECONDS, RATE_MINUTE_WINDOW_SECONDS, RETRY_BACKOFF_SECONDS,
+    SIGNAL_OUTBOX_CAPACITY, VERSION_INCOMPATIBLE_BACKOFF_SECONDS,
 };
-use crate::health_plane::model::{HealthCode, HealthKind};
-use crate::health_plane::report::{ack_payload, error_payload, HealthReporter};
+use crate::health_plane::model::{HealthCode, HealthKind, SignalKind, SignalRecord};
+use crate::health_plane::report::{
+    ack_payload, error_payload, run_signal_id, signal_encoded_bytes, signal_payload, HealthReporter,
+};
 use crate::health_plane::{
     HealthClock, HealthPlane, HealthReply, InboundHealthMessage, SystemHealthClock,
 };
 use crate::node_identity::NodeIdentity;
+use crate::node_registry::health::HealthOutboxEntry;
 use crate::node_registry::{NodeRegistry, PeerRole, PeerState};
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -57,10 +62,16 @@ enum LocalRole {
     None,
 }
 
-/// One outstanding Profile or Pulse awaiting its acknowledgement.
+/// One outstanding Profile, Pulse, or Signal awaiting its acknowledgement.
 struct Pending {
     kind: HealthKind,
     message_id: String,
+    /// The durable outbox key when this attempt carried a Signal.
+    ///
+    /// A Signal is retried from the outbox rather than rebuilt from live
+    /// facts, because the frozen contract requires a resend to reuse the
+    /// original `signal_id` and `sequence` while using a fresh `message_id`.
+    signal_id: Option<String>,
     /// The UTC Unix second the attempt left this node.
     sent_at: i64,
     attempts: i64,
@@ -104,6 +115,12 @@ pub struct HealthSession<'a> {
     last_pulse_sent: Option<i64>,
     /// Set when the Conductor answered `health_unsupported_version` (1101).
     suppressed_until: Option<i64>,
+    /// Start of the current one-minute Signal send window.
+    signal_window_start: Option<i64>,
+    /// Signals sent inside the current window, held under the frozen
+    /// per-peer-per-minute Signal bound so this node can never manufacture a
+    /// `health_rate_limited` rejection against itself.
+    signals_in_window: i64,
 }
 
 /// What the caller must do with the result of one inbound envelope.
@@ -162,6 +179,8 @@ impl<'a> HealthSession<'a> {
             next_pulse: None,
             last_pulse_sent: None,
             suppressed_until: None,
+            signal_window_start: None,
+            signals_in_window: 0,
         }
     }
 
@@ -265,6 +284,12 @@ impl<'a> HealthSession<'a> {
         if self.suppressed_until.is_some_and(|until| now < until) {
             return None;
         }
+        // Terminal runs become durable outbox entries before anything is sent,
+        // so a `run-completed` Signal survives this session, this connection,
+        // and this process. Nothing here starts, schedules, or cancels work:
+        // the run log is read only after a run already reached a terminal
+        // result.
+        self.harvest_run_signals(&reporter, &authorization.1);
         if let Some(retry) = self.retry_due(now) {
             return retry;
         }
@@ -280,13 +305,131 @@ impl<'a> HealthSession<'a> {
             self.profile_due = false;
             return self.send(HealthKind::Profile, message.payload, now);
         }
-        if self.next_pulse.is_some_and(|due| now < due) {
+        // Pulse keeps priority over the Signal feed, because presence is what
+        // an operator loses first and the frozen 10-per-minute Signal bound
+        // already leaves most of the 30-second Pulse window free for Signals.
+        if self.next_pulse.is_none_or(|due| now >= due) {
+            if let Some(message) = reporter.pulse(&self.remote_node_id, &fresh_id(), now) {
+                self.next_pulse =
+                    Some(now.saturating_add(HealthReporter::pulse_interval_seconds()));
+                self.last_pulse_sent = Some(now);
+                return self.send(HealthKind::Pulse, message.payload, now);
+            }
+        }
+        self.send_next_signal(&authorization.1, now)
+    }
+
+    /// Turn newly terminal runs into bounded, durable outbox Signals.
+    ///
+    /// Enqueueing goes through the Wave 2 shared operations, which own the
+    /// 64-entry capacity, the drop-oldest overflow rule, the local sequence,
+    /// the 7-day expiry, and the `signals_dropped` counter. Nothing here
+    /// writes a Health Plane row.
+    fn harvest_run_signals(&self, reporter: &HealthReporter, granted: &[String]) {
+        if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {
+            // The Conductor has not granted `notifications`. A Performer that
+            // reports Profile and Pulse but refuses Signals is an enforceable
+            // posture the frozen contract names, so nothing is queued at all.
+            return;
+        }
+        let plane = self.plane();
+        for run in reporter.run_signals() {
+            let signal_id = run_signal_id(&run.run_id);
+            let record = SignalRecord {
+                kind: SignalKind::RunCompleted,
+                occurred_at: run.finished_at,
+                run: Some(run.clone()),
+                sequence: 1,
+                signal_id: signal_id.clone(),
+                subject: None,
+            };
+            let message_bytes = signal_encoded_bytes(&self.remote_node_id, &record);
+            // A duplicate or a full outbox is a bounded, already-audited
+            // outcome inside the shared operations; it is never a reason to
+            // retry a run or to widen a bound here.
+            let _ = plane.enqueue_signal(
+                &self.remote_node_id,
+                &signal_id,
+                SignalKind::RunCompleted,
+                run.finished_at,
+                None,
+                Some(&run),
+                message_bytes,
+            );
+        }
+    }
+
+    /// Send the oldest undelivered Signal, if the frozen budget allows it.
+    fn send_next_signal(&mut self, granted: &[String], now: i64) -> Option<Vec<u8>> {
+        if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {
             return None;
         }
-        let message = reporter.pulse(&self.remote_node_id, &fresh_id(), now)?;
-        self.next_pulse = Some(now.saturating_add(HealthReporter::pulse_interval_seconds()));
-        self.last_pulse_sent = Some(now);
-        self.send(HealthKind::Pulse, message.payload, now)
+        if !self.signal_budget_available(now) {
+            return None;
+        }
+        let entry = self
+            .plane()
+            .outbox(1)
+            .ok()?
+            .into_iter()
+            .next()
+            .filter(|entry| entry.target_node_id == self.remote_node_id)?;
+        self.send_signal(&entry, now)
+    }
+
+    /// Sign and record one attempt at delivering a durable outbox Signal.
+    ///
+    /// The resend rule is frozen: the original `signal_id` and `sequence` are
+    /// reused so the Conductor can recognise the same logical Signal, while a
+    /// fresh `message_id` and a fresh nonce keep it outside the replay window.
+    fn send_signal(&mut self, entry: &HealthOutboxEntry, now: i64) -> Option<Vec<u8>> {
+        // The durable attempt counter is the authority. The frozen bound is
+        // three attempts per message; the outbox column enforces the same
+        // ceiling, so exceeding it is refused here rather than at the database.
+        if entry.attempts >= MAX_RETRIES {
+            return None;
+        }
+        let message_id = fresh_id();
+        let payload = signal_payload(&self.remote_node_id, &message_id, &entry.signal);
+        let encoded = self.sign(HealthKind::Signal, payload, now)?;
+        if !self
+            .plane()
+            .mark_signal_sent(&entry.signal_id, &message_id)
+            .ok()?
+        {
+            return None;
+        }
+        self.consume_signal_budget(now);
+        self.pending = Some(Pending {
+            kind: HealthKind::Signal,
+            message_id,
+            signal_id: Some(entry.signal_id.clone()),
+            sent_at: now,
+            attempts: entry.attempts,
+        });
+        Some(encoded)
+    }
+
+    /// Whether the frozen per-peer-per-minute Signal bound still has room.
+    fn signal_budget_available(&self, now: i64) -> bool {
+        match self.signal_window_start {
+            Some(start) if now.saturating_sub(start) < RATE_MINUTE_WINDOW_SECONDS => {
+                self.signals_in_window < MAX_SIGNALS_PER_PEER_PER_MINUTE
+            }
+            _ => true,
+        }
+    }
+
+    fn consume_signal_budget(&mut self, now: i64) {
+        match self.signal_window_start {
+            Some(start) if now.saturating_sub(start) < RATE_MINUTE_WINDOW_SECONDS => {
+                self.signals_in_window = self.signals_in_window.saturating_add(1);
+            }
+            _ => {
+                self.signal_window_start = Some(now);
+                self.signals_in_window = 1;
+            }
+        }
     }
 
     /// Whether this session carries Health Plane traffic in either direction.
@@ -310,12 +453,14 @@ impl<'a> HealthSession<'a> {
         let attempts = pending.attempts;
         let kind = pending.kind;
         if attempts >= MAX_RETRIES {
-            // Final retry exhausted. The frozen rule is that the send is
-            // dropped and the next *scheduled* Profile or Pulse supersedes it.
-            // A Profile is scheduled by a material change or by a new session,
-            // never by its own failure, so re-arming it here would turn one
-            // unreachable Conductor into an unbounded Profile loop that the
-            // frozen 12-per-hour bound forbids.
+            // Final retry exhausted. For a Profile or a Pulse the frozen rule
+            // is that the send is dropped and the next *scheduled* one
+            // supersedes it. A Profile is scheduled by a material change or by
+            // a new session, never by its own failure, so re-arming it here
+            // would turn one unreachable Conductor into an unbounded Profile
+            // loop that the frozen 12-per-hour bound forbids. A Signal is
+            // instead retained in the durable outbox within its 64-entry and
+            // 7-day bounds; see `retry_signal`.
             self.pending = None;
             return Some(None);
         }
@@ -333,6 +478,9 @@ impl<'a> HealthSession<'a> {
         }
         if waited < ACK_TIMEOUT_SECONDS.saturating_add(wait) {
             return Some(None);
+        }
+        if kind == HealthKind::Signal {
+            return Some(self.retry_signal(now));
         }
         let reporter = self.reporter.clone()?;
         let authorization = self.authorization();
@@ -360,6 +508,34 @@ impl<'a> HealthSession<'a> {
         Some(encoded)
     }
 
+    /// Retry one unacknowledged Signal from the durable outbox.
+    ///
+    /// The outbox is the single source of truth. When the entry is gone the
+    /// Conductor already acknowledged it and the Wave 2 apply step removed it,
+    /// so there is nothing to retry. When it is still there but has spent its
+    /// frozen three attempts, it is left in the outbox within its 64-entry and
+    /// 7-day bounds rather than resent forever.
+    fn retry_signal(&mut self, now: i64) -> Option<Vec<u8>> {
+        let signal_id = self.pending.as_ref().and_then(|pending| {
+            pending
+                .signal_id
+                .as_ref()
+                .filter(|_| pending.kind == HealthKind::Signal)
+                .cloned()
+        })?;
+        self.pending = None;
+        if !self.signal_budget_available(now) {
+            return None;
+        }
+        let entry = self
+            .plane()
+            .outbox(SIGNAL_OUTBOX_CAPACITY as usize)
+            .ok()?
+            .into_iter()
+            .find(|entry| entry.signal_id == signal_id)?;
+        self.send_signal(&entry, now)
+    }
+
     fn send(&mut self, kind: HealthKind, payload: Value, now: i64) -> Option<Vec<u8>> {
         let message_id = payload
             .get("message_id")
@@ -370,6 +546,7 @@ impl<'a> HealthSession<'a> {
         self.pending = Some(Pending {
             kind,
             message_id,
+            signal_id: None,
             sent_at: now,
             attempts: 0,
         });
@@ -559,6 +736,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     use crate::direct_transport::{envelope_kind_hint, health_envelope_view, verify_envelope};
+    use crate::health_plane::model::RunFact;
     use crate::health_plane::model::RunnerFact;
     use crate::health_plane::report::{HealthFactsSource, ProfileFacts, PulseFacts};
     use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
@@ -607,13 +785,31 @@ mod tests {
     /// smallest possible material Profile change.
     struct MutableFacts {
         display_name: StdMutex<String>,
+        terminal: StdMutex<Vec<RunFact>>,
     }
 
     impl MutableFacts {
         fn new() -> Arc<Self> {
             Arc::new(Self {
                 display_name: StdMutex::new("workshop".to_string()),
+                terminal: StdMutex::new(Vec::new()),
             })
+        }
+
+        /// Record one already-terminal run, exactly as the local run log would.
+        fn finish_run(&self, run_id: &str, script: &str, finished_at: i64) {
+            self.terminal.lock().unwrap().insert(
+                0,
+                RunFact {
+                    exit_code: Some(0),
+                    finished_at,
+                    run_id: run_id.to_string(),
+                    script: script.to_string(),
+                    started_at: None,
+                    state: "completed".to_string(),
+                    trigger: None,
+                },
+            );
         }
     }
 
@@ -645,6 +841,12 @@ mod tests {
                 last_run: None,
                 uptime_seconds: 60,
             }
+        }
+
+        fn terminal_runs(&self, limit: usize) -> Vec<RunFact> {
+            let mut runs = self.terminal.lock().unwrap().clone();
+            runs.truncate(limit);
+            runs
         }
     }
 
@@ -724,6 +926,34 @@ mod tests {
             clock: TestClock::at(BASE_NOW),
             facts: MutableFacts::new(),
         }
+    }
+
+    /// Grant the frozen `notifications` capability to this node's Conductor.
+    ///
+    /// Signals require it, and the base fixture deliberately does not have it,
+    /// so every pre-existing Profile/Pulse test also proves that a Performer
+    /// without `notifications` never emits a Signal.
+    fn grant_notifications(fixture: &Fixture) {
+        fixture
+            .registry
+            .update_peer_capabilities(
+                &fixture.conductor,
+                vec!["inventory-health".to_string(), "notifications".to_string()],
+                "direct-health-tests",
+                "grant the frozen notifications capability",
+            )
+            .expect("grant notifications");
+    }
+
+    /// Drive the session to the point where the Signal feed is the only thing
+    /// left to send: Profile acknowledged, Pulse acknowledged, cadence armed.
+    fn settle(fixture: &Fixture, session: &mut HealthSession<'_>) {
+        let (kind, profile) = decode(fixture, &session.tick().expect("profile"));
+        assert_eq!(kind, "health_profile");
+        ack(session, &profile);
+        let (kind, pulse) = decode(fixture, &session.tick().expect("pulse"));
+        assert_eq!(kind, "health_pulse");
+        ack(session, &pulse);
     }
 
     impl Fixture {
@@ -967,6 +1197,217 @@ mod tests {
             session.tick().is_some(),
             "the node retries once the frozen backoff expires"
         );
+    }
+
+    #[test]
+    fn a_terminal_run_becomes_exactly_one_bounded_redacted_signal() {
+        let fixture = fixture();
+        grant_notifications(&fixture);
+        let mut session = fixture.conductor_session();
+        settle(&fixture, &mut session);
+
+        // Nothing has finished yet, so the feed is silent.
+        fixture.clock.advance(1);
+        assert!(session.tick().is_none());
+
+        fixture
+            .facts
+            .finish_run(&"a".repeat(32), "deploy", BASE_NOW + 1);
+        fixture.clock.advance(1);
+        let encoded = session.tick().expect("run-completed signal");
+        let (kind, payload) = decode(&fixture, &encoded);
+        assert_eq!(kind, "health_signal");
+        assert_eq!(payload["target"], fixture.conductor);
+        assert_eq!(payload["signal"]["kind"], "run-completed");
+        assert_eq!(payload["signal"]["sequence"], 1);
+        assert!(payload["signal"]["subject"].is_null());
+        assert_eq!(payload["signal"]["occurred_at"], BASE_NOW + 1);
+        assert_eq!(payload["signal"]["run"]["finished_at"], BASE_NOW + 1);
+        assert_eq!(payload["signal"]["run"]["script"], "deploy");
+        assert_eq!(payload["signal"]["run"]["state"], "completed");
+        assert_eq!(payload["signal"]["run"].as_object().unwrap().len(), 5);
+        assert!(
+            encoded.len() <= HealthKind::Signal.max_encoded_bytes(),
+            "signal envelope exceeded the frozen per-kind cap"
+        );
+
+        // The same terminal run never produces a second outbox entry.
+        assert_eq!(session.plane().outbox(64).expect("outbox").len(), 1);
+        fixture.clock.advance(1);
+        assert!(session.tick().is_none(), "one in-flight message at a time");
+        assert_eq!(session.plane().outbox(64).expect("outbox").len(), 1);
+    }
+
+    #[test]
+    fn a_performer_without_the_notifications_capability_never_emits_a_signal() {
+        let fixture = fixture();
+        let mut session = fixture.conductor_session();
+        settle(&fixture, &mut session);
+        fixture
+            .facts
+            .finish_run(&"b".repeat(32), "deploy", BASE_NOW + 1);
+        for _ in 0..5 {
+            fixture.clock.advance(1);
+            assert!(
+                session.tick().is_none(),
+                "a Signal must never leave a node whose Conductor granted no notifications"
+            );
+        }
+        assert!(
+            session.plane().outbox(64).expect("outbox").is_empty(),
+            "nothing is even queued without the frozen capability"
+        );
+    }
+
+    #[test]
+    fn an_unacknowledged_signal_is_retried_from_the_outbox_and_then_bounded() {
+        let fixture = fixture();
+        grant_notifications(&fixture);
+        let mut session = fixture.conductor_session();
+        settle(&fixture, &mut session);
+        fixture
+            .facts
+            .finish_run(&"c".repeat(32), "deploy", BASE_NOW + 1);
+        fixture.clock.advance(1);
+        let (_, first) = decode(&fixture, &session.tick().expect("first attempt"));
+        let signal_id = first["signal"]["signal_id"].as_str().unwrap().to_string();
+        let mut message_ids = vec![first["message_id"].as_str().unwrap().to_string()];
+
+        // Frozen backoff: 1 s, then 2 s, each after the 5 s acknowledgement
+        // timeout. Three attempts in total, then the entry is retained rather
+        // than resent forever.
+        for backoff in [RETRY_BACKOFF_SECONDS[0], RETRY_BACKOFF_SECONDS[1]] {
+            fixture.clock.advance(ACK_TIMEOUT_SECONDS + backoff);
+            let (kind, retry) = decode(&fixture, &session.tick().expect("retry"));
+            assert_eq!(kind, "health_signal");
+            assert_eq!(
+                retry["signal"]["signal_id"], signal_id,
+                "a resend reuses the frozen idempotency key"
+            );
+            assert_eq!(retry["signal"]["sequence"], 1, "and the same sequence");
+            let message_id = retry["message_id"].as_str().unwrap().to_string();
+            assert!(
+                !message_ids.contains(&message_id),
+                "a resend must use a fresh message_id"
+            );
+            message_ids.push(message_id);
+        }
+        assert_eq!(message_ids.len(), MAX_RETRIES as usize);
+
+        fixture
+            .clock
+            .advance(ACK_TIMEOUT_SECONDS + RETRY_BACKOFF_SECONDS[2]);
+        assert!(
+            session.tick().is_none(),
+            "the frozen three-attempt bound must stop the resend loop"
+        );
+        let outbox = session.plane().outbox(64).expect("outbox");
+        assert_eq!(outbox.len(), 1, "the Signal is retained, not dropped");
+        assert_eq!(outbox[0].attempts, MAX_RETRIES);
+        assert_eq!(
+            outbox[0].expires_at - outbox[0].enqueued_at,
+            crate::health_plane::bounds::SIGNAL_RETENTION_SECONDS
+        );
+    }
+
+    #[test]
+    fn a_new_session_resends_the_same_logical_signal_after_a_reconnect() {
+        let fixture = fixture();
+        grant_notifications(&fixture);
+        let signal_id;
+        let first_message_id;
+        {
+            let mut session = fixture.conductor_session();
+            settle(&fixture, &mut session);
+            fixture
+                .facts
+                .finish_run(&"d".repeat(32), "deploy", BASE_NOW + 1);
+            fixture.clock.advance(1);
+            let (_, payload) = decode(&fixture, &session.tick().expect("first attempt"));
+            signal_id = payload["signal"]["signal_id"].as_str().unwrap().to_string();
+            first_message_id = payload["message_id"].as_str().unwrap().to_string();
+        }
+
+        // A brand new session over a brand new reporter: the durable outbox is
+        // the only thing that carries the Signal across the reconnect.
+        let mut session = fixture.conductor_session();
+        settle(&fixture, &mut session);
+        fixture.clock.advance(1);
+        let (kind, resent) = decode(&fixture, &session.tick().expect("resend"));
+        assert_eq!(kind, "health_signal");
+        assert_eq!(resent["signal"]["signal_id"], signal_id);
+        assert_eq!(resent["signal"]["sequence"], 1);
+        assert_ne!(resent["message_id"], first_message_id.as_str());
+        assert_eq!(
+            session.plane().outbox(64).expect("outbox").len(),
+            1,
+            "a reconnect must not duplicate the queued Signal"
+        );
+    }
+
+    #[test]
+    fn the_signal_send_rate_stays_inside_the_frozen_per_minute_bound() {
+        let fixture = fixture();
+        grant_notifications(&fixture);
+        let mut session = fixture.conductor_session();
+        settle(&fixture, &mut session);
+        for index in 0..(MAX_SIGNALS_PER_PEER_PER_MINUTE as usize + 4) {
+            fixture
+                .facts
+                .finish_run(&format!("{index:032x}"), "deploy", BASE_NOW + 1);
+        }
+
+        let mut sent = 0;
+        // One in-flight message at a time, so each accepted Signal is
+        // acknowledged before the next is offered. The window is one minute.
+        for _ in 0..120 {
+            fixture.clock.advance(1);
+            let Some(encoded) = session.tick() else {
+                continue;
+            };
+            let (kind, payload) = decode(&fixture, &encoded);
+            ack(&mut session, &payload);
+            if kind == "health_signal" {
+                sent += 1;
+            }
+            if fixture.clock.unix_seconds() >= BASE_NOW + RATE_MINUTE_WINDOW_SECONDS {
+                break;
+            }
+        }
+        assert!(
+            sent <= MAX_SIGNALS_PER_PEER_PER_MINUTE,
+            "sent {sent} Signals in one minute; the frozen bound is {MAX_SIGNALS_PER_PEER_PER_MINUTE}"
+        );
+        assert!(sent > 0, "the feed must actually drain");
+    }
+
+    #[test]
+    fn revoking_the_conductor_stops_the_signal_feed_on_the_next_tick() {
+        let fixture = fixture();
+        grant_notifications(&fixture);
+        let mut session = fixture.conductor_session();
+        settle(&fixture, &mut session);
+        fixture
+            .facts
+            .finish_run(&"e".repeat(32), "deploy", BASE_NOW + 1);
+        fixture.clock.advance(1);
+        assert!(session.tick().is_some(), "the Signal leaves while trusted");
+
+        fixture
+            .registry
+            .revoke_peer(
+                &fixture.conductor,
+                "direct-health-tests",
+                "revoked during the certification",
+            )
+            .expect("revoke conductor");
+        for _ in 0..5 {
+            fixture.clock.advance(ACK_TIMEOUT_SECONDS + 8);
+            assert!(
+                session.tick().is_none(),
+                "a revoked Conductor must never receive another Signal"
+            );
+        }
     }
 
     #[test]

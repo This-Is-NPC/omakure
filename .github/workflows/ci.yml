@@ -52,7 +52,14 @@ jobs:
       - name: Compile platform-specific node security paths
         if: matrix.target == 'x86_64-pc-windows-msvc'
         run: cargo check --all-targets --locked
+      # The MSVC release artifact is built with `+crt-static`
+      # (.github/workflows/release.yml), but nothing in CI carried those flags.
+      # With a vendored C dependency that gap hides CRT-linkage failures
+      # (LNK2038/LNK4098) until a release tag, which is the worst place to find
+      # them. Build the same way here.
       - name: Build release binary
+        env:
+          RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
         run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
 
   lint:

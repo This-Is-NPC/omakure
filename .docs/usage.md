@@ -207,8 +207,10 @@ malformed (1102), oversized (1103), forged signature (1102), spoofed sender
 Profile revision and Pulse sequence (1110), reordering past the buffer (1111),
 inbox overflow (1113), flood (1112), missing capability (1106), wrong role
 (1105), and revocation on a live session (1107), plus corrupt stored state
-(1115). Each case asserts the exact stable code, the frozen reply policy, a
-durable redacted audit row, and unchanged trust and health state.
+(1115). Each case asserts the exact stable code and the frozen reply policy.
+Durable redacted audit rows are asserted for the cases the contract requires
+them for, and trust and health state are asserted unchanged across the matrix
+as a whole rather than after every individual case.
 
 Management HTTP binds loopback inside each container and is never published, so
 it cannot be the node-to-node data path; the gate asserts that directly. Nostr,

@@ -237,12 +237,14 @@ jobs:
             -e 's|enrollment = \"disabled\"|enrollment = \"manual\"|' \
             -e 's|allow_remote_cues = false|allow_remote_cues = true|' \
             -e 's|remote_cue_scripts = \[\]|remote_cue_scripts = [\"deploy.sh\"]|' \
-            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = []|' \
+            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$conductor_id\"'@conductor:7879\"]|' \
             /etc/omakure/node.toml"
-          # The Conductor holds a standing session to the Performer, which is
-          # what a managed fleet looks like -- and the arrangement in which a
-          # separate process cannot dial that peer at all. The Cue must travel
-          # on the session the service already holds.
+          # Both sides name the other. That is what a managed fleet looks like,
+          # and what dial ownership requires: `should_initiate` gives the dial
+          # to whichever node id sorts lower, so configuring one side leaves no
+          # session at all half the time. It is also the arrangement in which a
+          # separate process cannot dial that peer, so the Cue must travel on
+          # the session the service already holds.
           sh_in conductor "sed -i 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$performer_id\"'@performer:7879\"]|' /etc/omakure/node.toml"
           sh_in performer "printf '#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"deploy\",\"Description\":\"cue smoke\",\"Fields\":[]}\n# OMAKURE_SCHEMA_END\necho cue-ran\n' > /workspace/deploy.sh \
              && chmod 0755 /workspace/deploy.sh && chown 10001:10001 /workspace/deploy.sh"
@@ -257,8 +259,21 @@ jobs:
               --allow-non-loopback-direct --workers 1 --no-scheduler \
               --capability node:read --capability node:write >/dev/null
           done
-          # Long enough for the standing session to establish before asking.
-          sleep 12
+          # Wait on the fact, not on a duration: dispatching before the session
+          # exists would fall back to the direct dial and pass for the wrong
+          # reason.
+          for attempt in $(seq 1 60); do
+            connected="$(d 30s docker exec omakure-cue-conductor curl --fail --silent \
+              --max-time 5 -H "Authorization: Bearer ${tok}" \
+              http://127.0.0.1:7878/v1/node/status \
+              | jq -r '.data.transport.expected_connected_peer_count // 0' || echo 0)"
+            [ "$connected" = "1" ] && break
+            if [ "$attempt" = 60 ]; then
+              echo "the Conductor never established its standing session" >&2
+              exit 1
+            fi
+            sleep 1
+          done
           # `--endpoint` takes a socket address, not a hostname. It is only the
           # fallback path's argument here -- with a session up, the dispatch
           # goes through the service and the endpoint is not used.

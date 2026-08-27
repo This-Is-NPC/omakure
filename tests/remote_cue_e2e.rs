@@ -372,6 +372,26 @@ fn derived_run_id(cue_id: &str) -> String {
     omakure::health_plane::report::opaque_run_id(&omakure::remote_cue::derive_run_id(cue_id))
 }
 
+/// Wait until every configured static peer is connected.
+fn wait_for_standing_session(service: &support::HttpServer) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        let status = service.get("/v1/node/status");
+        if status.status == 200 {
+            let transport = status.json()["data"]["transport"].clone();
+            let expected = transport["expected_peer_count"].as_u64();
+            if expected.is_some_and(|expected| {
+                expected > 0
+                    && transport["expected_connected_peer_count"].as_u64() == Some(expected)
+            }) {
+                return true;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    false
+}
+
 /// Poll the Conductor's own Signal feed for a `run-completed` carrying this id.
 ///
 /// Read through the shipped CLI rather than the database, so what is asserted
@@ -423,6 +443,7 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
 
     let conductor_status = init_node(conductor);
     let performer_status = init_node(performer);
+    let conductor_id = conductor_status["identity"]["node_id"].as_str().unwrap();
     let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
 
     let marker = performer.join("effects.log");
@@ -442,8 +463,10 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         "performer",
         &["inventory-health", "notifications", "remote-run"],
     );
-    // The Conductor holds the standing session. This is the arrangement that
-    // made the one-shot dial impossible.
+    // Both sides name the other, which is what a managed fleet looks like and
+    // what dial ownership requires: `should_initiate` gives the dial to
+    // whichever node id sorts lower, so configuring only one side leaves no
+    // session at all half the time — the node ids are fresh every run.
     configure(
         conductor,
         conductor_port,
@@ -451,13 +474,24 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         false,
         &[],
     );
-    configure(performer, performer_port, None, true, &["deploy.sh"]);
+    configure(
+        performer,
+        performer_port,
+        Some((conductor_id, conductor_port)),
+        true,
+        &["deploy.sh"],
+    );
 
     let _performer_service = serve(performer);
-    let _conductor_service = serve(conductor);
+    let conductor_service = serve(conductor);
 
-    // Let the standing session establish before asking for anything.
-    std::thread::sleep(Duration::from_secs(5));
+    // Wait on the fact, not on a duration. Dispatching before the session is up
+    // would fall back to the direct dial and pass for the wrong reason: the Cue
+    // would arrive, but over the path this test exists to avoid.
+    assert!(
+        wait_for_standing_session(&conductor_service),
+        "the Conductor never established its standing session to the Performer"
+    );
     assert_eq!(effect_count(&marker), 0, "nothing has run yet");
 
     let dispatched = assert_success_named(

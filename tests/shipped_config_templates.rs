@@ -20,11 +20,23 @@ fn every_shipped_config_template_matches_the_default_it_seeds() {
         std::fs::read_to_string(root.join("src/installer.rs")).expect("read the installer");
     let script = std::fs::read_to_string(root.join(".scripts/direct-transport-docker-e2e.sh"))
         .expect("read the transport e2e script");
+    let installer_sh =
+        std::fs::read_to_string(root.join("install.sh")).expect("read the shell installer");
 
     let expected = omakure::domain::NodeConfig::default();
     for (name, template) in [
         ("Dockerfile", extract_dockerfile_template(&dockerfile)),
         ("src/installer.rs", extract_installer_template(&installer)),
+        // The production installer for Linux and macOS. It was outside this
+        // test until a VM install failed: it wrote a `[trust]` block with no
+        // `authorities` and no bootstrap hashes, so a machine installed by the
+        // shipped installer could not be provisioned for signed-bundle
+        // enrollment at all. The three templates that were covered had been
+        // corrected; the one an operator actually runs had not.
+        (
+            "install.sh",
+            extract_shell_installer_template(&installer_sh),
+        ),
     ] {
         let parsed = omakure::domain::NodeConfig::parse(&template).unwrap_or_else(|error| {
             panic!("{name} template does not parse: {error:?}\n{template}")
@@ -109,6 +121,22 @@ fn extract_dockerfile_template(dockerfile: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Recover the TOML from `node_config_text`'s quoted heredoc.
+fn extract_shell_installer_template(installer: &str) -> String {
+    let start = installer
+        .find("node_config_text() {")
+        .expect("the shell installer still emits node.toml from node_config_text");
+    let rest = &installer[start..];
+    let body = rest
+        .find("<<'CONFIG'\n")
+        .map(|at| &rest[at + "<<'CONFIG'\n".len()..])
+        .expect("node_config_text still uses a quoted CONFIG heredoc");
+    let end = body
+        .find("\nCONFIG")
+        .expect("the CONFIG heredoc is still terminated");
+    body[..end].to_string()
 }
 
 /// Recover the TOML from the installer's single escaped string literal.

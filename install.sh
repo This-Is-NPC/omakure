@@ -2,6 +2,13 @@
 set -euo pipefail
 
 APP_NAME="omakure"
+# A locally built release tarball, for installing without a published release.
+#
+# Without this the installer can only ever run against a GitHub release, which
+# means it cannot be exercised before publishing -- and so it shipped for
+# months with nothing but string assertions behind it. An installer you cannot
+# test until after you have shipped it is an installer you have not tested.
+ARTIFACT="${ARTIFACT:-}"
 REPO_DEFAULT="This-Is-NPC/omakure"
 REPO="${REPO:-$REPO_DEFAULT}"
 BIN_DIR_ENV_SET=0
@@ -42,11 +49,13 @@ Usage: install.sh [--repo owner/name] [--version vX.Y.Z] [--bin-dir path]
                   [--uninstall-node-service [--uninstall-node-state --confirmed]]
 
 Environment variables:
+  ARTIFACT Local release tarball to install instead of downloading
   REPO     GitHub repository, e.g. org/omakure
   VERSION  Release tag, e.g. v0.1.0 (defaults to latest)
   BIN_DIR  Install directory (default: ~/.local/bin)
   DOCUMENTS_DIR  Documents directory (default: ~/Documents)
   SCRIPTS_DIR  Scripts directory (default: ~/Documents/omakure-scripts)
+  --artifact path         Install this tarball instead of downloading one.
   --install-node-service  Opt into privileged machine-service provisioning.
   --node-tokens-file path  Existing hashed tokens TOML for the machine service.
   --uninstall-node-service  Remove only the native service registration.
@@ -68,6 +77,11 @@ while [[ $# -gt 0 ]]; do
       BIN_DIR="$2"
       BIN_DIR_ENV_SET=1
       shift 2
+      ;;
+    --artifact)
+      ARTIFACT="$2"
+      shift 2
+      continue
       ;;
     --install-node-service)
       INSTALL_NODE_SERVICE=1
@@ -255,7 +269,13 @@ max_message_bytes = 1048576
 [trust]
 enrollment = "disabled"
 allow_remote_cues = false
+remote_cue_scripts = []
+remote_cue_batteries = []
 allow_baseline_push = false
+baseline_publishers = []
+authorities = []
+bootstrap_token_hash = ""
+bootstrap_nonce_hash = ""
 
 [discovery]
 enabled = false
@@ -480,7 +500,15 @@ url="https://github.com/${REPO}/releases/download/${VERSION}/${asset}"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
-download "${url}" "${tmp_dir}/${asset}"
+if [[ -n "${ARTIFACT}" ]]; then
+  if [[ ! -f "${ARTIFACT}" ]]; then
+    echo "--artifact ${ARTIFACT} does not exist" >&2
+    exit 1
+  fi
+  cp "${ARTIFACT}" "${tmp_dir}/${asset}"
+else
+  download "${url}" "${tmp_dir}/${asset}"
+fi
 
 tar -xzf "${tmp_dir}/${asset}" -C "${tmp_dir}"
 

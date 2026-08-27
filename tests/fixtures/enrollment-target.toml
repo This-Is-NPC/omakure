@@ -17,6 +17,7 @@ max_message_bytes = 1048576
 enrollment = "manual"
 allow_remote_cues = false
 allow_baseline_push = false
+baseline_publishers = []
 
 [discovery]
 enabled = true

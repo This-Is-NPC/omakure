@@ -95,6 +95,20 @@ pub struct TrustSettings {
     #[serde(default)]
     pub remote_cue_batteries: Vec<String>,
     pub allow_baseline_push: bool,
+    /// The baseline publishers this node will accept code from.
+    ///
+    /// The second of the two switches, on the pattern `remote_cue_scripts`
+    /// established: `allow_baseline_push = true` opens the door, this says who
+    /// may walk through it, and an empty list means nobody. Deny-by-default in
+    /// the direction that matters — a node that turned the gate on and named no
+    /// publisher installs nothing rather than trusting whoever signed first.
+    ///
+    /// A separate list from `authorities`, because they are separate keys with
+    /// separate blast radii: an enrollment authority admits machines to the
+    /// fleet, a publisher ships them code, and a node that recorded one in the
+    /// other's slot would be granting a power nobody wrote down.
+    #[serde(default)]
+    pub baseline_publishers: Vec<TrustedBaselinePublisher>,
     #[serde(default)]
     pub authorities: Vec<EnrollmentAuthority>,
     #[serde(default)]
@@ -106,6 +120,21 @@ pub struct TrustSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnrollmentAuthority {
+    pub key_id: String,
+    pub public_key: String,
+    #[serde(default)]
+    pub revoked: bool,
+}
+
+/// A baseline publisher as a receiver records it.
+///
+/// Deliberately not `EnrollmentAuthority` despite the identical three fields.
+/// The two lists authorize different things, and a shared type is how an entry
+/// from one ends up satisfying a lookup in the other — a mistake no test would
+/// see, because both would still be well-formed hex.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustedBaselinePublisher {
     pub key_id: String,
     pub public_key: String,
     #[serde(default)]
@@ -162,6 +191,7 @@ impl Default for NodeConfig {
                 remote_cue_scripts: Vec::new(),
                 remote_cue_batteries: Vec::new(),
                 allow_baseline_push: false,
+                baseline_publishers: Vec::new(),
                 authorities: Vec::new(),
                 bootstrap_token_hash: String::new(),
                 bootstrap_nonce_hash: String::new(),
@@ -315,6 +345,28 @@ impl NodeConfig {
             if !authority_ids.insert(authority.key_id.as_str()) {
                 return Err(NodeConfigError::Invalid(
                     "trust.authorities contains duplicate key IDs".to_string(),
+                ));
+            }
+        }
+        if self.trust.baseline_publishers.len() > MAX_AUTHORITY_KEYS {
+            return Err(NodeConfigError::Invalid(
+                "trust.baseline_publishers has too many entries".to_string(),
+            ));
+        }
+        let mut publisher_ids = HashSet::new();
+        for publisher in &self.trust.baseline_publishers {
+            validate_lower_hex("trust.baseline_publishers.key_id", &publisher.key_id, 16)?;
+            validate_lower_hex(
+                "trust.baseline_publishers.public_key",
+                &publisher.public_key,
+                32,
+            )?;
+            // A key id twice is a config whose meaning depends on which entry
+            // the reader stops at, and one of the two could carry
+            // `revoked = false`. Refused rather than resolved by order.
+            if !publisher_ids.insert(publisher.key_id.as_str()) {
+                return Err(NodeConfigError::Invalid(
+                    "trust.baseline_publishers contains duplicate key IDs".to_string(),
                 ));
             }
         }
@@ -606,6 +658,67 @@ mod tests {
             NodeConfig::parse(&valid_toml().replace("version = 1", "version = \"1\"")).is_err()
         );
         assert!(NodeConfig::parse(&format!("{}\nnot =", valid_toml())).is_err());
+    }
+
+    /// The list that says who may put code on this node has to be as strict as
+    /// the one that says who may admit machines to the fleet.
+    #[test]
+    fn validation_rejects_malformed_and_duplicated_baseline_publishers() {
+        let entry = |key_id: &str| TrustedBaselinePublisher {
+            key_id: key_id.to_string(),
+            public_key: "b".repeat(64),
+            revoked: false,
+        };
+
+        let mut config = NodeConfig::default();
+        config.trust.baseline_publishers = vec![entry(&"a".repeat(32))];
+        config
+            .validate()
+            .expect("a well-formed publisher must be accepted");
+
+        config.trust.baseline_publishers = vec![entry(&"a".repeat(31))];
+        assert!(
+            config.validate().is_err(),
+            "a key id of the wrong length must not be accepted"
+        );
+
+        config.trust.baseline_publishers = vec![TrustedBaselinePublisher {
+            public_key: "b".repeat(63),
+            ..entry(&"a".repeat(32))
+        }];
+        assert!(
+            config.validate().is_err(),
+            "a public key of the wrong length must not be accepted"
+        );
+
+        config.trust.baseline_publishers = vec![entry(&"A".repeat(32))];
+        assert!(
+            config.validate().is_err(),
+            "upper-case hex would make two spellings of one publisher"
+        );
+
+        // The duplicate matters more than it looks: the two entries can carry
+        // different `revoked` values, and then what this node trusts depends on
+        // which one a reader stops at.
+        config.trust.baseline_publishers = vec![
+            entry(&"a".repeat(32)),
+            TrustedBaselinePublisher {
+                revoked: true,
+                ..entry(&"a".repeat(32))
+            },
+        ];
+        assert!(
+            config.validate().is_err(),
+            "one publisher recorded twice must be refused, not resolved by order"
+        );
+    }
+
+    /// The gate ships off, and the shipped default must stay that way.
+    #[test]
+    fn baseline_push_is_off_and_names_nobody_by_default() {
+        let config = NodeConfig::default();
+        assert!(!config.trust.allow_baseline_push);
+        assert!(config.trust.baseline_publishers.is_empty());
     }
 
     #[test]

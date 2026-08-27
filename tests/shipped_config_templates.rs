@@ -61,6 +61,7 @@ fn every_shipped_config_template_matches_the_default_it_seeds() {
         "remote_cue_scripts",
         "remote_cue_batteries",
         "allow_baseline_push",
+        "baseline_publishers",
     ] {
         assert!(
             script.contains(key),

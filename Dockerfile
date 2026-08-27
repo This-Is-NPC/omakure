@@ -90,6 +90,7 @@ RUN apt-get update \
           'remote_cue_scripts = []' \
           'remote_cue_batteries = []' \
           'allow_baseline_push = false' \
+          'baseline_publishers = []' \
           'authorities = []' \
           'bootstrap_token_hash = ""' \
           'bootstrap_nonce_hash = ""' \

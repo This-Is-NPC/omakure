@@ -118,6 +118,50 @@ impl HealthIngest {
     }
 }
 
+/// What a Conductor concludes about one Performer's baseline.
+///
+/// Derived here and stored nowhere. A Performer reports two facts — the set it
+/// recorded installing and the set its disk currently holds — and never a
+/// verdict, because it does not know what it was supposed to have. This is the
+/// comparison, and it is recomputed from the stored Profile on every read, so a
+/// Profile that arrives after a script changed moves the answer with no second
+/// row to keep in step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BaselineStatus {
+    /// No Profile has arrived, so this node has said nothing either way.
+    /// Deliberately not `None`: "has not reported" and "reported holding
+    /// nothing" are different facts and neither is a drift verdict.
+    Unknown,
+    /// The Performer reported holding no baseline. It was never pushed one, so
+    /// it is neither in sync nor drifted.
+    None,
+    /// What is on disk is the set the Performer recorded installing.
+    InSync,
+    /// It is not.
+    Drifted,
+}
+
+impl BaselineStatus {
+    /// Read the verdict out of a stored Profile.
+    ///
+    /// The closed schema already refuses evidence without a claim, so the only
+    /// pairs that reach here are the four the contract names.
+    fn derive(profile: Option<&ProfileSnapshot>) -> Self {
+        let Some(profile) = profile else {
+            return Self::Unknown;
+        };
+        if profile.baseline_id.is_empty() {
+            return Self::None;
+        }
+        if profile.baseline_id == profile.baseline_observed_id {
+            Self::InSync
+        } else {
+            Self::Drifted
+        }
+    }
+}
+
 /// One row of the Conductor-local fleet-status projection.
 ///
 /// Every field is privacy class P0. No hostname, username, address, path,
@@ -131,6 +175,8 @@ pub struct FleetNode {
     pub trust_state: String,
     pub presence: Presence,
     pub last_pulse_at: Option<i64>,
+    /// The comparison of the two baseline facts in `profile`, derived on read.
+    pub baseline_status: BaselineStatus,
     pub profile: Option<ProfileSnapshot>,
     pub pulse: Option<PulseSnapshot>,
     pub signal_cursor: u64,
@@ -430,6 +476,7 @@ impl<'registry> HealthPlane<'registry> {
             trust_state,
             presence: Presence::derive(snapshot.state.last_pulse_at, now),
             last_pulse_at: snapshot.state.last_pulse_at,
+            baseline_status: BaselineStatus::derive(snapshot.profile.as_ref()),
             profile: snapshot.profile,
             pulse: snapshot.pulse,
             signal_cursor: snapshot.state.cursor,
@@ -1295,6 +1342,88 @@ mod tests {
         );
     }
 
+    /// The verdict is a comparison of two reported facts, made here.
+    ///
+    /// Every case moves the *Profile* and reads the projection, because a
+    /// verdict computed anywhere but from the pair the Performer reported would
+    /// be an inference the Conductor is not entitled to make.
+    #[test]
+    fn a_performers_baseline_reads_as_unknown_none_in_sync_or_drifted() {
+        let fixture = fixture();
+        let target = fixture.local.clone();
+        let installed = "1".repeat(64);
+        let on_disk = "2".repeat(64);
+
+        assert_eq!(
+            fixture
+                .plane()
+                .node_status(&fixture.performer)
+                .unwrap()
+                .map(|node| node.baseline_status),
+            None,
+            "a peer that has never reported has no row at all"
+        );
+
+        // A Performer whose Pulse arrived before its Profile has a row and has
+        // still said nothing about a baseline. Reading that as "holds none"
+        // would be a verdict on a machine that has not answered.
+        let pulse = pulse_payload(&target, 9, 1, BASE_NOW);
+        assert!(fixture
+            .ingest(&fixture.performer, "health_pulse", BASE_NOW, &pulse)
+            .accepted());
+        assert_eq!(
+            fixture
+                .plane()
+                .node_status(&fixture.performer)
+                .unwrap()
+                .expect("a pulsing peer has a row")
+                .baseline_status,
+            BaselineStatus::Unknown,
+            "presence without a Profile is not an answer about a baseline"
+        );
+
+        let mut revision = 0;
+        let mut report = |recorded: &str, observed: &str| {
+            revision += 1;
+            let mut payload = profile_payload(&target, revision, revision);
+            payload["profile"]["baseline_id"] = json!(recorded);
+            payload["profile"]["baseline_observed_id"] = json!(observed);
+            assert!(
+                fixture
+                    .ingest(&fixture.performer, "health_profile", BASE_NOW, &payload)
+                    .accepted(),
+                "the Profile under test must be accepted, or the verdict is about nothing"
+            );
+            fixture
+                .plane()
+                .node_status(&fixture.performer)
+                .unwrap()
+                .expect("a reporting peer has a row")
+                .baseline_status
+        };
+
+        assert_eq!(
+            report("", ""),
+            BaselineStatus::None,
+            "a node that was never pushed a baseline has none, which is not a drift verdict"
+        );
+        assert_eq!(
+            report(&installed, &installed),
+            BaselineStatus::InSync,
+            "a node running what it was pushed is in sync"
+        );
+        assert_eq!(
+            report(&installed, &on_disk),
+            BaselineStatus::Drifted,
+            "a node whose scripts changed underneath it has drifted"
+        );
+        assert_eq!(
+            report(&installed, &installed),
+            BaselineStatus::InSync,
+            "putting the set back must clear the verdict, or drift is one-way"
+        );
+    }
+
     #[test]
     fn the_public_fleet_projection_carries_only_permitted_fields() {
         let fixture = fixture();
@@ -1319,11 +1448,12 @@ mod tests {
         collect_field_names(&rendered, &mut names);
         names.sort();
         names.dedup();
-        const PERMITTED: [&str; 32] = [
+        const PERMITTED: [&str; 33] = [
             "agent_version",
             "arch",
             "baseline_id",
             "baseline_observed_id",
+            "baseline_status",
             "capabilities",
             "display_name",
             "distro_id",

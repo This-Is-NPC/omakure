@@ -1287,6 +1287,16 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
         "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92"
     );
     assert_eq!(body["data"]["nodes"][0]["presence"], "unknown");
+    // A peer that has said nothing has said nothing about a baseline either.
+    // `unknown` and `none` are separate answers on this route: reading silence
+    // as "holds no baseline" would put a verdict on a machine that has not
+    // reported.
+    assert_eq!(body["data"]["nodes"][0]["baseline_status"], "unknown");
+    assert_eq!(body["data"]["baselines"]["unknown"], 1);
+    assert_eq!(body["data"]["baselines"]["none"], 0);
+    assert_eq!(body["data"]["baselines"]["in_sync"], 0);
+    assert_eq!(body["data"]["baselines"]["drifted"], 0);
+    assert_eq!(body["data"]["baselines"]["total"], 1);
     assert_eq!(body["data"]["nodes"][0]["profile"], json!(null));
     assert_eq!(body["data"]["nodes"][0]["pulse"], json!(null));
     assert_eq!(body["data"]["nodes"][0]["trust_state"], "active");
@@ -1358,6 +1368,7 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
         .unwrap()
         .is_empty());
     assert_eq!(after_revoke.json()["data"]["presence"]["total"], 0);
+    assert_eq!(after_revoke.json()["data"]["baselines"]["total"], 0);
 
     // The local revocation Signal survives the revocation it records, which is
     // exactly what a Health Plane row keyed to the revoked peer could not do.

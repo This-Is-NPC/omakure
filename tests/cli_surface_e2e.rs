@@ -756,6 +756,12 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     assert_eq!(health_body["data"]["presence"]["total"], 1);
     assert_eq!(health_body["data"]["nodes"].as_array().unwrap().len(), 1);
     assert_eq!(health_body["data"]["nodes"][0]["presence"], "unknown");
+    assert_eq!(
+        health_body["data"]["nodes"][0]["baseline_status"],
+        "unknown"
+    );
+    assert_eq!(health_body["data"]["baselines"]["unknown"], 1);
+    assert_eq!(health_body["data"]["baselines"]["total"], 1);
     assert_eq!(health_body["data"]["nodes"][0]["role"], "performer");
     assert!(health_body["data"]["nodes"][0]["profile"].is_null());
     assert!(health_body["data"]["nodes"][0]["pulse"].is_null());

@@ -24,7 +24,7 @@ use crate::health_plane::model::{Presence, RunFact, RunnerFact, RuntimeFact, Sig
 use crate::health_plane::report::{
     opaque_run_id, sanitize_signal_run, HealthFactsSource, ProfileFacts, PulseFacts,
 };
-use crate::health_plane::{FleetNode, HealthPlane};
+use crate::health_plane::{BaselineStatus, FleetNode, HealthPlane};
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::{NodeRegistry, PeerRole, PeerState};
@@ -80,8 +80,26 @@ pub struct FleetStatusReport {
     pub observed_at: i64,
     /// Presence counts across every actively trusted peer.
     pub presence: PresenceCounts,
+    /// Baseline verdicts across the same peers, so "which machines drifted" is
+    /// one read rather than a scan of every row.
+    pub baselines: BaselineCounts,
     /// One row per actively trusted peer, ordered by node ID.
     pub nodes: Vec<FleetNode>,
+}
+
+/// Baseline verdict totals, derived from the same stored Profiles the rows show.
+///
+/// `unknown` and `none` are separate totals on purpose: a fleet with ten
+/// machines that have never reported and a fleet with ten that hold no baseline
+/// are different situations, and one number covering both would tell an
+/// operator to go looking in the wrong place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+pub struct BaselineCounts {
+    pub in_sync: usize,
+    pub drifted: usize,
+    pub none: usize,
+    pub unknown: usize,
+    pub total: usize,
 }
 
 /// Presence totals derived from the frozen Pulse-age windows.
@@ -147,6 +165,7 @@ pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport>
                 trust_state: "active".to_string(),
                 presence: Presence::derive(None, observed_at),
                 last_pulse_at: None,
+                baseline_status: BaselineStatus::Unknown,
                 profile: None,
                 pulse: None,
                 signal_cursor: 0,
@@ -161,6 +180,10 @@ pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport>
         total: nodes.len(),
         ..PresenceCounts::default()
     };
+    let mut baselines = BaselineCounts {
+        total: nodes.len(),
+        ..BaselineCounts::default()
+    };
     for node in &nodes {
         match node.presence {
             Presence::Online => presence.online += 1,
@@ -168,12 +191,19 @@ pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport>
             Presence::Offline => presence.offline += 1,
             Presence::Unknown => presence.unknown += 1,
         }
+        match node.baseline_status {
+            BaselineStatus::InSync => baselines.in_sync += 1,
+            BaselineStatus::Drifted => baselines.drifted += 1,
+            BaselineStatus::None => baselines.none += 1,
+            BaselineStatus::Unknown => baselines.unknown += 1,
+        }
     }
     Ok(FleetStatusReport {
         enabled,
         local_node_id: registry.local_node_id().to_string(),
         observed_at,
         presence,
+        baselines,
         nodes,
     })
 }

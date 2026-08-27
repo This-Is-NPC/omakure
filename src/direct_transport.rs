@@ -1070,6 +1070,8 @@ pub fn verify_envelope(
 pub const HEALTH_KIND_PREFIX: &str = "health_";
 /// The Remote Cue kind namespace, disjoint from the Health Plane's.
 pub const CUE_KIND_PREFIX: &str = "cue_";
+/// The baseline delivery kind namespace, disjoint from both of the above.
+pub const BASELINE_KIND_PREFIX: &str = "baseline_";
 
 /// Bytes scanned when reading `kind` without parsing the document.
 ///
@@ -1189,6 +1191,33 @@ pub fn sign_cue_envelope(
     now: u64,
 ) -> Result<SignedEnvelope, TransportError> {
     if !kind.starts_with(CUE_KIND_PREFIX) || kind.len() > MAX_ENVELOPE_KIND_BYTES {
+        return Err(TransportError::InvalidFrame);
+    }
+    if !payload.is_object() {
+        return Err(TransportError::InvalidFrame);
+    }
+    sign_envelope(identity, kind, session_id, nonce, payload, now)
+}
+
+/// The baseline delivery signer, third sibling to the other two.
+///
+/// Adds a `kind` and a payload to the frozen envelope and nothing else. The
+/// domain, the BIP-340 construction, the RFC-8785 prehash, the Noise session
+/// and the inner frame are all untouched — a baseline is new traffic over
+/// frozen carriage, exactly as a Cue was.
+///
+/// Refuses any kind outside `baseline_` for the reason the other two do: three
+/// wrappers over one private signer are only a separation if none of them can
+/// be used to sign for another's plane.
+pub fn sign_baseline_envelope(
+    identity: &NodeIdentity,
+    kind: &str,
+    session_id: &[u8; 32],
+    nonce: [u8; 16],
+    payload: Value,
+    now: u64,
+) -> Result<SignedEnvelope, TransportError> {
+    if !kind.starts_with(BASELINE_KIND_PREFIX) || kind.len() > MAX_ENVELOPE_KIND_BYTES {
         return Err(TransportError::InvalidFrame);
     }
     if !payload.is_object() {
@@ -1442,7 +1471,7 @@ mod tests {
     fn sign_health_envelope_refuses_a_foreign_plane_kind() {
         let dir = TempDir::new().unwrap();
         let identity = identity(&dir);
-        for foreign in ["cue_dispatch", "cue_ack", "probe", ""] {
+        for foreign in ["cue_dispatch", "cue_ack", "baseline_push", "probe", ""] {
             let result = sign_health_envelope(
                 &identity,
                 foreign,
@@ -1464,7 +1493,13 @@ mod tests {
     fn sign_cue_envelope_refuses_a_foreign_plane_kind() {
         let dir = TempDir::new().unwrap();
         let identity = identity(&dir);
-        for foreign in ["health_profile", "health_signal", "probe", ""] {
+        for foreign in [
+            "health_profile",
+            "health_signal",
+            "baseline_push",
+            "probe",
+            "",
+        ] {
             let result = sign_cue_envelope(
                 &identity,
                 foreign,
@@ -1494,6 +1529,50 @@ mod tests {
                 1_800_000_000,
             )
             .unwrap_or_else(|_| panic!("sign_cue_envelope must sign {own}"));
+        }
+    }
+
+    /// The third wrapper, held to the same rule in both directions.
+    ///
+    /// A baseline is the only message on this transport that carries code, so
+    /// a signer that could be talked into minting one under another plane's
+    /// name is the worst version of this mistake available.
+    #[test]
+    fn sign_baseline_envelope_signs_only_its_own_namespace() {
+        let dir = TempDir::new().unwrap();
+        let identity = identity(&dir);
+        for foreign in [
+            "health_profile",
+            "health_signal",
+            "cue_dispatch",
+            "probe",
+            "",
+        ] {
+            assert!(
+                matches!(
+                    sign_baseline_envelope(
+                        &identity,
+                        foreign,
+                        &[7u8; 32],
+                        [9u8; 16],
+                        serde_json::json!({"version": 1}),
+                        1_800_000_000,
+                    ),
+                    Err(TransportError::InvalidFrame)
+                ),
+                "sign_baseline_envelope must refuse {foreign:?}"
+            );
+        }
+        for own in ["baseline_push", "baseline_ack"] {
+            sign_baseline_envelope(
+                &identity,
+                own,
+                &[7u8; 32],
+                [9u8; 16],
+                serde_json::json!({"version": 1}),
+                1_800_000_000,
+            )
+            .unwrap_or_else(|_| panic!("sign_baseline_envelope must sign {own}"));
         }
     }
 

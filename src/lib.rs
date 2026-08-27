@@ -7,6 +7,9 @@ pub mod baseline;
 /// Custody of the key that signs baselines, held apart from the key that
 /// enrols members.
 pub mod baseline_publisher;
+/// Deciding whether another node may put code on this one, and installing it
+/// when the answer is yes.
+pub mod baseline_push;
 pub mod cli;
 pub mod direct_health;
 pub mod direct_service;

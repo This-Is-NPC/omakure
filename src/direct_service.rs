@@ -179,6 +179,42 @@ struct ConnectionState {
     /// correctly so -- two sessions with one peer would give the Health Plane
     /// two cursors for the same node.
     outbox: Mutex<HashMap<String, Vec<PendingCue>>>,
+    /// Baselines waiting for the session that can carry them, by peer node id.
+    ///
+    /// A separate queue from the Cue outbox rather than one queue of a sum
+    /// type: the two have different in-flight state machines -- a Cue is not
+    /// finished until its run outcome lands, a baseline is finished at its ack
+    /// -- and folding them together would have meant reworking the Cue path
+    /// that item 6 certified, to no benefit. The door into the session thread
+    /// is the same door; only the queue is new.
+    baseline_outbox: Mutex<HashMap<String, Vec<PendingBaseline>>>,
+}
+
+/// A baseline handed to the session thread, with the channel its answer goes
+/// back on.
+struct PendingBaseline {
+    /// The already-signed manifest bytes. The service never signs a manifest:
+    /// the publisher key does that, in whatever process holds it, and this
+    /// thread only carries what it is given.
+    manifest: Vec<u8>,
+    /// Script bodies in manifest order. No paths travel with them -- the
+    /// manifest is the only thing that says where a script goes.
+    bodies: Vec<Vec<u8>>,
+    baseline_id: String,
+    deadline: Instant,
+    reply: std::sync::mpsc::SyncSender<BaselinePushOutcome>,
+}
+
+/// What one baseline push came to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BaselinePushOutcome {
+    pub baseline_id: String,
+    /// Whether the peer said anything at all. A refusal on trust, role, or
+    /// capability is silent by design, so `false` is a real answer and not a
+    /// transport failure.
+    pub answered: bool,
+    pub accepted: bool,
+    pub code: u16,
 }
 
 /// A Cue handed to the session thread, with the channel its answer goes back on.
@@ -227,6 +263,7 @@ impl ConnectionState {
             stop,
             active: Mutex::new(HashMap::new()),
             outbox: Mutex::new(HashMap::new()),
+            baseline_outbox: Mutex::new(HashMap::new()),
             status,
             admission,
             reporter,
@@ -271,12 +308,51 @@ impl ConnectionState {
         Some(queue.remove(0))
     }
 
+    /// Hand a baseline to whichever thread holds the session with this peer.
+    ///
+    /// Refused when there is no live session, for the reason the Cue outbox
+    /// exists at all: the cipher state of a live session lives in the thread
+    /// holding it, a second dial to the same peer is refused by `register`,
+    /// and telling a caller its baseline is on its way when nothing can carry
+    /// it would be a lie.
+    fn enqueue_baseline(
+        &self,
+        peer_node_id: &str,
+        pending: PendingBaseline,
+    ) -> Result<(), TransportError> {
+        let active = self.active.lock().map_err(|_| TransportError::Internal)?;
+        if !active.contains_key(peer_node_id) {
+            return Err(TransportError::NotEnrolled);
+        }
+        drop(active);
+        self.baseline_outbox
+            .lock()
+            .map_err(|_| TransportError::Internal)?
+            .entry(peer_node_id.to_string())
+            .or_default()
+            .push(pending);
+        Ok(())
+    }
+
+    /// The next baseline this session should carry, if any.
+    fn take_pending_baseline(&self, peer_node_id: &str) -> Option<PendingBaseline> {
+        let mut outbox = self.baseline_outbox.lock().ok()?;
+        let queue = outbox.get_mut(peer_node_id)?;
+        if queue.is_empty() {
+            return None;
+        }
+        Some(queue.remove(0))
+    }
+
     /// Fail every Cue still waiting on a session that just ended.
     ///
     /// Dropping the reply channel is what unblocks the caller; without this a
     /// request would wait out its whole budget for a session that is gone.
     fn drain_outbox(&self, peer_node_id: &str) {
         if let Ok(mut outbox) = self.outbox.lock() {
+            outbox.remove(peer_node_id);
+        }
+        if let Ok(mut outbox) = self.baseline_outbox.lock() {
             outbox.remove(peer_node_id);
         }
     }
@@ -1452,6 +1528,18 @@ fn connect_and_hold(
             .as_ref()
             .map(|root| crate::workspace::Workspace::new(root.clone())),
     );
+    let baseline = crate::baseline_push::BaselineSession::new(
+        &registry,
+        &identity,
+        remote.node_id(),
+        *remote.identity_key(),
+        session_id,
+        crate::baseline_push::read_policy(context),
+        state
+            .workspace_root
+            .as_ref()
+            .map(|root| crate::workspace::Workspace::new(root.clone())),
+    );
     hold_session(
         &mut stream,
         &mut session,
@@ -1462,6 +1550,7 @@ fn connect_and_hold(
         remote.identity_key(),
         Some(health),
         Some(cue),
+        Some(baseline),
     )
 }
 
@@ -1488,6 +1577,7 @@ fn hold_session(
     peer_identity_key: &[u8; 32],
     mut health: Option<HealthSession<'_>>,
     mut cue: Option<crate::remote_cue::CueSession<'_>>,
+    mut baseline: Option<crate::baseline_push::BaselineSession<'_>>,
 ) -> Result<(), TransportError> {
     if health.as_ref().is_some_and(|health| !health.engaged()) {
         health = None;
@@ -1500,6 +1590,7 @@ fn hold_session(
         .map_err(|_| TransportError::Internal)?;
     let mut last_activity = Instant::now();
     let mut outbound_cue: Option<OutboundCue> = None;
+    let mut outbound_baseline: Option<OutboundBaseline> = None;
     // Anything still queued when this session ends must not wait out its
     // budget for a connection that is gone.
     let _drain = OutboxGuard {
@@ -1528,6 +1619,31 @@ fn hold_session(
         if let Some(in_flight) = outbound_cue.as_mut() {
             if in_flight.resolve(registry, peer_node_id) {
                 outbound_cue = None;
+            }
+        }
+        // One baseline in flight per session. A second would put megabytes on
+        // the wire behind a message the peer has not answered yet, and the
+        // answer is what says whether the first one was even wanted.
+        if outbound_baseline.is_none() {
+            if let Some(pending) = state.take_pending_baseline(peer_node_id) {
+                let deadline = Instant::now() + IDLE_TIMEOUT;
+                match sign_pending_baseline(identity, session.session_id(), &pending) {
+                    Ok(encoded) => {
+                        write_bytes(stream, &session.write(ENVELOPE_KIND, &encoded)?, deadline)
+                            .map_err(error_to_transport)?;
+                        last_activity = Instant::now();
+                        outbound_baseline = Some(OutboundBaseline { pending });
+                    }
+                    // Too large to carry, or unsignable. The caller is waiting
+                    // on the channel and must be told rather than left to time
+                    // out on something this node already knows the answer to.
+                    Err(code) => pending.answer(false, false, code),
+                }
+            }
+        }
+        if let Some(in_flight) = outbound_baseline.as_mut() {
+            if in_flight.expired() {
+                outbound_baseline = None;
             }
         }
         if let Some(outbound) = health.tick() {
@@ -1575,12 +1691,32 @@ fn hold_session(
                 continue;
             }
         }
+        if let Some(in_flight) = outbound_baseline.as_mut() {
+            if in_flight.absorb_ack(&message.body, peer_node_id, peer_identity_key, session) {
+                outbound_baseline = None;
+                continue;
+            }
+        }
         match health.handle_envelope(&message.body) {
             // A non-health envelope used to be discarded here without a trace.
             // Cue traffic is decided and audited instead; anything else keeps
             // the original silence, so the dispatcher never becomes an oracle
             // that answers unknown kinds.
             HealthOutcome::NotHealth => {
+                if let Some(baseline) = baseline.as_mut() {
+                    // The same door the Cue plane came in by: one fall-through
+                    // from the Health dispatch, and each plane answers only for
+                    // its own kind namespace.
+                    if baseline.handle_envelope(&message.body, unix_seconds())
+                        != crate::baseline_push::BaselineOutcome::NotBaseline
+                    {
+                        if let Some(reply) = baseline.take_reply() {
+                            write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
+                                .map_err(error_to_transport)?;
+                        }
+                        continue;
+                    }
+                }
                 if let Some(cue) = cue.as_mut() {
                     // The Cue session verifies the envelope against the same
                     // handshake identity and session id the Health Plane uses;
@@ -1675,6 +1811,65 @@ impl CueDispatcher {
             .lock()
             .map(|active| active.contains_key(peer_node_id))
             .unwrap_or(false)
+    }
+
+    /// Push one already-signed baseline over the session this service holds.
+    ///
+    /// The same constraint the Cue path is built around, for the same reason: a
+    /// node holds one session per peer, so a separate process cannot reach a
+    /// peer the running service is already connected to. Baseline delivery does
+    /// not get its own way in — it uses the outbox, and the thread that owns
+    /// the session does the writing.
+    ///
+    /// This service never signs the manifest. The publisher key is held apart
+    /// from everything this process touches, and a signing path here would put
+    /// "can order a run" and "can author what runs" back in one place, which is
+    /// the separation `node_registry` refuses in the other direction.
+    ///
+    /// `NotEnrolled` means there is no live session with that peer, which is a
+    /// different fact from a refusal and is reported as one.
+    pub fn push_baseline(
+        &self,
+        peer_node_id: &str,
+        manifest: &[u8],
+        bodies: &[Vec<u8>],
+        wait: Duration,
+    ) -> Result<BaselinePushOutcome, DirectServiceError> {
+        let parsed = crate::baseline::SignedBaselineManifest::decode(manifest)
+            .map_err(|_| TransportError::InvalidFrame)?;
+        // Named from the manifest rather than taken from the caller, so the
+        // reply this outcome is matched against can only be an answer about the
+        // set that was actually sent.
+        let baseline_id = parsed
+            .baseline_id()
+            .map(|id| id.iter().map(|byte| format!("{byte:02x}")).collect())
+            .map_err(|_| TransportError::InvalidFrame)?;
+        if bodies.len() != parsed.entries.len() {
+            return Err(TransportError::InvalidFrame.into());
+        }
+        let (reply, answers) = std::sync::mpsc::sync_channel(1);
+        self.state.enqueue_baseline(
+            peer_node_id,
+            PendingBaseline {
+                manifest: manifest.to_vec(),
+                bodies: bodies.to_vec(),
+                baseline_id: String::clone(&baseline_id),
+                deadline: Instant::now() + wait,
+                reply,
+            },
+        )?;
+        // A little past the session thread's own deadline, so the answer it is
+        // about to send wins over this timeout.
+        match answers.recv_timeout(wait + crate::direct_health::TICK * 2) {
+            Ok(outcome) => Ok(outcome),
+            // The session ended, or it never got to us. Neither is a verdict.
+            Err(_) => Ok(BaselinePushOutcome {
+                baseline_id,
+                answered: false,
+                accepted: false,
+                code: 0,
+            }),
+        }
     }
 }
 
@@ -1804,6 +1999,145 @@ impl OutboundCue {
             .answer(answered, accepted, code, false);
         true
     }
+}
+
+impl PendingBaseline {
+    /// Answer the waiting caller. A closed channel means it gave up; that is
+    /// not an error here, and must not take the session down with it.
+    fn answer(self, answered: bool, accepted: bool, code: u16) {
+        let _ = self.reply.try_send(BaselinePushOutcome {
+            baseline_id: self.baseline_id,
+            answered,
+            accepted,
+            code,
+        });
+    }
+}
+
+/// One baseline written on this session, waiting for its ack.
+///
+/// Simpler than `OutboundCue` because it is finished at the ack: a Cue's real
+/// answer is the outcome of a run that has not started yet, while a baseline
+/// either installed or did not by the time the peer replies.
+struct OutboundBaseline {
+    pending: PendingBaseline,
+}
+
+impl OutboundBaseline {
+    /// Take the `baseline_ack` for this baseline out of the stream, if this is
+    /// it. Returns `true` when the caller has been answered.
+    fn absorb_ack(
+        &mut self,
+        body: &[u8],
+        peer_node_id: &str,
+        peer_identity_key: &[u8; 32],
+        session: &TransportSession,
+    ) -> bool {
+        if crate::direct_transport::envelope_kind_hint(body) != Some(crate::baseline_push::KIND_ACK)
+        {
+            return false;
+        }
+        let Ok(nonce) = envelope_nonce(body) else {
+            return false;
+        };
+        // Anchored to the identity the handshake established, not to anything
+        // the message says about itself.
+        if verify_envelope(
+            body,
+            peer_node_id,
+            peer_identity_key,
+            crate::baseline_push::KIND_ACK,
+            session.session_id(),
+            &nonce,
+        )
+        .is_err()
+        {
+            return false;
+        }
+        let Ok(view) = crate::direct_transport::envelope_view(body) else {
+            return false;
+        };
+        let Some(ack) = view.payload.as_object() else {
+            return false;
+        };
+        // An ack for a different baseline is not an answer to this one.
+        if ack.get("baseline_id").and_then(serde_json::Value::as_str)
+            != Some(&self.pending.baseline_id)
+        {
+            return false;
+        }
+        let accepted = ack
+            .get("accepted")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        let code = if accepted {
+            0
+        } else {
+            ack.get("error")
+                .and_then(|error| error.get("code"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|code| u16::try_from(code).ok())
+                .unwrap_or_else(|| crate::baseline_push::BaselineCode::InvalidMessage.code())
+        };
+        std::mem::replace(&mut self.pending, placeholder_baseline()).answer(true, accepted, code);
+        true
+    }
+
+    /// Give up once the budget runs out.
+    ///
+    /// Silence is a real answer here: a receiver that refused on trust, role,
+    /// or capability says nothing by design, so `answered = false` is reported
+    /// rather than retried.
+    fn expired(&mut self) -> bool {
+        if Instant::now() < self.pending.deadline {
+            return false;
+        }
+        std::mem::replace(&mut self.pending, placeholder_baseline()).answer(false, false, 0);
+        true
+    }
+}
+
+/// A spent `PendingBaseline`, so the real one can be moved out to answer with.
+///
+/// Its channel has no receiver, so answering it is a no-op by construction.
+fn placeholder_baseline() -> PendingBaseline {
+    let (reply, _) = std::sync::mpsc::sync_channel(1);
+    PendingBaseline {
+        manifest: Vec::new(),
+        bodies: Vec::new(),
+        baseline_id: String::new(),
+        deadline: Instant::now(),
+        reply,
+    }
+}
+
+/// Sign the `baseline_push` for a queued baseline on this session.
+///
+/// The size bound is applied here, on the sending side, so an oversized
+/// baseline is refused before any of it goes on the wire rather than after the
+/// receiver has read a megabyte of it.
+fn sign_pending_baseline(
+    identity: &NodeIdentity,
+    session_id: &[u8; 32],
+    pending: &PendingBaseline,
+) -> Result<Vec<u8>, u16> {
+    let total: usize = pending.bodies.iter().map(Vec::len).sum();
+    if total > crate::baseline_push::MAX_PUSH_SCRIPT_BYTES {
+        return Err(crate::baseline_push::BaselineCode::TooLarge.code());
+    }
+    let now = unix_seconds();
+    let mut nonce = [0u8; 16];
+    OsRng.fill_bytes(&mut nonce);
+    crate::direct_transport::sign_baseline_envelope(
+        identity,
+        crate::baseline_push::KIND_PUSH,
+        session_id,
+        nonce,
+        crate::baseline_push::BaselinePush::encode(&pending.manifest, &pending.bodies),
+        now,
+    )
+    .map(|envelope| envelope.encoded())
+    .map_err(|_| crate::baseline_push::BaselineCode::InvalidMessage.code())
 }
 
 /// A spent `PendingCue`, so the real one can be moved out to answer with.
@@ -2543,6 +2877,18 @@ fn serve_connection(
                 .as_ref()
                 .map(|root| crate::workspace::Workspace::new(root.clone())),
         );
+        let baseline = crate::baseline_push::BaselineSession::new(
+            &registry,
+            &identity,
+            remote.node_id(),
+            *remote.identity_key(),
+            session_id,
+            crate::baseline_push::read_policy(context),
+            state
+                .workspace_root
+                .as_ref()
+                .map(|root| crate::workspace::Workspace::new(root.clone())),
+        );
         hold_session(
             &mut stream,
             &mut session,
@@ -2553,6 +2899,7 @@ fn serve_connection(
             remote.identity_key(),
             Some(health),
             Some(cue),
+            Some(baseline),
         )
         .map_err(DirectServiceError::Protocol)?;
         Ok(())
@@ -3094,6 +3441,7 @@ mod tests {
             stop: Arc::new(AtomicBool::new(false)),
             active: Mutex::new(HashMap::new()),
             outbox: Mutex::new(HashMap::new()),
+            baseline_outbox: Mutex::new(HashMap::new()),
             status: Arc::clone(&status),
             admission: Arc::new(AdmissionController {
                 state: Mutex::new(AdmissionState::default()),

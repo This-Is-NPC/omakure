@@ -386,6 +386,30 @@ impl HttpServer {
         self.request_with_auth("GET", path, None, AuthMode::Bearer(token))
     }
 
+    /// Poll `/v1/ready` until the service reports ready.
+    ///
+    /// Startup is gated on `/v1/health`, which answers as soon as the listener
+    /// binds. A service started with `--readiness-requires-worker` or
+    /// `--readiness-requires-scheduler` is not ready until those loops mark
+    /// themselves alive, and that happens *after* the listener is up — so
+    /// asking once, immediately, races them. Under parallel-suite load the
+    /// window is wide enough to lose.
+    ///
+    /// A service that never becomes ready still fails the test: once the
+    /// deadline passes the last response is returned as-is, so the caller's
+    /// assertion reports the real status and body rather than hanging or
+    /// silently passing.
+    pub fn await_ready(&self, timeout: Duration) -> HttpResponse {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let response = self.get_unauthenticated("/v1/ready");
+            if response.status == 200 || Instant::now() >= deadline {
+                return response;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     pub fn request(&self, method: &str, path: &str, body: Option<String>) -> HttpResponse {
         self.request_with_auth(method, path, body, AuthMode::Bearer(&self.token))
     }

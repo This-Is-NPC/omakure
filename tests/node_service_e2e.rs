@@ -53,7 +53,7 @@ fn node_service_workers_zero_no_scheduler_serves_http_like_api() {
     let health = server.get_unauthenticated("/v1/health");
     assert_eq!(health.status, 200, "body: {}", health.safe_body());
 
-    let ready = server.get_unauthenticated("/v1/ready");
+    let ready = server.await_ready(Duration::from_secs(10));
     assert_eq!(ready.status, 200, "body: {}", ready.safe_body());
     assert_eq!(ready.json()["data"]["status"], "ready");
     let ready_body = ready.body.clone();
@@ -146,7 +146,7 @@ fn node_service_ready_unauthenticated_and_minimal() {
         Duration::from_secs(15),
     );
 
-    let ready = server.get_unauthenticated("/v1/ready");
+    let ready = server.await_ready(Duration::from_secs(10));
     assert_eq!(ready.status, 200, "body: {}", ready.safe_body());
     let json = ready.json();
     assert_eq!(json["ok"], true);
@@ -177,7 +177,7 @@ fn node_service_ready_with_readiness_requires_flags_when_loops_alive() {
         Duration::from_secs(15),
     );
 
-    let ready = server.get_unauthenticated("/v1/ready");
+    let ready = server.await_ready(Duration::from_secs(10));
     assert_eq!(ready.status, 200, "body: {}", ready.safe_body());
     assert_eq!(ready.json()["data"]["status"], "ready");
 }
@@ -195,7 +195,7 @@ fn node_service_sigterm_stops_cleanly() {
     );
 
     let pid = server.child_id();
-    let ready = server.get_unauthenticated("/v1/ready");
+    let ready = server.await_ready(Duration::from_secs(10));
     assert_eq!(ready.status, 200, "body: {}", ready.safe_body());
 
     // SAFETY: libc::kill is the standard way to deliver SIGTERM to a child.
@@ -220,7 +220,7 @@ fn node_service_can_be_terminated_and_restarted_portably() {
         Duration::from_secs(15),
     );
     let identity_before = fs::read(workspace.path().join(".node-state/identity.key")).unwrap();
-    assert_eq!(server.get_unauthenticated("/v1/ready").status, 200);
+    assert_eq!(server.await_ready(Duration::from_secs(10)).status, 200);
     let status = server.terminate();
     assert!(
         status.success() || status.code().is_none(),
@@ -234,7 +234,7 @@ fn node_service_can_be_terminated_and_restarted_portably() {
         &[],
         Duration::from_secs(15),
     );
-    assert_eq!(restarted.get_unauthenticated("/v1/ready").status, 200);
+    assert_eq!(restarted.await_ready(Duration::from_secs(10)).status, 200);
     assert_eq!(
         fs::read(workspace.path().join(".node-state/identity.key")).unwrap(),
         identity_before
@@ -666,7 +666,7 @@ fn reset_while_node_service_is_active_refuses_without_mutation() {
         fs::read(state.join("node.sqlite")).unwrap(),
         database_before
     );
-    assert_eq!(server.get_unauthenticated("/v1/ready").status, 200);
+    assert_eq!(server.await_ready(Duration::from_secs(10)).status, 200);
 }
 
 #[test]
@@ -711,5 +711,5 @@ fn init_while_node_service_is_active_conflicts_without_hanging_or_mutating_ident
         fs::read(state.join("identity.key")).unwrap(),
         identity_before
     );
-    assert_eq!(server.get_unauthenticated("/v1/ready").status, 200);
+    assert_eq!(server.await_ready(Duration::from_secs(10)).status, 200);
 }

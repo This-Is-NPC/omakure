@@ -122,23 +122,19 @@ fn configure_static_peer(workspace: &Path, direct_port: &str, peer_node_id: &str
 
 /// Wait until `server` holds a session with `peer_node_id`.
 ///
-/// This can time out for a reason that belongs to the product rather than to
-/// the test. A static-peer dialer is given three connection attempts for the
-/// life of the process, spread over one and two seconds of backoff, and the
-/// counter is reset only by a *successful* connect. The peer's listener is
-/// routinely not bound yet when the first attempt lands -- every passing run
-/// of this file records `internal` against the peer before it connects -- so
-/// two attempts is the real budget. On a loaded machine a peer that takes more
-/// than about three seconds to bind exhausts it, the dialer thread returns for
-/// good, and nothing respawns it: no later poll can succeed and this wait
-/// spends its whole deadline on a link that is already dead.
-///
-/// So do not "fix" a timeout here by raising the deadline; there is nothing
-/// left to wait for. `last_errors` in the panic message is append-only and is
-/// never cleared on a successful connect, so it names the last thing that went
-/// wrong at any point, not the reason this call gave up.
+/// A static-peer dialer now retries a transient failure indefinitely, backing
+/// off toward `RETRY_BACKOFF_CEILING`, so a timeout here means the link is
+/// slow rather than retired. The peer's listener is routinely not bound yet
+/// when the first attempt lands, which costs the one-second delay; the twelve
+/// seconds below cover several more. Raising the deadline is only ever right
+/// if the peer genuinely needs longer to bind, because a dialer that has
+/// backed off is still going to try again.
 fn wait_for_connected(server: &support::HttpServer, peer_node_id: &str) {
-    let deadline = std::time::Instant::now() + Duration::from_secs(12);
+    wait_for_connected_within(server, peer_node_id, Duration::from_secs(12));
+}
+
+fn wait_for_connected_within(server: &support::HttpServer, peer_node_id: &str, budget: Duration) {
+    let deadline = std::time::Instant::now() + budget;
     loop {
         let status = server.get("/v1/node/status");
         assert_eq!(status.status, 200, "body: {}", status.safe_body());
@@ -1139,4 +1135,87 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
     );
     let _ = restarted.terminate();
     let _ = first_server.terminate();
+}
+
+/// How long the peer is held back before it binds its listener.
+///
+/// Longer than the whole opening backoff ladder of 1 s, 2 s, and 4 s, so the
+/// peer is still unreachable after the dialer has spent every delay that
+/// ladder defines. A dialer that retires once the ladder runs out can never
+/// recover from this; one that keeps backing off must.
+const PEER_HELD_BACK: Duration = Duration::from_secs(8);
+
+/// How long the recovered link is given to establish.
+///
+/// Past the ladder the delay keeps doubling to 8 s and 16 s, so the first
+/// attempt that can find the peer bound at 8 s lands near 15 s, and the one
+/// after it near 31 s. The budget covers that second attempt so a loaded
+/// machine missing the first is not a failure.
+const RECONNECT_BUDGET: Duration = Duration::from_secs(45);
+
+fn start_peer_service(workspace: &Path) -> support::HttpServer {
+    support::HttpServer::start_node_service(
+        workspace,
+        TOKEN,
+        &[
+            "--workers",
+            "0",
+            "--no-scheduler",
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(15),
+    )
+}
+
+#[test]
+fn static_peer_dialer_reconnects_after_the_opening_backoff_ladder_is_spent() {
+    let first = support::TestWorkspace::new("direct_reconnect_first");
+    let second = support::TestWorkspace::new("direct_reconnect_second");
+    init_node(first.path());
+    init_node(second.path());
+
+    let first_status = status_node(first.path());
+    let second_status = status_node(second.path());
+    trust_node(first.path(), second.path(), &second_status);
+    trust_node(second.path(), first.path(), &first_status);
+
+    let first_id = first_status["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let second_id = second_status["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let first_port = free_port();
+    let second_port = free_port();
+    configure_static_peer(first.path(), &first_port, &second_id, &second_port);
+    configure_static_peer(second.path(), &second_port, &first_id, &first_port);
+
+    // Only the lexicographically lower node ID dials its static peer, so the
+    // dialer is the side that has to come up first. Holding the other side
+    // back is what strands it.
+    let (dialer, listener, peer_id) = if first_id < second_id {
+        (first.path(), second.path(), second_id)
+    } else {
+        (second.path(), first.path(), first_id)
+    };
+
+    let dialer_server = start_peer_service(dialer);
+    std::thread::sleep(PEER_HELD_BACK);
+    let listener_server = start_peer_service(listener);
+
+    wait_for_connected_within(&dialer_server, &peer_id, RECONNECT_BUDGET);
+
+    let transport = dialer_server.get("/v1/node/status").json()["data"]["transport"].clone();
+    assert_eq!(
+        transport["last_errors"].get(peer_id.as_str()),
+        None,
+        "a connected peer still reports the failure it recovered from: {transport}"
+    );
+
+    let _ = listener_server.terminate();
+    let _ = dialer_server.terminate();
 }

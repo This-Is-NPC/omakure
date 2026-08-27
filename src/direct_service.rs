@@ -36,12 +36,25 @@ pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 const DIRECT_WORKERS: usize = 4;
 const DIRECT_QUEUE_CAPACITY: usize = 64;
-pub const MAX_RETRY_ATTEMPTS: usize = 3;
-pub const RETRY_BACKOFF: [Duration; MAX_RETRY_ATTEMPTS] = [
+/// The opening dial-retry delays.
+///
+/// Past the last one the delay keeps doubling until it reaches
+/// `RETRY_BACKOFF_CEILING`; it never runs out.
+pub const RETRY_BACKOFF: [Duration; 3] = [
     Duration::from_secs(1),
     Duration::from_secs(2),
     Duration::from_secs(4),
 ];
+/// The longest a static-peer dialer waits between attempts.
+///
+/// A peer that comes back has to be redialed while the fleet still counts it
+/// Online, so one whole delay plus its jitter plus `CONNECT_TIMEOUT` plus
+/// `HANDSHAKE_TIMEOUT` has to fit inside `PRESENCE_ONLINE_SECONDS`;
+/// `retry_ceiling_redials_within_the_presence_window` holds that. Sixty
+/// seconds is also the lease cadence `runs::HEARTBEAT_MS` already treats as
+/// live, and a twentieth of `IDLE_TIMEOUT`, so a peer that stays down is
+/// polled rather than hammered and its failures do not drown the status.
+pub const RETRY_BACKOFF_CEILING: Duration = Duration::from_secs(60);
 pub const RETRY_JITTER_MAX: Duration = Duration::from_millis(250);
 const RESOLVER_QUEUE_CAPACITY: usize = 8;
 const RESOLVER_CONCURRENCY: usize = 4;
@@ -302,6 +315,7 @@ impl ConnectionState {
             },
         );
         refresh_status(&self.status, &self.expected, &active);
+        self.clear_error(remote_node_id);
         Ok(ConnectionClaim {
             state: Arc::clone(self),
             remote_node_id: remote_node_id.to_string(),
@@ -327,6 +341,17 @@ impl ConnectionState {
             status
                 .last_errors
                 .insert(node_id.to_string(), error.code().as_str().to_string());
+        }
+    }
+
+    /// Drop a peer's recorded failure now that it holds a session again.
+    ///
+    /// `last_errors` is read to answer "why is this peer not connected", so a
+    /// connected peer must not answer it. Keeping the entry made the map name
+    /// the last thing that ever went wrong rather than the current cause.
+    fn clear_error(&self, node_id: &str) {
+        if let Ok(mut status) = self.status.lock() {
+            status.last_errors.remove(node_id);
         }
     }
 
@@ -1198,7 +1223,7 @@ fn dialer_loop(
         }
         return;
     }
-    let mut attempts = 0usize;
+    let mut failures = 0usize;
     while !stop.load(Ordering::SeqCst) {
         if state
             .active
@@ -1210,17 +1235,19 @@ fn dialer_loop(
             continue;
         }
         match connect_and_hold(&peer, &context, &state, &resolver) {
-            Ok(()) => attempts = 0,
+            Ok(()) => failures = 0,
             Err(error) => {
                 state.record_error(&peer.node_id, &error);
                 if is_fatal_connection_error(&error) {
                     return;
                 }
-                attempts += 1;
-                if attempts >= MAX_RETRY_ATTEMPTS {
-                    return;
-                }
-                let delay = RETRY_BACKOFF[attempts - 1].saturating_add(retry_jitter());
+                // Nothing respawns this thread, so a peer that is merely
+                // unreachable must never be allowed to retire it: the link
+                // would stay dead until the process restarts. Back off toward
+                // the ceiling instead, keeping the jitter so a fleet that
+                // restarts together does not resynchronise on one instant.
+                let delay = retry_backoff(failures).saturating_add(retry_jitter());
+                failures = failures.saturating_add(1);
                 sleep_or_stop(delay, &stop);
             }
         }
@@ -1240,6 +1267,16 @@ fn is_fatal_connection_error(error: &TransportError) -> bool {
             | TransportError::Expired
             | TransportError::Replay
     )
+}
+
+/// The delay before the attempt that follows `failures` transient failures.
+fn retry_backoff(failures: usize) -> Duration {
+    u32::try_from(failures)
+        .ok()
+        .and_then(|steps| 1u32.checked_shl(steps))
+        .and_then(|factor| RETRY_BACKOFF[0].checked_mul(factor))
+        .unwrap_or(RETRY_BACKOFF_CEILING)
+        .min(RETRY_BACKOFF_CEILING)
 }
 
 fn retry_jitter() -> Duration {
@@ -2692,6 +2729,40 @@ mod tests {
     use super::*;
 
     static RESOLVER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn retry_backoff_keeps_the_opening_ladder_then_holds_at_the_ceiling() {
+        for (failures, expected) in RETRY_BACKOFF.iter().enumerate() {
+            assert_eq!(retry_backoff(failures), *expected);
+        }
+        assert_eq!(retry_backoff(RETRY_BACKOFF.len()), Duration::from_secs(8));
+        assert_eq!(retry_backoff(usize::MAX), RETRY_BACKOFF_CEILING);
+        let mut previous = Duration::ZERO;
+        for failures in 0..64 {
+            let delay = retry_backoff(failures);
+            assert!(delay >= previous, "backoff shrank at {failures} failures");
+            assert!(
+                delay <= RETRY_BACKOFF_CEILING,
+                "backoff passed the ceiling at {failures} failures"
+            );
+            previous = delay;
+        }
+    }
+
+    /// The ceiling is only defensible if a peer that comes back is redialed
+    /// while the fleet still counts it Online.
+    #[test]
+    fn retry_ceiling_redials_within_the_presence_window() {
+        let worst_case =
+            RETRY_BACKOFF_CEILING + RETRY_JITTER_MAX + CONNECT_TIMEOUT + HANDSHAKE_TIMEOUT;
+        let online = u64::try_from(crate::health_plane::bounds::PRESENCE_ONLINE_SECONDS)
+            .expect("the Online window is a positive number of seconds");
+        let online = Duration::from_secs(online);
+        assert!(
+            worst_case < online,
+            "a redial can take {worst_case:?}, past the {online:?} Online window"
+        );
+    }
 
     #[test]
     fn admission_limits_each_source_without_starving_another_source() {

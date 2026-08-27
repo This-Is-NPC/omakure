@@ -18,7 +18,7 @@
 //! Run with:
 //! `cargo test --test docker_health_plane_exhaustion -- --ignored --nocapture`
 
-use omakure::direct_service::MAX_RETRY_ATTEMPTS;
+use omakure::direct_service::RETRY_BACKOFF;
 use omakure::direct_transport::{
     envelope_nonce, sign_ack, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
     TransportCertificate, ENVELOPE_KIND, MAX_FRAME_LENGTH,
@@ -42,10 +42,14 @@ const FRAME_TIMEOUT: Duration = Duration::from_secs(15);
 /// frozen retry budget.
 const EXPECTED_PROFILE_SENDS: usize = MAX_RETRIES as usize + 1;
 
-/// The shipped transport's dial-retry budget, which is a *different* frozen
-/// three from the Health Plane's ack-retry budget above. A connection that
-/// opens and sends nothing consumes one of these, never one of those.
-const DIAL_ATTEMPT_BUDGET: usize = MAX_RETRY_ATTEMPTS;
+/// How many strays keep the Performer redialing on the fast part of the
+/// shipped ladder.
+///
+/// A connection that opens and sends nothing costs a *dial* attempt, never a
+/// Health Plane ack retry. The dialer no longer retires on those, but each one
+/// advances it one rung down `RETRY_BACKOFF`, and past the last rung the delay
+/// doubles away toward a sixty-second ceiling.
+const FAST_DIAL_ATTEMPTS: usize = RETRY_BACKOFF.len();
 
 /// The observation window, derived from the frozen schedule rather than picked.
 ///
@@ -199,24 +203,20 @@ fn an_unacknowledged_profile_stops_at_the_frozen_attempt_budget_on_one_session()
         }
     };
 
-    // A stray costs a *dial* attempt (`MAX_RETRY_ATTEMPTS` in the shipped
-    // dialer), not a Health Plane ack retry. It threatens this phase's setup
-    // rather than its measurement: the send count asserted below is taken on
-    // the session that did handshake.
+    // Strays threaten this phase's setup rather than its measurement: the send
+    // count asserted below is taken on the session that did handshake. Nothing
+    // about reaching this line bounds how many came first, because the dialer
+    // survives all of them, so this is a real bound and not a restatement of
+    // the loop above.
     //
-    // The bound is `- 1` and that is the whole point. The shipped dialer
-    // retires itself once `attempts` reaches the budget, and `attempts` only
-    // resets on a successful dial, so reaching this line at all already proves
-    // at most `BUDGET - 1` strays occurred. Asserting against the raw budget
-    // would be indistinguishable from deleting the assertion. One stray is
-    // tolerated because it does not corrupt the measurement and the shipped
-    // dialer is known to produce them; two means the very next failure retires
-    // the dialer for the lifetime of the process, which is worth failing on.
+    // Beyond the fast rungs the delay doubles toward a minute, which would run
+    // this phase past `ACCEPT_BUDGET` and report a timeout instead of the stray
+    // storm that caused it.
     assert!(
-        (strays as usize) < DIAL_ATTEMPT_BUDGET - 1,
+        (strays as usize) < FAST_DIAL_ATTEMPTS,
         "the Performer opened {strays} connection(s) that sent no handshake frame, \
-         leaving only one of its {DIAL_ATTEMPT_BUDGET} dial attempts; one more \
-         failure and it could not reconnect at all for the life of the process"
+         pushing its redial past the {FAST_DIAL_ATTEMPTS} fast attempts and into \
+         delays long enough to time this phase out for an unrelated-looking reason"
     );
 
     // The shipped responder path, verbatim: three handshake messages, then the

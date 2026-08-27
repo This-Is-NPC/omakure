@@ -213,6 +213,12 @@ provide — scoped to operational management, **never surveillance**:
    script and then order every Performer to run it. **Do not "fix" the code
    back to a single node that signs and conducts** — pushing a baseline is an
    operator action spanning two principals, not one node's privilege.
+   The lost-device-revoke clause was already delivered by item 6 — `revoke_peer`
+   writes the revocation first and never conditionally on the run log, and
+   cancels the revoked peer's in-flight Cue runs, the executor heartbeat killing
+   the child as soon as a row leaves `running`. Withdrawing trust and stopping
+   the work that trust already caused belong to the plane that granted it, so
+   this item carries baseline push, drift, and rollback only.
 9. **Install automation** — systemd, launchd, and Windows daemon bootstrap.
 10. **Test & doc** — heterogeneous fleet simulation, install-config tests,
     security failure tests, platform release validation, and product docs.

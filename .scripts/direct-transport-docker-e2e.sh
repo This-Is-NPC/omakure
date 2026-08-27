@@ -128,7 +128,7 @@ status_node() {
 wait_connected() {
     local service=$1
     local peer_id=$2
-    local deadline=$((SECONDS + 30))
+    local deadline=$((SECONDS + ${3:-30}))
     while :; do
         if status_output=$(status_node "$service" 2>/dev/null) \
             && jq -e --arg peer "$peer_id" \
@@ -143,6 +143,58 @@ wait_connected() {
         fi
         sleep 1
     done
+}
+
+wait_disconnected() {
+    local service=$1
+    local peer_id=$2
+    local deadline=$((SECONDS + 60))
+    while :; do
+        if status_output=$(status_node "$service" 2>/dev/null) \
+            && jq -e --arg peer "$peer_id" \
+                '.data.transport.peers | any(.[]; .node_id == $peer and .state == "disconnected")' \
+                <<<"$status_output" >/dev/null; then
+            return
+        fi
+        if (( SECONDS >= deadline )); then
+            printf 'peer never reported disconnected: %s\n' "${status_output:-<no output>}" >&2
+            exit 1
+        fi
+        sleep 1
+    done
+}
+
+# The newest accepted session on a node, as "<max audit id>|<session id hex>".
+#
+# Read from the durable audit rather than from `node status`, because status
+# reports the link as `connected` either way; only the session id distinguishes
+# a link that was re-established from one that never broke.
+accepted_session_signature() {
+    local service=$1
+    local database="$tmp_dir/${service}.session-signature.sqlite"
+    "${compose[@]}" cp "${service}:/var/lib/omakure/node.sqlite" "$database" >/dev/null
+    "${sqlite_cmd[@]}" -separator '|' "$database" \
+        "SELECT COALESCE(MAX(id), 0),
+                COALESCE((SELECT hex(session_id) FROM transport_audit
+                          WHERE outcome = 'accepted' AND session_id IS NOT NULL
+                          ORDER BY id DESC LIMIT 1), '')
+         FROM transport_audit;"
+}
+
+assert_new_session_after_partition() {
+    local service=$1 before=$2 after=$3
+    local before_id before_session after_id after_session
+    IFS='|' read -r before_id before_session <<<"$before"
+    IFS='|' read -r after_id after_session <<<"$after"
+    if (( after_id <= before_id )); then
+        printf '%s recorded no new transport audit after the partition\n' "$service" >&2
+        exit 1
+    fi
+    if [[ -z "$before_session" || -z "$after_session" || "$before_session" == "$after_session" ]]; then
+        printf '%s reconnected onto the same session (%s -> %s); the link never broke\n' \
+            "$service" "${before_session:-<none>}" "${after_session:-<none>}" >&2
+        exit 1
+    fi
 }
 
 "${compose[@]}" build
@@ -246,11 +298,49 @@ write_config direct-a "$b_id" direct-b
 wait_connected direct-a "$b_id"
 wait_connected direct-b "$a_id"
 
-b_container=$("${compose[@]}" ps -q direct-b)
-"${docker_cmd[@]}" network disconnect "${project}_default" "$b_container"
-sleep 3
-"${docker_cmd[@]}" network connect "${project}_default" "$b_container"
-wait_connected direct-a "$b_id"
+# Offline reconnect, carried by the dialer that watched the peer leave.
+#
+# `should_initiate` gives the dial to whichever node id sorts lower, so the two
+# services are not interchangeable here and picking by name would test the real
+# thing only about half the time. Take the *listener* down and leave the dialer
+# running for the whole outage: it is never restarted, so the thread that was
+# retrying when the peer vanished is the only thing that can bring the link
+# back. Restarting the dialer instead would hand the job to a fresh thread and
+# prove nothing about the one under test.
+if [[ "$a_id" < "$b_id" ]]; then
+    dialer_svc=direct-a dialer_peer=$b_id listener_svc=direct-b
+else
+    dialer_svc=direct-b dialer_peer=$a_id listener_svc=direct-a
+fi
+
+# The outage has to outlast the dialer that used to give up, which stopped after
+# three failed connection attempts with RETRY_BACKOFF's 1 s and 2 s between
+# them. A connect against a peer whose name still resolves fails fast, but one
+# against a blackholed address can burn a whole CONNECT_TIMEOUT first, so that
+# dialer's longest possible life is 3 x 10 s + 1 s + 2 s = 33 s. Thirty-five
+# seconds puts the peer's return past it under either failure mode; a shorter
+# outage would leave this passing on a dialer that retires.
+partition_seconds=35
+
+# What the redial is allowed to cost, taken from the product's own bound rather
+# than chosen. One whole RETRY_BACKOFF_CEILING plus its jitter plus
+# CONNECT_TIMEOUT plus HANDSHAKE_TIMEOUT is 80.25 s, the bound
+# `retry_ceiling_redials_within_the_presence_window` holds under
+# PRESENCE_ONLINE_SECONDS. A budget below that would fail a dialer that is
+# merely deep in backoff, which is the behaviour being asked for.
+reconnect_budget=90
+
+partition_before=$(accepted_session_signature "$dialer_svc")
+"${compose[@]}" stop "$listener_svc" >/dev/null
+# The control. Stopping the listener closes the socket, so the dialer sees the
+# session end and starts its ladder; without that observation a reading of
+# "still connected" would satisfy everything below with nothing reconnected.
+wait_disconnected "$dialer_svc" "$dialer_peer"
+sleep "$partition_seconds"
+"${compose[@]}" start "$listener_svc" >/dev/null
+wait_connected "$dialer_svc" "$dialer_peer" "$reconnect_budget"
+assert_new_session_after_partition "$dialer_svc" "$partition_before" \
+    "$(accepted_session_signature "$dialer_svc")"
 
 # Revocation must prevent a fresh session. Revocations are retained and cannot
 # be silently undone by re-importing the same identity.

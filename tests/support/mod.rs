@@ -425,8 +425,8 @@ impl HttpServer {
         );
         stream.write_all(request.as_bytes()).expect("write request");
 
-        let mut raw = String::new();
-        stream.read_to_string(&mut raw).expect("read response");
+        let raw = read_http_response(&mut stream, HTTP_RESPONSE_DEADLINE)
+            .unwrap_or_else(|error| panic!("read response from {}: {error}", self.addr));
         HttpResponse::parse(raw)
     }
 
@@ -461,6 +461,59 @@ impl Drop for HttpServer {
     }
 }
 
+/// Overall budget for one HTTP exchange made through [`HttpServer`].
+///
+/// Deliberately far larger than the per-read socket timeout. `set_read_timeout`
+/// bounds a *single* `read` syscall, not the exchange: an Argon2id verification
+/// (64 MiB, t=3) on a machine running the whole suite in parallel can leave the
+/// socket idle for several seconds while the peer is perfectly healthy.
+const HTTP_RESPONSE_DEADLINE: Duration = Duration::from_secs(60);
+
+/// Read an HTTP response until the peer closes, tolerating read-timeout stalls.
+///
+/// Three outcomes must stay distinct, and conflating any two of them hides a
+/// real defect:
+///
+/// * the peer closed cleanly (`Ok(0)`) — the response is complete, return it;
+/// * a single `read` timed out (`WouldBlock`/`TimedOut`) — the peer is merely
+///   slow, so retry until `deadline`;
+/// * `deadline` passed without a clean close — a genuine hang, so fail with the
+///   byte count so the truncation is visible in the panic.
+///
+/// Retrying rather than ignoring the error is the whole point. `read_to_string`
+/// *keeps* the bytes it already consumed when it fails, so downgrading the
+/// error to `let _ = ...` would return a silently truncated response that still
+/// parses as valid HTTP — turning a real hang into a green assertion.
+pub fn read_http_response(stream: &mut TcpStream, deadline: Duration) -> std::io::Result<String> {
+    use std::io::ErrorKind;
+
+    let give_up = Instant::now() + deadline;
+    let mut raw: Vec<u8> = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(read) => raw.extend_from_slice(&chunk[..read]),
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            Err(error) if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
+                if Instant::now() >= give_up {
+                    return Err(std::io::Error::new(
+                        ErrorKind::TimedOut,
+                        format!(
+                            "peer never closed the connection within {deadline:?}; \
+                             {} byte(s) received so far (response is truncated)",
+                            raw.len()
+                        ),
+                    ));
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    String::from_utf8(raw)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+}
+
 pub fn http_get_with_timeout(url: &str, bearer_token: Option<&str>, timeout: Duration) -> String {
     let (_status, body) = http_get(url, bearer_token, timeout).expect("HTTP GET should succeed");
     body
@@ -482,8 +535,7 @@ fn http_get(
     let request = format!("GET {path} HTTP/1.1\r\nHost: {host}\r\n{auth}Connection: close\r\n\r\n");
     stream.write_all(request.as_bytes())?;
 
-    let mut response = String::new();
-    stream.read_to_string(&mut response)?;
+    let response = read_http_response(&mut stream, timeout)?;
     let (head, body) = response.split_once("\r\n\r\n").unwrap_or((&response, ""));
     let status = head
         .lines()

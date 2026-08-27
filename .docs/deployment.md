@@ -266,6 +266,22 @@ omakure node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
   --capability scripts:read --capability runs:read --capability runs:write
 ```
 
+Two rules cost a real debugging session on a provisioned machine; both are
+enforced, neither is guessable from the config file alone.
+
+**`api.bind` in `node.toml` must stay loopback.** A non-loopback address in
+the config is refused outright — the node will not start, and says so. The
+only way to bind wider is the pair of CLI flags above: `--bind` *and*
+`--allow-non-loopback`. Widening the listener is therefore always an explicit
+act at the command line, never a quiet edit to a file that some other tool
+might have written.
+
+**Enrolment is time-bound, so fix the clock first.** A signed bundle carries a
+validity window. A machine whose clock is off by an hour will refuse a
+perfectly good bundle with `enrollment_expired`, which reads like a stale
+bundle and is not. Confirm `timedatectl` reports a synchronised clock on the
+joining machine before issuing anything.
+
 Unauthenticated probes:
 
 | Path | Auth | Purpose |

@@ -153,6 +153,28 @@ pub fn run(
         // Cue: every gate is on the receiving node, and `node:write` decides
         // only whether this operator may ask.
         NodeCommand::Cue(args) => dispatch_cue(&context, &scripts_dir, args),
+        NodeCommand::Authority(args) => match args.command {
+            crate::cli::args::NodeAuthorityCommand::Create(args) => {
+                node_ops::create_enrollment_authority(&context, args.confirmed)
+                    .map(|result| serde_json::to_value(result).expect("authority serializes"))
+            }
+            crate::cli::args::NodeAuthorityCommand::Show => {
+                node_ops::read_enrollment_authority(&context)
+                    .map(|result| serde_json::to_value(result).expect("authority serializes"))
+            }
+            crate::cli::args::NodeAuthorityCommand::Issue(args) => {
+                node_ops::issue_enrollment_bundle(
+                    &context,
+                    node_ops::BundleIssueRequest {
+                        audience_node_id: args.audience,
+                        role: args.role,
+                        capabilities: args.capabilities,
+                        lifetime_seconds: args.lifetime_seconds,
+                    },
+                )
+                .map(|result| serde_json::to_value(result).expect("bundle serializes"))
+            }
+        },
         NodeCommand::Init => {
             node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
                 .map(|result| serde_json::to_value(result).expect("node initialization serializes"))

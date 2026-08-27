@@ -504,6 +504,9 @@ pub enum NodeCommand {
     /// Request and explicitly approve or reject manual enrollment
     Enroll(NodeEnrollArgs),
 
+    /// Hold and use this node's enrollment authority
+    Authority(NodeAuthorityArgs),
+
     /// Update one peer's capability allow-list with confirmation and evidence
     Capabilities(NodeCapabilitiesArgs),
 
@@ -598,6 +601,51 @@ pub struct NodeDirectProbeArgs {
     /// Expected canonical peer node ID.
     #[arg(long = "peer-node-id")]
     pub peer_node_id: String,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeAuthorityArgs {
+    #[command(subcommand)]
+    pub command: NodeAuthorityCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NodeAuthorityCommand {
+    /// Create this node's enrollment authority key, refusing to replace one
+    Create(NodeAuthorityCreateArgs),
+
+    /// Report the authority this node holds, without its private half
+    Show,
+
+    /// Mint one enrollment bundle naming this node as the subject
+    Issue(NodeAuthorityIssueArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct NodeAuthorityCreateArgs {
+    /// Required. Creating an authority is a fleet-wide act.
+    #[arg(long)]
+    pub confirmed: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeAuthorityIssueArgs {
+    /// The node that will apply this bundle. It is checked against that node's
+    /// own identity when it does, so a bundle is useless anywhere else.
+    #[arg(long = "audience")]
+    pub audience: String,
+
+    /// The role the audience will record for this node.
+    #[arg(long, value_parser = ["conductor", "performer"])]
+    pub role: String,
+
+    /// A capability the audience will grant this node. Repeatable.
+    #[arg(long = "capability")]
+    pub capabilities: Vec<String>,
+
+    /// How long the bundle stays valid, in seconds.
+    #[arg(long = "lifetime-seconds", default_value_t = 3600)]
+    pub lifetime_seconds: u64,
 }
 
 #[derive(Args, Debug)]

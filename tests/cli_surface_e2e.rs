@@ -200,6 +200,10 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
+        command: "node authority",
+        coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
+    },
+    CommandCoverage {
         command: "node capabilities",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
@@ -327,6 +331,7 @@ fn command_surface_inventory_maps_all_current_commands() {
         "history stats",
         "history tail",
         "history traces",
+        "node authority",
         "node capabilities",
         "node cue",
         "node direct-probe",

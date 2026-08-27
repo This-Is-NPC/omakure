@@ -188,29 +188,66 @@ must already contain for it to be accepted at all — the authority `key_id` and
 `public_key` — and the organization the bundle names. A bundle is checked
 against the applying node's own identity, so it is useless anywhere else.
 
-### What an unattended node does with a bundle it cannot use
+### How a provisioned machine joins
 
-Frozen decision, because on an unattended machine nobody is watching either way.
+A bundle **cannot be pre-placed**. It names the node that will apply it, and is
+checked against that node's own identity; the identity is generated from a
+keypair the machine creates on first start. So there is nothing to ship in the
+image that a fresh machine could apply to itself.
 
-**Refuse the enrollment; never refuse to serve.** A node that will not boot
-cannot be asked what went wrong, and one bad bundle would take down a whole
-rollout batch. A node that boots unenrolled is observable — `omakure node
-status` shows it initialized with no peers — and the reason is in its audit
-trail. This is the same shape the rest of the product already takes: a
-revocation is written before the run log is touched and never blocked by it, and
-a Cue refused on trust is silent to the sender while the node keeps serving.
+What the installer places is what the roadmap always said: the public
+`node.toml`, the authority's public key, the organization, both bootstrap
+hashes, and the bootstrap token file. The machine boots, generates its identity,
+and serves — belonging to nobody yet.
 
-Concretely:
+The fleet then issues membership for that identity and delivers it:
+
+```bash
+# on the machine holding the authority
+omakure node authority issue --audience omk1_… --role conductor \
+  --capability inventory-health --capability notifications
+
+curl --fail -H 'Authorization: Bearer <target token>' \
+  -H 'Content-Type: application/json' \
+  --data '{"bundle_hex":"…","bootstrap_nonce":"…"}' \
+  http://<target>:7878/v1/node/enrollment/bundle
+```
+
+Nothing is typed into the joining machine.
+
+**Reachability.** The target's management API binds loopback by default, so
+joining this way needs `--allow-non-loopback` and a token the fleet holds. Give
+that token `enrollment:write` and nothing else — it is the narrowest scope that
+admits the operation. It is not sufficient on its own: the bundle must still
+verify against the authority the target's *own* config names, and the bootstrap
+token and nonce must match the hashes its operator placed. Three independent
+gates, and the token is only the first.
+
+### What happens when a bundle cannot be used
+
+Delivery is a request, so **every refusal is answered to the caller** with a
+typed code — unknown or revoked authority, wrong organization, expired,
+replayed, enrollment not enabled. The fleet that pushed is the fleet that reads
+the answer.
+
+That is worth stating plainly because an earlier draft of this section froze the
+opposite shape. It described a node applying a bundle at boot and had to reason
+about what a machine should do when "nobody is watching". Under delivery there
+is no such moment: nothing is applied unprompted, and there is no unwatched
+failure to design around. The rule that survives from it is the one that still
+matters:
+
+**Refusing enrollment must never mean refusing to serve.** A node that will not
+boot cannot be asked what went wrong, and one bad bundle would take down a
+rollout batch. A target that refuses a bundle keeps serving, and stays available
+for the corrected one.
+
+Two cases are deliberately not failures on the target:
 
 | Case | Behaviour |
 |---|---|
-| No bundle present | Serve. Not an error; most nodes never have one. |
-| `trust.enrollment` is not `signed-bundle` | Serve, and log a distinguishable reason. Never silence — this is the shipped default, so a provisioning mistake looks exactly like a node that was never meant to enroll. |
-| Bundle invalid, expired, wrong organization, or from an unknown or revoked authority | Serve unenrolled, log the typed reason, do not retry this session. |
-| Already enrolled, or the bootstrap token already consumed | No-op, serve normally. The token is consumed and tombstoned on first success, so treating its absence as failure would let the node boot exactly once. |
-
-Retry is per session, matching the rest of the node's idioms: a condition that
-resolves is picked up on the next start, and nothing loops in between.
+| Never enrolled | Serves normally. Most nodes are this, most of the time. |
+| Already enrolled, or the bootstrap token already consumed | The delivery is refused to the caller; the node is unaffected. The token is consumed and tombstoned on first success, so treating its absence as a boot failure would let a node start exactly once. |
 
 ## Fleet health
 

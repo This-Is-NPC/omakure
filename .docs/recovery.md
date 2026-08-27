@@ -51,6 +51,33 @@ with the error `the worker holding this remote run stopped; it was not re-run
 because a remote instruction must execute at most once`. Re-dispatch it
 deliberately if it should happen again; nothing will do so on its own.
 
+## A machine that did not join
+
+A provisioned machine that never joined its fleet is serving and reachable —
+that is deliberate, because a node that refused to boot could not be asked
+anything. Check it in this order:
+
+```bash
+omakure node status          # identity present? peer count still zero?
+omakure node peers           # nothing active means the bundle never landed
+```
+
+The delivery is a request, so the fleet that pushed the bundle has the typed
+refusal in hand. Read it there first: unknown or revoked authority, wrong
+organization, expired, replayed, or enrollment not enabled.
+
+The two that look alike and are not:
+
+- **`enrollment_disabled`** — the target's `trust.enrollment` is not
+  `signed-bundle`. The shipped default is `disabled`, so this is what a
+  provisioning mistake looks like: the machine is healthy and was never told to
+  accept membership.
+- **`enrollment_replay`** — the bootstrap token was already spent. The machine
+  most likely joined already; check `node peers` before reissuing anything.
+
+Reissue rather than reuse. A bundle is bound to one node id and one bootstrap
+pair, so a second delivery of the same bundle is refused by design.
+
 ## Identity replacement
 
 Use `node reset --confirmed` only when the machine identity and trust registry

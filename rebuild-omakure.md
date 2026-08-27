@@ -191,7 +191,9 @@ provide — scoped to operational management, **never surveillance**:
 7. **Unattended autojoin — complete for signed-bundle provisioning** — a fleet
    can issue enrollment under an authority key it holds, and a provisioned
    machine generates its identity on first start and joins with no command run
-   on it. Hooks, notification delivery, and Shell/Menu integrations are not
+   on it. A bundle names the node that will apply it, so it cannot be
+   pre-placed; the installer places the authority's public key and a bootstrap
+   token, and the fleet issues membership once the machine has an identity. Hooks, notification delivery, and Shell/Menu integrations are not
    included in this phase; they are item 11. The richest-Profile clause was
    already delivered by item 4 — `omarchy_version`, `omarchy_channel`,
    `runtimes` and `capabilities` ship — and further facts belong to item 8,

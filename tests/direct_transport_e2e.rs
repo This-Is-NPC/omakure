@@ -1137,6 +1137,158 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
     let _ = first_server.terminate();
 }
 
+fn revoke_node(workspace: &Path, peer_node_id: &str) {
+    let output = run_node(
+        workspace,
+        &[
+            "revoke".to_string(),
+            peer_node_id.to_string(),
+            "--actor".to_string(),
+            "e2e".to_string(),
+            "--reason".to_string(),
+            "device retired".to_string(),
+            "--confirmed".to_string(),
+        ],
+    );
+    assert_success(&output);
+    assert_eq!(json(&output)["data"]["state"], "revoked");
+}
+
+/// The stable codes this node wrote for handshakes it turned away.
+fn rejected_error_codes(workspace: &Path) -> Vec<i64> {
+    let connection =
+        Connection::open(workspace.join(".node-state/node.sqlite")).expect("open node registry");
+    let mut statement = connection
+        .prepare("SELECT error_code FROM transport_audit WHERE outcome = 'rejected'")
+        .expect("prepare rejected audit query");
+    let codes = statement
+        .query_map([], |row| row.get::<_, Option<i64>>(0))
+        .expect("query rejected audit rows")
+        .filter_map(|code| code.expect("read error code"))
+        .collect();
+    codes
+}
+
+/// Wait until `server` records a transport failure for `peer_node_id`.
+fn wait_for_transport_error(server: &support::HttpServer, peer_node_id: &str) -> String {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        // A status that is not yet answerable is a startup race, not a
+        // verdict, so it is retried inside the same budget rather than failing
+        // the run.
+        let status = server.get("/v1/node/status");
+        let transport = if status.status == 200 {
+            status.json()["data"]["transport"].clone()
+        } else {
+            Value::Null
+        };
+        if let Some(error) = transport["last_errors"][peer_node_id].as_str() {
+            return error.to_string();
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the dialer recorded no failure at all for a peer that must refuse it: \
+             last status {} body {}",
+            status.status,
+            status.safe_body()
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// A revoked node must be told `revoked`, not left to infer `internal`.
+///
+/// The contract freezes `1007 revoked` for "Identity, certificate epoch, or
+/// bundle is revoked" and says reconnects using any revoked material fail with
+/// it. It also says `revoked` stops a static-peer dialer for the life of the
+/// process, while `internal` -- "bounded local failure" -- is retried without
+/// limit.
+///
+/// Two things were wrong. The listener sent a revoked peer down the
+/// `authenticated_untrusted` enrollment path, which is for a valid certificate
+/// this registry does not know *yet*, not for one it has permanently
+/// withdrawn; the refusal that came out of it was `identity_mismatch`, about
+/// an identity that matched perfectly. And nothing was ever written back, so
+/// the dialer saw only a socket that closed and recorded `internal`, then
+/// retried it forever. On two real machines the revoked node was still dialing
+/// its revoker ten minutes later with `"last_errors": {"...": "internal"}`.
+#[test]
+fn a_revoked_peer_is_refused_with_revoked_and_told_so() {
+    let first = support::TestWorkspace::new("direct_revoked_first");
+    let second = support::TestWorkspace::new("direct_revoked_second");
+    init_node(first.path());
+    init_node(second.path());
+
+    let first_status = status_node(first.path());
+    let second_status = status_node(second.path());
+    let first_id = first_status["identity"]["node_id"].as_str().unwrap();
+    let second_id = second_status["identity"]["node_id"].as_str().unwrap();
+
+    // Only the lexicographically lower node id dials, so the revoked peer has
+    // to be that one or nothing would ever knock on the revoker's door.
+    let (dialer, dialer_id, dialer_status, responder, responder_id) = if first_id < second_id {
+        (
+            first.path(),
+            first_id,
+            &first_status,
+            second.path(),
+            second_id,
+        )
+    } else {
+        (
+            second.path(),
+            second_id,
+            &second_status,
+            first.path(),
+            first_id,
+        )
+    };
+
+    trust_node(
+        dialer,
+        responder,
+        if first_id < second_id {
+            &second_status
+        } else {
+            &first_status
+        },
+    );
+    trust_node(responder, dialer, dialer_status);
+    // The asymmetry the operator actually creates: the revoker knows, and the
+    // revoked node is never told, so it goes on treating the revoker as active.
+    revoke_node(responder, dialer_id);
+
+    let dialer_port = free_port();
+    let responder_port = free_port();
+    configure_static_peer(dialer, &dialer_port, responder_id, &responder_port);
+    configure_static_peer(responder, &responder_port, dialer_id, &dialer_port);
+
+    let responder_server = start_peer_service(responder);
+    let dialer_server = start_peer_service(dialer);
+
+    let recorded = wait_for_transport_error(&dialer_server, responder_id);
+    assert_eq!(
+        recorded, "revoked",
+        "a node refused for revoked material must be told so; `internal` is the code \
+         the contract reserves for a bounded local failure and the one code a dialer \
+         retries without limit"
+    );
+
+    let _ = dialer_server.terminate();
+    let _ = responder_server.terminate();
+
+    let codes = rejected_error_codes(responder);
+    assert!(
+        codes.contains(&1007),
+        "the revoker must record `revoked` for the handshake it turned away, got {codes:?}"
+    );
+    assert!(
+        !codes.contains(&1005),
+        "a revoked peer is not an identity mismatch; its identity is exactly the one \
+         that was revoked: {codes:?}"
+    );
+}
+
 /// How long the peer is held back before it binds its listener.
 ///
 /// Longer than the whole opening backoff ladder of 1 s, 2 s, and 4 s, so the

@@ -1587,6 +1587,13 @@ fn connect_and_hold(
     .map_err(error_to_transport)?;
     let frame = read_frame(&mut stream, deadline).map_err(error_to_transport)?;
     let response = session.read(&frame)?;
+    // A stated refusal is the peer's verdict, and it is the only way this node
+    // can learn one: nothing local knows the peer revoked it. Reported as
+    // itself so `is_fatal_connection_error` can retire this dialer instead of
+    // reading a refusal as a transient fault and retrying it forever.
+    if let Some(stated) = crate::direct_transport::stated_error(&response) {
+        return Err(stated);
+    }
     if response.kind != ENVELOPE_KIND {
         return Err(TransportError::InvalidFrame);
     }
@@ -2361,6 +2368,36 @@ enum Readiness {
     Failed(TransportError),
 }
 
+/// Read and discard whatever the peer is still sending, briefly.
+///
+/// Closing a socket whose receive queue still holds unread bytes makes the
+/// kernel send RST, and an RST discards data this node has written but the peer
+/// has not read yet. A refusal written immediately before the close is exactly
+/// such data: the initiator writes its probe the instant the handshake
+/// finishes, so those bytes are almost always sitting unread when the refusal
+/// goes out. Without this the peer would be back to inferring `internal` from a
+/// dead connection, which is the failure this exists to fix.
+///
+/// Bounded by time and by bytes, because the peer on the other end is one this
+/// node has just refused and it does not get to hold a worker by talking.
+fn drain_until_hangup(stream: &mut TcpStream) {
+    const BUDGET: Duration = Duration::from_millis(250);
+    const MAX_BYTES: usize = 64 * 1024;
+    let deadline = Instant::now() + BUDGET;
+    let mut scratch = [0u8; 4096];
+    let mut seen = 0usize;
+    while Instant::now() < deadline && seen < MAX_BYTES {
+        match wait_readable(stream, Duration::from_millis(25)) {
+            Readiness::Readable => match stream.read(&mut scratch) {
+                Ok(0) | Err(_) => return,
+                Ok(count) => seen = seen.saturating_add(count),
+            },
+            Readiness::Idle => continue,
+            Readiness::Closed | Readiness::Failed(_) => return,
+        }
+    }
+}
+
 /// Wait up to `tick` for the peer to send something, without consuming it.
 fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness {
     if stream.set_read_timeout(Some(tick)).is_err() {
@@ -2447,6 +2484,9 @@ pub fn probe(
         deadline,
     )?;
     let response = session.read(&read_frame(&mut stream, deadline)?)?;
+    if let Some(stated) = crate::direct_transport::stated_error(&response) {
+        return Err(stated.into());
+    }
     if response.kind != ENVELOPE_KIND {
         return Err(TransportError::InvalidFrame.into());
     }
@@ -2539,6 +2579,9 @@ pub fn dispatch_cue(
         deadline,
     )?;
     let response = session.read(&read_frame(&mut stream, deadline)?)?;
+    if let Some(stated) = crate::direct_transport::stated_error(&response) {
+        return Err(stated.into());
+    }
     if response.kind != ENVELOPE_KIND {
         return Err(TransportError::InvalidFrame.into());
     }
@@ -2933,6 +2976,37 @@ fn serve_connection(
             .ok_or(TransportError::HandshakeFailed)?;
         remote_node_id = Some(remote.node_id().to_string());
         let peer = registry.transport_peer(remote.node_id(), &hex(remote.identity_key()))?;
+        // A revoked identity is not an enrollment candidate.
+        //
+        // `authenticated_untrusted` is the enrollment-only channel for a peer
+        // whose certificate is valid but whose node this registry does not know
+        // yet. A revoked one is not that: revocation rows are append-only, the
+        // schema's own triggers refuse to resurrect a revoked identity, and the
+        // contract says reconnects using any revoked material fail with
+        // `revoked`. Sending it down the staging path made the refusal come out
+        // as `identity_mismatch` -- it had presented a probe, and the staging
+        // path expects a manual request -- so the recorded reason for turning
+        // away a machine the operator revoked was that its identity did not
+        // match. It does match. That is the whole point.
+        //
+        // The refusal is stated to the peer, because it has authenticated as
+        // exactly the node that was revoked and nothing else can tell it. A
+        // dialer that is not told keeps the code it can infer, `internal`,
+        // which is the one code the contract says to retry.
+        if peer
+            .as_ref()
+            .is_some_and(|peer| peer.state == PeerState::Revoked)
+        {
+            let mut session = handshake.into_session()?;
+            if let Ok(frame) =
+                session.write_error(crate::direct_transport::ProtocolErrorCode::Revoked)
+            {
+                let _ = write_bytes(&mut stream, &frame, deadline);
+                let _ = stream.shutdown(std::net::Shutdown::Write);
+                drain_until_hangup(&mut stream);
+            }
+            return Err(DirectServiceError::Protocol(TransportError::Revoked));
+        }
         if peer
             .as_ref()
             .is_none_or(|peer| peer.state != PeerState::Active)

@@ -61,6 +61,28 @@ pub enum ProtocolErrorCode {
 }
 
 impl ProtocolErrorCode {
+    /// The code a peer stated, or `None` for anything outside the frozen table.
+    ///
+    /// Deliberately closed: a peer that names a number version 1 does not
+    /// define has said nothing this node can act on, and inventing a meaning
+    /// for it would be the one thing the stable table exists to prevent.
+    pub const fn from_u16(value: u16) -> Option<Self> {
+        match value {
+            1001 => Some(Self::UnsupportedVersion),
+            1002 => Some(Self::InvalidFrame),
+            1003 => Some(Self::MessageTooLarge),
+            1004 => Some(Self::HandshakeFailed),
+            1005 => Some(Self::IdentityMismatch),
+            1006 => Some(Self::NotEnrolled),
+            1007 => Some(Self::Revoked),
+            1008 => Some(Self::Expired),
+            1009 => Some(Self::Replay),
+            1010 => Some(Self::RateLimited),
+            1011 => Some(Self::Internal),
+            _ => None,
+        }
+    }
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::UnsupportedVersion => "unsupported_version",
@@ -124,6 +146,22 @@ impl TransportError {
             Self::Replay => ProtocolErrorCode::Replay,
             Self::RateLimited => ProtocolErrorCode::RateLimited,
             Self::Internal => ProtocolErrorCode::Internal,
+        }
+    }
+
+    pub const fn from_code(code: ProtocolErrorCode) -> Self {
+        match code {
+            ProtocolErrorCode::UnsupportedVersion => Self::UnsupportedVersion,
+            ProtocolErrorCode::InvalidFrame => Self::InvalidFrame,
+            ProtocolErrorCode::MessageTooLarge => Self::MessageTooLarge,
+            ProtocolErrorCode::HandshakeFailed => Self::HandshakeFailed,
+            ProtocolErrorCode::IdentityMismatch => Self::IdentityMismatch,
+            ProtocolErrorCode::NotEnrolled => Self::NotEnrolled,
+            ProtocolErrorCode::Revoked => Self::Revoked,
+            ProtocolErrorCode::Expired => Self::Expired,
+            ProtocolErrorCode::Replay => Self::Replay,
+            ProtocolErrorCode::RateLimited => Self::RateLimited,
+            ProtocolErrorCode::Internal => Self::Internal,
         }
     }
 }
@@ -845,6 +883,24 @@ impl TransportSession {
         })
     }
 
+    /// State one refusal to an authenticated peer, then stop talking.
+    ///
+    /// The frame kind, its two-byte body, and the codes it may carry are all
+    /// already frozen -- `read` has parsed `ERROR_KIND` since version 1 -- but
+    /// nothing ever wrote one, so every refusal after a completed handshake
+    /// reached the peer as a closed socket and became `internal` on the way.
+    /// That is the code the contract reserves for "bounded local failure", and
+    /// it is the one code a dialer is told to retry, so a peer refused on its
+    /// merits retried forever instead of stopping.
+    ///
+    /// Only ever sent after the handshake authenticated the peer's certificate.
+    /// A malformed unauthenticated peer is still closed without a response.
+    pub fn write_error(&mut self, code: ProtocolErrorCode) -> Result<Vec<u8>, TransportError> {
+        let frame = self.write(ERROR_KIND, &(code as u16).to_be_bytes())?;
+        self.closed = true;
+        Ok(frame)
+    }
+
     pub fn write_close(&mut self, reason: u16) -> Result<Vec<u8>, TransportError> {
         let frame = self.write(CLOSE_KIND, &reason.to_be_bytes())?;
         self.closed = true;
@@ -917,6 +973,27 @@ pub struct ReceivedMessage {
     pub sequence: u64,
     pub kind: u8,
     pub body: Vec<u8>,
+}
+
+/// The refusal a peer stated, if this message is one.
+///
+/// An `ERROR_KIND` message carries the stable code and nothing else -- `read`
+/// already refuses one of any other length -- so there is nothing here to
+/// parse beyond the two bytes. An unrecognised code is `internal`: the peer
+/// refused, this node cannot say why, and pretending the message was ordinary
+/// traffic would be worse than saying so.
+pub fn stated_error(message: &ReceivedMessage) -> Option<TransportError> {
+    if message.kind != ERROR_KIND {
+        return None;
+    }
+    let code = message
+        .body
+        .get(..2)
+        .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
+        .map(u16::from_be_bytes)
+        .and_then(ProtocolErrorCode::from_u16)
+        .unwrap_or(ProtocolErrorCode::Internal);
+    Some(TransportError::from_code(code))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1675,6 +1752,76 @@ mod tests {
         let frame = sender.write(ENVELOPE_KIND, b"probe").unwrap();
         assert_eq!(receiver.read(&frame).unwrap().body, b"probe");
         assert_eq!(receiver.read(&frame), Err(TransportError::Replay));
+    }
+
+    /// A refusal has to survive the round trip as itself.
+    ///
+    /// `ERROR_KIND` and its two-byte body have been in the frame parser since
+    /// version 1, but nothing ever wrote one, so every refusal after a
+    /// completed handshake reached the peer as a closed socket and became
+    /// `internal` -- the one code the contract tells a dialer to retry. This is
+    /// the writer that closes that gap, and the reader that has to recognise
+    /// what it wrote rather than call it ordinary traffic.
+    #[test]
+    fn a_stated_error_survives_the_round_trip_as_the_code_that_was_sent() {
+        let first = TempDir::new().unwrap();
+        let second = TempDir::new().unwrap();
+        let first_identity = identity(&first);
+        let second_identity = identity(&second);
+        let first_private = [11u8; 32];
+        let second_private = [13u8; 32];
+        let now = 1_700_000_000;
+        let first_certificate = TransportCertificate::issue(
+            &first_identity,
+            x25519_public_from_private(&first_private).unwrap(),
+            1,
+            now - 1,
+            now + 1000,
+            [1; 16],
+        )
+        .unwrap();
+        let second_certificate = TransportCertificate::issue(
+            &second_identity,
+            x25519_public_from_private(&second_private).unwrap(),
+            1,
+            now - 1,
+            now + 1000,
+            [2; 16],
+        )
+        .unwrap();
+        let mut initiator =
+            NoiseHandshake::new(HandshakeRole::Initiator, first_private, first_certificate)
+                .unwrap();
+        let mut responder =
+            NoiseHandshake::new(HandshakeRole::Responder, second_private, second_certificate)
+                .unwrap();
+        let message_1 = initiator.write_next().unwrap();
+        responder.read_next(&message_1, now).unwrap();
+        let message_2 = responder.write_next().unwrap();
+        initiator.read_next(&message_2, now).unwrap();
+        let message_3 = initiator.write_next().unwrap();
+        responder.read_next(&message_3, now).unwrap();
+        let mut refuser = responder.into_session().unwrap();
+        let mut refused = initiator.into_session().unwrap();
+
+        let frame = refuser.write_error(ProtocolErrorCode::Revoked).unwrap();
+        assert!(
+            refuser.is_closed(),
+            "a session that has stated a refusal must not go on talking"
+        );
+        let message = refused.read(&frame).unwrap();
+        assert_eq!(
+            stated_error(&message),
+            Some(TransportError::Revoked),
+            "the code that was sent is the code the peer must read"
+        );
+
+        // Ordinary traffic is not a refusal, and must not be read as one.
+        let mut other = refuser;
+        other.closed = false;
+        let ordinary = other.write(ENVELOPE_KIND, b"probe").unwrap();
+        let message = refused.read(&ordinary).unwrap();
+        assert_eq!(stated_error(&message), None);
     }
 
     #[test]

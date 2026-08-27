@@ -757,6 +757,14 @@ pub fn install_battery_script(
                 format!("failed to serialize install provenance: {err}"),
             )
         })?;
+        // The cache entry was already read once for validation, so the reader
+        // handed to the install must start at the top of the file again.
+        source_file.seek(SeekFrom::Start(0)).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to rewind battery script: {err}"),
+            )
+        })?;
         let mut install_state = materialize_install(
             &scripts_root,
             &script.path,
@@ -2078,6 +2086,65 @@ pub fn reject_unsafe_relative_path(path: &Path) -> OperationResult<()> {
     Ok(())
 }
 
+/// Install one already-verified script into the workspace, force-replacing
+/// whatever is there and keeping enough state to put it back.
+///
+/// The shared install primitive. It lives here rather than in a neutral module
+/// because this is where the path-confinement rules were built and where the
+/// tests that prove them are: `reject_symlink_components`, the no-follow parent
+/// handle, the temp-then-rename dance, and `ensure_installed_target_inside` are
+/// a single argument, and splitting the argument from its evidence is how one
+/// half of it quietly stops being true.
+///
+/// The caller supplies bytes it has already decided are correct. This function
+/// makes no claim about their provenance — a Battery proves it with a resolved
+/// commit, a baseline with a publisher signature over the whole set — and it
+/// deliberately cannot: an install primitive that also judged content would
+/// give two callers one opinion neither of them wrote.
+///
+/// Returns the state needed to commit or undo. The caller must call
+/// [`InstallState::cleanup`] or [`InstallState::rollback`]; dropping it leaves
+/// a backup file behind.
+pub(crate) fn install_verified_script(
+    workspace: &Workspace,
+    relative: &Path,
+    bytes: &[u8],
+) -> OperationResult<InstallState> {
+    reject_unsafe_relative_path(relative)?;
+    reject_reserved_install_path(relative)?;
+    let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::UnsafePath,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    let installed_path = workspace.scripts_root().join(relative);
+    if let Some(parent) = installed_path.parent() {
+        ensure_install_target_safe(&scripts_root, relative, &installed_path)?;
+        fs::create_dir_all(parent).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to create install directory: {err}"),
+            )
+        })?;
+        // Asked again after the directories exist: the first call could only
+        // check the components that were already there.
+        ensure_install_target_safe(&scripts_root, relative, &installed_path)?;
+    }
+    let operation_path = canonical_install_target_path(&scripts_root, relative, &installed_path)?;
+    let target_existed = operation_path.exists();
+    let mut source = bytes;
+    materialize_install(
+        &scripts_root,
+        relative,
+        &installed_path,
+        &operation_path,
+        &mut source,
+        true,
+        target_existed,
+    )
+}
+
 fn reject_reserved_install_path(path: &Path) -> OperationResult<()> {
     let first = path.components().find_map(|component| match component {
         Component::Normal(part) => part.to_str(),
@@ -2182,7 +2249,7 @@ fn ensure_installed_target_inside(
     Ok(())
 }
 
-enum InstallState {
+pub(crate) enum InstallState {
     #[cfg(unix)]
     Unix {
         parent: File,
@@ -2199,7 +2266,7 @@ enum InstallState {
 }
 
 impl InstallState {
-    fn rollback(&mut self) {
+    pub(crate) fn rollback(&mut self) {
         match self {
             #[cfg(unix)]
             InstallState::Unix {
@@ -2231,7 +2298,7 @@ impl InstallState {
         }
     }
 
-    fn cleanup(&mut self) {
+    pub(crate) fn cleanup(&mut self) {
         match self {
             #[cfg(unix)]
             InstallState::Unix {
@@ -2259,7 +2326,7 @@ fn materialize_install(
     relative: &Path,
     installed_path: &Path,
     operation_path: &Path,
-    source_file: &mut File,
+    source: &mut dyn Read,
     force: bool,
     target_existed: bool,
 ) -> OperationResult<InstallState> {
@@ -2281,7 +2348,7 @@ fn materialize_install(
     })?;
     let parent = open_dir_no_follow(parent_path)?;
     let (tmp_name, tmp_file) = create_new_file_at(&parent, target_name, "tmp")?;
-    copy_open_to_file(source_file, tmp_file)?;
+    copy_reader_to_file(source, tmp_file)?;
     let backup_name = if force && target_existed {
         let (backup_name, backup_file) = create_new_file_at(&parent, target_name, "backup")?;
         let mut input = open_existing_file_at_no_follow(&parent, target_name)?;
@@ -2318,12 +2385,12 @@ fn materialize_install(
     relative: &Path,
     installed_path: &Path,
     operation_path: &Path,
-    source_file: &mut File,
+    source: &mut dyn Read,
     force: bool,
     target_existed: bool,
 ) -> OperationResult<InstallState> {
     let (tmp_path, tmp_file) = unique_install_tmp_file(operation_path)?;
-    copy_open_to_file(source_file, tmp_file)?;
+    copy_reader_to_file(source, tmp_file)?;
     ensure_install_target_safe(scripts_root, relative, installed_path)?;
     let backup_path = if force && target_existed {
         Some(backup_existing_target(operation_path)?)
@@ -2589,13 +2656,24 @@ fn backup_existing_target(target: &Path) -> OperationResult<PathBuf> {
     ))
 }
 
-fn copy_open_to_file(input: &mut File, mut output: File) -> OperationResult<()> {
+fn copy_open_to_file(input: &mut File, output: File) -> OperationResult<()> {
     input.seek(SeekFrom::Start(0)).map_err(|err| {
         OperationError::new(
             OperationErrorCode::IoFailed,
             format!("failed to rewind battery script: {err}"),
         )
     })?;
+    copy_reader_to_file(input, output)
+}
+
+/// Write a staged install's bytes, whatever they are being read from.
+///
+/// A battery script arrives as an open file in the cache; a baseline arrives
+/// as bytes already verified against a signed manifest, with no file to open.
+/// The confinement, the temp-then-link dance, and the rollback below are the
+/// same either way, and the only thing that differed was where the bytes came
+/// from -- which is not a reason for a second copy of any of it.
+fn copy_reader_to_file(input: &mut dyn Read, mut output: File) -> OperationResult<()> {
     io::copy(input, &mut output).map_err(|err| {
         OperationError::new(
             OperationErrorCode::IoFailed,

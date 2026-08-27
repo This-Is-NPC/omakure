@@ -1,3 +1,4 @@
+pub mod baseline;
 pub mod battery;
 pub mod config;
 pub mod core;

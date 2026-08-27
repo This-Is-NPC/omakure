@@ -215,6 +215,9 @@ pub fn run(
         !static_peers.is_empty(),
     );
 
+    let cue_dispatcher = direct_service
+        .as_ref()
+        .map(|service| service.cue_dispatcher());
     let transport_status = direct_service.as_ref().map(|service| service.status());
     let discovery_status = discovery_service.as_ref().map(|service| service.status());
     let transport_readiness = transport_status.clone();
@@ -283,6 +286,16 @@ pub fn run(
     } else {
         None
     };
+    // Record where this service can be reached, so a CLI process can hand it
+    // work that only it can do. Removed on the way out; a stale file is
+    // harmless because the client treats a refused connection as "no service".
+    let endpoint_path = workspace.service_endpoint_path();
+    let _ = std::fs::write(
+        &endpoint_path,
+        serde_json::json!({ "api_bind": boot.bind.to_string() }).to_string(),
+    );
+    let _endpoint_guard = ServiceEndpointFile(endpoint_path);
+
     let runtime = tokio::runtime::Runtime::new()?;
     let cancel_for_http = Arc::clone(&cancel_flag);
     let readiness_for_http = Arc::clone(&readiness);
@@ -296,6 +309,7 @@ pub fn run(
             Some(readiness_for_http),
             transport_readiness,
             discovery_status,
+            cue_dispatcher,
             cancel_for_http,
             None,
         )
@@ -396,6 +410,15 @@ fn scheduler_loop(workspace: Workspace, cancel_flag: Arc<AtomicBool>) {
             }
             thread::sleep(Duration::from_millis(SCHEDULER_SCAN_SLICE_MS));
         }
+    }
+}
+
+/// Removes the service endpoint file when the service stops, however it stops.
+struct ServiceEndpointFile(std::path::PathBuf);
+
+impl Drop for ServiceEndpointFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
     }
 }
 

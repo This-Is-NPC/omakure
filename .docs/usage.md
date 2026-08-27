@@ -137,11 +137,17 @@ not learn that the feature exists.
 
 The outcome arrives as an ordinary `run-completed` Signal, correlated by a run
 id both sides derive from the Cue id; no message carries a correlation field.
-`omakure node cue` stays on the session it opened to receive it, bounded by
-`--wait-seconds` (default 120, `0` to return immediately). It waits there rather
-than relying on a standing session because a Performer that already holds one
-with this Conductor refuses the dial. `expected_run_id` in the reply is what to
-match in `omakure node signals`.
+`expected_run_id` in the reply is what to match in `omakure node signals`, and
+`--wait-seconds` (default 120, `0` to return immediately) bounds how long the
+command waits for it.
+
+**Which session carries it.** A node holds one session per peer, so a separate
+process cannot dial a peer the running service is already connected to — the
+normal state of a managed fleet. `omakure node cue` therefore asks the running
+service to send it, over `POST /v1/node/cues` under the same `node:write` scope
+as the rest of the node surface, and falls back to dialling directly only when
+no service is listening or there is no session with that peer. `via` in the reply
+says which path was taken; `--direct` forces the dial.
 
 Cue-origin runs execute with an explicit deny-all secret policy, and a script
 whose schema declares a secret field is refused at the gate rather than run

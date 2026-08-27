@@ -12,7 +12,7 @@ use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::{NodeRegistry, PeerState, RegistryError, TransportPeer};
 use crate::node_transport::{LocalTransport, NodeTransportError};
-use crate::remote_cue::CueOutcome;
+use crate::remote_cue::{CueCode, CueOutcome};
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::TokioResolver;
@@ -156,6 +156,26 @@ struct ConnectionState {
     /// decided and audited but never enqueued, which is what a node with no
     /// workspace should do: it has nothing to run.
     workspace_root: Option<std::path::PathBuf>,
+    /// Cues waiting for the session that can carry them, by peer node id.
+    ///
+    /// The cipher state of a live session lives in the thread holding it, so
+    /// nothing outside that thread can write to a peer. A caller that wants to
+    /// reach a peer this node is already connected to therefore hands the
+    /// instruction here and the session thread sends it. This is what makes a
+    /// Cue work in a managed fleet: dialling a second time is refused, and
+    /// correctly so -- two sessions with one peer would give the Health Plane
+    /// two cursors for the same node.
+    outbox: Mutex<HashMap<String, Vec<PendingCue>>>,
+}
+
+/// A Cue handed to the session thread, with the channel its answer goes back on.
+struct PendingCue {
+    cue_id: String,
+    script: String,
+    reason: String,
+    expected_run_id: String,
+    deadline: Instant,
+    reply: std::sync::mpsc::SyncSender<CueDispatchOutcome>,
 }
 
 impl ConnectionState {
@@ -193,6 +213,7 @@ impl ConnectionState {
             expected,
             stop,
             active: Mutex::new(HashMap::new()),
+            outbox: Mutex::new(HashMap::new()),
             status,
             admission,
             reporter,
@@ -206,6 +227,45 @@ impl ConnectionState {
 
     fn should_initiate(&self, remote_node_id: &str) -> bool {
         self.local_node_id.as_str() < remote_node_id
+    }
+
+    /// Hand a Cue to whichever thread holds the session with this peer.
+    ///
+    /// Refused when there is no live session: a caller must not be told its
+    /// instruction is on its way when nothing can carry it.
+    fn enqueue_cue(&self, peer_node_id: &str, pending: PendingCue) -> Result<(), TransportError> {
+        let active = self.active.lock().map_err(|_| TransportError::Internal)?;
+        if !active.contains_key(peer_node_id) {
+            return Err(TransportError::NotEnrolled);
+        }
+        drop(active);
+        self.outbox
+            .lock()
+            .map_err(|_| TransportError::Internal)?
+            .entry(peer_node_id.to_string())
+            .or_default()
+            .push(pending);
+        Ok(())
+    }
+
+    /// The next Cue this session should carry, if any.
+    fn take_pending_cue(&self, peer_node_id: &str) -> Option<PendingCue> {
+        let mut outbox = self.outbox.lock().ok()?;
+        let queue = outbox.get_mut(peer_node_id)?;
+        if queue.is_empty() {
+            return None;
+        }
+        Some(queue.remove(0))
+    }
+
+    /// Fail every Cue still waiting on a session that just ended.
+    ///
+    /// Dropping the reply channel is what unblocks the caller; without this a
+    /// request would wait out its whole budget for a session that is gone.
+    fn drain_outbox(&self, peer_node_id: &str) {
+        if let Ok(mut outbox) = self.outbox.lock() {
+            outbox.remove(peer_node_id);
+        }
     }
 
     fn register(
@@ -331,6 +391,13 @@ pub struct DirectService {
 }
 
 impl DirectService {
+    /// A handle for sending Cues over the sessions this service already holds.
+    pub fn cue_dispatcher(&self) -> CueDispatcher {
+        CueDispatcher {
+            state: Arc::clone(&self.state),
+        }
+    }
+
     pub fn start(
         bind: Option<SocketAddr>,
         static_peer_values: &[String],
@@ -1308,7 +1375,17 @@ fn connect_and_hold(
             .as_ref()
             .map(|root| crate::workspace::Workspace::new(root.clone())),
     );
-    hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
+    hold_session(
+        &mut stream,
+        &mut session,
+        state,
+        &identity,
+        &registry,
+        remote.node_id(),
+        remote.identity_key(),
+        Some(health),
+        Some(cue),
+    )
 }
 
 /// The single shared steady-state receive loop for both connection directions.
@@ -1323,10 +1400,15 @@ fn connect_and_hold(
 /// read so a cadence, a retry, a revocation, or a stop request is observed
 /// promptly; the tick never consumes bytes, so a partially arrived frame can
 /// never desynchronize the stream.
+#[allow(clippy::too_many_arguments)]
 fn hold_session(
     stream: &mut TcpStream,
     session: &mut TransportSession,
     state: &Arc<ConnectionState>,
+    identity: &NodeIdentity,
+    registry: &NodeRegistry,
+    peer_node_id: &str,
+    peer_identity_key: &[u8; 32],
     mut health: Option<HealthSession<'_>>,
     mut cue: Option<crate::remote_cue::CueSession<'_>>,
 ) -> Result<(), TransportError> {
@@ -1340,7 +1422,37 @@ fn hold_session(
         .set_read_timeout(Some(crate::direct_health::TICK))
         .map_err(|_| TransportError::Internal)?;
     let mut last_activity = Instant::now();
+    let mut outbound_cue: Option<OutboundCue> = None;
+    // Anything still queued when this session ends must not wait out its
+    // budget for a connection that is gone.
+    let _drain = OutboxGuard {
+        state,
+        peer_node_id,
+    };
     while !state.stop.load(Ordering::SeqCst) {
+        // One Cue in flight per session, which is the bound the contract
+        // already freezes at `concurrent_cue_runs_per_peer = 1`.
+        if outbound_cue.is_none() {
+            if let Some(pending) = state.take_pending_cue(peer_node_id) {
+                let deadline = Instant::now() + IDLE_TIMEOUT;
+                match sign_pending_cue(identity, session.session_id(), &pending) {
+                    Ok(encoded) => {
+                        write_bytes(stream, &session.write(ENVELOPE_KIND, &encoded)?, deadline)
+                            .map_err(error_to_transport)?;
+                        last_activity = Instant::now();
+                        outbound_cue = Some(OutboundCue::new(pending));
+                    }
+                    // A Cue this node cannot even sign is answered rather than
+                    // dropped; the caller is waiting on the channel.
+                    Err(_) => pending.answer(false, false, CueCode::InvalidMessage.code(), false),
+                }
+            }
+        }
+        if let Some(in_flight) = outbound_cue.as_mut() {
+            if in_flight.resolve(registry, peer_node_id) {
+                outbound_cue = None;
+            }
+        }
         if let Some(outbound) = health.tick() {
             let deadline = Instant::now() + IDLE_TIMEOUT;
             write_bytes(stream, &session.write(ENVELOPE_KIND, &outbound)?, deadline)
@@ -1380,6 +1492,12 @@ fn hold_session(
         if message.kind != ENVELOPE_KIND {
             continue;
         }
+        if let Some(in_flight) = outbound_cue.as_mut() {
+            if in_flight.absorb_ack(&message.body, peer_node_id, peer_identity_key, session) {
+                outbound_cue = None;
+                continue;
+            }
+        }
         match health.handle_envelope(&message.body) {
             // A non-health envelope used to be discarded here without a trace.
             // Cue traffic is decided and audited instead; anything else keeps
@@ -1408,6 +1526,249 @@ fn hold_session(
         }
     }
     Ok(())
+}
+
+/// Sends Cues over the sessions the running service already holds.
+///
+/// This is the path that works in a managed fleet. A separate process cannot
+/// dial a peer this node is already connected to -- `register` refuses it, and
+/// should, because two sessions with one peer would give the Health Plane two
+/// cursors for the same node. So the instruction is handed to the thread that
+/// owns the session instead of racing it for a new one.
+#[derive(Clone)]
+pub struct CueDispatcher {
+    state: Arc<ConnectionState>,
+}
+
+impl CueDispatcher {
+    /// Send one Cue and wait for as much of an answer as arrives in budget.
+    ///
+    /// `NotEnrolled` means there is no live session with that peer, which is a
+    /// different fact from a refusal and is reported as one.
+    pub fn dispatch(
+        &self,
+        peer_node_id: &str,
+        script: &str,
+        reason: &str,
+        wait: Duration,
+    ) -> Result<CueDispatchOutcome, DirectServiceError> {
+        if !crate::remote_cue::is_well_formed_script_name(script) {
+            return Err(TransportError::InvalidFrame.into());
+        }
+        if reason.is_empty() || reason.len() > crate::remote_cue::MAX_REASON_BYTES {
+            return Err(TransportError::InvalidFrame.into());
+        }
+        let mut cue_id_bytes = [0u8; 16];
+        OsRng.fill_bytes(&mut cue_id_bytes);
+        let cue_id = hex(&cue_id_bytes);
+        let expected_run_id =
+            crate::health_plane::report::opaque_run_id(&crate::remote_cue::derive_run_id(&cue_id));
+        let (reply, answers) = std::sync::mpsc::sync_channel(1);
+        self.state.enqueue_cue(
+            peer_node_id,
+            PendingCue {
+                cue_id: cue_id.clone(),
+                script: script.to_string(),
+                reason: reason.to_string(),
+                expected_run_id: expected_run_id.clone(),
+                deadline: Instant::now() + wait,
+                reply,
+            },
+        )?;
+        // A little past the session thread's own deadline, so the answer it is
+        // about to send wins over this timeout.
+        match answers.recv_timeout(wait + crate::direct_health::TICK * 2) {
+            Ok(outcome) => Ok(outcome),
+            // The session ended, or it never got to us. Neither is a verdict.
+            Err(_) => Ok(CueDispatchOutcome {
+                cue_id,
+                expected_run_id,
+                answered: false,
+                accepted: false,
+                code: 0,
+                outcome_seen: false,
+            }),
+        }
+    }
+
+    /// Whether a live session with this peer exists to carry a Cue.
+    pub fn has_session(&self, peer_node_id: &str) -> bool {
+        self.state
+            .active
+            .lock()
+            .map(|active| active.contains_key(peer_node_id))
+            .unwrap_or(false)
+    }
+}
+
+/// Fail everything still queued for a peer when its session ends.
+struct OutboxGuard<'a> {
+    state: &'a Arc<ConnectionState>,
+    peer_node_id: &'a str,
+}
+
+impl Drop for OutboxGuard<'_> {
+    fn drop(&mut self) {
+        self.state.drain_outbox(self.peer_node_id);
+    }
+}
+
+impl PendingCue {
+    /// Answer the waiting caller. A closed channel means it gave up; that is
+    /// not an error here, and must not take the session down with it.
+    fn answer(self, answered: bool, accepted: bool, code: u16, outcome_seen: bool) {
+        let _ = self.reply.try_send(CueDispatchOutcome {
+            cue_id: self.cue_id,
+            expected_run_id: self.expected_run_id,
+            answered,
+            accepted,
+            code,
+            outcome_seen,
+        });
+    }
+}
+
+/// One Cue written on this session, waiting for its ack and then its outcome.
+struct OutboundCue {
+    pending: PendingCue,
+    /// `None` until the Performer answers. A refusal on trust, role, or
+    /// capability is silent by design, so staying `None` is a real answer.
+    code: Option<u16>,
+}
+
+impl OutboundCue {
+    fn new(pending: PendingCue) -> Self {
+        Self {
+            pending,
+            code: None,
+        }
+    }
+
+    /// Take the `cue_ack` for this Cue out of the stream, if this is it.
+    ///
+    /// Returns `true` when the exchange is finished and the caller has been
+    /// answered. A refusal ends it here; an acceptance keeps waiting for the
+    /// outcome, which arrives as an ordinary Signal the Health Plane records.
+    fn absorb_ack(
+        &mut self,
+        body: &[u8],
+        peer_node_id: &str,
+        peer_identity_key: &[u8; 32],
+        session: &TransportSession,
+    ) -> bool {
+        if crate::direct_transport::envelope_kind_hint(body) != Some(crate::remote_cue::KIND_ACK) {
+            return false;
+        }
+        let Ok(nonce) = envelope_nonce(body) else {
+            return false;
+        };
+        // Anchored to the identity the handshake established, not to anything
+        // the message says about itself.
+        if verify_envelope(
+            body,
+            peer_node_id,
+            peer_identity_key,
+            crate::remote_cue::KIND_ACK,
+            session.session_id(),
+            &nonce,
+        )
+        .is_err()
+        {
+            return false;
+        }
+        let Ok(view) = crate::direct_transport::envelope_view(body) else {
+            return false;
+        };
+        let Some(ack) = view.payload.as_object() else {
+            return false;
+        };
+        // An ack for a different Cue is not an answer to this one.
+        if ack.get("cue_id").and_then(serde_json::Value::as_str) != Some(&self.pending.cue_id) {
+            return false;
+        }
+        let accepted = ack
+            .get("accepted")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if accepted {
+            self.code = Some(0);
+            return false;
+        }
+        let code = ack
+            .get("error")
+            .and_then(|error| error.get("code"))
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|code| u16::try_from(code).ok())
+            .unwrap_or_else(|| CueCode::InvalidMessage.code());
+        std::mem::replace(&mut self.pending, placeholder_cue()).answer(true, false, code, false);
+        true
+    }
+
+    /// Finish once the outcome is recorded or the budget runs out.
+    ///
+    /// The stop condition is read back from the registry after the Health Plane
+    /// session verified and recorded the Signal, never from a payload this code
+    /// inspected itself.
+    fn resolve(&mut self, registry: &NodeRegistry, peer_node_id: &str) -> bool {
+        if self.code == Some(0) {
+            let plane = crate::health_plane::HealthPlane::new(registry);
+            if signal_recorded(&plane, peer_node_id, &self.pending.expected_run_id) {
+                std::mem::replace(&mut self.pending, placeholder_cue()).answer(true, true, 0, true);
+                return true;
+            }
+        }
+        if Instant::now() < self.pending.deadline {
+            return false;
+        }
+        let answered = self.code.is_some();
+        let accepted = self.code == Some(0);
+        let code = self.code.unwrap_or(0);
+        std::mem::replace(&mut self.pending, placeholder_cue())
+            .answer(answered, accepted, code, false);
+        true
+    }
+}
+
+/// A spent `PendingCue`, so the real one can be moved out to answer with.
+///
+/// Its channel has no receiver, so answering it is a no-op by construction.
+fn placeholder_cue() -> PendingCue {
+    let (reply, _) = std::sync::mpsc::sync_channel(1);
+    PendingCue {
+        cue_id: String::new(),
+        script: String::new(),
+        reason: String::new(),
+        expected_run_id: String::new(),
+        deadline: Instant::now(),
+        reply,
+    }
+}
+
+/// Sign the `cue_dispatch` for a queued Cue on this session.
+fn sign_pending_cue(
+    identity: &NodeIdentity,
+    session_id: &[u8; 32],
+    pending: &PendingCue,
+) -> Result<Vec<u8>, TransportError> {
+    let now = unix_seconds();
+    let mut nonce = [0u8; 16];
+    OsRng.fill_bytes(&mut nonce);
+    Ok(crate::direct_transport::sign_cue_envelope(
+        identity,
+        crate::remote_cue::KIND_DISPATCH,
+        session_id,
+        nonce,
+        serde_json::json!({
+            "version": 1,
+            "cue_id": pending.cue_id,
+            "script": pending.script,
+            "not_before": now,
+            "expires_at": now + crate::remote_cue::MAX_LIFETIME_SECONDS as u64,
+            "reason": pending.reason,
+        }),
+        now,
+    )?
+    .encoded())
 }
 
 /// The pre-Health-Plane steady-state loop, unchanged.
@@ -2105,8 +2466,18 @@ fn serve_connection(
                 .as_ref()
                 .map(|root| crate::workspace::Workspace::new(root.clone())),
         );
-        hold_session(&mut stream, &mut session, state, Some(health), Some(cue))
-            .map_err(DirectServiceError::Protocol)?;
+        hold_session(
+            &mut stream,
+            &mut session,
+            state,
+            &identity,
+            &registry,
+            remote.node_id(),
+            remote.identity_key(),
+            Some(health),
+            Some(cue),
+        )
+        .map_err(DirectServiceError::Protocol)?;
         Ok(())
     })();
     let rejection_audit = if let Err(error) = &result {
@@ -2435,6 +2806,7 @@ mod tests {
             expected,
             stop: Arc::new(AtomicBool::new(false)),
             active: Mutex::new(HashMap::new()),
+            outbox: Mutex::new(HashMap::new()),
             status: Arc::clone(&status),
             admission: Arc::new(AdmissionController {
                 state: Mutex::new(AdmissionState::default()),

@@ -10,6 +10,7 @@ pub mod history;
 pub mod init;
 pub mod json;
 pub mod list;
+pub mod local_api;
 pub mod node;
 pub mod node_service;
 pub mod queue;

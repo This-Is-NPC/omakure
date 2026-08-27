@@ -239,7 +239,11 @@ jobs:
             -e 's|remote_cue_scripts = \[\]|remote_cue_scripts = [\"deploy.sh\"]|' \
             -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = []|' \
             /etc/omakure/node.toml"
-          sh_in conductor "sed -i 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = []|' /etc/omakure/node.toml"
+          # The Conductor holds a standing session to the Performer, which is
+          # what a managed fleet looks like -- and the arrangement in which a
+          # separate process cannot dial that peer at all. The Cue must travel
+          # on the session the service already holds.
+          sh_in conductor "sed -i 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$performer_id\"'@performer:7879\"]|' /etc/omakure/node.toml"
           sh_in performer "printf '#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"deploy\",\"Description\":\"cue smoke\",\"Fields\":[]}\n# OMAKURE_SCHEMA_END\necho cue-ran\n' > /workspace/deploy.sh \
              && chmod 0755 /workspace/deploy.sh && chown 10001:10001 /workspace/deploy.sh"
           for n in conductor performer; do
@@ -248,20 +252,26 @@ jobs:
               --volume "omakure-cue-ws-${n}:/workspace" \
               --volume "omakure-cue-state-${n}:/var/lib/omakure" \
               --volume "omakure-cue-etc-${n}:/etc/omakure" \
+              --env OMAKURE_API_CAPABILITIES=node:read,node:write \
               omakure-node:ci node serve --bind 0.0.0.0:7878 --allow-non-loopback \
-              --allow-non-loopback-direct --workers 1 --no-scheduler >/dev/null
+              --allow-non-loopback-direct --workers 1 --no-scheduler \
+              --capability node:read --capability node:write >/dev/null
           done
-          sleep 8
-          # `--endpoint` takes a socket address, not a hostname, so the network
-          # alias is resolved here rather than by the CLI.
+          # Long enough for the standing session to establish before asking.
+          sleep 12
+          # `--endpoint` takes a socket address, not a hostname. It is only the
+          # fallback path's argument here -- with a session up, the dispatch
+          # goes through the service and the endpoint is not used.
           performer_ip="$(d 30s docker inspect \
             -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' omakure-cue-performer)"
           out="$(d 180s docker exec omakure-cue-conductor omakure --json node cue \
             --endpoint "${performer_ip}:7879" --peer-node-id "$performer_id" \
             --script deploy.sh --reason "cue smoke" --wait-seconds 90)"
           echo "$out"
-          echo "$out" | jq -e '.ok == true and .data.accepted == true and .data.outcome_seen == true' >/dev/null \
-            || { echo "the packaged image did not carry one authorized Cue to its outcome" >&2; exit 1; }
+          # `via` is asserted too: passing through the direct dial would mean the
+          # standing session never came up, and the fleet path went untested.
+          echo "$out" | jq -e '.ok == true and .data.via == "service" and .data.accepted == true' >/dev/null \
+            || { echo "the packaged image did not carry one authorized Cue over its standing session" >&2; exit 1; }
 
       - name: Cleanup and verify Docker smoke resources
         if: always()

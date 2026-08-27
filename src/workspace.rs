@@ -58,6 +58,20 @@ impl Workspace {
         &self.omakure_dir
     }
 
+    /// Where a running node service records the address it actually bound.
+    ///
+    /// Deliberately here and not in the node state directory: that directory
+    /// holds identity and trust material behind a closed allow-list of entries,
+    /// and a service address is neither. It is runtime information, and this is
+    /// where runtime information lives.
+    ///
+    /// It exists because `api.bind` in the config is only a request —
+    /// `node serve --bind` wins over it — so a separate process reading the
+    /// config alone would look in the wrong place.
+    pub fn service_endpoint_path(&self) -> PathBuf {
+        self.omakure_dir.join("service.json")
+    }
+
     pub fn history_dir(&self) -> &Path {
         &self.history_dir
     }

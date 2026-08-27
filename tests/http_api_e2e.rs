@@ -203,6 +203,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_management_routes"),
     ),
     (
+        ("POST", "/v1/node/cues"),
+        RouteCoverage::Covered("node_cue_route_requires_node_write_and_a_transport"),
+    ),
+    (
         ("GET", "/v1/node/peers"),
         RouteCoverage::Covered("node_management_routes"),
     ),
@@ -1847,4 +1851,66 @@ fn assert_error_contains(envelope: &Value, needle: &str) {
 
 fn assert_error_code(envelope: &Value, expected: &str) {
     assert_eq!(envelope["error"]["code"], expected);
+}
+
+/// The Cue route is scoped like the rest of the node surface, and honest about
+/// having nothing to dispatch over.
+///
+/// A `node:read` token must be refused, and a service with no direct transport
+/// must say so rather than reporting a Cue it never sent. Both halves matter:
+/// the first is the authorization boundary, the second is the difference
+/// between "no session" and "refused", which a caller needs to tell apart.
+#[test]
+fn node_cue_route_requires_node_write_and_a_transport() {
+    let workspace = support::TestWorkspace::new("node-cue-route");
+    let server = support::HttpServer::start_node_service(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--workers",
+            "1",
+            "--no-scheduler",
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(20),
+    );
+    let body = serde_json::json!({
+        "peer_node_id": "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+        "script": "deploy.sh",
+        "reason": "scope check",
+        "wait_seconds": 1,
+    });
+    let denied = server.post_json("/v1/node/cues", &body);
+    assert_eq!(
+        denied.status,
+        403,
+        "a node:read token must not dispatch: {}",
+        denied.safe_body()
+    );
+
+    // A second node, because two `node serve` processes cannot share one
+    // workspace: the lifecycle lock is what stops that, and rightly.
+    let writer_workspace = support::TestWorkspace::new("node-cue-route-writer");
+    let writer = support::HttpServer::start_node_service(
+        writer_workspace.path(),
+        API_TOKEN,
+        &[
+            "--workers",
+            "1",
+            "--no-scheduler",
+            "--capability",
+            "node:write",
+        ],
+        &[],
+        Duration::from_secs(20),
+    );
+    let without_transport = writer.post_json("/v1/node/cues", &body);
+    assert_eq!(
+        without_transport.status,
+        400,
+        "with no direct transport there is no session to carry a cue: {}",
+        without_transport.safe_body()
+    );
 }

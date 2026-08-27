@@ -74,6 +74,10 @@ fn serve(workspace: &Path) -> support::HttpServer {
             "--no-scheduler",
             "--capability",
             "node:read",
+            // Dispatching a Cue is a node write, and the same scope that
+            // governs the rest of the node surface governs this.
+            "--capability",
+            "node:write",
         ],
         &[],
         Duration::from_secs(20),
@@ -354,7 +358,9 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
     );
     assert!(
         wait_for_signal(conductor, &expected),
-        "the Conductor's own Signal feed must show the outcome it correlated"
+        "the Conductor's own Signal feed must show the outcome it correlated. \
+         expected={expected} feed={}",
+        assert_success_named("signals", &run_node(conductor, &["signals".to_string()]))
     );
 }
 
@@ -392,6 +398,109 @@ fn wait_for_signal(conductor: &Path, expected_run_id: &str) -> bool {
         std::thread::sleep(Duration::from_millis(500));
     }
     false
+}
+
+/// The case a managed fleet is actually in: a session is already up.
+///
+/// This is the configuration that used to be impossible. The Performer holds a
+/// standing session with the Conductor, so a second dial is refused with
+/// `1010` -- and refused correctly, because two sessions with one peer would
+/// give the Health Plane two cursors for the same node. The Cue travels on the
+/// session that exists instead, handed to the thread that owns it.
+///
+/// Both halves are asserted: `via: "service"` proves the path taken, and the
+/// effect on disk proves it actually arrived.
+#[test]
+#[ignore = "spawns two real node services; run explicitly"]
+fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
+    let conductor_dir = tempfile::tempdir().expect("conductor workspace");
+    let performer_dir = tempfile::tempdir().expect("performer workspace");
+    let conductor = conductor_dir.path();
+    let performer = performer_dir.path();
+
+    let conductor_port = support::unique_loopback_port();
+    let performer_port = support::unique_loopback_port();
+
+    let conductor_status = init_node(conductor);
+    let performer_status = init_node(performer);
+    let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
+
+    let marker = performer.join("effects.log");
+    write_effect_script(performer, &marker);
+
+    trust_peer(
+        performer,
+        conductor,
+        &conductor_status,
+        "conductor",
+        &["inventory-health", "notifications", "remote-run"],
+    );
+    trust_peer(
+        conductor,
+        performer,
+        &performer_status,
+        "performer",
+        &["inventory-health", "notifications", "remote-run"],
+    );
+    // The Conductor holds the standing session. This is the arrangement that
+    // made the one-shot dial impossible.
+    configure(
+        conductor,
+        conductor_port,
+        Some((performer_id, performer_port)),
+        false,
+        &[],
+    );
+    configure(performer, performer_port, None, true, &["deploy.sh"]);
+
+    let _performer_service = serve(performer);
+    let _conductor_service = serve(conductor);
+
+    // Let the standing session establish before asking for anything.
+    std::thread::sleep(Duration::from_secs(5));
+    assert_eq!(effect_count(&marker), 0, "nothing has run yet");
+
+    let dispatched = assert_success_named(
+        "cue",
+        &run_node(
+            conductor,
+            &[
+                "cue".to_string(),
+                "--endpoint".to_string(),
+                format!("127.0.0.1:{performer_port}"),
+                "--peer-node-id".to_string(),
+                performer_id.to_string(),
+                "--script".to_string(),
+                "deploy.sh".to_string(),
+                "--reason".to_string(),
+                "over the standing session".to_string(),
+            ],
+        ),
+    );
+
+    assert_eq!(
+        dispatched["via"], "service",
+        "with a session up, the CLI must hand the Cue to the service rather \
+         than race it for a second connection: {dispatched}"
+    );
+    assert_eq!(
+        (
+            dispatched["answered"].as_bool(),
+            dispatched["accepted"].as_bool()
+        ),
+        (Some(true), Some(true)),
+        "the Performer must accept over the existing session: {dispatched}"
+    );
+    assert!(
+        wait_for_effect(&marker, 1),
+        "the declared script never ran on the Performer"
+    );
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(
+        effect_count(&marker),
+        1,
+        "one Cue is still exactly one run, whichever path carried it"
+    );
 }
 
 /// The refusal half, on the same real topology.

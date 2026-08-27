@@ -629,6 +629,14 @@ pub struct NodeCueArgs {
     /// immediately; the run still happens and still reports.
     #[arg(long = "wait-seconds", default_value_t = 120)]
     pub wait_seconds: u32,
+
+    /// Dial the peer from this process instead of asking the running service.
+    ///
+    /// The service is preferred because it is the only thing that can reach a
+    /// peer this node already has a session with. Use this for a peer there is
+    /// no standing session with, or when no service is running.
+    #[arg(long)]
+    pub direct: bool,
 }
 
 #[derive(Args, Debug)]

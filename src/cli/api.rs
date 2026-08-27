@@ -184,6 +184,11 @@ struct ApiState {
     readiness: Option<Arc<ReadinessGate>>,
     transport: Option<TransportStatusHandle>,
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
+    /// Sends Cues over the sessions this process already holds.
+    ///
+    /// `None` when no direct transport is running, in which case there is
+    /// nothing to dispatch over and the route says so rather than pretending.
+    cues: Option<crate::direct_service::CueDispatcher>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
 }
 
@@ -197,6 +202,7 @@ impl Clone for ApiState {
             readiness: self.readiness.clone(),
             transport: self.transport.clone(),
             discovery: self.discovery.clone(),
+            cues: self.cues.clone(),
             auth_verification_gate: Arc::clone(&self.auth_verification_gate),
         }
     }
@@ -590,6 +596,25 @@ struct NodeRevokeBody {
     confirmed: bool,
 }
 
+/// One Cue, named by the peer it is for and the script it selects.
+///
+/// There is no argument list and no script content: a Cue selects among code
+/// the Performer already declared, which is what stops remote management from
+/// being able to introduce code onto a node.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NodeCueBody {
+    peer_node_id: String,
+    script: String,
+    reason: String,
+    #[serde(default = "default_cue_wait_seconds")]
+    wait_seconds: u32,
+}
+
+fn default_cue_wait_seconds() -> u32 {
+    120
+}
+
 #[derive(Debug, Deserialize)]
 struct NodeEnrollmentStageBody {
     request_hex: String,
@@ -640,6 +665,9 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
             boot.deploy,
             None,
             None,
+            None,
+            // API-only mode runs no direct transport, so there is no session a
+            // Cue could travel on.
             None,
             cancel_flag,
             None,
@@ -708,6 +736,7 @@ pub(crate) async fn serve_http(
     readiness: Option<Arc<ReadinessGate>>,
     transport: Option<TransportStatusHandle>,
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
+    cues: Option<crate::direct_service::CueDispatcher>,
     cancel_flag: Arc<AtomicBool>,
     on_listening: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -717,7 +746,7 @@ pub(crate) async fn serve_http(
     }
     let body_limit = deploy.http.body_limit_bytes.max(1);
     let app = router_with_transport(
-        auth, workspace, policy, deploy, readiness, transport, discovery, body_limit,
+        auth, workspace, policy, deploy, readiness, transport, discovery, cues, body_limit,
     );
     axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_cancel(cancel_flag))
@@ -821,6 +850,7 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("POST", "/v1/node/init"),
     ("GET", "/v1/node/health"),
     ("GET", "/v1/node/signals"),
+    ("POST", "/v1/node/cues"),
     ("GET", "/v1/node/peers"),
     ("POST", "/v1/node/peers"),
     ("GET", "/v1/node/enrollments"),
@@ -843,7 +873,7 @@ fn router_with_policy(
     body_limit: usize,
 ) -> Router {
     router_with_transport(
-        auth, workspace, policy, deploy, readiness, None, None, body_limit,
+        auth, workspace, policy, deploy, readiness, None, None, None, body_limit,
     )
 }
 
@@ -858,6 +888,7 @@ fn router_with_transport(
     readiness: Option<Arc<ReadinessGate>>,
     transport: Option<TransportStatusHandle>,
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
+    cues: Option<crate::direct_service::CueDispatcher>,
     body_limit: usize,
 ) -> Router {
     let auth_verification_gate = Arc::new(tokio::sync::Semaphore::new(
@@ -874,6 +905,7 @@ fn router_with_transport(
         readiness,
         transport,
         discovery,
+        cues,
         auth_verification_gate,
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
@@ -935,6 +967,7 @@ fn router_with_transport(
         .route("/v1/node/init", post(node_initialize_handler))
         .route("/v1/node/health", get(node_health_handler))
         .route("/v1/node/signals", get(node_signals_handler))
+        .route("/v1/node/cues", post(node_cue_handler))
         .route(
             "/v1/node/peers",
             get(node_peers_handler).post(node_trust_handler),
@@ -1362,6 +1395,73 @@ async fn node_capabilities_handler(
         )
     }))
 }
+
+/// Dispatch one Cue over the session this process already holds.
+///
+/// Deliberately not a second way to authorize anything: every gate is on the
+/// receiving node, read from its own registry and config. What this route
+/// decides is only whether *this* operator may ask, which is the same
+/// `node:write` scope that governs the rest of the node surface.
+async fn node_cue_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_scope(&state, &auth_ctx, "node:write") {
+        return response;
+    }
+    let body = match parse_json_body::<NodeCueBody>(body, state.deploy.http.body_limit_bytes).await
+    {
+        Ok(body) => body,
+        Err(error) => return operation_error_response(error),
+    };
+    let Some(dispatcher) = state.cues.clone() else {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "no direct transport is running, so there is no session to carry a cue",
+        ));
+    };
+    // "No session with that peer" is a different fact from a refusal, and is
+    // reported as one so a caller can reach that peer another way instead of
+    // reading it as a verdict.
+    if !dispatcher.has_session(&body.peer_node_id) {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::NotFound,
+            "this node holds no session with that peer",
+        ));
+    }
+    let wait = Duration::from_secs(u64::from(body.wait_seconds.min(MAX_CUE_WAIT_SECONDS)));
+    // The dispatch blocks on the session thread, so it must not hold a runtime
+    // worker for its whole budget.
+    let dispatched = tokio::task::spawn_blocking(move || {
+        dispatcher.dispatch(&body.peer_node_id, &body.script, &body.reason, wait)
+    })
+    .await;
+    let result = match dispatched {
+        Ok(Ok(outcome)) => Ok(serde_json::json!({
+            "dispatched": true,
+            "via": "service",
+            "cue_id": outcome.cue_id,
+            "expected_run_id": outcome.expected_run_id,
+            "answered": outcome.answered,
+            "accepted": outcome.accepted,
+            "code": outcome.code,
+            "outcome_seen": outcome.outcome_seen,
+        })),
+        Ok(Err(error)) => Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("cue dispatch failed: {error}"),
+        )),
+        Err(_) => Err(OperationError::new(
+            OperationErrorCode::IoFailed,
+            "cue dispatch task failed",
+        )),
+    };
+    operation_response(result)
+}
+
+/// The ceiling on how long one request may hold a connection waiting.
+const MAX_CUE_WAIT_SECONDS: u32 = 600;
 
 async fn node_revoke_handler(
     State(state): State<ApiState>,

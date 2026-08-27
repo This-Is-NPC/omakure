@@ -8,6 +8,126 @@ use std::error::Error;
 use std::fs;
 use std::io::Read;
 
+/// Send one Cue, preferring the session this node's service already holds.
+///
+/// A separate process cannot dial a peer the service is connected to:
+/// `register` refuses a second connection, and correctly so, because two
+/// sessions with one peer would give the Health Plane two cursors for the same
+/// node. So the running service is asked first, and the direct dial is the
+/// fallback for the case it exists for -- no service, or a peer this node has
+/// no standing session with.
+///
+/// `via` is reported so the path taken is visible rather than magic.
+fn dispatch_cue(
+    context: &NodeContext,
+    scripts_dir: &std::path::Path,
+    args: crate::cli::args::NodeCueArgs,
+) -> OperationResult<serde_json::Value> {
+    if !args.direct {
+        match dispatch_cue_via_service(context, scripts_dir, &args) {
+            Ok(data) => return Ok(data),
+            // Two conditions fall through to the direct dial, and only two:
+            // nothing is listening, and the service holds no session with this
+            // peer. Any other refusal has been *decided* by the node that owns
+            // the sessions, and dialling around it would be second-guessing it.
+            Err(crate::cli::local_api::LocalApiError::Unreachable) => {}
+            Err(crate::cli::local_api::LocalApiError::Refused(ref envelope))
+                if envelope["error"]["code"] == "not_found" => {}
+            Err(error) => {
+                return Err(OperationError::new(
+                    OperationErrorCode::InvalidInput,
+                    error.to_string(),
+                ))
+            }
+        }
+    }
+    crate::direct_service::dispatch_cue(
+        args.endpoint,
+        &args.peer_node_id,
+        &args.script,
+        &args.reason,
+        args.wait_seconds,
+        context,
+    )
+    .map(|outcome| {
+        serde_json::json!({
+            "dispatched": true,
+            "via": "direct",
+            "cue_id": outcome.cue_id,
+            "expected_run_id": outcome.expected_run_id,
+            "answered": outcome.answered,
+            "accepted": outcome.accepted,
+            "code": outcome.code,
+            "outcome_seen": outcome.outcome_seen,
+        })
+    })
+    .map_err(map_direct_error)
+}
+
+/// Ask the running service to send it over the session it already holds.
+fn dispatch_cue_via_service(
+    context: &NodeContext,
+    scripts_dir: &std::path::Path,
+    args: &crate::cli::args::NodeCueArgs,
+) -> Result<serde_json::Value, crate::cli::local_api::LocalApiError> {
+    let Some(token) = std::env::var("OMAKURE_API_TOKEN")
+        .ok()
+        .filter(|t| !t.is_empty())
+    else {
+        return Err(crate::cli::local_api::LocalApiError::Unreachable);
+    };
+    let Some(bind) = node_api_bind(context, scripts_dir) else {
+        return Err(crate::cli::local_api::LocalApiError::Unreachable);
+    };
+    crate::cli::local_api::post_json(
+        bind,
+        &token,
+        "/v1/node/cues",
+        &serde_json::json!({
+            "peer_node_id": args.peer_node_id,
+            "script": args.script,
+            "reason": args.reason,
+            "wait_seconds": args.wait_seconds,
+        }),
+        std::time::Duration::from_secs(u64::from(args.wait_seconds)),
+    )
+}
+
+/// Where this node's running service can be reached.
+///
+/// The service records this itself, because `api.bind` in the config is only a
+/// request — `node serve --bind` wins over it, and a process reading the config
+/// alone would look in the wrong place. The config is still the fallback for a
+/// service started before this file existed.
+fn node_api_bind(
+    context: &NodeContext,
+    scripts_dir: &std::path::Path,
+) -> Option<std::net::SocketAddr> {
+    let workspace = crate::workspace::Workspace::new(scripts_dir.to_path_buf());
+    if let Ok(recorded) = fs::read_to_string(workspace.service_endpoint_path()) {
+        if let Some(addr) = serde_json::from_str::<serde_json::Value>(&recorded)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("api_bind")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|bind| bind.parse::<std::net::SocketAddr>().ok())
+            })
+        {
+            return Some(addr);
+        }
+    }
+    let mut file = context.open_public_file().ok()??;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).ok()?;
+    NodeConfig::parse(&contents)
+        .ok()?
+        .api
+        .bind
+        .parse::<std::net::SocketAddr>()
+        .ok()
+}
+
 pub fn run(
     scripts_dir: std::path::PathBuf,
     args: NodeArgs,
@@ -27,33 +147,12 @@ pub fn run(
                 .map(|()| serde_json::json!({"accepted": true}))
                 .map_err(map_direct_error)
         }
-        // Deliberately CLI-only. `.docs/cli-http-parity.md` records the status;
-        // an HTTP route would be a fifth authorization surface to keep in step
-        // for no safety gain, ahead of a feature whose whole point is bounding
-        // what a remote caller can reach.
-        NodeCommand::Cue(args) => crate::direct_service::dispatch_cue(
-            args.endpoint,
-            &args.peer_node_id,
-            &args.script,
-            &args.reason,
-            args.wait_seconds,
-            &context,
-        )
-        // `answered` and `accepted` are reported apart because a Performer
-        // that refuses on trust, role, or capability says nothing, and
-        // "no answer" must not be printed as a verdict.
-        .map(|outcome| {
-            serde_json::json!({
-                "dispatched": true,
-                "cue_id": outcome.cue_id,
-                "expected_run_id": outcome.expected_run_id,
-                "answered": outcome.answered,
-                "accepted": outcome.accepted,
-                "code": outcome.code,
-                "outcome_seen": outcome.outcome_seen,
-            })
-        })
-        .map_err(map_direct_error),
+        // Prefers `POST /v1/node/cues` on the running service, because a
+        // separate process cannot dial a peer that service already has a
+        // session with. The route is not a second authorization surface for the
+        // Cue: every gate is on the receiving node, and `node:write` decides
+        // only whether this operator may ask.
+        NodeCommand::Cue(args) => dispatch_cue(&context, &scripts_dir, args),
         NodeCommand::Init => {
             node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
                 .map(|result| serde_json::to_value(result).expect("node initialization serializes"))

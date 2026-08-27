@@ -17,7 +17,8 @@
 //! `crate::health_plane::bounds`. None of them is chosen here.
 
 use crate::health_plane::bounds::{
-    MAX_PERFORMERS_PER_CONDUCTOR, RUNTIME_NAMES, SIGNAL_INBOX_CAPACITY, SIGNAL_RETENTION_SECONDS,
+    MAX_PERFORMERS_PER_CONDUCTOR, NOMINAL_PULSE_INTERVAL_SECONDS, RUNTIME_NAMES,
+    SIGNAL_INBOX_CAPACITY, SIGNAL_RETENTION_SECONDS,
 };
 use crate::health_plane::model::{Presence, RunFact, RunnerFact, RuntimeFact, SignalRecord};
 use crate::health_plane::report::{
@@ -43,6 +44,18 @@ use std::time::{Duration, Instant};
 /// bounds that cost so a Profile-change check never becomes a fork storm, while
 /// still noticing a newly installed interpreter within one window.
 const RUNTIME_PROBE_TTL: Duration = Duration::from_secs(300);
+
+/// How long one recomputed baseline observation is reused.
+///
+/// The same shape and the same reason as [`RUNTIME_PROBE_TTL`]: the
+/// Profile-change check runs on a one-second tick, and re-hashing every script
+/// a baseline names that often would turn a fleet-wide drift answer into
+/// continuous disk work. Bounded to the frozen nominal Pulse interval rather
+/// than to a number chosen here, because a fact cannot usefully change faster
+/// than this node reports anything — which also makes it the worst-case delay
+/// between a script changing underneath a Performer and its Conductor seeing
+/// the drift.
+const BASELINE_OBSERVE_TTL: Duration = Duration::from_secs(NOMINAL_PULSE_INTERVAL_SECONDS as u64);
 
 /// Bytes read from `/etc/os-release`. The file is a few hundred bytes; the cap
 /// makes a hostile or corrupt file a bounded read rather than an unbounded one.
@@ -340,6 +353,14 @@ pub struct NodeHealthFacts {
     scheduler_enabled: bool,
     started: Instant,
     runtimes: Mutex<Option<(Instant, Vec<RuntimeFact>)>>,
+    baseline: Mutex<Option<(Instant, BaselineFacts)>>,
+}
+
+/// The claim and the evidence, as one Performer can currently answer them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct BaselineFacts {
+    recorded: String,
+    observed: String,
 }
 
 impl NodeHealthFacts {
@@ -357,7 +378,36 @@ impl NodeHealthFacts {
             scheduler_enabled,
             started: Instant::now(),
             runtimes: Mutex::new(None),
+            baseline: Mutex::new(None),
         }
+    }
+
+    /// The baseline this node recorded installing, beside the one it can
+    /// currently see.
+    ///
+    /// Reading the record and re-hashing the set are one cached step because
+    /// they must describe the same instant: a claim read before an install and
+    /// evidence gathered after it would report a machine as drifted at the one
+    /// moment it is certainly not.
+    fn cached_baseline(&self) -> BaselineFacts {
+        let mut cache = self.baseline.lock().expect("baseline observation cache");
+        if let Some((observed_at, facts)) = cache.as_ref() {
+            if observed_at.elapsed() < BASELINE_OBSERVE_TTL {
+                return facts.clone();
+            }
+        }
+        let facts = match crate::operations::baseline::installed_baseline(&self.workspace) {
+            Some(record) => BaselineFacts {
+                observed: crate::operations::baseline::observed_baseline_id(
+                    &self.workspace,
+                    &record,
+                ),
+                recorded: record.baseline_id,
+            },
+            None => BaselineFacts::default(),
+        };
+        *cache = Some((Instant::now(), facts.clone()));
+        facts
     }
 
     fn cached_runtimes(&self) -> Vec<RuntimeFact> {
@@ -375,6 +425,7 @@ impl NodeHealthFacts {
 
 impl HealthFactsSource for NodeHealthFacts {
     fn profile_facts(&self) -> ProfileFacts {
+        let baseline = self.cached_baseline();
         let os_release = read_os_release();
         let distro_id = os_release_value(&os_release, "ID");
         let distro_version = os_release_value(&os_release, "VERSION_ID");
@@ -389,8 +440,8 @@ impl HealthFactsSource for NodeHealthFacts {
                 "aarch64" => "aarch64".to_string(),
                 _ => "unknown".to_string(),
             },
-            baseline_id: String::new(),
-            baseline_observed_id: String::new(),
+            baseline_id: baseline.recorded,
+            baseline_observed_id: baseline.observed,
             capabilities: Vec::new(),
             display_name: self.display_name.clone(),
             distro_id,
@@ -740,6 +791,85 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The pair a Conductor compares comes off this node's own disk.
+    ///
+    /// The two halves are built in different modules — the record is written by
+    /// the install path and the observation is recomputed by the drift path —
+    /// and this is the only place they meet. A node with no baseline reports an
+    /// empty pair rather than an invented one, which is what makes "never
+    /// pushed" a different answer from "in sync".
+    #[test]
+    fn a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk() {
+        use k256::schnorr::SigningKey;
+        use sha2::{Digest, Sha256};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let open = || {
+            let workspace = crate::workspace::Workspace::new(dir.path().to_path_buf());
+            workspace.ensure_layout().expect("layout");
+            workspace
+        };
+        // The observation is cached to a bounded window, so each stage builds a
+        // fresh fact source: this test is about what a Performer reports, not
+        // about how long it reuses an answer.
+        let facts = NodeHealthFacts::new(open(), "certification".to_string(), 1, false);
+
+        let empty = facts.profile_facts();
+        assert_eq!(
+            (
+                empty.baseline_id.as_str(),
+                empty.baseline_observed_id.as_str()
+            ),
+            ("", ""),
+            "a node that was never pushed a baseline has neither a claim nor evidence"
+        );
+
+        let bodies = vec![("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec())];
+        let signing_key = SigningKey::from_slice(&[7u8; 32]).expect("scalar");
+        let mut public_key = [0u8; 32];
+        public_key.copy_from_slice(signing_key.verifying_key().to_bytes().as_slice());
+        let mut key_id = [0u8; 16];
+        key_id.copy_from_slice(&Sha256::digest(public_key)[..16]);
+        let baseline = crate::baseline::SignedBaselineManifest::sign_with_material(
+            signing_key.to_bytes().as_ref(),
+            key_id,
+            "acme".to_string(),
+            &bodies,
+            1_800_000_000,
+            1_800_003_600,
+        )
+        .expect("sign")
+        .bind(bodies)
+        .expect("bind");
+        let record =
+            crate::operations::baseline::install_baseline(&open(), &baseline, 1_800_000_100)
+                .expect("install");
+
+        let facts = NodeHealthFacts::new(open(), "certification".to_string(), 1, false);
+        let installed = facts.profile_facts();
+        assert_eq!(installed.baseline_id, record.baseline_id);
+        assert_eq!(
+            installed.baseline_observed_id, record.baseline_id,
+            "a node running what it was pushed reports one identity twice"
+        );
+
+        std::fs::write(
+            open().scripts_root().join("ops/deploy.sh"),
+            b"echo deploy\necho edited\n",
+        )
+        .expect("edit");
+        let facts = NodeHealthFacts::new(open(), "certification".to_string(), 1, false);
+        let drifted = facts.profile_facts();
+        assert_eq!(
+            drifted.baseline_id, record.baseline_id,
+            "editing a script does not change what this node was given"
+        );
+        assert_ne!(
+            drifted.baseline_observed_id, record.baseline_id,
+            "editing a script does change what this node is holding"
+        );
     }
 
     #[test]

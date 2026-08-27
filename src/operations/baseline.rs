@@ -55,6 +55,50 @@ pub fn installed_baseline(workspace: &Workspace) -> Option<InstalledBaseline> {
     serde_json::from_str(&contents).ok()
 }
 
+/// Recompute the identity of the set this node is actually holding.
+///
+/// This is the evidence half of drift, and it is deliberately a *recomputation*
+/// rather than a re-read of the record. A node that echoed the identity it
+/// wrote at install time would report exactly the same answer after every
+/// script in the set had been edited underneath it, which is the one case drift
+/// exists to catch.
+///
+/// The recorded entry list says which paths to look at, and nothing else is
+/// consulted: an unlisted file in the workspace is not part of the set that was
+/// published and does not change its name. A path that cannot be read — deleted,
+/// replaced by a directory, or escaped from the scripts root — drops out of the
+/// list, which shortens it and therefore changes the identity, which is the
+/// honest answer. The empty case is safe rather than lucky: an empty entry list
+/// is not signable, so the identity of "nothing readable" can never equal the
+/// identity of anything that was ever pushed.
+pub fn observed_baseline_id(workspace: &Workspace, record: &InstalledBaseline) -> String {
+    let Ok(scripts_root) = workspace.scripts_root().canonicalize() else {
+        return String::new();
+    };
+    let mut entries = Vec::with_capacity(record.entries.len());
+    for path in &record.entries {
+        let Ok(resolved) =
+            crate::operations::battery::confined_existing_path(&scripts_root, Path::new(path))
+        else {
+            continue;
+        };
+        let Ok(body) = std::fs::read(&resolved) else {
+            continue;
+        };
+        entries.push(crate::baseline::BaselineEntry {
+            path: path.clone(),
+            content_hash: crate::baseline::hash_script(&body),
+        });
+    }
+    // The canonical bytes are order-sensitive and a manifest's entries are
+    // sorted by path, so the list is sorted here rather than assumed: the
+    // record is a file on disk and an operator can reorder it.
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
+    crate::baseline::derive_baseline_id(&entries)
+        .map(|id| hex(&id))
+        .unwrap_or_default()
+}
+
 /// Install every script in a verified baseline, or leave the workspace exactly
 /// as it was.
 ///
@@ -378,6 +422,108 @@ mod tests {
             "the record on disk must name the baseline that was installed"
         );
         assert_eq!(record.entries.len(), 2);
+    }
+
+    /// Drift is a recomputation, not a re-read of what was recorded.
+    ///
+    /// Every case here changes the *scripts* and asks what the node now holds,
+    /// because a check that only ever compares the record to itself would pass
+    /// on a machine whose whole set had been rewritten underneath it.
+    #[test]
+    fn the_observed_identity_follows_the_scripts_and_not_the_record() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace(&dir);
+        let record =
+            install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
+
+        assert_eq!(
+            observed_baseline_id(&workspace, &record),
+            record.baseline_id,
+            "a node running what it installed must recompute the identity it recorded"
+        );
+
+        // A legitimate-looking edit: still a valid script, still at its path.
+        std::fs::write(
+            workspace.scripts_root().join("ops/deploy.sh"),
+            b"echo deploy\necho and one more thing\n",
+        )
+        .expect("edit the script underneath the node");
+        let edited = observed_baseline_id(&workspace, &record);
+        assert_ne!(
+            edited, record.baseline_id,
+            "one script changed underneath the node must change what it observes"
+        );
+        assert!(
+            !edited.is_empty(),
+            "a drifted node still holds a set, and reporting nothing would read as never pushed"
+        );
+
+        std::fs::write(
+            workspace.scripts_root().join("ops/deploy.sh"),
+            b"echo deploy\n",
+        )
+        .expect("put the bytes back");
+        assert_eq!(
+            observed_baseline_id(&workspace, &record),
+            record.baseline_id,
+            "restoring the published bytes must restore the identity, or drift is one-way"
+        );
+
+        std::fs::remove_file(workspace.scripts_root().join("audit.py")).expect("delete");
+        assert_ne!(
+            observed_baseline_id(&workspace, &record),
+            record.baseline_id,
+            "a script the set names and the disk no longer has is drift"
+        );
+    }
+
+    /// The identity names the set that was published, and says nothing about
+    /// what else is on the machine.
+    ///
+    /// Written down as a test rather than left to the reader: an operator who
+    /// believed `in_sync` meant "nothing else here" would be wrong, and the
+    /// place to be honest about that is beside the code that decides it.
+    #[test]
+    fn a_file_no_baseline_entry_names_does_not_change_the_identity() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace(&dir);
+        let record =
+            install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
+
+        std::fs::write(
+            workspace.scripts_root().join("unlisted.sh"),
+            b"echo not part of any baseline\n",
+        )
+        .expect("write an unlisted script");
+
+        assert_eq!(
+            observed_baseline_id(&workspace, &record),
+            record.baseline_id,
+            "the set that was signed is unchanged, and drift must not claim otherwise"
+        );
+    }
+
+    /// The one identity that can never be mistaken for being in sync.
+    #[test]
+    fn a_node_that_can_read_none_of_its_set_cannot_read_as_in_sync() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace(&dir);
+        let record =
+            install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
+        for (path, _) in set() {
+            std::fs::remove_file(workspace.scripts_root().join(&path)).expect("remove");
+        }
+
+        let observed = observed_baseline_id(&workspace, &record);
+        assert_ne!(
+            observed, record.baseline_id,
+            "a node holding none of its set is not in sync with it"
+        );
+        assert_eq!(
+            observed,
+            hex(&crate::baseline::derive_baseline_id(&[]).expect("the empty set has a name")),
+            "the answer is the name of the empty set, which no signable baseline can equal"
+        );
     }
 
     /// A baseline replaces what is there; that is the point of it.

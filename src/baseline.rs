@@ -222,10 +222,7 @@ impl SignedBaselineManifest {
     /// differently depending on who pushed them, which is precisely what a
     /// drift comparison must not depend on.
     pub fn baseline_id(&self) -> Result<[u8; BASELINE_ID_BYTES], BaselineError> {
-        Ok(hash_domain(
-            &entry_bytes(&self.entries)?,
-            BASELINE_ID_DOMAIN,
-        ))
+        derive_baseline_id(&self.entries)
     }
 
     pub fn verify(
@@ -367,6 +364,25 @@ impl VerifiedBaseline {
     pub fn scripts(&self) -> &[(String, Vec<u8>)] {
         &self.scripts
     }
+}
+
+/// Name a set of entries, without a manifest to have signed them.
+///
+/// The other half of what makes drift checkable. A Performer re-reads the
+/// scripts a baseline named, hashes them with [`hash_script`], and asks this
+/// function what set it is now holding; the answer is comparable with the
+/// identity the manifest derived precisely because it is the same function over
+/// the same canonical bytes. A separate recomputation would be a second
+/// implementation of the identity, and the first time the two disagreed every
+/// node in the fleet would read as drifted.
+///
+/// The caller supplies the order. Entries that came from a manifest are already
+/// sorted by path, and the canonical bytes are order-sensitive, so a caller
+/// assembling a list itself must sort it the same way.
+pub fn derive_baseline_id(
+    entries: &[BaselineEntry],
+) -> Result<[u8; BASELINE_ID_BYTES], BaselineError> {
+    Ok(hash_domain(&entry_bytes(entries)?, BASELINE_ID_DOMAIN))
 }
 
 /// The recorded hash of one script body.

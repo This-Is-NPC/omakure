@@ -1,6 +1,9 @@
 mod adapters;
 mod app_meta;
 pub mod auth;
+/// The signed, versioned baseline artefact: the first thing this product puts
+/// on a node that is code rather than an order.
+pub mod baseline;
 pub mod cli;
 pub mod direct_health;
 pub mod direct_service;

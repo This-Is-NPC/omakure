@@ -480,6 +480,9 @@ pub enum NodeCommand {
     /// Ask one trusted Performer to run a script it has already declared
     Cue(NodeCueArgs),
 
+    /// Publish and deliver the signed set of scripts a fleet runs
+    Baseline(NodeBaselineArgs),
+
     /// Explicitly initialize public config, identity, and local trust state
     Init,
 
@@ -685,6 +688,58 @@ pub struct NodeCueArgs {
     /// no standing session with, or when no service is running.
     #[arg(long)]
     pub direct: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeBaselineArgs {
+    #[command(subcommand)]
+    pub command: NodeBaselineCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NodeBaselineCommand {
+    /// Create this node's baseline publisher key, refusing to replace one
+    CreateKey,
+
+    /// Sign the named workspace scripts as one baseline
+    Publish(NodeBaselinePublishArgs),
+
+    /// Deliver a signed baseline to one trusted Performer
+    Push(NodeBaselinePushArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct NodeBaselinePublishArgs {
+    /// A workspace-relative script path to include. Repeatable.
+    ///
+    /// A path rather than a bare name, because a baseline says *where* each
+    /// script goes on every receiver; a name would leave that to whatever the
+    /// receiver happened to guess.
+    #[arg(long = "script", value_name = "PATH")]
+    pub scripts: Vec<String>,
+
+    /// How long the baseline stays installable, in seconds.
+    #[arg(long = "lifetime-seconds", default_value_t = 3600)]
+    pub lifetime_seconds: u64,
+
+    /// Where to write the signed manifest.
+    #[arg(long = "out", value_name = "PATH")]
+    pub out: PathBuf,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeBaselinePushArgs {
+    /// Expected canonical peer node ID.
+    #[arg(long = "peer-node-id")]
+    pub peer_node_id: String,
+
+    /// The signed manifest produced by `node baseline publish`.
+    #[arg(long = "manifest", value_name = "PATH")]
+    pub manifest: PathBuf,
+
+    /// How long to wait on the session for the Performer's answer.
+    #[arg(long = "wait-seconds", default_value_t = 120)]
+    pub wait_seconds: u32,
 }
 
 #[derive(Args, Debug)]

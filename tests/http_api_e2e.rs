@@ -207,6 +207,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_cue_route_requires_node_write_and_a_transport"),
     ),
     (
+        ("POST", "/v1/node/baselines"),
+        RouteCoverage::Covered("node_baseline_route_requires_node_write_and_a_transport"),
+    ),
+    (
         ("GET", "/v1/node/peers"),
         RouteCoverage::Covered("node_management_routes"),
     ),
@@ -1911,6 +1915,67 @@ fn node_cue_route_requires_node_write_and_a_transport() {
         without_transport.status,
         400,
         "with no direct transport there is no session to carry a cue: {}",
+        without_transport.safe_body()
+    );
+}
+
+/// The baseline route is the delivery seam, and it is guarded the same way.
+///
+/// `node:write` decides only whether this operator may ask; every gate that
+/// matters is on the receiving node. The second half is the difference between
+/// "no session" and "refused" — a baseline is megabytes, and a caller that
+/// could not tell those apart would retry into a node that had already said no.
+#[test]
+fn node_baseline_route_requires_node_write_and_a_transport() {
+    let workspace = support::TestWorkspace::new("node-baseline-route");
+    let server = support::HttpServer::start_node_service(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--workers",
+            "1",
+            "--no-scheduler",
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(20),
+    );
+    let body = serde_json::json!({
+        "peer_node_id": "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest": "00",
+        "scripts": ["00"],
+        "wait_seconds": 1,
+    });
+    let denied = server.post_json("/v1/node/baselines", &body);
+    assert_eq!(
+        denied.status,
+        403,
+        "a node:read token must not push code to a peer: {}",
+        denied.safe_body()
+    );
+
+    // A second node, because two `node serve` processes cannot share one
+    // workspace: the lifecycle lock is what stops that, and rightly.
+    let writer_workspace = support::TestWorkspace::new("node-baseline-route-writer");
+    let writer = support::HttpServer::start_node_service(
+        writer_workspace.path(),
+        API_TOKEN,
+        &[
+            "--workers",
+            "1",
+            "--no-scheduler",
+            "--capability",
+            "node:write",
+        ],
+        &[],
+        Duration::from_secs(20),
+    );
+    let without_transport = writer.post_json("/v1/node/baselines", &body);
+    assert_eq!(
+        without_transport.status,
+        400,
+        "with no direct transport there is no session to carry a baseline: {}",
         without_transport.safe_body()
     );
 }

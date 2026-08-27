@@ -98,6 +98,120 @@ fn dispatch_cue_via_service(
     )
 }
 
+/// Create a publisher key, sign a baseline, or deliver one.
+///
+/// Delivery goes through the running service and only through it. The Cue path
+/// keeps a direct dial for first contact, but a baseline has no first-contact
+/// case: it goes to a Performer this node already conducts, which is exactly
+/// the peer it already holds a session with. Adding a dial would have been a
+/// second way into the responder for a case that does not exist.
+fn dispatch_baseline(
+    context: &NodeContext,
+    scripts_dir: &std::path::Path,
+    args: crate::cli::args::NodeBaselineArgs,
+) -> OperationResult<serde_json::Value> {
+    use crate::cli::args::NodeBaselineCommand;
+
+    match args.command {
+        NodeBaselineCommand::CreateKey => {
+            let registry = node_ops::open_registry_for_baseline(context)?;
+            let publisher =
+                crate::baseline_publisher::BaselinePublisher::create(context, &registry).map_err(
+                    |error| OperationError::new(OperationErrorCode::Conflict, error.to_string()),
+                )?;
+            Ok(serde_json::json!({
+                "created": true,
+                "key_id": hex_of(&publisher.key_id()),
+                "public_key": hex_of(&publisher.public_key()),
+            }))
+        }
+        NodeBaselineCommand::Publish(publish) => {
+            let publisher = crate::baseline_publisher::BaselinePublisher::load_existing(context)
+                .map_err(|error| {
+                    OperationError::new(OperationErrorCode::NotFound, error.to_string())
+                })?;
+            let config = node_ops::load_node_config(context)?;
+            let workspace = crate::workspace::Workspace::new(scripts_dir.to_path_buf());
+            crate::operations::baseline::publish_baseline(
+                &workspace,
+                &publisher,
+                &config.organization.id,
+                &publish.scripts,
+                unix_now(),
+                publish.lifetime_seconds,
+                &publish.out,
+            )
+            .map(|result| serde_json::to_value(result).expect("published baseline serializes"))
+        }
+        NodeBaselineCommand::Push(push) => {
+            let workspace = crate::workspace::Workspace::new(scripts_dir.to_path_buf());
+            let encoded = fs::read(&push.manifest).map_err(|error| {
+                OperationError::new(
+                    OperationErrorCode::NotFound,
+                    format!("failed to read the manifest: {error}"),
+                )
+            })?;
+            let manifest =
+                crate::baseline::SignedBaselineManifest::decode(&encoded).map_err(|error| {
+                    OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
+                })?;
+            let bodies = crate::operations::baseline::bodies_for_manifest(&workspace, &manifest)?;
+            push_baseline_via_service(context, scripts_dir, &push, &encoded, &bodies).map_err(
+                |error| {
+                    OperationError::new(
+                        OperationErrorCode::InvalidInput,
+                        format!(
+                            "a baseline travels on the session this node's service holds, and \
+                             that service could not be asked: {error}"
+                        ),
+                    )
+                },
+            )
+        }
+    }
+}
+
+fn push_baseline_via_service(
+    context: &NodeContext,
+    scripts_dir: &std::path::Path,
+    args: &crate::cli::args::NodeBaselinePushArgs,
+    manifest: &[u8],
+    bodies: &[Vec<u8>],
+) -> Result<serde_json::Value, crate::cli::local_api::LocalApiError> {
+    let Some(token) = std::env::var("OMAKURE_API_TOKEN")
+        .ok()
+        .filter(|value| !value.is_empty())
+    else {
+        return Err(crate::cli::local_api::LocalApiError::Unreachable);
+    };
+    let Some(bind) = node_api_bind(context, scripts_dir) else {
+        return Err(crate::cli::local_api::LocalApiError::Unreachable);
+    };
+    crate::cli::local_api::post_json(
+        bind,
+        &token,
+        "/v1/node/baselines",
+        &serde_json::json!({
+            "peer_node_id": args.peer_node_id,
+            "manifest": hex_of(manifest),
+            "scripts": bodies.iter().map(|body| hex_of(body)).collect::<Vec<_>>(),
+            "wait_seconds": args.wait_seconds,
+        }),
+        std::time::Duration::from_secs(u64::from(args.wait_seconds)),
+    )
+}
+
+fn hex_of(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default()
+}
+
 /// Probe one peer, and name the one cause the prober cannot see for itself.
 ///
 /// Unlike a Cue, a probe is deliberately *not* relayed through the running
@@ -244,6 +358,7 @@ pub fn run(
         // Cue: every gate is on the receiving node, and `node:write` decides
         // only whether this operator may ask.
         NodeCommand::Cue(args) => dispatch_cue(&context, &scripts_dir, args),
+        NodeCommand::Baseline(args) => dispatch_baseline(&context, &scripts_dir, args),
         NodeCommand::Authority(args) => match args.command {
             crate::cli::args::NodeAuthorityCommand::Create(args) => {
                 node_ops::create_enrollment_authority(&context, args.confirmed)

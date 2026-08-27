@@ -218,6 +218,9 @@ pub fn run(
     let cue_dispatcher = direct_service
         .as_ref()
         .map(|service| service.cue_dispatcher());
+    let baseline_dispatcher = direct_service
+        .as_ref()
+        .map(|service| service.baseline_dispatcher());
     let transport_status = direct_service.as_ref().map(|service| service.status());
     let discovery_status = discovery_service.as_ref().map(|service| service.status());
     let transport_readiness = transport_status.clone();
@@ -310,6 +313,7 @@ pub fn run(
             transport_readiness,
             discovery_status,
             cue_dispatcher,
+            baseline_dispatcher,
             cancel_for_http,
             None,
         )

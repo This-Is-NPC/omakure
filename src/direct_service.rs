@@ -499,6 +499,12 @@ impl DirectService {
         }
     }
 
+    pub fn baseline_dispatcher(&self) -> BaselineDispatcher {
+        BaselineDispatcher {
+            state: Arc::clone(&self.state),
+        }
+    }
+
     pub fn start(
         bind: Option<SocketAddr>,
         static_peer_values: &[String],
@@ -1812,7 +1818,20 @@ impl CueDispatcher {
             .map(|active| active.contains_key(peer_node_id))
             .unwrap_or(false)
     }
+}
 
+/// Pushes baselines over the sessions the running service already holds.
+///
+/// Its own type rather than another method on `CueDispatcher`, because the two
+/// grant different powers: one asks a Performer to run code it already has,
+/// the other supplies the code. A handle that did both would be one thing to
+/// pass around when the whole design keeps them apart.
+#[derive(Clone)]
+pub struct BaselineDispatcher {
+    state: Arc<ConnectionState>,
+}
+
+impl BaselineDispatcher {
     /// Push one already-signed baseline over the session this service holds.
     ///
     /// The same constraint the Cue path is built around, for the same reason: a
@@ -1870,6 +1889,15 @@ impl CueDispatcher {
                 code: 0,
             }),
         }
+    }
+
+    /// Whether a live session with this peer exists to carry a baseline.
+    pub fn has_session(&self, peer_node_id: &str) -> bool {
+        self.state
+            .active
+            .lock()
+            .map(|active| active.contains_key(peer_node_id))
+            .unwrap_or(false)
     }
 }
 

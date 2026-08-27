@@ -189,6 +189,7 @@ struct ApiState {
     /// `None` when no direct transport is running, in which case there is
     /// nothing to dispatch over and the route says so rather than pretending.
     cues: Option<crate::direct_service::CueDispatcher>,
+    baselines: Option<crate::direct_service::BaselineDispatcher>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
 }
 
@@ -203,6 +204,7 @@ impl Clone for ApiState {
             transport: self.transport.clone(),
             discovery: self.discovery.clone(),
             cues: self.cues.clone(),
+            baselines: self.baselines.clone(),
             auth_verification_gate: Arc::clone(&self.auth_verification_gate),
         }
     }
@@ -615,6 +617,28 @@ fn default_cue_wait_seconds() -> u32 {
     120
 }
 
+/// One baseline push, as the operator's CLI hands it to its own service.
+///
+/// The manifest arrives already signed. This route never signs one, and this
+/// process holds no path to a publisher key: the operator signs where the key
+/// is, and the service only carries what it is given.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NodeBaselineBody {
+    peer_node_id: String,
+    /// The signed manifest, lowercase hex.
+    manifest: String,
+    /// Script bodies in manifest order, lowercase hex. No paths: the manifest
+    /// is the only thing that says where a script goes.
+    scripts: Vec<String>,
+    #[serde(default = "default_baseline_wait_seconds")]
+    wait_seconds: u32,
+}
+
+fn default_baseline_wait_seconds() -> u32 {
+    120
+}
+
 #[derive(Debug, Deserialize)]
 struct NodeEnrollmentStageBody {
     request_hex: String,
@@ -667,7 +691,8 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
             None,
             None,
             // API-only mode runs no direct transport, so there is no session a
-            // Cue could travel on.
+            // Cue or a baseline could travel on.
+            None,
             None,
             cancel_flag,
             None,
@@ -737,6 +762,7 @@ pub(crate) async fn serve_http(
     transport: Option<TransportStatusHandle>,
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     cues: Option<crate::direct_service::CueDispatcher>,
+    baselines: Option<crate::direct_service::BaselineDispatcher>,
     cancel_flag: Arc<AtomicBool>,
     on_listening: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -746,7 +772,8 @@ pub(crate) async fn serve_http(
     }
     let body_limit = deploy.http.body_limit_bytes.max(1);
     let app = router_with_transport(
-        auth, workspace, policy, deploy, readiness, transport, discovery, cues, body_limit,
+        auth, workspace, policy, deploy, readiness, transport, discovery, cues, baselines,
+        body_limit,
     );
     axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_cancel(cancel_flag))
@@ -851,6 +878,7 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("GET", "/v1/node/health"),
     ("GET", "/v1/node/signals"),
     ("POST", "/v1/node/cues"),
+    ("POST", "/v1/node/baselines"),
     ("GET", "/v1/node/peers"),
     ("POST", "/v1/node/peers"),
     ("GET", "/v1/node/enrollments"),
@@ -873,7 +901,7 @@ fn router_with_policy(
     body_limit: usize,
 ) -> Router {
     router_with_transport(
-        auth, workspace, policy, deploy, readiness, None, None, None, body_limit,
+        auth, workspace, policy, deploy, readiness, None, None, None, None, body_limit,
     )
 }
 
@@ -889,6 +917,7 @@ fn router_with_transport(
     transport: Option<TransportStatusHandle>,
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     cues: Option<crate::direct_service::CueDispatcher>,
+    baselines: Option<crate::direct_service::BaselineDispatcher>,
     body_limit: usize,
 ) -> Router {
     let auth_verification_gate = Arc::new(tokio::sync::Semaphore::new(
@@ -906,6 +935,7 @@ fn router_with_transport(
         transport,
         discovery,
         cues,
+        baselines,
         auth_verification_gate,
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
@@ -968,6 +998,7 @@ fn router_with_transport(
         .route("/v1/node/health", get(node_health_handler))
         .route("/v1/node/signals", get(node_signals_handler))
         .route("/v1/node/cues", post(node_cue_handler))
+        .route("/v1/node/baselines", post(node_baseline_handler))
         .route(
             "/v1/node/peers",
             get(node_peers_handler).post(node_trust_handler),
@@ -1462,6 +1493,91 @@ async fn node_cue_handler(
 
 /// The ceiling on how long one request may hold a connection waiting.
 const MAX_CUE_WAIT_SECONDS: u32 = 600;
+
+/// Hand one already-signed baseline to the session this service holds.
+///
+/// Under `node:write`, the same scope `POST /v1/node/cues` uses and no new
+/// capability. The route decides only whether this operator may ask; every
+/// authorization that matters — the gate, the publisher, the organization, the
+/// signature, the content hashes — is enforced on the receiving node against
+/// facts it reads locally, and nothing here can influence any of them.
+async fn node_baseline_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_scope(&state, &auth_ctx, "node:write") {
+        return response;
+    }
+    let body =
+        match parse_json_body::<NodeBaselineBody>(body, state.deploy.http.body_limit_bytes).await {
+            Ok(body) => body,
+            Err(error) => return operation_error_response(error),
+        };
+    let Some(dispatcher) = state.baselines.clone() else {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "no direct transport is running, so there is no session to carry a baseline",
+        ));
+    };
+    // "No session with that peer" is a different fact from a refusal, and is
+    // reported as one so a caller can reach that peer another way instead of
+    // reading it as a verdict.
+    if !dispatcher.has_session(&body.peer_node_id) {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::NotFound,
+            "this node holds no session with that peer",
+        ));
+    }
+    let (Some(manifest), Some(scripts)) = (
+        decode_lower_hex(&body.manifest),
+        body.scripts
+            .iter()
+            .map(|body| decode_lower_hex(body))
+            .collect::<Option<Vec<_>>>(),
+    ) else {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "the manifest and every script body must be lowercase hex",
+        ));
+    };
+    let wait = Duration::from_secs(u64::from(body.wait_seconds.min(MAX_CUE_WAIT_SECONDS)));
+    // The push blocks on the session thread, so it must not hold a runtime
+    // worker for its whole budget.
+    let pushed = tokio::task::spawn_blocking(move || {
+        dispatcher.push_baseline(&body.peer_node_id, &manifest, &scripts, wait)
+    })
+    .await;
+    let result = match pushed {
+        Ok(Ok(outcome)) => Ok(serde_json::json!({
+            "pushed": true,
+            "via": "service",
+            "baseline_id": outcome.baseline_id,
+            "answered": outcome.answered,
+            "accepted": outcome.accepted,
+            "code": outcome.code,
+        })),
+        Ok(Err(error)) => Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("baseline push failed: {error}"),
+        )),
+        Err(_) => Err(OperationError::new(
+            OperationErrorCode::IoFailed,
+            "baseline push task failed",
+        )),
+    };
+    operation_response(result)
+}
+
+/// Decode lowercase hex, refusing upper case so one artefact has one spelling.
+fn decode_lower_hex(value: &str) -> Option<Vec<u8>> {
+    if !value.len().is_multiple_of(2) || value.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return None;
+    }
+    (0..value.len() / 2)
+        .map(|index| u8::from_str_radix(value.get(index * 2..index * 2 + 2)?, 16).ok())
+        .collect()
+}
 
 async fn node_revoke_handler(
     State(state): State<ApiState>,

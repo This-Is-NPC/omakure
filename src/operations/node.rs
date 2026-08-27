@@ -1326,6 +1326,16 @@ fn map_direct_enrollment_error(error: crate::direct_service::DirectServiceError)
     OperationError::new(code, error.to_string())
 }
 
+/// The trust store, for the one caller outside this module that needs it.
+///
+/// `BaselinePublisher::create` asks the registry whether this node already
+/// conducts anyone, so creating a publisher key needs a registry handle. It is
+/// exposed here rather than opened by the CLI so the identity load, the error
+/// mapping, and the security validation stay in one place.
+pub fn open_registry_for_baseline(context: &NodeContext) -> OperationResult<NodeRegistry> {
+    open_initialized_registry(context)
+}
+
 fn open_initialized_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
     NodeRegistry::open_existing(context, identity.public_status()).map_err(map_registry_error)

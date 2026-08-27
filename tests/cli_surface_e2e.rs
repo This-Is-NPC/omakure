@@ -204,6 +204,12 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
+        command: "node baseline",
+        coverage: Coverage::Covered(
+            "tests/cli_surface_e2e.rs + src/baseline_push.rs delivery_tests",
+        ),
+    },
+    CommandCoverage {
         command: "node capabilities",
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
@@ -332,6 +338,7 @@ fn command_surface_inventory_maps_all_current_commands() {
         "history tail",
         "history traces",
         "node authority",
+        "node baseline",
         "node capabilities",
         "node cue",
         "node direct-probe",
@@ -553,6 +560,85 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
         assert_success(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage"));
     }
+}
+
+/// `node baseline` end to end at the CLI: a key, a signed manifest, and a push
+/// that has nowhere to go.
+///
+/// The push assertion is the one that matters. A baseline travels on the
+/// session the running service holds, and with no service there is nothing to
+/// ask — so the command must say so rather than dialling around it, which is
+/// exactly the second way into the responder the design refuses to open.
+#[test]
+fn node_baseline_creates_a_key_signs_a_set_and_refuses_to_push_without_a_service() {
+    let workspace = support::TestWorkspace::new("cli_node_baseline");
+    let state = workspace.path().join("node-state");
+    let config = workspace.path().join("node.toml");
+    let state_arg = state.to_string_lossy().to_string();
+    let config_arg = config.to_string_lossy().to_string();
+    workspace.write_schema_script("deploy.sh", "deploy", "echo fleet");
+
+    let node = |extra: &[&str]| {
+        let mut args = vec![
+            "--json",
+            "node",
+            "--node-state-dir",
+            state_arg.as_str(),
+            "--node-config",
+            config_arg.as_str(),
+        ];
+        args.extend_from_slice(extra);
+        omakure_with_env(workspace.path(), &args, &[("OMAKURE_NODE_TEST_MODE", "1")])
+    };
+
+    assert_success(&node(&["init"]));
+
+    let created = node(&["baseline", "create-key"]);
+    assert_success(&created);
+    assert_eq!(
+        json(&created)["data"]["key_id"].as_str().unwrap().len(),
+        32,
+        "the key id a receiver records is 16 bytes of hex"
+    );
+
+    // Creating twice must refuse: a rotation orphans every baseline the old
+    // key ever signed.
+    assert!(!node(&["baseline", "create-key"]).status.success());
+
+    let manifest = workspace.path().join("fleet.ombm");
+    let manifest_arg = manifest.to_string_lossy().to_string();
+    let published = node(&[
+        "baseline",
+        "publish",
+        "--script",
+        "deploy.sh",
+        "--out",
+        manifest_arg.as_str(),
+    ]);
+    assert_success(&published);
+    assert_eq!(
+        json(&published)["data"]["baseline_id"]
+            .as_str()
+            .unwrap()
+            .len(),
+        64
+    );
+    assert!(manifest.exists(), "publish must have written the manifest");
+
+    let pushed = node(&[
+        "baseline",
+        "push",
+        "--peer-node-id",
+        "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+        "--manifest",
+        manifest_arg.as_str(),
+        "--wait-seconds",
+        "1",
+    ]);
+    assert!(
+        !pushed.status.success(),
+        "with no service running there is no session a baseline could travel on"
+    );
 }
 
 #[test]

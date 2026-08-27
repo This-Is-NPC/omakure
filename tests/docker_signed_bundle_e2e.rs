@@ -32,6 +32,11 @@ struct ComposeGuard {
     root: PathBuf,
     _files: TempDir,
     finalized: bool,
+    /// The autojoin target's pre-placed bootstrap pair. The operator provisioned
+    /// both machines, so the authority knows them.
+    autojoin_token: String,
+    autojoin_nonce: [u8; 16],
+    autojoin_config: PathBuf,
 }
 
 impl ComposeGuard {
@@ -108,6 +113,28 @@ impl ComposeGuard {
         ] {
             std::env::set_var(name, path);
         }
+        // The autojoin target. Its config is written *after* the authority
+        // creates its key, because there is no key to name until then.
+        let autojoin_token = "autojoin-signed-bundle-token-01234567".to_string();
+        let autojoin_nonce = [12_u8; 16];
+        let autojoin_management = generate_scoped_tokens(
+            &root,
+            files.path(),
+            "signed-autojoin",
+            &["node:read", "enrollment:write"],
+        );
+        let autojoin_token_path = files.path().join("autojoin.bootstrap");
+        write_private_token(&autojoin_token_path, &autojoin_token);
+        let autojoin_config = files.path().join("autojoin.toml");
+        fs::write(&autojoin_config, []).expect("create autojoin config placeholder");
+        std::env::set_var("OMAKURE_SIGNED_AUTOJOIN_CONFIG", &autojoin_config);
+        std::env::set_var("OMAKURE_SIGNED_AUTOJOIN_TOKEN", &autojoin_token_path);
+        std::env::set_var(
+            "OMAKURE_SIGNED_AUTOJOIN_TOKENS",
+            &autojoin_management.tokens,
+        );
+        std::env::set_var("OMAKURE_SIGNED_AUTOJOIN_CURL", &autojoin_management.curl);
+
         let bundle_paths = [
             ("OMAKURE_SIGNED_AUTHORITY_A_BUNDLE", "authority-a.bundle"),
             ("OMAKURE_SIGNED_TARGET_A_BUNDLE", "target-a.bundle"),
@@ -121,6 +148,9 @@ impl ComposeGuard {
             root,
             _files: files,
             finalized: false,
+            autojoin_token,
+            autojoin_nonce,
+            autojoin_config,
         };
         guard.start();
         guard
@@ -184,7 +214,19 @@ impl Drop for ComposeGuard {
 
 fn cleanup(root: &Path) -> Result<(), String> {
     let mut failures = Vec::new();
-    let down = compose(root, &["down", "--volumes", "--remove-orphans"]);
+    // `--profile autojoin` is load-bearing: without it `down` leaves the
+    // profile's containers, volumes and network behind, and the leak check
+    // below reports it as a failure -- which is how this was found.
+    let down = compose(
+        root,
+        &[
+            "--profile",
+            "autojoin",
+            "down",
+            "--volumes",
+            "--remove-orphans",
+        ],
+    );
     if !down.status.success() {
         failures.push(format!(
             "compose down status={} stderr={}",
@@ -330,17 +372,25 @@ struct ManagementFiles {
 }
 
 fn generate_tokens(root: &Path, directory: &Path, id: &str) -> ManagementFiles {
+    generate_scoped_tokens(root, directory, id, &["node:read"])
+}
+
+/// The autojoin target needs `enrollment:write` as well, because the whole
+/// exchange is the authority pushing a bundle at its management API. That is
+/// the narrowest scope which admits the operation, and it is not enough on its
+/// own: the bundle must still verify against the authority named in the
+/// target's own config, and the bootstrap token and nonce must match the hashes
+/// its operator placed there.
+fn generate_scoped_tokens(
+    root: &Path,
+    directory: &Path,
+    id: &str,
+    scopes: &[&str],
+) -> ManagementFiles {
     let output = bounded_command(env!("CARGO_BIN_EXE_omakure"))
         .current_dir(root)
-        .args([
-            "--json",
-            "token",
-            "generate",
-            "--id",
-            id,
-            "--scope",
-            "node:read",
-        ])
+        .args(["--json", "token", "generate", "--id", id])
+        .args(scopes.iter().flat_map(|scope| ["--scope", scope]))
         .output()
         .expect("generate E2E auth token");
     if !output.status.success() {
@@ -935,4 +985,237 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+// ---------------------------------------------------------------------------
+// Unattended autojoin
+// ---------------------------------------------------------------------------
+
+/// A machine joins its fleet with **no command run on it**.
+///
+/// Everything the target is given could have been placed by an installer before
+/// that machine existed: its public `node.toml`, the authority's public key, and
+/// a bootstrap token. It is *not* given a bundle, and could not be — a bundle
+/// names the node that will apply it, and that node's identity does not exist
+/// until it first starts.
+///
+/// So the fleet issues one after the fact. The authority, which is the only
+/// thing in the product that can now do so, learns the target's identity from
+/// its management API, mints a bundle under its own key, and pushes it. The
+/// target ends up trusting the authority having had nothing typed into it.
+///
+/// The assertion that carries the weight is the one about `docker exec`: every
+/// command in this test runs against the *authority* container. A test that
+/// shelled into the target would prove nothing about unattended.
+#[test]
+#[ignore = "requires Docker and runs an isolated authority plus a fresh target"]
+fn a_provisioned_machine_joins_with_no_command_run_on_it() {
+    let guard = ComposeGuard::new();
+    wait_for_status();
+
+    // 1. The fleet creates its authority. Nothing could be issued before this.
+    let created = exec(
+        "signed-authority",
+        &[
+            "omakure",
+            "--json",
+            "node",
+            "authority",
+            "create",
+            "--confirmed",
+        ],
+    );
+    assert!(
+        created.status.success(),
+        "authority create failed: {}",
+        safe_stderr(&created)
+    );
+    let authority: Value = serde_json::from_slice(&created.stdout).expect("authority JSON");
+    let key_id = authority["data"]["key_id"].as_str().expect("key id");
+    let public_key = authority["data"]["public_key"]
+        .as_str()
+        .expect("public key");
+
+    // 2. The installer writes the target's public config, naming that authority.
+    fs::write(
+        &guard.autojoin_config,
+        signed_config(
+            key_id,
+            public_key,
+            &guard.autojoin_token,
+            &guard.autojoin_nonce,
+        ),
+    )
+    .expect("write the autojoin config");
+
+    // 3. The machine boots. From here on nothing is typed into it.
+    let up = compose(
+        &guard.root,
+        &["--profile", "autojoin", "up", "-d", "signed-autojoin"],
+    );
+    assert!(
+        up.status.success(),
+        "autojoin target did not start: {}",
+        safe_stderr(&up)
+    );
+
+    // 4. The fleet learns its identity the way a manager would -- over the
+    //    network, from the authority container. Waiting is done by polling that
+    //    same network path, not by sleeping and hoping.
+    wait_for_autojoin();
+    let status = autojoin_get("/v1/node/status");
+    let target_id = status["data"]["identity"]["node_id"]
+        .as_str()
+        .expect("the fresh node generated an identity on first start")
+        .to_string();
+    assert!(
+        status["data"]["trust"]["active_peer_count"]
+            .as_u64()
+            .is_some_and(|count| count == 0),
+        "the target must start out belonging to nobody: {status}"
+    );
+
+    // 5. The fleet issues membership for that identity.
+    let issued = exec(
+        "signed-authority",
+        &[
+            "omakure",
+            "--json",
+            "node",
+            "authority",
+            "issue",
+            "--audience",
+            &target_id,
+            "--role",
+            "conductor",
+            "--capability",
+            "inventory-health",
+            "--capability",
+            "notifications",
+            "--lifetime-seconds",
+            "600",
+        ],
+    );
+    assert!(
+        issued.status.success(),
+        "authority issue failed: {}",
+        safe_stderr(&issued)
+    );
+    let issued: Value = serde_json::from_slice(&issued.stdout).expect("issued JSON");
+    let bundle_hex = issued["data"]["bundle_hex"].as_str().expect("bundle hex");
+
+    // 6. And delivers it.
+    let applied = autojoin_post(
+        "/v1/node/enrollment/bundle",
+        &serde_json::json!({
+            "bundle_hex": bundle_hex,
+            "bootstrap_nonce": hex(&guard.autojoin_nonce),
+        }),
+    );
+    assert_eq!(
+        applied["data"]["state"], "active",
+        "the target must have joined: {applied}"
+    );
+
+    // 7. Observed from the target's own view, not from the reply we just read.
+    let peers = autojoin_get("/v1/node/peers");
+    let joined = peers["data"]
+        .as_array()
+        .expect("peer list")
+        .iter()
+        .find(|peer| peer["state"] == "active")
+        .expect("the target must now have an active peer");
+    assert_eq!(
+        joined["role"], "conductor",
+        "the role the fleet issued must be the role it recorded: {peers}"
+    );
+}
+
+/// Wait for the autojoin target to answer, from the authority container.
+///
+/// Deliberately the same path the test then uses. A readiness check that took a
+/// different route could go green while the route under test stayed shut.
+fn wait_for_autojoin() {
+    let deadline = Instant::now() + Duration::from_secs(90);
+    while Instant::now() < deadline {
+        let output = exec(
+            "signed-authority",
+            &[
+                "curl",
+                "--config",
+                "/run/secrets/autojoin-curl.conf",
+                "--fail",
+                "--silent",
+                "--max-time",
+                "5",
+                "http://signed-autojoin:7878/v1/node/status",
+            ],
+        );
+        if output.status.success() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    let logs = compose(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+        &["logs", "--no-color", "signed-autojoin"],
+    );
+    panic!(
+        "the autojoin target never answered: {}",
+        String::from_utf8_lossy(&logs.stdout)
+    );
+}
+
+/// Read the autojoin target's API **from the authority container**.
+///
+/// Never `docker exec` against the target. That constraint is the test.
+fn autojoin_get(path: &str) -> Value {
+    let output = exec(
+        "signed-authority",
+        &[
+            "curl",
+            "--config",
+            "/run/secrets/autojoin-curl.conf",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "10",
+            &format!("http://signed-autojoin:7878{path}"),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "GET {path} on the autojoin target failed: {}",
+        safe_stderr(&output)
+    );
+    serde_json::from_slice(&output.stdout).expect("autojoin JSON")
+}
+
+fn autojoin_post(path: &str, body: &Value) -> Value {
+    let body = body.to_string();
+    let output = exec(
+        "signed-authority",
+        &[
+            "curl",
+            "--config",
+            "/run/secrets/autojoin-curl.conf",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "20",
+            "--header",
+            "Content-Type: application/json",
+            "--data",
+            &body,
+            &format!("http://signed-autojoin:7878{path}"),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "POST {path} on the autojoin target failed: {}",
+        safe_stderr(&output)
+    );
+    serde_json::from_slice(&output.stdout).expect("autojoin JSON")
 }

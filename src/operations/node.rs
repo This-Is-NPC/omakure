@@ -1911,6 +1911,74 @@ mod tests {
         assert!(!context.transport_certificate_path().exists());
     }
 
+    /// Applying a bundle while this process already serves must not be
+    /// reported as a lifecycle conflict.
+    ///
+    /// `node serve` holds the lifecycle lock for its whole life. The apply path
+    /// re-initializes only when the state looks incomplete, and that branch
+    /// takes the lock *non-blocking* — so a state directory that merely looks
+    /// wrong turns "your state has a stray entry" into "lifecycle busy", which
+    /// sends the reader after the wrong problem entirely.
+    ///
+    /// Measured, not assumed: today it already reports
+    /// `node state is invalid or insecure`, because
+    /// `validate_existing_state_contents` *errors* on a stray entry rather than
+    /// returning `false`, and that error propagates before the re-init branch
+    /// is reached. So the hazard is not live and no `_locked` variant is
+    /// needed. This pins the diagnosis so it stays that way.
+    ///
+    /// The one shape that would still misreport is the state directory being
+    /// deleted out from under a running service — `Ok(false)` rather than an
+    /// error, so the re-init branch runs and the non-blocking lock fails.
+    /// Left alone deliberately: a state directory that vanishes mid-serve is
+    /// not a case worth carrying a code path for.
+    #[test]
+    fn a_stray_state_entry_is_not_reported_as_a_lifecycle_conflict() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let mut config = crate::domain::NodeConfig::default();
+        config.trust.enrollment = "signed-bundle".to_string();
+        config.organization.id = "stray-diagnosis".to_string();
+        config.trust.authorities = vec![crate::domain::EnrollmentAuthority {
+            key_id: "0".repeat(32),
+            public_key: "0".repeat(64),
+            revoked: false,
+        }];
+        config.trust.bootstrap_token_hash = "0".repeat(64);
+        config.trust.bootstrap_nonce_hash = "0".repeat(64);
+        initialize_node_nonblocking(&context, &config).expect("initialize");
+        std::fs::write(
+            context.config_path(),
+            toml::to_string(&config).expect("serialize config"),
+        )
+        .expect("write config");
+
+        // Hold the lock the way a serving process does.
+        let _serving = context.acquire_lifecycle_lock().expect("hold the lock");
+
+        std::fs::write(context.state_dir().join("stray.txt"), b"x").expect("stray");
+
+        let error = apply_signed_bundle(
+            &context,
+            SignedBundleApplyRequest {
+                bundle_hex: String::new(),
+                bootstrap_token: "irrelevant".into(),
+                bootstrap_token_path: None,
+                bootstrap_nonce: "00".repeat(16),
+            },
+        )
+        .expect_err("a stray state entry must not be applied over");
+        let message = error.to_string().to_lowercase();
+        assert!(
+            message.contains("state"),
+            "the reader must be sent at the state problem: {message}"
+        );
+        assert!(
+            !message.contains("busy") && !message.contains("lifecycle"),
+            "and not at the lock: {message}"
+        );
+    }
+
     #[test]
     fn status_treats_missing_config_parent_as_uninitialized() {
         let temp = TempDir::new().unwrap();

@@ -853,7 +853,11 @@ struct AdmissionController {
 
 struct AdmissionReservation {
     admission: Arc<AdmissionController>,
-    source: IpAddr,
+    /// The per-source-IP rate key, or `None` for a dial this node made.
+    ///
+    /// Only inbound work has a source to budget. A dial of our own has no
+    /// stranger behind it to hold to account.
+    source: Option<IpAddr>,
     node_id: Option<String>,
     phase: AdmissionPhase,
     bytes: usize,
@@ -906,7 +910,35 @@ impl AdmissionController {
         source_state.bytes += ADMISSION_BYTES;
         Some(AdmissionReservation {
             admission: Arc::clone(self),
-            source,
+            source: Some(source),
+            node_id: None,
+            phase: AdmissionPhase::Handshake,
+            bytes: ADMISSION_BYTES,
+        })
+    }
+
+    /// Take global admission capacity for a dial this node is making.
+    ///
+    /// Deliberately takes no per-source-IP budget. That budget bounds
+    /// unauthenticated pressure arriving from a stranger, and an outgoing dial
+    /// to a configured static peer is neither. Charging it to the local
+    /// address made every node that shares an address with its peers --
+    /// loopback, host networking, several nodes in one container -- spend
+    /// their inbound flood budget on its own outgoing links. The global
+    /// handshake, byte, and session ceilings still apply, and the peer's
+    /// certificate is still charged per identity once it authenticates.
+    fn reserve_dial(self: &Arc<Self>) -> Option<AdmissionReservation> {
+        let mut state = self.state.lock().ok()?;
+        if state.handshakes >= DIRECT_MAX_HANDSHAKES
+            || state.bytes.saturating_add(ADMISSION_BYTES) > DIRECT_MAX_BYTES
+        {
+            return None;
+        }
+        state.handshakes += 1;
+        state.bytes += ADMISSION_BYTES;
+        Some(AdmissionReservation {
+            admission: Arc::clone(self),
+            source: None,
             node_id: None,
             phase: AdmissionPhase::Handshake,
             bytes: ADMISSION_BYTES,
@@ -925,7 +957,10 @@ impl AdmissionController {
         if reservation.node_id.as_deref() == Some(node_id) {
             return Ok(());
         }
-        if !state.sources.contains_key(&reservation.source) {
+        if reservation
+            .source
+            .is_some_and(|source| !state.sources.contains_key(&source))
+        {
             return Err(TransportError::Internal);
         }
         let current = SourceAdmission {
@@ -984,11 +1019,16 @@ impl AdmissionReservation {
             .state
             .lock()
             .map_err(|_| TransportError::Internal)?;
-        let source_sessions = state
-            .sources
-            .get(&self.source)
-            .ok_or(TransportError::Internal)?
-            .sessions;
+        let source_sessions = self
+            .source
+            .map(|source| {
+                state
+                    .sources
+                    .get(&source)
+                    .ok_or(TransportError::Internal)
+                    .map(|source| source.sessions)
+            })
+            .transpose()?;
         let node_sessions = self
             .node_id
             .as_deref()
@@ -1001,19 +1041,21 @@ impl AdmissionReservation {
             })
             .transpose()?;
         if state.sessions >= DIRECT_MAX_SESSIONS
-            || source_sessions >= DIRECT_MAX_SOURCE_SESSIONS
+            || source_sessions.is_some_and(|sessions| sessions >= DIRECT_MAX_SOURCE_SESSIONS)
             || node_sessions.is_some_and(|sessions| sessions >= DIRECT_MAX_NODE_SESSIONS)
         {
             return Err(TransportError::RateLimited);
         }
         state.handshakes = state.handshakes.saturating_sub(1);
         state.sessions += 1;
-        let source_state = state
-            .sources
-            .get_mut(&self.source)
-            .ok_or(TransportError::Internal)?;
-        source_state.handshakes = source_state.handshakes.saturating_sub(1);
-        source_state.sessions += 1;
+        if let Some(source) = self.source {
+            let source_state = state
+                .sources
+                .get_mut(&source)
+                .ok_or(TransportError::Internal)?;
+            source_state.handshakes = source_state.handshakes.saturating_sub(1);
+            source_state.sessions += 1;
+        }
         if let Some(node_id) = self.node_id.as_deref() {
             let node_state = state
                 .nodes
@@ -1041,22 +1083,24 @@ impl Drop for AdmissionReservation {
             }
         }
         state.bytes = state.bytes.saturating_sub(self.bytes);
-        if let Some(source_state) = state.sources.get_mut(&self.source) {
-            match self.phase {
-                AdmissionPhase::Handshake => {
-                    source_state.handshakes = source_state.handshakes.saturating_sub(1);
+        if let Some(source) = self.source {
+            if let Some(source_state) = state.sources.get_mut(&source) {
+                match self.phase {
+                    AdmissionPhase::Handshake => {
+                        source_state.handshakes = source_state.handshakes.saturating_sub(1);
+                    }
+                    AdmissionPhase::Session => {
+                        source_state.sessions = source_state.sessions.saturating_sub(1);
+                    }
                 }
-                AdmissionPhase::Session => {
-                    source_state.sessions = source_state.sessions.saturating_sub(1);
+                source_state.bytes = source_state.bytes.saturating_sub(self.bytes);
+                if source_state.handshakes == 0
+                    && source_state.sessions == 0
+                    && source_state.bytes == 0
+                    && source_state.attempts.is_empty()
+                {
+                    state.sources.remove(&source);
                 }
-            }
-            source_state.bytes = source_state.bytes.saturating_sub(self.bytes);
-            if source_state.handshakes == 0
-                && source_state.sessions == 0
-                && source_state.bytes == 0
-                && source_state.attempts.is_empty()
-            {
-                state.sources.remove(&self.source);
             }
         }
         if let Some(node_id) = self.node_id.as_deref() {
@@ -1312,13 +1356,9 @@ fn connect_and_hold(
     }
     let mut stream = stream.ok_or(TransportError::Internal)?;
     set_stream_timeouts(&stream, deadline)?;
-    let local_ip = stream
-        .local_addr()
-        .map_err(|_| TransportError::Internal)?
-        .ip();
     let mut reservation = state
         .admission
-        .reserve(local_ip, Instant::now())
+        .reserve_dial()
         .ok_or(TransportError::RateLimited)?;
     let identity = NodeIdentity::load_existing(context).map_err(|_| TransportError::Internal)?;
     let local =
@@ -2761,6 +2801,126 @@ mod tests {
         assert!(
             worst_case < online,
             "a redial can take {worst_case:?}, past the {online:?} Online window"
+        );
+    }
+
+    /// The pre-auth budget is all that stands between an unenrolled stranger
+    /// and the handshake path, so anything narrowed elsewhere has to leave it
+    /// exactly this strict. No identity is known anywhere in this test; that
+    /// is the point.
+    ///
+    /// Three caps enforce the budget and all three land on four: concurrent
+    /// handshakes, reserved bytes, and arrival rate. So this freezes the
+    /// behaviour rather than any one cap, and deleting a single one will not
+    /// redden it. Deleting the per-address dimension will.
+    #[test]
+    fn an_unauthenticated_flood_from_one_address_is_still_refused() {
+        let admission = Arc::new(AdmissionController {
+            state: Mutex::new(AdmissionState::default()),
+        });
+        let flooder = "203.0.113.7".parse::<IpAddr>().unwrap();
+        let bystander = "203.0.113.8".parse::<IpAddr>().unwrap();
+        let start = Instant::now();
+
+        let held = (0..DIRECT_MAX_SOURCE_HANDSHAKES)
+            .map(|_| {
+                admission
+                    .reserve(flooder, start)
+                    .expect("the budget admits its own allowance")
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            admission.reserve(flooder, start).is_none(),
+            "an unauthenticated flood passed the per-address budget"
+        );
+        assert!(
+            admission.reserve(bystander, start).is_some(),
+            "the flood starved an unrelated address"
+        );
+
+        // Hanging up does not reopen the door. Arrival rate is budgeted apart
+        // from concurrency, so a stranger cannot flood by closing and
+        // reopening inside the window.
+        drop(held);
+        assert!(
+            admission.reserve(flooder, start).is_none(),
+            "the flood was readmitted by closing its own connections"
+        );
+        assert!(
+            admission
+                .reserve(flooder, start + DIRECT_RATE_WINDOW)
+                .is_some(),
+            "a caller was still refused after the rate window rolled"
+        );
+    }
+
+    /// Waiting is not a way around the budget either.
+    ///
+    /// A stranger that respects the arrival rate exactly -- one handshake per
+    /// window, never hanging up -- is still bounded by what it is holding, so
+    /// the rate cap is not the only thing standing in front of the handshake
+    /// path.
+    #[test]
+    fn a_patient_stranger_cannot_hold_more_than_its_address_allowance() {
+        let admission = Arc::new(AdmissionController {
+            state: Mutex::new(AdmissionState::default()),
+        });
+        let stranger = "203.0.113.9".parse::<IpAddr>().unwrap();
+        let start = Instant::now();
+
+        let held = (0..DIRECT_MAX_SOURCE_HANDSHAKES)
+            .map(|window| {
+                let now = start + DIRECT_RATE_WINDOW * u32::try_from(window).unwrap();
+                admission
+                    .reserve(stranger, now)
+                    .unwrap_or_else(|| panic!("the arrival rate refused window {window}"))
+            })
+            .collect::<Vec<_>>();
+        let after = start + DIRECT_RATE_WINDOW * u32::try_from(held.len()).unwrap();
+        assert!(
+            admission.reserve(stranger, after).is_none(),
+            "a stranger that waited out every rate window held more than its \
+             address allowance"
+        );
+        drop(held);
+    }
+
+    /// On one host every address in play is the same address, so a node that
+    /// charged its own dials to it spent the budget that protects it from
+    /// strangers on its own outgoing links.
+    #[test]
+    fn a_nodes_own_dials_leave_the_inbound_budget_to_its_peers() {
+        let admission = Arc::new(AdmissionController {
+            state: Mutex::new(AdmissionState::default()),
+        });
+        let shared = "127.0.0.1".parse::<IpAddr>().unwrap();
+        let start = Instant::now();
+
+        let dials = (0..DIRECT_MAX_SOURCE_HANDSHAKES)
+            .map(|_| admission.reserve_dial().expect("a dial of this node's own"))
+            .collect::<Vec<_>>();
+        let inbound = (0..DIRECT_MAX_SOURCE_HANDSHAKES)
+            .map(|index| {
+                admission
+                    .reserve(shared, start)
+                    .unwrap_or_else(|| panic!("inbound peer {index} lost its budget to our dials"))
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            admission.reserve(shared, start).is_none(),
+            "the per-address budget stopped applying to inbound peers"
+        );
+
+        drop(inbound);
+        drop(dials);
+        let state = admission.state.lock().unwrap();
+        assert_eq!(
+            state.handshakes, 0,
+            "a released dial left global handshake capacity behind"
+        );
+        assert_eq!(
+            state.bytes, 0,
+            "a released dial left global byte capacity behind"
         );
     }
 

@@ -83,6 +83,15 @@ impl NodeLayout {
         self.state_dir.join("authority.key")
     }
 
+    /// Where the baseline-publisher signing key lives, when this node holds
+    /// one. A third key beside the identity and the authority, for the same
+    /// reason there is a second: the key that admits a machine to the fleet and
+    /// the key that ships that machine code have different blast radii, and
+    /// folding them together would choose the larger one for everybody.
+    pub fn publisher_key_path(&self) -> PathBuf {
+        self.state_dir.join("publisher.key")
+    }
+
     pub fn identity_path(&self) -> PathBuf {
         self.state_dir.join("identity.key")
     }
@@ -363,6 +372,10 @@ impl NodeContext {
         self.layout.authority_key_path()
     }
 
+    pub fn publisher_key_path(&self) -> PathBuf {
+        self.layout.publisher_key_path()
+    }
+
     pub fn identity_path(&self) -> PathBuf {
         self.layout.identity_path()
     }
@@ -588,6 +601,12 @@ impl NodeContext {
                     // deliberately: the list is a security control, and a new
                     // entry is an amendment to it, not a convenience.
                     | "authority.key"
+                    // The baseline-publisher signing key, on a node that ships
+                    // code to the fleet. Second amendment to this closed list,
+                    // held to the same standard as the first: the list is the
+                    // control, and every entry is a decision to admit one more
+                    // file to the node's private state.
+                    | "publisher.key"
                     | "node.sqlite"
                     | "node.sqlite-wal"
                     | "node.sqlite-shm"

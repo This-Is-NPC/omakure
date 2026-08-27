@@ -1426,18 +1426,37 @@ fn connect_and_hold(
 ) -> Result<(), TransportError> {
     let deadline = initiator_deadline(Instant::now());
     let endpoints = resolver.resolve(&peer.endpoint, deadline, &state.stop)?;
-    let mut stream = None;
-    for endpoint in endpoints {
-        let remaining = deadline
-            .checked_duration_since(Instant::now())
-            .ok_or(TransportError::Internal)?;
-        if let Ok(candidate) = TcpStream::connect_timeout(&endpoint, remaining) {
-            stream = Some(candidate);
-            break;
-        }
-    }
-    let mut stream = stream.ok_or(TransportError::Internal)?;
-    set_stream_timeouts(&stream, deadline)?;
+    // Everything that can fail without a socket is done before there is one.
+    //
+    // Each of these five steps used to run between the TCP connect and the
+    // first handshake write, and each of them returns early. A local failure
+    // -- no admission budget, an identity or transport file that has gone
+    // away, a registry that will not open -- therefore left the peer holding
+    // an accepted connection that sent nothing. The peer charges that stray to
+    // its admission controller and writes it into its audit trail, so a fault
+    // entirely on this side is recorded as the other side's problem.
+    //
+    // That was survivable while the dialer retired after three attempts. It is
+    // not now: retries are unbounded with a sixty-second ceiling, so a
+    // persistent local failure produces one stray a minute forever.
+    //
+    // None of these takes the stream, so the only cost of hoisting them is
+    // that a dial now holds its admission reservation across the connect
+    // attempt as well as the handshake. That is the more honest accounting --
+    // a dial in flight is occupying a handshake slot -- and the reservation is
+    // released by `Drop` on every early return below.
+    //
+    // The first handshake message is built here too, for the same reason: it
+    // is fallible and it needs no socket. It carries no timestamp and no
+    // freshness data -- the initiator's first Noise XX message has an empty
+    // payload -- so building it before the connect changes nothing on the
+    // wire. Unlike the five below it cannot be driven to fail on a fresh
+    // handshake, so it is hoisted on the argument rather than on a test.
+    //
+    // What is left after the connect is `set_stream_timeouts` and the write
+    // itself, and the only way either abandons the socket is the initiator
+    // deadline expiring in between. `tests/docker_health_plane_exhaustion.rs`
+    // records why that keeps its stray count a bound rather than zero.
     let mut reservation = state
         .admission
         .reserve_dial()
@@ -1450,7 +1469,20 @@ fn connect_and_hold(
     let mut handshake = local
         .handshake(HandshakeRole::Initiator)
         .map_err(|_| TransportError::Internal)?;
-    write_bytes(&mut stream, &handshake.write_next()?, deadline).map_err(error_to_transport)?;
+    let opening_message = handshake.write_next()?;
+    let mut stream = None;
+    for endpoint in endpoints {
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or(TransportError::Internal)?;
+        if let Ok(candidate) = TcpStream::connect_timeout(&endpoint, remaining) {
+            stream = Some(candidate);
+            break;
+        }
+    }
+    let mut stream = stream.ok_or(TransportError::Internal)?;
+    set_stream_timeouts(&stream, deadline)?;
+    write_bytes(&mut stream, &opening_message, deadline).map_err(error_to_transport)?;
     let frame = read_frame(&mut stream, deadline).map_err(error_to_transport)?;
     handshake.read_next(&frame, unix_seconds())?;
     write_bytes(&mut stream, &handshake.write_next()?, deadline).map_err(error_to_transport)?;
@@ -3162,6 +3194,181 @@ mod tests {
             );
             previous = delay;
         }
+    }
+
+    /// A dial that fails on this node's own state must open no connection.
+    ///
+    /// `connect_and_hold` used to open the socket first and only afterwards
+    /// reserve admission, load the identity, load the transport material, open
+    /// the registry, and build the handshake. Every one of those returns
+    /// early, so a fault entirely on this side left the peer holding an
+    /// accepted connection that never spoke: the peer charges that stray to
+    /// its own admission controller and records it in its audit trail as the
+    /// dialer's misbehaviour.
+    ///
+    /// The dialer retries without bound now, so a persistent local fault
+    /// produced one such stray per redial forever rather than three in total.
+    ///
+    /// Each case below is a real local fault -- no budget, material that has
+    /// gone away, a registry file that will not open -- and each pins itself
+    /// to the step it means to exercise before dialing, so a case cannot
+    /// quietly start failing one step earlier than its name claims. The sixth
+    /// step, `local.handshake`, has no case: it cannot be driven to fail once
+    /// `LocalTransport::load_existing` has accepted the key material, so it is
+    /// covered by sitting between the cases below and the first write.
+    ///
+    /// Restore the old order and every case reddens.
+    #[test]
+    fn a_local_failure_before_the_first_write_opens_no_connection() {
+        let _test_lock = RESOLVER_TEST_LOCK.lock().unwrap();
+        use crate::node::{NodePathOverrides, NodePlatform};
+        use tempfile::TempDir;
+
+        fn context_for(temp: &TempDir) -> NodeContext {
+            NodeContext::resolve_for(
+                NodePlatform::Linux,
+                NodePathOverrides::new(
+                    Some(temp.path().join("state")),
+                    Some(temp.path().join("node.toml")),
+                ),
+                true,
+                None,
+                None,
+                None,
+            )
+            .expect("resolve the node context")
+        }
+
+        fn fresh_state() -> Arc<ConnectionState> {
+            Arc::new(ConnectionState {
+                local_node_id: "local-peer".to_string(),
+                expected: HashSet::new(),
+                stop: Arc::new(AtomicBool::new(false)),
+                active: Mutex::new(HashMap::new()),
+                outbox: Mutex::new(HashMap::new()),
+                baseline_outbox: Mutex::new(HashMap::new()),
+                status: Arc::new(Mutex::new(TransportStatus::default())),
+                admission: Arc::new(AdmissionController {
+                    state: Mutex::new(AdmissionState::default()),
+                }),
+                reporter: None,
+                workspace_root: None,
+            })
+        }
+
+        /// Dial a listener that never accepts, and report both the failure and
+        /// whether the kernel ever queued a connection for it. A listener is
+        /// handed the completed connection by the kernel whether or not it
+        /// calls `accept`, and it keeps it even after the dialer hangs up, so
+        /// asking once afterwards is enough.
+        fn dial_and_report(
+            context: &NodeContext,
+            state: &Arc<ConnectionState>,
+        ) -> (TransportError, bool) {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("bind the observing listener");
+            let address = listener.local_addr().expect("listener address");
+            listener
+                .set_nonblocking(true)
+                .expect("set the listener non-blocking");
+            let resolver = Resolver::start().expect("start the resolver");
+            let peer = StaticPeer {
+                node_id: "zzzz-remote-peer".to_string(),
+                endpoint: address.to_string(),
+            };
+            let error = connect_and_hold(&peer, context, state, &resolver)
+                .expect_err("the local fault must fail the dial");
+            resolver.shutdown();
+            let opened = match listener.accept() {
+                Ok(_) => true,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => false,
+                Err(error) => panic!("the observing listener could not be polled: {error}"),
+            };
+            (error, opened)
+        }
+
+        // Step 1: no admission budget left for a dial.
+        let temp = TempDir::new().expect("temporary node root");
+        let context = context_for(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
+        LocalTransport::provision_new(&context, &identity).expect("provision transport material");
+        let state = fresh_state();
+        let mut held = Vec::new();
+        while let Some(reservation) = state.admission.reserve_dial() {
+            held.push(reservation);
+        }
+        assert!(
+            !held.is_empty(),
+            "the admission controller refused the very first dial reservation, so this \
+             case would prove nothing about a budget that had been spent"
+        );
+        let (error, opened) = dial_and_report(&context, &state);
+        assert_eq!(error, TransportError::RateLimited);
+        assert!(
+            !opened,
+            "a dial with no admission budget opened a connection and abandoned it"
+        );
+        drop(held);
+
+        // Step 2: this node's identity is not on disk.
+        let temp = TempDir::new().expect("temporary node root");
+        let context = context_for(&temp);
+        assert!(
+            NodeIdentity::load_existing(&context).is_err(),
+            "this case must fail on the identity load"
+        );
+        let (error, opened) = dial_and_report(&context, &fresh_state());
+        assert_eq!(error, TransportError::Internal);
+        assert!(
+            !opened,
+            "a dial by a node that cannot load its own identity opened a connection \
+             and abandoned it"
+        );
+
+        // Step 3: the transport key has gone away.
+        let temp = TempDir::new().expect("temporary node root");
+        let context = context_for(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
+        LocalTransport::provision_new(&context, &identity).expect("provision transport material");
+        std::fs::remove_file(context.transport_key_path()).expect("remove the transport key");
+        let identity = NodeIdentity::load_existing(&context)
+            .expect("this case must reach the transport load, so the identity must still load");
+        assert!(
+            LocalTransport::load_existing(&context, &identity).is_err(),
+            "this case must fail on the transport load"
+        );
+        let (error, opened) = dial_and_report(&context, &fresh_state());
+        assert_eq!(error, TransportError::Internal);
+        assert!(
+            !opened,
+            "a dial by a node whose transport material has gone away opened a \
+             connection and abandoned it"
+        );
+
+        // Step 4: the registry will not open.
+        let temp = TempDir::new().expect("temporary node root");
+        let context = context_for(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
+        LocalTransport::provision_new(&context, &identity).expect("provision transport material");
+        // A directory where the registry file belongs. Docker creates exactly
+        // this when a bind mount names a file that does not exist yet, so it
+        // is a fault this fleet can really meet rather than an invented one.
+        std::fs::remove_file(context.database_path()).expect("clear the registry path");
+        std::fs::create_dir_all(context.database_path()).expect("occupy the registry path");
+        let identity = NodeIdentity::load_existing(&context)
+            .expect("this case must reach the registry open, so the identity must still load");
+        LocalTransport::load_existing(&context, &identity)
+            .expect("this case must reach the registry open, so the transport must still load");
+        assert!(
+            NodeRegistry::open_existing(&context, identity.public_status()).is_err(),
+            "this case must fail on the registry open"
+        );
+        let (error, opened) = dial_and_report(&context, &fresh_state());
+        assert_eq!(error, TransportError::Internal);
+        assert!(
+            !opened,
+            "a dial by a node whose registry will not open opened a connection and \
+             abandoned it"
+        );
     }
 
     /// The ceiling is only defensible if a peer that comes back is redialed

@@ -162,12 +162,37 @@ fn an_unacknowledged_profile_stops_at_the_frozen_attempt_budget_on_one_session()
     // frame is not the Performer's Noise dial. On this network the repointed
     // Performer is the only peer configured toward the harness, so a stray *is*
     // the shipped dialer opening a socket and abandoning it before its first
-    // write - `connect_and_hold` has five fallible steps between the TCP
-    // connect and that write, and any of them drops the stream silently.
+    // write.
     //
-    // Accepting past it preserves the measurement, which is taken on whichever
-    // session does handshake. The count is bounded below rather than required
-    // to be zero, because a stray spends a dial attempt, not an ack retry.
+    // This used to read "five fallible steps between the TCP connect and that
+    // write". It no longer does: `connect_and_hold` reserves admission, loads
+    // the identity and the transport material, opens the registry, and builds
+    // the opening handshake message before it opens a socket at all, so a
+    // local fault now fails the dial without the peer ever seeing it. That is
+    // held by `direct_service`'s
+    // `a_local_failure_before_the_first_write_opens_no_connection`, which
+    // drives each of those steps to fail in turn and asserts the listener saw
+    // nothing.
+    //
+    // The bound stays a bound rather than becoming zero, for two reasons.
+    //
+    // One, a stray is still reachable. `set_stream_timeouts` and the deadline
+    // check inside the first `write_bytes` both refuse an initiator deadline
+    // that has expired, and both run with the socket already open. The window
+    // is two syscalls wide and nothing here can steer a run into it, but it is
+    // real, and a zero written here would be a contract this suite has no way
+    // to keep.
+    //
+    // Two, and this is the part worth not pretending about: no run of this
+    // phase has ever been observed to produce a stray, so an assertion of zero
+    // would be one that has never been able to fail. The falsifiable statement
+    // about the five steps lives in the unit test named above, where a fault
+    // can actually be injected. This bound protects the phase's own runtime
+    // instead, which is the job it can do honestly.
+    //
+    // Accepting past a stray preserves the measurement, which is taken on
+    // whichever session does handshake; a stray spends a dial attempt, not an
+    // ack retry.
     let deadline = Instant::now() + ACCEPT_BUDGET;
     let mut strays = 0_u32;
     let (mut stream, frame) = loop {

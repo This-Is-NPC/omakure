@@ -87,6 +87,21 @@ pub enum DirectServiceError {
     State(#[from] NodeTransportError),
     #[error("direct transport node identity failed: {0}")]
     Identity(#[from] crate::node_identity::NodeIdentityError),
+    /// Refused before anything reached the wire, because the target is not an
+    /// active peer in *this* node's registry.
+    ///
+    /// Carries the peer and the state it was found in, because "refused" on its
+    /// own is not something an operator can act on: a peer that was revoked and
+    /// a peer that was never enrolled need different answers.
+    #[error(
+        "direct transport refused {peer_node_id}: this node's registry has it {state}, \
+         not active ({protocol})"
+    )]
+    PeerNotActive {
+        peer_node_id: String,
+        state: &'static str,
+        protocol: TransportError,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +166,17 @@ struct ActiveConnection {
 
 struct ConnectionState {
     local_node_id: String,
+    /// Where this node's own trust registry lives.
+    ///
+    /// Held so anything handed to a session thread can be checked against the
+    /// registry *at the moment it is asked for*, not against whatever was true
+    /// when the session opened. Revocation is a local durable fact that no peer
+    /// is told about, so a standing session is not evidence of trust.
+    context: NodeContext,
+    /// The public half of this node's identity, which is all `open_existing`
+    /// needs to reopen the registry. Kept instead of the `NodeIdentity` so the
+    /// shared state never holds a private key.
+    identity_status: crate::node_identity::NodeIdentityStatus,
     expected: HashSet<String>,
     stop: Arc<AtomicBool>,
     active: Mutex<HashMap<String, ActiveConnection>>,
@@ -228,7 +254,9 @@ struct PendingCue {
 }
 
 impl ConnectionState {
+    #[allow(clippy::too_many_arguments)]
     fn new(
+        context: NodeContext,
         identity: &NodeIdentity,
         static_peers: &[StaticPeer],
         stop: Arc<AtomicBool>,
@@ -259,6 +287,8 @@ impl ConnectionState {
         refresh_status(&status, &expected, &HashMap::new());
         Arc::new(Self {
             local_node_id: identity.public_status().node_id.clone(),
+            context,
+            identity_status: identity.public_status().clone(),
             expected,
             stop,
             active: Mutex::new(HashMap::new()),
@@ -277,6 +307,45 @@ impl ConnectionState {
 
     fn should_initiate(&self, remote_node_id: &str) -> bool {
         self.local_node_id.as_str() < remote_node_id
+    }
+
+    /// Refuse anything aimed at a peer this node does not trust *right now*.
+    ///
+    /// The sender is the only place this can be enforced. Every receiving gate
+    /// is fail-closed against the receiver's own registry, which is correct and
+    /// is also why it cannot help here: revocation is local durable state and
+    /// the revoked node is never told, so it goes on seeing the revoker as an
+    /// active peer and goes on honouring what it is asked to do. A standing
+    /// session is not evidence of trust either -- it was authorized when it
+    /// opened and nothing re-checks it -- so the registry is read here, at the
+    /// moment of the ask.
+    ///
+    /// The codes are the frozen table's own, chosen the same way
+    /// `authorize_peer` chooses them: `revoked` for a withdrawn peer, and
+    /// `not_enrolled` for one that is unknown, still pending, or suspended. A
+    /// registry that will not open is `internal` and still a refusal: a node
+    /// that cannot read its own trust state cannot claim a peer is trusted.
+    fn require_active_peer(&self, peer_node_id: &str) -> Result<(), DirectServiceError> {
+        let refuse = |state: &'static str, protocol: TransportError| {
+            Err(DirectServiceError::PeerNotActive {
+                peer_node_id: peer_node_id.to_string(),
+                state,
+                protocol,
+            })
+        };
+        let Ok(registry) = NodeRegistry::open_existing(&self.context, &self.identity_status) else {
+            return refuse("unreadable", TransportError::Internal);
+        };
+        match registry.peer(peer_node_id) {
+            Ok(Some(peer)) => match peer.state {
+                PeerState::Active => Ok(()),
+                PeerState::Revoked => refuse("revoked", TransportError::Revoked),
+                PeerState::Pending => refuse("pending", TransportError::NotEnrolled),
+                PeerState::Suspended => refuse("suspended", TransportError::NotEnrolled),
+            },
+            Ok(None) => refuse("absent", TransportError::NotEnrolled),
+            Err(_) => refuse("unreadable", TransportError::Internal),
+        }
     }
 
     /// Hand a Cue to whichever thread holds the session with this peer.
@@ -526,6 +595,7 @@ impl DirectService {
             state: Mutex::new(AdmissionState::default()),
         });
         let state = ConnectionState::new(
+            context.clone(),
             &identity,
             &static_peers,
             Arc::clone(&stop),
@@ -1212,6 +1282,7 @@ impl DirectListener {
             state: Mutex::new(AdmissionState::default()),
         });
         let state = ConnectionState::new(
+            context.clone(),
             &identity,
             &[],
             Arc::clone(&stop),
@@ -1809,6 +1880,9 @@ impl CueDispatcher {
         if reason.is_empty() || reason.len() > crate::remote_cue::MAX_REASON_BYTES {
             return Err(TransportError::InvalidFrame.into());
         }
+        // Before a cue id is minted, so a refused instruction leaves no id an
+        // operator could mistake for one that was sent.
+        self.state.require_active_peer(peer_node_id)?;
         let mut cue_id_bytes = [0u8; 16];
         OsRng.fill_bytes(&mut cue_id_bytes);
         let cue_id = hex(&cue_id_bytes);
@@ -1886,6 +1960,10 @@ impl BaselineDispatcher {
         bodies: &[Vec<u8>],
         wait: Duration,
     ) -> Result<BaselinePushOutcome, DirectServiceError> {
+        // The same hole the Cue path had, and it matters more here: this is the
+        // path that supplies the code, so an ungated push would keep shipping
+        // executable content to a machine the fleet has just disowned.
+        self.state.require_active_peer(peer_node_id)?;
         let parsed = crate::baseline::SignedBaselineManifest::decode(manifest)
             .map_err(|_| TransportError::InvalidFrame)?;
         // Named from the manifest rather than taken from the caller, so the
@@ -2310,6 +2388,9 @@ fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness {
 fn error_to_transport(error: DirectServiceError) -> TransportError {
     match error {
         DirectServiceError::Protocol(error) => error,
+        // A refusal already carries a code from the frozen table; flattening it
+        // to `internal` would be the same loss this fix exists to stop.
+        DirectServiceError::PeerNotActive { protocol, .. } => protocol,
         _ => TransportError::Internal,
     }
 }
@@ -3177,6 +3258,32 @@ mod tests {
 
     static RESOLVER_TEST_LOCK: Mutex<()> = Mutex::new(());
 
+    /// A node context rooted in a temporary directory, for the tests that only
+    /// need `ConnectionState` to *have* one.
+    fn test_node_context(temp: &tempfile::TempDir) -> NodeContext {
+        node_context_under(temp.path())
+    }
+
+    fn node_context_under(root: &std::path::Path) -> NodeContext {
+        use crate::node::{NodePathOverrides, NodePlatform};
+        NodeContext::resolve_for(
+            NodePlatform::Linux,
+            NodePathOverrides::new(Some(root.join("state")), Some(root.join("node.toml"))),
+            true,
+            None,
+            None,
+            None,
+        )
+        .expect("resolve the node context")
+    }
+
+    fn test_identity_status(node_id: &str) -> crate::node_identity::NodeIdentityStatus {
+        crate::node_identity::NodeIdentityStatus {
+            public_key_hex: "00".repeat(32),
+            node_id: node_id.to_string(),
+        }
+    }
+
     #[test]
     fn retry_backoff_keeps_the_opening_ladder_then_holds_at_the_ceiling() {
         for (failures, expected) in RETRY_BACKOFF.iter().enumerate() {
@@ -3239,9 +3346,11 @@ mod tests {
             .expect("resolve the node context")
         }
 
-        fn fresh_state() -> Arc<ConnectionState> {
+        fn fresh_state(context: &NodeContext) -> Arc<ConnectionState> {
             Arc::new(ConnectionState {
                 local_node_id: "local-peer".to_string(),
+                context: context.clone(),
+                identity_status: test_identity_status("local-peer"),
                 expected: HashSet::new(),
                 stop: Arc::new(AtomicBool::new(false)),
                 active: Mutex::new(HashMap::new()),
@@ -3291,7 +3400,7 @@ mod tests {
         let context = context_for(&temp);
         let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
         LocalTransport::provision_new(&context, &identity).expect("provision transport material");
-        let state = fresh_state();
+        let state = fresh_state(&context);
         let mut held = Vec::new();
         while let Some(reservation) = state.admission.reserve_dial() {
             held.push(reservation);
@@ -3316,7 +3425,7 @@ mod tests {
             NodeIdentity::load_existing(&context).is_err(),
             "this case must fail on the identity load"
         );
-        let (error, opened) = dial_and_report(&context, &fresh_state());
+        let (error, opened) = dial_and_report(&context, &fresh_state(&context));
         assert_eq!(error, TransportError::Internal);
         assert!(
             !opened,
@@ -3336,7 +3445,7 @@ mod tests {
             LocalTransport::load_existing(&context, &identity).is_err(),
             "this case must fail on the transport load"
         );
-        let (error, opened) = dial_and_report(&context, &fresh_state());
+        let (error, opened) = dial_and_report(&context, &fresh_state(&context));
         assert_eq!(error, TransportError::Internal);
         assert!(
             !opened,
@@ -3362,7 +3471,7 @@ mod tests {
             NodeRegistry::open_existing(&context, identity.public_status()).is_err(),
             "this case must fail on the registry open"
         );
-        let (error, opened) = dial_and_report(&context, &fresh_state());
+        let (error, opened) = dial_and_report(&context, &fresh_state(&context));
         assert_eq!(error, TransportError::Internal);
         assert!(
             !opened,
@@ -3670,8 +3779,11 @@ mod tests {
             peers: Vec::new(),
             last_errors: BTreeMap::new(),
         }));
+        let temp = tempfile::TempDir::new().expect("temporary node root");
         let state = Arc::new(ConnectionState {
             local_node_id: "local-peer".to_string(),
+            context: test_node_context(&temp),
+            identity_status: test_identity_status("local-peer"),
             expected,
             stop: Arc::new(AtomicBool::new(false)),
             active: Mutex::new(HashMap::new()),
@@ -3793,6 +3905,206 @@ mod tests {
         let remaining = deadline_timeout(deadline).unwrap();
         assert!(remaining < CONNECT_TIMEOUT);
         assert!(remaining > Duration::from_secs(9));
+    }
+
+    /// A trusted node, a live session with it, and then the trust withdrawn.
+    ///
+    /// Returns the state the dispatchers read, the peer's node id, and the
+    /// sockets whose lifetime keeps the registered session "live". The stream
+    /// is never written to: `register` only wants something it can shut down,
+    /// and every gate under test refuses before a byte would be produced.
+    fn revoked_peer_with_a_standing_session(
+        temp: &tempfile::TempDir,
+    ) -> (Arc<ConnectionState>, String, (TcpStream, TcpStream)) {
+        let context = test_node_context(temp);
+        let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
+        LocalTransport::provision_new(&context, &identity).expect("provision transport material");
+        let registry =
+            NodeRegistry::open_existing(&context, identity.public_status()).expect("open registry");
+
+        // A real second identity, because the registry validates the key.
+        let peer_root = temp.path().join("peer");
+        std::fs::create_dir_all(&peer_root).expect("peer root");
+        let peer_identity = NodeIdentity::load_or_initialize(&node_context_under(&peer_root))
+            .expect("initialize the peer identity");
+        let peer_node_id = peer_identity.public_status().node_id.clone();
+        registry
+            .import_manual_peer(crate::node_registry::PeerRegistration {
+                node_id: peer_node_id.clone(),
+                public_key: peer_identity.public_status().public_key_hex.clone(),
+                role: crate::node_registry::PeerRole::Performer,
+                capabilities: vec!["notifications".to_string(), "remote-run".to_string()],
+                source: crate::node_registry::PeerSource::Manual,
+                actor: "test".to_string(),
+                reason: "trusted for this test".to_string(),
+            })
+            .expect("trust the peer");
+
+        let state = ConnectionState::new(
+            context,
+            &identity,
+            &[],
+            Arc::new(AtomicBool::new(false)),
+            true,
+            Arc::new(AdmissionController {
+                state: Mutex::new(AdmissionState::default()),
+            }),
+            None,
+            None,
+        );
+
+        // A live session with the peer, exactly as the running service holds
+        // one. This is the whole point: the "no session with that peer" guard
+        // is satisfied, so it cannot be what refuses the instruction.
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let client = TcpStream::connect(listener.local_addr().unwrap()).expect("connect");
+        let (server, _) = listener.accept().expect("accept");
+        let claim = state
+            .register(
+                &peer_node_id,
+                ConnectionDirection::Responder,
+                [9; 32],
+                &server,
+            )
+            .expect("register the session");
+        std::mem::forget(claim);
+        assert!(
+            state.active.lock().unwrap().contains_key(&peer_node_id),
+            "the session must be live before trust is withdrawn, or this proves nothing"
+        );
+
+        registry
+            .revoke_peer(&peer_node_id, "operator", "device retired")
+            .expect("revoke the peer");
+
+        (state, peer_node_id, (client, server))
+    }
+
+    /// A Cue must not reach a peer this node has revoked.
+    ///
+    /// This is the live two-VM failure: `node revoke` on the Conductor, and the
+    /// Conductor then dispatched a Cue that the revoked Performer accepted and
+    /// ran (`accepted:true, code:0`). Every receiving gate is fail-closed
+    /// against the *receiver's* registry, and the revoked node is never told it
+    /// was revoked, so it went on seeing an active Conductor and was right to.
+    /// The sender is the only place this can be enforced.
+    ///
+    /// Delete the `require_active_peer` call in `dispatch` and this returns
+    /// `Ok` with `answered: false` after the budget instead of refusing: the
+    /// instruction was queued for the session and only the fake peer's silence
+    /// stopped it.
+    #[test]
+    fn a_cue_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session() {
+        let temp = tempfile::TempDir::new().expect("temporary node root");
+        let (state, peer_node_id, _sockets) = revoked_peer_with_a_standing_session(&temp);
+        let dispatcher = CueDispatcher {
+            state: Arc::clone(&state),
+        };
+        assert!(
+            dispatcher.has_session(&peer_node_id),
+            "the dispatcher must still see a session, or the refusal proves nothing"
+        );
+
+        let error = dispatcher
+            .dispatch(&peer_node_id, "cue-ok.sh", "why", Duration::from_millis(50))
+            .expect_err("a Cue to a revoked peer must be refused");
+        match &error {
+            DirectServiceError::PeerNotActive {
+                peer_node_id: named,
+                state,
+                protocol,
+            } => {
+                assert_eq!(named, &peer_node_id);
+                assert_eq!(*state, "revoked");
+                assert_eq!(*protocol, TransportError::Revoked);
+            }
+            other => panic!("expected a refusal naming the revoked peer, got {other}"),
+        }
+        assert!(
+            state.outbox.lock().unwrap().is_empty(),
+            "a refused Cue must never reach the session thread's outbox"
+        );
+    }
+
+    /// And the same hole on the path that supplies the code.
+    ///
+    /// `push_baseline` had the identical shape: it checked the manifest and the
+    /// body count, then enqueued onto whatever session existed. Shipping a
+    /// signed script set to a machine the fleet has just disowned is the worse
+    /// of the two, because the Performer installs it and keeps it.
+    #[test]
+    fn a_baseline_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session() {
+        let temp = tempfile::TempDir::new().expect("temporary node root");
+        let (state, peer_node_id, _sockets) = revoked_peer_with_a_standing_session(&temp);
+        let dispatcher = BaselineDispatcher {
+            state: Arc::clone(&state),
+        };
+        assert!(
+            dispatcher.has_session(&peer_node_id),
+            "the dispatcher must still see a session, or the refusal proves nothing"
+        );
+
+        // Deliberately not a valid manifest: the gate has to refuse before the
+        // manifest is even looked at, so a caller cannot learn whether its
+        // bytes parsed by asking about a peer it is no longer allowed to reach.
+        let error = dispatcher
+            .push_baseline(
+                &peer_node_id,
+                b"not-a-manifest",
+                &[],
+                Duration::from_millis(50),
+            )
+            .expect_err("a baseline push to a revoked peer must be refused");
+        match &error {
+            DirectServiceError::PeerNotActive {
+                peer_node_id: named,
+                state,
+                protocol,
+            } => {
+                assert_eq!(named, &peer_node_id);
+                assert_eq!(*state, "revoked");
+                assert_eq!(*protocol, TransportError::Revoked);
+            }
+            other => panic!("expected a refusal naming the revoked peer, got {other}"),
+        }
+        assert!(
+            state.baseline_outbox.lock().unwrap().is_empty(),
+            "a refused baseline must never reach the session thread's outbox"
+        );
+    }
+
+    /// A peer this node never trusted is refused too, and said to be absent.
+    ///
+    /// The distinction is the operator's: `not_enrolled` says "you have not set
+    /// this up", `revoked` says "you took it away". Collapsing them would make
+    /// a typo in a node id look like a revocation.
+    #[test]
+    fn a_cue_to_an_unknown_peer_is_refused_as_not_enrolled() {
+        let temp = tempfile::TempDir::new().expect("temporary node root");
+        let (state, _peer_node_id, _sockets) = revoked_peer_with_a_standing_session(&temp);
+        let stranger_root = temp.path().join("stranger");
+        std::fs::create_dir_all(&stranger_root).expect("stranger root");
+        let stranger = NodeIdentity::load_or_initialize(&node_context_under(&stranger_root))
+            .expect("initialize a stranger identity")
+            .public_status()
+            .node_id
+            .clone();
+        let dispatcher = CueDispatcher { state };
+        let error = dispatcher
+            .dispatch(&stranger, "cue-ok.sh", "why", Duration::from_millis(50))
+            .expect_err("a Cue to an unknown peer must be refused");
+        match &error {
+            DirectServiceError::PeerNotActive {
+                peer_node_id: named,
+                state,
+                protocol,
+            } => {
+                assert_eq!(named, &stranger);
+                assert_eq!(*state, "absent");
+                assert_eq!(*protocol, TransportError::NotEnrolled);
+            }
+            other => panic!("expected a not-enrolled refusal, got {other}"),
+        }
     }
 
     fn blackhole_resolver_config() -> ResolverConfig {

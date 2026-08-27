@@ -435,6 +435,14 @@ surface:
 | Handshake retries after a refusal | 0; the dialer stops |
 | Reconnect attempts for an unreachable peer | Unbounded |
 | Reconnect backoff | 1 s, 2 s, 4 s, doubling to a 60 s ceiling, plus jitter |
+<!-- The three rows above replaced a single frozen `Handshake retries | 3`.
+     That row was false in both directions: a handshake refused on its merits
+     was never retried at all — nine of the eleven transport errors are fatal —
+     and the three attempts it named governed reachability, where they made a
+     peer unreachable for three seconds unrecoverable until restart. The
+     correction of the description needs no approval; the change from three
+     attempts to unbounded-with-a-ceiling is a behaviour change to a frozen
+     number and is **recorded here for owner review**. -->
 | Noise rekey trigger | 1,048,576 messages or 1 GiB per direction |
 
 The listener also enforces 256 global in-flight handshakes, 4 new handshakes

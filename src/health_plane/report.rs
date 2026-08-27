@@ -15,7 +15,7 @@ use super::bounds::{
     MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_QUEUE_DEPTH,
     MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES, MAX_STORED_SIGNAL_BYTES,
     MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, NOMINAL_PULSE_INTERVAL_SECONDS,
-    OPAQUE_ID_HEX_CHARS, SIGNAL_OUTBOX_CAPACITY, SIGNATURE_BYTES,
+    OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES, SIGNAL_OUTBOX_CAPACITY, SIGNATURE_BYTES,
 };
 use super::model::{HealthKind, RunFact, RunnerFact, RuntimeFact, SignalRecord};
 use serde_json::{json, Value};
@@ -48,9 +48,6 @@ const SIGNAL_ID_DOMAIN: &[u8] = b"omakure/health-signal-id/v1\0";
 /// the real encoded size without needing a signing key.
 const SIZE_PROBE_CREATED_AT: u64 = 1_700_000_000;
 const SESSION_ID_HEX_CHARS: usize = 64;
-
-/// The four runtime names the closed schema permits, in frozen sorted order.
-pub const RUNTIME_NAMES: [&str; MAX_RUNTIME_COUNT] = ["bash", "powershell", "python", "sh"];
 
 /// The static node facts a Performer reports, before revision assignment.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

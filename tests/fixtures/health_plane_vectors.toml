@@ -45,6 +45,9 @@ capability_allowlist = [
 capability_profile_pulse = "inventory-health"
 capability_signal = "notifications"
 
+# Closed-schema value allow-lists.
+runtime_names = ["bash", "powershell", "python", "sh"]
+
 # Message size bounds.
 max_canonical_profile_bytes = 2048
 max_canonical_pulse_bytes = 1280

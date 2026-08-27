@@ -30,6 +30,14 @@ pub const CAPABILITY_ALLOWLIST: [&str; 7] = [
     "ssh-credential-rotation",
 ];
 
+/// The frozen runtime-name allow-list, in the sorted order the closed schema
+/// requires.
+///
+/// Sender-side clamping and receiver-side validation must read the same list:
+/// a Profile built from one list and validated against another would be
+/// rejected on the wire with no way for either side to explain why.
+pub const RUNTIME_NAMES: [&str; MAX_RUNTIME_COUNT] = ["bash", "powershell", "python", "sh"];
+
 // Message size bounds, in canonical envelope bytes excluding the signature.
 pub const MAX_CANONICAL_PROFILE: usize = 2_048;
 pub const MAX_CANONICAL_PULSE: usize = 1_280;

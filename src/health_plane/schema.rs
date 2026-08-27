@@ -10,7 +10,7 @@ use super::bounds::{
     MAX_CAPABILITY_COUNT, MAX_DISPLAY_NAME_BYTES, MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES,
     MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES, MAX_JSON_DEPTH, MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH,
     MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES, MAX_STRING_BYTES, MAX_UPTIME_SECONDS,
-    MAX_WORKERS, MIN_EXIT_CODE, NODE_ID_BYTES, OPAQUE_ID_HEX_CHARS,
+    MAX_WORKERS, MIN_EXIT_CODE, NODE_ID_BYTES, OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES,
 };
 use super::model::{
     AckBody, ErrorBody, HealthBody, HealthCode, HealthKind, HealthPayload, ProfileSnapshot,
@@ -26,7 +26,6 @@ const RUN_STATES: [&str; 5] = [
     "dead_letter",
 ];
 const RUN_TRIGGERS: [&str; 4] = ["manual", "scheduled", "queue", "cue"];
-const RUNTIME_NAMES: [&str; 4] = ["bash", "powershell", "python", "sh"];
 const RUNNER_STATES: [&str; 5] = ["idle", "busy", "paused", "degraded", "stopped"];
 const SCHEDULER_STATES: [&str; 2] = ["running", "disabled"];
 const ARCHITECTURES: [&str; 3] = ["x86_64", "aarch64", "unknown"];

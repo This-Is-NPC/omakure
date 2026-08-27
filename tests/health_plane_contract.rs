@@ -54,6 +54,8 @@ const CAPABILITY_ALLOWLIST: [&str; 7] = [
 const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
 const CAPABILITY_SIGNAL: &str = "notifications";
 
+const RUNTIME_NAMES: [&str; 4] = ["bash", "powershell", "python", "sh"];
+
 const MAX_CANONICAL_PROFILE: usize = 2_048;
 const MAX_CANONICAL_PULSE: usize = 1_280;
 const MAX_CANONICAL_SIGNAL: usize = 1_024;
@@ -1208,7 +1210,7 @@ fn validate_body(
                     .get("available")
                     .and_then(Value::as_bool)
                     .ok_or(HealthCode::InvalidMessage)?;
-                let name = one_of(runtime.get("name"), &["bash", "powershell", "python", "sh"])?;
+                let name = one_of(runtime.get("name"), &RUNTIME_NAMES)?;
                 if name.as_str() <= previous_runtime {
                     return Err(HealthCode::InvalidMessage);
                 }
@@ -1540,6 +1542,22 @@ fn fixture_pins_every_frozen_bound() {
         CAPABILITY_PROFILE_PULSE
     );
     assert_eq!(text(&fixture, "capability_signal"), CAPABILITY_SIGNAL);
+
+    let runtimes: Vec<&str> = fixture["runtime_names"]
+        .as_array()
+        .expect("runtime names")
+        .iter()
+        .map(|value| value.as_str().expect("runtime name string"))
+        .collect();
+    assert_eq!(runtimes, RUNTIME_NAMES);
+    // The Performer clamps to this list and the receiver validates against it.
+    // Were the shipped constant to drift from the frozen contract, a Profile
+    // would be built from one allow-list and rejected against another.
+    assert_eq!(
+        omakure::health_plane::bounds::RUNTIME_NAMES,
+        RUNTIME_NAMES,
+        "the shipped runtime allow-list must equal the frozen contract"
+    );
     assert!(
         fixture["new_capability_required"]
             .as_bool()

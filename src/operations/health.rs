@@ -17,11 +17,11 @@
 //! `crate::health_plane::bounds`. None of them is chosen here.
 
 use crate::health_plane::bounds::{
-    MAX_PERFORMERS_PER_CONDUCTOR, SIGNAL_INBOX_CAPACITY, SIGNAL_RETENTION_SECONDS,
+    MAX_PERFORMERS_PER_CONDUCTOR, RUNTIME_NAMES, SIGNAL_INBOX_CAPACITY, SIGNAL_RETENTION_SECONDS,
 };
 use crate::health_plane::model::{Presence, RunFact, RunnerFact, RuntimeFact, SignalRecord};
 use crate::health_plane::report::{
-    opaque_run_id, sanitize_signal_run, HealthFactsSource, ProfileFacts, PulseFacts, RUNTIME_NAMES,
+    opaque_run_id, sanitize_signal_run, HealthFactsSource, ProfileFacts, PulseFacts,
 };
 use crate::health_plane::{FleetNode, HealthPlane};
 use crate::node::NodeContext;

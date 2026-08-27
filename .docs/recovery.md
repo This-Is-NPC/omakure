@@ -78,6 +78,75 @@ The two that look alike and are not:
 Reissue rather than reuse. A bundle is bound to one node id and one bootstrap
 pair, so a second delivery of the same bundle is refused by design.
 
+## A machine that drifted
+
+`omakure node health --json` on the Conductor answers this, and the answer is a
+comparison rather than a claim. A Performer reports the identity of the set it
+recorded installing beside the identity of that same set as it is on its disk
+now; the projection compares them and reports `drifted` when they differ.
+
+```bash
+omakure node health --json | jq '.data.baselines'
+omakure node health --json | jq '.data.nodes[] | select(.baseline_status == "drifted")'
+```
+
+Read the two states that are not drift before reaching for a fix:
+
+- **`unknown`** — that Performer has not reported a Profile yet. It is not a
+  statement about a baseline; check presence first.
+- **`none`** — it reported holding no baseline at all. It was never pushed one.
+  Push one; there is nothing to repair.
+
+Drift means the set that was installed is no longer what was installed —
+someone edited, replaced, or deleted a script the baseline named. A file that
+*no* baseline entry names is not part of the published set and does not make a
+machine drift; the identity is a hash of the set that was signed.
+
+Two ways back, and they answer different questions.
+
+**The set is right and the machine is wrong.** Push the same baseline again from
+the Conductor. It reinstalls the whole set or none of it, and the machine is in
+sync again on the next Profile.
+
+```bash
+omakure node baseline push --peer-node-id omk1_... --manifest ./baseline-v1.omb
+```
+
+**The set is wrong.** Put the machine back on the version before it, on the
+machine itself:
+
+```bash
+omakure node baseline rollback --confirmed
+curl -X POST -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
+  -H 'content-type: application/json' --data '{"confirmed":true}' \
+  http://127.0.0.1:7878/v1/node/baseline/rollback
+```
+
+What to expect:
+
+- The restored bytes are the **signed** ones this node retained, not whatever
+  was on disk when the next push replaced them, so a rollback also undoes drift
+  in the version it restores.
+- Exactly one previous version is kept, and this is a **swap**: the version
+  rolled away from becomes the retained previous, so rolling back twice returns
+  the machine to where it started.
+- `not_found` means nothing is retained. A node that has only ever been pushed
+  one baseline has no previous version, and refusing is the answer — there is
+  nothing to put back.
+- `forbidden` with `baseline_publisher_revoked` means the publisher that signed
+  the retained set is no longer one this node accepts code from. That is the
+  rollback doing its job: it is re-verified against today's publishers, so it
+  cannot walk a machine back onto code the fleet has disowned. Sign a
+  replacement under a current key and push it.
+- `forbidden` with `baseline_expired` on a rollback means the retained record
+  claims to have been installed before its own manifest was issued. An ordinary
+  expired manifest does **not** block a rollback: the validity window is
+  answered as of the instant this node accepted the set, because nothing is
+  being delivered.
+
+A refused rollback changes nothing. The machine stays on the baseline it was
+running, and the fleet view is unchanged.
+
 ## Identity replacement
 
 Use `node reset --confirmed` only when the machine identity and trust registry
@@ -112,5 +181,6 @@ trail; a corrupt stored Profile row being quarantined with the frozen
 Performer re-reporting a fresh Profile; revocation excluding a Performer from
 the fleet immediately and the bounded retention pass purging its Health Plane
 rows; and a replaced identity rejoining with a fresh Signal cursor while the old
-identity holds no Health Plane state. It does not claim Nostr,
-baselines, campaigns, or MDM behavior.
+identity holds no Health Plane state. It does not claim Nostr or campaigns;
+baseline push, drift, and verified rollback are proved separately on the
+packaged image by the `docker-smoke` CI job.

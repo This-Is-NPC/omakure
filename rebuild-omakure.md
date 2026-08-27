@@ -182,7 +182,8 @@ provide — scoped to operational management, **never surveillance**:
    `omakure node signals` / `GET /v1/node/signals`. Contracts and every
    quantitative bound are frozen in `.docs/health-plane-contract.md`. Baselines,
    dashboards, alert engines, arbitrary metrics, long-term telemetry, and remote
-   Cues are not included in this phase.
+   Cues are not included in this phase; the Profile was amended once since, by
+   item 8, to carry the two baseline facts drift reads.
 5. **Script execution** — Lua as an embedded first-class script kind; retain
    Bash, PowerShell, and Python through host runtimes.
 6. **Remote management — complete for authorized Cues** — a trusted Conductor
@@ -201,8 +202,22 @@ provide — scoped to operational management, **never surveillance**:
    already delivered by item 4 — `omarchy_version`, `omarchy_channel`,
    `runtimes` and `capabilities` ship — and further facts belong to item 8,
    where drift is what reads them.
-8. **MDM basics** — signed/versioned baseline push, drift status, rollback, and
-   lost-device revoke. Custody is already settled and shipped: publishing
+8. **MDM basics — complete** — signed/versioned baseline push, drift status, and
+   rollback. A publisher signs a versioned set of scripts, a Conductor delivers
+   it over the session it already holds, and a Performer installs the whole set
+   or none of it behind two independent authorities. Drift is a comparison, not
+   a claim: the Performer reports the identity it recorded installing beside the
+   identity recomputed from that set on its own disk, and the Conductor's fleet
+   projection reads `unknown`, `none`, `in_sync`, or `drifted` through
+   `omakure node health` / `GET /v1/node/health`. Each node retains exactly one
+   previous baseline and can be put back on it, re-verified against the
+   publishers it names today, so a publisher revoked since the install makes the
+   rollback fail. Contracts and every quantitative bound are frozen in
+   `.docs/baseline-delivery.md` and `.docs/health-plane-contract.md`. Campaigns,
+   fan-out, chunked delivery of a baseline larger than one push, and history
+   deeper than one retained version are not included in this phase.
+
+   Custody is already settled and shipped: publishing
    baselines and conducting a fleet are mutually exclusive on one node. A node
    holding a baseline publisher key cannot record a Performer peer, and a node
    with any non-revoked Performer peer cannot create one; the refusal lives in
@@ -213,6 +228,7 @@ provide — scoped to operational management, **never surveillance**:
    script and then order every Performer to run it. **Do not "fix" the code
    back to a single node that signs and conducts** — pushing a baseline is an
    operator action spanning two principals, not one node's privilege.
+
    The lost-device-revoke clause was already delivered by item 6 — `revoke_peer`
    writes the revocation first and never conditionally on the run log, and
    cancels the revoked peer's in-flight Cue runs, the executor heartbeat killing
@@ -242,6 +258,10 @@ provide — scoped to operational management, **never surveillance**:
   and I can push a signed baseline to that fleet — all from CLI/HTTP. The
   baseline is signed on a publisher node and the run is ordered from the
   Conductor, and those are deliberately not the same node.
+- One view tells me which machines are running what I pushed and which have
+  drifted, and a drifted machine can be put back on the version before it
+  without the publisher having to sign anything new — but not if that publisher
+  has since been revoked.
 - An unattended machine joins because its public install config and signed
   enrollment data are present: the target service generates its identity on
   first start and completes enrollment without a manual step after boot. An

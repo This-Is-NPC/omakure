@@ -127,9 +127,12 @@ Aligned with what market MDM tools (Omadium, Hexnode, Fleet, ManageEngine)
 provide — scoped to operational management, **never surveillance**:
 
 - **Remote execution** — trigger scripts/runs on a Performer from the Conductor.
-- **Deployment baseline** — push environments, schedules, and scripts from
-  Conductor to Performers so machines stay in sync. Baselines are signed,
+- **Deployment baseline** — an operator pushes environments, schedules, and
+  scripts to Performers so machines stay in sync. Baselines are signed,
   versioned, previewable, auditable, and recoverable when application fails.
+  The signing key lives on a **baseline publisher**, which is never the same
+  node as the Conductor that orders the run — see the custody note under item
+  8.
 - **Lost-device basics** — revoke a node's access / disable its runner if a
   machine goes missing; verify disk encryption status.
 - **Status & health** — as above.
@@ -199,7 +202,17 @@ provide — scoped to operational management, **never surveillance**:
    `runtimes` and `capabilities` ship — and further facts belong to item 8,
    where drift is what reads them.
 8. **MDM basics** — signed/versioned baseline push, drift status, rollback, and
-   lost-device revoke.
+   lost-device revoke. Custody is already settled and shipped: publishing
+   baselines and conducting a fleet are mutually exclusive on one node. A node
+   holding a baseline publisher key cannot record a Performer peer, and a node
+   with any non-revoked Performer peer cannot create one; the refusal lives in
+   the registry that records trust, so no command wiring can route around it.
+   The reason is item 6's: a Cue "names a script and never carries one" so that
+   ordering execution and supplying what gets executed are two powers held by
+   two principals. One key that did both would let a single compromise write a
+   script and then order every Performer to run it. **Do not "fix" the code
+   back to a single node that signs and conducts** — pushing a baseline is an
+   operator action spanning two principals, not one node's privilege.
 9. **Install automation** — systemd, launchd, and Windows daemon bootstrap.
 10. **Test & doc** — heterogeneous fleet simulation, install-config tests,
     security failure tests, platform release validation, and product docs.
@@ -219,8 +232,10 @@ provide — scoped to operational management, **never surveillance**:
   Linux, macOS, and Windows Performers over the same protocol and config model.
 - On my LAN, a new Omakure node shows up automatically; I delegate one as
   Conductor and see every node's health in one place.
-- I can run a script on any node from the Conductor, push a baseline, and revoke
-  a lost machine — all from CLI/HTTP.
+- I can run a script on any node from the Conductor and revoke a lost machine,
+  and I can push a signed baseline to that fleet — all from CLI/HTTP. The
+  baseline is signed on a publisher node and the run is ordered from the
+  Conductor, and those are deliberately not the same node.
 - An unattended machine joins because its public install config and signed
   enrollment data are present: the target service generates its identity on
   first start and completes enrollment without a manual step after boot. An
@@ -237,7 +252,7 @@ common MDM tools:
 |---|---|---|
 | IdP login (Okta/Entra/Google) | Out of scope | OS-level login, not node management. Omakure uses key-based node identity. |
 | Remote help / support access | Partial | Remote script execution (Cue) + capability allow-list; not interactive screen-share. |
-| Deployment baseline | Yes | Baseline push (environments/schedules/scripts) + Pulse "in sync". |
+| Deployment baseline | Yes | Baseline push (environments/schedules/scripts) + Pulse "in sync". Signing key held by a baseline publisher, which cannot also be a Conductor. |
 | Lost-device basics | Yes | `revoke` Cue + Profile reports disk encryption. |
 | No surveillance | Yes | Same principle: only operational health. |
 

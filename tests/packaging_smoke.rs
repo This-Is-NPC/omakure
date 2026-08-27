@@ -222,6 +222,72 @@ fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results(
     assert!(release.contains("816 passed"));
 }
 
+/// What item 10 leaves unproven has to stay named where a reader looks, and
+/// stay precise about what ships versus what is proven.
+///
+/// The installers really do write a systemd unit, a launchd plist, and a
+/// Windows service; a record that softened into "install automation does not
+/// ship" would be false in the other direction, so the plan is held to naming
+/// the three artifacts as well as the gap. And the fleet-simulation claim that
+/// used to assert macOS and Windows coverage is pinned as gone, because a
+/// paragraph added elsewhere does not retract a sentence left standing.
+#[test]
+fn the_unproven_install_and_platform_gaps_are_named_rather_than_implied() {
+    // Matched on the sentence rather than on the line wrapping, so reflowing a
+    // paragraph is not a failure and deleting the statement is.
+    fn unwrapped(rel: &str) -> String {
+        read(rel).split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    let plan = unwrapped("rebuild-omakure.md");
+    for needle in [
+        "macOS and Windows nodes cannot be exercised on this machine.",
+        "Install execution has no proof.",
+        "Nothing anywhere runs the install path, registers a real service, starts one, or has observed a machine boot into a running node",
+        // What ships, named exactly, so the gap cannot be overstated into the
+        // opposite falsehood that the automation is missing.
+        "ExecStart=${binary} node serve",
+        "hands it to `launchctl bootstrap`",
+        "`install.ps1` registers `OmakureNode` through `sc.exe`",
+        "Do not reach for a privileged container to close this.",
+        "every compose harness sets `allow_remote_cues = false`",
+    ] {
+        assert!(
+            plan.contains(needle),
+            "rebuild-omakure.md must still name {needle:?}"
+        );
+    }
+    assert!(
+        !plan.contains("Fleet simulation covers heterogeneous Omarchy, generic Linux, macOS, and"),
+        "the retracted fleet-simulation claim must not be left standing beside its correction"
+    );
+
+    let release = unwrapped(".docs/headless-release.md");
+    assert!(
+        release.contains("nothing runs the install path of `install.sh`, and `install.ps1` is never executed at all"),
+        "headless-release.md must say a release does not prove the install path"
+    );
+
+    let installation = unwrapped(".docs/installation.md");
+    for needle in [
+        "Nothing anywhere runs the install path, registers a real service, starts one, or has observed a machine boot into a running node.",
+        "`install.ps1` is never executed on any platform.",
+        "which is not a service manager starting it at boot",
+        "systemctl status omakure-node",
+        "launchctl print system/com.omakure.node",
+        "sc.exe query OmakureNode",
+    ] {
+        assert!(
+            installation.contains(needle),
+            ".docs/installation.md must still name {needle:?}"
+        );
+    }
+    assert!(
+        !installation.contains("covered by source/static packaging tests and hosted CI"),
+        "installation.md must not still credit hosted CI with running the installers"
+    );
+}
+
 #[test]
 fn deployment_doc_covers_required_topics_and_multi_token() {
     let doc = read(".docs/deployment.md");

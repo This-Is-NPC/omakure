@@ -84,6 +84,13 @@ release archive contract is still binary-only.
 Hosted Linux, macOS, and Windows CI/release runs remain pending. They are not
 claimed by this local snapshot; task #2678 remains blocked on that evidence.
 
+Neither a hosted run nor a local one would close the install gap: nothing runs
+the install path of `install.sh`, and `install.ps1` is never executed at all. A
+release ships a binary and the automation that registers it as a machine
+service; nothing has observed a machine boot into a running node. See the service section of
+`.docs/installation.md` for what is and is not checked, and roadmap item 10 for
+why the evidence needs a throwaway machine.
+
 The snapshot above predates the version-only `0.3.0` bump. The resulting local
 Linux `v0.3.0` release binary measured 8,812,016 bytes and its binary-only
 archive measured 3,379,153 bytes; these figures are not substituted into the

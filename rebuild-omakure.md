@@ -155,9 +155,13 @@ provide — scoped to operational management, **never surveillance**:
   identity on the target service's first start. Manual pairing and the same
   public-data provisioning contract remain available on every supported
   platform.
-- Fleet simulation covers heterogeneous Omarchy, generic Linux, macOS, and
-  Windows nodes, including offline reconnect, replay rejection, revocation,
-  and duplicate Cue delivery.
+- Fleet simulation runs Linux container nodes on one Docker host. It covers
+  discovery, manual and signed-bundle enrollment, offline reconnect on the
+  dialer that watched the peer leave, replay rejection, and revocation. It does
+  not cover macOS or Windows nodes, which a Linux host cannot run, and it does
+  not cover *duplicate* Cue delivery: one Cue crosses containers in CI, but no
+  compose harness enables remote Cues and no delivery is ever repeated. Item 10
+  names both gaps rather than leaving them to be discovered.
 
 ## Direction by phase (feature view, not tasks)
 
@@ -236,8 +240,54 @@ provide — scoped to operational management, **never surveillance**:
    the work that trust already caused belong to the plane that granted it, so
    this item carries baseline push, drift, and rollback only.
 9. **Install automation** — systemd, launchd, and Windows daemon bootstrap.
-10. **Test & doc** — heterogeneous fleet simulation, install-config tests,
-    security failure tests, platform release validation, and product docs.
+10. **Test & doc — complete for what one Linux host with Docker can prove** —
+    fleet simulation, install-config tests, security failure tests, and product
+    docs ship, and the multi-container transport and Health Plane gates in
+    `.github/workflows/ci.yml` are the canonical runs. Three limits are named
+    here rather than left for a reader to find, because each one is a place
+    where the evidence stops short of the claim above it.
+
+    **macOS and Windows nodes cannot be exercised on this machine.** It is Linux
+    with Docker, and a Linux kernel hosts neither. The workflows declare macOS
+    and Windows jobs that build and run the suite natively, but no hosted run
+    has been observed and recorded — `.docs/headless-release.md` has said so
+    since task #2678 and still does. Every cross-platform statement in this
+    document therefore rests on source written for those targets and on tests
+    that have run only on Linux. That is an environment limit, not a
+    scope choice, and no amount of local work removes it.
+
+    **Install execution has no proof.** The automation ships and is real:
+    `install.sh` writes `/etc/systemd/system/omakure-node.service` carrying
+    `ExecStart=${binary} node serve`, writes
+    `/Library/LaunchDaemons/com.omakure.node.plist` and hands it to `launchctl
+    bootstrap`, and `install.ps1` registers `OmakureNode` through `sc.exe`.
+    `tests/packaging_smoke.rs` asserts all of it — and asserts it *statically*,
+    by reading the installer sources. One test does execute an installer, and
+    only its uninstall path, with `systemctl` replaced by a shim that records
+    what it was asked. Nothing anywhere runs the install path, registers a real
+    service, starts one, or has observed a machine boot into a running node; the
+    Docker gates start `node serve` as a container entrypoint, which is not a
+    service manager starting it at boot. Saying the automation does not ship would be false;
+    saying it is proven would also be false. The only honest evidence is a
+    throwaway machine — `systemd-nspawn --boot`, qemu, or a CI runner that is
+    discarded after the run. **Do not reach for a privileged container to close
+    this.** It was tried here with `--privileged --cgroupns=host` and
+    `/sbin/init`: a container systemd sharing the host's cgroup namespace does
+    not see itself as isolated, signalled processes it judged orphaned, and
+    killed the host's Wayland session leader twice. A container sharing a host
+    namespace is not a machine boot and cannot stand in for one.
+
+    **Duplicate Cue delivery is proven at both dedupe layers and on no live
+    node.** The in-session guard is `seen_cue_ids`, and the durable one is
+    `runs.run_id`, whose primary key is derived from the cue id — including the
+    cross-session redelivery where that key is the only guard. All of it is
+    covered by tests in `src/remote_cue.rs`, all of them in-process. One Cue does
+    travel between containers — `.github/workflows/ci.yml` carries an authorized
+    Cue end to end on the packaged image — but exactly one, and every compose
+    harness sets `allow_remote_cues = false`. `omakure node cue` has no flag for
+    the cue id either, so the same Cue cannot be dispatched twice from the
+    product surface at all. Closing this needs a way to redeliver one cue id,
+    which is a product decision rather than a test, so it stays named here.
 11. **Omarchy desktop surfaces** — hooks, notification delivery, and optional
     Shell/Menu integrations. Split out of item 7 rather than declared done with
     it. Hooks are a second script-execution surface with their own trust model

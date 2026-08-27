@@ -80,9 +80,37 @@ Reinstalling updates the binary and service definition but preserves
 `node.toml`, `identity.key`, `node.sqlite`, and registration. Remove only the
 service with `--uninstall-node-service`; deleting node state additionally
 requires `--uninstall-node-state --confirmed` (or the matching PowerShell
-switches). Platform service registration and permission checks are covered by
-source/static packaging tests and hosted CI; local validation here does not
-claim macOS or Windows execution.
+switches).
+
+### What is proven about the service, and what is not
+
+`tests/packaging_smoke.rs` reads the installer sources and asserts that the
+systemd unit, the launchd plist, and the `sc.exe` registration are written the
+way this page describes, with the node-state paths and ACLs it names. That is a
+static check of what the installers *say*.
+
+Only one test executes an installer at all, and only its uninstall path:
+`install.sh --uninstall-node-service` runs with `systemctl` replaced by a shim
+that records what it was asked and does nothing. Nothing anywhere runs the
+install path, registers a real service, starts one, or has observed a machine
+boot into a running node. The Docker gates start `node serve` as a container
+entrypoint, which is not a service manager starting it at boot, and the macOS
+and Windows CI jobs run the test suite without touching either installer.
+`install.ps1` is never executed on any platform.
+
+Treat the first machine-service install on a new host as unverified and confirm
+it yourself:
+
+```bash
+systemctl status omakure-node            # Linux
+launchctl print system/com.omakure.node  # macOS
+sc.exe query OmakureNode                 # Windows
+```
+
+Getting real evidence needs a disposable machine — `systemd-nspawn --boot`,
+a VM, or a CI runner discarded after the run. A privileged container sharing
+the host's cgroup or PID namespace is not a substitute: its init does not see
+itself as isolated and will signal host processes it judges orphaned.
 
 ## Unattended Signed-Bundle Enrollment
 

@@ -79,7 +79,18 @@ impl BaselinePublisher {
     /// under the key the fleet records, so every Performer's next drift answer
     /// becomes unanswerable at once. That is a fleet-wide event, not a side
     /// effect of running a command twice.
-    pub fn create(context: &NodeContext) -> Result<Self, PublisherError> {
+    ///
+    /// Also refuses on a node that already holds Conductor authority. The
+    /// registry is asked *after* the key is on disk, not before, and that
+    /// order is the whole race argument: the registry's own trust writes stat
+    /// this file inside their transactions, so once it exists no activation
+    /// can commit without seeing it, and if one committed first this call
+    /// finds it and takes the key back off disk. The two can never both
+    /// succeed.
+    pub fn create(
+        context: &NodeContext,
+        registry: &crate::node_registry::NodeRegistry,
+    ) -> Result<Self, PublisherError> {
         context.ensure_state_directory()?;
         let path = context.publisher_key_path();
         if fs::symlink_metadata(&path).is_ok() {
@@ -89,6 +100,10 @@ impl BaselinePublisher {
         }
         let signing_key = SigningKey::generate();
         crate::node::write_atomic_new(&path, signing_key.to_bytes().as_ref(), 0o600)?;
+        if let Err(error) = registry.reject_conductor_authority() {
+            let _ = fs::remove_file(&path);
+            return Err(PublisherError::State(error.to_string()));
+        }
         context.validate_private_file(&path)?;
         Ok(Self { signing_key })
     }
@@ -225,6 +240,18 @@ mod tests {
         .expect("resolve node context")
     }
 
+    /// A publisher needs the trust store to ask whether this node already
+    /// conducts anyone, so every custody test opens one.
+    fn registry(context: &NodeContext) -> crate::node_registry::NodeRegistry {
+        let identity =
+            crate::node_identity::NodeIdentity::load_or_initialize(context).expect("identity");
+        crate::node_registry::NodeRegistry::open_for_initialization(
+            context,
+            identity.public_status(),
+        )
+        .expect("registry")
+    }
+
     fn scripts() -> Vec<(String, Vec<u8>)> {
         vec![
             ("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec()),
@@ -238,11 +265,12 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let context = node_context(dir.path());
 
-        let first = BaselinePublisher::create(&context).expect("create the publisher");
+        let first =
+            BaselinePublisher::create(&context, &registry(&context)).expect("create the publisher");
         let before = first.public_key();
 
         assert!(
-            BaselinePublisher::create(&context).is_err(),
+            BaselinePublisher::create(&context, &registry(&context)).is_err(),
             "a second create must refuse; rotation orphans every signed baseline"
         );
         assert_eq!(
@@ -259,7 +287,7 @@ mod tests {
     fn the_key_id_is_a_function_of_the_public_key() {
         let dir = tempfile::tempdir().expect("tempdir");
         let context = node_context(dir.path());
-        let publisher = BaselinePublisher::create(&context).expect("create");
+        let publisher = BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
         assert_eq!(
             publisher.key_id(),
@@ -272,7 +300,7 @@ mod tests {
         let other_context = node_context(other_dir.path());
         assert_ne!(
             publisher.key_id(),
-            BaselinePublisher::create(&other_context)
+            BaselinePublisher::create(&other_context, &registry(&other_context))
                 .expect("create")
                 .key_id(),
             "two publishers must not share an id"
@@ -288,7 +316,8 @@ mod tests {
 
         let authority =
             crate::enrollment_authority::EnrollmentAuthority::create(&context).expect("authority");
-        let publisher = BaselinePublisher::create(&context).expect("publisher");
+        let publisher =
+            BaselinePublisher::create(&context, &registry(&context)).expect("publisher");
 
         assert_ne!(
             authority.public_key(),
@@ -325,7 +354,7 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("tempdir");
         let context = node_context(dir.path());
-        BaselinePublisher::create(&context).expect("create");
+        BaselinePublisher::create(&context, &registry(&context)).expect("create");
         assert!(BaselinePublisher::load_existing(&context).is_ok());
 
         let path = context.publisher_key_path();
@@ -356,7 +385,8 @@ mod tests {
 
         let decoy_dir = tempfile::tempdir().expect("tempdir");
         let decoy_context = node_context(decoy_dir.path());
-        let decoy = BaselinePublisher::create(&decoy_context).expect("a real key elsewhere");
+        let decoy = BaselinePublisher::create(&decoy_context, &registry(&decoy_context))
+            .expect("a real key elsewhere");
         let elsewhere = decoy_context.publisher_key_path();
         std::fs::set_permissions(&elsewhere, std::fs::Permissions::from_mode(0o600)).expect("0600");
         drop(decoy);
@@ -367,7 +397,7 @@ mod tests {
             "a symlink must not redirect the publisher key"
         );
         assert!(
-            BaselinePublisher::create(&context).is_err(),
+            BaselinePublisher::create(&context, &registry(&context)).is_err(),
             "create must not overwrite through a symlink either"
         );
     }
@@ -383,7 +413,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let context = node_context(dir.path());
         crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
-        BaselinePublisher::create(&context).expect("create");
+        BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
         assert!(
             context
@@ -408,7 +438,7 @@ mod tests {
     fn a_published_baseline_verifies_under_this_publishers_own_record() {
         let dir = tempfile::tempdir().expect("tempdir");
         let context = node_context(dir.path());
-        let publisher = BaselinePublisher::create(&context).expect("create");
+        let publisher = BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
         let encoded = publisher
             .publish("acme".to_string(), &scripts(), ISSUED_AT, EXPIRES_AT)
@@ -428,7 +458,12 @@ mod tests {
             .expect("a fleet recording this publisher must accept what it signs");
 
         let other_dir = tempfile::tempdir().expect("tempdir");
-        let other = BaselinePublisher::create(&node_context(other_dir.path())).expect("create");
+        let other = {
+            let other_context = node_context(other_dir.path());
+            let other_registry = registry(&other_context);
+            BaselinePublisher::create(&other_context, &other_registry)
+        }
+        .expect("create");
         assert!(
             manifest
                 .verify(

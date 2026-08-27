@@ -1682,6 +1682,10 @@ pub(crate) fn map_registry_error(error: RegistryError) -> OperationError {
             OperationErrorCode::Conflict,
             "an active conductor already exists",
         ),
+        RegistryError::PublisherConductorConflict => OperationError::new(
+            OperationErrorCode::Conflict,
+            "a baseline publisher cannot also be a conductor",
+        ),
         RegistryError::BundleCapacity => {
             registry_error("signed enrollment replay capacity is exhausted")
         }

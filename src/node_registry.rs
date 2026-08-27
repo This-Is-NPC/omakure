@@ -125,6 +125,8 @@ pub enum RegistryError {
     BootstrapProofConsumed,
     #[error("an active conductor already exists")]
     ConductorConflict,
+    #[error("a baseline publisher cannot also be a conductor")]
+    PublisherConductorConflict,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,6 +283,10 @@ pub struct AuditEvent {
 #[derive(Debug, Clone)]
 pub struct NodeRegistry {
     path: PathBuf,
+    /// Consulted, never written. A node is a baseline publisher exactly when
+    /// this file exists, so the trust writes below read the same fact the
+    /// publisher key custody enforces rather than a copy of it that could drift.
+    publisher_key_path: PathBuf,
     local_node_id: String,
     local_public_key: String,
 }
@@ -326,6 +332,7 @@ impl NodeRegistry {
         let (node_id, public_key) = validate_identity(identity)?;
         let registry = Self {
             path,
+            publisher_key_path: context.publisher_key_path(),
             local_node_id: node_id,
             local_public_key: public_key,
         };
@@ -380,6 +387,7 @@ impl NodeRegistry {
         validate_database_security(context, &path)?;
         let registry = Self {
             path,
+            publisher_key_path: context.publisher_key_path(),
             local_node_id: node_id,
             local_public_key: public_key,
         };
@@ -398,6 +406,58 @@ impl NodeRegistry {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Whether this node holds the key that signs baselines.
+    ///
+    /// Item 6 built a Cue that "names a script and never carries one" so that
+    /// ordering execution and supplying what gets executed are two different
+    /// powers. A node that could do both would hand a single compromise the
+    /// ability to write a script and then order every Performer to run it,
+    /// which is the separation gone. So the two are refused together here, in
+    /// the store that records trust, rather than left to whoever wires the
+    /// commands.
+    fn holds_publisher_key(&self) -> bool {
+        std::fs::symlink_metadata(&self.publisher_key_path)
+            .is_ok_and(|metadata| metadata.file_type().is_file())
+    }
+
+    /// Refuse to record a Performer peer — this node acting as their Conductor
+    /// — while this node also publishes baselines.
+    ///
+    /// Called inside each trust transaction rather than before it, so a
+    /// publisher key appearing concurrently cannot slip between the check and
+    /// the write: the key is on disk before `BaselinePublisher::create` opens
+    /// its own transaction, and SQLite serializes the two.
+    fn reject_publisher_conflict(&self, role: PeerRole) -> Result<(), RegistryError> {
+        if role == PeerRole::Performer && self.holds_publisher_key() {
+            return Err(RegistryError::PublisherConductorConflict);
+        }
+        Ok(())
+    }
+
+    /// Refuse to become a baseline publisher while this node holds Conductor
+    /// authority over anyone.
+    ///
+    /// The other direction of the same rule. "Conductor authority" is any peer
+    /// recorded as a Performer that has not been revoked: a suspended peer can
+    /// be reactivated and a pending one approved, so only revocation actually
+    /// ends the relationship.
+    pub(crate) fn reject_conductor_authority(&self) -> Result<(), RegistryError> {
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let holds: i64 = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM peers WHERE role = 'performer' AND state <> 'revoked')",
+                [],
+                |row| row.get(0),
+            )?;
+            transaction.commit()?;
+            if holds != 0 {
+                return Err(RegistryError::PublisherConductorConflict);
+            }
+            Ok(())
+        })
     }
 
     pub(crate) fn bootstrap_proof_consumed(
@@ -555,6 +615,7 @@ impl NodeRegistry {
             if public_key_exists(&transaction, &registration.public_key)? {
                 return Err(RegistryError::Duplicate(registration.public_key.clone()));
             }
+            self.reject_publisher_conflict(registration.role)?;
             transaction.execute(
                 "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
                  VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?5, NULL, ?6)",
@@ -741,6 +802,7 @@ impl NodeRegistry {
                 )?;
                 return Err(RegistryError::EnrollmentConflict);
             }
+            self.reject_publisher_conflict(registration.role)?;
             transaction.execute(
                 "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
                  VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?5, NULL, 'manual')",
@@ -979,6 +1041,7 @@ impl NodeRegistry {
             {
                 return Err(RegistryError::BundleConflict);
             }
+            self.reject_publisher_conflict(registration.role)?;
             if registration.role == PeerRole::Conductor
                 && transaction.query_row(
                     "SELECT EXISTS(SELECT 1 FROM peers WHERE role = 'conductor' AND state = 'active')",
@@ -1350,6 +1413,7 @@ impl NodeRegistry {
             {
                 return Err(RegistryError::Duplicate(registration.node_id.clone()));
             }
+            self.reject_publisher_conflict(registration.role)?;
             transaction.execute(
                 "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
                  VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?5, NULL, ?6)",
@@ -1561,6 +1625,7 @@ impl NodeRegistry {
             {
                 return Err(RegistryError::Duplicate(replacement.node_id.clone()));
             }
+            self.reject_publisher_conflict(replacement.role)?;
             transaction.execute(
                 "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
                  VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?5, NULL, ?6)",
@@ -3094,6 +3159,9 @@ fn bundle_failure_detail(error: &RegistryError) -> &'static str {
         RegistryError::BundleReplay => "signed enrollment bundle was already consumed",
         RegistryError::BootstrapProofConsumed => "bootstrap proof was already consumed",
         RegistryError::ConductorConflict => "an active conductor already exists",
+        RegistryError::PublisherConductorConflict => {
+            "this node publishes baselines and cannot also conduct"
+        }
         RegistryError::BundleConflict => "signed enrollment conflicts with existing trust state",
         RegistryError::Revoked(_) => "signed enrollment identity is retained as revoked",
         RegistryError::BundleCapacity => "signed enrollment capacity is exhausted",
@@ -4639,6 +4707,211 @@ mod tests {
             actor: "operator".to_string(),
             reason: "test decision".to_string(),
         }
+    }
+
+    /// A second identity, to stand in for the peer being trusted.
+    fn remote_identity(temp: &TempDir) -> (NodeContext, NodeIdentity) {
+        let remote_context = NodeContext::resolve_for(
+            NodePlatform::Linux,
+            NodePathOverrides::new(
+                Some(temp.path().join("remote-state")),
+                Some(temp.path().join("remote-node.toml")),
+            ),
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let identity = NodeIdentity::load_or_initialize(&remote_context).unwrap();
+        (remote_context, identity)
+    }
+
+    const REMOTE_TRANSPORT_PUBLIC: [u8; 32] = [7; 32];
+
+    fn remote_certificate(
+        identity: &NodeIdentity,
+        now: u64,
+    ) -> crate::direct_transport::TransportCertificate {
+        crate::direct_transport::TransportCertificate::issue(
+            identity,
+            REMOTE_TRANSPORT_PUBLIC,
+            1,
+            now,
+            now + 600,
+            [1; 16],
+        )
+        .unwrap()
+    }
+
+    /// Direction one: a node that signs baselines may not take Conductor
+    /// authority over anyone, on any path that records a Performer.
+    ///
+    /// Every entry point is exercised rather than the shared helper, because
+    /// the helper being right is worth nothing if one path forgets to call it.
+    #[test]
+    fn a_baseline_publisher_is_refused_conductor_authority_on_every_path() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        crate::baseline_publisher::BaselinePublisher::create(&context, &registry).unwrap();
+
+        assert!(matches!(
+            registry.register_pending(registration(&identity, 3)),
+            Err(RegistryError::PublisherConductorConflict)
+        ));
+        assert!(matches!(
+            registry.import_manual_peer(registration(&identity, 4)),
+            Err(RegistryError::PublisherConductorConflict)
+        ));
+
+        let now = crate::enrollment::now_seconds();
+        let (_remote_context, remote) = remote_identity(&temp);
+        let certificate = remote_certificate(&remote, now);
+        let offer = ManualEnrollmentRequest::create(
+            &remote,
+            REMOTE_TRANSPORT_PUBLIC,
+            crate::enrollment::EnrollmentRole::Performer,
+            vec!["remote-run".to_string()],
+            now,
+            600,
+        )
+        .unwrap();
+        assert!(matches!(
+            registry.stage_manual_enrollment(
+                &offer.request,
+                certificate.as_bytes(),
+                "operator",
+                "staging a performer",
+                now,
+            ),
+            Err(RegistryError::PublisherConductorConflict)
+        ));
+
+        let bundle = SignedEnrollmentBundle::sign_with_material(
+            &[5u8; 32],
+            [2; crate::enrollment::REQUEST_ID_BYTES],
+            [8; crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES],
+            "omakure".to_string(),
+            identity.public_status().node_id.clone(),
+            remote.public_status().node_id.clone(),
+            crate::enrollment::parse_hex(&remote.public_status().public_key_hex, 32)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            REMOTE_TRANSPORT_PUBLIC,
+            *certificate.as_bytes(),
+            crate::enrollment::EnrollmentRole::Performer,
+            vec!["remote-run".to_string()],
+            now,
+            now + 600,
+        )
+        .unwrap();
+        assert!(matches!(
+            registry.activate_signed_bundle(
+                &bundle,
+                "operator",
+                "activating a performer",
+                now,
+                &[1; 32],
+                &[2; 32],
+            ),
+            Err(RegistryError::PublisherConductorConflict)
+        ));
+
+        // `replace_peer` needs something to replace, and only a Conductor can
+        // be there while a publisher key is held.
+        let mut conductor = registration(&identity, 6);
+        conductor.role = PeerRole::Conductor;
+        registry.register_pending(conductor.clone()).unwrap();
+        let mut successor = registration(&identity, 7);
+        successor.role = PeerRole::Performer;
+        assert!(matches!(
+            registry.replace_peer(&conductor.node_id, successor),
+            Err(RegistryError::PublisherConductorConflict)
+        ));
+
+        assert!(
+            registry
+                .peers()
+                .unwrap()
+                .iter()
+                .all(|peer| peer.role == PeerRole::Conductor),
+            "no refused path may have left a Performer behind"
+        );
+    }
+
+    /// Direction two, and the other order: a node that already conducts someone
+    /// cannot become a publisher — and the refused attempt leaves no key.
+    #[test]
+    fn a_conductor_is_refused_a_publisher_key_and_keeps_none() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        let performer = registry
+            .register_pending(registration(&identity, 3))
+            .unwrap();
+        assert_eq!(performer.role, PeerRole::Performer);
+
+        assert!(
+            crate::baseline_publisher::BaselinePublisher::create(&context, &registry).is_err(),
+            "a node that conducts a Performer must not become a publisher"
+        );
+        assert!(
+            !context.publisher_key_path().exists(),
+            "a refused create must not leave a key on disk for a later load to find"
+        );
+        assert!(
+            context.validate_existing_state_contents().unwrap(),
+            "and must not leave a stray temporary file in the state directory"
+        );
+    }
+
+    /// The refusal is about the combination, not about publishers.
+    ///
+    /// Without this the whole rule could have been "a publisher records no
+    /// peers", which would be a different and much blunter thing.
+    #[test]
+    fn a_publisher_may_still_record_the_conductor_it_answers_to() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        crate::baseline_publisher::BaselinePublisher::create(&context, &registry).unwrap();
+
+        let mut conductor = registration(&identity, 3);
+        conductor.role = PeerRole::Conductor;
+        let peer = registry.import_manual_peer(conductor).unwrap();
+        assert_eq!(peer.state, PeerState::Active);
+    }
+
+    /// Only revocation ends a Conductor relationship, so only revocation frees
+    /// the node to publish.
+    #[test]
+    fn a_performer_blocks_publishing_until_it_is_revoked() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        let performer = registry
+            .register_pending(registration(&identity, 3))
+            .unwrap();
+
+        registry
+            .suspend_peer(&performer.node_id, "operator", "paused")
+            .unwrap();
+        assert!(
+            crate::baseline_publisher::BaselinePublisher::create(&context, &registry).is_err(),
+            "a suspended Performer can be reactivated, so it still counts"
+        );
+
+        registry
+            .revoke_peer(&performer.node_id, "operator", "decommissioned")
+            .unwrap();
+        crate::baseline_publisher::BaselinePublisher::create(&context, &registry)
+            .expect("a revoked Performer is terminal and no longer blocks publishing");
     }
 
     #[test]

@@ -270,10 +270,82 @@ peer appears once with its presence (`unknown` before it has ever reported,
 then `online`, `stale`, or `offline`), its platform and runtime facts, its
 runner and scheduler state, and its last completed run.
 
+Each row also carries `baseline_status`, which is how a Conductor sees drift.
+That is a comparison rather than a claim: a Performer reports the identity of
+the set it recorded installing and the identity of the same set as it is on its
+disk right now, and never a verdict, because it does not know what it was
+supposed to have.
+
+| `baseline_status` | What it means |
+|---|---|
+| `unknown` | This Performer has not reported a Profile yet. Not an answer about a baseline. |
+| `none` | It reported holding no baseline. It was never pushed one, so it is neither drifted nor in sync. |
+| `in_sync` | What is on its disk is the set it recorded installing. |
+| `drifted` | It is not. |
+
+The `baselines` object in the same response totals the four across the fleet.
+`unknown` and `none` stay separate there too: ten machines that have never
+reported and ten that hold no baseline need looking into in different places.
+
+Drift is noticed within one nominal Pulse interval of a script changing. It
+means "the set that was installed is no longer what was installed" — a file no
+baseline entry names is not part of the published set and does not change the
+answer.
+
 This is current status only. There is no chart, alert rule, host inventory,
 raw log, or history API, and no HTTP call can write health state: the only
 writer is the node-to-node exchange. `.docs/health-plane-contract.md` holds the
 frozen windows, bounds, error codes, and privacy classes.
+
+## Baselines
+
+A baseline is the signed, versioned set of scripts a fleet runs. Three
+principals, and two of them may never be one machine: a **publisher** signs the
+set, a **Conductor** delivers it, and a **Performer** installs it. The registry
+refuses to let one node hold a publisher key and record a Performer, so nobody
+can both author code and order every machine to run it.
+
+```bash
+# On the publisher, once. Rotating this key orphans every baseline it signed.
+omakure node baseline create-key
+
+# On the publisher, over scripts in its own workspace.
+omakure node baseline publish --script ops/deploy.sh --script audit.py   --lifetime-seconds 3600 --out ./baseline-v1.omb
+
+# On the Conductor, which holds the same script bytes and no publisher key.
+omakure node baseline push --peer-node-id omk1_... --manifest ./baseline-v1.omb
+curl -X POST -H "Authorization: Bearer $OMAKURE_API_TOKEN"   -H 'content-type: application/json'   --data '{"peer_node_id":"omk1_...","manifest":"<hex>","scripts":["<hex>"]}'   http://127.0.0.1:7878/v1/node/baselines
+```
+
+A Performer installs only if **both** authorities hold: the sender is an active
+Conductor holding `baseline-push`, *and* the manifest verifies under a publisher
+named in its own `trust.baseline_publishers`. It installs the whole set or none
+of it. A node that names no publisher accepts no baseline, which is the shipped
+state.
+
+The version identifier is derived from the entry list alone — not from who
+pushed it, not from when — which is what lets a Performer recompute it from the
+files on its own disk and what makes drift checkable rather than merely
+reported.
+
+### Putting a machine back
+
+Each node keeps exactly one previous baseline beside the one it is running:
+
+```bash
+omakure node baseline rollback --confirmed
+curl -X POST -H "Authorization: Bearer $OMAKURE_API_TOKEN"   -H 'content-type: application/json' --data '{"confirmed":true}'   http://127.0.0.1:7878/v1/node/baseline/rollback
+```
+
+This is a local act on the machine that holds the scripts, on purpose: a
+Conductor cannot order it. It is re-verified against the publishers that node
+names *today*, so a publisher revoked since the original install makes it fail.
+It is a swap rather than a step down a stack — rolling back twice returns the
+machine to where it started — and a node with nothing retained refuses rather
+than reporting a rollback that changed nothing.
+
+`.docs/baseline-delivery.md` holds the wire format, the gate order, every bound,
+and what "previous" means. `.docs/recovery.md` walks a drifted machine back.
 
 ## Lifecycle Signals
 
@@ -363,8 +435,9 @@ as a whole rather than after every individual case.
 
 Management HTTP binds loopback inside each container and is never published, so
 it cannot be the node-to-node data path; the gate asserts that directly. Nostr,
-baselines, dashboards, alerting, arbitrary metrics, and MDM
-are all outside its scope.
+dashboards, alerting, and arbitrary metrics are all outside its scope; baseline
+push, drift, and rollback are proved separately on the packaged image by the
+`docker-smoke` job.
 
 ## Scheduling and local lifecycle
 

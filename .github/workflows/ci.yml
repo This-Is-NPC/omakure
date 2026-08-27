@@ -288,6 +288,209 @@ jobs:
           echo "$out" | jq -e '.ok == true and .data.via == "service" and .data.accepted == true' >/dev/null \
             || { echo "the packaged image did not carry one authorized Cue over its standing session" >&2; exit 1; }
 
+      - name: Push a signed baseline, drift it, and roll it back across three containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          net=omakure-baseline-ci
+          tok='ci-node-service-token-with-enough-entropy-00002'
+          d() { timeout --foreground --kill-after=10s "$@"; }
+          cleanup() {
+            for n in conductor performer; do
+              d 30s docker logs "omakure-baseline-${n}" 2>&1 | tail -20 || true
+              d 30s docker rm -f "omakure-baseline-${n}" >/dev/null 2>&1 || true
+            done
+            for n in conductor performer publisher; do
+              d 30s docker volume rm "omakure-baseline-ws-${n}" "omakure-baseline-state-${n}" \
+                "omakure-baseline-etc-${n}" >/dev/null 2>&1 || true
+            done
+            d 30s docker network rm "$net" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          d 30s docker network create "$net" >/dev/null
+          # Three principals, because two of them may never be one. `node_registry`
+          # refuses to let a node hold a publisher key and record a Performer, so the
+          # machine that signs the code is not the machine that orders it installed.
+          for n in conductor performer publisher; do
+            for v in ws state etc; do d 30s docker volume create "omakure-baseline-${v}-${n}" >/dev/null; done
+            d 60s docker run --rm --user 0 \
+              --volume "omakure-baseline-ws-${n}:/workspace" \
+              --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
+              --volume "omakure-baseline-etc-${n}:/etc/omakure" \
+              --entrypoint /bin/sh omakure-node:ci -c \
+              'chown 10001:10001 /workspace /var/lib/omakure /etc/omakure \
+               && chmod 0750 /workspace /etc/omakure && chmod 0700 /var/lib/omakure'
+          done
+          one() { n="$1"; shift; d 120s docker run --rm --network "$net" \
+            --env OMAKURE_API_TOKEN="$tok" \
+            --volume "omakure-baseline-ws-${n}:/workspace" \
+            --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
+            --volume "omakure-baseline-etc-${n}:/etc/omakure" omakure-node:ci "$@"; }
+          sh_in() { n="$1"; shift; d 60s docker run --rm --user 0 \
+            --volume "omakure-baseline-ws-${n}:/workspace" \
+            --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
+            --volume "omakure-baseline-etc-${n}:/etc/omakure" \
+            --entrypoint /bin/sh omakure-node:ci -c "$*"; }
+          # Base64 rather than quoted heredocs: the bytes of a script are what a
+          # baseline's identity is a hash of, so they must survive this transport exactly.
+          put_script() { sh_in "$1" "echo '$3' | base64 -d > /workspace/$2 \
+            && chown 10001:10001 /workspace/$2 && chmod 0755 /workspace/$2"; }
+          v1_deploy="$(printf '#!/usr/bin/env bash\necho deploy v1\n' | base64 -w0)"
+          v1_audit="$(printf '#!/usr/bin/env bash\necho audit v1\n' | base64 -w0)"
+          v2_deploy="$(printf '#!/usr/bin/env bash\necho deploy v2\n' | base64 -w0)"
+          v2_audit="$(printf '#!/usr/bin/env bash\necho audit v2\n' | base64 -w0)"
+
+          for n in conductor performer publisher; do one "$n" --json node init >/dev/null; done
+          for n in conductor performer; do
+            eval "${n}_id=$(one "$n" --json node status | jq -r '.data.identity.node_id')"
+            eval "${n}_pk=$(one "$n" --json node status | jq -r '.data.identity.public_key')"
+            eval "${n}_cert=$(sh_in "$n" "od -An -v -tx1 /var/lib/omakure/transport.cert | tr -d ' \n'")"
+          done
+
+          created="$(one publisher --json node baseline create-key)"
+          key_id="$(echo "$created" | jq -r '.data.key_id')"
+          publisher_key="$(echo "$created" | jq -r '.data.public_key')"
+          for n in publisher performer; do
+            sh_in "$n" "sed -i 's|^id = \"\"|id = \"ci-fleet\"|' /etc/omakure/node.toml"
+          done
+
+          # The Performer names the publisher it will take code from and the Conductor it
+          # takes orders from. Neither substitutes for the other, which is the whole
+          # point of the plane.
+          sh_in performer "sed -i \
+            -e 's|enrollment = \"disabled\"|enrollment = \"manual\"|' \
+            -e 's|allow_baseline_push = false|allow_baseline_push = true|' \
+            -e 's|baseline_publishers = \[\]|baseline_publishers = [{ key_id = \"$key_id\", public_key = \"$publisher_key\", revoked = false }]|' \
+            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$conductor_id\"'@conductor:7879\"]|' \
+            /etc/omakure/node.toml"
+          sh_in conductor "sed -i \
+            -e 's|enrollment = \"disabled\"|enrollment = \"manual\"|' \
+            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$performer_id\"'@performer:7879\"]|' \
+            /etc/omakure/node.toml"
+          one performer node trust --node-id "$conductor_id" --public-key "$conductor_pk" \
+            --transport-certificate "$conductor_cert" --role conductor --actor ci \
+            --reason "baseline smoke" --confirmed --capability baseline-push \
+            --capability inventory-health --capability notifications >/dev/null
+          one conductor node trust --node-id "$performer_id" --public-key "$performer_pk" \
+            --transport-certificate "$performer_cert" --role performer --actor ci \
+            --reason "baseline smoke" --confirmed --capability baseline-push \
+            --capability inventory-health --capability notifications >/dev/null
+
+          publish() {
+            deploy="$1"; audit="$2"; out="$3"
+            put_script publisher deploy.sh "$deploy"
+            put_script publisher audit.sh "$audit"
+            # The Conductor carries the bytes it was given; it never signs them, and it
+            # holds no path to the publisher key.
+            put_script conductor deploy.sh "$deploy"
+            put_script conductor audit.sh "$audit"
+            one publisher --json node baseline publish --script deploy.sh --script audit.sh \
+              --lifetime-seconds 3600 --out "/workspace/$out"
+            manifest="$(sh_in publisher "base64 -w0 /workspace/$out")"
+            sh_in conductor "echo '$manifest' | base64 -d > /workspace/$out && chown 10001:10001 /workspace/$out"
+          }
+          published_v1="$(publish "$v1_deploy" "$v1_audit" base-v1.omb | tail -1)"
+          v1_id="$(echo "$published_v1" | jq -r '.data.baseline_id')"
+
+          for n in conductor performer; do
+            d 60s docker run --detach --name "omakure-baseline-${n}" --network "$net" \
+              --network-alias "$n" --env OMAKURE_API_TOKEN="$tok" \
+              --volume "omakure-baseline-ws-${n}:/workspace" \
+              --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
+              --volume "omakure-baseline-etc-${n}:/etc/omakure" \
+              --env OMAKURE_API_CAPABILITIES=node:read,node:write \
+              omakure-node:ci node serve --bind 0.0.0.0:7878 --allow-non-loopback \
+              --allow-non-loopback-direct --workers 1 --no-scheduler \
+              --capability node:read --capability node:write >/dev/null
+          done
+          # Every wait below fails by falling out of its loop rather than by matching a
+          # duplicated attempt count. A bound written twice is a bound that can go out of
+          # step, and a poll that runs out of attempts and returns success is an
+          # assertion that cannot fail.
+          budget=90
+          session_up=no
+          for _ in $(seq 1 "$budget"); do
+            connected="$(d 30s docker exec omakure-baseline-conductor curl --fail --silent \
+              --max-time 5 -H "Authorization: Bearer ${tok}" \
+              http://127.0.0.1:7878/v1/node/status \
+              | jq -r '.data.transport.expected_connected_peer_count // 0' || echo 0)"
+            if [ "$connected" = "1" ]; then session_up=yes; break; fi
+            sleep 1
+          done
+          [ "$session_up" = yes ] || { echo "the Conductor never established its standing session" >&2; exit 1; }
+
+          # Every assertion below reads the shipped fleet projection, never a database.
+          await_status() {
+            want="$1"; want_id="$2"; why="$3"
+            status=absent
+            reported=""
+            for _ in $(seq 1 "$budget"); do
+              row="$(d 30s docker exec omakure-baseline-conductor curl --fail --silent \
+                --max-time 5 -H "Authorization: Bearer ${tok}" \
+                http://127.0.0.1:7878/v1/node/health \
+                | jq -c --arg id "$performer_id" '.data.nodes[] | select(.node_id == $id)' || echo '{}')"
+              status="$(echo "$row" | jq -r '.baseline_status // "absent"')"
+              reported="$(echo "$row" | jq -r '.profile.baseline_id // ""')"
+              if [ "$status" = "$want" ] && [ "$reported" = "$want_id" ]; then
+                echo "  fleet projection: $status ${reported:-<none>}"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "$why (saw $status ${reported:-<none>})" >&2
+            exit 1
+          }
+
+          push() {
+            out="$(d 180s docker exec omakure-baseline-conductor omakure --json node baseline push \
+              --peer-node-id "$performer_id" --manifest "/workspace/$1" --wait-seconds 90)"
+            echo "$out"
+            echo "$out" | jq -e '.ok == true and .data.via == "service" and .data.accepted == true' >/dev/null \
+              || { echo "the packaged image did not install a signed baseline over its standing session" >&2; exit 1; }
+          }
+          # Before anything is pushed: neither drifted nor in sync, because there is no
+          # baseline. Asserted here rather than after the push, where "the ack has not
+          # become a Profile yet" would look identical.
+          await_status none "" "a Performer that was never pushed a baseline must report having none"
+
+          push base-v1.omb
+          await_status in_sync "$v1_id" "a Performer running what it was pushed must read as in sync"
+
+          # Drift, with a script that still runs: the set on disk is no longer the set
+          # that was signed, and nothing but the bytes changed.
+          d 30s docker exec --user 10001 omakure-baseline-performer \
+            sh -c "printf 'echo edited underneath\n' >> /workspace/deploy.sh"
+          await_status drifted "$v1_id" "a Performer whose scripts changed underneath it must read as drifted"
+
+          published_v2="$(publish "$v2_deploy" "$v2_audit" base-v2.omb | tail -1)"
+          v2_id="$(echo "$published_v2" | jq -r '.data.baseline_id')"
+          push base-v2.omb
+          await_status in_sync "$v2_id" "a second push must land and clear the drift"
+
+          # Rollback, through the shipped route on the machine that holds the scripts.
+          rollback() { d 60s docker exec omakure-baseline-performer curl --silent \
+            --max-time 30 -X POST -H "Authorization: Bearer ${tok}" \
+            -H 'content-type: application/json' --data '{"confirmed":true}' \
+            http://127.0.0.1:7878/v1/node/baseline/rollback; }
+          rolled="$(rollback)"
+          echo "$rolled"
+          echo "$rolled" | jq -e --arg id "$v1_id" '.ok == true and .data.baseline_id == $id' >/dev/null \
+            || { echo "rollback did not restore the previous version" >&2; exit 1; }
+          # The retained copy is the signed bytes, not whatever was on disk when the next
+          # push replaced it, so rolling back also undoes the drift.
+          await_status in_sync "$v1_id" "a rolled-back Performer must read as in sync against the version it was put back on"
+
+          # A publisher revoked since the install must make the rollback fail: a rollback
+          # to a no-longer-verifiable state would launder code past the publisher check.
+          sh_in performer "sed -i 's|revoked = false|revoked = true|' /etc/omakure/node.toml"
+          refused="$(rollback)"
+          echo "$refused"
+          echo "$refused" | jq -e '.ok == false and (.error.message | contains("baseline_publisher_revoked"))' >/dev/null \
+            || { echo "a rollback under a revoked publisher was not refused" >&2; exit 1; }
+          await_status in_sync "$v1_id" "a refused rollback must leave the machine where it was"
+
+          echo "signed baseline push, drift, and verified rollback carried on the packaged image"
+
       - name: Cleanup and verify Docker smoke resources
         if: always()
         shell: bash
@@ -299,7 +502,11 @@ jobs:
           for name in omakure-node-ci omakure-workspace-ci omakure-node-state-ci \
             omakure-cue-conductor omakure-cue-performer omakure-cue-ci \
             omakure-cue-ws-conductor omakure-cue-state-conductor omakure-cue-etc-conductor \
-            omakure-cue-ws-performer omakure-cue-state-performer omakure-cue-etc-performer; do
+            omakure-cue-ws-performer omakure-cue-state-performer omakure-cue-etc-performer \
+            omakure-baseline-conductor omakure-baseline-performer omakure-baseline-ci \
+            omakure-baseline-ws-conductor omakure-baseline-state-conductor omakure-baseline-etc-conductor \
+            omakure-baseline-ws-performer omakure-baseline-state-performer omakure-baseline-etc-performer \
+            omakure-baseline-ws-publisher omakure-baseline-state-publisher omakure-baseline-etc-publisher; do
             for resource in container network volume; do
               if ! remaining="$(timeout --foreground --kill-after=5s 30s docker "$resource" ls -q \
                 --filter name="$name")"; then

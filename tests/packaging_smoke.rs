@@ -477,6 +477,44 @@ fn release_workflows_build_and_package_only_the_headless_binary() {
 }
 
 #[cfg(unix)]
+/// The installer's preference and the workflow's build must not drift apart.
+///
+/// If the release stops producing the static archive, `install.sh` silently
+/// falls back to the glibc build — and the fallback is deliberately quiet,
+/// because it is the normal path for older releases. Nothing would report the
+/// loss until an install failed on a machine with an older glibc, which is
+/// exactly the machine that cannot be debugged remotely. So the two are
+/// pinned to each other here.
+#[test]
+fn the_installer_preference_and_the_release_matrix_name_the_same_static_asset() {
+    let workflow = read(".github/workflows/release.yml");
+    assert!(
+        workflow.contains("x86_64-unknown-linux-musl"),
+        "the release workflow must build the statically linked target"
+    );
+    assert!(
+        workflow.contains("asset_os: linux-musl"),
+        "the static build must be published under its own asset name, \
+         or it overwrites the glibc archive"
+    );
+    assert!(
+        workflow.contains("musl-tools"),
+        "the musl build needs a C toolchain for the vendored native code; \
+         without it the job fails at link time"
+    );
+
+    let installer = read("install.sh");
+    assert!(
+        installer.contains("${APP_NAME}-${VERSION}-linux-musl-${arch}.tar.gz"),
+        "install.sh must ask for the asset name the workflow publishes"
+    );
+    assert!(
+        installer.contains("download_optional"),
+        "the preference must tolerate a release that predates the static \
+         asset, rather than failing the install"
+    );
+}
+
 #[test]
 fn release_tarball_contains_only_the_required_binary() {
     let temp = tempfile::tempdir().expect("create packaging fixture");

@@ -37,6 +37,14 @@ jobs:
             ext: tar.gz
             bin: omakure
             rustflags: ""
+          # Statically linked, so it runs on any Linux regardless of the host
+          # glibc. This is the asset `install.sh` prefers on Linux.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            asset_os: linux-musl
+            ext: tar.gz
+            bin: omakure
+            rustflags: ""
           - os: macos-latest
             target: x86_64-apple-darwin
             asset_os: darwin
@@ -60,6 +68,10 @@ jobs:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
 
+      - name: Install musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
       - name: Test headless binary
         run: cargo test --all-targets --locked
       - name: Test node-service lifecycle surface
@@ -68,6 +80,7 @@ jobs:
       - name: Build
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
+          CC_x86_64_unknown_linux_musl: musl-gcc
         run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
 
       - name: Package

@@ -155,6 +155,22 @@ download() {
   fi
 }
 
+# Like `download`, but a missing asset is an answer rather than a failure.
+# The installer uses this to prefer a statically linked build and fall back
+# to the dynamically linked one on releases published before it existed.
+download_optional() {
+  local url="$1"
+  local dest="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$dest" 2>/dev/null
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q "$url" -O "$dest" 2>/dev/null
+  else
+    echo "Missing curl or wget" >&2
+    exit 1
+  fi
+}
+
 download_stdout() {
   local url="$1"
   if command -v curl >/dev/null 2>&1; then
@@ -495,7 +511,6 @@ case "$(uname -m)" in
  esac
 
 asset="${APP_NAME}-${VERSION}-${os}-${arch}.tar.gz"
-url="https://github.com/${REPO}/releases/download/${VERSION}/${asset}"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
@@ -507,7 +522,28 @@ if [[ -n "${ARTIFACT}" ]]; then
   fi
   cp "${ARTIFACT}" "${tmp_dir}/${asset}"
 else
-  download "${url}" "${tmp_dir}/${asset}"
+  # On Linux, prefer the statically linked build. Omakure is installed on
+  # machines the operator does not control, and a dynamically linked binary
+  # refuses to start on any distribution whose glibc is older than the one it
+  # was built against — which is most of a real fleet. Releases published
+  # before the static build existed only carry the dynamic asset, so a miss
+  # here is normal and falls through rather than failing.
+  fetched=0
+  if [[ "${os}" == "linux" ]]; then
+    static_asset="${APP_NAME}-${VERSION}-linux-musl-${arch}.tar.gz"
+    if download_optional \
+      "https://github.com/${REPO}/releases/download/${VERSION}/${static_asset}" \
+      "${tmp_dir}/${asset}"; then
+      fetched=1
+    else
+      rm -f "${tmp_dir}/${asset}"
+    fi
+  fi
+  if (( ! fetched )); then
+    download \
+      "https://github.com/${REPO}/releases/download/${VERSION}/${asset}" \
+      "${tmp_dir}/${asset}"
+  fi
 fi
 
 tar -xzf "${tmp_dir}/${asset}" -C "${tmp_dir}"

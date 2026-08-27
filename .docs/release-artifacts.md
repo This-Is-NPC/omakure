@@ -6,9 +6,17 @@ files.
 
 ## Archives
 
-- `omakure-vX.Y.Z-linux-x86_64.tar.gz`
+- `omakure-vX.Y.Z-linux-x86_64.tar.gz` (dynamically linked against glibc)
+- `omakure-vX.Y.Z-linux-musl-x86_64.tar.gz` (statically linked)
 - `omakure-vX.Y.Z-darwin-x86_64.tar.gz`
 - `omakure-vX.Y.Z-windows-x86_64.zip`
+
+`install.sh` prefers the `linux-musl` archive and falls back to the glibc one
+when a release predates it. Omakure is installed on machines the operator does
+not control, and a glibc-linked binary refuses to start on any distribution
+older than the machine that built it — so the portable build is the default
+and the dynamic one is kept for anyone who wants the system allocator and
+resolver.
 
 Each archive contains exactly one root entry:
 

@@ -333,6 +333,12 @@ Compose publishes **`127.0.0.1:7878`** on the host. The container process still
 listens on `0.0.0.0:7878` so the published port works. The image always runs as
 uid/gid `10001:10001`; host bind mounts must be prepared for that principal.
 The image-owned `/etc/omakure/node.toml` remains `root:omakure` mode `0640`.
+`0640` is the broadest mode the node accepts, not the only one: any
+stricter mode the service can still read, such as `0600`, is accepted too.
+A broader one is refused, and the refusal names the file, the mode it
+found, and the `chmod` that fixes it. The private key material under
+`/var/lib/omakure` is held to `0600` by the same rule, so no group or
+other bit is ever accepted there.
 
 ## Transport certification topology
 

@@ -505,6 +505,13 @@ impl<'a> BaselineSession<'a> {
                 "rejected",
                 Some(BaselineCode::Duplicate),
             );
+            // Answered from the first decision, which is what `Repeat` means.
+            // `Duplicate` is reportable, and the ack is the only thing the
+            // sender ever sees: with nothing queued here the Conductor waits
+            // out its whole `--wait-seconds` budget and then reports the same
+            // `answered: false` that a push refused on trust, role, or
+            // capability produces. Those are opposite facts to an operator.
+            self.queue_reply(&baseline_id, Some(BaselineCode::Duplicate), now);
             return BaselineOutcome::Repeat;
         }
 
@@ -1358,6 +1365,96 @@ mod delivery_tests {
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
             "fleet-audit"
+        );
+    }
+
+    /// A push repeated on one session must be answered, not met with silence.
+    ///
+    /// `Duplicate` is reportable and `Repeat` is documented as "answered from
+    /// the first decision", but the repeat was audited and then dropped without
+    /// queueing an ack. The ack is the only thing a Conductor ever sees, so the
+    /// push sat until `--wait-seconds` ran out and then reported
+    /// `answered: false` -- byte for byte what a push refused on trust, role,
+    /// or capability reports. On two real VMs a duplicate push burned the full
+    /// 60-second budget and was indistinguishable from a silently refused one;
+    /// telling them apart meant reading the Performer's audit table by hand.
+    #[test]
+    fn a_repeated_push_is_answered_rather_than_silently_dropped() {
+        let performer = Performer::new();
+        let conductor = Performer::new();
+        let bodies = fleet_scripts();
+        let manifest = sign(3, &bodies);
+        let payload = wire(&manifest, &bodies);
+
+        let performer_identity = performer.identity();
+        let registry = performer.registry(&performer_identity);
+        let conductor_identity = conductor.identity();
+        let conductor_status = conductor_identity.public_status();
+        trust_conductor(
+            &registry,
+            &conductor_status.node_id,
+            &conductor_status.public_key_hex,
+            crate::baseline_push::CAPABILITY_BASELINE_PUSH,
+        );
+
+        let session_id = [42u8; 32];
+        let mut nonce = [0u8; 16];
+        nonce[0] = 7;
+        let mut conductor_key = [0u8; 32];
+        conductor_key.copy_from_slice(
+            &(0..32)
+                .map(|index| {
+                    u8::from_str_radix(
+                        &conductor_status.public_key_hex[index * 2..index * 2 + 2],
+                        16,
+                    )
+                    .expect("hex")
+                })
+                .collect::<Vec<_>>(),
+        );
+        let envelope = crate::direct_transport::sign_baseline_envelope(
+            &conductor_identity,
+            crate::baseline_push::KIND_PUSH,
+            &session_id,
+            nonce,
+            payload,
+            NOW,
+        )
+        .expect("sign the push");
+
+        // One session, deliberately: the duplicate guard is per-session, so a
+        // second session would install again rather than exercise the repeat.
+        let mut session = BaselineSession::new(
+            &registry,
+            &performer_identity,
+            &conductor_status.node_id,
+            conductor_key,
+            session_id,
+            policy(true, vec![publisher(3).1]),
+            Some(Workspace::new(performer.workspace.root().to_path_buf())),
+        );
+
+        let first = session.handle_envelope(&envelope.encoded(), NOW);
+        assert!(accepted(&first), "the first push must install: {first:?}");
+        assert!(
+            session.take_reply().is_some(),
+            "the first push must be acked"
+        );
+
+        let second = session.handle_envelope(&envelope.encoded(), NOW);
+        assert_eq!(second, BaselineOutcome::Repeat, "got {second:?}");
+        let reply = session.take_reply().expect(
+            "a repeated push was audited but never answered: the Conductor is left waiting \
+             out its whole budget and cannot tell a duplicate from a silent refusal",
+        );
+        let view = crate::direct_transport::envelope_view(&reply).expect("decode the ack");
+        assert_eq!(view.payload["accepted"], false, "ack: {}", view.payload);
+        assert_eq!(
+            view.payload["error"]["code"],
+            u64::from(BaselineCode::Duplicate.code()),
+            "the repeat must name itself as {} rather than any other refusal: {}",
+            BaselineCode::Duplicate.name(),
+            view.payload
         );
     }
 

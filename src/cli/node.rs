@@ -632,10 +632,9 @@ fn map_node_error(error: NodeError) -> OperationError {
         }
         NodeError::UnsafePath(_)
         | NodeError::UnexpectedFileType(_)
-        | NodeError::ExistingConfig(_) => OperationError::new(
-            OperationErrorCode::RegistryInvalid,
-            "node state is invalid or insecure",
-        ),
+        | NodeError::ExistingConfig(_) => {
+            OperationError::new(OperationErrorCode::RegistryInvalid, error.to_string())
+        }
         NodeError::LifecycleBusy => OperationError::new(
             OperationErrorCode::Conflict,
             "node service is active; stop it before resetting",

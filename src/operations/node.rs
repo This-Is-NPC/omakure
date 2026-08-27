@@ -946,21 +946,32 @@ fn recover_private_token_tombstones(
             .find(|(_, cleanup)| cleanup.token_hash == token_hash)
         {
             if lease.finish_success() == PrivateFileCommitStatus::CleanupRequired {
-                return Err(cleanup_recovery_error());
+                return Err(cleanup_recovery_error(&OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    "the spent bootstrap token could not be removed",
+                )));
             }
             registry
                 .complete_bootstrap_cleanup(cleanup, None)
-                .map_err(|_| cleanup_recovery_error())?;
+                .map_err(|error| cleanup_recovery_error(&map_registry_error(error)))?;
             completed[index] = true;
         } else if registry
             .bootstrap_proof_consumed(organization)
-            .map_err(|_| cleanup_recovery_error())?
+            .map_err(|error| cleanup_recovery_error(&map_registry_error(error)))?
         {
             if lease.finish_success() == PrivateFileCommitStatus::CleanupRequired {
-                return Err(cleanup_recovery_error());
+                return Err(cleanup_recovery_error(&OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    "a bootstrap token already consumed elsewhere could not be removed",
+                )));
             }
         } else {
-            lease.restore().map_err(|_| cleanup_recovery_error())?;
+            lease.restore().map_err(|error| {
+                cleanup_recovery_error(&OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    error.to_string(),
+                ))
+            })?;
         }
     }
     for (index, cleanup) in pending.iter().enumerate() {
@@ -968,13 +979,26 @@ fn recover_private_token_tombstones(
             continue;
         }
         match fs::symlink_metadata(path) {
-            Ok(_) => return Err(cleanup_recovery_error()),
+            Ok(_) => {
+                return Err(cleanup_recovery_error(&OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    format!(
+                        "a spent bootstrap token is still present at {}",
+                        path.display()
+                    ),
+                )))
+            }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(_) => return Err(cleanup_recovery_error()),
+            Err(error) => {
+                return Err(cleanup_recovery_error(&OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    format!("{} could not be inspected: {error}", path.display()),
+                )))
+            }
         }
         registry
             .complete_bootstrap_cleanup(cleanup, None)
-            .map_err(|_| cleanup_recovery_error())?;
+            .map_err(|error| cleanup_recovery_error(&map_registry_error(error)))?;
     }
     Ok(())
 }
@@ -990,7 +1014,7 @@ pub fn recover_local_bootstrap_token_tombstones(context: &NodeContext) -> Operat
             .map_err(map_registry_error)?;
         recover_private_token_tombstones(context, &registry, &config.organization.id, &path)
     })();
-    result.map_err(|_| cleanup_recovery_error())
+    result.map_err(|error| cleanup_recovery_error(&error))
 }
 
 fn complete_token_cleanup(
@@ -1017,10 +1041,22 @@ fn complete_token_cleanup(
     }
 }
 
-fn cleanup_recovery_error() -> OperationError {
+/// Abort startup over a failed tombstone recovery, saying what failed.
+///
+/// The cause used to be discarded by `map_err(|_| ...)`. That cost a real
+/// debugging session: a node refused to start on a provisioned machine and the
+/// message named neither the check that failed nor the file it read, while the
+/// actual reason -- enrollment was not set to `signed-bundle` -- was sitting in
+/// the error being thrown away. An abort message that omits its own cause is
+/// the operator's whole picture.
+fn cleanup_recovery_error(cause: &OperationError) -> OperationError {
     OperationError::new(
         OperationErrorCode::IoFailed,
-        "bootstrap token cleanup recovery failed; node service startup was aborted; repair the node state and retry",
+        format!(
+            "bootstrap token cleanup recovery failed; node service startup was aborted; \
+             repair the node state and retry. Cause: {}",
+            cause.message
+        ),
     )
 }
 
@@ -1611,9 +1647,14 @@ pub(crate) fn map_node_error(error: NodeError) -> OperationError {
         // authorized to read node state -- while an opaque string leaves an
         // operator with a 0644 node.toml no route at all to `chmod 640`.
         NodeError::InsecurePath(_) => registry_error(error.to_string()),
+        // Same argument as `InsecurePath` above, applied to the rest of the
+        // family. These three collapsed into one opaque sentence, which cost a
+        // real debugging session on a real machine: a node refused to start,
+        // the operator had root, and the message named neither the path nor
+        // what was wrong with it.
         NodeError::UnsafePath(_)
         | NodeError::UnexpectedFileType(_)
-        | NodeError::ExistingConfig(_) => registry_error("node state is invalid or insecure"),
+        | NodeError::ExistingConfig(_) => registry_error(error.to_string()),
         NodeError::LifecycleBusy => OperationError::new(
             OperationErrorCode::Conflict,
             "node service is active; stop it before changing node state",
@@ -1915,6 +1956,49 @@ mod tests {
         let error = import_manual_trust(&context, request).unwrap_err();
         assert_eq!(error.code, OperationErrorCode::Forbidden);
         assert!(list_trusted_peers(&context).unwrap().is_empty());
+    }
+
+    /// An abort must say what failed, not only that something did.
+    ///
+    /// These three variants collapsed into one opaque sentence, and it cost a
+    /// real debugging session on a provisioned machine: the node refused to
+    /// start, the operator had root, and `node state is invalid or insecure`
+    /// named neither the file nor the problem. The reason was sitting in the
+    /// error that was being discarded.
+    #[test]
+    fn a_refused_node_path_says_which_path_and_why() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        context.ensure_state_directory().expect("state dir");
+
+        // A directory where a file belongs: `UnexpectedFileType`, which used
+        // to be reported as the same sentence as every other refusal.
+        std::fs::create_dir(context.state_dir().join("identity.key")).expect("decoy");
+
+        let error = public_node_status(&context).expect_err("a directory is not an identity");
+        let message = error.to_string();
+        assert!(
+            message.contains("identity.key"),
+            "the refusal must name the entry it refused: {message}"
+        );
+        assert_ne!(
+            message, "node state is invalid or insecure",
+            "the opaque sentence is what this test exists to prevent"
+        );
+    }
+
+    /// A recovery abort must carry the cause it was given.
+    #[test]
+    fn a_failed_cleanup_recovery_reports_what_actually_failed() {
+        let cause = OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "signed-bundle enrollment is not enabled",
+        );
+        let message = cleanup_recovery_error(&cause).to_string();
+        assert!(
+            message.contains("signed-bundle enrollment is not enabled"),
+            "the abort must carry its cause, not discard it: {message}"
+        );
     }
 
     #[test]
@@ -2356,7 +2440,14 @@ mod tests {
         .unwrap();
         let error = public_node_status(&linked_context).unwrap_err();
         assert_eq!(error.code, OperationErrorCode::RegistryInvalid);
-        assert_eq!(error.message, "node state is invalid or insecure");
+        // A symlinked ancestor is refused for a different reason than a
+        // symlinked config file, and the operator has to be told which one
+        // they hit: the two are repaired differently.
+        assert!(
+            error.message.contains(&link_parent.display().to_string()),
+            "the refusal must name the unsafe ancestor: {}",
+            error.message
+        );
     }
 
     #[test]

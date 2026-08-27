@@ -2804,6 +2804,62 @@ mod tests {
         );
     }
 
+    /// One address is bounded before authentication, not after.
+    ///
+    /// The `DIRECT_MAX_SOURCE_SESSIONS` check in `promote_session` reads like
+    /// the thing that decides how many distinct nodes may share an address,
+    /// and it is not: the pre-auth byte budget refuses the next reservation
+    /// first, so that check is never the binding limit. Removing it would
+    /// admit no one and would only leave the impression that sharing a host
+    /// had been dealt with. It stays because it becomes load-bearing again the
+    /// moment the byte budget is raised, and this records where the real limit
+    /// is so the next reader looks at the right one.
+    #[test]
+    fn one_address_is_bounded_before_authentication_not_after() {
+        let admission = Arc::new(AdmissionController {
+            state: Mutex::new(AdmissionState::default()),
+        });
+        let shared = "198.51.100.4".parse::<IpAddr>().unwrap();
+        let start = Instant::now();
+
+        let held = (0..DIRECT_MAX_SOURCE_SESSIONS)
+            .map(|index| {
+                let mut reservation = admission
+                    .reserve(shared, start)
+                    .expect("a distinct node behind the shared address");
+                admission
+                    .migrate_node(&mut reservation, &format!("node-{index}"))
+                    .expect("the identity is under its own cap");
+                reservation
+                    .promote_session()
+                    .expect("a distinct identity is admitted a session");
+                reservation
+            })
+            .collect::<Vec<_>>();
+
+        // The arrival rate has rolled, so only a standing per-address cap can
+        // refuse the next one.
+        let after = start + DIRECT_RATE_WINDOW;
+        assert!(
+            admission.reserve(shared, after).is_none(),
+            "the next node behind the shared address reached the handshake, \
+             which would make the post-auth session cap the binding limit"
+        );
+        let state = admission.state.lock().unwrap();
+        let reserved = state
+            .sources
+            .get(&shared)
+            .expect("the shared address still holds its sessions")
+            .bytes;
+        assert!(
+            reserved.saturating_add(ADMISSION_BYTES) > DIRECT_MAX_SOURCE_BYTES,
+            "the refusal above was not the pre-auth byte budget, so the limit \
+             this test names has moved"
+        );
+        drop(state);
+        drop(held);
+    }
+
     /// The pre-auth budget is all that stands between an unenrolled stranger
     /// and the handshake path, so anything narrowed elsewhere has to leave it
     /// exactly this strict. No identity is known anywhere in this test; that

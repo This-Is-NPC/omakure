@@ -212,7 +212,7 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
     ),
     (
         ("POST", "/v1/node/baseline/rollback"),
-        RouteCoverage::Covered("node_baseline_rollback_route_is_local_write_and_needs_a_previous"),
+        RouteCoverage::Covered("node_baseline_route_requires_node_write_and_a_transport"),
     ),
     (
         ("GET", "/v1/node/peers"),
@@ -1993,53 +1993,21 @@ fn node_baseline_route_requires_node_write_and_a_transport() {
         "with no direct transport there is no session to carry a baseline: {}",
         without_transport.safe_body()
     );
-}
 
-/// Rolling back is a local act on the machine that holds the scripts.
-///
-/// It reaches no peer and needs no session, which is exactly why it is not a
-/// third node-to-node message kind. What it does need is something to roll back
-/// to, and a node that was never pushed a baseline says so rather than
-/// reporting a success that changed nothing.
-#[test]
-fn node_baseline_rollback_route_is_local_write_and_needs_a_previous() {
-    let workspace = support::TestWorkspace::new("node-baseline-rollback-route");
-    let server = support::HttpServer::start_node_service(
-        workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
-        &[],
-        Duration::from_secs(20),
-    );
+    // Rolling back is the one baseline act that reaches no peer, which is why
+    // the second server needs no transport for it. It rides this test's two
+    // servers rather than starting two more: `node serve` is the most expensive
+    // fixture in this suite, and the read/write pair here is exactly the pair
+    // the route needs.
     let confirmed = serde_json::json!({ "confirmed": true });
-    let denied = server.post_json("/v1/node/baseline/rollback", &confirmed);
+    let read_only = server.post_json("/v1/node/baseline/rollback", &confirmed);
     assert_eq!(
-        denied.status,
+        read_only.status,
         403,
         "a node:read token must not replace the scripts on this machine: {}",
-        denied.safe_body()
+        read_only.safe_body()
     );
 
-    let writer_workspace = support::TestWorkspace::new("node-baseline-rollback-route-writer");
-    let writer = support::HttpServer::start_node_service(
-        writer_workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:write",
-        ],
-        &[],
-        Duration::from_secs(20),
-    );
     let unconfirmed = writer.post_json(
         "/v1/node/baseline/rollback",
         &serde_json::json!({ "confirmed": false }),
@@ -2052,11 +2020,14 @@ fn node_baseline_rollback_route_is_local_write_and_needs_a_previous() {
     );
     assert_error_code(&unconfirmed.json(), "forbidden");
 
+    // A node that was never pushed a baseline has no previous version. Refusing
+    // is the answer; a success that changed nothing would tell an operator the
+    // machine had been put back when it had not.
     let nothing_to_undo = writer.post_json("/v1/node/baseline/rollback", &confirmed);
     assert_eq!(
         nothing_to_undo.status,
         404,
-        "a node that was never pushed a baseline has no previous version: {}",
+        "a node with no previous baseline must refuse rather than report a rollback: {}",
         nothing_to_undo.safe_body()
     );
     assert_error_code(&nothing_to_undo.json(), "not_found");

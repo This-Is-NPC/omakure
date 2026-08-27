@@ -1482,4 +1482,148 @@ mod tests {
             "unreadable must never compare equal to authorized"
         );
     }
+
+    // -----------------------------------------------------------------------
+    // Durable at-most-once, across sessions
+    // -----------------------------------------------------------------------
+
+    /// A node context with an identity and an open registry, in `root`.
+    fn identity_and_registry(
+        root: &std::path::Path,
+    ) -> (
+        crate::node_identity::NodeIdentity,
+        crate::node_registry::NodeRegistry,
+    ) {
+        let config = root.join("node.toml");
+        std::fs::write(&config, "version = 1\n").expect("write config");
+        let context = crate::node::NodeContext::resolve_for(
+            crate::node::NodePlatform::current(),
+            crate::node::NodePathOverrides::new(Some(root.join("state")), Some(config)),
+            true,
+            None,
+            None,
+            None,
+        )
+        .expect("resolve node context");
+        let identity =
+            crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
+        let registry =
+            crate::node_registry::NodeRegistry::open_existing(&context, identity.public_status())
+                .expect("registry");
+        (identity, registry)
+    }
+
+    /// A workspace holding the one script the Performer declares.
+    fn workspace_with_declared_script(root: &std::path::Path) -> crate::workspace::Workspace {
+        let workspace = crate::workspace::Workspace::new(root.join("workspace"));
+        workspace.ensure_layout().expect("workspace layout");
+        let script = workspace.scripts_root().join("deploy.sh");
+        std::fs::create_dir_all(script.parent().expect("scripts root")).expect("scripts root");
+        std::fs::write(
+            &script,
+            "#!/usr/bin/env bash\n\
+             # OMAKURE_SCHEMA_START\n\
+             # {\"Name\":\"deploy.sh\",\"Fields\":[]}\n\
+             # OMAKURE_SCHEMA_END\n\
+             echo ok\n",
+        )
+        .expect("write the declared script");
+        workspace
+    }
+
+    fn cue_session<'a>(
+        registry: &'a crate::node_registry::NodeRegistry,
+        identity: &'a crate::node_identity::NodeIdentity,
+        session_id: [u8; 32],
+        workspace: crate::workspace::Workspace,
+    ) -> CueSession<'a> {
+        CueSession::new(
+            registry,
+            identity,
+            "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+            [3u8; 32],
+            session_id,
+            CuePolicy {
+                enabled: true,
+                declared_scripts: vec!["deploy.sh".to_string()],
+                declared_batteries: Vec::new(),
+            },
+            Some(workspace),
+        )
+    }
+
+    /// The same Cue arriving on a second session must not run a second time.
+    ///
+    /// `a_new_session_does_not_inherit_the_seen_set` establishes that the
+    /// in-session guard dies with the connection, and `seen_cue_ids` above says
+    /// durable at-most-once is `runs.run_id`. Nothing exercised the sentence.
+    /// The unit test on `enqueue_cue_run` proves SQLite refuses a repeated run
+    /// id; it does not prove `CueSession` derives that id from the cue id,
+    /// reaches the insert, or reports the refusal as `Duplicate` rather than as
+    /// something that reads like a fault in the script.
+    ///
+    /// This is the only shape in which the primary key is the sole guard: a
+    /// Conductor whose session drops mid-Cue and redispatches is exactly the
+    /// duplicate the in-session set cannot see.
+    #[test]
+    fn the_same_cue_id_on_a_second_session_does_not_enqueue_a_second_run() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (identity, registry) = identity_and_registry(dir.path());
+        let cue_id = "0123456789abcdef0123456789abcdef";
+
+        let first = cue_session(
+            &registry,
+            &identity,
+            [7u8; 32],
+            workspace_with_declared_script(dir.path()),
+        );
+        let enqueued = first
+            .enqueue_accepted(cue_id, "deploy.sh", "first delivery", "authorized-hash")
+            .expect("the first delivery of a cue id must enqueue its run");
+        assert_eq!(
+            enqueued,
+            derive_run_id(cue_id),
+            "the run id must be derived from the cue id, or the primary key guards nothing"
+        );
+        drop(first);
+
+        // A different session id, so `seen_cue_ids` is empty and cannot be the
+        // thing that refuses this.
+        let second = cue_session(
+            &registry,
+            &identity,
+            [11u8; 32],
+            crate::workspace::Workspace::new(dir.path().join("workspace")),
+        );
+        assert_eq!(
+            second.enqueue_accepted(cue_id, "deploy.sh", "redelivery", "authorized-hash"),
+            Err(CueCode::Duplicate),
+            "a redelivered cue id must be refused as a duplicate, not as a script fault"
+        );
+
+        let workspace = crate::workspace::Workspace::new(dir.path().join("workspace"));
+        let runs = crate::operations::core::list_runs(
+            &workspace,
+            crate::operations::core::ListRunsRequest {
+                script: None,
+                actor: None,
+                since_ms: None,
+                until_ms: None,
+                success: None,
+                limit: None,
+                states: Vec::new(),
+                // Every state: the run is still queued, and a filter that
+                // happened to exclude it would make the count below pass by
+                // finding nothing rather than by finding one.
+                state_set: Some("all".to_string()),
+            },
+        )
+        .expect("list the runs the workspace holds");
+        let ids: Vec<&str> = runs.iter().map(|run| run.run_id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec![enqueued.as_str()],
+            "two deliveries of one cue id must leave exactly one run"
+        );
+    }
 }

@@ -99,6 +99,141 @@ pub fn observed_baseline_id(workspace: &Workspace, record: &InstalledBaseline) -
         .unwrap_or_default()
 }
 
+/// One installed baseline, kept whole so this node can put itself back.
+///
+/// The stored payload is a `baseline_push` verbatim — the signed manifest and
+/// the script bodies in manifest order — because that is what
+/// [`crate::baseline_push::verify_push`] takes, and a rollback that re-asks
+/// every question the push asked has to hand that function the same thing.
+/// Storing a decoded form would be a second wire format for the one artefact
+/// that carries code.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetainedBaseline {
+    /// The instant this node accepted the baseline, used to answer the
+    /// manifest's validity window at rollback time. See
+    /// [`rollback_baseline`] for why that is the one question answered as of
+    /// then rather than as of now.
+    pub installed_at: i64,
+    pub push: serde_json::Value,
+}
+
+/// The baseline this node is running, kept whole.
+pub fn retained_current_path(workspace: &Workspace) -> PathBuf {
+    workspace.omakure_dir().join("baseline-current.json")
+}
+
+/// The one baseline before it. There is no third.
+///
+/// Exactly one is retained, and "rollback" is a swap rather than a step down a
+/// stack: rolling back twice returns a machine to where it started. That is the
+/// honest shape for one retained version, and it is the whole of the history
+/// this plane keeps. Deeper history would need an operator vocabulary for
+/// *which* version — a name, an index, a listing — that item 8 does not ask for
+/// and that would grow with every push.
+///
+/// The cost is bounded by a bound that already exists: every installed baseline
+/// arrived through a push, so its scripts are at most
+/// `baseline_push::MAX_PUSH_SCRIPT_BYTES` and its manifest at most
+/// `baseline::MAX_MANIFEST_BYTES`. Two slots, hexed, is under 1.3 MiB.
+pub fn retained_previous_path(workspace: &Workspace) -> PathBuf {
+    workspace.omakure_dir().join("baseline-previous.json")
+}
+
+/// The baseline this node would roll back to, if any.
+pub fn retained_previous(workspace: &Workspace) -> Option<RetainedBaseline> {
+    let contents = std::fs::read_to_string(retained_previous_path(workspace)).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+/// Put this node back on the baseline before the one it is running.
+///
+/// **As verified as the push that installed it, by being the same call.** The
+/// retained payload goes back through
+/// [`crate::baseline_push::verify_push`] against the policy this node holds
+/// *now*: the publisher must still be one it names, must not have been revoked
+/// since, the organization must still match, the signature must still verify,
+/// and every retained script body must still match its recorded hash. A
+/// rollback to an unsigned or no-longer-verifiable state would launder code
+/// past the publisher check, which is the one check this plane exists for.
+///
+/// **One question is answered as of then, not now: the validity window.** A
+/// manifest's window bounds how long a *published artefact may be delivered* —
+/// it stops a captured push being replayed onto a machine months later. Nothing
+/// is delivered here; the bytes never leave the disk they are already on, and
+/// this node already accepted them once, inside that window. Re-asking it as of
+/// today would make rollback useless in exactly the situation it exists for: a
+/// bad push discovered after the previous manifest's lifetime ran out, with the
+/// publisher offline. So the window is evaluated at the instant this node
+/// accepted the baseline, and every question about *whether the author is still
+/// trusted* is evaluated today. The recorded instant is clamped to now, so a
+/// retained record cannot reach forward into a window that has not opened.
+///
+/// The consequence is written down rather than hidden: there is no way for a
+/// publisher to retire one specific baseline. Expiry is time-based and
+/// revocation is key-wide, and neither expresses "not that one". A publisher
+/// that needs a version gone revokes the key and re-signs under a new one.
+///
+/// Rolling back is a swap. The baseline being rolled away from becomes the
+/// retained previous, so a mistaken rollback can itself be undone, and a second
+/// rollback returns the machine to where it started rather than reaching for a
+/// version this node never kept.
+pub fn rollback_baseline(
+    workspace: &Workspace,
+    policy: &crate::baseline_push::BaselinePolicy,
+    confirmed: bool,
+    now: i64,
+) -> OperationResult<InstalledBaseline> {
+    // Asked for here rather than in each adapter, so the CLI and the HTTP route
+    // cannot disagree about whether replacing every script a baseline named is
+    // something an operator has to say out loud.
+    if !confirmed {
+        return Err(OperationError::new(
+            OperationErrorCode::Forbidden,
+            "explicit confirmation is required to replace every script the current baseline named",
+        ));
+    }
+    let retained = retained_previous(workspace).ok_or_else(|| {
+        OperationError::new(
+            OperationErrorCode::NotFound,
+            "this node has no previous baseline to roll back to; exactly one is retained, \
+             and nothing has replaced the one it is running",
+        )
+    })?;
+    let push =
+        crate::baseline_push::BaselinePush::parse(&retained.push).map_err(map_baseline_code)?;
+    let accepted_at = retained.installed_at.min(now).max(0) as u64;
+    let baseline =
+        crate::baseline_push::verify_push(&push, policy, accepted_at).map_err(map_baseline_code)?;
+    install_baseline(workspace, &baseline, now)
+}
+
+/// Carry the stable baseline vocabulary out of a local refusal.
+///
+/// The `baseline_*` names are already the frozen way this plane says why it
+/// refused, and a rollback refuses for the same reasons a push does. Inventing
+/// a second set of names for the local path would leave an operator comparing
+/// two vocabularies for one decision.
+fn map_baseline_code(code: crate::baseline_push::BaselineCode) -> OperationError {
+    use crate::baseline_push::BaselineCode;
+    let operation_code = match code {
+        BaselineCode::TooLarge => OperationErrorCode::PayloadTooLarge,
+        BaselineCode::ContentMismatch => OperationErrorCode::Conflict,
+        BaselineCode::PublisherUnknown
+        | BaselineCode::PublisherRevoked
+        | BaselineCode::OrganizationMismatch
+        | BaselineCode::SignatureMismatch
+        | BaselineCode::Expired => OperationErrorCode::Forbidden,
+        _ => OperationErrorCode::InvalidInput,
+    };
+    OperationError::new(
+        operation_code,
+        format!(
+            "the retained baseline no longer verifies on this node: {}",
+            code.name()
+        ),
+    )
+}
+
 /// Install every script in a verified baseline, or leave the workspace exactly
 /// as it was.
 ///
@@ -143,11 +278,23 @@ pub fn install_baseline(
         }
     };
 
+    // The set being replaced becomes the one this node can roll back to, and
+    // the set arriving becomes the one it is running. Rotating before the
+    // record is written and restoring both slots on failure keeps the three
+    // files describing one machine: an archive that had moved on while the
+    // install was walked back would offer a rollback to the baseline the node
+    // is already running.
+    let rotation = match rotate_retained(workspace, baseline, now) {
+        Ok(rotation) => rotation,
+        Err(error) => return Err(unwind(staged, error)),
+    };
+
     // Written last and unwound on failure, so "the scripts are installed" and
     // "the node says it holds this baseline" cannot disagree. A node that
     // reported a baseline whose scripts were not there would make wave 2's
     // drift comparison answer from a file instead of from the disk.
     if let Err(error) = write_record(workspace, &serialized) {
+        rotation.restore();
         return Err(unwind(staged, error));
     }
 
@@ -155,6 +302,78 @@ pub fn install_baseline(
         state.cleanup();
     }
     Ok(record)
+}
+
+/// The contents of both retained slots before an install touched them.
+struct RetainedRotation {
+    current: (PathBuf, Option<Vec<u8>>),
+    previous: (PathBuf, Option<Vec<u8>>),
+}
+
+impl RetainedRotation {
+    /// Put both slots back exactly as they were.
+    ///
+    /// Best-effort by necessity — this runs on a filesystem that has already
+    /// refused something — and safe to be so, because a stale archive is not a
+    /// way to install unverified code: a rollback re-verifies whatever it finds
+    /// there against the publisher policy of the day.
+    fn restore(self) {
+        for (path, previous) in [self.previous, self.current] {
+            match previous {
+                Some(contents) => {
+                    let _ = write_metadata_file(&path, &contents);
+                }
+                None => {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+    }
+}
+
+/// Move the retained current into the previous slot and retain the new set.
+fn rotate_retained(
+    workspace: &Workspace,
+    baseline: &VerifiedBaseline,
+    now: i64,
+) -> OperationResult<RetainedRotation> {
+    let current_path = retained_current_path(workspace);
+    let previous_path = retained_previous_path(workspace);
+    let rotation = RetainedRotation {
+        current: (current_path.clone(), std::fs::read(&current_path).ok()),
+        previous: (previous_path.clone(), std::fs::read(&previous_path).ok()),
+    };
+
+    let bodies: Vec<Vec<u8>> = baseline
+        .scripts()
+        .iter()
+        .map(|(_, body)| body.clone())
+        .collect();
+    let retained = RetainedBaseline {
+        installed_at: now,
+        push: crate::baseline_push::BaselinePush::encode(&baseline.manifest().encode(), &bodies),
+    };
+    let serialized = serde_json::to_vec(&retained).map_err(|error| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to serialize the retained baseline: {error}"),
+        )
+    })?;
+
+    // A node installing its first baseline has nothing to roll back to, and
+    // saying so by leaving the slot empty is what makes `rollback` refuse
+    // rather than reinstall what is already there.
+    if let Some(outgoing) = rotation.current.1.as_ref() {
+        if let Err(error) = write_metadata_file(&previous_path, outgoing) {
+            rotation.restore();
+            return Err(error);
+        }
+    }
+    if let Err(error) = write_metadata_file(&current_path, &serialized) {
+        rotation.restore();
+        return Err(error);
+    }
+    Ok(rotation)
 }
 
 /// Undo every write made so far and return the failure that caused it.
@@ -166,7 +385,11 @@ fn unwind(staged: Vec<InstallState>, error: OperationError) -> OperationError {
 }
 
 fn write_record(workspace: &Workspace, contents: &[u8]) -> OperationResult<()> {
-    let path = installed_baseline_path(workspace);
+    write_metadata_file(&installed_baseline_path(workspace), contents)
+}
+
+/// Replace one workspace metadata file, or leave it exactly as it was.
+fn write_metadata_file(path: &Path, contents: &[u8]) -> OperationResult<()> {
     let parent = path.parent().ok_or_else(|| {
         OperationError::new(
             OperationErrorCode::UnsafePath,
@@ -181,7 +404,7 @@ fn write_record(workspace: &Workspace, contents: &[u8]) -> OperationResult<()> {
     })?;
     // A symlink here would redirect the record outside the workspace, which is
     // the same refusal the Battery metadata directory makes for the same reason.
-    if std::fs::symlink_metadata(&path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+    if std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
         return Err(OperationError::new(
             OperationErrorCode::UnsafePath,
             "the baseline record path is a symlink",
@@ -194,7 +417,7 @@ fn write_record(workspace: &Workspace, contents: &[u8]) -> OperationResult<()> {
             format!("failed to stage the baseline record: {err}"),
         )
     })?;
-    std::fs::rename(&temporary, &path).map_err(|err| {
+    std::fs::rename(&temporary, path).map_err(|err| {
         let _ = std::fs::remove_file(&temporary);
         OperationError::new(
             OperationErrorCode::IoFailed,
@@ -362,6 +585,7 @@ pub fn bodies_for_manifest(
 mod tests {
     use super::*;
     use crate::baseline::SignedBaselineManifest;
+    use crate::baseline::FUTURE_SKEW_SECONDS;
     use k256::schnorr::SigningKey;
     use sha2::{Digest, Sha256};
 
@@ -398,6 +622,32 @@ mod tests {
             ("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec()),
             ("audit.py".to_string(), b"print('audit')\n".to_vec()),
         ]
+    }
+
+    /// The next version of the same set: same paths, different bytes.
+    fn next_set() -> Vec<(String, Vec<u8>)> {
+        vec![
+            ("ops/deploy.sh".to_string(), b"echo deploy v2\n".to_vec()),
+            ("audit.py".to_string(), b"print('audit v2')\n".to_vec()),
+        ]
+    }
+
+    /// The publisher `verified` signs with, as a receiver would record it.
+    fn policy(revoked: bool) -> crate::baseline_push::BaselinePolicy {
+        let signing_key = SigningKey::from_slice(&[7u8; 32]).expect("scalar");
+        let mut public_key = [0u8; 32];
+        public_key.copy_from_slice(signing_key.verifying_key().to_bytes().as_slice());
+        let mut key_id = [0u8; 16];
+        key_id.copy_from_slice(&Sha256::digest(public_key)[..16]);
+        crate::baseline_push::BaselinePolicy {
+            enabled: true,
+            publishers: vec![crate::baseline::BaselinePublisherKey {
+                key_id,
+                public_key,
+                revoked,
+            }],
+            organization: "acme".to_string(),
+        }
     }
 
     /// The whole set lands, and the record names the set that landed.
@@ -584,6 +834,157 @@ mod tests {
             installed_baseline(&workspace).is_none(),
             "a failed install must not record a baseline the node does not hold"
         );
+    }
+
+    /// Rollback restores the previous version and leaves the node in sync
+    /// against it.
+    #[test]
+    fn a_rollback_restores_the_previous_set_and_the_node_reads_as_in_sync() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace(&dir);
+        let first = install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
+        let second =
+            install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
+        assert_ne!(first.baseline_id, second.baseline_id);
+        assert_eq!(
+            std::fs::read(workspace.scripts_root().join("ops/deploy.sh")).expect("read"),
+            b"echo deploy v2\n".to_vec()
+        );
+
+        let restored = rollback_baseline(&workspace, &policy(false), true, 1_800_000_300)
+            .expect("a set this node installed under a publisher it still names rolls back");
+
+        assert_eq!(
+            restored.baseline_id, first.baseline_id,
+            "rollback restores the version before the current one"
+        );
+        for (path, body) in set() {
+            assert_eq!(
+                std::fs::read(workspace.scripts_root().join(&path)).expect("read"),
+                body,
+                "{path} must hold the bytes of the restored set"
+            );
+        }
+        assert_eq!(
+            observed_baseline_id(&workspace, &restored),
+            first.baseline_id,
+            "a rolled-back node reports in sync against the version it was put back on"
+        );
+
+        // Exactly one version is retained, so this is a swap and not a stack.
+        let again = rollback_baseline(&workspace, &policy(false), true, 1_800_000_400)
+            .expect("the set rolled away from is the one now retained");
+        assert_eq!(
+            again.baseline_id, second.baseline_id,
+            "rolling back twice returns this node to where it started"
+        );
+    }
+
+    /// A publisher revoked since the install must make the rollback fail.
+    ///
+    /// This is the property that separates a rollback from copying files back:
+    /// the retained set goes through the same `verify_push` the delivery path
+    /// runs, against the policy this node holds *today*. Without it, a machine
+    /// could be walked back onto code whose author the fleet had since
+    /// disowned, with no signature check anywhere in the story.
+    #[test]
+    fn a_rollback_under_a_revoked_publisher_is_refused_and_changes_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace(&dir);
+        install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
+        let second =
+            install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
+
+        let refused = rollback_baseline(&workspace, &policy(true), true, 1_800_000_300)
+            .expect_err("a revoked publisher's code must not be reinstalled");
+        assert_eq!(refused.code, OperationErrorCode::Forbidden);
+        assert!(
+            refused.message.contains("baseline_publisher_revoked"),
+            "the stable baseline vocabulary must say why: {}",
+            refused.message
+        );
+
+        // A named-but-different publisher, and an unnamed one: the same refusal
+        // reached two other ways, each leaving the machine exactly as it was.
+        let mut stranger = policy(false);
+        stranger.publishers[0].public_key[0] ^= 0xff;
+        assert!(rollback_baseline(&workspace, &stranger, true, 1_800_000_300).is_err());
+        assert!(rollback_baseline(
+            &workspace,
+            &crate::baseline_push::BaselinePolicy::default(),
+            true,
+            1_800_000_300
+        )
+        .is_err());
+
+        assert_eq!(
+            installed_baseline(&workspace).expect("record").baseline_id,
+            second.baseline_id,
+            "a refused rollback leaves the node on the baseline it was running"
+        );
+        assert_eq!(
+            std::fs::read(workspace.scripts_root().join("ops/deploy.sh")).expect("read"),
+            b"echo deploy v2\n".to_vec(),
+            "a refused rollback must not put any of the old bytes back"
+        );
+    }
+
+    /// A retained set tampered with on disk is refused by the content check.
+    ///
+    /// The signature covers every script's hash, so an operator who edited the
+    /// retained copy cannot use rollback as a way to install it.
+    #[test]
+    fn a_tampered_retained_set_cannot_be_rolled_back_into_place() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace(&dir);
+        install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
+        install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
+
+        let path = retained_previous_path(&workspace);
+        let mut retained: RetainedBaseline =
+            serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("parse");
+        // A valid script body, hexed exactly as the retained format expects,
+        // that the signed manifest simply does not name the hash of.
+        retained.push["scripts"][0] = serde_json::json!(hex(b"echo something else\n"));
+        std::fs::write(&path, serde_json::to_vec(&retained).expect("serialize")).expect("write");
+
+        let refused = rollback_baseline(&workspace, &policy(false), true, 1_800_000_300)
+            .expect_err("a retained body the manifest does not name must be refused");
+        assert_eq!(refused.code, OperationErrorCode::Conflict);
+        assert!(refused.message.contains("baseline_content_mismatch"));
+    }
+
+    /// The window is answered as of the install, and cannot reach forward.
+    #[test]
+    fn a_rollback_survives_the_manifests_expiry_but_not_a_window_that_never_opened() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace(&dir);
+        install_baseline(&workspace, &verified(&set()), ISSUED_AT as i64 + 100).expect("first");
+        install_baseline(&workspace, &verified(&next_set()), ISSUED_AT as i64 + 200)
+            .expect("second");
+
+        // Long past the manifest's own expiry. Nothing is delivered by a
+        // rollback, and this node already accepted these bytes inside the
+        // window, so the question is answered as of then.
+        let restored = rollback_baseline(
+            &workspace,
+            &policy(false),
+            true,
+            EXPIRES_AT as i64 + 90 * 24 * 60 * 60,
+        )
+        .expect("an expired manifest still names a set this node already ran");
+        assert_eq!(restored.entries.len(), 2);
+
+        // A retained record claiming to have been installed before its own
+        // manifest was issued must not reach a window that had not opened.
+        let path = retained_previous_path(&workspace);
+        let mut retained: RetainedBaseline =
+            serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("parse");
+        retained.installed_at = ISSUED_AT as i64 - FUTURE_SKEW_SECONDS as i64 - 10;
+        std::fs::write(&path, serde_json::to_vec(&retained).expect("serialize")).expect("write");
+        let refused = rollback_baseline(&workspace, &policy(false), true, ISSUED_AT as i64 + 400)
+            .expect_err("a window that had not opened is still a refusal");
+        assert!(refused.message.contains("baseline_expired"));
     }
 
     /// A path the manifest could never carry, asked for directly.

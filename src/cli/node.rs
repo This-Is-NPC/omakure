@@ -168,6 +168,20 @@ fn dispatch_baseline(
                 },
             )
         }
+        NodeBaselineCommand::Rollback(rollback) => {
+            let workspace = crate::workspace::Workspace::new(scripts_dir.to_path_buf());
+            // The same policy the receive path reads, from this node's own
+            // config, so a rollback can never be more permissive than the push
+            // that installed the set would be if it arrived today.
+            let policy = crate::baseline_push::read_policy(context);
+            crate::operations::baseline::rollback_baseline(
+                &workspace,
+                &policy,
+                rollback.confirmed,
+                unix_now() as i64,
+            )
+            .map(|record| serde_json::to_value(record).expect("baseline record serializes"))
+        }
     }
 }
 

@@ -879,6 +879,7 @@ pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("GET", "/v1/node/signals"),
     ("POST", "/v1/node/cues"),
     ("POST", "/v1/node/baselines"),
+    ("POST", "/v1/node/baseline/rollback"),
     ("GET", "/v1/node/peers"),
     ("POST", "/v1/node/peers"),
     ("GET", "/v1/node/enrollments"),
@@ -999,6 +1000,10 @@ fn router_with_transport(
         .route("/v1/node/signals", get(node_signals_handler))
         .route("/v1/node/cues", post(node_cue_handler))
         .route("/v1/node/baselines", post(node_baseline_handler))
+        .route(
+            "/v1/node/baseline/rollback",
+            post(node_baseline_rollback_handler),
+        )
         .route(
             "/v1/node/peers",
             get(node_peers_handler).post(node_trust_handler),
@@ -1567,6 +1572,47 @@ async fn node_baseline_handler(
         )),
     };
     operation_response(result)
+}
+
+/// The body `POST /v1/node/baseline/rollback` takes.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NodeBaselineRollbackBody {
+    confirmed: bool,
+}
+
+/// Put this node back on the baseline it retained before the current one.
+///
+/// A local act on the machine that holds the scripts, exposed here for the same
+/// reason every other local act is: an operator working over the management API
+/// should not have to open a shell. It is `node:write` on *this* node's own
+/// surface and reaches no peer. Nothing a Conductor can send arrives here: the
+/// baseline plane carries exactly two node-to-node kinds and neither one asks a
+/// Performer to change which version it runs.
+async fn node_baseline_rollback_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+    body: Body,
+) -> Response {
+    if let Some(response) = require_scope(&state, &auth_ctx, "node:write") {
+        return response;
+    }
+    let body =
+        match parse_json_body::<NodeBaselineRollbackBody>(body, state.deploy.http.body_limit_bytes)
+            .await
+        {
+            Ok(body) => body,
+            Err(error) => return operation_error_response(error),
+        };
+    operation_response(node_context().and_then(|context| {
+        let policy = crate::baseline_push::read_policy(&context);
+        crate::operations::baseline::rollback_baseline(
+            &state.workspace,
+            &policy,
+            body.confirmed,
+            crate::direct_transport::unix_seconds() as i64,
+        )
+    }))
 }
 
 /// Decode lowercase hex, refusing upper case so one artefact has one spelling.

@@ -639,6 +639,26 @@ fn node_baseline_creates_a_key_signs_a_set_and_refuses_to_push_without_a_service
         !pushed.status.success(),
         "with no service running there is no session a baseline could travel on"
     );
+
+    // Rollback is the one baseline verb that reaches no peer at all, and on a
+    // node that was never pushed one there is nothing to reach for. Refusing is
+    // the answer; a success that changed nothing would tell an operator their
+    // machine had been put back when it had not.
+    assert!(
+        !node(&["baseline", "rollback"]).status.success(),
+        "replacing every script a baseline named is confirmed explicitly"
+    );
+    let nothing_to_undo = node(&["baseline", "rollback", "--confirmed"]);
+    assert!(
+        !nothing_to_undo.status.success(),
+        "a node with no previous baseline must refuse rather than report a rollback"
+    );
+    assert_eq!(
+        json(&nothing_to_undo)["error"]["code"],
+        "not_found",
+        "body: {}",
+        String::from_utf8_lossy(&nothing_to_undo.stdout)
+    );
 }
 
 #[test]

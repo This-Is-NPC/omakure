@@ -2,8 +2,9 @@
 
 **Status: PENDING OWNER REVIEW.** This document records the wire format,
 authorization mapping, and every quantitative bound for putting a signed
-baseline onto a node. It is the delivery half of roadmap item 8; the signing
-half is `src/baseline.rs` and `src/baseline_publisher.rs`.
+baseline onto a node, keeping one version behind it, and putting a machine back.
+It is the delivery half of roadmap item 8; the signing half is `src/baseline.rs`
+and `src/baseline_publisher.rs`.
 
 Every number here is normative. A later task needing a limit not written here
 must amend this document first.
@@ -225,7 +226,98 @@ grounds that it only defended against an attacker who could already write to
 the workspace; this plane makes that premise false, and the check is now live
 and fail-closed. `hash_reverified_at_exec = true`.
 
+## Retention and Rollback
+
+Wave 2. Two message kinds still, and no third: **rollback is local.**
+
+### What "previous" means
+
+Exactly **one** previous baseline is retained, in
+`.omakure/baseline-previous.json`, beside the one currently installed in
+`.omakure/baseline-current.json`. Each slot holds a `baseline_push` payload
+verbatim — the signed manifest and the script bodies in manifest order — plus
+the Unix second this node accepted it.
+
+| Item | Value |
+|---|---|
+| Retained versions | Exactly 1 previous, plus the current |
+| Current slot | `.omakure/baseline-current.json` |
+| Previous slot | `.omakure/baseline-previous.json` |
+| Worst-case retained bytes | `2 × (2 × MAX_PUSH_SCRIPT_BYTES + 2 × MAX_MANIFEST_BYTES)` = **1,310,720**, hexed |
+
+The bound is a consequence rather than a new number: every installed baseline
+arrived through a push, so its scripts are already capped at
+`MAX_PUSH_SCRIPT_BYTES` and its manifest at `MAX_MANIFEST_BYTES`.
+
+Installing rotates: the set being replaced moves into the previous slot, and the
+arriving set becomes current. **Rolling back is therefore a swap, not a step
+down a stack** — the version rolled away from becomes the retained previous, so
+a mistaken rollback can itself be undone and a second rollback returns the
+machine to where it started. Deeper history was refused: it needs an operator
+vocabulary for *which* version — a name, an index, a listing — that item 8 does
+not ask for and that grows with every push.
+
+A node with nothing in the previous slot refuses with `not_found`. It does not
+reinstall what it is already running and report success.
+
+### As verified as the push that installed it
+
+The retained payload goes back through **the same `verify_push`** the delivery
+path runs, against the policy this node reads from its own config **now**:
+
+- the publisher key id must still be one `trust.baseline_publishers` names,
+- that publisher must not have been revoked since,
+- `organization.id` must still match,
+- the manifest signature must still verify,
+- every retained script body must still match its recorded hash (`bind`, all or
+  none).
+
+A rollback to an unsigned or no-longer-verifiable state would launder code past
+the publisher check, which is the check this whole plane exists for. A publisher
+revoked since the original install makes the rollback fail.
+
+### The one question answered as of then
+
+**The validity window is evaluated at the instant this node accepted the
+baseline, not today.** The window bounds how long a published artefact may be
+*delivered* — it stops a captured push being replayed onto a machine months
+later. Nothing is delivered by a rollback: the bytes never leave the disk they
+are already on, and this node already accepted them once, inside that window.
+Re-asking it as of today would make rollback useless in exactly the situation it
+exists for — a bad push discovered after the previous manifest's 30-day lifetime
+ran out, with the publisher offline.
+
+The recorded instant is clamped to now, so a retained record cannot reach
+forward into a window that has not opened.
+
+The consequence is stated rather than hidden: **there is no way for a publisher
+to retire one specific baseline.** Expiry is time-based and revocation is
+key-wide, and neither expresses "not that one". A publisher that needs a version
+gone revokes the key and re-signs under a new one — and that does block the
+rollback, because revocation is re-read.
+
+### Why rollback is not a third message kind
+
+`omakure node baseline rollback --confirmed` and
+`POST /v1/node/baseline/rollback` under `node:write`. Both act on the machine
+they run on and reach no peer.
+
+A `baseline_rollback` kind would hand a Conductor the power to flip a Performer
+between two code versions at will, without a publisher signature anywhere in
+*that* message. The split between publishing and conducting exists to withhold
+exactly that. The Conductor already learns which machine needs attention: the
+Health Plane's `baseline_status` says `drifted`, and `.docs/recovery.md` says
+what to do about it.
+
+## Drift
+
+A Performer reports two facts on its Profile and no verdict: `baseline_id`, the
+derived name of the set it recorded installing, and `baseline_observed_id`, the
+same derivation recomputed over that set's paths as they are on disk now. The
+Conductor's fleet projection compares them. The grammar, the four verdicts, and
+what the pair does not cover are frozen in `.docs/health-plane-contract.md`.
+
 ## Out of scope
 
-Drift reporting and rollback (wave 2). Campaigns and fan-out. Chunked delivery
-of a baseline larger than one push.
+Campaigns and fan-out. Chunked delivery of a baseline larger than one push.
+Retaining more than one previous version.

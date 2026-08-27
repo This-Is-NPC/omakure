@@ -211,6 +211,10 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_baseline_route_requires_node_write_and_a_transport"),
     ),
     (
+        ("POST", "/v1/node/baseline/rollback"),
+        RouteCoverage::Covered("node_baseline_rollback_route_is_local_write_and_needs_a_previous"),
+    ),
+    (
         ("GET", "/v1/node/peers"),
         RouteCoverage::Covered("node_management_routes"),
     ),
@@ -1989,4 +1993,71 @@ fn node_baseline_route_requires_node_write_and_a_transport() {
         "with no direct transport there is no session to carry a baseline: {}",
         without_transport.safe_body()
     );
+}
+
+/// Rolling back is a local act on the machine that holds the scripts.
+///
+/// It reaches no peer and needs no session, which is exactly why it is not a
+/// third node-to-node message kind. What it does need is something to roll back
+/// to, and a node that was never pushed a baseline says so rather than
+/// reporting a success that changed nothing.
+#[test]
+fn node_baseline_rollback_route_is_local_write_and_needs_a_previous() {
+    let workspace = support::TestWorkspace::new("node-baseline-rollback-route");
+    let server = support::HttpServer::start_node_service(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--workers",
+            "1",
+            "--no-scheduler",
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(20),
+    );
+    let confirmed = serde_json::json!({ "confirmed": true });
+    let denied = server.post_json("/v1/node/baseline/rollback", &confirmed);
+    assert_eq!(
+        denied.status,
+        403,
+        "a node:read token must not replace the scripts on this machine: {}",
+        denied.safe_body()
+    );
+
+    let writer_workspace = support::TestWorkspace::new("node-baseline-rollback-route-writer");
+    let writer = support::HttpServer::start_node_service(
+        writer_workspace.path(),
+        API_TOKEN,
+        &[
+            "--workers",
+            "1",
+            "--no-scheduler",
+            "--capability",
+            "node:write",
+        ],
+        &[],
+        Duration::from_secs(20),
+    );
+    let unconfirmed = writer.post_json(
+        "/v1/node/baseline/rollback",
+        &serde_json::json!({ "confirmed": false }),
+    );
+    assert_eq!(
+        unconfirmed.status,
+        403,
+        "replacing every script a baseline named is said out loud: {}",
+        unconfirmed.safe_body()
+    );
+    assert_error_code(&unconfirmed.json(), "forbidden");
+
+    let nothing_to_undo = writer.post_json("/v1/node/baseline/rollback", &confirmed);
+    assert_eq!(
+        nothing_to_undo.status,
+        404,
+        "a node that was never pushed a baseline has no previous version: {}",
+        nothing_to_undo.safe_body()
+    );
+    assert_error_code(&nothing_to_undo.json(), "not_found");
 }

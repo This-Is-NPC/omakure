@@ -706,6 +706,28 @@ pub enum NodeBaselineCommand {
 
     /// Deliver a signed baseline to one trusted Performer
     Push(NodeBaselinePushArgs),
+
+    /// Put this node back on the one baseline retained before the current one
+    ///
+    /// A local operator action, not something a Conductor orders. The baseline
+    /// plane carries exactly two message kinds and neither of them is "run the
+    /// other version"; a remote rollback verb would hand a Conductor the power
+    /// to flip a Performer between two code versions at will, which is a power
+    /// the split between publishing and conducting exists to withhold. The
+    /// drift status on `node health` says which machine to go and fix.
+    ///
+    /// Exactly one previous baseline is retained, and this is a swap: rolling
+    /// back twice returns this node to where it started. The retained set is
+    /// re-verified against the publishers this node names *today*, so a
+    /// publisher revoked since the original install makes the rollback fail.
+    Rollback(NodeBaselineRollbackArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct NodeBaselineRollbackArgs {
+    /// Required. A rollback replaces every script the current baseline named.
+    #[arg(long = "confirmed")]
+    pub confirmed: bool,
 }
 
 #[derive(Args, Debug)]

@@ -153,6 +153,65 @@ Cue-origin runs execute with an explicit deny-all secret policy, and a script
 whose schema declares a secret field is refused at the gate rather than run
 without its secrets. See `remote-cue-contract.md`.
 
+## Enrollment authority
+
+A fleet needs something that can say "this node belongs to me". That is an
+enrollment authority: a signing key held by one node, whose public half every
+member names in `trust.authorities`.
+
+```bash
+omakure node authority create --confirmed
+omakure node authority show
+```
+
+The key is **not** the node identity key. Both are BIP-340 scalars and sharing
+one would cost nothing to implement, but it would mean compromising any single
+node's identity hands over the right to mint membership for the whole fleet.
+It lives beside the identity, under the same 0700 directory, written at 0600,
+re-validated for owner and mode on every read, and returned by no read path.
+
+`create` refuses to replace an existing key. Rotating an authority invalidates
+every bundle it ever signed and every `trust.authorities` entry naming it, on
+every machine in the fleet — that is a fleet-wide event, not something a
+repeated command should do quietly.
+
+Issuing names the node that will apply the bundle; the subject is always the
+issuing node, because an authority issues membership in its own fleet:
+
+```bash
+omakure node authority issue --audience omk1_… --role conductor \
+  --capability remote-run --lifetime-seconds 3600
+```
+
+The reply carries `bundle_hex` plus the two values the audience's `node.toml`
+must already contain for it to be accepted at all — the authority `key_id` and
+`public_key` — and the organization the bundle names. A bundle is checked
+against the applying node's own identity, so it is useless anywhere else.
+
+### What an unattended node does with a bundle it cannot use
+
+Frozen decision, because on an unattended machine nobody is watching either way.
+
+**Refuse the enrollment; never refuse to serve.** A node that will not boot
+cannot be asked what went wrong, and one bad bundle would take down a whole
+rollout batch. A node that boots unenrolled is observable — `omakure node
+status` shows it initialized with no peers — and the reason is in its audit
+trail. This is the same shape the rest of the product already takes: a
+revocation is written before the run log is touched and never blocked by it, and
+a Cue refused on trust is silent to the sender while the node keeps serving.
+
+Concretely:
+
+| Case | Behaviour |
+|---|---|
+| No bundle present | Serve. Not an error; most nodes never have one. |
+| `trust.enrollment` is not `signed-bundle` | Serve, and log a distinguishable reason. Never silence — this is the shipped default, so a provisioning mistake looks exactly like a node that was never meant to enroll. |
+| Bundle invalid, expired, wrong organization, or from an unknown or revoked authority | Serve unenrolled, log the typed reason, do not retry this session. |
+| Already enrolled, or the bootstrap token already consumed | No-op, serve normally. The token is consumed and tombstoned on first success, so treating its absence as failure would let the node boot exactly once. |
+
+Retry is per session, matching the rest of the node's idioms: a condition that
+resolves is picked up on the next start, and nothing loops in between.
+
 ## Fleet health
 
 An enrolled Performer reports a Profile on connect or material change and a

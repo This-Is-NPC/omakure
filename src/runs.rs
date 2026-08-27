@@ -535,6 +535,11 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             PRIMARY KEY(run_id, secret_ref),
             FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS run_script_hashes (
+            run_id TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+        );
         CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at DESC);
         CREATE INDEX IF NOT EXISTS idx_runs_script_path ON runs(script_path);
         CREATE INDEX IF NOT EXISTS idx_runs_actor ON runs(actor);
@@ -771,6 +776,13 @@ pub struct EnqueueOptions {
     pub trigger: RunTrigger,
     pub env_name: Option<String>,
     pub allowed_secret_refs: Option<Vec<String>>,
+    /// The exact script bytes this run was authorized against.
+    ///
+    /// Only a Cue-origin run carries one, and for such a run the executor
+    /// treats its absence as a refusal rather than as "no opinion". Written in
+    /// the same call as the row so no window exists in which a Cue-origin run
+    /// is claimable without the hash that constrains it.
+    pub script_content_hash: Option<String>,
 }
 
 pub const ALLOW_ALL_SECRET_REFS_POLICY: &str = "__omakure_allow_all_secret_refs__";
@@ -824,6 +836,9 @@ pub fn enqueue(
             &row.run_id,
             &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
         )?,
+    }
+    if let Some(hash) = opts.script_content_hash.as_deref() {
+        set_run_script_hash(conn, &row.run_id, hash)?;
     }
     Ok(row)
 }
@@ -880,6 +895,9 @@ pub fn start_inline(
             &row.run_id,
             &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
         )?,
+    }
+    if let Some(hash) = opts.script_content_hash.as_deref() {
+        set_run_script_hash(conn, &row.run_id, hash)?;
     }
     Ok(row)
 }
@@ -947,6 +965,36 @@ pub fn get_run_secret_refs(conn: &Connection, run_id: &str) -> Result<Option<Vec
     } else {
         Ok(Some(refs))
     }
+}
+
+/// Record the script bytes a run was authorized against.
+///
+/// `INSERT` rather than `INSERT OR REPLACE`: the authorized content of a run is
+/// decided once, when the row is created. A path that could overwrite it would
+/// let whatever wrote second decide what the executor compares against, which
+/// is the entire property this table exists to hold.
+pub fn set_run_script_hash(
+    conn: &Connection,
+    run_id: &str,
+    content_hash: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO run_script_hashes (run_id, content_hash) VALUES (?, ?)",
+        params![run_id, content_hash],
+    )
+    .map(|_| ())
+    .map_err(|err| format!("Set run script hash failed: {}", err))
+}
+
+/// The script bytes a run was authorized against, if any were recorded.
+pub fn get_run_script_hash(conn: &Connection, run_id: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT content_hash FROM run_script_hashes WHERE run_id = ?",
+        [run_id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|err| format!("Query run script hash failed: {}", err))
 }
 
 /// Filters used by [`claim_next`] to scope a worker to a subset of jobs.

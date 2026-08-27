@@ -251,12 +251,26 @@ The resolved file's content hash is recorded when gate E authorizes it and
 read a schema; without the re-check, a file swapped during that walk would be
 enqueued under an authorization granted for different bytes.
 
-**Deviation from the original draft, for owner review.** This does not extend to
-a third check inside `run_executor`. Doing so needs a new `runs` column and a
-Cue-specific branch in the executor, and it defends only against an attacker who
-can already write into the workspace this node runs code from — who has no need
-of a Cue. `hash_reverified_at_exec = false` in the frozen vectors records the
-choice rather than hiding it.
+**Amended when baseline push landed.** The original draft declined a third check
+inside `run_executor` on the grounds that it defended only against an attacker
+who could already write into the workspace this node runs code from — who has no
+need of a Cue. Baseline delivery makes that premise false. A signed baseline
+replaces scripts *legitimately*, so a Cue accepted against version N can reach
+the executor with version N+1 on disk with no attacker anywhere in the story,
+and the run would be one the Conductor never authorized.
+
+The check is therefore live: `run_script_hashes` records the bytes gate E
+authorized, in the same call that inserts the run row, and
+`execute_with_heartbeat` compares them before it resolves a single argument. It
+is scoped to `RunTrigger::Cue`; a manual or scheduled run has no earlier
+authorization to have drifted from.
+
+It fails closed in all three directions — a missing hash row, a failed lookup,
+and an unreadable script each refuse. That is deliberate symmetry with the
+secret-policy rule above, where "missing" and "lookup failed" both meaning
+allow-all is the single most dangerous default on this path.
+
+`hash_reverified_at_exec = true` in the frozen vectors.
 
 Failure to resolve is `1206`. The reply never distinguishes "no such script" from
 "excluded from discovery": both are `1206` with identical timing-insensitive

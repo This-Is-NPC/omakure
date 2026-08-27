@@ -13,7 +13,7 @@
 use crate::adapters::script_runner::MultiScriptRunner;
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::ports::ScriptRepository;
-use crate::runs::{self, RunCompletion, RunRow, RunState};
+use crate::runs::{self, RunCompletion, RunRow, RunState, RunTrigger};
 use crate::workspace::Workspace;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -80,6 +80,19 @@ pub fn execute_with_heartbeat(
                 exit_code: None,
                 success: false,
                 error: Some(format!("script not found: {}", row.script_path)),
+            },
+        };
+    }
+
+    if let Err(error) = check_cue_script_unchanged(workspace, row, &script_path) {
+        return ExecutionResult {
+            terminal: ExecutionTerminal::Failed,
+            completion: RunCompletion {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+                success: false,
+                error: Some(error),
             },
         };
     }
@@ -377,6 +390,48 @@ pub fn execute_with_heartbeat(
     }
 }
 
+/// Refuse a Cue-origin run whose script is no longer the script it was
+/// authorized against.
+///
+/// The Remote Cue contract declined this third check on the grounds that it
+/// only defended against an attacker who could already write to the workspace.
+/// A baseline push makes that premise false: a signed baseline replaces scripts
+/// legitimately, so a Cue accepted against version N can reach the executor
+/// with version N+1 on disk and nobody hostile anywhere in the story.
+///
+/// Fail-closed in all three directions. A missing hash row, a failed lookup,
+/// and an unreadable script each refuse, because none of them is evidence that
+/// the bytes are the authorized ones — and the run_secret_refs precedent, where
+/// "missing" and "lookup failed" both meant allow-all, is exactly the shape of
+/// mistake this must not repeat.
+///
+/// Scoped to `RunTrigger::Cue`. A manual or scheduled run is started by someone
+/// on this machine against whatever is on this machine; there is no earlier
+/// authorization for it to have drifted from.
+fn check_cue_script_unchanged(
+    workspace: &Workspace,
+    row: &RunRow,
+    script_path: &Path,
+) -> Result<(), String> {
+    if row.trigger != RunTrigger::Cue {
+        return Ok(());
+    }
+    let recorded = runs::open(workspace)
+        .and_then(|conn| runs::get_run_script_hash(&conn, &row.run_id))
+        .map_err(|err| format!("authorized script content lookup failed: {err}"))?
+        .ok_or_else(|| {
+            "no authorized script content was recorded for this remote run".to_string()
+        })?;
+    match crate::remote_cue::content_hash(script_path) {
+        Some(current) if current == recorded => Ok(()),
+        Some(_) => Err(
+            "the script changed after this remote run was authorized; it was not executed"
+                .to_string(),
+        ),
+        None => Err("the authorized script could not be read at execution time".to_string()),
+    }
+}
+
 fn secret_access_for_row(
     workspace: &Workspace,
     row: &RunRow,
@@ -567,6 +622,124 @@ mod tests {
             fs::set_permissions(&p, perms).unwrap();
         }
         p
+    }
+
+    /// A Cue authorized one script; a baseline may legitimately replace it
+    /// before the worker claims the row. The bytes that run must be the bytes
+    /// that were authorized.
+    #[test]
+    #[cfg(unix)]
+    fn a_cue_run_refuses_a_script_that_changed_after_it_was_authorized() {
+        let ws = make_workspace("cue_swapped_script");
+        let script = write_bash_stub(&ws, "deploy.sh", "echo authorized");
+        let authorized = crate::remote_cue::content_hash(&script).unwrap();
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "conductor".into(),
+                omakure_version: "test".into(),
+                trigger: RunTrigger::Cue,
+                script_content_hash: Some(authorized),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        // The control: unchanged bytes still run, so the refusal below is
+        // about the swap and not about Cue-origin runs being blocked outright.
+        let unchanged = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(unchanged.terminal, ExecutionTerminal::Completed);
+        assert!(unchanged.completion.stdout.contains("authorized"));
+
+        write_bash_stub(&ws, "deploy.sh", "echo substituted");
+        let swapped = execute_with_heartbeat(&ws, &row, vec![], None);
+
+        assert_eq!(swapped.terminal, ExecutionTerminal::Failed);
+        assert!(
+            !swapped.completion.stdout.contains("substituted"),
+            "the substituted script must not have run at all, got: {:?}",
+            swapped.completion.stdout
+        );
+        assert!(swapped
+            .completion
+            .error
+            .unwrap_or_default()
+            .contains("changed after this remote run was authorized"));
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    /// The `run_secret_refs` lesson: "no record" must not read as "no
+    /// constraint". A Cue-origin row without a recorded hash is a row whose
+    /// authorization cannot be checked, and running it would make the whole
+    /// binding optional for anyone who could delete one table row.
+    #[test]
+    #[cfg(unix)]
+    fn a_cue_run_with_no_recorded_hash_does_not_execute() {
+        let ws = make_workspace("cue_missing_hash");
+        let script = write_bash_stub(&ws, "deploy.sh", "echo unconstrained");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "conductor".into(),
+                omakure_version: "test".into(),
+                trigger: RunTrigger::Cue,
+                script_content_hash: None,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+
+        assert_eq!(result.terminal, ExecutionTerminal::Failed);
+        assert!(
+            !result.completion.stdout.contains("unconstrained"),
+            "an unconstrained remote run must not reach the child process"
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    /// The check is scoped to remote runs. A run someone started on this
+    /// machine has no earlier authorization to have drifted from, and
+    /// requiring a hash for it would break every local path.
+    #[test]
+    #[cfg(unix)]
+    fn a_manual_run_is_unaffected_by_the_authorized_content_check() {
+        let ws = make_workspace("manual_unaffected");
+        let script = write_bash_stub(&ws, "local.sh", "echo local");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                trigger: RunTrigger::Manual,
+                script_content_hash: None,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        write_bash_stub(&ws, "local.sh", "echo edited");
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        assert!(result.completion.stdout.contains("edited"));
+        let _ = fs::remove_dir_all(ws.root());
     }
 
     #[test]

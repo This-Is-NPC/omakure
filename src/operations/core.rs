@@ -322,6 +322,7 @@ pub fn enqueue_run_with_access(
             trigger: runs::RunTrigger::Manual,
             env_name: request.env,
             allowed_secret_refs: Some(resolved_args.provider_refs),
+            script_content_hash: None,
         },
     )
     .map_err(io_error_string)
@@ -345,9 +346,17 @@ pub fn enqueue_run_with_access(
 ///
 /// A script declaring secret fields is refused at the gate before reaching this
 /// point, so the empty policy denies nothing the script legitimately needed.
+///
+/// `authorized_content_hash` is a required parameter for the same reason the
+/// secret policy is not one. It is the bytes gate E authorized, and the executor
+/// refuses a Cue-origin run whose recorded hash is missing. Were it a field on
+/// the shared request struct, every non-Cue caller would carry a `None` that
+/// looks like a default, and the day someone copied one into this path the run
+/// would execute unconstrained with nothing red.
 pub fn enqueue_cue_run(
     workspace: &Workspace,
     request: EnqueueRunRequest,
+    authorized_content_hash: &str,
 ) -> OperationResult<RunRow> {
     let path = resolve_script_path(&request.script, workspace.scripts_root())?;
     let canonical = std::fs::canonicalize(&path).unwrap_or(path);
@@ -387,6 +396,7 @@ pub fn enqueue_cue_run(
             trigger: runs::RunTrigger::Cue,
             env_name: None,
             allowed_secret_refs: Some(Vec::new()),
+            script_content_hash: Some(authorized_content_hash.to_string()),
         },
     )
     .map_err(io_error_string)
@@ -635,7 +645,8 @@ mod tests {
         let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
-        let row = enqueue_cue_run(&ws, cue_request()).expect("enqueue the cue run");
+        let row =
+            enqueue_cue_run(&ws, cue_request(), "authorized-hash").expect("enqueue the cue run");
 
         let conn = runs::open(&ws).unwrap();
         assert_eq!(
@@ -653,7 +664,8 @@ mod tests {
         let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
-        let row = enqueue_cue_run(&ws, cue_request()).expect("enqueue the cue run");
+        let row =
+            enqueue_cue_run(&ws, cue_request(), "authorized-hash").expect("enqueue the cue run");
 
         assert_eq!(row.trigger, runs::RunTrigger::Cue);
     }
@@ -666,9 +678,9 @@ mod tests {
         let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
-        assert!(enqueue_cue_run(&ws, cue_request()).is_ok());
+        assert!(enqueue_cue_run(&ws, cue_request(), "authorized-hash").is_ok());
         assert!(
-            enqueue_cue_run(&ws, cue_request()).is_err(),
+            enqueue_cue_run(&ws, cue_request(), "authorized-hash").is_err(),
             "the primary key is what makes a repeated cue id run at most once"
         );
     }
@@ -922,6 +934,7 @@ mod tests {
                 trigger: runs::RunTrigger::Manual,
                 env_name: None,
                 allowed_secret_refs: None,
+                script_content_hash: None,
             },
         )
         .unwrap();

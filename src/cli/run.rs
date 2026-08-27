@@ -104,6 +104,7 @@ pub fn run(
             trigger: crate::runs::RunTrigger::Manual,
             env_name: None,
             allowed_secret_refs: None,
+            script_content_hash: None,
         },
     )
     .map_err(|err| -> Box<dyn Error> { err.into() })?;

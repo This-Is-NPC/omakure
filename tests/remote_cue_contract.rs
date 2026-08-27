@@ -309,11 +309,25 @@ fn a_cue_names_a_script_and_never_carries_one() {
         "without the re-check, a file swapped during the gate walk is enqueued \
          under an authorization granted for different bytes"
     );
-    // Recorded as false rather than removed: a claim that quietly disappears
-    // from a contract is worse than one the reader can see was declined.
+    // Declined in the original draft, then landed when baseline push made its
+    // premise false: a baseline replaces scripts legitimately, so a Cue
+    // authorized against version N could execute N+1 with no attacker involved.
     assert!(
-        !boolean(&v, &["resolution", "hash_reverified_at_exec"]),
-        "the executor re-check is a declared deviation, not an omission"
+        boolean(&v, &["resolution", "hash_reverified_at_exec"]),
+        "a legitimate baseline replacement must not be able to substitute the \
+         bytes a Cue was authorized against"
+    );
+    assert!(
+        boolean(&v, &["resolution", "hash_missing_at_exec_refuses"]),
+        "\"no recorded hash\" must not read as \"no constraint\"; that is the \
+         allow-all-on-missing shape the secret policy rule exists to forbid"
+    );
+    assert!(
+        boolean(
+            &v,
+            &["resolution", "hash_reverified_at_exec_scoped_to_cue_runs"]
+        ),
+        "a locally started run has no earlier authorization to have drifted from"
     );
     assert!(
         boolean(&v, &["resolution", "missing_and_excluded_share_a_code"]),

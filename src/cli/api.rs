@@ -4527,6 +4527,7 @@ echo ok
                 trigger: runs::RunTrigger::Manual,
                 env_name: None,
                 allowed_secret_refs: None,
+                script_content_hash: None,
             },
         )
         .unwrap();
@@ -5168,6 +5169,7 @@ echo ok
                 trigger: runs::RunTrigger::Manual,
                 env_name: None,
                 allowed_secret_refs: None,
+                script_content_hash: None,
             },
         )
         .unwrap();
@@ -5220,6 +5222,7 @@ echo ok
                 trigger: runs::RunTrigger::Manual,
                 env_name: None,
                 allowed_secret_refs: None,
+                script_content_hash: None,
             },
         )
         .unwrap();
@@ -5274,6 +5277,7 @@ echo ok
                 trigger: runs::RunTrigger::Manual,
                 env_name: None,
                 allowed_secret_refs: None,
+                script_content_hash: None,
             },
         )
         .unwrap();
@@ -5310,6 +5314,7 @@ echo ok
                 trigger: runs::RunTrigger::Manual,
                 env_name: None,
                 allowed_secret_refs: None,
+                script_content_hash: None,
             },
         )
         .unwrap();

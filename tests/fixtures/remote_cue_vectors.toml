@@ -94,11 +94,14 @@ requires_regular_file = true
 # authorization granted for different bytes.
 hash_recorded_at_accept = true
 hash_reverified_at_accept_transition = true
-# NOT re-verified again inside the executor. That would need a new `runs`
-# column and a Cue-specific branch in `run_executor`, and it only defends
-# against an attacker who can already write to the workspace this node runs
-# code from -- who does not need a Cue. Recorded as a deviation for the owner.
-hash_reverified_at_exec = false
+# Re-verified a third time inside the executor. Declined in the original draft
+# because it only defended against an attacker who could already write to the
+# workspace -- a premise baseline push made false, since a signed baseline
+# replaces scripts legitimately and a Cue authorized against version N would
+# otherwise execute N+1. Fail-closed: a missing hash row also refuses.
+hash_reverified_at_exec = true
+hash_missing_at_exec_refuses = true
+hash_reverified_at_exec_scoped_to_cue_runs = true
 missing_and_excluded_share_a_code = true
 
 [idempotency]

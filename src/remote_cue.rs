@@ -392,7 +392,12 @@ struct ScriptBinding {
 ///
 /// Unreadable is not "unchanged": a missing or unreadable file must fail the
 /// comparison rather than pass it, so the caller treats `None` as a mismatch.
-fn content_hash(path: &std::path::Path) -> Option<String> {
+///
+/// Public because the executor's third check must compare against the same
+/// digest gate E recorded. Two definitions of "the authorized bytes" would
+/// eventually disagree, and the check that disagreed would be the one that
+/// silently stopped defending anything.
+pub fn content_hash(path: &std::path::Path) -> Option<String> {
     use sha2::{Digest, Sha256};
     let bytes = std::fs::read(path).ok()?;
     let mut hasher = Sha256::new();
@@ -627,7 +632,12 @@ impl<'a> CueSession<'a> {
             return self.refuse(Some(&dispatch), code, at_accept);
         }
 
-        match self.enqueue_accepted(&dispatch.cue_id, &dispatch.script, &dispatch.reason) {
+        match self.enqueue_accepted(
+            &dispatch.cue_id,
+            &dispatch.script,
+            &dispatch.reason,
+            &binding.content_hash,
+        ) {
             Ok(_) => {
                 self.audit("cue_accepted", "accepted", None);
                 self.queue_reply(&dispatch.cue_id, None, at_accept);
@@ -825,6 +835,7 @@ impl<'a> CueSession<'a> {
         cue_id: &str,
         script: &str,
         reason: &str,
+        authorized_content_hash: &str,
     ) -> Result<String, CueCode> {
         let workspace = self.workspace.as_ref().ok_or(CueCode::ScriptUnresolvable)?;
         let run_id = derive_run_id(cue_id);
@@ -843,6 +854,7 @@ impl<'a> CueSession<'a> {
                 parent_run_id: None,
                 cron_schedule_id: None,
             },
+            authorized_content_hash,
         )
         .map(|_| run_id)
         .map_err(|_| CueCode::Duplicate)

@@ -31,7 +31,7 @@ use omakure::health_plane::bounds::{
 use omakure::health_plane::model::HealthCode;
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -130,6 +130,90 @@ fn latest_audit_id() -> i64 {
         .expect("read the Health Plane audit high-water mark")
 }
 
+/// The audit row matching `code` above `after_id`, or the query error.
+///
+/// This used to end in `.ok()`, which folded a failed query into an absent
+/// row. A schema that moved, a copy taken while the container was mid
+/// checkpoint, a truncated `docker compose cp` -- every one of them read as
+/// "the Conductor never wrote it", and the timeout below then said exactly
+/// that. The accusation may simply have been false, and nothing in the report
+/// could tell. Keep the error so the timeout can name it.
+fn audit_row_after(
+    connection: &Connection,
+    after_id: i64,
+    code: HealthCode,
+) -> rusqlite::Result<Option<(String, String, String)>> {
+    connection
+        .query_row(
+            "SELECT event_code, message_kind, outcome FROM health_audit
+             WHERE id > ?1 AND error_code = ?2 ORDER BY id LIMIT 1",
+            rusqlite::params![after_id, i64::from(code.code())],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )
+        .optional()
+}
+
+/// Every error code actually recorded above `after_id`, with its row count.
+///
+/// `error_code` is nullable -- an accepted row carries none -- so the null
+/// bucket is reported rather than dropped, which is what distinguishes "the
+/// Conductor wrote nothing" from "the Conductor accepted what this case
+/// expected it to reject".
+fn audit_codes_after(
+    connection: &Connection,
+    after_id: i64,
+) -> rusqlite::Result<Vec<(Option<i64>, i64)>> {
+    let mut statement = connection.prepare(
+        "SELECT error_code, COUNT(*) FROM health_audit WHERE id > ?1
+         GROUP BY error_code ORDER BY error_code",
+    )?;
+    let rows = statement
+        .query_map(rusqlite::params![after_id], |row| {
+            Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, i64>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// What the harness actually saw, so a timeout is a diagnosis and not a bare
+/// accusation.
+///
+/// Naming the codes that *are* above the cursor separates "the row never
+/// arrived" from "the row arrived under a code this case did not expect". The
+/// second is a product defect rather than a slow copy: `transport_failure_code`
+/// maps `Replay` and `InvalidMessage` to different codes, and the matcher above
+/// compares `error_code` exactly, so a case that names the wrong one times out
+/// looking exactly like a Conductor that wrote nothing at all.
+fn audit_evidence(connection: &Connection, after_id: i64, last_error: Option<&str>) -> String {
+    let present = match audit_codes_after(connection, after_id) {
+        Err(error) => format!("unreadable ({error})"),
+        Ok(codes) if codes.is_empty() => {
+            "none, the Conductor wrote no audit row at all above that id".to_string()
+        }
+        Ok(codes) => codes
+            .iter()
+            .map(|(code, count)| match code {
+                None => format!("null (accepted) x{count}"),
+                Some(code) => match u16::try_from(*code).ok().and_then(HealthCode::from_code) {
+                    Some(named) => format!("{code} ({named:?}) x{count}"),
+                    None => format!("{code} (not a known code) x{count}"),
+                },
+            })
+            .collect::<Vec<_>>()
+            .join(", "),
+    };
+    format!(
+        "last query error: {}; error codes present above id {after_id}: {present}",
+        last_error.unwrap_or("none")
+    )
+}
+
 /// One durable, redacted audit row recorded after `after_id` with `code`.
 ///
 /// Bounded: the row must appear inside [`AUDIT_WINDOW`] or the case fails.
@@ -144,40 +228,160 @@ fn await_audit(after_id: i64, code: HealthCode, label: &str) -> (String, String,
     loop {
         let connection = conductor_registry();
         polls += 1;
-        let row = connection
-            .query_row(
-                "SELECT event_code, message_kind, outcome FROM health_audit
-                 WHERE id > ?1 AND error_code = ?2 ORDER BY id LIMIT 1",
-                rusqlite::params![after_id, i64::from(code.code())],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                    ))
-                },
-            )
-            .ok();
-        if let Some(row) = row {
-            assert!(
-                matches!(row.2.as_str(), "rejected" | "dropped"),
-                "{label}: audit outcome for {code:?} was {:?}",
-                row.2
-            );
-            return row;
-        }
+        // Scoped to this poll on purpose: an error carried over from an
+        // earlier copy would misattribute the timeout to a read that has since
+        // succeeded.
+        let last_error = match audit_row_after(&connection, after_id, code) {
+            Ok(Some(row)) => {
+                assert!(
+                    matches!(row.2.as_str(), "rejected" | "dropped"),
+                    "{label}: audit outcome for {code:?} was {:?}",
+                    row.2
+                );
+                return row;
+            }
+            Ok(None) => None,
+            Err(error) => Some(error.to_string()),
+        };
         assert!(
             Instant::now() < deadline,
             "{label}: the Conductor recorded no durable audit row with code {} ({:?}) \
              within {AUDIT_WINDOW:?}; {polls} poll(s) in {:?}, so each registry copy \
-             cost about {:?}",
+             cost about {:?}. {}",
             code.code(),
             code,
             started.elapsed(),
-            started.elapsed() / polls.max(1)
+            started.elapsed() / polls.max(1),
+            audit_evidence(&connection, after_id, last_error.as_deref())
         );
         std::thread::sleep(Duration::from_millis(500));
     }
+}
+
+/// Drive the audit timeout the way the intermittent would, and read the report.
+///
+/// This is diagnostics, so it is proven the way diagnostics can be: the timeout
+/// is caused deliberately, and the report is required to name what was
+/// actually there. It fixes nothing about the intermittent itself -- that is
+/// not reproducible, and a fix that cannot be driven to failure is not a fix.
+///
+/// Two causes are driven, because the old report could not tell them apart and
+/// the whole point of the change is that it now can:
+///
+///   * a row that arrived under a code the matcher does not expect. This is
+///     the product-defect shape: `transport_failure_code` maps `Replay` and
+///     `InvalidMessage` to different codes, so a case naming the wrong one
+///     times out while the Conductor did everything right.
+///   * a query that failed outright. `.ok()` reported this as an absent row,
+///     which made the timeout's accusation false. A registry copied out of a
+///     running container mid-write is the real cause here, so the database is
+///     truncated rather than deleted.
+///
+/// The schema is the product's own -- the registry is created by the shipped
+/// node initialization, never hand-written here -- so a column that moves
+/// reddens this test instead of silently agreeing with it.
+#[test]
+fn an_audit_timeout_reports_the_query_error_and_the_codes_that_were_present() {
+    let temp = tempfile::TempDir::new().expect("temporary node root");
+    let config_path = temp.path().join("node.toml");
+    std::fs::write(&config_path, "version = 1\n").expect("write the node config");
+    let context = NodeContext::resolve_for(
+        NodePlatform::current(),
+        NodePathOverrides::new(Some(temp.path().join("state")), Some(config_path)),
+        true,
+        None,
+        None,
+        None,
+    )
+    .expect("resolve the node context");
+    // The shipped initialization owns the schema, so `health_audit` here is
+    // exactly the table the Conductor writes.
+    NodeIdentity::load_or_initialize(&context).expect("initialize the node");
+    let database = context.database_path();
+    let connection = Connection::open(&database).expect("open the initialized registry");
+
+    let node_id: String = std::iter::repeat_n('a', 69).collect();
+    let after_id: i64 = connection
+        .query_row("SELECT COALESCE(MAX(id), 0) FROM health_audit", [], |row| {
+            row.get(0)
+        })
+        .expect("read the audit high-water mark");
+
+    // Valid rows the product itself could have written, under a code this
+    // case does not expect. Nothing here is malformed: every CHECK on
+    // `health_audit` is satisfied, and the property violated is the one the
+    // report exists to expose.
+    let present = HealthCode::InvalidMessage;
+    let expected = HealthCode::Replay;
+    assert_ne!(
+        present.code(),
+        expected.code(),
+        "the frozen mapping must keep these two apart, or this case proves nothing"
+    );
+    for kind in ["health_profile", "health_pulse"] {
+        connection
+            .execute(
+                "INSERT INTO health_audit
+                   (event_code, node_id, message_kind, byte_count, outcome, error_code, occurred_at)
+                 VALUES ('health_rejected', ?1, ?2, 128, 'rejected', ?3, 1)",
+                rusqlite::params![node_id, kind, i64::from(present.code())],
+            )
+            .expect("record an audit row under an unexpected code");
+    }
+
+    assert!(
+        audit_row_after(&connection, after_id, expected)
+            .expect("the query itself must succeed")
+            .is_none(),
+        "the seeded rows must not match the expected code, or the timeout is not driven"
+    );
+    let report = audit_evidence(&connection, after_id, None);
+    assert!(
+        report.contains(&format!("{} ({present:?}) x2", present.code())),
+        "the report must name the code that was actually recorded and how many \
+         rows carried it; got {report:?}"
+    );
+    assert!(
+        !report.contains(&expected.code().to_string()),
+        "the report must not invent the code the case was looking for; got {report:?}"
+    );
+    assert!(
+        report.contains("last query error: none"),
+        "a report with no query error must say so rather than leave it out; got {report:?}"
+    );
+
+    // A row that never arrived reads differently from one that arrived under
+    // the wrong code, which is the distinction the timeout could not draw.
+    let empty = audit_evidence(&connection, i64::MAX, None);
+    assert!(
+        empty.contains("no audit row at all"),
+        "an empty scan must say the Conductor wrote nothing; got {empty:?}"
+    );
+
+    // A registry copied out from under a writer, rather than one that is
+    // merely empty. `.ok()` reported this as an absent row.
+    drop(connection);
+    let truncated = temp.path().join("truncated.sqlite");
+    std::fs::copy(&database, &truncated).expect("copy the registry");
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&truncated)
+        .expect("reopen the copy")
+        .set_len(512)
+        .expect("truncate the copy the way a racing container copy would");
+    let broken = Connection::open(&truncated).expect("open the truncated copy");
+    let error = audit_row_after(&broken, after_id, expected)
+        .expect_err("a truncated registry must surface its error, not read as an absent row");
+    let report = audit_evidence(&broken, after_id, Some(&error.to_string()));
+    assert!(
+        report.contains("last query error: ") && !report.contains("last query error: none"),
+        "the report must carry the query error that caused the timeout; got {report:?}"
+    );
+    assert!(
+        report.contains("unreadable ("),
+        "the report must say the codes could not be read rather than claim there \
+         were none; got {report:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -2285,6 +2285,14 @@ fn create_schema(
             first_seen TEXT NOT NULL,
             expires_at TEXT NOT NULL
         );
+        -- Declared, integrity-checked and exported, and deliberately never
+        -- written. It was sketched for remote Cues before that plane existed;
+        -- when Cues shipped, the design refused it, because it would have been
+        -- eight states re-implementing `RunState` and the durable at-most-once
+        -- guarantee already falls out of `runs.run_id` being a primary key
+        -- derived from the cue id. Left in place rather than dropped: removing
+        -- it costs a registry schema bump, and this comment costs nothing.
+        -- If you are looking for where a Cue is recorded, it is the runs table.
         CREATE TABLE inbox (
             cue_id TEXT PRIMARY KEY,
             state TEXT NOT NULL,

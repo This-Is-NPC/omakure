@@ -182,7 +182,10 @@ wait_service() {
 
 wait_connected() {
     local service=$1 peer_id=$2
-    local deadline=$((SECONDS + 45))
+    # Must exceed RETRY_BACKOFF_CEILING (60s) plus a dial, or a wait that spans
+    # one full backoff fails on this budget rather than on the behaviour under
+    # test -- and reads as a transport fault when nothing is wrong.
+    local deadline=$((SECONDS + 90))
     while (( SECONDS < deadline )); do
         if output=$(status_http "$service" 2>/dev/null) \
             && jq -e --arg peer "$peer_id" \

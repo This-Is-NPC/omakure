@@ -52,8 +52,8 @@ pub const RETRY_BACKOFF: [Duration; 3] = [
 /// `HANDSHAKE_TIMEOUT` has to fit inside `PRESENCE_ONLINE_SECONDS`;
 /// `retry_ceiling_redials_within_the_presence_window` holds that. Sixty
 /// seconds is also the lease cadence `runs::HEARTBEAT_MS` already treats as
-/// live, and a twentieth of `IDLE_TIMEOUT`, so a peer that stays down is
-/// polled rather than hammered and its failures do not drown the status.
+/// live, and a fifth of `IDLE_TIMEOUT`, so a peer that stays down is polled
+/// rather than hammered and its failures do not drown the status.
 pub const RETRY_BACKOFF_CEILING: Duration = Duration::from_secs(60);
 pub const RETRY_JITTER_MAX: Duration = Duration::from_millis(250);
 const RESOLVER_QUEUE_CAPACITY: usize = 8;

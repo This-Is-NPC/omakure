@@ -89,6 +89,36 @@ fn compose_example_is_host_loopback_with_workspace_and_tokens_file() {
     );
 }
 
+/// The service account's home must not be the node state directory.
+///
+/// `/var/lib/omakure` is a 0700 secrets directory validated against a closed
+/// allow-list: anything in it that the list does not name makes the node refuse
+/// to read its own state. An `omakure` command run as this account without
+/// `OMAKURE_SCRIPTS_DIR` resolves its default workspace under `$HOME`, so while
+/// the state directory was the home directory the product created
+/// `/var/lib/omakure/Documents/omakure-scripts` itself -- and from that moment
+/// `node status`, `GET /v1/node/status` and `GET /v1/node/health` all returned
+/// `registry_invalid: node path has unexpected file type: Documents`.
+///
+/// It survived a restart, because the directory is still there afterwards, and
+/// systemd still reported the unit `active`, so nothing pointed at the cause.
+/// Recovery meant knowing to delete a directory the product had made.
+#[test]
+fn the_service_account_is_not_homed_in_the_node_state_directory() {
+    let shell = read("install.sh");
+    assert!(
+        shell.contains("--home-dir /var/lib/omakure-workspace"),
+        "install.sh must home the service account in the workspace"
+    );
+    assert!(
+        !shell.contains("--home-dir /var/lib/omakure "),
+        "install.sh homes the service account in the node state directory, so any \
+         omakure command run as that account without OMAKURE_SCRIPTS_DIR writes a \
+         default workspace into a directory whose closed allow-list then refuses \
+         every read of the node's own state"
+    );
+}
+
 #[test]
 fn machine_service_installers_are_explicit_and_preserve_node_state() {
     let shell = read("install.sh");

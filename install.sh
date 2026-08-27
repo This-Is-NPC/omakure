@@ -337,7 +337,14 @@ ensure_linux_node_principal() {
     groupadd --system omakure
   fi
   if ! id omakure >/dev/null 2>&1; then
-    useradd --system --gid omakure --home-dir /var/lib/omakure \
+    # Home is the workspace, never /var/lib/omakure. The state directory is a
+    # 0700 secrets directory guarded by a closed allow-list, and anything it
+    # does not name makes the node refuse to read its own state. Any omakure
+    # command run as this account without OMAKURE_SCRIPTS_DIR resolves its
+    # default workspace under $HOME -- so making the state directory the home
+    # directory points the product's own scratch files at the one place they
+    # brick it.
+    useradd --system --gid omakure --home-dir /var/lib/omakure-workspace \
       --shell /usr/sbin/nologin omakure
   fi
 }

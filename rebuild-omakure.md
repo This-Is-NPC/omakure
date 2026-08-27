@@ -166,9 +166,11 @@ provide — scoped to operational management, **never surveillance**:
    Linux, macOS, and Windows.
 3. **Secure transport & pairing — complete for the bounded direct foundation** —
    encrypted authenticated channels, static peers, LAN discovery, manual
-   enrollment, unattended signed-bundle enrollment, revocation, replay
-   protection, and reset/replacement recovery. Nostr fallback and later fleet
-   planes are not included in this phase.
+   enrollment, signed-bundle enrollment **verification and apply**, revocation,
+   replay protection, and reset/replacement recovery. Issuing a bundle is item
+   7: this phase shipped the half a node performs, not the half a fleet
+   performs. Nostr fallback and later fleet planes are not included in this
+   phase.
 4. **Health plane — complete for the minimal bounded plane** — versioned
    Profile, Pulse, and a closed three-kind Signal feed (`enrolled`, `revoked`,
    `run-completed`) carried inside the frozen direct envelope, bounded current
@@ -186,13 +188,25 @@ provide — scoped to operational management, **never surveillance**:
    Cue names a script and never carries one, runs with deny-all secret access,
    executes at most once, and reports its outcome on the existing
    `run-completed` Signal. Broader delegation and campaign fan-out remain open.
-7. **Omarchy-first experience** — unattended public-data provisioning, rich
-   Profile, hooks, notifications, and optional Shell/Menu integrations.
+7. **Unattended autojoin — complete for signed-bundle provisioning** — a fleet
+   can issue enrollment under an authority key it holds, and a provisioned
+   machine generates its identity on first start and joins with no command run
+   on it. Hooks, notification delivery, and Shell/Menu integrations are not
+   included in this phase; they are item 11. The richest-Profile clause was
+   already delivered by item 4 — `omarchy_version`, `omarchy_channel`,
+   `runtimes` and `capabilities` ship — and further facts belong to item 8,
+   where drift is what reads them.
 8. **MDM basics** — signed/versioned baseline push, drift status, rollback, and
    lost-device revoke.
 9. **Install automation** — systemd, launchd, and Windows daemon bootstrap.
 10. **Test & doc** — heterogeneous fleet simulation, install-config tests,
     security failure tests, platform release validation, and product docs.
+11. **Omarchy desktop surfaces** — hooks, notification delivery, and optional
+    Shell/Menu integrations. Split out of item 7 rather than declared done with
+    it. Hooks are a second script-execution surface with their own trust model
+    and need their own contract, the way remote Cues did. Notification delivery
+    must not overload the `notifications` capability name, which is a frozen
+    authorization gate that the Cue plane's gate D depends on.
 
 ## Success looks like
 
@@ -253,7 +267,8 @@ implemented.
   foundation includes identity, `node.toml`, isolated `node.sqlite`, explicit
   trust management, service lifecycle, reset, and platform path validation.
 - Direct transport, trust-neutral discovery, manual enrollment, signed-bundle
-  enrollment, static-peer lifecycle, revocation, replay protection, and
+  enrollment **verification and apply** — issuing is item 7 — static-peer
+  lifecycle, revocation, replay protection, and
   reset/replacement recovery are shipped, as are Profiles, Pulses, the closed
   Signal feed, and authorized remote Cues. Nostr, campaigns, and MDM remain
   future work.

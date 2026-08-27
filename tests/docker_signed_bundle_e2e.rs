@@ -1129,6 +1129,81 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
         joined["role"], "conductor",
         "the role the fleet issued must be the role it recorded: {peers}"
     );
+
+    // 8. And it stays joined across restarts.
+    //
+    // The bootstrap token is consumed and tombstoned on the first success, so a
+    // node that treated its absence as a failure would boot exactly once. Twice,
+    // because the first restart is the one that finds the token gone and the
+    // second is the one that finds the tombstone already reconciled.
+    for attempt in 1..=2 {
+        let restart = compose(
+            &guard.root,
+            &["--profile", "autojoin", "restart", "signed-autojoin"],
+        );
+        assert!(
+            restart.status.success(),
+            "restart {attempt} failed: {}",
+            safe_stderr(&restart)
+        );
+        wait_for_autojoin();
+        let peers = autojoin_get("/v1/node/peers");
+        assert!(
+            peers["data"]
+                .as_array()
+                .expect("peer list")
+                .iter()
+                .any(|peer| peer["state"] == "active"),
+            "restart {attempt} lost the membership it had: {peers}"
+        );
+    }
+
+    // Snapshot before the refusal, so the comparison after it is against a
+    // different reading rather than against itself.
+    let before_replay = autojoin_get("/v1/node/peers")["data"].clone();
+
+    // 9. A second delivery of the same bundle is refused, and refused *to the
+    //    caller* rather than swallowed. Under this model nobody is unwatched:
+    //    the fleet that pushed is the fleet that reads the answer.
+    let replay = exec(
+        "signed-authority",
+        &[
+            "curl",
+            "--config",
+            "/run/secrets/autojoin-curl.conf",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "20",
+            "--header",
+            "Content-Type: application/json",
+            "--data",
+            &serde_json::json!({
+                "bundle_hex": bundle_hex,
+                "bootstrap_nonce": hex(&guard.autojoin_nonce),
+            })
+            .to_string(),
+            "http://signed-autojoin:7878/v1/node/enrollment/bundle",
+        ],
+    );
+    let replay: Value = serde_json::from_slice(&replay.stdout).expect("replay JSON");
+    assert_eq!(
+        replay["ok"], false,
+        "replaying a spent bundle must be refused: {replay}"
+    );
+    assert!(
+        replay["error"]["code"]
+            .as_str()
+            .is_some_and(|code| !code.is_empty()),
+        "the refusal must carry a typed code the caller can act on: {replay}"
+    );
+
+    // And the refusal changed nothing.
+    assert_eq!(
+        autojoin_get("/v1/node/peers")["data"],
+        before_replay,
+        "a refused delivery must leave trust exactly as it was"
+    );
 }
 
 /// Wait for the autojoin target to answer, from the authority container.

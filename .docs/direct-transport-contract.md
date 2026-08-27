@@ -393,10 +393,21 @@ Stable protocol error codes are:
 
 Errors reveal only the stable code and no key, signature, plaintext, or raw
 frame. A malformed unauthenticated peer is closed without an error response
-unless the frame can be parsed safely. Retry behavior is bounded: a failed
-handshake permits at most three attempts with 1 s, 2 s, and 4 s backoff, then
-requires a new operator or caller action. There is no retry after revocation,
-identity mismatch, or certificate signature failure.
+unless the frame can be parsed safely.
+
+Retry behavior turns on what failed. A handshake refused on its merits is not
+retried at all: `unsupported_version`, `invalid_frame`, `message_too_large`,
+`handshake_failed`, `identity_mismatch`, `not_enrolled`, `revoked`, `expired`,
+and `replay` stop a static-peer dialer for the life of the process, and
+recovery requires a new operator or caller action. A peer that is merely
+unreachable is a different failure and is retried without limit, because
+nothing respawns a dialer that gives up and a peer down for a few seconds at
+the wrong moment would otherwise be lost until the process restarted. Those
+attempts wait 1 s, then 2 s, then 4 s, then keep doubling to a 60-second
+ceiling, each delay carrying up to 250 ms of jitter so a fleet restarting
+together does not resynchronise. The ceiling is bounded rather than chosen: one
+whole delay plus its jitter plus the connect and handshake budgets must still
+leave a peer that comes back inside the Health Plane's Online window.
 
 ## Time, Replay, and Resource Limits
 
@@ -421,7 +432,9 @@ surface:
 | Capabilities in a bundle | 32, sorted and unique |
 | Capability bytes | 64 each |
 | Enrollment replay retention | Through expiry plus 24 hours |
-| Handshake retries | 3 |
+| Handshake retries after a refusal | 0; the dialer stops |
+| Reconnect attempts for an unreachable peer | Unbounded |
+| Reconnect backoff | 1 s, 2 s, 4 s, doubling to a 60 s ceiling, plus jitter |
 | Noise rekey trigger | 1,048,576 messages or 1 GiB per direction |
 
 The listener also enforces 256 global in-flight handshakes, 4 new handshakes
@@ -429,6 +442,11 @@ per minute per rate key, 64 MiB of global queued frame bytes, 4 MiB per source
 rate key, and 256 KiB per session. Before authentication the rate key is the
 canonical source IP; after a certificate is structurally authenticated it is
 `source-IP || node_id`. A source key is never treated as identity or trust.
+These budgets bound work arriving from a stranger, so a dial this node makes
+itself takes none of them; it is charged only against the global ceilings and,
+once its peer's certificate authenticates, against that identity. Otherwise a
+node sharing an address with its peers would spend their inbound allowance on
+its own outgoing links.
 The four-byte header has a 2-second read deadline. The body deadline is
 1 second plus 1 second per started 64 KiB, capped at 10 seconds; the handshake
 wall clock remains 10 seconds. Each malformed input consumes one of four

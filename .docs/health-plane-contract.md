@@ -599,8 +599,8 @@ Plane can never be the component that exhausts transport capacity.
 | Conductor global Signal inbox | 16,384 Signals (256 x 64) |
 | Inbox overflow | Reject with `health_queue_full` (1113); the Performer retains the Signal in its outbox |
 | Acknowledgement timeout | 5 seconds |
-| Retries per message | 3 (matches the shipped `MAX_RETRY_ATTEMPTS`) |
-| Retry backoff | 1 s, 2 s, 4 s (matches the shipped `RETRY_BACKOFF`) |
+| Retries per message | 3 (matches the shipped `MAX_RETRIES`) |
+| Retry backoff | 1 s, 2 s, 4 s (matches the shipped `RETRY_BACKOFF_SECONDS`) |
 | After the final retry, Profile/Pulse | Dropped; the next scheduled Profile/Pulse supersedes it |
 | After the final retry, Signal | Retained in the outbox within its 64-entry and 7-day bounds; resent on the next session |
 | Receiver processing budget per message | 250 milliseconds |

@@ -25,7 +25,7 @@ kind_prefix = "cue_"
 health_kind_prefix = "health_"
 health_kinds_remain = 5
 signal_kinds_remain = 3
-registry_schema_version = 7
+registry_schema_version = 8
 
 # Exactly two kinds. A terminal outcome is NOT a Cue message: it rides the
 # existing `run-completed` Signal, correlated by the derived run id.

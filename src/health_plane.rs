@@ -766,6 +766,8 @@ mod tests {
             "profile": {
                 "agent_version": "0.3.0",
                 "arch": "x86_64",
+                "baseline_id": "",
+                "baseline_observed_id": "",
                 "capabilities": ["inventory-health", "notifications"],
                 "display_name": "workshop-laptop",
                 "distro_id": "arch",
@@ -937,6 +939,61 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(node.presence, expected, "at offset {offset}");
+        }
+    }
+
+    /// The two baseline fields are a claim and its evidence, and the closed
+    /// schema is what keeps both readable.
+    ///
+    /// The drift verdict is a comparison of these two strings, so a receiver
+    /// that accepted a half-width identity would compare a truncated name
+    /// against a whole one and read that as drift; and one that accepted
+    /// evidence without a claim would store a verdict no set on disk could
+    /// justify.
+    #[test]
+    fn a_profile_carrying_an_unreadable_baseline_pair_is_refused() {
+        let fixture = fixture();
+        let target = fixture.local.clone();
+        let identity = "a".repeat(64);
+
+        let mut accepted = profile_payload(&target, 1, 1);
+        accepted["profile"]["baseline_id"] = json!(identity);
+        accepted["profile"]["baseline_observed_id"] = json!(identity);
+        assert!(
+            fixture
+                .ingest(&fixture.performer, "health_profile", BASE_NOW, &accepted)
+                .accepted(),
+            "a Performer reporting the set it holds must be accepted"
+        );
+
+        for (recorded, observed, why) in [
+            (
+                identity[..63].to_string(),
+                identity.clone(),
+                "an identity one character short is not a shorter identity",
+            ),
+            (
+                identity.clone(),
+                identity.to_uppercase(),
+                "uppercase hex names the same bytes and must still be refused, \
+                 because two spellings of one set would read as drift",
+            ),
+            (
+                String::new(),
+                identity.clone(),
+                "evidence without a claim is a verdict no record justifies",
+            ),
+        ] {
+            let mut payload = profile_payload(&target, 2, 2);
+            payload["profile"]["baseline_id"] = json!(recorded);
+            payload["profile"]["baseline_observed_id"] = json!(observed);
+            assert_eq!(
+                fixture
+                    .ingest(&fixture.performer, "health_profile", BASE_NOW, &payload)
+                    .code(),
+                Some(HealthCode::InvalidMessage),
+                "{why}"
+            );
         }
     }
 
@@ -1262,9 +1319,11 @@ mod tests {
         collect_field_names(&rendered, &mut names);
         names.sort();
         names.dedup();
-        const PERMITTED: [&str; 30] = [
+        const PERMITTED: [&str; 32] = [
             "agent_version",
             "arch",
+            "baseline_id",
+            "baseline_observed_id",
             "capabilities",
             "display_name",
             "distro_id",

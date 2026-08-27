@@ -43,7 +43,7 @@ and bounds.
 | Direct envelope version | integer `1`, carried as envelope `version` (frozen, unchanged) |
 | Signature domain | Existing `omakure/direct-envelope/v1` followed by one NUL byte (frozen, unchanged) |
 | Node ID domain | Existing `omakure/node-id/v1` followed by one NUL byte (frozen, unchanged) |
-| Node registry schema version | `7` (Health Plane migration; the current shipped `SCHEMA_VERSION` is `6`) |
+| Node registry schema version | `8` (version 7 created the Health Plane tables; version 8 widened the stored Profile with the two baseline fields) |
 
 `payload.health_version` is deliberately independent of the envelope `version`.
 The envelope version governs the signed container; the Health Plane version
@@ -133,6 +133,8 @@ Performer and replaces it in place.
   "profile": {
     "agent_version": "0.3.0",
     "arch": "x86_64",
+    "baseline_id": "3f0a91c4d2b85e67a1c30f4e8b29d75641aeb0c3928f5d61b7e04a2c8d9f1350",
+    "baseline_observed_id": "3f0a91c4d2b85e67a1c30f4e8b29d75641aeb0c3928f5d61b7e04a2c8d9f1350",
     "capabilities": ["inventory-health", "notifications"],
     "display_name": "workshop-laptop",
     "distro_id": "arch",
@@ -154,6 +156,8 @@ Performer and replaces it in place.
 |---|---|---|
 | `agent_version` | string | 1..=32 bytes, `[0-9][0-9A-Za-z.+-]{0,31}` |
 | `arch` | string | Exactly one of `x86_64`, `aarch64`, `unknown` |
+| `baseline_id` | string | `` (empty) or exactly 64 lowercase hex characters |
+| `baseline_observed_id` | string | `` (empty) or exactly 64 lowercase hex characters; MUST be empty when `baseline_id` is empty |
 | `capabilities` | array of string | 0..=32 entries, each 1..=64 bytes, each from the frozen allow-list, sorted by raw bytes, unique |
 | `display_name` | string | 0..=64 bytes, `` (empty) or `[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}` with no trailing space |
 | `distro_id` | string | 0..=32 bytes, `` (empty) or `[a-z0-9][a-z0-9._-]{0,31}` |
@@ -177,6 +181,45 @@ from `SUPPORTED_CAPABILITIES` in `src/node_registry.rs` and `src/enrollment.rs`:
 `capabilities` reports the capabilities the Performer has been granted by this
 Conductor. It is an echo for operator visibility; the receiver authorizes from
 its own registry and never from this field.
+
+### The baseline pair
+
+`baseline_id` and `baseline_observed_id` are the amendment item 8 needs, and
+they are two fields rather than one on purpose.
+
+`baseline_id` is the derived name of the set this Performer recorded
+installing — the **claim**. `baseline_observed_id` is the same derivation
+(`.docs/baseline-delivery.md`, domain `omakure/baseline-id/v1\0`) recomputed
+over the paths that set named, as they are on this node's disk now — the
+**evidence**. Both are 32 bytes wide because that is what the baseline plane
+derives; the width is not a policy choice this contract made, and
+`src/health_plane/bounds.rs` derives it from `crate::baseline` rather than
+transcribing it, so the two cannot disagree.
+
+**A Performer never reports drift.** It does not know what it was supposed to
+have; it knows what it recorded installing and what it can currently see. The
+comparison is the Conductor's, and it is a comparison of two facts rather than a
+verdict taken on trust:
+
+| `baseline_id` | `baseline_observed_id` | Fleet projection |
+|---|---|---|
+| No Profile stored | — | `unknown` — this Performer has not reported yet |
+| empty | empty | `none` — this node holds no baseline |
+| set | equal to it | `in_sync` |
+| set | different | `drifted` |
+
+Empty is the only way to say "no baseline", and it can never collide with an
+identity: an empty entry list is not signable (`src/baseline.rs` refuses it), so
+no baseline that was ever pushed can name itself with the empty string.
+Evidence without a claim is refused with `health_invalid_message` (1102) — a
+node that recorded nothing cannot have observed something, and accepting the
+pair would store a verdict no set on disk could justify.
+
+What this pair does **not** cover, stated rather than implied: the identity
+names the set that was published, so a file added to the workspace that no
+baseline entry names does not change it. Drift here means "the set that was
+installed is no longer what was installed", not "nothing else exists on this
+machine".
 
 No other Profile field exists in version 1. Hostname, username, IP address, MAC
 address, serial number, disk encryption state, installed packages, process list,
@@ -635,7 +678,7 @@ Sizes are of the canonical envelope bytes, excluding the 64-byte signature.
 
 | Kind | Maximum canonical bytes | Maximum encoded bytes (canonical + signature) | Measured worst case |
 |---|---:|---:|---:|
-| `health_profile` | 2,048 | 2,112 | 1,327 |
+| `health_profile` | 2,048 | 2,112 | 1,504 |
 | `health_pulse` | 1,280 | 1,344 | 926 |
 | `health_signal` | 1,024 | 1,088 | 777 |
 | `health_ack` | 768 | 832 | 510 |
@@ -698,6 +741,8 @@ Mixed-version policy:
 **Class P0, permitted on the wire.** The complete list; nothing else is P0.
 
 Node ID, target node ID, session ID, nonce, message ID, signal ID, run ID,
+baseline ID and observed baseline ID (derived digests over a published script
+set, carrying no path and no host fact),
 sequence, cursor, profile revision, Unix timestamps, role name, granted
 capability names from the frozen allow-list, agent version, platform, arch,
 distro id, distro version, Omarchy version, Omarchy channel, operator-chosen
@@ -743,6 +788,7 @@ run history are not derived and are never touched by Health Plane recovery.
 | Case | Frozen behavior |
 |---|---|
 | Schema migration to version 7 | Forward-only, one transaction, updates both `PRAGMA user_version` and the `metadata.schema_version` row atomically, exactly like the existing v1 through v6 migrations |
+| Schema migration to version 8 | Forward-only, one transaction, adds `health_profiles.baseline_id` and `health_profiles.baseline_observed_id` defaulted to empty, and fails hard rather than degrading: there is no half-state in which a closed Profile schema requires two fields the storage cannot hold. A node that never completed the version 7 migration stays at version 6 with the plane disabled and never reaches it |
 | Migration failure | Full rollback; the database stays at version 6; the node starts with the Health Plane disabled while transport, enrollment, HTTP, and runs continue; a `health_corrupt_state` (1115) audit is written |
 | Migration retry | Only on explicit operator action; never automatic on every start |
 | Second database | Never created; the Health Plane lives only in `node.sqlite` |
@@ -840,7 +886,8 @@ production seams, and no others:
 2. A kind dispatch inside `hold_session` in `src/direct_service.rs`, which is the
    single shared steady-state receive loop for both connection directions.
 3. The read-only role/capability projection described in Authorization Mapping.
-4. The schema version 7 migration and the Health Plane tables.
+4. The schema version 7 migration and the Health Plane tables, and the version
+   8 migration that widened the stored Profile.
 
 No change to the certificate, the Noise handshake, the frame format, the inner
 control kinds, the admission controller, or the enrollment path is authorized.

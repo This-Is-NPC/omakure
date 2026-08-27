@@ -1114,6 +1114,8 @@ impl HealthFactsSource for SharedFacts {
         ProfileFacts {
             agent_version: "0.3.0".to_string(),
             arch: "x86_64".to_string(),
+            baseline_id: String::new(),
+            baseline_observed_id: String::new(),
             capabilities: Vec::new(),
             display_name: "certification".to_string(),
             distro_id: "arch".to_string(),

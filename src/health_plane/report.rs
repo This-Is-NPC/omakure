@@ -11,11 +11,12 @@
 //! receiver to reject rather than redact.
 
 use super::bounds::{
-    CAPABILITY_ALLOWLIST, HEALTH_VERSION, MAX_AGENT_VERSION_BYTES, MAX_DISPLAY_NAME_BYTES,
-    MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_QUEUE_DEPTH,
-    MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES, MAX_STORED_SIGNAL_BYTES,
-    MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, NOMINAL_PULSE_INTERVAL_SECONDS,
-    OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES, SIGNAL_OUTBOX_CAPACITY, SIGNATURE_BYTES,
+    BASELINE_ID_HEX_CHARS, CAPABILITY_ALLOWLIST, HEALTH_VERSION, MAX_AGENT_VERSION_BYTES,
+    MAX_DISPLAY_NAME_BYTES, MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE,
+    MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES,
+    MAX_STORED_SIGNAL_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE,
+    NOMINAL_PULSE_INTERVAL_SECONDS, OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES, SIGNAL_OUTBOX_CAPACITY,
+    SIGNATURE_BYTES,
 };
 use super::model::{HealthKind, RunFact, RunnerFact, RuntimeFact, SignalRecord};
 use serde_json::{json, Value};
@@ -54,6 +55,11 @@ const SESSION_ID_HEX_CHARS: usize = 64;
 pub struct ProfileFacts {
     pub agent_version: String,
     pub arch: String,
+    /// The derived name of the baseline this node recorded installing, or empty.
+    pub baseline_id: String,
+    /// The same derivation recomputed over that baseline's paths as they are on
+    /// disk now, or empty.
+    pub baseline_observed_id: String,
     pub capabilities: Vec<String>,
     pub display_name: String,
     pub distro_id: String,
@@ -452,6 +458,8 @@ fn profile_payload(
         "profile": {
             "agent_version": facts.agent_version,
             "arch": facts.arch,
+            "baseline_id": facts.baseline_id,
+            "baseline_observed_id": facts.baseline_observed_id,
             "capabilities": facts.capabilities,
             "display_name": facts.display_name,
             "distro_id": facts.distro_id,
@@ -578,6 +586,14 @@ fn sanitize_profile(facts: &mut ProfileFacts) {
     if !["x86_64", "aarch64"].contains(&facts.arch.as_str()) {
         facts.arch = "unknown".to_string();
     }
+    clamp_baseline_id(&mut facts.baseline_id);
+    clamp_baseline_id(&mut facts.baseline_observed_id);
+    // A node that records no baseline has nothing to have observed. Clearing
+    // here rather than trusting the caller keeps the pair the receiver's closed
+    // schema insists on reachable from any fact source.
+    if facts.baseline_id.is_empty() {
+        facts.baseline_observed_id.clear();
+    }
     facts.display_name = clamp(&facts.display_name, MAX_DISPLAY_NAME_BYTES, " ._-", true);
     while facts.display_name.ends_with(' ') {
         facts.display_name.pop();
@@ -628,6 +644,21 @@ fn sanitize_profile(facts: &mut ProfileFacts) {
         if !runtime.available {
             runtime.version.clear();
         }
+    }
+}
+
+/// Clear anything that is not the exact derived identity width in lowercase hex.
+///
+/// A malformed value is cleared rather than truncated: half of a baseline
+/// identity is not a shorter identity, and the receiver would read it as a
+/// different set rather than as an unreadable one.
+fn clamp_baseline_id(value: &mut String) {
+    if value.len() != BASELINE_ID_HEX_CHARS
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        value.clear();
     }
 }
 
@@ -736,6 +767,8 @@ mod tests {
         ProfileFacts {
             agent_version: "0.3.0".to_string(),
             arch: "x86_64".to_string(),
+            baseline_id: String::new(),
+            baseline_observed_id: String::new(),
             capabilities: Vec::new(),
             display_name: "workshop laptop".to_string(),
             distro_id: "arch".to_string(),
@@ -908,6 +941,67 @@ mod tests {
         assert_eq!(profile.arch, "unknown");
         assert_eq!(profile.platform, "linux");
         assert_eq!(profile.capabilities, vec!["remote-run".to_string()]);
+    }
+
+    /// The sender clamps to exactly what the receiver validates.
+    ///
+    /// A Performer that put a half-written or differently-spelled identity on
+    /// the wire would have every Profile refused with no way for either side to
+    /// say why — the same failure the runtime allow-list is single-sourced to
+    /// avoid. Truncating is refused for a second reason: half of a baseline
+    /// identity is not a shorter set, it is a different name, and a Conductor
+    /// would read it as drift.
+    #[test]
+    fn an_unreadable_baseline_identity_is_cleared_rather_than_carried() {
+        let whole = "0123456789abcdef".repeat(4);
+        for (recorded, observed, expected, why) in [
+            (
+                whole.clone(),
+                whole.clone(),
+                (whole.clone(), whole.clone()),
+                "a well-formed pair travels unchanged",
+            ),
+            (
+                whole.to_uppercase(),
+                whole.clone(),
+                (String::new(), String::new()),
+                "uppercase is a second spelling of one set and is not carried",
+            ),
+            (
+                whole[..40].to_string(),
+                whole.clone(),
+                (String::new(), String::new()),
+                "a truncated claim clears its own evidence with it",
+            ),
+            (
+                whole.clone(),
+                "not-hex".to_string(),
+                (whole.clone(), String::new()),
+                "unreadable evidence is dropped without discarding the claim",
+            ),
+            (
+                String::new(),
+                whole.clone(),
+                (String::new(), String::new()),
+                "evidence a receiver would refuse never leaves the sender",
+            ),
+        ] {
+            let mut facts = sample_profile();
+            facts.baseline_id = recorded;
+            facts.baseline_observed_id = observed;
+            let reporter = reporter(facts, sample_pulse());
+            let message = reporter.profile(TARGET, MESSAGE_ID, &[], 1_700_000_000);
+            let payload = schema::validate_payload(HealthKind::Profile, &message.payload, 0)
+                .expect("a clamped profile must stay contract-valid");
+            let crate::health_plane::model::HealthBody::Profile(profile) = payload.body else {
+                panic!("expected a profile body");
+            };
+            assert_eq!(
+                (profile.baseline_id, profile.baseline_observed_id),
+                expected,
+                "{why}"
+            );
+        }
     }
 
     #[test]

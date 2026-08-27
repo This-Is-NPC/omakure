@@ -389,6 +389,8 @@ impl HealthFactsSource for NodeHealthFacts {
                 "aarch64" => "aarch64".to_string(),
                 _ => "unknown".to_string(),
             },
+            baseline_id: String::new(),
+            baseline_observed_id: String::new(),
             capabilities: Vec::new(),
             display_name: self.display_name.clone(),
             distro_id,

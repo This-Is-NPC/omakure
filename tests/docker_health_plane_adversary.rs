@@ -421,6 +421,8 @@ fn profile_payload(target: &str, id: &str, revision: u64) -> Value {
         "profile": {
             "agent_version": "0.3.0",
             "arch": "x86_64",
+            "baseline_id": "",
+            "baseline_observed_id": "",
             "capabilities": ["inventory-health", "notifications"],
             "display_name": "health-adversary",
             "distro_id": "debian",

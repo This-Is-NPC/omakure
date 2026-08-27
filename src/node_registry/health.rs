@@ -1160,8 +1160,8 @@ fn store_profile(
         "INSERT INTO health_profiles
          (node_id, profile_revision, agent_version, arch, capabilities, display_name,
           distro_id, distro_version, omarchy_channel, omarchy_version, platform, role,
-          runtimes, message_bytes, received_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+          runtimes, message_bytes, received_at, baseline_id, baseline_observed_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
          ON CONFLICT(node_id) DO UPDATE SET
            profile_revision = excluded.profile_revision,
            agent_version = excluded.agent_version,
@@ -1176,7 +1176,9 @@ fn store_profile(
            role = excluded.role,
            runtimes = excluded.runtimes,
            message_bytes = excluded.message_bytes,
-           received_at = excluded.received_at",
+           received_at = excluded.received_at,
+           baseline_id = excluded.baseline_id,
+           baseline_observed_id = excluded.baseline_observed_id",
         params![
             request.sender,
             profile.profile_revision as i64,
@@ -1193,6 +1195,8 @@ fn store_profile(
             runtimes,
             request.message_bytes,
             request.now,
+            profile.baseline_id,
+            profile.baseline_observed_id,
         ],
     )?;
     Ok(())
@@ -1533,7 +1537,7 @@ fn read_profile(
         .query_row(
             "SELECT profile_revision, agent_version, arch, capabilities, display_name,
                     distro_id, distro_version, omarchy_channel, omarchy_version, platform,
-                    role, runtimes
+                    role, runtimes, baseline_id, baseline_observed_id
              FROM health_profiles WHERE node_id = ?1",
             params![node_id],
             |row| {
@@ -1550,6 +1554,8 @@ fn read_profile(
                     row.get::<_, String>(9)?,
                     row.get::<_, String>(10)?,
                     row.get::<_, String>(11)?,
+                    row.get::<_, String>(12)?,
+                    row.get::<_, String>(13)?,
                 ))
             },
         )
@@ -1572,6 +1578,8 @@ fn read_profile(
     Ok(Some(ProfileSnapshot {
         agent_version: row.1,
         arch: row.2,
+        baseline_id: row.12,
+        baseline_observed_id: row.13,
         capabilities,
         display_name: row.4,
         distro_id: row.5,
@@ -1813,6 +1821,8 @@ mod tests {
             body: HealthBody::Profile(ProfileSnapshot {
                 agent_version: "0.3.0".to_string(),
                 arch: "x86_64".to_string(),
+                baseline_id: String::new(),
+                baseline_observed_id: String::new(),
                 capabilities: vec!["inventory-health".to_string(), "notifications".to_string()],
                 display_name: "workshop-laptop".to_string(),
                 distro_id: "arch".to_string(),
@@ -1935,7 +1945,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(marker, "7");
+        assert_eq!(marker, "8");
         for (object_type, name) in super::super::HEALTH_PLANE_OBJECTS {
             let present: i64 = connection
                 .query_row(

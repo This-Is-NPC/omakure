@@ -839,6 +839,8 @@ mod tests {
             ProfileFacts {
                 agent_version: "0.3.0".to_string(),
                 arch: "x86_64".to_string(),
+                baseline_id: String::new(),
+                baseline_observed_id: String::new(),
                 capabilities: Vec::new(),
                 display_name: self.display_name.lock().unwrap().clone(),
                 distro_id: "arch".to_string(),

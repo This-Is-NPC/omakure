@@ -134,6 +134,8 @@ fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
             "profile": {
                 "agent_version": "0.3.0",
                 "arch": "x86_64",
+                "baseline_id": "",
+                "baseline_observed_id": "",
                 "capabilities": [CAPABILITY_PROFILE_PULSE, CAPABILITY_SIGNAL],
                 "display_name": "feasibility-performer",
                 "distro_id": "arch",

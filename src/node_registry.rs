@@ -19,7 +19,7 @@ use thiserror::Error;
 
 pub mod health;
 
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_ACTOR_BYTES: usize = 256;
 const MAX_REASON_BYTES: usize = 1024;
@@ -2108,7 +2108,54 @@ fn initialize_database(
     if version == 6 {
         apply_health_plane_migration(connection)?;
     }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 7 {
+        migrate_v7_to_v8(connection)?;
+    }
     validate_schema(connection, registry)
+}
+
+/// Widen the stored Profile with the baseline a Performer holds.
+///
+/// Forward-only and fail-hard, unlike the Health Plane migration it follows.
+/// That one degraded gracefully because the plane it created was new and a node
+/// could serve everything else without it; there is no equivalent half-state
+/// here. The Profile schema is closed, so a receiver whose storage lacks these
+/// two columns and whose validator requires them would accept a Profile it
+/// cannot write, and reporting drift from a table that does not hold the answer
+/// is worse than refusing to open.
+///
+/// A node that never completed the Health Plane migration stays at version 6
+/// with the plane disabled and never reaches here.
+fn migrate_v7_to_v8(connection: &mut Connection) -> Result<(), RegistryError> {
+    let metadata_version: String = connection.query_row(
+        "SELECT value FROM metadata WHERE key = 'schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if metadata_version != "7" {
+        return Err(RegistryError::InvalidSchema(
+            "v7 database metadata marker is invalid".to_string(),
+        ));
+    }
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    // Empty is the shipped answer for every existing row: a Performer that
+    // already reported under version 7 said nothing about a baseline, and
+    // inventing one for it would make a node read as in sync with a set it
+    // never received. The next Profile it sends replaces the row.
+    transaction.execute_batch(
+        "ALTER TABLE health_profiles ADD COLUMN baseline_id TEXT NOT NULL DEFAULT ''
+           CHECK (baseline_id = '' OR length(baseline_id) = 64);
+         ALTER TABLE health_profiles ADD COLUMN baseline_observed_id TEXT NOT NULL DEFAULT ''
+           CHECK (baseline_observed_id = '' OR length(baseline_observed_id) = 64);",
+    )?;
+    transaction.execute(
+        "UPDATE metadata SET value = '8' WHERE key = 'schema_version'",
+        [],
+    )?;
+    transaction.execute_batch("PRAGMA user_version = 8")?;
+    transaction.commit()?;
+    Ok(())
 }
 
 /// Attempt the Health Plane migration to schema version 7.
@@ -3426,7 +3473,7 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
     let expected = [
         (
             "schema_version",
-            if health_plane_present { "7" } else { "6" },
+            if health_plane_present { "8" } else { "6" },
         ),
         (
             "health_plane",
@@ -3653,6 +3700,8 @@ fn validate_health_plane_columns(connection: &Connection) -> Result<(), Registry
             "runtimes",
             "message_bytes",
             "received_at",
+            "baseline_id",
+            "baseline_observed_id",
         ],
     )?;
     validate_columns(
@@ -5107,6 +5156,7 @@ mod tests {
         migrate_v4_to_v5(&mut connection).unwrap();
         migrate_v5_to_v6(&mut connection).unwrap();
         migrate_v6_to_v7(&mut connection).unwrap();
+        migrate_v7_to_v8(&mut connection).unwrap();
         validate_schema(&connection, &registry).unwrap();
         set_new_database_mode(&context.database_path()).unwrap();
         drop(connection);
@@ -5349,7 +5399,12 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&ctx).unwrap();
         let database = ctx.database_path();
         let connection = Connection::open(&database).unwrap();
-        connection.execute_batch("PRAGMA user_version = 8").unwrap();
+        // One past whatever this build supports: the property is that a
+        // database written by a newer Omakure is refused, and pinning the
+        // literal here would quietly stop testing that at the next migration.
+        connection
+            .execute_batch(&format!("PRAGMA user_version = {}", SCHEMA_VERSION + 1))
+            .unwrap();
         assert!(matches!(
             NodeRegistry::open(&ctx, identity.public_status()),
             Err(RegistryError::InvalidSchema(_))

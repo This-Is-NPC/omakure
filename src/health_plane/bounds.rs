@@ -1,13 +1,14 @@
 //! Every quantitative bound frozen by `.docs/health-plane-contract.md`.
 //!
 //! These constants are a transcription of the frozen contract and of
-//! `tests/fixtures/health_plane_vectors.toml`.  They are never derived, never
-//! negotiated, and never widened at runtime.
+//! `tests/fixtures/health_plane_vectors.toml`.  They are never negotiated and
+//! never widened at runtime. One — [`BASELINE_ID_HEX_CHARS`] — is derived
+//! rather than transcribed, for the reason written at its definition.
 
 /// `payload.health_version` accepted by this implementation.
 pub const HEALTH_VERSION: u64 = 1;
 /// Node registry schema version that owns the Health Plane tables.
-pub const REGISTRY_SCHEMA_VERSION: i64 = 7;
+pub const REGISTRY_SCHEMA_VERSION: i64 = 8;
 
 /// Frozen trust roles as stored in `trusted_peers.role`.
 pub const ROLE_CONDUCTOR: i64 = 1;
@@ -37,6 +38,18 @@ pub const CAPABILITY_ALLOWLIST: [&str; 7] = [
 /// a Profile built from one list and validated against another would be
 /// rejected on the wire with no way for either side to explain why.
 pub const RUNTIME_NAMES: [&str; MAX_RUNTIME_COUNT] = ["bash", "powershell", "python", "sh"];
+
+/// Width of a baseline identity as the Profile carries it, in hex characters.
+///
+/// The one constant in this file that is derived rather than transcribed, and
+/// deliberately so. Every other number here is a policy choice the contract
+/// froze; this one is not a choice at all — it is the width of the identity
+/// `crate::baseline` computes, and a Profile that validated a different width
+/// would reject an identity the baseline plane can legitimately produce. The
+/// literal `64` is transcribed independently by
+/// `tests/health_plane_contract.rs`, which is what would catch a change here
+/// that the contract did not agree to.
+pub const BASELINE_ID_HEX_CHARS: usize = crate::baseline::BASELINE_ID_BYTES * 2;
 
 // Message size bounds, in canonical envelope bytes excluding the signature.
 pub const MAX_CANONICAL_PROFILE: usize = 2_048;

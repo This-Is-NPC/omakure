@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 const ENVELOPE_DOMAIN: &[u8] = b"omakure/direct-envelope/v1\0";
 const CONTRACT_ID: &str = "omakure/health-plane/v1";
 const HEALTH_VERSION: u64 = 1;
-const REGISTRY_SCHEMA_VERSION: i64 = 7;
+const REGISTRY_SCHEMA_VERSION: i64 = 8;
 
 /// Published test scalar 1 from `tests/fixtures/node_identity_vectors.toml`.
 const PERFORMER_SCALAR_HEX: &str =
@@ -74,6 +74,11 @@ const NODE_ID_BYTES: usize = 69;
 const HEX16_CHARS: usize = 32;
 
 const MAX_AGENT_VERSION_BYTES: usize = 32;
+const BASELINE_ID_HEX_CHARS: usize = 64;
+/// The reference Profile reports the same set recorded and observed, which is
+/// the in-sync case; drift is the two differing and needs no second vector.
+const REFERENCE_BASELINE_ID: &str =
+    "3f0a91c4d2b85e67a1c30f4e8b29d75641aeb0c3928f5d61b7e04a2c8d9f1350";
 const MAX_DISPLAY_NAME_BYTES: usize = 64;
 const MAX_DISTRO_ID_BYTES: usize = 32;
 const MAX_DISTRO_VERSION_BYTES: usize = 32;
@@ -380,6 +385,8 @@ fn profile_payload(target: &str, revision: u64) -> Value {
         "profile": {
             "agent_version": "0.3.0",
             "arch": "x86_64",
+            "baseline_id": REFERENCE_BASELINE_ID,
+            "baseline_observed_id": REFERENCE_BASELINE_ID,
             "capabilities": [CAPABILITY_PROFILE_PULSE, CAPABILITY_SIGNAL],
             "display_name": "workshop-laptop",
             "distro_id": "arch",
@@ -518,6 +525,8 @@ fn worst_case_payload(kind: Kind) -> Value {
             "profile": {
                 "agent_version": "9".repeat(MAX_AGENT_VERSION_BYTES),
                 "arch": "x86_64",
+                "baseline_id": "b".repeat(BASELINE_ID_HEX_CHARS),
+                "baseline_observed_id": "c".repeat(BASELINE_ID_HEX_CHARS),
                 "capabilities": CAPABILITY_ALLOWLIST,
                 "display_name": "d".repeat(MAX_DISPLAY_NAME_BYTES),
                 "distro_id": "d".repeat(MAX_DISTRO_ID_BYTES),
@@ -1126,6 +1135,8 @@ fn validate_body(
                 &[
                     "agent_version",
                     "arch",
+                    "baseline_id",
+                    "baseline_observed_id",
                     "capabilities",
                     "display_name",
                     "distro_id",
@@ -1146,6 +1157,25 @@ fn validate_body(
                 return Err(HealthCode::InvalidMessage);
             }
             one_of(object.get("arch"), &["x86_64", "aarch64", "unknown"])?;
+            let mut baselines = Vec::with_capacity(2);
+            for name in ["baseline_id", "baseline_observed_id"] {
+                let text = object
+                    .get(name)
+                    .and_then(Value::as_str)
+                    .ok_or(HealthCode::InvalidMessage)?;
+                if !text.is_empty()
+                    && (text.len() != BASELINE_ID_HEX_CHARS
+                        || !text
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+                {
+                    return Err(HealthCode::InvalidMessage);
+                }
+                baselines.push(text);
+            }
+            if baselines[0].is_empty() && !baselines[1].is_empty() {
+                return Err(HealthCode::InvalidMessage);
+            }
             let capabilities = object
                 .get("capabilities")
                 .and_then(Value::as_array)
@@ -2338,6 +2368,8 @@ fn privacy_classes_are_closed_and_forbid_every_listed_disclosure() {
     for name in [
         "agent_version",
         "arch",
+        "baseline_id",
+        "baseline_observed_id",
         "capabilities",
         "display_name",
         "distro_id",

@@ -6,11 +6,12 @@
 //! can never silently persist sensitive data.
 
 use super::bounds::{
-    CAPABILITY_ALLOWLIST, MAX_AGENT_VERSION_BYTES, MAX_ARRAY_LENGTH, MAX_CAPABILITY_BYTES,
-    MAX_CAPABILITY_COUNT, MAX_DISPLAY_NAME_BYTES, MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES,
-    MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES, MAX_JSON_DEPTH, MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH,
-    MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES, MAX_STRING_BYTES, MAX_UPTIME_SECONDS,
-    MAX_WORKERS, MIN_EXIT_CODE, NODE_ID_BYTES, OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES,
+    BASELINE_ID_HEX_CHARS, CAPABILITY_ALLOWLIST, MAX_AGENT_VERSION_BYTES, MAX_ARRAY_LENGTH,
+    MAX_CAPABILITY_BYTES, MAX_CAPABILITY_COUNT, MAX_DISPLAY_NAME_BYTES, MAX_DISTRO_ID_BYTES,
+    MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES, MAX_JSON_DEPTH,
+    MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES,
+    MAX_STRING_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, NODE_ID_BYTES,
+    OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES,
 };
 use super::model::{
     AckBody, ErrorBody, HealthBody, HealthCode, HealthKind, HealthPayload, ProfileSnapshot,
@@ -168,6 +169,23 @@ fn is_lower_hex(byte: u8) -> bool {
     byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
 }
 
+/// A baseline identity as the Profile carries it: empty, or the exact width
+/// `crate::baseline` derives.
+///
+/// Empty is the only way to say "this node holds no baseline", and it is a
+/// separate answer from any identity — an empty entry list is not signable, so
+/// no baseline that was ever pushed can name itself with the empty string.
+fn baseline_id_field(value: Option<&Value>) -> Result<String, HealthCode> {
+    let text = value
+        .and_then(Value::as_str)
+        .ok_or(HealthCode::InvalidMessage)?;
+    if !text.is_empty() && (text.len() != BASELINE_ID_HEX_CHARS || !text.bytes().all(is_lower_hex))
+    {
+        return Err(HealthCode::InvalidMessage);
+    }
+    Ok(text.to_string())
+}
+
 fn node_id_field(value: Option<&Value>) -> Result<String, HealthCode> {
     let text = value
         .and_then(Value::as_str)
@@ -311,6 +329,8 @@ fn validate_profile(object: &Map<String, Value>) -> Result<ProfileSnapshot, Heal
         &[
             "agent_version",
             "arch",
+            "baseline_id",
+            "baseline_observed_id",
             "capabilities",
             "display_name",
             "distro_id",
@@ -331,6 +351,15 @@ fn validate_profile(object: &Map<String, Value>) -> Result<ProfileSnapshot, Heal
         return Err(HealthCode::InvalidMessage);
     }
     let arch = one_of(object.get("arch"), &ARCHITECTURES)?;
+    let baseline_id = baseline_id_field(object.get("baseline_id"))?;
+    let baseline_observed_id = baseline_id_field(object.get("baseline_observed_id"))?;
+    // A node that records no baseline cannot have observed one, and the pair
+    // is what the drift comparison reads. Allowing "nothing installed, this
+    // observed" would put a verdict on the wire that no set on disk could
+    // justify.
+    if baseline_id.is_empty() && !baseline_observed_id.is_empty() {
+        return Err(HealthCode::InvalidMessage);
+    }
     let entries = object
         .get("capabilities")
         .and_then(Value::as_array)
@@ -425,6 +454,8 @@ fn validate_profile(object: &Map<String, Value>) -> Result<ProfileSnapshot, Heal
     Ok(ProfileSnapshot {
         agent_version: agent_version.to_string(),
         arch,
+        baseline_id,
+        baseline_observed_id,
         capabilities,
         display_name: display_name.to_string(),
         distro_id: distro_id.to_string(),

@@ -468,6 +468,8 @@ fn profile_payload(target: &str, seed: u8, revision: u64) -> Value {
         "profile": {
             "agent_version": "0.3.0",
             "arch": "x86_64",
+            "baseline_id": "",
+            "baseline_observed_id": "",
             "capabilities": [CAPABILITY_PROFILE_PULSE],
             "display_name": "adversary",
             "distro_id": "arch",

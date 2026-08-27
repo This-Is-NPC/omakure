@@ -223,6 +223,14 @@ pub struct RuntimeFact {
 pub struct ProfileSnapshot {
     pub agent_version: String,
     pub arch: String,
+    /// The derived name of the baseline this node recorded installing, or empty
+    /// when it holds none. The claim.
+    pub baseline_id: String,
+    /// The same derivation recomputed over the paths that baseline named, as
+    /// they are on this node's disk now, or empty when it holds none. The
+    /// evidence. Comparing the two is the whole of drift; neither field on its
+    /// own is a verdict.
+    pub baseline_observed_id: String,
     pub capabilities: Vec<String>,
     pub display_name: String,
     pub distro_id: String,

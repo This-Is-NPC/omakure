@@ -201,6 +201,8 @@ fn profile_payload(target: &str, message_seed: u64, revision: u64) -> Value {
         "profile": {
             "agent_version": "0.3.0",
             "arch": "x86_64",
+            "baseline_id": "",
+            "baseline_observed_id": "",
             "capabilities": ["inventory-health", "notifications"],
             "display_name": "workshop-laptop",
             "distro_id": "arch",

@@ -8,6 +8,7 @@ pub mod direct_transport;
 pub mod discovery;
 pub mod domain;
 pub mod enrollment;
+pub mod enrollment_authority;
 mod error;
 pub mod health_plane;
 pub mod node;

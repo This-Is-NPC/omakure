@@ -75,6 +75,14 @@ impl NodeLayout {
         &self.state_dir
     }
 
+    /// Where the enrollment-authority signing key lives, when this node holds
+    /// one. Beside the identity, under the same 0700 directory and the same
+    /// 0600 discipline, but a *separate* key: reusing the identity would mean
+    /// compromising one node hands over the right to enrol the whole fleet.
+    pub fn authority_key_path(&self) -> PathBuf {
+        self.state_dir.join("authority.key")
+    }
+
     pub fn identity_path(&self) -> PathBuf {
         self.state_dir.join("identity.key")
     }
@@ -351,6 +359,10 @@ impl NodeContext {
         self.layout.state_dir()
     }
 
+    pub fn authority_key_path(&self) -> PathBuf {
+        self.layout.authority_key_path()
+    }
+
     pub fn identity_path(&self) -> PathBuf {
         self.layout.identity_path()
     }
@@ -571,6 +583,11 @@ impl NodeContext {
             let allowed = matches!(
                 name.as_ref(),
                 "identity.key"
+                    // The enrollment-authority signing key, on a node that
+                    // issues fleet membership. Added to this closed list
+                    // deliberately: the list is a security control, and a new
+                    // entry is an amendment to it, not a convenience.
+                    | "authority.key"
                     | "node.sqlite"
                     | "node.sqlite-wal"
                     | "node.sqlite-shm"

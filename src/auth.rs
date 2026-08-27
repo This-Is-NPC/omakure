@@ -676,6 +676,10 @@ pub fn append_token_entry(path: &Path, id: &str, entry: &str) -> Result<(), Auth
     }
     // Re-parse staged content before replace so we never leave a broken file.
     let _ = parse_tokens_toml(&staged)?;
+    // Read under the append lock, so the mode/ownership carried forward is the
+    // one belonging to the file this append is actually replacing.
+    #[cfg(unix)]
+    let replaced_metadata = fs::metadata(path).ok();
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     // Randomize the tmp suffix so two concurrent appends in the same process
     // never collide on the path, and so the path is unpredictable (an attacker
@@ -717,6 +721,16 @@ pub fn append_token_entry(path: &Path, id: &str, entry: &str) -> Result<(), Auth
             .map_err(|e| AuthError::Io(e.to_string()))?;
         file.sync_all().map_err(|e| AuthError::Io(e.to_string()))?;
     }
+    // Carry the destination's existing mode and ownership onto the replacement.
+    // The staged file is deliberately created 0600 and owned by whoever runs the
+    // append, but the installed tokens file is `root:omakure 0640` so the
+    // unprivileged service user can read it. Renaming a fresh 0600 root-owned
+    // file over it would lock the service out of its own credentials — and only
+    // at the *next* restart, long after the append that caused it.
+    #[cfg(unix)]
+    if let Some(existing) = replaced_metadata.as_ref() {
+        preserve_ownership_and_mode(&tmp, existing)?;
+    }
     #[cfg(windows)]
     if path.exists() {
         // Windows rename does not replace an existing destination. The sidecar
@@ -724,6 +738,40 @@ pub fn append_token_entry(path: &Path, id: &str, entry: &str) -> Result<(), Auth
         fs::remove_file(path).map_err(|e| AuthError::Io(e.to_string()))?;
     }
     fs::rename(&tmp, path).map_err(|e| AuthError::Io(e.to_string()))?;
+    Ok(())
+}
+
+/// Apply `existing`'s mode and ownership to the staged replacement at `tmp`.
+///
+/// Ownership is only changed when it actually differs, so an unprivileged
+/// operator appending to a file they already own never needs `CAP_CHOWN`. When
+/// it does differ and the chown is refused, that is reported rather than
+/// swallowed: silently completing the append is what leaves a node unable to
+/// read its own tokens file.
+#[cfg(unix)]
+fn preserve_ownership_and_mode(tmp: &Path, existing: &fs::Metadata) -> Result<(), AuthError> {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::fs::PermissionsExt;
+
+    let staged = fs::metadata(tmp).map_err(|e| AuthError::Io(e.to_string()))?;
+    if staged.uid() != existing.uid() || staged.gid() != existing.gid() {
+        let raw = std::ffi::CString::new(tmp.as_os_str().as_bytes())
+            .map_err(|e| AuthError::Io(e.to_string()))?;
+        // SAFETY: `raw` is a NUL-terminated path we own for the call's duration.
+        let rc = unsafe { libc::chown(raw.as_ptr(), existing.uid(), existing.gid()) };
+        if rc != 0 {
+            let err = std::io::Error::last_os_error();
+            return Err(AuthError::Io(format!(
+                "could not preserve tokens file ownership {}:{} on {}: {err}",
+                existing.uid(),
+                existing.gid(),
+                tmp.display()
+            )));
+        }
+    }
+    fs::set_permissions(tmp, fs::Permissions::from_mode(existing.mode() & 0o7777))
+        .map_err(|e| AuthError::Io(e.to_string()))?;
     Ok(())
 }
 
@@ -1235,6 +1283,37 @@ enabled = true
         assert_eq!(status.token_count, 1);
         let serialized = serde_json::to_string(&status).unwrap();
         assert!(!serialized.contains(token));
+    }
+
+    /// Appending a token must not narrow the tokens file's permissions.
+    ///
+    /// The installer creates `/etc/omakure/tokens.toml` as `root:omakure 0640`
+    /// precisely so the unprivileged node service can read it. An append that
+    /// replaced the file with a fresh 0600 one made the service fail to start
+    /// with `tokens file I/O error: Permission denied` — at the next restart,
+    /// not at append time, so the outage looked unrelated to adding a token.
+    #[cfg(unix)]
+    #[test]
+    fn append_token_entry_preserves_the_existing_file_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let first = generate_token("first", &["runs:read".into()]).unwrap();
+        append_token_entry(&path, &first.id, &first.tokens_file_entry).unwrap();
+        // Stand in for the installer's group-readable install mode.
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+
+        let second = generate_token("second", &["runs:read".into()]).unwrap();
+        append_token_entry(&path, &second.id, &second.tokens_file_entry).unwrap();
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(
+            mode, 0o640,
+            "append replaced the tokens file with mode {mode:o}, dropping the \
+             group read bit the node service needs to read its own credentials"
+        );
+        assert_eq!(load_tokens_file(&path).unwrap().len(), 2);
     }
 
     #[test]

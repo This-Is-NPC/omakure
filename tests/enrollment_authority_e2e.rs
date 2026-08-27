@@ -286,6 +286,56 @@ fn a_bundle_from_an_unnamed_authority_is_refused() {
     );
 }
 
+/// Revoking an authority must reach bundles it already signed.
+///
+/// The mechanism ships (`src/enrollment.rs` checks `authority.revoked`); what
+/// this proves is that the issuing side reaches it — a bundle that was valid a
+/// moment ago stops being valid because the audience said so, with nothing
+/// reissued and nothing expired.
+#[test]
+fn revoking_an_authority_refuses_a_bundle_it_already_signed() {
+    let issuer_dir = tempfile::tempdir().expect("issuer workspace");
+    let audience_dir = tempfile::tempdir().expect("audience workspace");
+    let issuer = issuer_dir.path();
+    let audience = audience_dir.path();
+
+    init(issuer);
+    let audience_id = init(audience)["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let authority = assert_ok(
+        "authority create",
+        &run_node(
+            issuer,
+            &[
+                "authority".to_string(),
+                "create".to_string(),
+                "--confirmed".to_string(),
+            ],
+        ),
+    );
+    set_organization(issuer);
+    accept_bundles_from(audience, &authority);
+
+    let issued = issue(issuer, &audience_id);
+    let bundle_hex = issued["bundle_hex"].as_str().expect("bundle").to_string();
+
+    // Same bundle, same everything — only the audience's opinion changes.
+    let path = audience.join("node.toml");
+    let config = std::fs::read_to_string(&path).expect("read node config");
+    let revoked = config.replace("revoked = false", "revoked = true");
+    assert_ne!(config, revoked, "the revoke edit matched nothing");
+    std::fs::write(&path, revoked).expect("write node config");
+
+    let refusal = assert_refused("enroll apply", &apply(audience, &bundle_hex));
+    assert!(
+        refusal.contains("authority") || refusal.contains("revoked"),
+        "the refusal should name the revoked authority: {refusal}"
+    );
+}
+
 /// Creating an authority twice must refuse rather than rotate the fleet's key.
 #[test]
 fn an_authority_is_not_replaced_by_running_the_command_again() {

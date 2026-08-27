@@ -329,15 +329,29 @@ mod tests {
     }
 
     /// A symlink must not be able to stand in for the key.
+    ///
+    /// The target is a real authority key at 0600 owned by this user on
+    /// purpose. A decoy that looked *wrong* in any other way -- loose mode, a
+    /// foreign owner, bytes that are not a scalar -- would be turned away by
+    /// the check for that instead, leaving the redirect itself untested. Here
+    /// every other reason to refuse has been removed, so the only thing
+    /// standing between the symlink and a loaded key is the refusal to follow
+    /// it.
     #[cfg(unix)]
     #[test]
     fn a_symlinked_authority_key_is_refused() {
+        use std::os::unix::fs::PermissionsExt;
+
         let dir = tempfile::tempdir().expect("tempdir");
         let context = node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
-        let elsewhere = dir.path().join("elsewhere.key");
-        std::fs::write(&elsewhere, [7u8; 32]).expect("write");
+        let decoy_dir = tempfile::tempdir().expect("tempdir");
+        let decoy_context = node_context(decoy_dir.path());
+        let decoy = EnrollmentAuthority::create(&decoy_context).expect("a real key elsewhere");
+        let elsewhere = decoy_context.authority_key_path();
+        std::fs::set_permissions(&elsewhere, std::fs::Permissions::from_mode(0o600)).expect("0600");
+        drop(decoy);
         std::os::unix::fs::symlink(&elsewhere, context.authority_key_path()).expect("symlink");
 
         assert!(

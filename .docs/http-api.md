@@ -22,7 +22,8 @@ revocation. Trust mutation bodies must include `confirmed: true`, a non-empty
 `actor`, and a non-empty `reason`.
 
 Routes are `GET /v1/node/status`, `POST /v1/node/init`, `GET /v1/node/health`,
-`GET /v1/node/signals`, `GET` and `POST /v1/node/peers`, `PATCH
+`GET /v1/node/signals`, `POST /v1/node/cues`, `POST /v1/node/baselines`,
+`POST /v1/node/baseline/rollback`, `GET` and `POST /v1/node/peers`, `PATCH
 /v1/node/peers/:node_id/capabilities`, and `POST
 /v1/node/peers/:node_id/revoke`. Responses use the standard JSON envelope.
 Private keys, plaintext secret values, revocation reasons, and unbounded audit
@@ -30,13 +31,23 @@ history are never returned.
 
 `GET /v1/node/health` returns the Health Plane fleet-status projection: one row
 per actively trusted peer with its presence (`unknown`, `online`, `stale`,
-`offline`), its latest Profile, and its latest Pulse. It is current status
+`offline`), its `baseline_status` (`unknown`, `none`, `in_sync`, `drifted`), its
+latest Profile, and its latest Pulse, plus fleet totals for both. It is current status
 only - there is no history, no series, and no alert surface - and it renders
 exactly the same protocol-neutral operation as `omakure node health --json`. It
 is read-only: no HTTP route writes Health Plane state, and the only writer is
 the authenticated node-to-node exchange over the direct transport. See
 `.docs/health-plane-contract.md` for the frozen presence windows, bounds, and
 privacy classes.
+
+`POST /v1/node/baseline/rollback` puts *this* node back on the one baseline it
+retained before the one it is running. It takes `{"confirmed": true}` under
+`node:write`, reaches no peer, and re-verifies the retained set against the
+publishers this node names today: a publisher revoked since the original install
+makes it fail with `forbidden`, and a node with nothing retained answers
+`not_found` rather than reporting a rollback that changed nothing. There is no
+node-to-node message kind that asks a Performer to change version; see
+`.docs/baseline-delivery.md`.
 
 `GET /v1/node/signals` returns the closed lifecycle Signal feed: at most 64
 entries, newest first, retained for seven days, across exactly three kinds

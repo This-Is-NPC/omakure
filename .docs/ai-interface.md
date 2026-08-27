@@ -20,6 +20,13 @@ Signal wave shipped, `node health` and `node signals`. Health data is written
 only by the authenticated node-to-node exchange over the direct transport;
 management HTTP and the CLI can read that state and can never write it.
 
+`node health --json` also answers baseline drift, and answers it as a comparison
+rather than a claim: each row's `baseline_status` is `unknown`, `none`,
+`in_sync`, or `drifted`, derived from two facts the Performer reports about its
+own disk. `unknown` means that Performer has not reported yet and `none` means
+it holds no baseline; neither is a drift verdict, and treating them as one would
+send an operator looking in the wrong place.
+
 ## Trust model
 
 **The AI is a full user. Everything is audited.**

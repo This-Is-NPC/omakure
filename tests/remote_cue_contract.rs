@@ -144,6 +144,15 @@ fn the_cue_plane_is_a_sibling_and_leaves_the_closed_sets_closed() {
     );
     assert_eq!(int(&v, &["signal_kinds_remain"]), 3);
     assert!(!boolean(&v, &["signal_field_added"]));
+    // Transcribed here since this contract was frozen and, until now, never
+    // read: a fixture value nothing asserts is a number that can go stale
+    // without anything noticing. The Cue plane added no registry object, so
+    // whatever the shipped registry version is, this file must be saying it.
+    assert_eq!(
+        int(&v, &["registry_schema_version"]),
+        omakure::node_registry::SCHEMA_VERSION,
+        "the frozen Cue vectors must name the registry version the code ships"
+    );
 }
 
 #[test]

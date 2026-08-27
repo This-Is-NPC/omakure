@@ -712,6 +712,7 @@ impl NodeContext {
             ));
         }
         validate_file_security_metadata(
+            &lock_path,
             &metadata,
             owner_policy(self.platform, self.custom_paths, true)?,
             self.test_mode,
@@ -784,6 +785,7 @@ impl NodeContext {
             return Err(NodeError::UnexpectedFileType(path.display().to_string()));
         }
         validate_file_security_metadata(
+            path,
             &metadata,
             owner_policy(self.platform, self.custom_paths, true)?,
             self.test_mode,
@@ -832,9 +834,10 @@ impl NodeContext {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(_) => {
-                return Err(NodeError::InsecurePath(
-                    "node configuration file could not be opened securely".to_string(),
-                ))
+                return Err(NodeError::InsecurePath(format!(
+                    "{} could not be opened securely",
+                    path.display()
+                )))
             }
         };
         let metadata = file.metadata()?;
@@ -844,15 +847,17 @@ impl NodeContext {
             ));
         }
         validate_file_security_metadata(
+            path,
             &metadata,
             owner_policy(self.platform, self.custom_paths, false)?,
             self.test_mode,
             0o640,
         )?;
         if !ensure_safe_parent_if_present(path)? {
-            return Err(NodeError::InsecurePath(
-                "node configuration path changed while opening".to_string(),
-            ));
+            return Err(NodeError::InsecurePath(format!(
+                "{} changed while it was being opened",
+                path.display()
+            )));
         }
         validate_open_file_identity(path, &file)?;
         #[cfg(windows)]
@@ -1369,7 +1374,7 @@ fn validate_file_security(
     _test_mode: bool,
 ) -> Result<(), NodeError> {
     let metadata = fs::symlink_metadata(path)?;
-    validate_file_security_metadata(&metadata, owner, _test_mode, 0o640)?;
+    validate_file_security_metadata(path, &metadata, owner, _test_mode, 0o640)?;
     #[cfg(windows)]
     validate_windows_security(path, false, _test_mode)?;
     Ok(())
@@ -1383,13 +1388,31 @@ fn validate_file_security_mode(
     _expected_mode: u32,
 ) -> Result<(), NodeError> {
     let metadata = fs::symlink_metadata(path)?;
-    validate_file_security_metadata(&metadata, owner, _test_mode, _expected_mode)?;
+    validate_file_security_metadata(path, &metadata, owner, _test_mode, _expected_mode)?;
     #[cfg(windows)]
     validate_windows_security(path, false, _test_mode)?;
     Ok(())
 }
 
+/// Is `mode` no broader than `allowed`?
+///
+/// `allowed` is the *broadest* permission set a node file may carry, not the
+/// only one it may carry. A stricter file is always acceptable: an operator
+/// hardening `node.toml` from 0640 to 0600 has removed access, not granted it,
+/// and refusing to read it turns a hardening step into an outage.
+///
+/// This cannot loosen a private file. The modes this admits for `allowed =
+/// 0o600` are exactly the subsets of 0600 — 0000, 0200, 0400, 0600 — every one
+/// of which is at least as strict as 0600, and no group or other bit can ever
+/// pass. So one comparison serves both the public config and the private keys
+/// without weakening either.
+#[cfg(unix)]
+fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool {
+    mode & 0o777 & !allowed == 0
+}
+
 fn validate_file_security_metadata(
+    path: &Path,
     metadata: &fs::Metadata,
     #[cfg(unix)] owner: UnixOwner,
     #[cfg(not(unix))] _owner: (),
@@ -1399,18 +1422,33 @@ fn validate_file_security_metadata(
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        if metadata.permissions().mode() & 0o777 != expected_mode {
-            return Err(NodeError::InsecurePath(
-                "node file has an unexpected mode".to_string(),
-            ));
+        let mode = metadata.permissions().mode() & 0o777;
+        if !mode_is_no_broader_than(mode, expected_mode) {
+            return Err(NodeError::InsecurePath(format!(
+                "{} has mode {:04o}, which grants more access than the permitted {:04o}; \
+                 run: chmod {:o} {}",
+                path.display(),
+                mode,
+                expected_mode,
+                expected_mode,
+                path.display()
+            )));
         }
         if metadata.uid() != owner.uid || metadata.gid() != owner.gid {
-            return Err(NodeError::InsecurePath(
-                "node file has the wrong owner or group".to_string(),
-            ));
+            return Err(NodeError::InsecurePath(format!(
+                "{} is owned by {}:{} but must be owned by {}:{}; run: chown {}:{} {}",
+                path.display(),
+                metadata.uid(),
+                metadata.gid(),
+                owner.uid,
+                owner.gid,
+                owner.uid,
+                owner.gid,
+                path.display()
+            )));
         }
     }
-    let _ = (metadata, _test_mode, expected_mode);
+    let _ = (path, metadata, _test_mode, expected_mode);
     Ok(())
 }
 
@@ -1796,6 +1834,71 @@ const _: unsafe extern "system" fn(
     *mut std::ffi::c_void,
     *mut u32,
 ) -> i32 = CreateWellKnownSid;
+
+/// Why a policy read produced the configuration it did.
+///
+/// Every variant below denies everything, and that is correct: a node that
+/// cannot prove what it opted into has opted into nothing. But "nothing was
+/// declared" and "the config exists and this node could not read it" are the
+/// same *decision* and completely different operator problems. Collapsing them
+/// is how one mode bit silently disables remote Cues, or the baseline gate,
+/// with no distinguishable reason.
+pub(crate) enum PolicyConfig {
+    /// The config was read and parsed. Whatever it declares is what holds.
+    Declared(Box<NodeConfig>),
+    /// There is no config file. Nothing was declared.
+    NothingDeclared,
+    /// A config exists and could not be read or trusted. `String` says why, in
+    /// the terms the operator needs: which file, and what is wrong with it.
+    Unreadable(String),
+}
+
+/// Read this node's own public config for a policy decision, keeping the
+/// reason for any failure rather than discarding it.
+pub(crate) fn read_policy_config(context: &NodeContext) -> PolicyConfig {
+    let mut file = match context.open_public_file() {
+        Ok(Some(file)) => file,
+        Ok(None) => return PolicyConfig::NothingDeclared,
+        Err(error) => return PolicyConfig::Unreadable(error.to_string()),
+    };
+    let mut contents = String::new();
+    if let Err(error) = file.read_to_string(&mut contents) {
+        return PolicyConfig::Unreadable(format!(
+            "{} could not be read: {error}",
+            context.config_path().display()
+        ));
+    }
+    match NodeConfig::parse(&contents) {
+        Ok(config) => PolicyConfig::Declared(Box::new(config)),
+        Err(error) => PolicyConfig::Unreadable(format!(
+            "{} is not a usable node configuration: {error}",
+            context.config_path().display()
+        )),
+    }
+}
+
+/// Report an unreadable policy config once per distinct reason.
+///
+/// Policy is read per session so a change takes effect without a restart, so an
+/// unconditional warning would repeat for every inbound connection.
+/// Deduplicating on the reason keeps a standing misconfiguration to one line
+/// while still reporting a *new* problem when one appears.
+pub(crate) fn warn_policy_unreadable(gate: &str, reason: &str) {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+
+    static REPORTED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    let reported = REPORTED.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut reported = match reported.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if reported.insert(format!("{gate}\u{0}{reason}")) {
+        eprintln!(
+            "omakure: {gate} denied for every peer; this node's configuration could not be read ({reason})"
+        );
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -2212,5 +2315,186 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(error, NodeError::TestModeUnavailable));
+    }
+
+    /// Hardening a file must never be an outage.
+    ///
+    /// 0640 is the *broadest* a public node config may be, not the only mode it
+    /// may have. An operator who chmods `node.toml` to 0600 has removed access,
+    /// not granted it, and the node must keep reading it. The previous exact
+    /// comparison refused 0600 and 0400 alongside 0644, so tightening the
+    /// config broke the node.
+    #[cfg(all(unix, debug_assertions))]
+    #[test]
+    fn a_public_config_may_be_hardened_but_never_loosened() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("node.toml");
+        fs::write(&path, "version = 1\n").unwrap();
+        let owner = owner_policy(NodePlatform::Linux, true, false).unwrap();
+
+        // Nothing beyond owner-rw plus group-r may pass. Checked first so a
+        // regression reports the widened access, not a stricter-mode edge case.
+        for mode in 0..=0o777u32 {
+            if mode & !0o640 == 0 {
+                continue;
+            }
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+            assert!(
+                validate_file_security(&path, owner, true).is_err(),
+                "mode {mode:04o} grants access beyond 0640 and must be refused"
+            );
+        }
+
+        // Every stricter mode must be readable: hardening is not an outage.
+        // 0600 and 0400 are the cases the exact comparison used to refuse.
+        for mode in 0..=0o777u32 {
+            if mode & !0o640 != 0 {
+                continue;
+            }
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+            assert!(
+                validate_file_security(&path, owner, true).is_ok(),
+                "mode {mode:04o} is no broader than 0640 and must be accepted"
+            );
+        }
+    }
+
+    /// The same comparison guards `identity.key`, `authority.key` and
+    /// `publisher.key` at 0600. Relaxing "exactly" to "no broader than" must
+    /// not make *those* loosenable.
+    ///
+    /// Proven exhaustively rather than by sample: all 512 permission modes are
+    /// checked, and acceptance must hold for exactly the subsets of 0600. That
+    /// is the whole security argument for using one comparison for both files —
+    /// no group bit and no other bit can ever pass on a private file.
+    #[cfg(all(unix, debug_assertions))]
+    #[test]
+    fn no_group_or_other_bit_can_ever_pass_on_a_private_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let context = test_context(temp.path());
+        let path = temp.path().join("identity.key");
+        fs::write(&path, b"key").unwrap();
+
+        // The security invariant first, so a regression reports the exposure
+        // rather than some stricter-mode edge case that happens to sort lower.
+        for mode in 0..=0o777u32 {
+            if mode & 0o077 == 0 {
+                continue;
+            }
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+            assert!(
+                context.validate_private_file(&path).is_err(),
+                "mode {mode:04o} exposes a private key to group or other and must be refused"
+            );
+        }
+
+        // Then the exact accepted set: the subsets of 0600 and nothing else.
+        for mode in 0..=0o777u32 {
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+            assert_eq!(
+                context.validate_private_file(&path).is_ok(),
+                mode & !0o600 == 0,
+                "mode {mode:04o} against a 0600 private file"
+            );
+        }
+    }
+
+    /// The refusal must lead somewhere. Naming neither the file nor the mode
+    /// nor the expectation leaves the operator with no route from the error to
+    /// the fix, and every file this validator guards produced the same
+    /// sentence.
+    #[cfg(all(unix, debug_assertions))]
+    #[test]
+    fn a_refused_mode_names_the_file_the_mode_and_the_remedy() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("node.toml");
+        fs::write(&path, "version = 1\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        let owner = owner_policy(NodePlatform::Linux, true, false).unwrap();
+
+        let error = validate_file_security(&path, owner, true).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains(&path.display().to_string()),
+            "the refusal must name the file: {message}"
+        );
+        assert!(
+            message.contains("0644"),
+            "the refusal must name the mode it found: {message}"
+        );
+        assert!(
+            message.contains("0640"),
+            "the refusal must name what it permits: {message}"
+        );
+        assert!(
+            message.contains("chmod 640"),
+            "the refusal must carry the remedy: {message}"
+        );
+    }
+
+    /// Deny-all is right for every unreadable config. Silence about *which*
+    /// failure it was is not.
+    ///
+    /// A mode bit that turns remote Cues off must not be indistinguishable from
+    /// a node that simply never opted in — those are the same decision and
+    /// completely different operator problems, and the reason is the only thing
+    /// that tells them apart.
+    #[cfg(all(unix, debug_assertions))]
+    #[test]
+    fn an_unreadable_policy_config_is_distinguishable_from_nothing_declared() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let context = test_context(temp.path());
+        let path = temp.path().join("node.toml");
+        let valid = NodeConfig::default().to_toml().unwrap();
+
+        // No config at all: nothing was declared.
+        assert!(matches!(
+            read_policy_config(&context),
+            PolicyConfig::NothingDeclared
+        ));
+
+        // The passing control. Without it the assertions below would hold just
+        // as well if the reader never returned anything but a failure.
+        fs::write(&path, &valid).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(matches!(
+            read_policy_config(&context),
+            PolicyConfig::Declared(_)
+        ));
+
+        // A mode the node refuses: unreadable, and the reason names the file
+        // and the mode so the operator can act on it.
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        let PolicyConfig::Unreadable(mode_reason) = read_policy_config(&context) else {
+            panic!("a config this node refuses to read must not look like nothing declared");
+        };
+        assert!(
+            mode_reason.contains(&path.display().to_string()) && mode_reason.contains("0644"),
+            "the reason must name the file and the mode: {mode_reason}"
+        );
+
+        // A different failure must read differently, or the reason carries no
+        // information beyond "something went wrong".
+        fs::write(&path, "this is not toml = = =").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+        let PolicyConfig::Unreadable(parse_reason) = read_policy_config(&context) else {
+            panic!("a config that will not parse must not look like nothing declared");
+        };
+        assert!(
+            parse_reason.contains(&path.display().to_string()),
+            "the reason must name the file: {parse_reason}"
+        );
+        assert_ne!(
+            mode_reason, parse_reason,
+            "a permissions failure and a malformed config must not read the same"
+        );
     }
 }

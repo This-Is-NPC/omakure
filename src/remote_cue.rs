@@ -505,20 +505,23 @@ pub struct CuePolicy {
 /// the default, which denies everything: a node that cannot prove what it
 /// declared has declared nothing.
 pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy {
-    let Ok(Some(mut file)) = context.open_public_file() else {
-        return CuePolicy::default();
+    let config = match crate::node::read_policy_config(context) {
+        crate::node::PolicyConfig::Declared(config) => *config,
+        // Nothing declared is the shipped state and needs no comment.
+        crate::node::PolicyConfig::NothingDeclared => return CuePolicy::default(),
+        // A config this node cannot read denies exactly the same way, so the
+        // reason has to be said out loud or a mode bit turns Cues off with
+        // nothing to distinguish it from never having opted in.
+        crate::node::PolicyConfig::Unreadable(reason) => {
+            crate::node::warn_policy_unreadable("remote cues", &reason);
+            return CuePolicy::default();
+        }
     };
-    let mut contents = String::new();
-    if std::io::Read::read_to_string(&mut file, &mut contents).is_err() {
-        return CuePolicy::default();
+    CuePolicy {
+        enabled: config.trust.allow_remote_cues,
+        declared_scripts: config.trust.remote_cue_scripts,
+        declared_batteries: config.trust.remote_cue_batteries,
     }
-    crate::domain::NodeConfig::parse(&contents)
-        .map(|config| CuePolicy {
-            enabled: config.trust.allow_remote_cues,
-            declared_scripts: config.trust.remote_cue_scripts,
-            declared_batteries: config.trust.remote_cue_batteries,
-        })
-        .unwrap_or_default()
 }
 
 impl<'a> CueSession<'a> {

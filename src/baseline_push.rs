@@ -164,15 +164,16 @@ pub struct BaselinePolicy {
 /// everything: a node that cannot prove what it opted into has opted into
 /// nothing.
 pub fn read_policy(context: &crate::node::NodeContext) -> BaselinePolicy {
-    let Ok(Some(mut file)) = context.open_public_file() else {
-        return BaselinePolicy::default();
-    };
-    let mut contents = String::new();
-    if std::io::Read::read_to_string(&mut file, &mut contents).is_err() {
-        return BaselinePolicy::default();
-    }
-    let Ok(config) = crate::domain::NodeConfig::parse(&contents) else {
-        return BaselinePolicy::default();
+    let config = match crate::node::read_policy_config(context) {
+        crate::node::PolicyConfig::Declared(config) => *config,
+        // Nothing declared is the shipped state and needs no comment.
+        crate::node::PolicyConfig::NothingDeclared => return BaselinePolicy::default(),
+        // Same decision as "nothing declared", entirely different operator
+        // problem. Say which one it was.
+        crate::node::PolicyConfig::Unreadable(reason) => {
+            crate::node::warn_policy_unreadable("baseline push", &reason);
+            return BaselinePolicy::default();
+        }
     };
     let mut publishers = Vec::with_capacity(config.trust.baseline_publishers.len());
     for entry in &config.trust.baseline_publishers {

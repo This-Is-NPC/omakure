@@ -1605,8 +1605,13 @@ pub(crate) fn map_node_error(error: NodeError) -> OperationError {
         | NodeError::IncompleteTestOverrides => {
             OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
         }
-        NodeError::InsecurePath(_)
-        | NodeError::UnsafePath(_)
+        // Carries the file, what was wrong with it, and the remedy. The paths
+        // it names are the node's own documented defaults or a path the caller
+        // supplied itself, so this discloses nothing to a caller already
+        // authorized to read node state -- while an opaque string leaves an
+        // operator with a 0644 node.toml no route at all to `chmod 640`.
+        NodeError::InsecurePath(_) => registry_error(error.to_string()),
+        NodeError::UnsafePath(_)
         | NodeError::UnexpectedFileType(_)
         | NodeError::ExistingConfig(_) => registry_error("node state is invalid or insecure"),
         NodeError::LifecycleBusy => OperationError::new(
@@ -2291,7 +2296,17 @@ mod tests {
 
         let error = public_node_status(&context).unwrap_err();
         assert_eq!(error.code, OperationErrorCode::RegistryInvalid);
-        assert_eq!(error.message, "node state is invalid or insecure");
+        // The refusal has to lead somewhere. An operator who reads this must be
+        // able to get from it to the fix without reading the source.
+        let path = context.config_path().display().to_string();
+        assert!(
+            error.message.contains(&path)
+                && error.message.contains("0644")
+                && error.message.contains("0640")
+                && error.message.contains("chmod 640"),
+            "the refusal must name the file, the mode, and the remedy: {}",
+            error.message
+        );
     }
 
     #[cfg(unix)]
@@ -2309,7 +2324,16 @@ mod tests {
         symlink(&outside, context.config_path()).unwrap();
         let error = public_node_status(&context).unwrap_err();
         assert_eq!(error.code, OperationErrorCode::RegistryInvalid);
-        assert_eq!(error.message, "node state is invalid or insecure");
+        // O_NOFOLLOW refuses the final symlink. The refusal names the path it
+        // refused, which is what tells the operator which file to look at.
+        assert!(
+            error
+                .message
+                .contains(&context.config_path().display().to_string())
+                && error.message.contains("could not be opened securely"),
+            "the refusal must name the file it refused: {}",
+            error.message
+        );
 
         std::fs::remove_file(context.config_path()).unwrap();
         let real_parent = temp.path().join("real-config");

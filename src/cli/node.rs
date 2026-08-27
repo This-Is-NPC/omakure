@@ -627,9 +627,11 @@ fn map_node_error(error: NodeError) -> OperationError {
         NodeError::Config(error) => {
             OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
         }
+        NodeError::InsecurePath(_) => {
+            OperationError::new(OperationErrorCode::RegistryInvalid, error.to_string())
+        }
         NodeError::UnsafePath(_)
         | NodeError::UnexpectedFileType(_)
-        | NodeError::InsecurePath(_)
         | NodeError::ExistingConfig(_) => OperationError::new(
             OperationErrorCode::RegistryInvalid,
             "node state is invalid or insecure",

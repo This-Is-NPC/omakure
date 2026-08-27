@@ -120,6 +120,23 @@ fn configure_static_peer(workspace: &Path, direct_port: &str, peer_node_id: &str
     std::fs::write(path, config).expect("write static peer config");
 }
 
+/// Wait until `server` holds a session with `peer_node_id`.
+///
+/// This can time out for a reason that belongs to the product rather than to
+/// the test. A static-peer dialer is given three connection attempts for the
+/// life of the process, spread over one and two seconds of backoff, and the
+/// counter is reset only by a *successful* connect. The peer's listener is
+/// routinely not bound yet when the first attempt lands -- every passing run
+/// of this file records `internal` against the peer before it connects -- so
+/// two attempts is the real budget. On a loaded machine a peer that takes more
+/// than about three seconds to bind exhausts it, the dialer thread returns for
+/// good, and nothing respawns it: no later poll can succeed and this wait
+/// spends its whole deadline on a link that is already dead.
+///
+/// So do not "fix" a timeout here by raising the deadline; there is nothing
+/// left to wait for. `last_errors` in the panic message is append-only and is
+/// never cleared on a successful connect, so it names the last thing that went
+/// wrong at any point, not the reason this call gave up.
 fn wait_for_connected(server: &support::HttpServer, peer_node_id: &str) {
     let deadline = std::time::Instant::now() + Duration::from_secs(12);
     loop {

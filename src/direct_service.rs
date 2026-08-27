@@ -1705,6 +1705,7 @@ fn hold_session(
         .set_read_timeout(Some(crate::direct_health::TICK))
         .map_err(|_| TransportError::Internal)?;
     let mut last_activity = Instant::now();
+    let mut last_trust_check = Instant::now();
     let mut outbound_cue: Option<OutboundCue> = None;
     let mut outbound_baseline: Option<OutboundBaseline> = None;
     // Anything still queued when this session ends must not wait out its
@@ -1714,6 +1715,33 @@ fn hold_session(
         peer_node_id,
     };
     while !state.stop.load(Ordering::SeqCst) {
+        // Revocation is immediate or it is not revocation.
+        //
+        // A session is authorized once, when it opens, and nothing re-read that
+        // decision afterwards. So an operator who revoked a peer went on being
+        // told it was `connected` -- for as long as the link stayed up, which
+        // on an idle link is five minutes and on a busy one is unbounded --
+        // and `connected` is the evidence `.docs/recovery.md` sends them to
+        // read when it says to confirm the revoked peer cannot establish a
+        // useful direct session. Nothing they could see said otherwise.
+        //
+        // Only a positive reading ends the session. A registry that will not
+        // answer leaves the link alone and asks again next tick: `not_enrolled`
+        // is fatal to a dialer, so treating a transient read failure as an
+        // answer would retire a healthy link permanently over a locked
+        // database. The sender-side gate already refuses to *use* a session it
+        // cannot prove is trusted, so nothing rides on this being pessimistic.
+        if last_trust_check.elapsed() >= crate::direct_health::TICK {
+            last_trust_check = Instant::now();
+            if let Ok(Some(authorization)) = registry.health_authorization(peer_node_id) {
+                if authorization.state != PeerState::Active {
+                    return Err(match authorization.state {
+                        PeerState::Revoked => TransportError::Revoked,
+                        _ => TransportError::NotEnrolled,
+                    });
+                }
+            }
+        }
         // One Cue in flight per session, which is the bound the contract
         // already freezes at `concurrent_cue_runs_per_peer = 1`.
         if outbound_cue.is_none() {

@@ -36,6 +36,23 @@ a peer is not a licence to cancel what this node's own owner started. The
 revocation itself is written first and is never made conditional on the run log,
 so withdrawing trust cannot be blocked by a busy or missing workspace database.
 
+It reaches the transport too, and no restart is required for any of it:
+
+- **A standing session ends** within about a second. `node status` stops
+  reporting the peer `connected`, which is what makes the check above answerable
+  at all.
+- **A Cue or a baseline push aimed at that peer is refused** by this node before
+  anything reaches the wire, naming the peer and the state it was found in. Do
+  not read this as the peer having refused; it never heard the request.
+- **The peer's own reconnects are refused with `revoked`**, which it is told, so
+  its dialer stops rather than retrying. Expect `revoked` — not `internal` — in
+  that node's `node status` under `transport.last_errors`.
+
+The asymmetry is deliberate and is worth expecting: the revoked node is never
+told it was revoked until it next connects, so until then it still lists the
+revoker as an active peer. That is its registry being honest about what it
+knows, not a failed revocation.
+
 ## A worker that died holding a remote run
 
 A Cue-origin run is deliberately excluded from the worker lease steal. Where an

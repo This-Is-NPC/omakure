@@ -1289,6 +1289,86 @@ fn a_revoked_peer_is_refused_with_revoked_and_told_so() {
     );
 }
 
+/// Wait until `server` reports no session with `peer_node_id`.
+fn wait_for_disconnected(server: &support::HttpServer, peer_node_id: &str, budget: Duration) {
+    let deadline = Instant::now() + budget;
+    loop {
+        let status = server.get("/v1/node/status");
+        let transport = if status.status == 200 {
+            status.json()["data"]["transport"].clone()
+        } else {
+            Value::Null
+        };
+        let still_connected = transport["peers"].as_array().is_some_and(|peers| {
+            peers
+                .iter()
+                .any(|peer| peer["node_id"] == peer_node_id && peer["state"] == "connected")
+        });
+        if !still_connected && transport != Value::Null {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the session with a revoked peer is still standing: {transport}"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Revoking a peer must end the session this node is already holding.
+///
+/// The frozen contract speaks only to reconnects, so this is uncontracted; the
+/// obligation is `.docs/recovery.md`, which tells the operator to "confirm the
+/// revoked peer cannot establish a useful direct session" and says revocation
+/// reaches work already in flight. A session authorized once at open and never
+/// re-checked keeps answering that question with `connected`, which is the one
+/// piece of evidence the operator has and it is wrong. On two real machines
+/// both sides reported `connected` for over ninety seconds after `node revoke`,
+/// and cut-off arrived only with a service restart.
+#[test]
+fn revoking_a_peer_ends_the_session_this_node_is_already_holding() {
+    let first = support::TestWorkspace::new("direct_teardown_first");
+    let second = support::TestWorkspace::new("direct_teardown_second");
+    init_node(first.path());
+    init_node(second.path());
+
+    let first_status = status_node(first.path());
+    let second_status = status_node(second.path());
+    let first_id = first_status["identity"]["node_id"].as_str().unwrap();
+    let second_id = second_status["identity"]["node_id"].as_str().unwrap();
+    trust_node(first.path(), second.path(), &second_status);
+    trust_node(second.path(), first.path(), &first_status);
+
+    let first_port = free_port();
+    let second_port = free_port();
+    configure_static_peer(first.path(), &first_port, second_id, &second_port);
+    configure_static_peer(second.path(), &second_port, first_id, &first_port);
+
+    let first_server = start_peer_service(first.path());
+    let second_server = start_peer_service(second.path());
+    wait_for_connected(&first_server, second_id);
+    wait_for_connected(&second_server, first_id);
+
+    // Revoked on one side only, which is the only shape revocation ever has:
+    // it is local durable state and the revoked node is never told.
+    revoke_node(first.path(), second_id);
+
+    wait_for_disconnected(&first_server, second_id, Duration::from_secs(30));
+
+    // And it must stay down. The revoker will not redial a peer it revoked, and
+    // the revoked node's own dials are refused with `revoked`, which retires
+    // its dialer.
+    std::thread::sleep(Duration::from_secs(3));
+    let transport = first_server.get("/v1/node/status").json()["data"]["transport"].clone();
+    assert_eq!(
+        transport["connected_peer_count"], 0,
+        "a revoked peer reconnected: {transport}"
+    );
+
+    let _ = second_server.terminate();
+    let _ = first_server.terminate();
+}
+
 /// How long the peer is held back before it binds its listener.
 ///
 /// Longer than the whole opening backoff ladder of 1 s, 2 s, and 4 s, so the

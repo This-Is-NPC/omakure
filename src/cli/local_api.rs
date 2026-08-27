@@ -8,8 +8,8 @@
 //! service to act instead of racing it.
 //!
 //! Deliberately not a dependency. This speaks the small, fixed subset of HTTP
-//! the local API needs — one JSON POST to a loopback address with a bearer
-//! token — rather than pulling a client library in for a single verb. There is
+//! the local API needs — a JSON request to a loopback address with a bearer
+//! token — rather than pulling a client library in for two verbs. There is
 //! no TLS here and none is wanted: the target is the address this node bound
 //! itself, on this machine.
 
@@ -56,6 +56,27 @@ pub fn post_json(
     body: &serde_json::Value,
     read_timeout: Duration,
 ) -> Result<serde_json::Value, LocalApiError> {
+    request(addr, token, "POST", path, Some(body), read_timeout)
+}
+
+/// GET one path from this node's own API and return the `data` object.
+pub fn get_json(
+    addr: SocketAddr,
+    token: &str,
+    path: &str,
+    read_timeout: Duration,
+) -> Result<serde_json::Value, LocalApiError> {
+    request(addr, token, "GET", path, None, read_timeout)
+}
+
+fn request(
+    addr: SocketAddr,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Option<&serde_json::Value>,
+    read_timeout: Duration,
+) -> Result<serde_json::Value, LocalApiError> {
     let mut stream = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
         .map_err(|_| LocalApiError::Unreachable)?;
     stream
@@ -65,9 +86,9 @@ pub fn post_json(
         .set_read_timeout(Some(read_timeout + READ_HEADROOM))
         .map_err(LocalApiError::Io)?;
 
-    let body = body.to_string();
+    let body = body.map(serde_json::Value::to_string).unwrap_or_default();
     let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: {addr}\r\nAuthorization: Bearer {token}\r\n\
+        "{method} {path} HTTP/1.1\r\nHost: {addr}\r\nAuthorization: Bearer {token}\r\n\
          Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );

@@ -7,6 +7,11 @@ use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use std::error::Error;
 use std::fs;
 use std::io::Read;
+use std::time::Duration;
+
+/// The local status read that explains a failed probe is a loopback lookup, not
+/// a remote wait, so it gets a short budget of its own.
+const SESSION_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Send one Cue, preferring the session this node's service already holds.
 ///
@@ -93,6 +98,96 @@ fn dispatch_cue_via_service(
     )
 }
 
+/// Probe one peer, and name the one cause the prober cannot see for itself.
+///
+/// Unlike a Cue, a probe is deliberately *not* relayed through the running
+/// service. A Cue is an instruction that has to arrive, so the session the
+/// service holds is the only way to deliver it. A probe is a question, and for
+/// a peer this node already has a session with the answer is already in hand:
+/// that session was built by the same handshake, identity check, and
+/// authorization a probe performs, and it is torn down when any of them stops
+/// holding. Relaying would also write a `probe_accepted` audit row for a
+/// handshake that never happened, which is worse than no answer.
+///
+/// What the prober cannot see is why it was refused. A peer that already holds
+/// a session with this node rejects the second connection inside `register`
+/// and hangs up without a reply, so all the dial observes is a closed stream:
+/// `transport_internal`, "direct transport I/O failed". The reason lives on
+/// the other side of the wire, but the *fact* is local -- this node's own
+/// service knows which peers it is connected to -- so it is read from there.
+fn dispatch_direct_probe(
+    context: &NodeContext,
+    scripts_dir: &std::path::Path,
+    args: crate::cli::args::NodeDirectProbeArgs,
+) -> OperationResult<serde_json::Value> {
+    let error = match crate::direct_service::probe(args.endpoint, &args.peer_node_id, context) {
+        Ok(()) => return Ok(serde_json::json!({"accepted": true})),
+        Err(error) => error,
+    };
+    if hung_up_mid_session(&error)
+        && service_holds_session(context, scripts_dir, &args.peer_node_id)
+    {
+        return Err(OperationError::new(
+            OperationErrorCode::AlreadyExists,
+            format!(
+                "this node's service already holds a session with {}, and a peer accepts \
+                 only one; that session is itself the proof a probe would produce, so read \
+                 it from `node status` instead of dialling a second time",
+                args.peer_node_id
+            ),
+        ));
+    }
+    Err(map_direct_error(error))
+}
+
+/// Whether the peer accepted the connection and then dropped it without
+/// answering, which is what a refusal inside `register` looks like from here.
+///
+/// A refused or unanswered *connection* is excluded deliberately. It reaches
+/// the caller as the same `Io` variant, but it means nothing is listening at
+/// that address -- a wrong endpoint, not a duplicate session -- and reporting a
+/// standing session for it would hide the real fault.
+fn hung_up_mid_session(error: &crate::direct_service::DirectServiceError) -> bool {
+    let crate::direct_service::DirectServiceError::Io(error) = error else {
+        return false;
+    };
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::UnexpectedEof
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::BrokenPipe
+    )
+}
+
+/// Whether this node's own service reports a live session with `peer`.
+///
+/// Read at most once, only after a probe has already failed, so the ordinary
+/// path pays nothing for it. Any inability to ask -- no token, no service, no
+/// answer -- means the failure is reported exactly as it arrived rather than
+/// guessed at.
+fn service_holds_session(context: &NodeContext, scripts_dir: &std::path::Path, peer: &str) -> bool {
+    let Ok(token) = std::env::var("OMAKURE_API_TOKEN") else {
+        return false;
+    };
+    let Some(addr) = node_api_bind(context, scripts_dir) else {
+        return false;
+    };
+    if token.is_empty() {
+        return false;
+    }
+    let Ok(data) =
+        crate::cli::local_api::get_json(addr, &token, "/v1/node/status", SESSION_LOOKUP_TIMEOUT)
+    else {
+        return false;
+    };
+    data["transport"]["peers"].as_array().is_some_and(|peers| {
+        peers
+            .iter()
+            .any(|entry| entry["node_id"] == peer && entry["state"] == "connected")
+    })
+}
+
 /// Where this node's running service can be reached.
 ///
 /// The service records this itself, because `api.bind` in the config is only a
@@ -142,11 +237,7 @@ pub fn run(
         NodeCommand::Serve(args) => {
             return crate::cli::node_service::run(scripts_dir, context, args);
         }
-        NodeCommand::DirectProbe(args) => {
-            crate::direct_service::probe(args.endpoint, &args.peer_node_id, &context)
-                .map(|()| serde_json::json!({"accepted": true}))
-                .map_err(map_direct_error)
-        }
+        NodeCommand::DirectProbe(args) => dispatch_direct_probe(&context, &scripts_dir, args),
         // Prefers `POST /v1/node/cues` on the running service, because a
         // separate process cannot dial a peer that service already has a
         // session with. The route is not a second authorization surface for the

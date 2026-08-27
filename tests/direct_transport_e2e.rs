@@ -928,6 +928,114 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
     let _ = target_server.terminate();
 }
 
+/// A probe into a standing session must say so, not die on a closed stream.
+///
+/// This is the normal state of a managed fleet: the service holds a session
+/// with the peer, so the peer refuses a second connection inside `register` and
+/// hangs up without a reply. The dial sees only `UnexpectedEof`, which used to
+/// surface as `transport_internal` / "direct transport I/O failed" -- an error
+/// that names neither the cause nor anything the operator could do about it.
+///
+/// The second half is the more important one. A connected peer must not become
+/// an excuse for every I/O failure: a probe at an address where nothing is
+/// listening is still a wrong address, and must keep saying so.
+#[test]
+fn direct_probe_names_the_standing_session_and_still_reports_a_dead_endpoint() {
+    let first = support::TestWorkspace::new("direct_probe_session_first");
+    let second = support::TestWorkspace::new("direct_probe_session_second");
+    init_node(first.path());
+    init_node(second.path());
+
+    let first_status = status_node(first.path());
+    let second_status = status_node(second.path());
+    let second_id = second_status["identity"]["node_id"].as_str().unwrap();
+    trust_node(first.path(), second.path(), &second_status);
+    trust_node(second.path(), first.path(), &first_status);
+
+    let first_direct_port = free_port();
+    let second_direct_port = free_port();
+    // Both sides name the other because dial ownership is decided by node id
+    // order, and the ids are fresh every run: configuring one side only would
+    // leave no session at all about half the time.
+    configure_static_peer(
+        first.path(),
+        &first_direct_port,
+        second_id,
+        &second_direct_port,
+    );
+    configure_static_peer(
+        second.path(),
+        &second_direct_port,
+        first_status["identity"]["node_id"].as_str().unwrap(),
+        &first_direct_port,
+    );
+
+    let first_server = support::HttpServer::start_node_service(
+        first.path(),
+        TOKEN,
+        &[
+            "--workers",
+            "0",
+            "--no-scheduler",
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(15),
+    );
+    let second_server = support::HttpServer::start_node_service(
+        second.path(),
+        TOKEN,
+        &[
+            "--workers",
+            "0",
+            "--no-scheduler",
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(15),
+    );
+    // Wait on the fact, not on a duration. Probing before the session is up
+    // would succeed and prove nothing.
+    wait_for_connected(&first_server, second_id);
+
+    let refused = probe(
+        first.path(),
+        &format!("127.0.0.1:{second_direct_port}"),
+        second_id,
+    );
+    assert!(
+        !refused.status.success(),
+        "a second connection to a connected peer cannot succeed"
+    );
+    let envelope = json(&refused);
+    assert_eq!(
+        envelope["error"]["code"], "already_exists",
+        "the operator must be told a session exists, not handed an I/O \
+         failure: {envelope}"
+    );
+    let message = envelope["error"]["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains(second_id) && message.contains("node status"),
+        "the explanation must name the peer and where the answer already is: {message}"
+    );
+
+    // Nothing is listening here, and the peer this names is connected. The
+    // standing session must not be offered as the explanation for that.
+    let dead_port = free_port();
+    let unreachable = probe(first.path(), &format!("127.0.0.1:{dead_port}"), second_id);
+    assert!(!unreachable.status.success());
+    let envelope = json(&unreachable);
+    assert_eq!(
+        envelope["error"]["code"], "transport_internal",
+        "a refused connection is a wrong endpoint, not a duplicate session: {envelope}"
+    );
+
+    let _ = second_server.terminate();
+    let _ = first_server.terminate();
+}
+
 #[test]
 fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
     let first = support::TestWorkspace::new("direct_static_first");

@@ -466,41 +466,11 @@ Read query parameters and safety policy:
   the scripts root through `..`, absolute paths, or symlinks.
 - Tree/content routes reject `.omakure`, `.history`, and `.git` metadata paths.
 
-## CLI / HTTP Parity Matrix
+## CLI / HTTP parity
 
-| CLI | HTTP | Shared operation |
-|---|---|---|
-| `omakure config --json` | `GET /v1/config` | `config_summary` |
-| workspace summary | `GET /v1/workspace` | `workspace_summary` |
-| `omakure scripts --json` | `GET /v1/scripts` | `list_scripts` |
-| `omakure search <query> --json` | `GET /v1/search?q=...` | `search_scripts` |
-| `omakure describe <script> --json` | `GET /v1/scripts/{script_id}` | `describe_script` |
-| script browser | `GET /v1/tree`, `GET /v1/tree/{path}` | `list_tree` |
-| script content | `GET /v1/scripts/{script_id}/content` | `read_script_content` |
-| `omakure doctor` | `GET /v1/doctor` | `doctor_report` |
-| `omakure history list --json` | `GET /v1/runs` | `list_runs` |
-| `omakure history show <run_id> --json` | `GET /v1/runs/{run_id}` | `show_run` |
-| `omakure history traces <run_id> --json` | `GET /v1/runs/{run_id}/traces` | `list_traces` |
-| `omakure queue stats --json` | `GET /v1/queue/stats` | `queue_stats` |
-| `omakure queue add <script> --json` | `POST /v1/runs` | `enqueue_run` |
-| `omakure queue cancel <run_id> --json` | `POST /v1/runs/{run_id}/cancel` | `cancel_run` |
-| `omakure queue dead-letter <run_id> --json` | `POST /v1/runs/{run_id}/dead-letter` | `dead_letter_run` |
-| `omakure env list --json` | `GET /v1/envs` | `list_envs` |
-| `omakure env create <name> ... --json` | `POST /v1/envs` | `create_env` |
-| `omakure env show <name> --json` | `GET /v1/envs/{name}` | `show_env` |
-| `omakure env replace <name> ... --json` | `PUT /v1/envs/{name}` | `replace_env` |
-| `omakure env set <name> KEY=VALUE --json` | `PATCH /v1/envs/{name}`, `PUT /v1/envs/{name}/params/{key}` | `set_param` |
-| `omakure env remove <name> <key> --json` | `DELETE /v1/envs/{name}/params/{key}` | `remove_param` |
-| `omakure env activate <name> --json` | `POST /v1/envs/{name}/activate` | `activate_env` |
-| `omakure env deactivate --json` | `DELETE /v1/envs/active` | `deactivate_env` |
-| `omakure env delete <name> --json` | `DELETE /v1/envs/{name}` | `delete_env` |
-| `omakure battery list --json` | `GET /v1/batteries` | `list_batteries` |
-| `omakure battery add <url> --json` | `POST /v1/batteries` | `add_battery` |
-| `omakure battery sync <name> --json` | `POST /v1/batteries/{battery_id}/sync` | `sync_battery` |
-| `omakure battery inspect <name> --json` | `GET /v1/batteries/{battery_id}` | `inspect_battery` |
-| `omakure battery scripts <name> --json` | `GET /v1/batteries/{battery_id}/scripts` | `list_battery_scripts` |
-| `omakure battery install <name> <script-id> --json` | `POST /v1/batteries/{battery_id}/scripts/{script_id}/install` | `install_battery_script` |
-| `omakure battery remove <name> --json` | `DELETE /v1/batteries/{battery_id}` | `remove_battery` |
+Recorded in `cli-http-parity.md`, which is the single copy: it carries the
+status and the notes as well as the mapping, and a second hand-maintained
+table here had already drifted from it.
 
 ## Shared Operations
 

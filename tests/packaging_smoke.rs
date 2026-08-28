@@ -252,17 +252,24 @@ fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results(
     assert!(release.contains("816 passed"));
 }
 
-/// What item 10 leaves unproven has to stay named where a reader looks, and
-/// stay precise about what ships versus what is proven.
+/// What item 10 proves and what it still does not has to stay named where a
+/// reader looks, in every document that carries the claim.
 ///
-/// The installers really do write a systemd unit, a launchd plist, and a
-/// Windows service; a record that softened into "install automation does not
-/// ship" would be false in the other direction, so the plan is held to naming
-/// the three artifacts as well as the gap. And the fleet-simulation claim that
-/// used to assert macOS and Windows coverage is pinned as gone, because a
-/// paragraph added elsewhere does not retract a sentence left standing.
+/// Three of them do -- the roadmap, `.docs/installation.md` and
+/// `.docs/headless-release.md` -- and they are pinned together because a
+/// correction made in one and not the others leaves the old falsehood standing
+/// somewhere a reader will find it first. The installers really do write a
+/// systemd unit, a launchd plist, and a Windows service, so the plan is held to
+/// naming the three artifacts as well as the gaps: a record that softened into
+/// "install automation does not ship" would be false in the other direction.
+///
+/// The install claim moved once already. Two real Fedora virtual machines ran
+/// `install.sh`, so "nothing anywhere runs the install path" became false and
+/// is pinned as gone; what those machines did *not* establish -- a cold boot,
+/// launchd, and `install.ps1` -- is pinned as present, because evidence for one
+/// platform is exactly when the others quietly get credited too.
 #[test]
-fn the_unproven_install_and_platform_gaps_are_named_rather_than_implied() {
+fn the_install_and_platform_evidence_is_named_rather_than_implied() {
     // Matched on the sentence rather than on the line wrapping, so reflowing a
     // paragraph is not a failure and deleting the statement is.
     fn unwrapped(rel: &str) -> String {
@@ -272,14 +279,18 @@ fn the_unproven_install_and_platform_gaps_are_named_rather_than_implied() {
     let plan = unwrapped("rebuild-omakure.md");
     for needle in [
         "macOS and Windows nodes cannot be exercised on this machine.",
-        "Install execution has no proof.",
-        "Nothing anywhere runs the install path, registers a real service, starts one, or has observed a machine boot into a running node",
-        // What ships, named exactly, so the gap cannot be overstated into the
+        "Install execution is proven on Linux, and nowhere else.",
+        "was run on two real Fedora virtual machines, which are machines and not containers",
+        // The limits that survived the evidence. Naming what one platform
+        // proved is where the other two get credited by omission.
+        "a cold boot into a running node was not separately recorded",
+        "macOS launchd and the Windows service remain unexecuted",
+        // What ships, named exactly, so the gaps cannot be overstated into the
         // opposite falsehood that the automation is missing.
         "ExecStart=${binary} node serve",
         "hands it to `launchctl bootstrap`",
         "`install.ps1` registers `OmakureNode` through `sc.exe`",
-        "Do not reach for a privileged container to close this.",
+        "Do not reach for a privileged container to close the remaining gap.",
         "every compose harness sets `allow_remote_cues = false`",
     ] {
         assert!(
@@ -287,21 +298,34 @@ fn the_unproven_install_and_platform_gaps_are_named_rather_than_implied() {
             "rebuild-omakure.md must still name {needle:?}"
         );
     }
-    assert!(
-        !plan.contains("Fleet simulation covers heterogeneous Omarchy, generic Linux, macOS, and"),
-        "the retracted fleet-simulation claim must not be left standing beside its correction"
-    );
+    for stale in [
+        "Fleet simulation covers heterogeneous Omarchy, generic Linux, macOS, and",
+        "Install execution has no proof.",
+        "Nothing anywhere runs the install path, registers a real service, starts one, or has observed a machine boot into a running node",
+    ] {
+        assert!(
+            !plan.contains(stale),
+            "a retracted claim must not be left standing beside its correction: {stale:?}"
+        );
+    }
 
     let release = unwrapped(".docs/headless-release.md");
-    assert!(
-        release.contains("nothing runs the install path of `install.sh`, and `install.ps1` is never executed at all"),
-        "headless-release.md must say a release does not prove the install path"
-    );
+    for needle in [
+        "no release run exercises the install path of `install.sh`, and `install.ps1` is never executed at all",
+        "run by hand on two real Fedora virtual machines, which is evidence about the product rather than about a release run",
+    ] {
+        assert!(
+            release.contains(needle),
+            "headless-release.md must still name {needle:?}"
+        );
+    }
 
     let installation = unwrapped(".docs/installation.md");
     for needle in [
-        "Nothing anywhere runs the install path, registers a real service, starts one, or has observed a machine boot into a running node.",
-        "`install.ps1` is never executed on any platform.",
+        "No test anywhere runs the install path, registers a real service, or starts one.",
+        "the Linux install path has been executed on two real Fedora virtual machines",
+        "A cold boot into a running node was not separately recorded",
+        "`install.ps1` is never executed on any platform, and the launchd path has never been run either.",
         "which is not a service manager starting it at boot",
         "systemctl status omakure-node",
         "launchctl print system/com.omakure.node",

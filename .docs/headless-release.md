@@ -84,12 +84,15 @@ release archive contract is still binary-only.
 Hosted Linux, macOS, and Windows CI/release runs remain pending. They are not
 claimed by this local snapshot; task #2678 remains blocked on that evidence.
 
-Neither a hosted run nor a local one would close the install gap: nothing runs
-the install path of `install.sh`, and `install.ps1` is never executed at all. A
-release ships a binary and the automation that registers it as a machine
-service; nothing has observed a machine boot into a running node. See the service section of
-`.docs/installation.md` for what is and is not checked, and roadmap item 10 for
-why the evidence needs a throwaway machine.
+Neither a hosted run nor a local one closes the install gap on its own: no
+release run exercises the install path of `install.sh`, and `install.ps1` is
+never executed at all. A release ships a binary and the automation that
+registers it as a machine service. The Linux install path has since been run by
+hand on two real Fedora virtual machines, which is evidence about the product
+rather than about a release run; a cold boot into a running node was not
+separately recorded. See the service section of `.docs/installation.md` for what
+is and is not checked, and roadmap item 10 for what those machines did and did
+not establish.
 
 The snapshot above predates the version-only `0.3.0` bump. The resulting local
 Linux `v0.3.0` release binary measured 8,812,016 bytes and its binary-only

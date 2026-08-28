@@ -240,12 +240,13 @@ provide — scoped to operational management, **never surveillance**:
    the work that trust already caused belong to the plane that granted it, so
    this item carries baseline push, drift, and rollback only.
 9. **Install automation** — systemd, launchd, and Windows daemon bootstrap.
-10. **Test & doc — complete for what one Linux host with Docker can prove** —
-    fleet simulation, install-config tests, security failure tests, and product
-    docs ship, and the multi-container transport and Health Plane gates in
-    `.github/workflows/ci.yml` are the canonical runs. Three limits are named
-    here rather than left for a reader to find, because each one is a place
-    where the evidence stops short of the claim above it.
+10. **Test & doc — complete for what Linux can prove** — fleet simulation,
+    install-config tests, security failure tests, and product docs ship; the
+    multi-container transport and Health Plane gates in
+    `.github/workflows/ci.yml` are the canonical runs, and two real Fedora
+    virtual machines carry the install and the fleet end to end. Three places
+    are named here rather than left for a reader to find, because each is a
+    place where the evidence and the claim above it have to be told apart.
 
     **macOS and Windows nodes cannot be exercised on this machine.** It is Linux
     with Docker, and a Linux kernel hosts neither. The workflows declare macOS
@@ -256,26 +257,46 @@ provide — scoped to operational management, **never surveillance**:
     that have run only on Linux. That is an environment limit, not a
     scope choice, and no amount of local work removes it.
 
-    **Install execution has no proof.** The automation ships and is real:
-    `install.sh` writes `/etc/systemd/system/omakure-node.service` carrying
-    `ExecStart=${binary} node serve`, writes
-    `/Library/LaunchDaemons/com.omakure.node.plist` and hands it to `launchctl
-    bootstrap`, and `install.ps1` registers `OmakureNode` through `sc.exe`.
-    `tests/packaging_smoke.rs` asserts all of it — and asserts it *statically*,
-    by reading the installer sources. One test does execute an installer, and
-    only its uninstall path, with `systemctl` replaced by a shim that records
-    what it was asked. Nothing anywhere runs the install path, registers a real
-    service, starts one, or has observed a machine boot into a running node; the
-    Docker gates start `node serve` as a container entrypoint, which is not a
-    service manager starting it at boot. Saying the automation does not ship would be false;
-    saying it is proven would also be false. The only honest evidence is a
-    throwaway machine — `systemd-nspawn --boot`, qemu, or a CI runner that is
-    discarded after the run. **Do not reach for a privileged container to close
-    this.** It was tried here with `--privileged --cgroupns=host` and
-    `/sbin/init`: a container systemd sharing the host's cgroup namespace does
-    not see itself as isolated, signalled processes it judged orphaned, and
-    killed the host's Wayland session leader twice. A container sharing a host
-    namespace is not a machine boot and cannot stand in for one.
+    **Install execution is proven on Linux, and nowhere else.** The automation
+    ships and is real: `install.sh` writes
+    `/etc/systemd/system/omakure-node.service` carrying `ExecStart=${binary}
+    node serve`, writes `/Library/LaunchDaemons/com.omakure.node.plist` and
+    hands it to `launchctl bootstrap`, and `install.ps1` registers
+    `OmakureNode` through `sc.exe`. `tests/packaging_smoke.rs` asserts all of
+    it — and asserts it *statically*, by reading the installer sources.
+
+    The Linux half now has execution evidence beyond those strings. `install.sh`
+    was run on two real Fedora virtual machines, which are machines and not
+    containers: it created the unprivileged `omakure` service account, wrote the
+    unit, and systemd started `node serve` under that account, with the nodes
+    then driven through direct transport, an authorized Cue, baseline
+    push/drift/rollback, and revocation. Restart was exercised too, which is
+    what makes the evidence worth having — six defects survived a green suite
+    and only appeared there. Two of them were reachable **only** through the
+    installed service: `e7ccebc`, where `token generate --append` dropped the
+    replaced file's mode and ownership and rewrote the installer's
+    `root:omakure 0640` tokens file to `root:root 0600`, so nothing looked wrong
+    until the next restart failed `Permission denied`, burned its
+    `Restart=on-failure` start limit and took both nodes offline hours after the
+    change that caused it; and `5fca616`, where `useradd --home-dir
+    /var/lib/omakure` made the 0700 state directory the service account's home,
+    so a command run by hand as that account created an entry inside the one
+    directory validated against a closed allow-list — a permanent
+    `registry_invalid` while systemd still reported the unit `active`.
+
+    What that run does **not** establish: a cold boot into a running node was
+    not separately recorded — start, restart, and running as the service account
+    were — and macOS launchd and the Windows service remain unexecuted for the
+    reason named above, that this machine hosts neither. Those two rest on
+    source and on static assertions alone.
+
+    **Do not reach for a privileged container to close the remaining gap.** It
+    was tried here with `--privileged --cgroupns=host` and `/sbin/init`: a
+    container systemd sharing the host's cgroup namespace does not see itself as
+    isolated, signalled processes it judged orphaned, and killed the host's
+    Wayland session leader twice. A container sharing a host namespace is not a
+    machine boot and cannot stand in for one. A throwaway machine is the honest
+    instrument — which is what the Fedora VMs were.
 
     **Duplicate Cue delivery is proven at both dedupe layers and on no live
     node.** The in-session guard is `seen_cue_ids`, and the durable one is

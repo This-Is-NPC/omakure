@@ -91,12 +91,23 @@ static check of what the installers *say*.
 
 Only one test executes an installer at all, and only its uninstall path:
 `install.sh --uninstall-node-service` runs with `systemctl` replaced by a shim
-that records what it was asked and does nothing. Nothing anywhere runs the
-install path, registers a real service, starts one, or has observed a machine
-boot into a running node. The Docker gates start `node serve` as a container
-entrypoint, which is not a service manager starting it at boot, and the macOS
-and Windows CI jobs run the test suite without touching either installer.
-`install.ps1` is never executed on any platform.
+that records what it was asked and does nothing. No test anywhere runs the
+install path, registers a real service, or starts one. The Docker gates start
+`node serve` as a container entrypoint, which is not a service manager starting
+it at boot, and the macOS and Windows CI jobs run the test suite without
+touching either installer.
+
+Outside the test suite, the Linux install path has been executed on two real
+Fedora virtual machines: `install.sh` created the unprivileged `omakure` service
+account, wrote the unit, and systemd started `node serve` under it, and the pair
+was then driven through direct transport, an authorized Cue, baseline
+push/drift/rollback, and revocation. Restart was exercised, and two defects
+reachable only through the installed service were found that way — the tokens
+file losing its `root:omakure 0640` ownership on `token generate --append`, and
+the service account being homed inside the 0700 state directory. A cold boot
+into a running node was not separately recorded; start, restart, and running as
+the service account were. `install.ps1` is never executed on any platform, and
+the launchd path has never been run either.
 
 Treat the first machine-service install on a new host as unverified and confirm
 it yourself:

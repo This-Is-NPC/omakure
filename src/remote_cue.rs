@@ -152,8 +152,8 @@ pub enum GateDecision {
 /// with Cues disabled produces the same silence for every peer regardless of
 /// what it knows about them.
 pub fn evaluate_gates(authority: &LocalAuthority) -> GateDecision {
-    // A — this node has not opted in. Until now `allow_remote_cues` was parsed,
-    // defaulted false, and reported, but read by no enforcement path at all.
+    // A — this node has not opted in. `allow_remote_cues` defaults to false, so
+    // a node that never declared itself refuses every Cue.
     if !authority.remote_cues_enabled {
         return GateDecision::Rejected(CueCode::Disabled);
     }

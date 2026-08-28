@@ -22,3 +22,6 @@ scripts/.history/*
 scripts/.omakure/envs/*
 !scripts/.omakure/envs/env_template.conf
 .temp/
+
+# Planning notes, kept out of the product record.
+rebuild-omakure.md

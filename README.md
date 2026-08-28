@@ -116,7 +116,6 @@ fabricate macOS or Windows runtime evidence.
 
 ## Documentation
 
-- `rebuild-omakure.md`: canonical future product direction and node contract
 - `docs/internal/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
 - `docs/README.md`: documentation index
 - `docs/usage.md`: CLI and HTTP workflows

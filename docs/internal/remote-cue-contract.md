@@ -157,18 +157,13 @@ and configuration only. A Cue is accepted if and only if **all five** pass.
 | **D** | That peer also holds `notifications` | `1204` |
 | **E** | The script is in `trust.remote_cue_scripts`, or was installed by a battery in `trust.remote_cue_batteries` | `1212`, reported as `1206` |
 
-Role is the shipped `INTEGER` encoding, `ROLE_CONDUCTOR = 1` /
-`ROLE_PERFORMER = 2` (`src/health_plane/bounds.rs:13-15`). It is **not** the
-`TEXT conductor/performer` sketched at `rebuild-omakure.md:510`; this contract
-freezes what ships, not what was drawn.
+Role is the `INTEGER` encoding `ROLE_CONDUCTOR = 1` / `ROLE_PERFORMER = 2`
+(`src/health_plane/bounds.rs:13-15`), not a `TEXT` role name.
 
-Gate A is today **inert**: `allow_remote_cues` is parsed, defaulted to `false`,
-and reported, but enforced nowhere, because nothing has ever consumed it. This
-contract makes it load-bearing. A node that has never opted in refuses every Cue
-regardless of how trusted the sender is.
+Gate A is load-bearing: `allow_remote_cues` defaults to `false`, and a node that
+has never opted in refuses every Cue regardless of how trusted the sender is.
 
-`remote-run` requires **no capability-list amendment**: it already ships in all
-three hand-duplicated copies (`src/health_plane/bounds.rs:23`,
+`remote-run` ships in all three hand-duplicated capability copies (`src/health_plane/bounds.rs:23`,
 `src/node_registry.rs:70`, `src/enrollment.rs:47`).
 
 ### Gate E: what may run is declared, not inferred

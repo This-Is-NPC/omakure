@@ -6,7 +6,6 @@ process.
 
 ## Users and operators
 
-- `../rebuild-omakure.md`: canonical future product direction and node contract
 - `internal/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
 - `internal/health-plane-contract.md`: frozen Profile/Pulse/Signal wire, authorization, and bounds contract (pending owner review)
 - `internal/remote-cue-contract.md`: frozen Cue wire, authorization gates, and refusal codes

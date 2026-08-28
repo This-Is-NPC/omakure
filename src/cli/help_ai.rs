@@ -154,7 +154,7 @@ fn build_payload() -> HelpAiPayload {
                 "auth": "Authorization: Bearer <token>; prefer OMAKURE_TOKENS_FILE/--tokens-file (per-token scopes); legacy OMAKURE_API_TOKEN = id legacy scopes * gated by --capability (admin:status needs explicit capability); /v1/health and /v1/ready unauthenticated; GET /v1/admin/status needs admin:status (or * / capability all); 401 and authenticated requests emit omakure.http_audit (token_id never Authorization); --capability all does not bypass --secret-ref",
                 "envelope": "Same { ok, data, error, schema_version } shape as CLI JSON.",
                 "body_limit": "1 MiB",
-                "reference": ".docs/http-api.md",
+                "reference": "docs/http-api.md",
             }),
             "config": json!({
                 "ok": true,

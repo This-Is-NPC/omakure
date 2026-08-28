@@ -27,7 +27,7 @@
 //! smaller limit: [`MAX_PUSH_SCRIPT_BYTES`] of script content per push,
 //! enforced on both sides. A baseline larger than that is still signable and
 //! still installable locally; it is simply not pushable, and the sender is told
-//! so before anything goes on the wire. See `.docs/baseline-delivery.md`.
+//! so before anything goes on the wire. See `docs/internal/baseline-delivery.md`.
 
 use crate::baseline::{
     BaselineError, BaselinePublisherKey, SignedBaselineManifest, VerifiedBaseline,
@@ -1553,7 +1553,7 @@ mod delivery_tests {
     /// Acceptance: with the gate off — the shipped default — nothing installs and
     /// the node keeps serving.
     ///
-    /// The second half is the one `.docs/usage.md` froze for enrollment: refusing
+    /// The second half is the one `docs/usage.md` froze for enrollment: refusing
     /// a baseline must never mean refusing to serve. It is checked by delivering a
     /// second baseline on the same session after the refusal and watching it be
     /// decided normally, which a node that had torn the session down could not do.

@@ -11,7 +11,7 @@ network). It is not a public-internet threat model.
 
 **Preferred:** multi-token file via `--tokens-file` / `OMAKURE_TOKENS_FILE`
 (Argon2id hashes, per-token scopes, `omakure token generate`, SIGHUP reload).
-See `.docs/http-api.md` → Authentication Contract.
+See `docs/http-api.md` → Authentication Contract.
 
 **Legacy:** `OMAKURE_API_TOKEN` still works when no tokens file is set
 (internal id `legacy`, scopes `*`, gated by process-wide `--capability`),

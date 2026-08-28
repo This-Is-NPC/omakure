@@ -184,7 +184,7 @@ provide — scoped to operational management, **never surveillance**:
    health state with latest-state-only retention, and a Conductor fleet-status
    projection read through `omakure node health` / `GET /v1/node/health` and
    `omakure node signals` / `GET /v1/node/signals`. Contracts and every
-   quantitative bound are frozen in `.docs/health-plane-contract.md`. Baselines,
+   quantitative bound are frozen in `docs/internal/health-plane-contract.md`. Baselines,
    dashboards, alert engines, arbitrary metrics, long-term telemetry, and remote
    Cues are not included in this phase; the Profile was amended once since, by
    item 8, to carry the two baseline facts drift reads.
@@ -217,7 +217,7 @@ provide — scoped to operational management, **never surveillance**:
    previous baseline and can be put back on it, re-verified against the
    publishers it names today, so a publisher revoked since the install makes the
    rollback fail. Contracts and every quantitative bound are frozen in
-   `.docs/baseline-delivery.md` and `.docs/health-plane-contract.md`. Campaigns,
+   `docs/internal/baseline-delivery.md` and `docs/internal/health-plane-contract.md`. Campaigns,
    fan-out, chunked delivery of a baseline larger than one push, and history
    deeper than one retained version are not included in this phase.
 
@@ -251,7 +251,7 @@ provide — scoped to operational management, **never surveillance**:
     **macOS and Windows nodes cannot be exercised on this machine.** It is Linux
     with Docker, and a Linux kernel hosts neither. The workflows declare macOS
     and Windows jobs that build and run the suite natively, but no hosted run
-    has been observed and recorded — `.docs/headless-release.md` has said so
+    has been observed and recorded — `docs/headless-release.md` has said so
     since task #2678 and still does. Every cross-platform statement in this
     document therefore rests on source written for those targets and on tests
     that have run only on Linux. That is an environment limit, not a
@@ -562,7 +562,7 @@ vector tests. References: `https://crates.io/crates/k256`,
 `https://github.com/RustCrypto/elliptic-curves/tree/master/k256`.
 
 The direct authenticated channel and enrollment contract is recorded in
-`.docs/direct-transport-contract.md`. The owner approved the standard pure-Rust
+`docs/internal/direct-transport-contract.md`. The owner approved the standard pure-Rust
 Noise `XX_25519_ChaChaPoly_SHA256` construction through `snow` 0.10.0, with a
 service-owned static X25519 key bound to the canonical normalized
 secp256k1/BIP-340 identity by a signed certificate. The exact direct-channel

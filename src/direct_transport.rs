@@ -1140,7 +1140,7 @@ pub fn verify_envelope(
 // The Health Plane adds envelope `kind` values only. It reuses `sign_envelope`
 // verbatim, so the frozen BIP-340 construction, the RFC-8785 canonical prehash,
 // the certificate, the Noise handshake, and the framing are all unchanged.
-// See `.docs/health-plane-contract.md` "Production carriage feasibility".
+// See `docs/internal/health-plane-contract.md` "Production carriage feasibility".
 // ---------------------------------------------------------------------------
 
 /// The `kind` prefix that marks an envelope as a Health Plane message.

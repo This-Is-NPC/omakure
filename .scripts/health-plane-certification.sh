@@ -44,7 +44,7 @@ induced_failure=${OMAKURE_HEALTH_CERTIFICATION_INDUCE_FAILURE:-0}
 
 # ---------------------------------------------------------------------------
 # Frozen bounds. Every number below is transcribed from
-# `.docs/health-plane-contract.md` and `tests/fixtures/health_plane_vectors.toml`.
+# `docs/internal/health-plane-contract.md` and `tests/fixtures/health_plane_vectors.toml`.
 # None of them is chosen here.
 # ---------------------------------------------------------------------------
 FROZEN_SIGNAL_INBOX_CAPACITY=64

@@ -7,7 +7,7 @@
 //!
 //! Every value it emits is privacy class P0 and is clamped to the frozen
 //! grammar before it reaches the wire, because
-//! `.docs/health-plane-contract.md` requires the sender to redact and the
+//! `docs/internal/health-plane-contract.md` requires the sender to redact and the
 //! receiver to reject rather than redact.
 
 use super::bounds::{

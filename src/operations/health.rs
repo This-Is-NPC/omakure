@@ -13,7 +13,7 @@
 //!    Profile, Pulse, and `run-completed`. It reads the local node only;
 //!    nothing here consults a peer message, and nothing here can mutate trust.
 //!
-//! Every bound below is transcribed from `.docs/health-plane-contract.md` via
+//! Every bound below is transcribed from `docs/internal/health-plane-contract.md` via
 //! `crate::health_plane::bounds`. None of them is chosen here.
 
 use crate::health_plane::bounds::{

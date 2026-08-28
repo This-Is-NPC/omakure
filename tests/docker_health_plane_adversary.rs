@@ -10,7 +10,7 @@
 //! `node.sqlite`.
 //!
 //! Every expected code below is transcribed from
-//! `.docs/health-plane-contract.md`; none of them is chosen here. The frozen
+//! `docs/internal/health-plane-contract.md`; none of them is chosen here. The frozen
 //! reply policy is asserted as well as the code: a `health_error` is emitted
 //! only once the sender is authenticated, authorized *and* target-bound, so
 //! trust, role, capability, size, schema, and target failures are silent drops

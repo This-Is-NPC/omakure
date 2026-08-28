@@ -270,7 +270,7 @@ pub(crate) fn worker_loop(
 /// terminal transition.
 fn execute_and_finalize(workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>) {
     // Layer 2 of the env-injection precedence table
-    // (`.docs/env-injection-spec.md` §1): the active managed env. Reserved
+    // (`docs/internal/env-injection-spec.md` §1): the active managed env. Reserved
     // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
     // and remain non-overridable.
     let run_env_name = runs::open(workspace)

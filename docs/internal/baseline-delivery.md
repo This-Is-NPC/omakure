@@ -90,7 +90,7 @@ an answer about the set the receiver actually evaluated.
 ## Size: why delivery carries its own bound
 
 The frozen Noise plaintext limit is `MAX_PLAINTEXT_BYTES` = **1,048,520**
-bytes (`.docs/direct-transport-contract.md`). A signable baseline may hold
+bytes (`docs/internal/direct-transport-contract.md`). A signable baseline may hold
 `MAX_ENTRIES` = 256 scripts of `MAX_SCRIPT_BYTES` = 1 MiB each, so a maximal
 baseline is roughly **256 MiB**. It does not fit in one frame, and not by any
 margin.
@@ -196,7 +196,7 @@ that battery would silently have made it remotely runnable.
 
 ## Refusing a baseline is not refusing to serve
 
-`.docs/usage.md` froze this rule for enrollment and it applies unchanged. Every
+`docs/usage.md` froze this rule for enrollment and it applies unchanged. Every
 refusal above is a decision about one message. The session stays up, the Health
 Plane keeps reporting, and the next baseline on the same session is decided
 normally.
@@ -221,7 +221,7 @@ operator signs where the key is; the service carries what it is given.
 
 A baseline replaces scripts *legitimately*. A Cue accepted against version N of
 a script could therefore execute N+1 with no attacker anywhere in the story.
-`.docs/remote-cue-contract.md` declined an exec-time content re-check on the
+`docs/internal/remote-cue-contract.md` declined an exec-time content re-check on the
 grounds that it only defended against an attacker who could already write to
 the workspace; this plane makes that premise false, and the check is now live
 and fail-closed. `hash_reverified_at_exec = true`.
@@ -306,7 +306,7 @@ A `baseline_rollback` kind would hand a Conductor the power to flip a Performer
 between two code versions at will, without a publisher signature anywhere in
 *that* message. The split between publishing and conducting exists to withhold
 exactly that. The Conductor already learns which machine needs attention: the
-Health Plane's `baseline_status` says `drifted`, and `.docs/recovery.md` says
+Health Plane's `baseline_status` says `drifted`, and `docs/recovery.md` says
 what to do about it.
 
 ## Drift
@@ -315,7 +315,7 @@ A Performer reports two facts on its Profile and no verdict: `baseline_id`, the
 derived name of the set it recorded installing, and `baseline_observed_id`, the
 same derivation recomputed over that set's paths as they are on disk now. The
 Conductor's fleet projection compares them. The grammar, the four verdicts, and
-what the pair does not cover are frozen in `.docs/health-plane-contract.md`.
+what the pair does not cover are frozen in `docs/internal/health-plane-contract.md`.
 
 ## Out of scope
 

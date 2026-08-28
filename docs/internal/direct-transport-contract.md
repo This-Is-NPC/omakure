@@ -159,7 +159,7 @@ thread; restart starts with an empty in-memory observation set.
 
 ## Identity and Transport Keys
 
-The canonical identity rules in `rebuild-omakure.md` remain binding:
+The identity rules this contract binds:
 
 - `identity.key` contains exactly one normalized 32-byte big-endian
   secp256k1 scalar. It is normalized to the even-Y representative before

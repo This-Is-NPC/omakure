@@ -6,7 +6,7 @@
 //! product adapter: callers hand it an already-authenticated message and it
 //! returns a stable decision plus the reply the frozen contract permits.
 //!
-//! Every bound it enforces is transcribed from `.docs/health-plane-contract.md`
+//! Every bound it enforces is transcribed from `docs/internal/health-plane-contract.md`
 //! into [`bounds`]; none of them is derived, negotiated, or widened at runtime.
 
 pub mod bounds;

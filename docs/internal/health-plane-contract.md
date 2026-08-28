@@ -30,7 +30,7 @@ altered by any Health Plane work:
 - The direct envelope signature domain `omakure/direct-envelope/v1\0` and its
   RFC-8785 canonical JSON prehash are reused verbatim.
 
-See `.docs/direct-transport-contract.md` for those frozen constructions. This
+See `docs/internal/direct-transport-contract.md` for those frozen constructions. This
 document only adds envelope `kind` values, payload schemas, authorization rules,
 and bounds.
 
@@ -189,7 +189,7 @@ they are two fields rather than one on purpose.
 
 `baseline_id` is the derived name of the set this Performer recorded
 installing — the **claim**. `baseline_observed_id` is the same derivation
-(`.docs/baseline-delivery.md`, domain `omakure/baseline-id/v1\0`) recomputed
+(`docs/internal/baseline-delivery.md`, domain `omakure/baseline-id/v1\0`) recomputed
 over the paths that set named, as they are on this node's disk now — the
 **evidence**. Both are 32 bytes wide because that is what the baseline plane
 derives; the width is not a policy choice this contract made, and
@@ -908,9 +908,9 @@ task MUST NOT invent a bound that is not written here.
 
 ## References
 
-- `.docs/direct-transport-contract.md` - frozen transport, certificate, envelope,
+- `docs/internal/direct-transport-contract.md` - frozen transport, certificate, envelope,
   enrollment, and registry contract.
-- `rebuild-omakure.md` - roadmap definitions of Conductor, Performer, Pulse,
-  Profile, Signal, and the node foundation threat model.
+- `../usage.md` - the terms this contract uses: Conductor, Performer, Pulse,
+  Profile, and Signal.
 - [RFC 8785 JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785)
 - [BIP-340 Schnorr Signatures](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)

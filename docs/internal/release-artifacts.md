@@ -1,8 +1,7 @@
 # Release artifact format
 
 The release workflow builds one headless `omakure` executable per supported
-platform. It does not package workspace scripts, themes, TUI assets, or widget
-files.
+platform. It packages nothing else: no workspace scripts, no assets.
 
 ## Archives
 
@@ -27,5 +26,5 @@ CI runs `cargo test --all-targets --locked`, release builds, and archive-content
 assertions. `tests/packaging_smoke.rs` verifies the source/package contract
 without requiring Docker.
 
-The runtime workspace is created or mounted separately. See `deployment.md`
-for the node-service container and `workspace.md` for its volume layout.
+The runtime workspace is created or mounted separately. See `../deployment.md`
+for the node-service container and `../workspace.md` for its volume layout.

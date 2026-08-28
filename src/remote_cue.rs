@@ -1,5 +1,5 @@
 //! The receive half of the Remote Cue plane, frozen by
-//! `.docs/remote-cue-contract.md`.
+//! `docs/internal/remote-cue-contract.md`.
 //!
 //! This module decides **whether a node will accept an instruction at all**. It
 //! executes nothing, and deliberately holds no path into `run_executor`,
@@ -19,7 +19,7 @@ use crate::ports::ScriptRepository;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-/// Stable rejection codes, frozen in `.docs/remote-cue-contract.md`.
+/// Stable rejection codes, frozen in `docs/internal/remote-cue-contract.md`.
 ///
 /// The band is `1201..` inside the existing `transport_audit.error_code` range
 /// `1000..=1999`, disjoint from transport `1001..=1011`/`1020` and Health

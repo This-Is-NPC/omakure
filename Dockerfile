@@ -2,7 +2,7 @@
 #
 # Official multi-stage image for `omakure node serve`.
 # Default runtime includes bash/git/jq (required script runtimes).
-# Python and PowerShell variants are deferred — see .docs/deployment.md.
+# Python and PowerShell variants are deferred — see docs/deployment.md.
 
 FROM rust@sha256:e536cf316987faedfe8ae120f83b70c7df0068fdb4fc9efcce55c71a625001d5 AS builder
 
@@ -122,7 +122,7 @@ EXPOSE 7878
 # node-service shutdown (SIGTERM/SIGINT).
 #
 # CMD binds 0.0.0.0 inside the container so published ports work. Host-side
-# publish should stay on 127.0.0.1 (see compose.yaml / .docs/deployment.md).
+# publish should stay on 127.0.0.1 (see compose.yaml / docs/deployment.md).
 # Prefer OMAKURE_TOKENS_FILE over legacy OMAKURE_API_TOKEN in production.
 ENTRYPOINT ["tini", "--", "omakure"]
 CMD ["node", "serve", "--bind", "0.0.0.0:7878", "--allow-non-loopback"]

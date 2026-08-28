@@ -1,6 +1,6 @@
 # Example Compose file for a single-host `omakure node serve` deployment.
 #
-# Security notes (read .docs/deployment.md before production use):
+# Security notes (read docs/deployment.md before production use):
 # - Prefer multi-token auth via OMAKURE_TOKENS_FILE / --tokens-file (Argon2id).
 #   Legacy OMAKURE_API_TOKEN remains supported when no tokens file is set.
 # - Publish on host loopback only (127.0.0.1:7878). The container still binds

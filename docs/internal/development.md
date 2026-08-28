@@ -115,5 +115,5 @@ operations, state transitions, redaction, and runtime resolution.
 CI runs `cargo test --all-targets --locked`, release builds for Linux/macOS/
 Windows, clippy, formatting, packaging assertions, and release-note/version
 validation. Before changing a command contract, run `omakure help-ai` from the
-built binary and update `.docs/ai-interface.md`, `.docs/cli-http-parity.md`,
+built binary and update `docs/ai-interface.md`, `docs/cli-http-parity.md`,
 and the relevant tests.

@@ -156,7 +156,7 @@ pub fn execute_with_heartbeat(
     }
 
     let args = resolved_args.execution_args.clone();
-    // Env-injection precedence (`.docs/env-injection-spec.md` §1): the
+    // Env-injection precedence (`docs/internal/env-injection-spec.md` §1): the
     // caller-supplied `extra_env` (parent shell env is inherited by the
     // child; layer 2 active managed env; future layer 3 `--env-file`) is
     // seeded FIRST, then the reserved layer-4 vars are pushed AFTER it.

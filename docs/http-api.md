@@ -37,7 +37,7 @@ only - there is no history, no series, and no alert surface - and it renders
 exactly the same protocol-neutral operation as `omakure node health --json`. It
 is read-only: no HTTP route writes Health Plane state, and the only writer is
 the authenticated node-to-node exchange over the direct transport. See
-`.docs/health-plane-contract.md` for the frozen presence windows, bounds, and
+`docs/internal/health-plane-contract.md` for the frozen presence windows, bounds, and
 privacy classes.
 
 `POST /v1/node/baseline/rollback` puts *this* node back on the one baseline it
@@ -47,7 +47,7 @@ publishers this node names today: a publisher revoked since the original install
 makes it fail with `forbidden`, and a node with nothing retained answers
 `not_found` rather than reporting a rollback that changed nothing. There is no
 node-to-node message kind that asks a Performer to change version; see
-`.docs/baseline-delivery.md`.
+`docs/internal/baseline-delivery.md`.
 
 `GET /v1/node/signals` returns the closed lifecycle Signal feed: at most 64
 entries, newest first, retained for seven days, across exactly three kinds

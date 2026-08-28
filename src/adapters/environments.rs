@@ -510,7 +510,7 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
 /// skipping) mirrors [`parse_env_defaults`]. Values are returned **raw** —
 /// `$VAR` / `${VAR}` expansion is deferred to [`merge_env_layers`], which
 /// sources references from the parent shell plus prior user-provided layers,
-/// per `.docs/env-injection-spec.md` §2. Reserved vars are injected later by
+/// per `docs/internal/env-injection-spec.md` §2. Reserved vars are injected later by
 /// the executor and are not visible to this expansion step.
 fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)> {
     let mut pairs: Vec<(String, String)> = Vec::new();
@@ -542,7 +542,7 @@ fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)> {
 }
 
 /// The parent shell environment, used **only** as a lower-precedence
-/// expansion source (`.docs/env-injection-spec.md` §1 layer 1). It is never
+/// expansion source (`docs/internal/env-injection-spec.md` §1 layer 1). It is never
 /// emitted as an injected pair — see [`merge_env_layers`].
 fn parent_env() -> HashMap<String, String> {
     std::env::vars().collect()
@@ -550,7 +550,7 @@ fn parent_env() -> HashMap<String, String> {
 
 /// Expand and merge raw env `layers` (ordered lowest → highest precedence) on
 /// top of `base`, applying the single-pass `$VAR` / `${VAR}` grammar
-/// (`.docs/env-injection-spec.md` §2).
+/// (`docs/internal/env-injection-spec.md` §2).
 ///
 /// `base` carries lower-precedence env used **only** as an expansion source
 /// (the parent shell env; see [`parent_env`]). Each value is expanded against
@@ -623,7 +623,7 @@ pub(crate) fn read_managed_env_defaults(
 /// implementation, not three.
 ///
 /// It implements **layer 2** of the env-injection precedence table
-/// (`.docs/env-injection-spec.md` §1): the managed active env selected by
+/// (`docs/internal/env-injection-spec.md` §1): the managed active env selected by
 /// `.omakure/envs/active`, read from `.omakure/envs/<name>.conf` and parsed
 /// case-sensitively via [`parse_env_pairs_raw`], then expanded and merged by
 /// [`merge_env_layers`] on top of the parent shell env (layer 1). The
@@ -657,7 +657,7 @@ pub(crate) fn resolve_active_env(envs_dir: &Path) -> Vec<(String, String)> {
 
 /// Resolve the full per-run `extra_env` for a `omakure run` invocation:
 /// layer 2 (managed active env) with an optional layer 3 (CLI `--env-file`)
-/// folded **on top** (`.docs/env-injection-spec.md` §1).
+/// folded **on top** (`docs/internal/env-injection-spec.md` §1).
 ///
 /// This is the single composition root for the layer-2 + layer-3 merge so the
 /// precedence logic lives in exactly one place, not inline at the call site.
@@ -713,7 +713,7 @@ fn is_valid_var_name(name: &str) -> bool {
 }
 
 /// Single-pass, non-recursive `$VAR` / `${VAR}` expansion per the
-/// env-injection grammar (`.docs/env-injection-spec.md` section 2).
+/// env-injection grammar (`docs/internal/env-injection-spec.md` section 2).
 ///
 /// - The input is scanned left-to-right exactly once; substituted output is
 ///   never re-scanned (no recursion).

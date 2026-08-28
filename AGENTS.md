@@ -129,7 +129,7 @@ kind, which is a different Lua from the removed TUI widget runtime.
 
 Supported script extensions are `.bash`, `.sh`, `.ps1`, and `.py`. Schema
 fields may be strings, numbers, booleans, or secrets. Optional `Schedule` data
-is consumed by `serve` and `node serve`; see `.docs/scheduling.md`.
+is consumed by `serve` and `node serve`; see `docs/scheduling.md`.
 
 ## JSON and HTTP contracts
 
@@ -161,4 +161,4 @@ release archives contain only the binary.
 GitHub Actions builds Linux, macOS, and Windows headless binaries from version
 tags. CI requires tests, clippy, formatting, package checks, and a matching
 `release-notes/vX.Y.Z.md`. Archives contain only `omakure` or `omakure.exe`.
-See `.docs/headless-release.md` and `.docs/release-artifacts.md`.
+See `docs/headless-release.md` and `docs/internal/release-artifacts.md`.

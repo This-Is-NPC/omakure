@@ -687,7 +687,7 @@ impl<'a> HealthSession<'a> {
 
 /// The frozen transport-layer failure mapping.
 ///
-/// See `.docs/health-plane-contract.md`, "Transport-layer failure mapping".
+/// See `docs/internal/health-plane-contract.md`, "Transport-layer failure mapping".
 fn transport_failure_code(error: TransportError) -> HealthCode {
     match error {
         TransportError::Replay => HealthCode::Replay,

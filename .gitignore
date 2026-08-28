@@ -11,6 +11,11 @@ cobertura.xml
 .vscode/
 .opencode/
 .claude/
+.cursor/
+.aider*/
+.continue/
+.windsurf/
+.omaken/
 scripts/.history/search-index.sqlite*
 scripts/.history/*
 !scripts/.history/.gitkeep

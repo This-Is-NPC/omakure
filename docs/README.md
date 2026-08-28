@@ -7,10 +7,10 @@ process.
 ## Users and operators
 
 - `../rebuild-omakure.md`: canonical future product direction and node contract
-- `direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
-- `health-plane-contract.md`: frozen Profile/Pulse/Signal wire, authorization, and bounds contract (pending owner review)
-- `remote-cue-contract.md`: frozen Cue wire, authorization gates, and refusal codes
-- `baseline-delivery.md`: frozen signed-baseline manifest, carriage, install, and rollback contract
+- `internal/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
+- `internal/health-plane-contract.md`: frozen Profile/Pulse/Signal wire, authorization, and bounds contract (pending owner review)
+- `internal/remote-cue-contract.md`: frozen Cue wire, authorization gates, and refusal codes
+- `internal/baseline-delivery.md`: frozen signed-baseline manifest, carriage, install, and rollback contract
 - `installation.md`: install, update, uninstall, and version pinning.
 - `usage.md`: CLI commands and common workflows.
 - `deployment.md`: API/node-service topologies, containers, volumes, and security.
@@ -27,13 +27,11 @@ process.
 
 - `ai-interface.md`: JSON envelope, agent verbs, queue, history, and traces.
 - `cli-http-parity.md`: CLI, shared operation, and HTTP parity matrix.
-- `headless-migration.md`: intentional breaking removals and migration actions.
 
 ## Contributors
 
-- `development.md`: build, test, lint, integration checks, and `mise` tasks.
-- `architecture.md`: retained stack, source structure, and boundaries.
-- `requirements.md`: implemented requirements with source references.
-- `release-artifacts.md`: binary-only release archive contract.
-- `headless-release.md`: current release checklist and compatibility statement.
-- `env-injection-spec.md`: environment precedence and secret non-persistence.
+- `internal/development.md`: build, test, lint, integration checks, and `mise` tasks.
+- `internal/architecture.md`: retained stack, source structure, and boundaries.
+- `internal/requirements.md`: implemented requirements with source references.
+- `internal/release-artifacts.md`: binary-only release archive contract.
+- `internal/env-injection-spec.md`: environment precedence and secret non-persistence.

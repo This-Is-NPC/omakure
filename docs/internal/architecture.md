@@ -171,7 +171,7 @@ src/
   already has and can never introduce more. Cue-origin runs execute with an
   explicit deny-all secret policy, are excluded from the worker lease steal so
   they run at most once, and report their provenance as `cue` rather than
-  `manual`. See `.docs/remote-cue-contract.md`.
+  `manual`. See `docs/internal/remote-cue-contract.md`.
 - The minimal Health Plane adds five application message kinds inside the frozen
   direct envelope — `health_profile`, `health_pulse`, `health_signal`,
   `health_ack`, `health_error` — and no new transport, signature construction,
@@ -183,7 +183,7 @@ src/
   `GET /v1/node/health` / `GET /v1/node/signals` both render. Health state is
   written only by the authenticated node-to-node exchange; CLI and HTTP are read
   surfaces and have no write path. Every quantitative bound is frozen in
-  `.docs/health-plane-contract.md` and asserted by
+  `docs/internal/health-plane-contract.md` and asserted by
   `tests/health_plane_contract.rs`.
 - The baseline plane is the only one that carries code, so it is the only one
   authorized by two independent authorities: `src/baseline.rs` signs a versioned
@@ -196,7 +196,7 @@ src/
   let one node hold a publisher key and record a Performer, so authoring code
   and ordering it run stay two powers. Drift is a comparison the Health Plane
   projection makes from two facts the Performer reports; it is never a verdict
-  the Performer sends. See `.docs/baseline-delivery.md`.
+  the Performer sends. See `docs/internal/baseline-delivery.md`.
 
 ## Release and tests
 
@@ -207,7 +207,7 @@ clippy with warnings denied, formatting, packaging checks, and release-readiness
 validation. The two multi-container gates run on hosted Linux only; macOS and
 Windows keep native coverage and never claim a container result. Release archives contain
 only the matching `omakure` executable (or `omakure.exe` on Windows). See
-`release-artifacts.md` and `headless-release.md`.
+`release-artifacts.md`.
 
 Use `cargo test` for unit and integration coverage, `cargo clippy --all-targets
 -- -D warnings` for lint, and `cargo tree --edges normal` to audit the retained

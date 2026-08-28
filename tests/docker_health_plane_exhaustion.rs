@@ -1,7 +1,7 @@
 //! Frozen attempt exhaustion, certified over one real, continuously connected
 //! production Noise session against a packaged Performer.
 //!
-//! `.docs/health-plane-contract.md` freezes three retries per message with a
+//! `docs/internal/health-plane-contract.md` freezes three retries per message with a
 //! 1/2/4-second backoff after a 5-second acknowledgement timeout, and freezes
 //! that an exhausted Profile is dropped rather than retried forever. Proving
 //! that end to end needs a Conductor that stays connected and never

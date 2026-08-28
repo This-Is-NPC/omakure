@@ -1,6 +1,6 @@
 //! Executable Remote Cue contract.
 //!
-//! The machine-checked half of `.docs/remote-cue-contract.md`. It pins every
+//! The machine-checked half of `docs/internal/remote-cue-contract.md`. It pins every
 //! frozen bound, builds a canonical reference vector for each of the two message
 //! kinds, verifies them through the production `omakure::direct_transport`
 //! envelope path, and asserts the properties that make remote execution safe
@@ -107,7 +107,7 @@ fn the_contract_identifies_itself_and_changes_no_frozen_construction() {
     assert_eq!(text(&v, &["contract_id"]), CONTRACT_ID);
     assert_eq!(
         text(&v, &["contract_document"]),
-        ".docs/remote-cue-contract.md"
+        "docs/internal/remote-cue-contract.md"
     );
     assert_eq!(text(&v, &["status"]), "frozen-pending-owner-review");
     assert_eq!(int(&v, &["cue_version"]), CUE_VERSION as i64);

@@ -13,7 +13,7 @@
 //! * **Exactly once, by construction.** One trust transition is one audit row
 //!   is one Signal. A restart, a repeated read, or a duplicate CLI invocation
 //!   cannot produce a second Signal, because nothing is ever written.
-//! * **Revocation-safe.** `.docs/health-plane-contract.md` makes Health Plane
+//! * **Revocation-safe.** `docs/internal/health-plane-contract.md` makes Health Plane
 //!   state derived and disposable, and revocation cleanup deletes every Health
 //!   Plane row for a peer that is no longer actively trusted. A `revoked`
 //!   Signal stored in that state would delete itself. The audit log is not

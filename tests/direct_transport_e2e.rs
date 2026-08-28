@@ -1371,7 +1371,7 @@ fn wait_for_disconnected(server: &support::HttpServer, peer_node_id: &str, budge
 /// Revoking a peer must end the session this node is already holding.
 ///
 /// The frozen contract speaks only to reconnects, so this is uncontracted; the
-/// obligation is `.docs/recovery.md`, which tells the operator to "confirm the
+/// obligation is `docs/recovery.md`, which tells the operator to "confirm the
 /// revoked peer cannot establish a useful direct session" and says revocation
 /// reaches work already in flight. A session authorized once at open and never
 /// re-checked keeps answering that question with `connected`, which is the one

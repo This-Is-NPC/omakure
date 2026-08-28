@@ -1,6 +1,6 @@
 //! Executable Health Plane contract.
 //!
-//! This test is the machine-checked half of `.docs/health-plane-contract.md`.
+//! This test is the machine-checked half of `docs/internal/health-plane-contract.md`.
 //! It pins every frozen bound, builds the canonical reference vectors for each
 //! of the five message kinds, verifies them through the production
 //! `omakure::direct_transport` envelope path, and drives a reference receiver
@@ -1412,7 +1412,7 @@ fn fixture_pins_every_frozen_bound() {
     assert_eq!(text(&fixture, "status"), "frozen-pending-owner-review");
     assert_eq!(
         text(&fixture, "contract_document"),
-        ".docs/health-plane-contract.md"
+        "docs/internal/health-plane-contract.md"
     );
     assert_eq!(integer(&fixture, "health_version"), HEALTH_VERSION as i64);
     assert_eq!(integer(&fixture, "envelope_version"), 1);

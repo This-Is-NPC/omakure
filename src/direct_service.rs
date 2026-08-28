@@ -1721,7 +1721,7 @@ fn hold_session(
         // decision afterwards. So an operator who revoked a peer went on being
         // told it was `connected` -- for as long as the link stayed up, which
         // on an idle link is five minutes and on a busy one is unbounded --
-        // and `connected` is the evidence `.docs/recovery.md` sends them to
+        // and `connected` is the evidence `docs/recovery.md` sends them to
         // read when it says to confirm the revoked peer cannot establish a
         // useful direct session. Nothing they could see said otherwise.
         //

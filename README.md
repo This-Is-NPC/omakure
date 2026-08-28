@@ -117,22 +117,22 @@ fabricate macOS or Windows runtime evidence.
 ## Documentation
 
 - `rebuild-omakure.md`: canonical future product direction and node contract
-- `.docs/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
-- `.docs/README.md`: documentation index
-- `.docs/usage.md`: CLI and HTTP workflows
-- `.docs/ai-interface.md`: JSON, queue, history, trace, and agent contract
-- `.docs/http-api.md`: routes, authentication, policy, and parity
-- `.docs/deployment.md`: node-service/container deployment and security
-- `.docs/recovery.md`: restart, revocation, reset, and identity-replacement recovery
-- `.docs/workspace.md`: on-disk state and ownership
-- `.docs/scripts-path.md`: workspace resolution and ignore files
-- `.docs/how-to-create-a-script.md`: schema and script authoring
-- `.docs/scheduling.md`: cron scheduler lifecycle
-- `.docs/headless-migration.md`: breaking removals and migration actions
-- `.docs/headless-release.md`: current headless release contract
-- `.docs/development.md`: local build, test, lint, and node-service checks
-- `.docs/architecture.md`: source structure and retained dependencies
-- `.docs/requirements.md`: implemented requirements with source references
+- `docs/internal/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
+- `docs/README.md`: documentation index
+- `docs/usage.md`: CLI and HTTP workflows
+- `docs/ai-interface.md`: JSON, queue, history, trace, and agent contract
+- `docs/http-api.md`: routes, authentication, policy, and parity
+- `docs/deployment.md`: node-service/container deployment and security
+- `docs/recovery.md`: restart, revocation, reset, and identity-replacement recovery
+- `docs/workspace.md`: on-disk state and ownership
+- `docs/scripts-path.md`: workspace resolution and ignore files
+- `docs/how-to-create-a-script.md`: schema and script authoring
+- `docs/scheduling.md`: cron scheduler lifecycle
+- `docs/headless-migration.md`: breaking removals and migration actions
+- `docs/headless-release.md`: current headless release contract
+- `docs/internal/development.md`: local build, test, lint, and node-service checks
+- `docs/internal/architecture.md`: source structure and retained dependencies
+- `docs/internal/requirements.md`: implemented requirements with source references
 
 Historical release notes retain the behavior of the releases that produced
 them. The current headless breaking changes are documented separately in the

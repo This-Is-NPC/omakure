@@ -32,7 +32,7 @@ pub fn run(
     };
 
     // Layers 2 + 3 of the env-injection precedence table
-    // (`.docs/env-injection-spec.md` §1): the active managed env, with the
+    // (`docs/internal/env-injection-spec.md` §1): the active managed env, with the
     // optional CLI `--env-file` folded on top (env-file wins per key). The
     // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
     // pushed after this inside `execute_with_heartbeat`, stay

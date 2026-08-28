@@ -54,7 +54,7 @@ bash install-from-source.sh
 ```
 
 For development, use `cargo build`, `cargo test`, `mise run lint`, and
-`mise run dev`; see `development.md`.
+`mise run dev`; see `internal/development.md`.
 
 ## Machine Node Service
 

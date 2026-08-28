@@ -1,6 +1,6 @@
 # Frozen public vectors for the Remote Cue contract.
 #
-# Every value here mirrors a normative number in `.docs/remote-cue-contract.md`
+# Every value here mirrors a normative number in `docs/internal/remote-cue-contract.md`
 # and is asserted by `tests/remote_cue_contract.rs`. The scalars referenced by
 # the vectors are the published test inputs from
 # `tests/fixtures/node_identity_vectors.toml`; they are explicitly not
@@ -8,7 +8,7 @@
 
 format_version = 1
 contract_id = "omakure/remote-cue/v1"
-contract_document = ".docs/remote-cue-contract.md"
+contract_document = "docs/internal/remote-cue-contract.md"
 status = "frozen-pending-owner-review"
 cue_version = 1
 envelope_version = 1

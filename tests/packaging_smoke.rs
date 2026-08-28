@@ -247,104 +247,56 @@ fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results(
     assert!(ci.contains("docker volume create"));
     assert!(ci.contains("chown 10001:10001"));
     assert!(ci.contains("chmod 0700 /var/lib/omakure"));
-    let release = read(".docs/headless-release.md");
-    assert!(release.contains("Hosted Linux, macOS, and Windows CI/release runs remain pending"));
-    assert!(release.contains("816 passed"));
 }
 
-/// What item 10 proves and what it still does not has to stay named where a
-/// reader looks, in every document that carries the claim.
+/// What the install automation proves, and what it still does not, has to stay
+/// named where a reader looks.
 ///
-/// Three of them do -- the roadmap, `.docs/installation.md` and
-/// `.docs/headless-release.md` -- and they are pinned together because a
-/// correction made in one and not the others leaves the old falsehood standing
-/// somewhere a reader will find it first. The installers really do write a
-/// systemd unit, a launchd plist, and a Windows service, so the plan is held to
-/// naming the three artifacts as well as the gaps: a record that softened into
-/// "install automation does not ship" would be false in the other direction.
+/// `docs/installation.md` is that place and is now the only one: the roadmap is
+/// no longer tracked and the release-notes document was retired, so a claim
+/// corrected here cannot be left standing somewhere else. The installers really
+/// do write a systemd unit, a launchd plist, and a Windows service, so the
+/// document is held to naming all three as well as the gaps -- a record that
+/// softened into "install automation does not ship" would be false in the other
+/// direction.
 ///
-/// The install claim moved once already. Two real Fedora virtual machines ran
-/// `install.sh`, so "nothing anywhere runs the install path" became false and
-/// is pinned as gone; what those machines did *not* establish -- a cold boot,
-/// launchd, and `install.ps1` -- is pinned as present, because evidence for one
-/// platform is exactly when the others quietly get credited too.
+/// Evidence for one platform is exactly when the others quietly get credited
+/// too, so what the Fedora machines did *not* establish is pinned as present.
 #[test]
 fn the_install_and_platform_evidence_is_named_rather_than_implied() {
     // Matched on the sentence rather than on the line wrapping, so reflowing a
     // paragraph is not a failure and deleting the statement is.
-    fn unwrapped(rel: &str) -> String {
-        read(rel).split_whitespace().collect::<Vec<_>>().join(" ")
-    }
-
-    let plan = unwrapped("rebuild-omakure.md");
+    let installation = read("docs/installation.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     for needle in [
-        "macOS and Windows nodes cannot be exercised on this machine.",
-        "Install execution is proven on Linux, and nowhere else.",
-        "was run on two real Fedora virtual machines, which are machines and not containers",
-        // The limits that survived the evidence. Naming what one platform
-        // proved is where the other two get credited by omission.
-        "a cold boot into a running node was not separately recorded",
-        "macOS launchd and the Windows service remain unexecuted",
-        // What ships, named exactly, so the gaps cannot be overstated into the
-        // opposite falsehood that the automation is missing.
-        "ExecStart=${binary} node serve",
-        "hands it to `launchctl bootstrap`",
-        "`install.ps1` registers `OmakureNode` through `sc.exe`",
-        "Do not reach for a privileged container to close the remaining gap.",
-        "every compose harness sets `allow_remote_cues = false`",
-    ] {
-        assert!(
-            plan.contains(needle),
-            "rebuild-omakure.md must still name {needle:?}"
-        );
-    }
-    for stale in [
-        "Fleet simulation covers heterogeneous Omarchy, generic Linux, macOS, and",
-        "Install execution has no proof.",
-        "Nothing anywhere runs the install path, registers a real service, starts one, or has observed a machine boot into a running node",
-    ] {
-        assert!(
-            !plan.contains(stale),
-            "a retracted claim must not be left standing beside its correction: {stale:?}"
-        );
-    }
-
-    let release = unwrapped(".docs/headless-release.md");
-    for needle in [
-        "no release run exercises the install path of `install.sh`, and `install.ps1` is never executed at all",
-        "run by hand on two real Fedora virtual machines, which is evidence about the product rather than about a release run",
-    ] {
-        assert!(
-            release.contains(needle),
-            "headless-release.md must still name {needle:?}"
-        );
-    }
-
-    let installation = unwrapped(".docs/installation.md");
-    for needle in [
+        // What is proven, and by what.
         "No test anywhere runs the install path, registers a real service, or starts one.",
         "the Linux install path has been executed on two real Fedora virtual machines",
+        // The limits that survived that evidence.
         "A cold boot into a running node was not separately recorded",
         "`install.ps1` is never executed on any platform, and the launchd path has never been run either.",
         "which is not a service manager starting it at boot",
+        // The commands an operator confirms it with.
         "systemctl status omakure-node",
         "launchctl print system/com.omakure.node",
         "sc.exe query OmakureNode",
     ] {
         assert!(
             installation.contains(needle),
-            ".docs/installation.md must still name {needle:?}"
+            "docs/installation.md must still name {needle:?}"
         );
     }
     assert!(
         !installation.contains("covered by source/static packaging tests and hosted CI"),
-        "installation.md must not still credit hosted CI with running the installers"
+        "installation.md must not credit hosted CI with running the installers"
     );
 }
 
 #[test]
 fn deployment_doc_covers_required_topics_and_multi_token() {
-    let doc = read(".docs/deployment.md");
+    let doc = read("docs/deployment.md");
     for needle in [
         "API-only",
         "worker",
@@ -403,13 +355,12 @@ fn legacy_engine_command_is_absent_from_current_surfaces() {
         "mise.toml",
         "Dockerfile",
         "compose.yaml",
-        ".docs/architecture.md",
-        ".docs/requirements.md",
-        ".docs/deployment.md",
-        ".docs/development.md",
-        ".docs/headless-release.md",
-        ".docs/headless-migration.md",
-        "rebuild-omakure.md",
+        "docs/internal/architecture.md",
+        "docs/internal/requirements.md",
+        "docs/deployment.md",
+        "docs/internal/development.md",
+        "docs/usage.md",
+        "docs/installation.md",
     ] {
         let text = read(path);
         assert!(!text.contains("omakure engine"), "stale command in {path}");
@@ -418,10 +369,10 @@ fn legacy_engine_command_is_absent_from_current_surfaces() {
 
 #[test]
 fn docs_index_links_deployment() {
-    let index = read(".docs/README.md");
+    let index = read("docs/README.md");
     assert!(
         index.contains("deployment.md"),
-        ".docs/README.md should link deployment.md"
+        "docs/README.md should link deployment.md"
     );
 }
 
@@ -429,23 +380,21 @@ fn docs_index_links_deployment() {
 fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     let root = repo_root();
     for doc in [
-        ".docs/README.md",
-        ".docs/headless-migration.md",
-        ".docs/headless-release.md",
-        ".docs/architecture.md",
-        ".docs/requirements.md",
-        ".docs/development.md",
-        ".docs/usage.md",
-        ".docs/workspace.md",
-        ".docs/scripts-path.md",
-        ".docs/release-artifacts.md",
+        "docs/README.md",
+        "docs/internal/architecture.md",
+        "docs/internal/requirements.md",
+        "docs/internal/development.md",
+        "docs/usage.md",
+        "docs/workspace.md",
+        "docs/scripts-path.md",
+        "docs/internal/release-artifacts.md",
     ] {
         assert!(
             root.join(doc).is_file(),
             "headless documentation is missing {doc}"
         );
     }
-    for obsolete in [".docs/tui-screens-and-widgets.md", ".docs/lua-widgets.md"] {
+    for obsolete in ["docs/tui-screens-and-widgets.md", "docs/lua-widgets.md"] {
         assert!(
             !root.join(obsolete).exists(),
             "obsolete current surface remains {obsolete}"
@@ -462,13 +411,9 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     assert!(mise.contains("openssl rand -hex 32"));
     assert!(mise.contains("--capability all"));
     assert!(mise.contains("cargo run --bin omakure -- node serve"));
-    let release = read(".docs/headless-release.md");
-    assert!(release.contains("10,520,464 bytes"));
-    assert!(release.contains("8,815,352 bytes"));
-    assert!(release.contains("-1,705,112 bytes (-16.21%)"));
-    assert!(release.contains("27") && release.contains("23") && release.contains("-4"));
-    assert!(release.contains("release archive contract is still binary-only"));
-    assert!(release.contains("Hosted Linux, macOS, and Windows CI/release runs remain pending"));
+    // The archive contract is as-is and keeps its own document.
+    let artifacts = read("docs/internal/release-artifacts.md");
+    assert!(artifacts.contains("Each archive contains exactly one root entry"));
 }
 
 #[test]

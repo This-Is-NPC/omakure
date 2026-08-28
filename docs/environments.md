@@ -51,7 +51,7 @@ lowest to highest is:
 Values support single-pass `$VAR` and `${VAR}` expansion. Undefined variables
 become empty; `\$` is literal; command substitution and recursive expansion
 are not supported. Injected values reach the child at spawn time and are never
-written to `runs.sqlite`, logs, or traces. See `env-injection-spec.md` for the
+written to `runs.sqlite`, logs, or traces. See `internal/env-injection-spec.md` for the
 grammar and persistence invariant.
 
 ## Interpreter selection

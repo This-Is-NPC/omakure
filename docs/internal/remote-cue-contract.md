@@ -363,7 +363,7 @@ Requiring a further owner-approved amendment:
 
 - A Cue that carries script content, arguments, environment, or any execution
   parameter.
-- Any HTTP surface for dispatch. `node cue` is CLI-only; `cli-http-parity.md`
+- Any HTTP surface for dispatch. `node cue` is CLI-only; `../cli-http-parity.md`
   has a `CLI-only` status for recording that honestly.
 - A Conductor-side durable outbox. Dispatch is a one-shot dial mirroring the
   existing `probe()`.

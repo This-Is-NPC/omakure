@@ -1,4 +1,4 @@
-//! Every quantitative bound frozen by `.docs/health-plane-contract.md`.
+//! Every quantitative bound frozen by `docs/internal/health-plane-contract.md`.
 //!
 //! These constants are a transcription of the frozen contract and of
 //! `tests/fixtures/health_plane_vectors.toml`.  They are never negotiated and

@@ -3,6 +3,27 @@
 Omakure has no interactive application mode. Running the binary without a
 subcommand prints help; every operational invocation names a command.
 
+## Terms
+
+The words the rest of the documentation uses, and what they mean in the shipped
+product.
+
+| Term | Meaning |
+|---|---|
+| Node | One Omakure installation on one machine. |
+| Mesh | The peer-to-peer network of nodes. There is no fixed server. |
+| Conductor | A node trusted to manage other nodes. |
+| Performer | A node managed by a Conductor. |
+| Profile | The static facts a Performer reports: OS, architecture, runtimes, capabilities, and the baseline it installed. |
+| Pulse | The periodic liveness and runner health a Performer reports. |
+| Signal | One event from the closed set a node emits: `enrolled`, `revoked`, `run-completed`. |
+| Cue | An instruction to run a script the Performer has already declared. A Cue names a script and never carries one. |
+| Baseline | The signed, versioned set of scripts a fleet runs, and the only way code reaches a node. |
+
+The role is a property of the trust record on each side, not of the machine: a
+node is a Conductor to the peers it manages and a Performer to the peer that
+manages it.
+
 ## Discovery and workspace
 
 ```bash
@@ -71,7 +92,7 @@ omakure env delete prod
 Managed files live under `.omakure/envs/`. Active values are injected into
 child processes; `--env-file` overrides them for one run and reserved Omakure
 variables win last. Sensitive values are masked in diagnostics and excluded
-from run storage. See `environments.md` and `env-injection-spec.md`.
+from run storage. See `environments.md` and `internal/env-injection-spec.md`.
 
 ## HTTP API and node service
 
@@ -151,7 +172,7 @@ says which path was taken; `--direct` forces the dial.
 
 Cue-origin runs execute with an explicit deny-all secret policy, and a script
 whose schema declares a secret field is refused at the gate rather than run
-without its secrets. See `remote-cue-contract.md`.
+without its secrets. See `internal/remote-cue-contract.md`.
 
 ## Manual enrollment
 
@@ -327,7 +348,7 @@ answer.
 
 This is current status only. There is no chart, alert rule, host inventory,
 raw log, or history API, and no HTTP call can write health state: the only
-writer is the node-to-node exchange. `.docs/health-plane-contract.md` holds the
+writer is the node-to-node exchange. `docs/internal/health-plane-contract.md` holds the
 frozen windows, bounds, error codes, and privacy classes.
 
 ## Baselines
@@ -377,8 +398,8 @@ It is a swap rather than a step down a stack — rolling back twice returns the
 machine to where it started — and a node with nothing retained refuses rather
 than reporting a rollback that changed nothing.
 
-`.docs/baseline-delivery.md` holds the wire format, the gate order, every bound,
-and what "previous" means. `.docs/recovery.md` walks a drifted machine back.
+`docs/internal/baseline-delivery.md` holds the wire format, the gate order, every bound,
+and what "previous" means. `docs/recovery.md` walks a drifted machine back.
 
 ## Lifecycle Signals
 

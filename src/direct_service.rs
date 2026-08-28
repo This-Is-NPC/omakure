@@ -1831,9 +1831,21 @@ fn hold_session(
             continue;
         }
         if let Some(in_flight) = outbound_cue.as_mut() {
-            if in_flight.absorb_ack(&message.body, peer_node_id, peer_identity_key, session) {
-                outbound_cue = None;
-                continue;
+            match in_flight.absorb_ack(
+                &message.body,
+                peer_node_id,
+                peer_identity_key,
+                session.session_id(),
+            ) {
+                CueAckMatch::Other => {}
+                // The slot stays: the Cue is not finished until its outcome is
+                // read back from the registry. The envelope *is* finished, and
+                // handing it on is what audited an acceptance as malformed.
+                CueAckMatch::Accepted => continue,
+                CueAckMatch::Refused => {
+                    outbound_cue = None;
+                    continue;
+                }
             }
         }
         if let Some(in_flight) = outbound_baseline.as_mut() {
@@ -2139,21 +2151,25 @@ impl OutboundCue {
 
     /// Take the `cue_ack` for this Cue out of the stream, if this is it.
     ///
-    /// Returns `true` when the exchange is finished and the caller has been
-    /// answered. A refusal ends it here; an acceptance keeps waiting for the
+    /// A refusal answers the caller here; an acceptance keeps waiting for the
     /// outcome, which arrives as an ordinary Signal the Health Plane records.
+    /// Both are still *this Cue's ack*, and saying so is the whole point: an
+    /// acceptance that reported "not mine" was handed on to the receive half,
+    /// which judges `cue_dispatch` messages and can only read a `cue_ack` as a
+    /// malformed one -- so every accepted Cue wrote `cue_rejected` /
+    /// `invalid_message` into the Conductor's own audit table.
     fn absorb_ack(
         &mut self,
         body: &[u8],
         peer_node_id: &str,
         peer_identity_key: &[u8; 32],
-        session: &TransportSession,
-    ) -> bool {
+        session_id: &[u8; 32],
+    ) -> CueAckMatch {
         if crate::direct_transport::envelope_kind_hint(body) != Some(crate::remote_cue::KIND_ACK) {
-            return false;
+            return CueAckMatch::Other;
         }
         let Ok(nonce) = envelope_nonce(body) else {
-            return false;
+            return CueAckMatch::Other;
         };
         // Anchored to the identity the handshake established, not to anything
         // the message says about itself.
@@ -2162,22 +2178,22 @@ impl OutboundCue {
             peer_node_id,
             peer_identity_key,
             crate::remote_cue::KIND_ACK,
-            session.session_id(),
+            session_id,
             &nonce,
         )
         .is_err()
         {
-            return false;
+            return CueAckMatch::Other;
         }
         let Ok(view) = crate::direct_transport::envelope_view(body) else {
-            return false;
+            return CueAckMatch::Other;
         };
         let Some(ack) = view.payload.as_object() else {
-            return false;
+            return CueAckMatch::Other;
         };
         // An ack for a different Cue is not an answer to this one.
         if ack.get("cue_id").and_then(serde_json::Value::as_str) != Some(&self.pending.cue_id) {
-            return false;
+            return CueAckMatch::Other;
         }
         let accepted = ack
             .get("accepted")
@@ -2185,7 +2201,7 @@ impl OutboundCue {
             .unwrap_or(false);
         if accepted {
             self.code = Some(0);
-            return false;
+            return CueAckMatch::Accepted;
         }
         let code = ack
             .get("error")
@@ -2194,7 +2210,7 @@ impl OutboundCue {
             .and_then(|code| u16::try_from(code).ok())
             .unwrap_or_else(|| CueCode::InvalidMessage.code());
         std::mem::replace(&mut self.pending, placeholder_cue()).answer(true, false, code, false);
-        true
+        CueAckMatch::Refused
     }
 
     /// Finish once the outcome is recorded or the budget runs out.
@@ -2233,6 +2249,19 @@ impl PendingBaseline {
             code,
         });
     }
+}
+
+/// What an inbound envelope turned out to be for the Cue this session sent.
+#[derive(Debug, PartialEq, Eq)]
+enum CueAckMatch {
+    /// Not the ack for this Cue; the dispatcher keeps looking.
+    Other,
+    /// This Cue's ack, carrying an acceptance. The exchange is *not* over --
+    /// the outcome still arrives as an ordinary Signal -- but the envelope
+    /// belongs to this slot and has been taken out of the stream.
+    Accepted,
+    /// This Cue's ack, carrying a refusal. The caller has been answered.
+    Refused,
 }
 
 /// What an inbound envelope turned out to be for the baseline this session sent.
@@ -3478,6 +3507,121 @@ mod tests {
             public_key_hex: "00".repeat(32),
             node_id: node_id.to_string(),
         }
+    }
+
+    /// One Cue written on a session, with the channel its answer goes back on.
+    fn outbound_cue_waiting(
+        cue_id: &str,
+    ) -> (OutboundCue, std::sync::mpsc::Receiver<CueDispatchOutcome>) {
+        let (reply, answers) = std::sync::mpsc::sync_channel(1);
+        let pending = PendingCue {
+            cue_id: cue_id.to_string(),
+            script: "declared.sh".to_string(),
+            reason: "unit test".to_string(),
+            expected_run_id: "run".to_string(),
+            deadline: Instant::now() + Duration::from_secs(60),
+            reply,
+        };
+        (OutboundCue::new(pending), answers)
+    }
+
+    /// The `cue_ack` a Performer sends back, signed by its own identity against
+    /// the session the handshake established.
+    fn signed_cue_ack(
+        peer: &crate::node_identity::NodeIdentity,
+        session_id: &[u8; 32],
+        cue_id: &str,
+        accepted: bool,
+    ) -> Vec<u8> {
+        let mut payload = serde_json::json!({
+            "version": 1,
+            "cue_id": cue_id,
+            "accepted": accepted,
+        });
+        if !accepted {
+            payload["error"] = serde_json::json!({
+                "code": crate::remote_cue::CueCode::ScriptUnresolvable.code(),
+            });
+        }
+        crate::direct_transport::sign_cue_envelope(
+            peer,
+            crate::remote_cue::KIND_ACK,
+            session_id,
+            [11u8; 16],
+            payload,
+            unix_seconds(),
+        )
+        .expect("sign the cue ack")
+        .encoded()
+    }
+
+    /// An accepted Cue's ack belongs to the Cue that sent it.
+    ///
+    /// It does not *finish* the exchange -- the outcome still arrives later as
+    /// an ordinary Signal -- but it is this slot's envelope, and reporting
+    /// otherwise handed it to the receive half, which judges `cue_dispatch`
+    /// messages and can only read a `cue_ack` as a malformed one. The result
+    /// was `cue_rejected` / `invalid_message` written into the *Conductor's*
+    /// own audit table for every Cue its Performer accepted and ran. Measured
+    /// on two real nodes: one accepted dispatch, one new 1211 row.
+    #[test]
+    fn an_accepted_cue_ack_is_not_mistaken_for_a_stranger() {
+        let temp = tempfile::tempdir().expect("workspace");
+        let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+        let session_id = [13u8; 32];
+        let (mut in_flight, answers) = outbound_cue_waiting("cue-accepted");
+
+        let ack = signed_cue_ack(&peer, &session_id, "cue-accepted", true);
+        assert_eq!(
+            in_flight.absorb_ack(&ack, &peer_node_id, &peer_key, &session_id),
+            CueAckMatch::Accepted,
+            "the ack for this node's own Cue was reported as somebody else's"
+        );
+        assert!(
+            answers.try_recv().is_err(),
+            "an acceptance must not answer the caller: the outcome has not been read back yet"
+        );
+    }
+
+    /// A refusal is the end of the exchange, and answers the caller.
+    #[test]
+    fn a_refused_cue_ack_answers_the_caller_and_ends_the_exchange() {
+        let temp = tempfile::tempdir().expect("workspace");
+        let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+        let session_id = [17u8; 32];
+        let (mut in_flight, answers) = outbound_cue_waiting("cue-refused");
+
+        let ack = signed_cue_ack(&peer, &session_id, "cue-refused", false);
+        assert_eq!(
+            in_flight.absorb_ack(&ack, &peer_node_id, &peer_key, &session_id),
+            CueAckMatch::Refused
+        );
+        let outcome = answers.try_recv().expect("the caller must be answered");
+        assert!(
+            outcome.answered && !outcome.accepted,
+            "outcome: {outcome:?}"
+        );
+        assert_eq!(
+            outcome.code,
+            crate::remote_cue::CueCode::ScriptUnresolvable.code(),
+            "outcome: {outcome:?}"
+        );
+    }
+
+    /// An ack for someone else's Cue is not an answer to this one, and
+    /// classifying acceptances must not turn into matching everything.
+    #[test]
+    fn an_ack_for_a_different_cue_is_never_taken_as_this_ones_answer() {
+        let temp = tempfile::tempdir().expect("workspace");
+        let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+        let session_id = [19u8; 32];
+        let (mut in_flight, _answers) = outbound_cue_waiting("cue-mine");
+
+        let ack = signed_cue_ack(&peer, &session_id, "cue-theirs", true);
+        assert_eq!(
+            in_flight.absorb_ack(&ack, &peer_node_id, &peer_key, &session_id),
+            CueAckMatch::Other
+        );
     }
 
     /// Build a peer identity and its 32-byte identity key, as the handshake

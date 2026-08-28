@@ -428,6 +428,23 @@ Returns the resolved workspace root, scripts root, history dir, envs
 dir, active environment, and bootstrap mode in one envelope. Useful for
 agents that need to understand which workspace a command will operate on.
 
+### `omakure node health --json` and `omakure node signals --json`
+
+The two fleet read surfaces an agent may use. Both are read-only: Health Plane
+data is written only by the authenticated node-to-node exchange over the direct
+transport, never by an agent, and neither verb can create work.
+
+`node health` returns the fleet projection — per-Performer presence, the Profile
+it last reported, runner status, and whether its installed baseline matches the
+one it was pushed. `node signals` returns the bounded newest-first feed of the
+three closed Signal kinds, `enrolled`, `revoked`, and `run-completed`, each
+beside the cursor that counted it. Both are read as one snapshot, so a Signal
+never appears beyond the cursor reported next to it.
+
+An agent that dispatched work with `omakure node cue` correlates the outcome by
+matching the `expected_run_id` from the dispatch reply against `run-completed`
+in this feed. That is the whole correlation contract; there is no callback.
+
 ## `run_id` format
 
 `run_id` is a synthetic, sortable string of the form
@@ -737,7 +754,6 @@ omakure --json history stats
 - Automatic retry policies (`retrying` state, exponential backoff,
   retry limits). Manual re-enqueue is the only retry mechanism.
 - Job dependencies / DAGs.
-- Multi-host coordination.
 - Embedded MCP server. CLI and HTTP are the implemented integration surfaces.
 - Streaming `run --json` output. Long-running scripts still print live
   output when `--json` is **not** set.

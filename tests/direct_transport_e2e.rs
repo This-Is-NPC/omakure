@@ -157,6 +157,24 @@ fn free_port() -> String {
     support::unique_loopback_port().to_string()
 }
 
+fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpServer {
+    support::HttpServer::start_node_service(
+        workspace,
+        TOKEN,
+        &[
+            "--workers",
+            "0",
+            "--no-scheduler",
+            "--direct-bind",
+            &format!("127.0.0.1:{direct_port}"),
+            "--capability",
+            "node:read",
+        ],
+        &[],
+        Duration::from_secs(15),
+    )
+}
+
 fn probe(workspace: &Path, endpoint: &str, peer_node_id: &str) -> Output {
     run_node(
         workspace,
@@ -510,20 +528,6 @@ fn full_registry_snapshot_at(database: &Path) -> String {
         .expect("read full registry snapshot")
 }
 
-fn latest_protocol_audit_at(database: &Path) -> (String, String, i64) {
-    Connection::open(database)
-        .expect("open protocol audit database")
-        .query_row(
-            "SELECT event_type, outcome, error_code
-             FROM transport_audit
-             WHERE outcome = 'rejected' AND error_code IS NOT NULL
-             ORDER BY id DESC LIMIT 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .expect("read latest protocol audit")
-}
-
 fn assert_custom_certificate_case(
     target: &Path,
     endpoint: &str,
@@ -538,51 +542,100 @@ fn assert_custom_certificate_case(
     assert_eq!(full_registry_snapshot(target), before_state);
 }
 
+/// A peer that was trusted before a reset is refused afterwards, and told why.
+///
+/// `node reset` discards this node's identity and everything it had trusted. A
+/// peer holding the old relationship has no way to learn that from its own
+/// state -- trust is local and durable on both sides, and nothing tells the
+/// other end -- so the only thing standing between an operator and the wrong
+/// diagnosis is the refusal the listener sends back and the row the prober
+/// writes about it. `1006 not_enrolled` is that answer.
+///
+/// This test used to read four `OMAKURE_RESET_*` environment variables and
+/// pointed at an external "canonical certification" listener. Nothing in this
+/// repository ever set them -- not CI, not a compose file, not a script -- so
+/// it could not run, and `cargo test -- --ignored` reported it as a failure
+/// rather than as a test with no harness. It was the only assertion of `1006`
+/// anywhere in the suite, which meant the protocol's not-enrolled answer had no
+/// executable coverage at all. It builds its own scenario now.
 #[test]
-#[ignore = "canonical certification invokes this against the post-reset production listener"]
+#[ignore = "spawns a real node service twice; run explicitly"]
 fn direct_transport_post_reset_old_identity_rejected() {
-    let old_state = std::env::var_os("OMAKURE_RESET_OLD_STATE")
-        .expect("OMAKURE_RESET_OLD_STATE for canonical reset proof");
-    let old_config = std::env::var_os("OMAKURE_RESET_OLD_CONFIG")
-        .expect("OMAKURE_RESET_OLD_CONFIG for canonical reset proof");
-    let endpoint = std::env::var("OMAKURE_RESET_ENDPOINT")
-        .expect("OMAKURE_RESET_ENDPOINT for canonical reset proof");
-    let expected_node_id = std::env::var("OMAKURE_RESET_EXPECTED_NODE_ID")
-        .expect("OMAKURE_RESET_EXPECTED_NODE_ID for canonical reset proof");
-    let database = Path::new(&old_state).join("node.sqlite");
-    let before_state = full_registry_snapshot_at(&database);
+    let initiator = support::TestWorkspace::new("direct_reset_initiator");
+    let target = support::TestWorkspace::new("direct_reset_target");
+    init_node(initiator.path());
+    init_node(target.path());
 
-    let output = Command::new(support::omakure_bin())
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(&old_state)
-        .arg("--node-config")
-        .arg(&old_config)
-        .arg("direct-probe")
-        .arg("--endpoint")
-        .arg(endpoint)
-        .arg("--peer-node-id")
-        .arg(expected_node_id)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .output()
-        .expect("run old identity reset proof");
-    assert!(!output.status.success(), "old reset identity was accepted");
-    assert_eq!(json(&output)["error"]["code"], "transport_not_enrolled");
+    // Both directions: a probe is refused unless each end holds the other.
+    let initiator_status = status_node(initiator.path());
+    let target_status = status_node(target.path());
+    trust_node(target.path(), initiator.path(), &initiator_status);
+    trust_node(initiator.path(), target.path(), &target_status);
+    let target_port = free_port();
+    let endpoint = format!("127.0.0.1:{target_port}");
+
+    // The control. Without it, a probe refused because the listener never came
+    // up would pass this test for the wrong reason.
+    let before_reset = {
+        let server = start_direct_listener(target.path(), &target_port);
+        let target_node_id = status_node(target.path())["identity"]["node_id"]
+            .as_str()
+            .expect("target node id")
+            .to_string();
+        let probed = probe(initiator.path(), &endpoint, &target_node_id);
+        assert!(
+            probed.status.success(),
+            "the trusted peer could not probe before the reset, so nothing below \
+             would be measuring the reset: stdout={:?} stderr={:?}",
+            String::from_utf8_lossy(&probed.stdout),
+            String::from_utf8_lossy(&probed.stderr)
+        );
+        drop(server);
+        registry_snapshot(initiator.path())
+    };
+
+    assert_success(&run_node(
+        target.path(),
+        &["reset".to_string(), "--confirmed".to_string()],
+    ));
+
+    let server = start_direct_listener(target.path(), &target_port);
+    let reset_node_id = status_node(target.path())["identity"]["node_id"]
+        .as_str()
+        .expect("post-reset target node id")
+        .to_string();
+
+    let probed = probe(initiator.path(), &endpoint, &reset_node_id);
+    assert!(
+        !probed.status.success(),
+        "the reset node accepted a peer it no longer trusts"
+    );
+    assert_eq!(
+        json(&probed)["error"]["code"],
+        "transport_not_enrolled",
+        "the refusal must name not-enrolled, which is the one fact the prober \
+         cannot work out from its own state: {:?}",
+        String::from_utf8_lossy(&probed.stdout)
+    );
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let audit = latest_protocol_audit_at(&database);
-        if audit == ("probe_rejected".into(), "rejected".into(), 1006) {
+        let audit = latest_protocol_audit(initiator.path());
+        if audit == ("probe_rejected".to_string(), "rejected".to_string(), 1006) {
             break;
         }
         assert!(
             Instant::now() < deadline,
-            "old identity proof audit was not 1006: {audit:?}"
+            "the prober did not record the refusal as not-enrolled: {audit:?}"
         );
         std::thread::sleep(Duration::from_millis(25));
     }
-    assert_eq!(full_registry_snapshot_at(&database), before_state);
+
+    // A refusal decides nothing on the prober's side. Its own trust of the old
+    // relationship is untouched, which is exactly why the audit row has to
+    // carry the reason.
+    assert_eq!(registry_snapshot(initiator.path()), before_reset);
+    drop(server);
 }
 
 #[test]

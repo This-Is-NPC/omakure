@@ -191,14 +191,14 @@ peer cannot install a battery**, so remote management still selects among code
 the node already has and can never introduce more. Making installation itself
 remotely triggerable would hand whoever controls the Conductor the power to
 choose what code exists on the node, not merely which of it runs, and that
-requires publisher signatures rather than transport trust — deferred to the MDM
-phase with its own owner decision.
+requires publisher signatures rather than transport trust, which is what
+baseline delivery does instead (`baseline-delivery.md`).
 
-An earlier draft of this contract treated the `.omakureignore`-honouring
-workspace listing as the allow-list. It is not one. It is a deny-list over an
-implicit allow-all, and its failure mode is silent and privilege-granting: a new
-file in the workspace would become remotely executable with nobody having
-declared it. Privilege would be granted by forgetting rather than by acting.
+The `.omakureignore`-honouring workspace listing is not the allow-list. It is a
+deny-list over an implicit allow-all, and its failure mode is silent and
+privilege-granting: a new file in the workspace would become remotely executable
+with nobody having declared it, so privilege would be granted by forgetting
+rather than by acting.
 
 Both mechanisms now apply, and they cannot conflict dangerously: a script must
 be **both** discoverable and declared, so `.omakureignore` can only ever

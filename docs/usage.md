@@ -249,7 +249,7 @@ checked against that node's own identity; the identity is generated from a
 keypair the machine creates on first start. So there is nothing to ship in the
 image that a fresh machine could apply to itself.
 
-What the installer places is what the roadmap always said: the public
+What the installer places is the public
 `node.toml`, the authority's public key, the organization, both bootstrap
 hashes, and the bootstrap token file. The machine boots, generates its identity,
 and serves — belonging to nobody yet.

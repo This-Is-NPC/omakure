@@ -311,9 +311,8 @@ Artifacts in the repo root:
 The default runtime image installs **bash**, **git**, **jq**, and **curl** (required for
 supported scripts / `omakure doctor` required checks).
 
-**Deferred (document only):** Python and PowerShell (`pwsh`) image variants.
-Scripts that need those interpreters will fail until a variant image or host
-install provides them — do not assume they are in the default image.
+**Not in the default image:** Python and PowerShell (`pwsh`). Scripts that need
+those interpreters fail unless a variant image or a host install provides them.
 
 ### Build
 

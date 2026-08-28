@@ -3,8 +3,8 @@
 **Status: PENDING OWNER REVIEW.** This document records the wire format,
 authorization mapping, and every quantitative bound for putting a signed
 baseline onto a node, keeping one version behind it, and putting a machine back.
-It is the delivery half of roadmap item 8; the signing half is `src/baseline.rs`
-and `src/baseline_publisher.rs`.
+It is the delivery half; the signing half is `src/baseline.rs` and
+`src/baseline_publisher.rs`.
 
 Every number here is normative. A later task needing a limit not written here
 must amend this document first.

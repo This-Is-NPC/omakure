@@ -744,18 +744,52 @@ fn probe_runtimes() -> Vec<RuntimeFact> {
         .collect()
 }
 
+/// How long one interpreter gets to answer `--version`.
+///
+/// A Profile is built on the Performer's own session loop, the loop that also
+/// has to read frames off the transport socket. `Command::output()` waits for
+/// as long as the child takes, so one wedged interpreter would park the link
+/// for as long as it stayed wedged. An interpreter that cannot say its version
+/// in five seconds is reported unavailable, which is the same answer as one
+/// that is not installed and is the honest one either way.
+const RUNTIME_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
 fn probe_version(program: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(program)
+    use std::io::Read;
+
+    let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
         .ok()?;
-    if !output.status.success() {
+
+    let deadline = Instant::now() + RUNTIME_PROBE_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => return None,
+        }
+    };
+    if !status.success() {
         return None;
     }
-    let banner = String::from_utf8_lossy(&output.stdout);
-    let banner = &banner[..banner.len().min(MAX_VERSION_BANNER_BYTES)];
-    Some(version_token(banner))
+
+    let mut banner = String::new();
+    child
+        .stdout
+        .take()?
+        .take(MAX_VERSION_BANNER_BYTES as u64)
+        .read_to_string(&mut banner)
+        .ok()?;
+    Some(version_token(&banner))
 }
 
 /// Extract the first dotted version token from a `--version` banner.
@@ -777,6 +811,35 @@ fn version_token(banner: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A wedged interpreter must not hold the Profile open.
+    ///
+    /// The probe runs on the Performer's session loop, so an unbounded wait
+    /// here is an unbounded wait on the transport. Measured against `sleep`,
+    /// which is the cheapest program that reliably does nothing for longer
+    /// than the budget.
+    #[test]
+    fn a_runtime_that_will_not_answer_is_given_up_on() {
+        let started = Instant::now();
+        let probed = probe_version("sleep", &["60"]);
+        let waited = started.elapsed();
+
+        assert!(
+            probed.is_none(),
+            "a program that never prints a version must be reported unavailable"
+        );
+        assert!(
+            waited < RUNTIME_PROBE_TIMEOUT * 2,
+            "the probe waited {waited:?}, which is past its own budget of {RUNTIME_PROBE_TIMEOUT:?}"
+        );
+    }
+
+    /// The bound must not cost the answer in the ordinary case.
+    #[test]
+    fn a_runtime_that_answers_is_still_read() {
+        let probed = probe_version("sh", &["-c", "echo 1.2.3"]);
+        assert_eq!(probed.as_deref(), Some("1.2.3"));
+    }
 
     #[test]
     fn os_release_values_are_unquoted_and_key_exact() {

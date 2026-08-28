@@ -22,10 +22,36 @@ fn compose_project() -> &'static str {
         .as_str()
 }
 
-fn bounded_command(program: &str) -> Command {
+/// Every Docker call is bounded, so a wedged daemon cannot hang the suite.
+///
+/// Two different budgets, because two different things are being bounded. An
+/// operation on a stack that is already up is fast, and 120s is a generous
+/// ceiling for one. A call carrying `--build` may compile this crate inside the
+/// container from a cold layer cache, which on an ordinary machine does not fit
+/// in two minutes -- and when it did not, `timeout` killed the build and the
+/// test reported `compose up failed`, which reads exactly like the product
+/// refusing to start. One budget for both made a slow machine indistinguishable
+/// from a broken node.
+const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
+const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
+
+fn bounded_command_within(program: &str, budget: &str) -> Command {
     let mut command = Command::new("timeout");
-    command.args(["--foreground", "--kill-after=10s", "120s", program]);
+    command.args(["--foreground", "--kill-after=10s", budget, program]);
     command
+}
+
+fn bounded_command(program: &str) -> Command {
+    bounded_command_within(program, COMPOSE_OPERATION_TIMEOUT)
+}
+
+/// The budget a Compose invocation gets, decided by whether it can build.
+fn compose_timeout(args: &[&str]) -> &'static str {
+    if args.contains(&"--build") {
+        COMPOSE_BUILD_TIMEOUT
+    } else {
+        COMPOSE_OPERATION_TIMEOUT
+    }
 }
 
 struct ComposeGuard {
@@ -262,7 +288,7 @@ fn safe_generation_stderr(output: &Output) -> String {
 }
 
 fn compose(root: &Path, args: &[&str]) -> Output {
-    bounded_command("docker")
+    bounded_command_within("docker", compose_timeout(args))
         .current_dir(root)
         .args(["compose"])
         .args(args)

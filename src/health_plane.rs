@@ -16,7 +16,8 @@ pub mod report;
 pub mod schema;
 
 use crate::node_registry::health::{
-    HealthApplyRequest, HealthAuditEvent, HealthAuthorization, HealthOutboxEntry, HealthPruneReport,
+    HealthApplyRequest, HealthAuditEvent, HealthAuthorization, HealthFleetPeer, HealthOutboxEntry,
+    HealthPruneReport,
 };
 use crate::node_registry::{NodeRegistry, PeerRole, PeerState, RegistryError};
 use bounds::{PROCESSING_BUDGET_MILLIS, SIGNATURE_BYTES};
@@ -185,6 +186,39 @@ pub struct FleetNode {
     pub version_incompatible: bool,
 }
 
+/// The bounded Signal read surface, as one snapshot of one instant.
+///
+/// Every field below was read in the same registry transaction, which is what
+/// lets the caller render cursors and Signals that agree with each other.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FleetSignalFeed {
+    /// The UTC Unix second the whole feed was read at.
+    pub observed_at: i64,
+    /// The Conductor-local lifecycle Signals, projected from the trust log.
+    pub local: Vec<SignalRecord>,
+    /// Per-peer cursor state, ordered by node ID.
+    pub nodes: Vec<FleetSignalCursor>,
+    /// The bounded page reported by Performers, newest first.
+    pub signals: Vec<FleetSignal>,
+}
+
+/// One Performer's Signal cursor state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FleetSignalCursor {
+    pub node_id: String,
+    pub trust_state: String,
+    pub cursor: u64,
+    pub stored: u64,
+    pub held: u64,
+}
+
+/// One Signal in the bounded page, with the Performer that reported it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FleetSignal {
+    pub source: String,
+    pub signal: SignalRecord,
+}
+
 /// The shared, protocol-neutral Health Plane operations.
 pub struct HealthPlane<'registry> {
     registry: &'registry NodeRegistry,
@@ -337,22 +371,68 @@ impl<'registry> HealthPlane<'registry> {
     }
 
     /// The fleet-status projection over every actively trusted peer.
+    ///
+    /// The whole projection comes from one registry snapshot. Read peer by
+    /// peer, it could report counts, presence, and baselines that belong to
+    /// different instants, which is a status report of a fleet that never
+    /// existed.
     pub fn fleet_status(&self) -> Result<Vec<FleetNode>, RegistryError> {
         let now = self.clock.unix_seconds();
-        let mut nodes = Vec::new();
-        for state in self.registry.health_peer_states()? {
-            let Some(node) = self.project(&state.node_id, now)? else {
-                continue;
-            };
-            nodes.push(node);
-        }
-        Ok(nodes)
+        Ok(self
+            .registry
+            .health_fleet_snapshot(now)?
+            .into_iter()
+            .map(|peer| project(peer, now))
+            .collect())
     }
 
     /// The fleet-status projection for one peer.
     pub fn node_status(&self, node_id: &str) -> Result<Option<FleetNode>, RegistryError> {
         let now = self.clock.unix_seconds();
-        self.project(node_id, now)
+        Ok(self
+            .registry
+            .health_node_snapshot(node_id, now)?
+            .map(|peer| project(peer, now)))
+    }
+
+    /// The bounded Signal read surface, read as one snapshot.
+    ///
+    /// The cursors, the Signals, and the trust transitions the local
+    /// lifecycle Signals project from all describe `observed_at`. A feed
+    /// assembled from separate reads can contradict itself — a Signal beside
+    /// a cursor that has not counted it — and `gap`, which tells an operator
+    /// whether delivery has stalled, is derived from the same counters.
+    pub fn signal_feed(&self, limit: usize) -> Result<FleetSignalFeed, RegistryError> {
+        let observed_at = self.clock.unix_seconds();
+        let feed = self.registry.health_signal_feed(limit, observed_at)?;
+        let nodes = feed
+            .peers
+            .into_iter()
+            .map(|peer| FleetSignalCursor {
+                node_id: peer.state.node_id,
+                trust_state: peer
+                    .authorization
+                    .map(|authorization| peer_state_name(authorization.state).to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
+                cursor: peer.state.cursor,
+                stored: peer.state.stored_signals,
+                held: peer.state.held_signals,
+            })
+            .collect();
+        let signals = feed
+            .signals
+            .into_iter()
+            .map(|entry| FleetSignal {
+                source: entry.node_id,
+                signal: entry.signal,
+            })
+            .collect();
+        Ok(FleetSignalFeed {
+            observed_at,
+            local: lifecycle::project(&feed.lifecycle, observed_at, limit),
+            nodes,
+            signals,
+        })
     }
 
     /// The bounded, ordered Signal inbox for one peer.
@@ -455,35 +535,6 @@ impl<'registry> HealthPlane<'registry> {
     /// The redacted Health Plane audit trail, newest first.
     pub fn audit_events(&self, limit: usize) -> Result<Vec<HealthAuditEvent>, RegistryError> {
         self.registry.health_audit_events(limit)
-    }
-
-    fn project(&self, node_id: &str, now: i64) -> Result<Option<FleetNode>, RegistryError> {
-        let Some(snapshot) = self.registry.health_peer_snapshot(node_id, now)? else {
-            return Ok(None);
-        };
-        let authorization = self.registry.health_authorization(node_id)?;
-        let (trust_state, capabilities) = match authorization {
-            Some(authorization) => (
-                peer_state_name(authorization.state).to_string(),
-                authorization.capabilities,
-            ),
-            None => ("unknown".to_string(), Vec::new()),
-        };
-        Ok(Some(FleetNode {
-            node_id: snapshot.state.node_id.clone(),
-            role: peer_role_name(snapshot.state.role).to_string(),
-            capabilities,
-            trust_state,
-            presence: Presence::derive(snapshot.state.last_pulse_at, now),
-            last_pulse_at: snapshot.state.last_pulse_at,
-            baseline_status: BaselineStatus::derive(snapshot.profile.as_ref()),
-            profile: snapshot.profile,
-            pulse: snapshot.pulse,
-            signal_cursor: snapshot.state.cursor,
-            stored_signals: snapshot.state.stored_signals,
-            held_signals: snapshot.state.held_signals,
-            version_incompatible: snapshot.state.version_incompatible,
-        }))
     }
 
     fn reply_for(
@@ -637,6 +688,33 @@ fn role_code(role: PeerRole) -> i64 {
     }
 }
 
+/// Render one fleet-status row from the snapshot it was read in.
+fn project(peer: HealthFleetPeer, now: i64) -> FleetNode {
+    let snapshot = peer.snapshot;
+    let (trust_state, capabilities) = match peer.authorization {
+        Some(authorization) => (
+            peer_state_name(authorization.state).to_string(),
+            authorization.capabilities,
+        ),
+        None => ("unknown".to_string(), Vec::new()),
+    };
+    FleetNode {
+        node_id: snapshot.state.node_id.clone(),
+        role: peer_role_name(snapshot.state.role).to_string(),
+        capabilities,
+        trust_state,
+        presence: Presence::derive(snapshot.state.last_pulse_at, now),
+        last_pulse_at: snapshot.state.last_pulse_at,
+        baseline_status: BaselineStatus::derive(snapshot.profile.as_ref()),
+        profile: snapshot.profile,
+        pulse: snapshot.pulse,
+        signal_cursor: snapshot.state.cursor,
+        stored_signals: snapshot.state.stored_signals,
+        held_signals: snapshot.state.held_signals,
+        version_incompatible: snapshot.state.version_incompatible,
+    }
+}
+
 fn peer_role_name(role: PeerRole) -> &'static str {
     match role {
         PeerRole::Conductor => "conductor",
@@ -669,6 +747,10 @@ mod tests {
     use tempfile::TempDir;
 
     const BASE_NOW: i64 = 1_700_000_000;
+
+    /// Signals one Performer reports while the feed is read concurrently.
+    /// Well inside the frozen 64-entry inbox, so nothing is evicted.
+    const SIGNALS_UNDER_CONCURRENT_READ: u64 = 40;
 
     #[derive(Debug, Default)]
     struct TestClock {
@@ -1533,5 +1615,106 @@ mod tests {
             }
             _ => {}
         }
+    }
+
+    /// The Signal feed is one snapshot, not a sequence of reads.
+    ///
+    /// A projection assembled from separate reads can contradict itself while
+    /// ingest is running: the cursor and the `stored`/`held` counters are
+    /// snapshotted, a Signal commits, and the later read returns a Signal the
+    /// counters never counted. That is what `gap` — the field an operator
+    /// reads to decide whether a fleet's Signal delivery has stalled — is
+    /// derived from, so the contradiction is an operational defect and not
+    /// only a test-visible one.
+    ///
+    /// The race is real time, so this drives ingest concurrently rather than
+    /// pretending to schedule it. Against the split reads it replaced, every
+    /// single read observed the contradiction; against one transaction the
+    /// invariants below cannot be violated at all, so the test never fails
+    /// for timing reasons.
+    #[test]
+    fn the_signal_feed_never_reports_a_signal_its_own_cursor_has_not_counted() {
+        let fixture = Arc::new(fixture());
+        let performer = fixture.performer.clone();
+        let local = fixture.local.clone();
+        let writer = {
+            let fixture = Arc::clone(&fixture);
+            std::thread::spawn(move || {
+                // Ten seconds apart keeps the frozen per-minute Signal rate
+                // limit satisfied while the reader hammers the feed.
+                for sequence in 1_u64..=SIGNALS_UNDER_CONCURRENT_READ {
+                    let at = BASE_NOW + (sequence as i64) * 10;
+                    fixture.clock.set(at);
+                    let outcome = fixture.ingest(
+                        &performer,
+                        "health_signal",
+                        at,
+                        &signal_payload(&local, 1_000 + sequence, sequence, 5_000 + sequence, at),
+                    );
+                    assert!(
+                        matches!(outcome.decision, HealthDecision::Accepted { .. }),
+                        "signal {sequence} was not accepted: {:?}",
+                        outcome.decision
+                    );
+                }
+            })
+        };
+
+        let mut reads = 0_u64;
+        while !writer.is_finished() {
+            let feed = fixture.plane().signal_feed(64).unwrap();
+            reads += 1;
+            for signal in &feed.signals {
+                let cursor = feed
+                    .nodes
+                    .iter()
+                    .find(|node| node.node_id == signal.source)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "the feed carried a Signal from {} with no cursor",
+                            signal.source
+                        )
+                    });
+                assert!(
+                    signal.signal.sequence <= cursor.cursor,
+                    "sequence {} is beyond the cursor {} the same feed reports",
+                    signal.signal.sequence,
+                    cursor.cursor
+                );
+            }
+            for node in &feed.nodes {
+                let carried = feed
+                    .signals
+                    .iter()
+                    .filter(|signal| signal.source == node.node_id)
+                    .count();
+                assert!(
+                    carried as u64 <= node.stored,
+                    "the feed carried {carried} Signals from {} beside stored={}",
+                    node.node_id,
+                    node.stored
+                );
+            }
+        }
+        writer.join().unwrap();
+        assert!(reads > 0, "the reader never observed the feed");
+
+        // The settled feed still renders every Signal the cursor accepted.
+        let feed = fixture.plane().signal_feed(64).unwrap();
+        let cursor = feed
+            .nodes
+            .iter()
+            .find(|node| node.node_id == fixture.performer)
+            .expect("performer cursor");
+        assert_eq!(cursor.cursor, SIGNALS_UNDER_CONCURRENT_READ);
+        assert_eq!(cursor.stored, SIGNALS_UNDER_CONCURRENT_READ);
+        assert_eq!(cursor.held, 0);
+        assert_eq!(
+            feed.signals
+                .iter()
+                .filter(|signal| signal.source == fixture.performer)
+                .count() as u64,
+            SIGNALS_UNDER_CONCURRENT_READ
+        );
     }
 }

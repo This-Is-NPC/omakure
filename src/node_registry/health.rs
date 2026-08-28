@@ -7,7 +7,8 @@
 //! historical query engine.
 
 use super::{
-    decode_hex, validate_node_id, NodeRegistry, PeerRole, PeerState, RegistryError, SCHEMA_VERSION,
+    decode_hex, lifecycle_trust_events_in, validate_node_id, AuditEvent, NodeRegistry, PeerRole,
+    PeerState, RegistryError, SCHEMA_VERSION,
 };
 use crate::health_plane::bounds::{
     AUDIT_RETENTION_SECONDS, AUDIT_ROW_BYTES, MAX_AUDIT_ROWS, MAX_CONDUCTORS_PER_PERFORMER,
@@ -22,7 +23,7 @@ use crate::health_plane::model::{
     HealthBody, HealthCode, HealthDecision, HealthKind, HealthPayload, ProfileSnapshot,
     PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalKind, SignalRecord,
 };
-use rusqlite::{params, OptionalExtension, Transaction, TransactionBehavior};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 
 const MAX_HEALTH_READ_ROWS: usize = 4_096;
 
@@ -97,6 +98,51 @@ pub struct HealthPeerSnapshot {
     pub pulse: Option<PulseSnapshot>,
 }
 
+/// Everything one fleet-status row is projected from, read together.
+///
+/// The authorization travels beside the stored state because the projection
+/// reports both as one row: a peer whose trust ends between two reads would
+/// otherwise be rendered from a stored snapshot that the trust decision no
+/// longer matches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HealthFleetPeer {
+    pub snapshot: HealthPeerSnapshot,
+    pub authorization: Option<HealthAuthorization>,
+}
+
+/// One peer's Signal cursor state, as the feed reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HealthFeedPeer {
+    pub state: HealthPeerState,
+    pub authorization: Option<HealthAuthorization>,
+}
+
+/// One Signal in the bounded feed page, tagged with the peer that reported it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HealthFeedSignal {
+    pub node_id: String,
+    pub signal: SignalRecord,
+}
+
+/// The whole Signal read surface, captured in exactly one transaction.
+///
+/// The cursors and the Signals they describe are read together on purpose.
+/// Assembled from separate reads, the projection can contradict itself: the
+/// counters are snapshotted, ingest commits, and the later read returns a
+/// Signal the counters have not counted. That is not only a test-visible
+/// oddity — `gap`, the field an operator reads to decide whether a fleet's
+/// Signal delivery has stalled, is derived from those same counters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HealthSignalFeed {
+    /// Per-peer cursor state, ordered by node ID.
+    pub peers: Vec<HealthFeedPeer>,
+    /// The bounded fleet-wide page, newest first.
+    pub signals: Vec<HealthFeedSignal>,
+    /// The append-only trust transitions the local lifecycle Signals project
+    /// from, read in the same transaction as everything they are merged with.
+    pub lifecycle: Vec<AuditEvent>,
+}
+
 /// A validated message ready to be applied under the frozen receive order.
 #[derive(Debug, Clone)]
 pub(crate) struct HealthApplyRequest<'a> {
@@ -138,35 +184,7 @@ impl NodeRegistry {
         node_id: &str,
     ) -> Result<Option<HealthAuthorization>, RegistryError> {
         validate_node_id(node_id)?;
-        self.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT r.state, p.role, p.capabilities, p.state
-                     FROM remote_identities r
-                     LEFT JOIN trusted_peers p ON p.node_id = r.node_id
-                     WHERE r.node_id = ?1",
-                    params![node_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, Option<i64>>(1)?,
-                            row.get::<_, Option<Vec<u8>>>(2)?,
-                            row.get::<_, Option<String>>(3)?,
-                        ))
-                    },
-                )
-                .optional()?
-                .map(|(identity_state, role, capabilities, trust_state)| {
-                    health_authorization_from_row(
-                        node_id,
-                        &identity_state,
-                        role,
-                        capabilities,
-                        trust_state.as_deref(),
-                    )
-                })
-                .transpose()
-        })
+        self.with_connection(|connection| authorization_in(connection, node_id))
     }
 
     /// Apply receive-order steps 7 through 15 in exactly one transaction.
@@ -257,26 +275,81 @@ impl NodeRegistry {
 
     /// The durable Health Plane state for every tracked peer.
     pub fn health_peer_states(&self) -> Result<Vec<HealthPeerState>, RegistryError> {
+        self.with_connection(|connection| peer_states_in(connection))
+    }
+
+    /// The fleet-status projection input for every tracked peer, read as one
+    /// snapshot.
+    ///
+    /// One transaction covers the stored state, the Profile, the Pulse, and
+    /// the trust decision of every peer, so the report describes a fleet the
+    /// node actually had rather than a mixture of instants.
+    pub fn health_fleet_snapshot(&self, now: i64) -> Result<Vec<HealthFleetPeer>, RegistryError> {
         self.with_connection(|connection| {
-            let mut statement = connection.prepare(
-                "SELECT p.node_id, p.role, p.cursor, p.last_profile_revision,
-                        p.last_pulse_sequence, p.last_pulse_at, p.version_incompatible_at,
-                        p.first_seen, p.updated_at,
-                        (SELECT COUNT(*) FROM health_signals s
-                          WHERE s.node_id = p.node_id AND s.state = 'applied'),
-                        (SELECT COUNT(*) FROM health_signals s
-                          WHERE s.node_id = p.node_id AND s.state = 'held')
-                 FROM health_peers p ORDER BY p.node_id",
-            )?;
-            let rows = statement
-                .query_map([], health_peer_from_row)?
-                .collect::<Result<Vec<_>, _>>()?;
-            if rows.len() > MAX_HEALTH_READ_ROWS {
-                return Err(RegistryError::Corrupt(
-                    "health peer table exceeds the frozen node-count bound".to_string(),
-                ));
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let mut peers = Vec::new();
+            for state in peer_states_in(&transaction)? {
+                peers.push(fleet_peer_in(&transaction, state, now)?);
             }
-            rows.into_iter().collect::<Result<Vec<_>, _>>()
+            transaction.commit()?;
+            Ok(peers)
+        })
+    }
+
+    /// The fleet-status projection input for one peer, read as one snapshot.
+    pub fn health_node_snapshot(
+        &self,
+        node_id: &str,
+        now: i64,
+    ) -> Result<Option<HealthFleetPeer>, RegistryError> {
+        validate_node_id(node_id)?;
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let peer = match load_peer_state(&transaction, node_id)? {
+                Some(state) => Some(fleet_peer_in(&transaction, state, now)?),
+                None => None,
+            };
+            transaction.commit()?;
+            Ok(peer)
+        })
+    }
+
+    /// The whole bounded Signal read surface, read as one snapshot.
+    ///
+    /// The per-peer counters, the bounded page of Signals they describe, and
+    /// the trust transitions the local lifecycle Signals project from are all
+    /// read in one transaction. Separate reads let ingest commit in between,
+    /// which is how a feed came to report a Signal beside a cursor that had
+    /// not counted it.
+    pub fn health_signal_feed(
+        &self,
+        limit: usize,
+        now: i64,
+    ) -> Result<HealthSignalFeed, RegistryError> {
+        let limit = limit.min(SIGNAL_INBOX_CAPACITY as usize);
+        self.with_connection(|connection| {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let mut peers = Vec::new();
+            for state in peer_states_in(&transaction)? {
+                let authorization = authorization_in(&transaction, &state.node_id)?;
+                peers.push(HealthFeedPeer {
+                    state,
+                    authorization,
+                });
+            }
+            let signals = feed_page_in(&transaction, limit, now)?;
+            // The lifecycle projection collapses transitions per peer, so it
+            // needs the whole bounded scan window rather than one page of it.
+            let lifecycle = lifecycle_trust_events_in(&transaction, usize::MAX)?;
+            transaction.commit()?;
+            Ok(HealthSignalFeed {
+                peers,
+                signals,
+                lifecycle,
+            })
         })
     }
 
@@ -380,16 +453,13 @@ impl NodeRegistry {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let stale: Vec<String> = {
-                let mut statement = transaction.prepare(
+                let statement = format!(
                     "SELECT h.node_id FROM health_peers h
-                     WHERE NOT EXISTS (
-                       SELECT 1 FROM trusted_peers t
-                       JOIN remote_identities r ON r.node_id = t.node_id
-                       WHERE t.node_id = h.node_id
-                         AND t.state = 'active' AND r.state = 'active'
-                     )
+                     WHERE NOT {}
                      ORDER BY h.node_id",
-                )?;
+                    active_trust_predicate("h.node_id")
+                );
+                let mut statement = transaction.prepare(&statement)?;
                 let rows = statement
                     .query_map([], |row| row.get::<_, String>(0))?
                     .collect::<Result<Vec<_>, _>>()?;
@@ -1467,6 +1537,166 @@ fn delete_peer_health(transaction: &Transaction<'_>, node_id: &str) -> Result<()
         params![node_id],
     )?;
     Ok(())
+}
+
+/// The durable Health Plane state for every tracked peer, on a connection the
+/// caller owns.
+fn peer_states_in(connection: &Connection) -> Result<Vec<HealthPeerState>, RegistryError> {
+    let mut statement = connection.prepare(
+        "SELECT p.node_id, p.role, p.cursor, p.last_profile_revision,
+                p.last_pulse_sequence, p.last_pulse_at, p.version_incompatible_at,
+                p.first_seen, p.updated_at,
+                (SELECT COUNT(*) FROM health_signals s
+                  WHERE s.node_id = p.node_id AND s.state = 'applied'),
+                (SELECT COUNT(*) FROM health_signals s
+                  WHERE s.node_id = p.node_id AND s.state = 'held')
+         FROM health_peers p ORDER BY p.node_id",
+    )?;
+    let rows = statement
+        .query_map([], health_peer_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    if rows.len() > MAX_HEALTH_READ_ROWS {
+        return Err(RegistryError::Corrupt(
+            "health peer table exceeds the frozen node-count bound".to_string(),
+        ));
+    }
+    rows.into_iter().collect::<Result<Vec<_>, _>>()
+}
+
+/// The read-only authorization projection, on a connection the caller owns.
+fn authorization_in(
+    connection: &Connection,
+    node_id: &str,
+) -> Result<Option<HealthAuthorization>, RegistryError> {
+    connection
+        .query_row(
+            "SELECT r.state, p.role, p.capabilities, p.state
+             FROM remote_identities r
+             LEFT JOIN trusted_peers p ON p.node_id = r.node_id
+             WHERE r.node_id = ?1",
+            params![node_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, Option<Vec<u8>>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            },
+        )
+        .optional()?
+        .map(|(identity_state, role, capabilities, trust_state)| {
+            health_authorization_from_row(
+                node_id,
+                &identity_state,
+                role,
+                capabilities,
+                trust_state.as_deref(),
+            )
+        })
+        .transpose()
+}
+
+/// Everything one fleet-status row is projected from, inside one transaction.
+fn fleet_peer_in(
+    transaction: &Transaction<'_>,
+    state: HealthPeerState,
+    now: i64,
+) -> Result<HealthFleetPeer, RegistryError> {
+    let authorization = authorization_in(transaction, &state.node_id)?;
+    let profile = read_profile(transaction, &state.node_id, now)?;
+    let pulse = read_pulse(transaction, &state.node_id, now)?;
+    Ok(HealthFleetPeer {
+        snapshot: HealthPeerSnapshot {
+            state,
+            profile,
+            pulse,
+        },
+        authorization,
+    })
+}
+
+/// The bounded, newest-first page of Signals across the actively trusted
+/// fleet, inside one transaction.
+///
+/// Newest-first in SQL rather than in the caller keeps the working set at one
+/// page no matter how many Performers this Conductor manages, which is what
+/// the per-peer loop it replaces achieved by reducing after every peer.
+fn feed_page_in(
+    transaction: &Transaction<'_>,
+    limit: usize,
+    now: i64,
+) -> Result<Vec<HealthFeedSignal>, RegistryError> {
+    let mut corrupt: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut page = Vec::new();
+    {
+        // `signal_id` is a fixed 16-byte identifier, so ordering the blob
+        // descending is the same total order the rendered hexadecimal gives.
+        let statement = format!(
+            "SELECT s.node_id, s.signal_id, s.sequence, s.kind, s.occurred_at, s.subject, s.run
+             FROM health_signals s
+             WHERE s.state = 'applied' AND {}
+             ORDER BY s.occurred_at DESC, s.signal_id DESC
+             LIMIT ?1",
+            active_trust_predicate("s.node_id")
+        );
+        let mut statement = transaction.prepare(&statement)?;
+        let rows = statement
+            .query_map(params![limit as i64], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    (
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                    ),
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (node_id, row) in rows {
+            match signal_from_row(&row) {
+                Ok(signal) => page.push(HealthFeedSignal { node_id, signal }),
+                Err(_) => corrupt.push((node_id, row.0)),
+            }
+        }
+    }
+    for (node_id, signal_id) in &corrupt {
+        transaction.execute(
+            "DELETE FROM health_signals WHERE node_id = ?1 AND signal_id = ?2",
+            params![node_id, signal_id],
+        )?;
+        record_health_audit_tx(
+            transaction,
+            "corrupt_row",
+            node_id,
+            HealthKind::Signal.wire(),
+            0,
+            "rejected",
+            Some(HealthCode::CorruptState.code()),
+            now,
+        )?;
+    }
+    Ok(page)
+}
+
+/// The one predicate that decides whether a peer is still actively trusted.
+///
+/// The Signal feed must hide exactly what the revocation cleanup deletes, so
+/// both statements build their clause here and cannot drift apart: a peer
+/// whose trust ends stops appearing in the operator's feed on the next read
+/// rather than on the next cleanup tick.
+fn active_trust_predicate(node_column: &str) -> String {
+    format!(
+        "EXISTS (
+           SELECT 1 FROM trusted_peers t
+           JOIN remote_identities r ON r.node_id = t.node_id
+           WHERE t.node_id = {node_column}
+             AND t.state = 'active' AND r.state = 'active'
+         )"
+    )
 }
 
 fn load_peer_state(

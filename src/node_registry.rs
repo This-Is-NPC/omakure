@@ -1779,17 +1779,7 @@ impl NodeRegistry {
     /// reads it. Rows whose `to_state` is neither `active` nor `revoked` are
     /// not lifecycle transitions and never leave the registry.
     pub fn lifecycle_trust_events(&self, limit: usize) -> Result<Vec<AuditEvent>, RegistryError> {
-        let limit = limit.min(MAX_LIFECYCLE_SCAN_ROWS) as i64;
-        self.with_connection(|connection| {
-            let mut statement = connection.prepare(
-                "SELECT id, event_type, node_id, from_state, to_state, actor, reason, occurred_at
-                 FROM audit_events
-                 WHERE to_state IN ('active', 'revoked')
-                 ORDER BY id DESC LIMIT ?1",
-            )?;
-            let rows = statement.query_map(params![limit], audit_from_row)?;
-            Ok(rows.collect::<Result<Vec<_>, _>>()?)
-        })
+        self.with_connection(|connection| lifecycle_trust_events_in(connection, limit))
     }
 
     /// Return the v2 projection for transport authorization. Legacy `peers`
@@ -4577,6 +4567,27 @@ fn revocation_from_row(row: &Row<'_>) -> rusqlite::Result<RevocationRecord> {
         reason,
         replacement_node_id,
     })
+}
+
+/// Read the bounded, newest-first lifecycle trust transitions on a connection
+/// the caller owns.
+///
+/// The Health Plane Signal feed reads these rows inside the same transaction
+/// that reads the Signal cursors, so the projected `enrolled` and `revoked`
+/// Signals describe the same instant as everything beside them.
+pub(crate) fn lifecycle_trust_events_in(
+    connection: &Connection,
+    limit: usize,
+) -> Result<Vec<AuditEvent>, RegistryError> {
+    let limit = limit.min(MAX_LIFECYCLE_SCAN_ROWS) as i64;
+    let mut statement = connection.prepare(
+        "SELECT id, event_type, node_id, from_state, to_state, actor, reason, occurred_at
+         FROM audit_events
+         WHERE to_state IN ('active', 'revoked')
+         ORDER BY id DESC LIMIT ?1",
+    )?;
+    let rows = statement.query_map(params![limit], audit_from_row)?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 fn audit_from_row(row: &Row<'_>) -> rusqlite::Result<AuditEvent> {

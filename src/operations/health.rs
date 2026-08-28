@@ -277,46 +277,57 @@ pub fn signal_feed(context: &NodeContext) -> OperationResult<SignalFeedReport> {
     let registry = open_registry(context)?;
     let plane = HealthPlane::new(&registry);
     let enabled = plane.enabled().map_err(map_registry_error)?;
-    let observed_at = plane.now();
     let limit = SIGNAL_INBOX_CAPACITY as usize;
+    let mut observed_at = plane.now();
     let mut entries: Vec<SignalEntry> = Vec::new();
     let mut cursors: Vec<SignalCursor> = Vec::new();
     if enabled {
-        for signal in plane.local_signals(limit).map_err(map_registry_error)? {
+        // One snapshot for the cursors, the Signals, and the trust log the
+        // local lifecycle Signals are projected from. Read separately, the
+        // report could contradict itself: ingest commits between the counter
+        // read and the Signal read, and the feed then shows a Signal beside a
+        // cursor that has not counted it. `gap` is derived from those same
+        // counters, and it is the field an operator reads to decide whether a
+        // fleet's Signal delivery has stalled.
+        let feed = plane.signal_feed(limit).map_err(map_registry_error)?;
+        observed_at = feed.observed_at;
+        for signal in feed.local {
             entries.push(SignalEntry {
                 source: LOCAL_SIGNAL_SOURCE.to_string(),
                 signal,
             });
         }
-        let mut nodes = plane.fleet_status().map_err(map_registry_error)?;
         // The feed shows the *actively trusted* fleet, exactly like the
         // fleet-status projection: a peer whose trust was revoked, suspended,
         // or replaced stops appearing at once, which is what makes a
         // revocation change the operator's view immediately. The retained rows
         // are removed for good by the frozen revocation cleanup.
-        nodes.retain(|node| node.trust_state == "active");
-        nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));
-        for node in nodes {
-            cursors.push(SignalCursor {
-                node_id: node.node_id.clone(),
-                cursor: node.signal_cursor,
-                stored: node.stored_signals,
-                held: node.held_signals,
-                gap: node.held_signals > 0,
-            });
-            for signal in plane
-                .signals(&node.node_id, limit)
-                .map_err(map_registry_error)?
-            {
-                entries.push(SignalEntry {
-                    source: node.node_id.clone(),
-                    signal,
-                });
+        let mut active: HashSet<String> = HashSet::new();
+        for node in feed.nodes {
+            if node.trust_state != "active" {
+                continue;
             }
-            // Reduce after every peer rather than at the end, so the working
-            // set stays at two pages regardless of how many Performers this
-            // Conductor manages.
-            reduce_to_newest(&mut entries, limit);
+            active.insert(node.node_id.clone());
+            cursors.push(SignalCursor {
+                node_id: node.node_id,
+                cursor: node.cursor,
+                stored: node.stored,
+                held: node.held,
+                gap: node.held > 0,
+            });
+        }
+        cursors.sort_by(|left, right| left.node_id.cmp(&right.node_id));
+        for entry in feed.signals {
+            // The bounded page is already restricted to actively trusted
+            // peers by the read itself; this repeats the decision here so the
+            // rule stays visible where the projection is assembled.
+            if !active.contains(&entry.source) {
+                continue;
+            }
+            entries.push(SignalEntry {
+                source: entry.source,
+                signal: entry.signal,
+            });
         }
     }
     reduce_to_newest(&mut entries, limit);

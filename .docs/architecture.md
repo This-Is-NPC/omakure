@@ -102,11 +102,27 @@ src/
 ├── policy.rs                deploy-time route and runtime policy
 ├── secrets.rs               secret references and provider resolution
 ├── redaction.rs             output and trace redaction
+├── node.rs                  node paths, platform rules, and state validation
+├── node_identity.rs         BIP-340 machine identity and node ID derivation
+├── node_registry.rs         node-owned trust and delivery persistence boundary
+│   └── health.rs            Health Plane reads and receive-order application
 ├── direct_transport.rs      Noise framing, certificates, envelopes, and replay limits
-├── direct_service.rs        production direct listener and peer admission
-├── discovery.rs              bounded trust-neutral LAN discovery
-├── enrollment.rs             manual and signed-bundle enrollment records
-├── node_transport.rs         node-owned transport state and static peers
+├── direct_service.rs        production direct listener, peer admission, and outboxes
+├── direct_health.rs         Health Plane carriage over an established direct session
+├── health_plane/            protocol-neutral Health Plane domain and operations
+│   ├── model.rs             Profile, Pulse, and the closed Signal kinds
+│   ├── schema.rs            frozen wire schema
+│   ├── bounds.rs            frozen size and rate bounds
+│   ├── report.rs            Performer-side reporting
+│   └── lifecycle.rs         enrolled/revoked lifecycle Signals
+├── remote_cue.rs            receive half of the Cue plane and its refusal codes
+├── baseline.rs              signed baseline manifest: the versioned set a fleet ships
+├── baseline_push.rs         receive half of baseline delivery, install, and rollback
+├── baseline_publisher.rs    custody of the key that signs a baseline
+├── enrollment_authority.rs  custody of the key that mints fleet membership
+├── discovery.rs             bounded trust-neutral LAN discovery
+├── enrollment.rs            manual and signed-bundle enrollment records
+├── node_transport.rs        node-owned transport state and static peers
 └── installer.rs             standalone installer binary
 ```
 

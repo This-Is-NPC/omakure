@@ -1684,9 +1684,24 @@ pub(crate) fn map_registry_error(error: RegistryError) -> OperationError {
         RegistryError::InvalidInput(error) => {
             OperationError::new(OperationErrorCode::InvalidInput, error)
         }
-        RegistryError::Duplicate(error) | RegistryError::Revoked(error) => {
-            OperationError::new(OperationErrorCode::Conflict, error)
-        }
+        // Both are conflicts and neither is the other. "This peer is already
+        // trusted" and "this peer was revoked and cannot be resurrected" want
+        // opposite things from an operator -- leave it alone, or issue a new
+        // identity -- and collapsing them into one arm bound the inner node id
+        // as the whole message, so the refusal read as nothing but the id the
+        // caller had just typed.
+        RegistryError::Duplicate(node_id) => OperationError::new(
+            OperationErrorCode::Conflict,
+            format!("{node_id} already exists as a peer or conflicts with existing state"),
+        ),
+        RegistryError::Revoked(node_id) => OperationError::new(
+            OperationErrorCode::Conflict,
+            format!(
+                "{node_id} has a retained revocation and cannot be trusted again. \
+                 Revocation is durable, so re-admitting this machine means giving it a \
+                 new identity."
+            ),
+        ),
         RegistryError::InvalidTransition { from, to } => OperationError::new(
             OperationErrorCode::Conflict,
             format!("invalid trust transition from {from} to {to}"),
@@ -1956,6 +1971,65 @@ mod tests {
         let error = import_manual_trust(&context, request).unwrap_err();
         assert_eq!(error.code, OperationErrorCode::Forbidden);
         assert!(list_trusted_peers(&context).unwrap().is_empty());
+    }
+
+    /// A conflict must say which conflict it is.
+    ///
+    /// "This peer is already trusted" and "this peer was revoked and cannot be
+    /// resurrected" want opposite things from an operator: leave it alone, or
+    /// issue the machine a new identity. Both arrived as `Conflict` carrying
+    /// the inner node id as the entire message, so the refusal read as nothing
+    /// but the id the caller had just typed. Measured on a real fleet: after
+    /// `node revoke`, re-trusting the same peer answered
+    /// `{"code":"conflict","message":"omk1_709c1c..."}` and nothing else.
+    #[test]
+    fn a_trust_conflict_says_whether_the_peer_is_already_trusted_or_revoked() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        initialize_node(&context, &NodeConfig::default()).unwrap();
+        let identity = NodeIdentity::load_existing(&context).unwrap();
+        let request = peer_request(&identity);
+        let node_id = request.node_id.clone();
+        import_manual_trust(&context, request.clone()).expect("first trust");
+
+        // Already trusted.
+        let duplicate = import_manual_trust(&context, request.clone()).unwrap_err();
+        assert_eq!(duplicate.code, OperationErrorCode::Conflict);
+        assert!(
+            duplicate.message.contains(&node_id) && duplicate.message.contains("already exists"),
+            "a duplicate must say the peer is already there: {}",
+            duplicate.message
+        );
+
+        revoke_peer(
+            &context,
+            &crate::workspace::Workspace::new(temp.path().join("workspace")),
+            RevocationRequest {
+                node_id: node_id.clone(),
+                actor: "operator".into(),
+                reason: "lost device".into(),
+                confirmed: true,
+            },
+        )
+        .expect("revoke");
+
+        // Revoked, which is a different conflict with a different remedy.
+        let revoked = import_manual_trust(&context, request).unwrap_err();
+        assert_eq!(revoked.code, OperationErrorCode::Conflict);
+        assert!(
+            revoked.message.contains("revocation"),
+            "a revoked peer's refusal must name the revocation, not just the id: {}",
+            revoked.message
+        );
+        assert!(
+            revoked.message.contains("new identity"),
+            "the refusal must say what the operator can actually do: {}",
+            revoked.message
+        );
+        assert_ne!(
+            revoked.message, duplicate.message,
+            "two opposite conflicts must not produce the same sentence"
+        );
     }
 
     /// An abort must say what failed, not only that something did.

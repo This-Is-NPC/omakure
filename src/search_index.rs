@@ -33,7 +33,7 @@ pub struct SearchField {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // detail projection: constructed by `load_details`, asserted by tests
 pub struct SearchDetails {
     pub display_name: String,
     pub description: Option<String>,

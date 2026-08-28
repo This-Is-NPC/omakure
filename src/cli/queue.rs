@@ -381,7 +381,7 @@ fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Bo
 }
 
 // Used by tests to make captured-output assertions.
-#[allow(dead_code)]
+#[allow(dead_code)] // test-support: dead in the lib target, used by the tests below
 pub(crate) fn make_completion(
     stdout: &str,
     stderr: &str,

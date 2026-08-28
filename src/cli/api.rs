@@ -3053,19 +3053,6 @@ fn query_bool(pairs: &[(String, String)], key: &str) -> OperationResult<Option<b
         .transpose()
 }
 
-#[allow(dead_code)] // retained for tests that build ApiPolicy without boot
-pub(crate) fn policy_from_config(
-    capabilities: &[String],
-    refs: &[String],
-) -> Result<ApiPolicy, Box<dyn Error>> {
-    Ok(ApiPolicy::from_config(capabilities, refs)?)
-}
-
-#[allow(dead_code)] // thin wrapper; prefer resolve_auth_with_policy
-pub(crate) fn resolve_auth(tokens_file: Option<&Path>) -> Result<Authenticator, ApiConfigError> {
-    resolve_auth_with_policy(tokens_file, true)
-}
-
 pub(crate) fn resolve_auth_with_policy(
     tokens_file: Option<&Path>,
     allow_legacy_env_token: bool,

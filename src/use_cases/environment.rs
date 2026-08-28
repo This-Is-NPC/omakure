@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::error::AppResult;
 use crate::ports::{EnvFile, EnvPreview, EnvironmentConfig, EnvironmentRepository};
 
@@ -18,11 +16,6 @@ impl EnvironmentService {
 
     pub fn load_environment_config(&self) -> AppResult<EnvironmentConfig> {
         self.repo.load_environment_config()
-    }
-
-    #[allow(dead_code)]
-    pub fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview> {
-        self.repo.load_env_preview(path)
     }
 
     pub fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {

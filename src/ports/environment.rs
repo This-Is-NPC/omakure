@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::error::AppResult;
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // `envs_dir`/`defaults` are read by the adapter tests only
 pub struct EnvironmentConfig {
     pub envs_dir: PathBuf,
     pub active: Option<String>,

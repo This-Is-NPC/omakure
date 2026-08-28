@@ -71,17 +71,6 @@ subscriptions, webhooks, alert routes, or user-defined Signal kinds.
 - Direct execution of Battery scripts from Git cache.
 - A second product surface with behavior that differs from CLI operations.
 
-## Framework Decision
-
-Use `axum` with `tokio` for v1.
-
-Why:
-
-- Middleware and extractors keep auth, body limits, and route state testable.
-- `tower` service testing lets endpoint tests run without binding real ports.
-- The async runtime is contained behind `omakure api`; local CLI commands remain
-  synchronous.
-
 ## Command Contract
 
 ```bash
@@ -581,12 +570,3 @@ Operational safety notes:
   token holders cannot ask the server to import arbitrary local repositories.
 - Queue/run writes use the existing SQLite run state machine; invalid state
   transitions return `conflict` instead of bypassing the workflow.
-
-## Validation
-
-Use the normal repository checks after changing the HTTP API:
-
-```bash
-cargo test
-mise run lint
-```

@@ -210,21 +210,25 @@ fn wait_for_standing_session(service: &support::HttpServer) -> bool {
     false
 }
 
-/// A Conductor must be told what became of the baseline it pushed.
+/// Two real nodes, trusted both ways, with a published baseline the Conductor
+/// holds the bodies for.
 ///
-/// The push itself is only half of the delivery. The other half is the
-/// `baseline_ack` coming back over the same standing session, because that ack
-/// is the *entire* operator-visible result: `node baseline push` reports
-/// `answered` and `accepted` and nothing else. If the ack never lands, a push
-/// that installed perfectly reports exactly what a push refused on trust,
-/// role, or capability reports -- and the operator's only recourse is to read
-/// the receiving node's audit table by hand.
-///
-/// Asserted on both sides: the Conductor's own reported outcome, and the
-/// Performer's installed baseline record.
-#[test]
-#[ignore = "spawns two real node services; run explicitly"]
-fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
+/// Shared so the tests below differ in the one thing each is measuring rather
+/// than in the fleet they measure it on.
+struct Fleet {
+    /// Never serves: a node holding Conductor authority over anyone is refused
+    /// a publisher key outright, so the key lives with a third principal.
+    _publisher: tempfile::TempDir,
+    conductor: tempfile::TempDir,
+    performer: tempfile::TempDir,
+    performer_id: String,
+    baseline_id: String,
+    manifest: std::path::PathBuf,
+    /// Script names in manifest order.
+    scripts: Vec<String>,
+}
+
+fn stand_up_fleet() -> Fleet {
     let publisher_dir = tempfile::tempdir().expect("publisher workspace");
     let conductor_dir = tempfile::tempdir().expect("conductor workspace");
     let performer_dir = tempfile::tempdir().expect("performer workspace");
@@ -232,8 +236,6 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
     let conductor = conductor_dir.path();
     let performer = performer_dir.path();
 
-    // The publisher is a third principal that never serves: a node holding
-    // Conductor authority over anyone is refused a publisher key outright.
     init_node(publisher);
     configure(
         publisher,
@@ -280,22 +282,28 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
 
     let conductor_status = init_node(conductor);
     let performer_status = init_node(performer);
-    let conductor_id = conductor_status["identity"]["node_id"].as_str().unwrap();
-    let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
+    let conductor_id = conductor_status["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let performer_id = performer_status["identity"]["node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let conductor_port = support::unique_loopback_port();
     let performer_port = support::unique_loopback_port();
 
     configure(
         conductor,
         conductor_port,
-        Some((performer_id, performer_port)),
+        Some((&performer_id, performer_port)),
         false,
         None,
     );
     configure(
         performer,
         performer_port,
-        Some((conductor_id, conductor_port)),
+        Some((&conductor_id, conductor_port)),
         true,
         Some((key_id.as_str(), public_key.as_str())),
     );
@@ -322,8 +330,43 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
     let conductor_manifest = conductor.join("base-v1.omb");
     std::fs::copy(&manifest_path, &conductor_manifest).expect("copy manifest to conductor");
 
-    let performer_service = serve(performer);
-    let conductor_service = serve(conductor);
+    Fleet {
+        _publisher: publisher_dir,
+        conductor: conductor_dir,
+        performer: performer_dir,
+        performer_id,
+        baseline_id,
+        manifest: conductor_manifest,
+        scripts: vec!["base-a.sh".to_string(), "base-b.sh".to_string()],
+    }
+}
+
+/// The baseline record the Performer wrote, or a failure that says the push
+/// never arrived rather than one that says the ack did not.
+fn installed_baseline(fleet: &Fleet) -> Value {
+    let raw = std::fs::read_to_string(fleet.performer.path().join(".omakure/baseline.json"))
+        .expect("the Performer installed no baseline at all");
+    serde_json::from_str(&raw).expect("parse installed baseline record")
+}
+
+/// A Conductor must be told what became of the baseline it pushed.
+///
+/// The push itself is only half of the delivery. The other half is the
+/// `baseline_ack` coming back over the same standing session, because that ack
+/// is the *entire* operator-visible result: `node baseline push` reports
+/// `answered` and `accepted` and nothing else. If the ack never lands, a push
+/// that installed perfectly reports exactly what a push refused on trust,
+/// role, or capability reports -- and the operator's only recourse is to read
+/// the receiving node's audit table by hand.
+///
+/// Asserted on both sides: the Conductor's own reported outcome, and the
+/// Performer's installed baseline record.
+#[test]
+#[ignore = "spawns two real node services; run explicitly"]
+fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
+    let fleet = stand_up_fleet();
+    let performer_service = serve(fleet.performer.path());
+    let conductor_service = serve(fleet.conductor.path());
     assert!(
         wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session with the Performer"
@@ -332,14 +375,14 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
     let pushed = assert_success_named(
         "baseline push",
         &run_node(
-            conductor,
+            fleet.conductor.path(),
             &[
                 "baseline".to_string(),
                 "push".to_string(),
                 "--peer-node-id".to_string(),
-                performer_id.to_string(),
+                fleet.performer_id.clone(),
                 "--manifest".to_string(),
-                conductor_manifest.display().to_string(),
+                fleet.manifest.display().to_string(),
                 "--wait-seconds".to_string(),
                 "60".to_string(),
             ],
@@ -348,22 +391,19 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
 
     // The Performer's own record first: without this, a failing `answered`
     // assertion below could equally mean the push never arrived.
-    let installed: Value = {
-        let raw = std::fs::read_to_string(performer.join(".omakure/baseline.json"))
-            .expect("the Performer installed no baseline at all");
-        serde_json::from_str(&raw).expect("parse installed baseline record")
-    };
+    let installed = installed_baseline(&fleet);
     assert_eq!(
-        installed["baseline_id"], baseline_id,
+        installed["baseline_id"], fleet.baseline_id,
         "the Performer installed a different baseline than the one pushed"
     );
 
     assert_eq!(
         pushed["answered"], true,
-        "the Performer installed the baseline ({baseline_id}) but the Conductor was \
+        "the Performer installed the baseline ({}) but the Conductor was \
          never told: the baseline_ack did not come back over the standing session, so a \
          successful push is indistinguishable from one refused on trust, role, or \
-         capability. Reported outcome: {pushed}"
+         capability. Reported outcome: {pushed}",
+        fleet.baseline_id
     );
     assert_eq!(
         pushed["accepted"], true,
@@ -371,7 +411,131 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
          Performer's own record shows it installed. Reported outcome: {pushed}"
     );
     assert_eq!(pushed["code"], 0, "reported outcome: {pushed}");
-    assert_eq!(pushed["baseline_id"], baseline_id);
+    assert_eq!(pushed["baseline_id"], fleet.baseline_id);
+
+    drop(conductor_service);
+    drop(performer_service);
+}
+
+/// Every `baseline_*` audit row this node wrote, as `(event_type, outcome,
+/// error_code)`.
+fn baseline_audit_rows(workspace: &Path) -> Vec<(String, String, Option<i64>)> {
+    let connection = rusqlite::Connection::open(workspace.join(".node-state/node.sqlite"))
+        .expect("open node registry");
+    let mut statement = connection
+        .prepare(
+            "SELECT event_type, outcome, error_code FROM transport_audit
+             WHERE event_type LIKE 'baseline%' ORDER BY id",
+        )
+        .expect("prepare baseline audit query");
+    let rows = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .expect("query baseline audit rows")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("read baseline audit rows");
+    rows
+}
+
+/// An ack that misses the caller's budget must be recorded as what it was.
+///
+/// The budget bounds how long the *caller* waits, and nothing about it says the
+/// Performer will stay quiet. On a slow link the ack has arrived a minute or
+/// two after the Conductor was already told `answered: false`, with the
+/// baseline installed. A session that had forgotten the id hands that ack to
+/// the receive half, which judges `baseline_push` messages and can only call a
+/// `baseline_ack` malformed -- so the Conductor's own audit table records
+/// `baseline_rejected` / 1304 for a baseline the Performer accepted, and the
+/// audit trail says the opposite of what happened. That table is the only place
+/// an operator can tell "retry it" from "you already have it" apart.
+///
+/// `wait_seconds = 0` makes the miss deterministic: the budget is spent before
+/// the push is even written, so any ack at all is a late one.
+#[test]
+#[ignore = "spawns two real node services; run explicitly"]
+fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
+    let fleet = stand_up_fleet();
+    let performer_service = serve(fleet.performer.path());
+    let conductor_service = serve(fleet.conductor.path());
+    assert!(
+        wait_for_standing_session(&conductor_service),
+        "the Conductor never established its standing session with the Performer"
+    );
+
+    let scripts = fleet
+        .scripts
+        .iter()
+        .map(|name| {
+            hex(&std::fs::read(fleet.conductor.path().join(name)).expect("read baseline script"))
+        })
+        .collect::<Vec<_>>();
+    let response = conductor_service.post_json(
+        "/v1/node/baselines",
+        &serde_json::json!({
+            "peer_node_id": fleet.performer_id,
+            "manifest": hex(&std::fs::read(&fleet.manifest).expect("read manifest")),
+            "scripts": scripts,
+            "wait_seconds": 0,
+        }),
+    );
+    assert_eq!(response.status, 200, "push response: {}", response.body);
+    let pushed = response.json()["data"].clone();
+    assert_eq!(
+        pushed["answered"], false,
+        "wait_seconds = 0 must spend the budget before the push is written, or this \
+         test is not measuring a late ack at all. Reported outcome: {pushed}"
+    );
+
+    // The ack cannot be late until it exists. The install is what proves the
+    // Performer accepted, which is what the audit row below must agree with.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let installed = loop {
+        if fleet
+            .performer
+            .path()
+            .join(".omakure/baseline.json")
+            .exists()
+        {
+            break installed_baseline(&fleet);
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the Performer never installed the baseline, so no ack was ever sent"
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    };
+    assert_eq!(installed["baseline_id"], fleet.baseline_id);
+
+    let mut rows = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        rows = baseline_audit_rows(fleet.conductor.path());
+        if rows
+            .iter()
+            .any(|(event, _, _)| event == "baseline_answered_late")
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+
+    assert!(
+        rows.contains(&(
+            "baseline_answered_late".to_string(),
+            "accepted".to_string(),
+            None
+        )),
+        "the Performer accepted the baseline and said so, but the Conductor recorded \
+         no late answer: an operator reading this table cannot tell an install that \
+         landed from one that never did. Rows: {rows:?}"
+    );
+    assert!(
+        !rows
+            .iter()
+            .any(|(event, outcome, _)| event == "baseline_rejected" && outcome == "rejected"),
+        "the Conductor audited its own peer's acceptance as a rejection: the late ack \
+         fell through to the receive half, which can only read a `baseline_ack` as a \
+         malformed `baseline_push`. Rows: {rows:?}"
+    );
 
     drop(conductor_service);
     drop(performer_service);

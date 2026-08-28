@@ -1768,7 +1768,10 @@ fn hold_session(
         // One baseline in flight per session. A second would put megabytes on
         // the wire behind a message the peer has not answered yet, and the
         // answer is what says whether the first one was even wanted.
-        if outbound_baseline.is_none() {
+        if outbound_baseline
+            .as_ref()
+            .is_none_or(OutboundBaseline::is_answered)
+        {
             if let Some(pending) = state.take_pending_baseline(peer_node_id) {
                 let deadline = Instant::now() + IDLE_TIMEOUT;
                 match sign_pending_baseline(identity, session.session_id(), &pending) {
@@ -1776,7 +1779,7 @@ fn hold_session(
                         write_bytes(stream, &session.write(ENVELOPE_KIND, &encoded)?, deadline)
                             .map_err(error_to_transport)?;
                         last_activity = Instant::now();
-                        outbound_baseline = Some(OutboundBaseline { pending });
+                        outbound_baseline = Some(OutboundBaseline::new(pending));
                     }
                     // Too large to carry, or unsignable. The caller is waiting
                     // on the channel and must be told rather than left to time
@@ -1786,9 +1789,7 @@ fn hold_session(
             }
         }
         if let Some(in_flight) = outbound_baseline.as_mut() {
-            if in_flight.expired() {
-                outbound_baseline = None;
-            }
+            in_flight.expire_if_due();
         }
         if let Some(outbound) = health.tick() {
             let deadline = Instant::now() + IDLE_TIMEOUT;
@@ -1836,9 +1837,34 @@ fn hold_session(
             }
         }
         if let Some(in_flight) = outbound_baseline.as_mut() {
-            if in_flight.absorb_ack(&message.body, peer_node_id, peer_identity_key, session) {
-                outbound_baseline = None;
-                continue;
+            match in_flight.absorb_ack(
+                &message.body,
+                peer_node_id,
+                peer_identity_key,
+                session.session_id(),
+            ) {
+                BaselineAckMatch::Other => {}
+                BaselineAckMatch::Answered => {
+                    outbound_baseline = None;
+                    continue;
+                }
+                // The caller was told `answered: false` and has gone. This row
+                // is the only thing that can tell an operator the push landed
+                // anyway, which is the difference between "retry it" and
+                // "you already have it".
+                BaselineAckMatch::Late { accepted, code } => {
+                    let _ = registry.record_transport_audit(
+                        "baseline_answered_late",
+                        peer_node_id,
+                        Some(session.session_id()),
+                        None,
+                        0,
+                        if accepted { "accepted" } else { "rejected" },
+                        (!accepted).then_some(code),
+                    );
+                    outbound_baseline = None;
+                    continue;
+                }
             }
         }
         match health.handle_envelope(&message.body) {
@@ -2187,6 +2213,19 @@ impl PendingBaseline {
     }
 }
 
+/// What an inbound envelope turned out to be for the baseline this session sent.
+#[derive(Debug, PartialEq, Eq)]
+enum BaselineAckMatch {
+    /// Not the ack for this baseline; the dispatcher keeps looking.
+    Other,
+    /// The ack arrived inside the budget and the caller has been answered.
+    Answered,
+    /// The ack arrived after the budget ran out. The caller was already told
+    /// `answered: false` and cannot be told anything else, so this is the only
+    /// place the true outcome can be recorded.
+    Late { accepted: bool, code: u16 },
+}
+
 /// One baseline written on this session, waiting for its ack.
 ///
 /// Simpler than `OutboundCue` because it is finished at the ack: a Cue's real
@@ -2194,24 +2233,48 @@ impl PendingBaseline {
 /// either installed or did not by the time the peer replies.
 struct OutboundBaseline {
     pending: PendingBaseline,
+    /// Kept beside `pending`, because answering the caller moves the real
+    /// `PendingBaseline` out and leaves a placeholder with an empty id. The
+    /// correlation has to outlive the answer or a late ack has nothing to
+    /// match against.
+    baseline_id: String,
+    /// Set once the caller has been answered, by the ack or by the budget.
+    answered: bool,
 }
 
 impl OutboundBaseline {
+    fn new(pending: PendingBaseline) -> Self {
+        Self {
+            baseline_id: pending.baseline_id.clone(),
+            pending,
+            answered: false,
+        }
+    }
+
+    /// Whether this slot still bars the next baseline from going out.
+    ///
+    /// A slot whose caller has been answered is kept only for correlation, so
+    /// it must not hold the queue: the "one in flight per session" bound is
+    /// about unanswered bytes on the wire, not about remembering an id.
+    fn is_answered(&self) -> bool {
+        self.answered
+    }
+
     /// Take the `baseline_ack` for this baseline out of the stream, if this is
-    /// it. Returns `true` when the caller has been answered.
+    /// it.
     fn absorb_ack(
         &mut self,
         body: &[u8],
         peer_node_id: &str,
         peer_identity_key: &[u8; 32],
-        session: &TransportSession,
-    ) -> bool {
+        session_id: &[u8; 32],
+    ) -> BaselineAckMatch {
         if crate::direct_transport::envelope_kind_hint(body) != Some(crate::baseline_push::KIND_ACK)
         {
-            return false;
+            return BaselineAckMatch::Other;
         }
         let Ok(nonce) = envelope_nonce(body) else {
-            return false;
+            return BaselineAckMatch::Other;
         };
         // Anchored to the identity the handshake established, not to anything
         // the message says about itself.
@@ -2220,24 +2283,22 @@ impl OutboundBaseline {
             peer_node_id,
             peer_identity_key,
             crate::baseline_push::KIND_ACK,
-            session.session_id(),
+            session_id,
             &nonce,
         )
         .is_err()
         {
-            return false;
+            return BaselineAckMatch::Other;
         }
         let Ok(view) = crate::direct_transport::envelope_view(body) else {
-            return false;
+            return BaselineAckMatch::Other;
         };
         let Some(ack) = view.payload.as_object() else {
-            return false;
+            return BaselineAckMatch::Other;
         };
         // An ack for a different baseline is not an answer to this one.
-        if ack.get("baseline_id").and_then(serde_json::Value::as_str)
-            != Some(&self.pending.baseline_id)
-        {
-            return false;
+        if ack.get("baseline_id").and_then(serde_json::Value::as_str) != Some(&self.baseline_id) {
+            return BaselineAckMatch::Other;
         }
         let accepted = ack
             .get("accepted")
@@ -2252,21 +2313,32 @@ impl OutboundBaseline {
                 .and_then(|code| u16::try_from(code).ok())
                 .unwrap_or_else(|| crate::baseline_push::BaselineCode::InvalidMessage.code())
         };
+        if self.answered {
+            return BaselineAckMatch::Late { accepted, code };
+        }
+        self.answered = true;
         std::mem::replace(&mut self.pending, placeholder_baseline()).answer(true, accepted, code);
-        true
+        BaselineAckMatch::Answered
     }
 
-    /// Give up once the budget runs out.
+    /// Stop the caller waiting once the budget runs out.
     ///
     /// Silence is a real answer here: a receiver that refused on trust, role,
     /// or capability says nothing by design, so `answered = false` is reported
     /// rather than retried.
-    fn expired(&mut self) -> bool {
-        if Instant::now() < self.pending.deadline {
-            return false;
+    ///
+    /// The slot itself is kept. The budget bounds how long the *caller* waits,
+    /// and nothing about it says the Performer will stay quiet: an ack that
+    /// arrives a moment later is still this node's own answer to its own push,
+    /// and a session that had forgotten the id would hand it to the receive
+    /// half, which judges `baseline_push` messages and can only call a
+    /// `baseline_ack` malformed.
+    fn expire_if_due(&mut self) {
+        if self.answered || Instant::now() < self.pending.deadline {
+            return;
         }
+        self.answered = true;
         std::mem::replace(&mut self.pending, placeholder_baseline()).answer(false, false, 0);
-        true
     }
 }
 
@@ -3384,6 +3456,197 @@ mod tests {
             public_key_hex: "00".repeat(32),
             node_id: node_id.to_string(),
         }
+    }
+
+    /// Build a peer identity and its 32-byte identity key, as the handshake
+    /// would have established them.
+    fn test_peer_identity(
+        temp: &tempfile::TempDir,
+    ) -> (crate::node_identity::NodeIdentity, String, [u8; 32]) {
+        let context = node_context_under(temp.path());
+        let identity = crate::node_identity::NodeIdentity::load_or_initialize(&context)
+            .expect("peer identity");
+        let (node_id, mut key) = {
+            let status = identity.public_status();
+            let mut key = [0u8; 32];
+            for (index, slot) in key.iter_mut().enumerate() {
+                *slot = u8::from_str_radix(&status.public_key_hex[index * 2..index * 2 + 2], 16)
+                    .expect("the identity key is lowercase hex");
+            }
+            (status.node_id.clone(), key)
+        };
+        let _ = &mut key;
+        (identity, node_id, key)
+    }
+
+    /// One baseline written on a session, with the budget the caller asked for
+    /// and the channel it is waiting on.
+    fn outbound_baseline_waiting(
+        baseline_id: &str,
+        budget: Duration,
+    ) -> (
+        OutboundBaseline,
+        std::sync::mpsc::Receiver<BaselinePushOutcome>,
+    ) {
+        let (reply, answers) = std::sync::mpsc::sync_channel(1);
+        let pending = PendingBaseline {
+            manifest: Vec::new(),
+            bodies: Vec::new(),
+            baseline_id: baseline_id.to_string(),
+            deadline: Instant::now() + budget,
+            reply,
+        };
+        (OutboundBaseline::new(pending), answers)
+    }
+
+    /// The `baseline_ack` a Performer sends back, signed by its own identity
+    /// against the session the handshake established.
+    fn signed_baseline_ack(
+        peer: &crate::node_identity::NodeIdentity,
+        session_id: &[u8; 32],
+        baseline_id: &str,
+        accepted: bool,
+    ) -> Vec<u8> {
+        let mut payload = serde_json::json!({
+            "version": 1,
+            "baseline_id": baseline_id,
+            "accepted": accepted,
+        });
+        if !accepted {
+            payload["error"] = serde_json::json!({
+                "code": crate::baseline_push::BaselineCode::InstallFailed.code(),
+            });
+        }
+        crate::direct_transport::sign_baseline_envelope(
+            peer,
+            crate::baseline_push::KIND_ACK,
+            session_id,
+            [9u8; 16],
+            payload,
+            unix_seconds(),
+        )
+        .expect("sign the baseline ack")
+        .encoded()
+    }
+
+    /// The ordinary case, so the late-ack tests below cannot pass by breaking
+    /// the timely path they are measured against.
+    #[test]
+    fn a_baseline_ack_inside_the_budget_answers_the_caller() {
+        let temp = tempfile::tempdir().expect("workspace");
+        let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+        let session_id = [3u8; 32];
+        let (mut in_flight, answers) = outbound_baseline_waiting("a1b2c3", Duration::from_secs(60));
+
+        let ack = signed_baseline_ack(&peer, &session_id, "a1b2c3", true);
+        assert_eq!(
+            in_flight.absorb_ack(&ack, &peer_node_id, &peer_key, &session_id),
+            BaselineAckMatch::Answered
+        );
+        let outcome = answers.try_recv().expect("the caller must be answered");
+        assert!(outcome.answered && outcome.accepted, "outcome: {outcome:?}");
+        assert_eq!(outcome.code, 0, "outcome: {outcome:?}");
+    }
+
+    /// A `baseline_ack` that misses the caller's budget is still this node's
+    /// own answer to its own push.
+    ///
+    /// The budget bounds how long the *caller* waits. Nothing about it says the
+    /// Performer will stay quiet, and on a slow link the ack has arrived a
+    /// minute or two later with the baseline installed. A session that had
+    /// forgotten the id hands that ack to the receive half, which judges
+    /// `baseline_push` messages and can only call a `baseline_ack` malformed --
+    /// so the Conductor's own audit table records `baseline_rejected` /
+    /// `invalid_message` for a baseline the Performer accepted.
+    #[test]
+    fn a_baseline_ack_after_the_budget_is_recognized_rather_than_taken_for_a_stranger() {
+        let temp = tempfile::tempdir().expect("workspace");
+        let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+        let session_id = [5u8; 32];
+        let (mut in_flight, answers) = outbound_baseline_waiting("d4e5f6", Duration::ZERO);
+
+        in_flight.expire_if_due();
+        let given_up = answers
+            .try_recv()
+            .expect("an expired budget must stop the caller waiting");
+        assert!(
+            !given_up.answered,
+            "the caller was told the push was answered: {given_up:?}"
+        );
+
+        let ack = signed_baseline_ack(&peer, &session_id, "d4e5f6", true);
+        assert_eq!(
+            in_flight.absorb_ack(&ack, &peer_node_id, &peer_key, &session_id),
+            BaselineAckMatch::Late {
+                accepted: true,
+                code: 0
+            },
+            "the ack for this node's own baseline was not recognized after the budget"
+        );
+        assert!(
+            answers.try_recv().is_err(),
+            "the caller was answered twice: the first answer is the only one it read"
+        );
+    }
+
+    /// A late refusal carries its code, so the audited outcome is the
+    /// Performer's, not a guess.
+    #[test]
+    fn a_late_baseline_refusal_keeps_the_code_the_performer_sent() {
+        let temp = tempfile::tempdir().expect("workspace");
+        let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+        let session_id = [6u8; 32];
+        let (mut in_flight, _answers) = outbound_baseline_waiting("0a0b0c", Duration::ZERO);
+        in_flight.expire_if_due();
+
+        let ack = signed_baseline_ack(&peer, &session_id, "0a0b0c", false);
+        assert_eq!(
+            in_flight.absorb_ack(&ack, &peer_node_id, &peer_key, &session_id),
+            BaselineAckMatch::Late {
+                accepted: false,
+                code: crate::baseline_push::BaselineCode::InstallFailed.code()
+            }
+        );
+    }
+
+    /// An ack for someone else's baseline is not an answer to this one, and
+    /// keeping the id around to spot a late ack must not turn into matching
+    /// everything that arrives.
+    #[test]
+    fn an_ack_for_a_different_baseline_is_never_taken_as_this_ones_answer() {
+        let temp = tempfile::tempdir().expect("workspace");
+        let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+        let session_id = [7u8; 32];
+        let (mut in_flight, _answers) = outbound_baseline_waiting("111111", Duration::ZERO);
+        in_flight.expire_if_due();
+
+        let ack = signed_baseline_ack(&peer, &session_id, "222222", true);
+        assert_eq!(
+            in_flight.absorb_ack(&ack, &peer_node_id, &peer_key, &session_id),
+            BaselineAckMatch::Other
+        );
+    }
+
+    /// The "one baseline in flight per session" bound is about unanswered bytes
+    /// on the wire, not about remembering an id: a slot kept only so a late ack
+    /// can be recognized must not hold the next push behind it for the rest of
+    /// the session.
+    #[test]
+    fn a_slot_kept_only_for_correlation_does_not_bar_the_next_push() {
+        let (mut waiting, _waiting_answers) =
+            outbound_baseline_waiting("333333", Duration::from_secs(60));
+        waiting.expire_if_due();
+        assert!(
+            !waiting.is_answered(),
+            "a baseline still inside its budget must hold the queue"
+        );
+
+        let (mut spent, _spent_answers) = outbound_baseline_waiting("444444", Duration::ZERO);
+        spent.expire_if_due();
+        assert!(
+            spent.is_answered(),
+            "a slot whose caller has been answered must let the next baseline go out"
+        );
     }
 
     #[test]

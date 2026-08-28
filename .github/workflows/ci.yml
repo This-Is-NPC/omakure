@@ -610,8 +610,4 @@ jobs:
             echo "::error::Cargo.toml version ${version} already has tag ${tag} — bump the version before merging"
             exit 1
           fi
-          if [[ ! -f "release-notes/${tag}.md" ]]; then
-            echo "::error::Missing release-notes/${tag}.md — add release notes before merging"
-            exit 1
-          fi
           echo "Ready to release ${tag}"

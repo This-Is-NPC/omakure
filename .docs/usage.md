@@ -153,6 +153,39 @@ Cue-origin runs execute with an explicit deny-all secret policy, and a script
 whose schema declares a secret field is refused at the gate rather than run
 without its secrets. See `remote-cue-contract.md`.
 
+## Manual enrollment
+
+The other way into a fleet, and the one that needs a human at both ends. It is
+gated by `trust.enrollment = "manual"`; with the shipped `"disabled"` the
+commands below are refused and the node keeps serving.
+
+The joining node makes the offer, naming what it wants to be:
+
+```bash
+omakure node enroll request --endpoint 10.0.0.5:7879 \
+  --role performer --capability inventory-health --lifetime-seconds 3600
+```
+
+That prints a `request_hex` and a **code**. The receiving node stores only the
+code's hash and compares it in constant time, so holding the request bytes is
+not enough to approve them — the code has to arrive by some other channel, which
+is the point: it is what a person confirms out of band.
+
+On the receiving node:
+
+```bash
+omakure node enroll approve --request <request_hex> \
+  --transport-certificate <cert_hex> --code <code> \
+  --actor ops --reason "new performer, ticket 412" --confirmed
+
+omakure node enroll reject <node_id> \
+  --actor ops --reason "unrecognised request" --confirmed
+```
+
+Both require `--confirmed`, an actor, and a reason, and both write an audit row.
+A rejection activates no trust. Pending requests are listed by
+`omakure node status` and over `GET /v1/node/enrollments`.
+
 ## Enrollment authority
 
 A fleet needs something that can say "this node belongs to me". That is an

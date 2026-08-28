@@ -1,5 +1,10 @@
 [tools]
-powershell = "latest"
+# PowerShell is deliberately not pinned. It is optional in the product --
+# `.ps1` is one of four script kinds and the node reports it unavailable
+# when absent -- and pinning "latest" resolved to a preview build that
+# aborts on every invocation, which the runtime probe then spawned once
+# per node process. Add a specific working version here if you need to
+# run `.ps1` scripts locally.
 rust = "1.97.1"
 
 [tasks.dev]

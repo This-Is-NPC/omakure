@@ -385,59 +385,21 @@ kept for seven days, and stalls rather than admitting a hole if a Signal goes
 missing - `gap` and the per-node `cursor` in the response say so explicitly.
 There are no subscriptions, webhooks, alerts, or user-defined Signal kinds.
 
-## Transport certification
+## Certification gates
 
-The repository's bounded Linux certification uses four isolated Compose services
-and production node listeners. It covers encrypted direct probes, malformed,
-oversized, downgraded, expired, forged, identity-mismatched, wrong-target,
-untrusted, and exact-replay ingress, durable redacted audits with unchanged
-registry-state snapshots, static-peer locator validation, partition/reconnect,
-revocation, identity reset/replacement, and the retained discovery/manual/
-signed-bundle suites.
+Two bounded Linux gates run the product against itself over real Compose
+topologies and production listeners, not mocks:
 
 ```bash
 mise run transport-certification
-```
-
-This is a development and CI gate, not a general fleet launcher. Nostr, remote
-campaigns and MDM are outside its scope.
-
-## Health Plane certification
-
-The Health Plane has its own bounded Linux gate over four independently stateful
-packaged nodes on one dedicated network — one Conductor, two Performers, and an
-untrusted adversary:
-
-```bash
 mise run health-plane-certification
 ```
 
-It proves Profile and Pulse over production Noise, fleet aggregation through
-both `omakure node health --json` and `GET /v1/node/health`, all three Signal
-kinds including one idempotent `run-completed` Signal from a real manual
-`omakure run`, `online` → `stale` → recovery across a real network partition,
-Health Plane persistence across a Conductor restart, immediate exclusion after
-revocation plus the bounded retention purge, identity replacement, corrupt-row
-quarantine and recovery, and the frozen retry budget over one continuously
-connected session.
-
-The adversarial matrix is injected over real production Noise sessions and
-covers wrong target (1104), future (1109), stale (1108), unknown field (1114),
-malformed (1102), oversized (1103), forged signature (1102), spoofed sender
-(1102), cross-session binding (1110), replayed `message_id` (1110), non-increasing
-Profile revision and Pulse sequence (1110), reordering past the buffer (1111),
-inbox overflow (1113), flood (1112), missing capability (1106), wrong role
-(1105), and revocation on a live session (1107), plus corrupt stored state
-(1115). Each case asserts the exact stable code and the frozen reply policy.
-Durable redacted audit rows are asserted for the cases the contract requires
-them for, and trust and health state are asserted unchanged across the matrix
-as a whole rather than after every individual case.
-
-Management HTTP binds loopback inside each container and is never published, so
-it cannot be the node-to-node data path; the gate asserts that directly. Nostr,
-dashboards, alerting, and arbitrary metrics are all outside its scope; baseline
-push, drift, and rollback are proved separately on the packaged image by the
-`docker-smoke` job.
+The first certifies direct transport and enrolment; the second certifies the
+Health Plane over four independently stateful nodes. What each one builds and
+exactly which cases it covers is in `deployment.md`, under the two
+certification-topology sections, so the coverage lists have one home rather
+than two that drift.
 
 ## Scheduling and local lifecycle
 

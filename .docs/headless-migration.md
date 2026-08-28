@@ -46,6 +46,29 @@ the source of truth for the current command surface.
 
 The run database remains `.history/runs.sqlite` and the workspace environment
 layout remains `.omakure/envs/`. The release package is now one binary per
-platform; it does not contain themes, widgets, or workspace scripts. Back up
-workspace state before upgrading because the existing run-state migration and
-legacy JSON cleanup are destructive as documented in `ai-interface.md`.
+platform; it does not contain themes, widgets, or workspace scripts. Back up workspace state before upgrading: the run-state
+migration and the legacy JSON cleanup are destructive, as follows.
+
+### Destructive upgrade cleanups
+
+Upgrading to this version of `omakure` triggers **two destructive
+cleanups** on first launch against an existing workspace:
+
+1. Every top-level `*.json` file in `<workspace>/.history/` is deleted
+   (legacy per-run JSON history layout from pre-v0.1 releases).
+2. If `<workspace>/.history/runs.sqlite` exists with the v0.1 schema
+   (i.e. the `runs` table has no `state` column), the table is
+   **dropped and recreated** with the new state-machine schema. Every
+   row in the legacy table is lost.
+
+Both cleanups are intentionally narrow:
+
+- only top-level files in `history_dir()` are touched by the JSON cleanup
+- only files whose extension is exactly `.json`
+- subdirectories and `search-index.sqlite`
+  are left untouched
+- the schema rebuild only drops and recreates the `runs` and
+  `run_traces` tables — not the database file or any other table
+
+If you care about historical run data from older releases, **back up
+`<workspace>/.history/` before upgrading**.

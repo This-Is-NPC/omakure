@@ -172,30 +172,6 @@ log must `execve` the omakure binary, which means it goes through
 clap argument parsing, the typed `runs.rs` helpers, and the JSON
 envelope contract. There is no "write a row directly" path.
 
-## Destructive upgrade notice
-
-Upgrading to this version of `omakure` triggers **two destructive
-cleanups** on first launch against an existing workspace:
-
-1. Every top-level `*.json` file in `<workspace>/.history/` is deleted
-   (legacy per-run JSON history layout from pre-v0.1 releases).
-2. If `<workspace>/.history/runs.sqlite` exists with the v0.1 schema
-   (i.e. the `runs` table has no `state` column), the table is
-   **dropped and recreated** with the new state-machine schema. Every
-   row in the legacy table is lost.
-
-Both cleanups are intentionally narrow:
-
-- only top-level files in `history_dir()` are touched by the JSON cleanup
-- only files whose extension is exactly `.json`
-- subdirectories and `search-index.sqlite`
-  are left untouched
-- the schema rebuild only drops and recreates the `runs` and
-  `run_traces` tables — not the database file or any other table
-
-If you care about historical run data from older releases, **back up
-`<workspace>/.history/` before upgrading**.
-
 ## JSON envelope
 
 Every `--json` payload uses the same envelope shape:

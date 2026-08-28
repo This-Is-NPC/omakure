@@ -94,7 +94,9 @@ fn dispatch_cue_via_service(
             "reason": args.reason,
             "wait_seconds": args.wait_seconds,
         }),
-        std::time::Duration::from_secs(u64::from(args.wait_seconds)),
+        crate::direct_service::dispatch_client_timeout(std::time::Duration::from_secs(u64::from(
+            args.wait_seconds,
+        ))),
     )
 }
 
@@ -211,7 +213,9 @@ fn push_baseline_via_service(
             "scripts": bodies.iter().map(|body| hex_of(body)).collect::<Vec<_>>(),
             "wait_seconds": args.wait_seconds,
         }),
-        std::time::Duration::from_secs(u64::from(args.wait_seconds)),
+        crate::direct_service::dispatch_client_timeout(std::time::Duration::from_secs(u64::from(
+            args.wait_seconds,
+        ))),
     )
 }
 
@@ -642,5 +646,44 @@ fn map_node_error(error: NodeError) -> OperationError {
         NodeError::Io(error) => {
             OperationError::new(OperationErrorCode::IoFailed, error.to_string())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// No wait-bounded command may set its own client timeout.
+    ///
+    /// `--wait-seconds` is the budget the *peer* is given to answer in. The
+    /// session thread waits a little longer than that before answering
+    /// `answered: false` itself, because silence is a designed verdict here and
+    /// something has to turn it into one. A client that closes the socket at
+    /// exactly `--wait-seconds` closes it before that verdict exists, and the
+    /// operator sees a transport error where the protocol has an answer -- the
+    /// precise case `answered: false` was built to report. The two timeouts are
+    /// derived from one rule so they cannot drift apart again.
+    #[test]
+    fn no_wait_bounded_command_gives_up_before_the_service_answers() {
+        let source = include_str!("node.rs");
+        assert!(
+            // Split so this test does not match its own source.
+            !source.contains(&format!(
+                "Duration::from_secs(u64::from(args.{}))",
+                "wait_seconds"
+            )),
+            "a wait-bounded command is timing its client on the peer's budget \
+             instead of on the service's own answer deadline"
+        );
+        assert_eq!(
+            source
+                .matches(&format!(
+                    "crate::direct_service::{}(",
+                    "dispatch_client_timeout"
+                ))
+                .count(),
+            2,
+            "the Cue and baseline pushes are the two wait-bounded commands that \
+             call this node's own service; a third one must derive its timeout \
+             the same way"
+        );
     }
 }

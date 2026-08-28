@@ -1963,7 +1963,7 @@ impl CueDispatcher {
         )?;
         // A little past the session thread's own deadline, so the answer it is
         // about to send wins over this timeout.
-        match answers.recv_timeout(wait + crate::direct_health::TICK * 2) {
+        match answers.recv_timeout(dispatch_answer_deadline(wait)) {
             Ok(outcome) => Ok(outcome),
             // The session ended, or it never got to us. Neither is a verdict.
             Err(_) => Ok(CueDispatchOutcome {
@@ -2050,7 +2050,7 @@ impl BaselineDispatcher {
         )?;
         // A little past the session thread's own deadline, so the answer it is
         // about to send wins over this timeout.
-        match answers.recv_timeout(wait + crate::direct_health::TICK * 2) {
+        match answers.recv_timeout(dispatch_answer_deadline(wait)) {
             Ok(outcome) => Ok(outcome),
             // The session ended, or it never got to us. Neither is a verdict.
             Err(_) => Ok(BaselinePushOutcome {
@@ -2070,6 +2070,28 @@ impl BaselineDispatcher {
             .map(|active| active.contains_key(peer_node_id))
             .unwrap_or(false)
     }
+}
+
+/// When the session thread stops waiting for a peer's answer to a `wait`-bounded
+/// dispatch, and answers the caller itself.
+///
+/// A little past the budget the caller asked for, so the answer the thread is
+/// about to send wins over the budget that asked for it.
+pub fn dispatch_answer_deadline(wait: Duration) -> Duration {
+    wait + crate::direct_health::TICK * 2
+}
+
+/// How long a client must be prepared to wait for that answer.
+///
+/// `answered: false` is a verdict, not a failure: a receiver that refused on
+/// trust, role, or capability says nothing at all, by design, and the session
+/// thread turns that silence into the answer at `dispatch_answer_deadline`. A
+/// client that gives up at the budget it asked for gives up *before* the answer
+/// to that budget exists, so the one outcome the silence rule is built to
+/// report arrives as an opaque transport error instead. A client has to outlast
+/// the thread it is waiting on.
+pub fn dispatch_client_timeout(wait: Duration) -> Duration {
+    dispatch_answer_deadline(wait) + crate::direct_health::TICK
 }
 
 /// Fail everything still queued for a peer when its session ends.
@@ -3647,6 +3669,34 @@ mod tests {
             spent.is_answered(),
             "a slot whose caller has been answered must let the next baseline go out"
         );
+    }
+
+    /// A client waiting on a `wait`-bounded dispatch must outlast the session
+    /// thread it is waiting on.
+    ///
+    /// The thread answers `answered: false` at `dispatch_answer_deadline`,
+    /// which is how the protocol's designed silence -- a receiver that refused
+    /// on trust, role, or capability says nothing at all -- becomes a verdict
+    /// an operator can read. A client that gives up at the budget it asked for
+    /// gives up before that verdict is produced, and reports a transport error
+    /// for the one case the rule exists to describe.
+    #[test]
+    fn a_dispatch_client_outlasts_the_session_thread_it_waits_on() {
+        for seconds in [0u64, 1, 2, 60, 120, 300, 3600] {
+            let wait = Duration::from_secs(seconds);
+            let answer = dispatch_answer_deadline(wait);
+            let client = dispatch_client_timeout(wait);
+            assert!(
+                answer > wait,
+                "the session thread must outlast the budget it is enforcing at {seconds}s: \
+                 answer={answer:?} wait={wait:?}"
+            );
+            assert!(
+                client > answer,
+                "the client must outlast the answer it is waiting for at {seconds}s: \
+                 client={client:?} answer={answer:?}"
+            );
+        }
     }
 
     #[test]

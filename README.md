@@ -2,6 +2,8 @@
   <img src="docs/assets/brand/omakure-header.gif" width="1200" alt="Animated Omakure wordmark: connected pixel nodes pulse, form an X, merge into the letter O, and fan open into OMAKURE">
 </p>
 
+> ### *Scripts, nodes... and control.*
+
 Omakure is a headless automation runner with authenticated node-to-node
 coordination. It runs ordinary Bash, PowerShell, Python, and embedded Lua
 scripts, then keeps queue state, run history, and structured traces in local

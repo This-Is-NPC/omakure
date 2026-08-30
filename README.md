@@ -4,90 +4,200 @@
 
 > ### *Scripts, nodes... and control.*
 
-Omakure is a headless automation runner with authenticated node-to-node
-coordination. It runs ordinary Bash, PowerShell, Python, and embedded Lua
-scripts, then keeps queue state, run history, and structured traces in local
-SQLite. The machine-owned `omakure node serve` process combines the management
-API, optional workers, the scheduler, identity, trust, and direct transport.
+Omakure is a self-hosted remote operations layer for managing a fleet of
+computers over a secure peer-to-peer mesh.
 
-It is deliberately smaller than an MDM. Omakure provides the execution and
-trust layer; each organization still decides what its operations actually do.
+Distribute approved automation, run remote maintenance, monitor operational
+status, and audit executions across Linux, macOS, and Windows.
 
-## Three planes, one trusted session
+## How it works
 
-![A six-step animation showing a Conductor and Performer sharing one authenticated session for Health reports, signed Baseline delivery, a declared Remote Cue, and the resulting audit trail](docs/assets/three-planes-one-session.gif)
+Computers connect directly over authenticated, encrypted sessions. No fixed
+coordination server is required, and every relationship defines what each peer
+is allowed to request or report.
 
-One authenticated direct session carries three separate application planes:
+The protocol gives each participant a clear responsibility:
 
-| Plane | Direction | Responsibility |
+| Role | Protocol term | Responsibility |
 |---|---|---|
-| **Health** | Performer to Conductor | Reports bounded current facts, liveness, run outcomes, and Baseline state. |
-| **Cue** | Conductor to Performer | Names one script the receiving node already declared as remotely runnable. |
-| **Baseline** | Publisher through Conductor to Performer | Delivers a signed, versioned script set under two independent authorities. |
+| **Control node** | Conductor | Monitors managed computers, requests approved operations, and delivers signed automation releases. |
+| **Managed computer** | Performer | Reports current status, validates incoming requests, and runs local automation. |
+| **Signing authority** | Publisher | Signs the exact automation files approved for distribution. |
 
-The planes share transport but not authority. A Conductor may ask. A Publisher
-may sign code. A Performer decides which peers, publishers, and scripts it
-accepts. [Read the fleet model](docs/fleet-model.md).
+A computer can control some peers while being managed by another. Its role is
+defined by each trust relationship, not permanently assigned to the machine.
 
-## A Cue names. It never carries code.
+![A six-step animation showing a control node and managed computer sharing one authenticated session for fleet status, signed automation delivery, a remote operation, and its audit trail](docs/assets/three-planes-one-session.gif)
 
-![A six-step animation showing a Remote Cue crossing an authenticated session, passing receiver-owned authorization gates, binding to a local script hash, executing at most once without secrets, and returning a run-completed Signal](docs/assets/cue-names-never-carries.gif)
+One authenticated session supports three independent workflows:
 
-A Cue contains no script body, arguments, environment, secret, or working
-directory. The receiver verifies the session, reads trust and capabilities from
-its own registry, resolves its own allow-list, binds the authorized content hash,
-and executes the local bytes at most once. A script with secret-bearing fields is
-refused before it becomes a run.
+| Workflow | Protocol name | Purpose |
+|---|---|---|
+| **Fleet status** | Health | Reports liveness, runtime availability, recent outcomes, and the state of installed automation. |
+| **Remote operation** | Cue | Requests an operation the managed computer already has and has explicitly approved. |
+| **Signed automation delivery** | Baseline | Installs a signed, versioned set of automation files as one atomic release. |
 
-The immediate acknowledgement and eventual `run-completed` Signal are separate,
-so dispatch remains bounded while the outcome stays correlated by run ID. See
-[Remote Cues](docs/usage.md#remote-cues) and the
-[implemented contract](docs/internal/remote-cue-contract.md).
+## Remote operations run approved code
 
-## What ships today
+![A six-step animation showing a remote operation request crossing an authenticated session, passing local authorization checks, binding to an approved script, executing at most once, and reporting the result](docs/assets/cue-names-never-carries.gif)
 
-| Area | Current behavior |
+A remote request identifies an operation by name. It does not contain source
+code, arguments, environment values, secrets, or a working directory. The
+managed computer checks its own permissions and allow-list, binds the request to
+the exact local file, executes it at most once, and returns a bounded outcome.
+
+New automation follows a separate path. A signed automation release is verified
+and installed as a complete set, while a local operator can inspect and install
+selected scripts from an automation repository. Software delivery and execution
+remain separate operations.
+
+## Built around scripts
+
+Operations are ordinary Bash, PowerShell, Python, or embedded Lua scripts. Each
+script can declare typed inputs, outputs, tags, secrets, and an optional cron
+schedule through an embedded JSON schema.
+
+The same execution path serves direct runs, local queues, schedules, the HTTP
+API, and approved remote requests. Timeouts, cancellation, redaction, history,
+and structured traces behave consistently across every entry point.
+
+## Available today
+
+| Area | Capabilities |
 |---|---|
-| Scripts | `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`; Lua 5.4 is embedded. |
-| Execution | Direct runs, local SQLite queue workers, cron scheduling, cancellation, timeout, redaction, history, and traces. |
-| Interfaces | Machine-readable CLI, stable JSON envelope, and authenticated HTTP management API over shared operations. |
-| Nodes | Persistent machine identity, explicit trust and capabilities, revocation, LAN discovery, manual enrollment, and signed-bundle enrollment. |
-| Transport | Authenticated encrypted direct sessions with replay limits and redacted audit outcomes. |
-| Fleet | Current Health projection, authorized Remote Cues, signed Baseline delivery, drift detection, and verified local rollback. |
-| Batteries | External script repositories that remain untrusted until a local install validates and copies a selected script. |
+| **Fleet coordination** | Persistent machine identity, explicit trust, enrollment, revocation, LAN discovery, current status, and remote operations. |
+| **Automation delivery** | Signed versioned releases, atomic installation, drift detection, and verified local rollback. |
+| **Execution** | Direct runs, SQLite queues, concurrent workers, cron scheduling, cancellation, timeouts, redaction, history, and traces. |
+| **Interfaces** | Human-readable CLI, stable JSON responses, authenticated HTTP API, and the machine-owned `node serve` process. |
+| **Automation repositories** | Register, sync, inspect, validate, and locally install selected scripts with provenance on Unix systems. |
+| **Platforms** | Build and release targets for Linux, macOS, and Windows, with native platform adapters and scripts for host-specific operations. |
 
-Release and CI targets cover x86_64 Linux, macOS, and Windows. Linux also runs
-bounded multi-container transport and Health certification gates. Platform
-installer evidence is stated separately in [Installation](docs/installation.md)
-rather than inferred from a successful build.
+This supports software updates, VPN and certificate maintenance, backups,
+configuration changes, diagnostics, scheduled maintenance, and other operations
+defined by the scripts your organization approves.
 
-## Boundaries, on purpose
+Specialized operations such as lock, wipe, recovery, or host checks are also
+organization-owned scripts, not separate Omakure features. They can be maintained
+in a private automation repository and distributed through signed releases.
 
-- The run queue and detailed history are local SQLite state, not a distributed
-  queue or shared multi-host database.
-- Cue and Baseline dispatch target one peer at a time. Campaigns and fan-out are
-  not implemented.
-- Nostr transport is not implemented; the shipped node-to-node path is direct.
-- Omakure is not an MDM today. It does not provide device wipe, package
-  inventory, compliance scoring, configuration enforcement, or unattended
-  provisioning.
-- The official machine service runs as a restricted service account. Omakure
-  does not provide a privilege broker or built-in administrative elevation.
-- Remote Cues cannot introduce code or consume Omakure-managed secrets.
+The authenticated HTTP API also allows teams to build their own web, desktop,
+CI, or agent-driven control surfaces without coupling them to the runtime.
 
-These are product boundaries, not hidden roadmap claims. The exact privacy,
-authorization, retention, and size limits live in the implemented contracts
-under [`docs/internal/`](docs/internal/).
+## Security model
+
+Omakure answers four operational questions:
+
+- Which machine is this?
+- Which peer may request an operation?
+- Which exact script is approved to run?
+- What happened when it ran?
+
+Authorization belongs to the receiving computer. An encrypted connection proves
+who is connected, but it does not grant permission by itself. Trust, capabilities,
+approved scripts, signing authorities, and revocations are read from local state
+before an operation is accepted.
+
+Detailed output, traces, environment values, workspace paths, and secrets remain
+on the computer that ran the operation. Fleet status and completion reports carry
+only bounded operational data.
+
+> Omakure audits operations, not people.
+
+## Deployment patterns
+
+Omakure does not require a single topology. The same computer can be managed by
+one peer while controlling others. Every connection remains direct and keeps its
+own trust and permissions.
+
+### One central control node
+
+A single control node can operate a small or medium fleet. A separate signing
+authority approves the automation distributed through it.
+
+```mermaid
+flowchart TB
+    signing["Signing authority"] -->|approved releases| control["Central control node"]
+    control -->|remote operations| nodeA["Managed computer A"]
+    control -->|remote operations| nodeB["Managed computer B"]
+    control -->|remote operations| nodeC["Managed computer C"]
+    nodeA -->|status and outcomes| control
+    nodeB -->|status and outcomes| control
+    nodeC -->|status and outcomes| control
+```
+
+### Multiple control nodes
+
+Larger fleets can be split by team, site, network, or responsibility. Each
+control node manages its own computers, while the same signing authority can
+approve automation for every group.
+
+```mermaid
+flowchart TB
+    signing["Signing authority"] -->|approved releases| controlA["Control node A"]
+    signing -->|approved releases| controlB["Control node B"]
+
+    subgraph siteA["Site or team A"]
+        controlA -->|remote operations| nodeA1["Managed computer A1"]
+        controlA -->|remote operations| nodeA2["Managed computer A2"]
+        nodeA1 -->|status and outcomes| controlA
+        nodeA2 -->|status and outcomes| controlA
+    end
+
+    subgraph siteB["Site or team B"]
+        controlB -->|remote operations| nodeB1["Managed computer B1"]
+        controlB -->|remote operations| nodeB2["Managed computer B2"]
+        nodeB1 -->|status and outcomes| controlB
+        nodeB2 -->|status and outcomes| controlB
+    end
+```
+
+### Layered mesh
+
+A computer can report to an upstream control node and manage its own downstream
+group at the same time. This supports regional, site, or edge control without
+changing the protocol.
+
+```mermaid
+flowchart TB
+    root["Fleet control node"] -->|remote operations| regionA["Regional control node A"]
+    root -->|remote operations| regionB["Regional control node B"]
+    regionA -->|status and outcomes| root
+    regionB -->|status and outcomes| root
+
+    regionA -->|remote operations| edgeA1["Managed computer A1"]
+    regionA -->|remote operations| edgeA2["Managed computer A2"]
+    edgeA1 -->|status and outcomes| regionA
+    edgeA2 -->|status and outcomes| regionA
+
+    regionB -->|remote operations| edgeB1["Managed computer B1"]
+    regionB -->|remote operations| edgeB2["Managed computer B2"]
+    edgeB1 -->|status and outcomes| regionB
+    edgeB2 -->|status and outcomes| regionB
+```
+
+Each level sees and operates its directly trusted peers. Operations, status, and
+queues are not forwarded implicitly between levels.
+
+## Roadmap
+
+These are future directions, not current capabilities:
+
+- **Omakure Control:** organizations, groups of computers, fleet-wide campaigns,
+  access control, and a dedicated operations console.
+- **Provisioned systems:** ISO images that boot as managed computers, generate
+  their own identity, and enter the enrollment flow.
+- **Windows automation repositories:** install approved scripts from automation
+  repositories (Batteries) on Windows with the same validation, provenance, and
+  safe replacement guarantees available on Unix.
+- **Identity integration:** OIDC for the control console and optional integration
+  with machine login flows.
 
 ## Quick start
 
-Requirements for development are Rust, Git, Bash, and `jq`.
+Development requires Rust, Git, Bash, and `jq`. PowerShell and Python are needed
+only for scripts using those runtimes; Lua 5.4 is embedded in Omakure.
 
-- Optional PowerShell (`pwsh`) runs `.ps1` scripts.
-- Optional Python 3 runs `.py` scripts.
-- Lua needs no system interpreter because Lua 5.4 is embedded.
-
-Build this checkout and inspect the machine surface:
+Build the project and inspect the command surface:
 
 ```bash
 cargo build
@@ -96,7 +206,7 @@ cargo run --bin omakure -- --help
 cargo run --bin omakure -- help-ai
 ```
 
-Create and run a local script:
+Create and run a local operation:
 
 ```bash
 cargo run --bin omakure -- init hello.lua \
@@ -109,9 +219,6 @@ cargo run --bin omakure -- --json run hello.lua --actor local --reason smoke-tes
 cargo run --bin omakure -- --json history list --limit 5
 ```
 
-After installing a release, use `omakure doctor` to verify the workspace,
-required tools, optional runtimes, and every discovered script schema.
-
 Install the latest tagged release on Linux or macOS:
 
 ```bash
@@ -119,20 +226,19 @@ curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh
   | bash -s -- --repo This-Is-NPC/omakure
 ```
 
-Start with [CLI and HTTP usage](docs/usage.md) for local and multi-node
-workflows. Use [Deployment](docs/deployment.md) before exposing a node service.
+After installation, run `omakure doctor` to verify the workspace, required
+tools, optional runtimes, and discovered script schemas.
 
 ## Documentation
 
-- [Documentation map](docs/README.md)
 - [Fleet model](docs/fleet-model.md)
 - [CLI and HTTP usage](docs/usage.md)
 - [Installation and machine services](docs/installation.md)
-- [Deployment and security checklist](docs/deployment.md)
-- [Batteries](docs/batteries.md)
+- [Deployment and security](docs/deployment.md)
+- [Automation repositories](docs/batteries.md)
 - [Script authoring](docs/how-to-create-a-script.md)
 - [Architecture](docs/internal/architecture.md)
-- [Implemented requirements](docs/internal/requirements.md)
+- [Complete documentation map](docs/README.md)
 
 ## Validation
 
@@ -141,10 +247,6 @@ cargo test --all-targets --locked
 cargo clippy --all-targets --locked -- -D warnings
 cargo fmt --check
 ```
-
-The release archive contains only `omakure` or `omakure.exe`. Documentation
-assets and their editable sources stay in the repository, never in the runtime
-package.
 
 ## License
 

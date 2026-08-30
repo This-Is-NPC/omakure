@@ -18,6 +18,8 @@ pub mod run;
 pub mod search;
 pub mod serve;
 pub mod serve_autostart;
+#[cfg(windows)]
+pub(crate) mod serve_windows;
 pub mod token;
 pub mod trace;
 pub mod uninstall;

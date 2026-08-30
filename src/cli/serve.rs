@@ -17,6 +17,8 @@ use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::app_meta;
 use crate::cli::args::ServeArgs;
 use crate::cli::json::{self, codes};
+#[cfg(windows)]
+use crate::cli::serve_windows::{self, OpenEventError, ProcessProbe, StopEvent};
 use crate::domain::{next_fire_after, parse_cron};
 use crate::ports::ScriptRepository;
 use crate::runs::{self, EnqueueOptions, RunState, RunTrigger};
@@ -74,6 +76,7 @@ fn log_file(workspace: &Workspace) -> PathBuf {
 // Lock file
 // ---------------------------------------------------------------------------
 
+#[cfg(unix)]
 fn acquire_lock(workspace: &Workspace) -> Result<(), String> {
     let path = pid_file(workspace);
     if path.exists() {
@@ -99,10 +102,149 @@ fn acquire_lock(workspace: &Workspace) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(windows)]
+#[derive(PartialEq, Eq)]
+struct WindowsPidFile {
+    pid: u32,
+    stop_event: String,
+}
+
+#[cfg(windows)]
+struct WindowsLock {
+    identity: WindowsPidFile,
+    stop_event: StopEvent,
+}
+
+#[cfg(windows)]
+fn read_windows_pid_file(path: &Path) -> Result<WindowsPidFile, String> {
+    let contents =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    let mut lines = contents.lines();
+    let pid = lines
+        .next()
+        .ok_or_else(|| format!("{} is empty", path.display()))?
+        .trim()
+        .parse::<u32>()
+        .map_err(|error| format!("invalid PID in {}: {error}", path.display()))?;
+    let stop_event = lines
+        .next()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| format!("{} has no stop-event identity", path.display()))?
+        .to_string();
+    if !serve_windows::is_stop_event_name(&stop_event) {
+        return Err(format!("invalid stop-event identity in {}", path.display()));
+    }
+    Ok(WindowsPidFile { pid, stop_event })
+}
+
+#[cfg(windows)]
+fn remove_windows_pid_file_if_current(path: &Path, expected: &WindowsPidFile) {
+    if let Ok(current) = read_windows_pid_file(path) {
+        if &current != expected {
+            return;
+        }
+        let _ = fs::remove_file(path);
+    }
+}
+
+#[cfg(windows)]
+fn publish_windows_pid_file(path: &Path, identity: &WindowsPidFile) -> Result<(), String> {
+    let token = identity
+        .stop_event
+        .rsplit('-')
+        .next()
+        .ok_or_else(|| "stop-event identity has no publication token".to_string())?;
+    let temp_path = path.with_file_name(format!("daemon.pid.{token}.tmp"));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .map_err(|error| format!("create {}: {error}", temp_path.display()))?;
+        writeln!(file, "{}\n{}", identity.pid, identity.stop_event)
+            .and_then(|_| file.sync_all())
+            .map_err(|error| format!("flush {}: {error}", temp_path.display()))?;
+        drop(file);
+        serve_windows::publish_exclusive(&temp_path, path)
+            .map_err(|error| format!("publish {}: {error}", path.display()))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+#[cfg(windows)]
+fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, String> {
+    let path = pid_file(workspace);
+    if path.exists() {
+        let existing = read_windows_pid_file(&path)?;
+        match serve_windows::probe_process(existing.pid) {
+            ProcessProbe::Live(_process) => {
+                match serve_windows::open_stop_event(&existing.stop_event) {
+                    Ok(_event) => {
+                        return Err(format!(
+                            "daemon already running (pid {}, lock file {})",
+                            existing.pid,
+                            path.display()
+                        ));
+                    }
+                    Err(OpenEventError::NotFound) => {
+                        return Err(format!(
+                            "daemon pid {} is live but its stop event is unavailable; \
+                             refusing to reclaim {}",
+                            existing.pid,
+                            path.display()
+                        ));
+                    }
+                    Err(OpenEventError::Indeterminate(error)) => {
+                        return Err(format!(
+                            "cannot verify daemon pid {}: {error}; refusing to reclaim {}",
+                            existing.pid,
+                            path.display()
+                        ));
+                    }
+                }
+            }
+            ProcessProbe::Dead => {
+                remove_windows_pid_file_if_current(&path, &existing);
+            }
+            ProcessProbe::Indeterminate(error) => {
+                return Err(format!(
+                    "cannot determine whether daemon pid {} is live: {error}; refusing to reclaim {}",
+                    existing.pid,
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    let (stop_event_name, stop_event) = serve_windows::create_stop_event()?;
+    let identity = WindowsPidFile {
+        pid: std::process::id(),
+        stop_event: stop_event_name,
+    };
+    if let Err(error) = publish_windows_pid_file(&path, &identity) {
+        return Err(error);
+    }
+    Ok(WindowsLock {
+        identity,
+        stop_event,
+    })
+}
+
+#[cfg(unix)]
 fn release_lock(workspace: &Workspace) {
     let _ = fs::remove_file(pid_file(workspace));
 }
 
+#[cfg(windows)]
+fn release_lock(workspace: &Workspace, expected: &WindowsPidFile) {
+    remove_windows_pid_file_if_current(&pid_file(workspace), expected);
+}
+
+#[cfg(unix)]
 fn read_pid(path: &Path) -> Option<u32> {
     fs::read_to_string(path)
         .ok()
@@ -121,27 +263,16 @@ extern "C" {
     fn libc_kill(pid: i32, sig: i32) -> i32;
 }
 
-#[cfg(windows)]
-fn process_alive(_pid: u32) -> bool {
-    // On Windows we conservatively assume the PID file is stale if we ever
-    // fail to open it; the user can delete it manually. Good enough for v1.
-    true
-}
-
 #[cfg(unix)]
 fn send_sigterm(pid: u32) -> bool {
     unsafe { libc_kill(pid as i32, 15) == 0 }
-}
-
-#[cfg(windows)]
-fn send_sigterm(_pid: u32) -> bool {
-    false
 }
 
 // ---------------------------------------------------------------------------
 // Stop
 // ---------------------------------------------------------------------------
 
+#[cfg(unix)]
 fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let path = pid_file(workspace);
     let Some(pid) = read_pid(&path) else {
@@ -187,6 +318,89 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
         codes::INTERNAL,
         format!("daemon pid {pid} did not exit within {:?}", STOP_GRACE),
     )
+}
+
+#[cfg(windows)]
+fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
+    let path = pid_file(workspace);
+    let pid_file = match read_windows_pid_file(&path) {
+        Ok(pid_file) => pid_file,
+        Err(_error) if !path.exists() => {
+            return emit_error(
+                json_output,
+                codes::DAEMON_NOT_RUNNING,
+                format!("no daemon pid file at {}", path.display()),
+            );
+        }
+        Err(error) => {
+            return emit_error(
+                json_output,
+                codes::INTERNAL,
+                format!(
+                    "cannot determine daemon identity from {}: {error}",
+                    path.display()
+                ),
+            );
+        }
+    };
+
+    let process = match serve_windows::probe_process(pid_file.pid) {
+        ProcessProbe::Live(process) => process,
+        ProcessProbe::Dead => {
+            remove_windows_pid_file_if_current(&path, &pid_file);
+            return emit_error(
+                json_output,
+                codes::DAEMON_NOT_RUNNING,
+                format!(
+                    "stale pid file at {} (process {} is gone)",
+                    path.display(),
+                    pid_file.pid
+                ),
+            );
+        }
+        ProcessProbe::Indeterminate(error) => {
+            return emit_error(
+                json_output,
+                codes::INTERNAL,
+                format!(
+                    "cannot determine whether daemon pid {} is live: {error}",
+                    pid_file.pid
+                ),
+            );
+        }
+    };
+
+    if let Err(error) = serve_windows::signal_stop(&pid_file.stop_event) {
+        return emit_error(
+            json_output,
+            codes::INTERNAL,
+            format!("failed to signal daemon pid {}: {error}", pid_file.pid),
+        );
+    }
+    match process.wait(STOP_GRACE) {
+        Ok(true) => {
+            remove_windows_pid_file_if_current(&path, &pid_file);
+            if json_output {
+                json::print_ok(json!({ "stopped": pid_file.pid }));
+            } else {
+                println!("stopped daemon pid {}", pid_file.pid);
+            }
+            Ok(())
+        }
+        Ok(false) => emit_error(
+            json_output,
+            codes::INTERNAL,
+            format!(
+                "daemon pid {} did not exit within {:?}",
+                pid_file.pid, STOP_GRACE
+            ),
+        ),
+        Err(error) => emit_error(
+            json_output,
+            codes::INTERNAL,
+            format!("failed waiting for daemon pid {}: {error}", pid_file.pid),
+        ),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -247,12 +461,31 @@ fn run_foreground(
     args: ServeArgs,
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
+    #[cfg(unix)]
     if let Err(err) = acquire_lock(&workspace) {
         return emit_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
     }
-    let result = run_scheduler(workspace.clone_for_executor(), args, false);
-    release_lock(&workspace);
-    result
+    #[cfg(windows)]
+    let lock = match acquire_lock(&workspace) {
+        Ok(lock) => lock,
+        Err(err) => {
+            return emit_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
+        }
+    };
+    #[cfg(windows)]
+    let expected = lock.identity.clone();
+    #[cfg(unix)]
+    {
+        let result = run_scheduler(workspace.clone_for_executor(), args, false);
+        release_lock(&workspace);
+        result
+    }
+    #[cfg(windows)]
+    {
+        let result = run_scheduler(workspace.clone_for_executor(), args, false, lock.stop_event);
+        release_lock(&workspace, &expected);
+        result
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +496,7 @@ fn run_scheduler(
     workspace: Workspace,
     args: ServeArgs,
     locked_by_daemonize: bool,
+    #[cfg(windows)] stop_event: StopEvent,
 ) -> Result<(), Box<dyn Error>> {
     let cancel_flag = Arc::new(AtomicBool::new(false));
     crate::cli::queue::install_signal_handlers(Arc::clone(&cancel_flag));
@@ -290,6 +524,14 @@ fn run_scheduler(
         if cancel_flag.load(Ordering::SeqCst) {
             break;
         }
+        #[cfg(windows)]
+        if stop_event
+            .is_signaled()
+            .map_err(|error| std::io::Error::other(format!("check stop event: {error}")))?
+        {
+            cancel_flag.store(true, Ordering::SeqCst);
+            break;
+        }
         let tick_start = Utc::now();
         match scheduler_tick(&workspace, tick_start) {
             Ok(fired) => {
@@ -308,6 +550,14 @@ fn run_scheduler(
         let deadline = std::time::Instant::now() + SCAN_INTERVAL;
         while std::time::Instant::now() < deadline {
             if cancel_flag.load(Ordering::SeqCst) {
+                break;
+            }
+            #[cfg(windows)]
+            if stop_event
+                .is_signaled()
+                .map_err(|error| std::io::Error::other(format!("check stop event: {error}")))?
+            {
+                cancel_flag.store(true, Ordering::SeqCst);
                 break;
             }
             thread::sleep(Duration::from_millis(200));
@@ -727,6 +977,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn acquire_lock_rejects_when_live_pid_present() {
         let tmp = TempDir::new().unwrap();
@@ -738,6 +989,7 @@ mod tests {
         assert!(err.contains("daemon already running"), "was: {err}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn acquire_lock_reclaims_stale_pid() {
         let tmp = TempDir::new().unwrap();
@@ -747,5 +999,121 @@ mod tests {
         fs::write(pid_file(&ws), "999999999").unwrap();
         acquire_lock(&ws).expect("stale PID should be reclaimed");
         release_lock(&ws);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_acquire_lock_reclaims_dead_pid_with_event_identity() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        fs::write(
+            pid_file(&ws),
+            "4294967295\nLocal\\OmakureServeStop-00000000000000000000000000000000\n",
+        )
+        .unwrap();
+
+        let event = acquire_lock(&ws).expect("dead PID should be reclaimed");
+        release_lock(&ws);
+        drop(event);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_malformed_or_partial_pid_files_are_preserved() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let path = pid_file(&ws);
+
+        for contents in [
+            "",
+            "1234\n",
+            "not-a-pid\nLocal\\OmakureServeStop-00000000000000000000000000000000\n",
+            "1234\nnot-an-event\n",
+        ] {
+            fs::write(&path, contents).unwrap();
+            assert!(
+                acquire_lock(&ws).is_err(),
+                "invalid PID file must not be accepted: {contents:?}"
+            );
+            assert_eq!(fs::read_to_string(&path).unwrap(), contents);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_release_does_not_delete_a_replacement_identity() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let old = WindowsPidFile {
+            pid: 100,
+            stop_event: "Local\\OmakureServeStop-00000000000000000000000000000001".to_string(),
+        };
+        let replacement = WindowsPidFile {
+            pid: 200,
+            stop_event: "Local\\OmakureServeStop-00000000000000000000000000000002".to_string(),
+        };
+        fs::write(
+            pid_file(&ws),
+            format!("{}\n{}\n", replacement.pid, replacement.stop_event),
+        )
+        .unwrap();
+
+        release_lock(&ws, &old);
+
+        assert_eq!(read_windows_pid_file(&pid_file(&ws)).unwrap(), replacement);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_release_deletes_only_the_published_identity() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let identity = WindowsPidFile {
+            pid: 300,
+            stop_event: "Local\\OmakureServeStop-00000000000000000000000000000003".to_string(),
+        };
+        fs::write(
+            pid_file(&ws),
+            format!("{}\n{}\n", identity.pid, identity.stop_event),
+        )
+        .unwrap();
+
+        release_lock(&ws, &identity);
+
+        assert!(!pid_file(&ws).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_pid_publication_is_complete_and_exclusive() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let identity = WindowsPidFile {
+            pid: 400,
+            stop_event: "Local\\OmakureServeStop-00000000000000000000000000000004".to_string(),
+        };
+
+        publish_windows_pid_file(&pid_file(&ws), &identity).unwrap();
+
+        assert_eq!(read_windows_pid_file(&pid_file(&ws)).unwrap(), identity);
+        assert!(!pid_file(&ws)
+            .with_file_name("daemon.pid.00000000000000000000000000000004.tmp")
+            .exists());
+
+        let replacement = WindowsPidFile {
+            pid: 401,
+            stop_event: "Local\\OmakureServeStop-00000000000000000000000000000005".to_string(),
+        };
+        let result = publish_windows_pid_file(&pid_file(&ws), &replacement);
+        assert!(result.is_err(), "publication must retain exclusive startup");
+        assert_eq!(read_windows_pid_file(&pid_file(&ws)).unwrap(), identity);
+        assert!(!pid_file(&ws)
+            .with_file_name("daemon.pid.00000000000000000000000000000005.tmp")
+            .exists());
     }
 }

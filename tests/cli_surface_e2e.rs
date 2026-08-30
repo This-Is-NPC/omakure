@@ -3,8 +3,14 @@ mod support;
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+#[cfg(windows)]
+use std::process::Command;
 use std::process::Output;
+#[cfg(windows)]
+use std::thread;
 use std::time::Duration;
+#[cfg(windows)]
+use std::time::Instant;
 
 // Coverage-guarantee boundary (read before trusting this inventory):
 //
@@ -560,6 +566,98 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
         assert_success(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage"));
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn serve_stop_gracefully_stops_a_foreground_process() {
+    let workspace = support::TestWorkspace::new("serve_stop");
+    let pid_path = workspace.path().join(".omakure").join("daemon.pid");
+    let mut serve = support::omakure_command();
+    serve
+        .arg("--scripts-dir")
+        .arg(workspace.path())
+        .args(["serve", "--no-worker"]);
+    let mut child = serve.spawn().expect("start foreground serve");
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while (!pid_path.exists()
+        || fs::read_to_string(&pid_path)
+            .map(|contents| contents.lines().count() < 2)
+            .unwrap_or(true))
+        && Instant::now() < deadline
+    {
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        fs::read_to_string(&pid_path)
+            .map(|contents| contents.lines().count() >= 2)
+            .unwrap_or(false),
+        "serve did not publish a complete PID file"
+    );
+
+    let stop = omakure(workspace.path(), &["serve", "--stop"]);
+    if !stop.status.success() {
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!(
+            "expected successful serve --stop, status: {:?}, stderr: {}",
+            stop.status.code(),
+            String::from_utf8_lossy(&stop.stderr)
+        );
+    }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while child.try_wait().expect("poll foreground serve").is_none() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        child
+            .try_wait()
+            .expect("poll stopped foreground serve")
+            .is_some(),
+        "serve did not exit after --stop"
+    );
+    assert!(!pid_path.exists(), "stopped serve left its PID file behind");
+}
+
+#[cfg(windows)]
+#[test]
+fn serve_stop_refuses_a_live_unrelated_pid_and_preserves_the_file() {
+    let workspace = support::TestWorkspace::new("serve_stop_unrelated");
+    let pid_path = workspace.path().join(".omakure").join("daemon.pid");
+    fs::create_dir_all(pid_path.parent().expect("PID parent")).expect("create metadata dir");
+
+    let mut unrelated = Command::new("cmd")
+        .args(["/C", "ping -n 20 127.0.0.1 >NUL"])
+        .spawn()
+        .expect("start unrelated process");
+    fs::write(
+        &pid_path,
+        format!(
+            "{}\nLocal\\OmakureServeStop-00000000000000000000000000000000\n",
+            unrelated.id()
+        ),
+    )
+    .expect("write test PID file");
+
+    let stop = omakure(workspace.path(), &["serve", "--stop"]);
+    assert!(
+        !stop.status.success(),
+        "stop must reject a live PID without the daemon event"
+    );
+    assert!(
+        unrelated
+            .try_wait()
+            .expect("poll unrelated process")
+            .is_none(),
+        "stop must not terminate an unrelated process"
+    );
+    assert!(
+        pid_path.exists(),
+        "indeterminate PID file must be preserved"
+    );
+    let _ = unrelated.kill();
+    let _ = unrelated.wait();
 }
 
 /// `node baseline` end to end at the CLI: a key, a signed manifest, and a push

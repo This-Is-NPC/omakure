@@ -1,0 +1,14 @@
+[Unit]
+Description=Omakure VM certification fixed root operation
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/libexec/omakure-certified-root-operation
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/omakure-certified-root
+RestrictSUIDSGID=true

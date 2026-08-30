@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+effect_dir=/var/lib/omakure-certified-root
+effect_file="$effect_dir/effects.log"
+
+[[ "$(id -u)" == 0 ]] || {
+    printf 'certified root operation refused non-root execution\n' >&2
+    exit 1
+}
+
+printf 'uid=0 operation=fixed timestamp=%(%s)T\n' -1 >>"$effect_file"
+chmod 0600 "$effect_file"

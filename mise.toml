@@ -54,3 +54,15 @@ run = "cargo install --path ."
 [tasks.coverage]
 description = "Run tests with tarpaulin and generate HTML coverage report"
 run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/update.rs' --skip-clean"
+
+[tasks.vm-privilege-certification-static]
+description = "Validate the Fedora VM privilege certification harness and fixed policy fixtures"
+run = "./.scripts/fedora-vm-privilege-certification-static-test.sh"
+
+[tasks.vm-privilege-certification]
+description = "Run the manual KVM/libvirt Fedora privilege certification and clean up all run resources"
+run = "./.scripts/fedora-vm-privilege-certification-static-test.sh && timeout --foreground --kill-after=30s 30m ./.scripts/fedora-vm-privilege-certification.sh"
+
+[tasks.vm-privilege-certification-cleanup]
+description = "Induce a Fedora VM certification failure and prove complete libvirt cleanup"
+run = "timeout --foreground --kill-after=30s 25m ./.scripts/fedora-vm-privilege-certification-cleanup-test.sh"

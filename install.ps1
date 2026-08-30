@@ -259,7 +259,17 @@ if (-not $Version) {
   exit 1
 }
 
-$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "aarch64" } else { "x86_64" }
+$processorArchitecture = if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
+  $env:PROCESSOR_ARCHITEW6432
+} else {
+  $env:PROCESSOR_ARCHITECTURE
+}
+$arch = switch ($processorArchitecture.ToUpperInvariant()) {
+  "ARM64" { "aarch64"; break }
+  "AMD64" { "x86_64"; break }
+  "X86" { "x86_64"; break }
+  default { throw "Unsupported architecture: $processorArchitecture" }
+}
 $asset = "omakure-$Version-windows-$arch.zip"
 $url = "https://github.com/$Repo/releases/download/$Version/$asset"
 

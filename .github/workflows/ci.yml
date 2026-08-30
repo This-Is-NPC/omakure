@@ -15,18 +15,52 @@ jobs:
           - name: Linux headless test and release build
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            musl: false
+            rustflags: ""
+          - name: Linux musl static release build
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            musl: true
+            rustflags: ""
+          - name: Linux ARM64 headless test and release build
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            musl: false
+            rustflags: ""
+          - name: Linux ARM64 musl static release build
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            musl: true
+            rustflags: ""
           - name: macOS headless test and release build
-            os: macos-latest
+            os: macos-15-intel
             target: x86_64-apple-darwin
+            musl: false
+            rustflags: ""
+          - name: macOS ARM64 headless test and release build
+            os: macos-15
+            target: aarch64-apple-darwin
+            musl: false
+            rustflags: ""
           - name: Windows headless test and release build
             os: windows-latest
             target: x86_64-pc-windows-msvc
+            musl: false
+            rustflags: "-C target-feature=+crt-static"
+          - name: Windows ARM64 headless test and release build
+            os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            musl: false
+            rustflags: "-C target-feature=+crt-static"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
+      - name: Install musl toolchain
+        if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       # The Unix SIGTERM integration test is cfg(unix); Windows still runs the
       # readiness and process-boundary tests and gets the same release build.
       - name: Test headless binary
@@ -50,7 +84,7 @@ jobs:
           --test health_plane_signals --test health_plane_transport_e2e
           --test health_plane_feasibility --locked
       - name: Compile platform-specific node security paths
-        if: matrix.target == 'x86_64-pc-windows-msvc'
+        if: contains(matrix.target, 'windows')
         run: cargo check --all-targets --locked
       # The MSVC release artifact is built with `+crt-static`
       # (.github/workflows/release.yml), but nothing in CI carried those flags.
@@ -59,8 +93,40 @@ jobs:
       # them. Build the same way here.
       - name: Build release binary
         env:
-          RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
+          RUSTFLAGS: ${{ matrix.rustflags }}
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
+      - name: Verify musl binary is statically linked
+        if: matrix.musl
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="target/${{ matrix.target }}/release/omakure"
+          compiler_machine="$(musl-gcc -dumpmachine)"
+          case "${{ matrix.target }}" in
+            x86_64-*) [[ "${compiler_machine}" == *x86_64* ]] ;;
+            aarch64-*) [[ "${compiler_machine}" == *aarch64* ]] ;;
+            *) echo "unexpected musl target: ${{ matrix.target }}" >&2; exit 1 ;;
+          esac
+          file_output="$(file "${binary}")"
+          echo "${file_output}"
+          grep -qi 'statically linked' <<<"${file_output}"
+          case "${{ matrix.target }}" in
+            x86_64-*) grep -Eqi 'x86-64|x86_64' <<<"${file_output}" ;;
+            aarch64-*) grep -Eqi 'aarch64|ARM' <<<"${file_output}" ;;
+          esac
+          ! readelf -l "${binary}" | grep -q 'INTERP'
+      - name: Run native release binary smoke test
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            target/${{ matrix.target }}/release/omakure.exe --version
+          else
+            target/${{ matrix.target }}/release/omakure --version
+          fi
 
   lint:
     runs-on: ubuntu-latest

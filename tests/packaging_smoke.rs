@@ -460,7 +460,14 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
 fn release_workflows_build_and_package_only_the_headless_binary() {
     let ci = read(".github/workflows/ci.yml");
     assert!(ci.contains("branches: [test, master]"));
-    for platform in ["ubuntu-latest", "macos-latest", "windows-latest"] {
+    for platform in [
+        "ubuntu-latest",
+        "ubuntu-24.04-arm",
+        "macos-15-intel",
+        "macos-15",
+        "windows-latest",
+        "windows-11-arm",
+    ] {
         assert!(ci.contains(platform), "CI matrix must include {platform}");
     }
     assert!(ci.contains("cargo test --all-targets"));
@@ -473,6 +480,117 @@ fn release_workflows_build_and_package_only_the_headless_binary() {
     assert!(release.contains("archive contains only the headless binary"));
     assert!(release.contains("omakure.exe"));
     assert!(!release.contains("themes/") && !release.contains("tui/"));
+    assert!(!ci.contains("macos-14"));
+    assert!(!release.contains("macos-14"));
+}
+
+#[derive(Debug, PartialEq)]
+struct ReleaseMatrixTuple {
+    runner: String,
+    target: String,
+    asset_os: String,
+    asset_arch: String,
+}
+
+fn release_matrix_tuples(workflow: &str) -> Vec<ReleaseMatrixTuple> {
+    let mut tuples = Vec::new();
+    let mut current: Option<ReleaseMatrixTuple> = None;
+
+    for line in workflow.lines() {
+        if let Some(runner) = line.strip_prefix("          - os: ") {
+            if let Some(tuple) = current.take() {
+                tuples.push(tuple);
+            }
+            current = Some(ReleaseMatrixTuple {
+                runner: runner.to_string(),
+                target: String::new(),
+                asset_os: String::new(),
+                asset_arch: String::new(),
+            });
+        } else if let Some(tuple) = current.as_mut() {
+            if let Some(target) = line.strip_prefix("            target: ") {
+                tuple.target = target.to_string();
+            } else if let Some(asset_os) = line.strip_prefix("            asset_os: ") {
+                tuple.asset_os = asset_os.to_string();
+            } else if let Some(asset_arch) = line.strip_prefix("            asset_arch: ") {
+                tuple.asset_arch = asset_arch.to_string();
+            }
+        }
+    }
+    if let Some(tuple) = current {
+        tuples.push(tuple);
+    }
+    tuples
+}
+
+#[test]
+fn release_matrix_associates_every_target_with_its_asset_and_runner() {
+    let workflow = read(".github/workflows/release.yml");
+    let expected = vec![
+        ReleaseMatrixTuple {
+            runner: "ubuntu-latest".to_string(),
+            target: "x86_64-unknown-linux-gnu".to_string(),
+            asset_os: "linux".to_string(),
+            asset_arch: "x86_64".to_string(),
+        },
+        ReleaseMatrixTuple {
+            runner: "ubuntu-latest".to_string(),
+            target: "x86_64-unknown-linux-musl".to_string(),
+            asset_os: "linux-musl".to_string(),
+            asset_arch: "x86_64".to_string(),
+        },
+        ReleaseMatrixTuple {
+            runner: "ubuntu-24.04-arm".to_string(),
+            target: "aarch64-unknown-linux-gnu".to_string(),
+            asset_os: "linux".to_string(),
+            asset_arch: "aarch64".to_string(),
+        },
+        ReleaseMatrixTuple {
+            runner: "ubuntu-24.04-arm".to_string(),
+            target: "aarch64-unknown-linux-musl".to_string(),
+            asset_os: "linux-musl".to_string(),
+            asset_arch: "aarch64".to_string(),
+        },
+        ReleaseMatrixTuple {
+            runner: "macos-15-intel".to_string(),
+            target: "x86_64-apple-darwin".to_string(),
+            asset_os: "darwin".to_string(),
+            asset_arch: "x86_64".to_string(),
+        },
+        ReleaseMatrixTuple {
+            runner: "macos-15".to_string(),
+            target: "aarch64-apple-darwin".to_string(),
+            asset_os: "darwin".to_string(),
+            asset_arch: "aarch64".to_string(),
+        },
+        ReleaseMatrixTuple {
+            runner: "windows-latest".to_string(),
+            target: "x86_64-pc-windows-msvc".to_string(),
+            asset_os: "windows".to_string(),
+            asset_arch: "x86_64".to_string(),
+        },
+        ReleaseMatrixTuple {
+            runner: "windows-11-arm".to_string(),
+            target: "aarch64-pc-windows-msvc".to_string(),
+            asset_os: "windows".to_string(),
+            asset_arch: "aarch64".to_string(),
+        },
+    ];
+
+    assert_eq!(release_matrix_tuples(&workflow), expected);
+    assert!(workflow.contains("${{ matrix.asset_os }}-${{ matrix.asset_arch }}"));
+    assert!(workflow.contains("name: dist-${{ matrix.asset_os }}-${{ matrix.asset_arch }}"));
+    assert!(workflow.contains("Run native release binary smoke test"));
+    assert!(workflow.contains("Verify musl binary is statically linked"));
+    assert!(workflow.contains("musl-gcc -dumpmachine"));
+    assert!(workflow.contains("x86-64|x86_64"));
+    assert!(workflow.contains("aarch64|ARM"));
+    assert!(workflow.contains("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc"));
+    assert!(workflow.contains("windows-11-arm"));
+    assert!(
+        !workflow.contains("${{ matrix.asset_os }}-x86_64"),
+        "release archive names must not hardcode x86_64"
+    );
 }
 
 #[cfg(unix)]
@@ -511,6 +629,31 @@ fn the_installer_preference_and_the_release_matrix_name_the_same_static_asset() 
         installer.contains("download_optional"),
         "the preference must tolerate a release that predates the static \
          asset, rather than failing the install"
+    );
+    assert!(
+        installer.contains("case \"$(uname -m)\""),
+        "install.sh must select the asset architecture from the host"
+    );
+
+    let powershell = read("install.ps1");
+    assert!(
+        powershell.contains("PROCESSOR_ARCHITECTURE") && powershell.contains("windows-$arch.zip"),
+        "install.ps1 must select the matching Windows architecture asset"
+    );
+    for architecture in ["PROCESSOR_ARCHITEW6432", "ARM64", "AMD64", "X86"] {
+        assert!(
+            powershell.contains(architecture),
+            "install.ps1 must explicitly handle {architecture}"
+        );
+    }
+    assert!(
+        powershell.find("PROCESSOR_ARCHITEW6432").unwrap()
+            < powershell.find("PROCESSOR_ARCHITECTURE").unwrap(),
+        "install.ps1 must prefer the native architecture under WOW64"
+    );
+    assert!(
+        powershell.contains("Unsupported architecture"),
+        "install.ps1 must reject unknown architectures"
     );
 }
 

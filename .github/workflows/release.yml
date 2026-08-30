@@ -34,6 +34,7 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             asset_os: linux
+            asset_arch: x86_64
             ext: tar.gz
             bin: omakure
             rustflags: ""
@@ -42,18 +43,51 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             asset_os: linux-musl
+            asset_arch: x86_64
             ext: tar.gz
             bin: omakure
             rustflags: ""
-          - os: macos-latest
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset_os: linux
+            asset_arch: aarch64
+            ext: tar.gz
+            bin: omakure
+            rustflags: ""
+          # Native ARM64 musl build and smoke test. This is statically linked,
+          # so it runs on any ARM64 Linux regardless of the host glibc.
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            asset_os: linux-musl
+            asset_arch: aarch64
+            ext: tar.gz
+            bin: omakure
+            rustflags: ""
+          - os: macos-15-intel
             target: x86_64-apple-darwin
             asset_os: darwin
+            asset_arch: x86_64
+            ext: tar.gz
+            bin: omakure
+            rustflags: ""
+          - os: macos-15
+            target: aarch64-apple-darwin
+            asset_os: darwin
+            asset_arch: aarch64
             ext: tar.gz
             bin: omakure
             rustflags: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             asset_os: windows
+            asset_arch: x86_64
+            ext: zip
+            bin: omakure.exe
+            rustflags: "-C target-feature=+crt-static"
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            asset_os: windows
+            asset_arch: aarch64
             ext: zip
             bin: omakure.exe
             rustflags: "-C target-feature=+crt-static"
@@ -69,7 +103,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install musl toolchain
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: endsWith(matrix.target, '-unknown-linux-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Test headless binary
@@ -81,13 +115,41 @@ jobs:
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
           CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
+
+      - name: Verify musl binary is statically linked
+        if: endsWith(matrix.target, '-unknown-linux-musl')
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          compiler_machine="$(musl-gcc -dumpmachine)"
+          case "${{ matrix.target }}" in
+            x86_64-*) [[ "${compiler_machine}" == *x86_64* ]] ;;
+            aarch64-*) [[ "${compiler_machine}" == *aarch64* ]] ;;
+            *) echo "unexpected musl target: ${{ matrix.target }}" >&2; exit 1 ;;
+          esac
+          file_output="$(file "${binary}")"
+          echo "${file_output}"
+          grep -qi 'statically linked' <<<"${file_output}"
+          case "${{ matrix.target }}" in
+            x86_64-*) grep -Eqi 'x86-64|x86_64' <<<"${file_output}" ;;
+            aarch64-*) grep -Eqi 'aarch64|ARM' <<<"${file_output}" ;;
+          esac
+          ! readelf -l "${binary}" | grep -q 'INTERP'
+
+      - name: Run native release binary smoke test
+        shell: bash
+        run: target/${{ matrix.target }}/release/${{ matrix.bin }} --version
 
       - name: Package
         shell: bash
         run: |
           version="${RELEASE_TAG}"
-          out="${APP_NAME}-${version}-${{ matrix.asset_os }}-x86_64.${{ matrix.ext }}"
+          out="${APP_NAME}-${version}-${{ matrix.asset_os }}-${{ matrix.asset_arch }}.${{ matrix.ext }}"
           dist="dist"
           mkdir -p "${dist}"
           if [[ "${{ matrix.ext }}" == "zip" ]]; then
@@ -104,16 +166,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          archive="dist/${APP_NAME}-${RELEASE_TAG}-${{ matrix.asset_os }}-x86_64.${{ matrix.ext }}"
+          archive="dist/${APP_NAME}-${RELEASE_TAG}-${{ matrix.asset_os }}-${{ matrix.asset_arch }}.${{ matrix.ext }}"
           if [[ "${{ matrix.ext }}" == "zip" ]]; then
-            powershell -NoProfile -Command '$entries = (Get-ChildItem -Path (Join-Path (Get-Location) "dist\*.zip")).FullName | ForEach-Object { [IO.Compression.ZipFile]::OpenRead($_).Entries.FullName }; if ($entries.Count -ne 1 -or $entries[0] -ne "${{ matrix.bin }}") { throw "archive must contain only ${{ matrix.bin }}" }'
+            powershell -NoProfile -Command '$entries = [IO.Compression.ZipFile]::OpenRead("dist\${{ env.APP_NAME }}-${{ env.RELEASE_TAG }}-${{ matrix.asset_os }}-${{ matrix.asset_arch }}.${{ matrix.ext }}").Entries.FullName; if ($entries.Count -ne 1 -or $entries[0] -ne "${{ matrix.bin }}") { throw "archive must contain only ${{ matrix.bin }}" }'
           else
             test "$(tar -tzf "${archive}")" = "${{ matrix.bin }}"
           fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ matrix.asset_os }}
+          name: dist-${{ matrix.asset_os }}-${{ matrix.asset_arch }}
           path: dist/*
 
   transport-certification:

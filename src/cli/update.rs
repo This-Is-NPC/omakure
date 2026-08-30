@@ -92,7 +92,11 @@ fn fetch_latest_version(repo: &str) -> Result<String, Box<dyn Error>> {
 
 pub(crate) fn release_asset(version: &str) -> Result<String, Box<dyn Error>> {
     let os = if cfg!(target_os = "linux") {
-        "linux"
+        if cfg!(target_env = "musl") {
+            "linux-musl"
+        } else {
+            "linux"
+        }
     } else if cfg!(target_os = "macos") {
         "darwin"
     } else if cfg!(target_os = "windows") {
@@ -109,7 +113,20 @@ pub(crate) fn release_asset(version: &str) -> Result<String, Box<dyn Error>> {
         return Err("Unsupported architecture for update".into());
     };
 
-    let ext = if cfg!(windows) { "zip" } else { "tar.gz" };
+    release_asset_for(version, os, arch)
+}
+
+fn release_asset_for(version: &str, os: &str, arch: &str) -> Result<String, Box<dyn Error>> {
+    if !matches!(arch, "x86_64" | "aarch64") {
+        return Err(format!("Unsupported architecture for update: {arch}").into());
+    }
+
+    let ext = match os {
+        "linux" | "linux-musl" | "darwin" => "tar.gz",
+        "windows" => "zip",
+        _ => return Err(format!("Unsupported OS for update: {os}").into()),
+    };
+
     Ok(format!("omakure-{}-{}-{}.{}", version, os, arch, ext))
 }
 
@@ -409,11 +426,50 @@ mod tests {
         assert_eq!(normalize_version_tag(input), expected);
     }
 
+    #[rstest]
+    #[case("linux", "x86_64", "omakure-v0.1.8-linux-x86_64.tar.gz")]
+    #[case("linux", "aarch64", "omakure-v0.1.8-linux-aarch64.tar.gz")]
+    #[case("linux-musl", "x86_64", "omakure-v0.1.8-linux-musl-x86_64.tar.gz")]
+    #[case("linux-musl", "aarch64", "omakure-v0.1.8-linux-musl-aarch64.tar.gz")]
+    #[case("darwin", "x86_64", "omakure-v0.1.8-darwin-x86_64.tar.gz")]
+    #[case("darwin", "aarch64", "omakure-v0.1.8-darwin-aarch64.tar.gz")]
+    #[case("windows", "x86_64", "omakure-v0.1.8-windows-x86_64.zip")]
+    #[case("windows", "aarch64", "omakure-v0.1.8-windows-aarch64.zip")]
+    fn test_release_asset_selection(#[case] os: &str, #[case] arch: &str, #[case] expected: &str) {
+        assert_eq!(release_asset_for("v0.1.8", os, arch).unwrap(), expected);
+    }
+
+    #[rstest]
+    #[case("linux", "riscv64", "Unsupported architecture")]
+    #[case("linux", "armv7", "Unsupported architecture")]
+    #[case("freebsd", "x86_64", "Unsupported OS")]
+    fn test_release_asset_rejects_unknown_platform_values(
+        #[case] os: &str,
+        #[case] arch: &str,
+        #[case] expected_error: &str,
+    ) {
+        let error = release_asset_for("v0.1.8", os, arch).unwrap_err();
+        assert!(error.to_string().contains(expected_error));
+    }
+
     #[test]
-    fn test_release_asset_format() {
+    fn test_release_asset_uses_this_binarys_platform() {
         let asset = release_asset("v0.1.8").unwrap();
         assert!(asset.starts_with("omakure-v0.1.8-"));
-        assert!(asset.ends_with(".tar.gz") || asset.ends_with(".zip"));
+        if cfg!(target_os = "linux") && cfg!(target_env = "musl") {
+            assert!(asset.contains("-linux-musl-"));
+        } else if cfg!(target_os = "linux") {
+            assert!(asset.contains("-linux-"));
+        } else if cfg!(target_os = "macos") {
+            assert!(asset.contains("-darwin-"));
+        } else if cfg!(target_os = "windows") {
+            assert!(asset.contains("-windows-"));
+        }
+        if cfg!(target_arch = "x86_64") {
+            assert!(asset.contains("-x86_64."));
+        } else if cfg!(target_arch = "aarch64") {
+            assert!(asset.contains("-aarch64."));
+        }
     }
 
     #[test]

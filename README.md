@@ -1,4 +1,6 @@
-# Omakure
+<p align="center">
+  <img src="docs/assets/brand/omakure-header.gif" width="1200" alt="Animated Omakure wordmark: connected pixel nodes pulse, form an X, merge into the letter O, and fan open into OMAKURE">
+</p>
 
 Omakure is a headless automation runner with authenticated node-to-node
 coordination. It runs ordinary Bash, PowerShell, Python, and embedded Lua
@@ -10,6 +12,8 @@ It is deliberately smaller than an MDM. Omakure provides the execution and
 trust layer; each organization still decides what its operations actually do.
 
 ## Three planes, one trusted session
+
+![A six-step animation showing a Conductor and Performer sharing one authenticated session for Health reports, signed Baseline delivery, a declared Remote Cue, and the resulting audit trail](docs/assets/three-planes-one-session.gif)
 
 One authenticated direct session carries three separate application planes:
 
@@ -24,6 +28,8 @@ may sign code. A Performer decides which peers, publishers, and scripts it
 accepts. [Read the fleet model](docs/fleet-model.md).
 
 ## A Cue names. It never carries code.
+
+![A six-step animation showing a Remote Cue crossing an authenticated session, passing receiver-owned authorization gates, binding to a local script hash, executing at most once without secrets, and returning a run-completed Signal](docs/assets/cue-names-never-carries.gif)
 
 A Cue contains no script body, arguments, environment, secret, or working
 directory. The receiver verifies the session, reads trust and capabilities from
@@ -134,7 +140,9 @@ cargo clippy --all-targets --locked -- -D warnings
 cargo fmt --check
 ```
 
-The release archive contains only `omakure` or `omakure.exe`.
+The release archive contains only `omakure` or `omakure.exe`. Documentation
+assets and their editable sources stay in the repository, never in the runtime
+package.
 
 ## License
 

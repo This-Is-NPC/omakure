@@ -1293,6 +1293,99 @@ struct UnixOwner {
 }
 
 #[cfg(unix)]
+const PRINCIPAL_LOOKUP_BUFFER_LIMIT: usize = 1024 * 1024;
+
+#[cfg(unix)]
+fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError> {
+    if buffer.len() >= PRINCIPAL_LOOKUP_BUFFER_LIMIT {
+        return Err(NodeError::InsecurePath(
+            "configured node service principal lookup exceeded the supported size".to_string(),
+        ));
+    }
+    buffer.resize(
+        buffer
+            .len()
+            .saturating_mul(2)
+            .min(PRINCIPAL_LOOKUP_BUFFER_LIMIT),
+        0,
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, NodeError> {
+    use std::ptr;
+
+    let uid = {
+        let mut entry = unsafe { std::mem::zeroed::<libc::passwd>() };
+        let mut result = ptr::null_mut();
+        let mut buffer = vec![0_u8; 16 * 1024];
+        loop {
+            let status = unsafe {
+                libc::getpwnam_r(
+                    service_name.as_ptr(),
+                    &mut entry,
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len(),
+                    &mut result,
+                )
+            };
+            if status == libc::ERANGE {
+                grow_principal_lookup_buffer(&mut buffer)?;
+                continue;
+            }
+            if status != 0 {
+                return Err(NodeError::InsecurePath(format!(
+                    "failed to resolve configured node service principal: {}",
+                    io::Error::from_raw_os_error(status)
+                )));
+            }
+            if result.is_null() {
+                return Err(NodeError::InsecurePath(
+                    "configured node service principal does not exist".to_string(),
+                ));
+            }
+            break entry.pw_uid;
+        }
+    };
+
+    let gid = {
+        let mut entry = unsafe { std::mem::zeroed::<libc::group>() };
+        let mut result = ptr::null_mut();
+        let mut buffer = vec![0_u8; 16 * 1024];
+        loop {
+            let status = unsafe {
+                libc::getgrnam_r(
+                    service_name.as_ptr(),
+                    &mut entry,
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len(),
+                    &mut result,
+                )
+            };
+            if status == libc::ERANGE {
+                grow_principal_lookup_buffer(&mut buffer)?;
+                continue;
+            }
+            if status != 0 {
+                return Err(NodeError::InsecurePath(format!(
+                    "failed to resolve configured node service principal: {}",
+                    io::Error::from_raw_os_error(status)
+                )));
+            }
+            if result.is_null() {
+                return Err(NodeError::InsecurePath(
+                    "configured node service principal does not exist".to_string(),
+                ));
+            }
+            break entry.gr_gid;
+        }
+    };
+
+    Ok(UnixOwner { uid, gid })
+}
+
+#[cfg(unix)]
 fn owner_policy(
     platform: NodePlatform,
     custom_paths: bool,
@@ -1312,20 +1405,14 @@ fn owner_policy(
         NodePlatform::Windows => return Ok(UnixOwner { uid: 0, gid: 0 }),
     };
     let service_name = CString::new(service_name).expect("static principal has no NUL");
-    let (uid, gid) = unsafe {
-        let passwd = libc::getpwnam(service_name.as_ptr());
-        let group = libc::getgrnam(service_name.as_ptr());
-        if passwd.is_null() || group.is_null() {
-            return Err(NodeError::InsecurePath(
-                "configured node service principal does not exist".to_string(),
-            ));
-        }
-        ((*passwd).pw_uid, (*group).gr_gid)
-    };
+    let service_owner = lookup_unix_principal(&service_name)?;
     if state {
-        Ok(UnixOwner { uid, gid })
+        Ok(service_owner)
     } else {
-        Ok(UnixOwner { uid: 0, gid })
+        Ok(UnixOwner {
+            uid: 0,
+            gid: service_owner.gid,
+        })
     }
 }
 
@@ -1963,6 +2050,34 @@ mod tests {
             Path::new("/tmp/ProgramData/Omakure/node.toml")
         );
         assert_eq!(windows.state_dir(), Path::new("/tmp/ProgramData/Omakure"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_principal_lookup_is_safe_under_concurrency() {
+        use std::ffi::CString;
+        use std::sync::{Arc, Barrier};
+
+        const THREADS: usize = 16;
+        let barrier = Arc::new(Barrier::new(THREADS));
+        let handles = (0..THREADS)
+            .map(|_| {
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let root = CString::new("root").unwrap();
+                    barrier.wait();
+                    for _ in 0..256 {
+                        let owner = lookup_unix_principal(&root).unwrap();
+                        assert_eq!(owner.uid, 0);
+                        assert_eq!(owner.gid, 0);
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
     }
 
     #[cfg(debug_assertions)]

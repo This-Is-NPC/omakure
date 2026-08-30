@@ -100,6 +100,8 @@ pub struct PublicPeer {
     pub source: String,
     #[serde(default, skip_serializing_if = "is_false")]
     pub cleanup_pending: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_error: Option<String>,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -422,6 +424,8 @@ pub fn update_peer_capabilities(
     request: CapabilityUpdateRequest,
 ) -> OperationResult<PublicPeer> {
     require_confirmation(request.confirmed)?;
+    let _guard = crate::remote_cue::ExecutionGuard::acquire(context, &request.node_id)
+        .map_err(|error| OperationError::new(OperationErrorCode::IoFailed, error))?;
     let registry = open_initialized_registry(context)?;
     registry
         .update_peer_capabilities(
@@ -436,25 +440,83 @@ pub fn update_peer_capabilities(
 
 /// Revoke a peer, and stop the work it already caused.
 ///
-/// The revocation is written first and is never made conditional on the run
-/// log: withdrawing trust must not be blocked because a workspace database is
-/// missing or busy. Cancelling in-flight Cue runs is a best-effort follow-up
-/// whose whole mechanism is the row transition -- the executor heartbeat kills
-/// the child as soon as the row leaves `running`.
+/// Trust withdrawal is committed independently of the runs database: an
+/// unavailable history store must not leave a peer trusted. Existing Cue work
+/// is then cancelled and the response reports whether that cleanup was
+/// confirmed. Workers perform the same registry check immediately before Cue
+/// execution, so a race cannot turn a revoked peer's queued work into a new
+/// process.
 pub fn revoke_peer(
     context: &NodeContext,
     workspace: &crate::workspace::Workspace,
     request: RevocationRequest,
 ) -> OperationResult<PublicPeer> {
     require_confirmation(request.confirmed)?;
+    let _guard = crate::remote_cue::ExecutionGuard::acquire(context, &request.node_id)
+        .map_err(|error| OperationError::new(OperationErrorCode::IoFailed, error))?;
     let registry = open_initialized_registry(context)?;
+    if registry
+        .peer(&request.node_id)
+        .map_err(map_registry_error)?
+        .is_none()
+    {
+        return Err(OperationError::new(
+            OperationErrorCode::NotFound,
+            format!("peer was not found: {}", request.node_id),
+        ));
+    }
     let peer = registry
         .revoke_peer(&request.node_id, &request.actor, &request.reason)
         .map_err(map_registry_error)?;
-    if let Ok(conn) = crate::runs::open(workspace) {
-        let _ = crate::runs::cancel_cue_runs_for_actor(&conn, &request.node_id);
+    let (cleanup_pending, cleanup_error) = match crate::runs::open(workspace) {
+        Ok(runs) => match crate::runs::cancel_cue_runs_for_actor(&runs, &request.node_id) {
+            Ok(_) => (false, None),
+            Err(error) => (true, Some(error)),
+        },
+        Err(error) => (true, Some(format!("cannot open runs database: {error}"))),
+    };
+    let mut result = public_peer(peer);
+    result.cleanup_pending = cleanup_pending;
+    result.cleanup_error = cleanup_error;
+    Ok(result)
+}
+
+/// Reconcile Cue rows for every peer the registry records as revoked. This is
+/// safe to retry after a crash or a temporary runs-database failure; the worker
+/// preflight remains the fail-closed barrier while reconciliation is pending.
+pub fn reconcile_revoked_cue_runs(
+    context: &NodeContext,
+    workspace: &crate::workspace::Workspace,
+) -> OperationResult<Vec<String>> {
+    let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
+    let registry = NodeRegistry::open_existing(context, identity.public_status())
+        .map_err(map_registry_error)?;
+    let revoked = registry
+        .peers()
+        .map_err(map_registry_error)?
+        .into_iter()
+        .filter(|peer| peer.state == PeerState::Revoked)
+        .map(|peer| peer.node_id)
+        .collect::<Vec<_>>();
+    let conn = crate::runs::open(workspace).map_err(|error| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("cannot reconcile revoked Cue runs: {error}"),
+        )
+    })?;
+    let mut cancelled = Vec::new();
+    for actor in revoked {
+        let _guard = crate::remote_cue::ExecutionGuard::acquire(context, &actor)
+            .map_err(|error| OperationError::new(OperationErrorCode::IoFailed, error))?;
+        let rows = crate::runs::cancel_cue_runs_for_actor(&conn, &actor).map_err(|error| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("cannot reconcile revoked Cue runs for {actor}: {error}"),
+            )
+        })?;
+        cancelled.extend(rows);
     }
-    Ok(public_peer(peer))
+    Ok(cancelled)
 }
 
 /// What this node needs to be told to mint one bundle.
@@ -1572,6 +1634,7 @@ fn public_peer(peer: PeerRecord) -> PublicPeer {
         last_seen: peer.last_seen,
         source: source_string(peer.source),
         cleanup_pending: false,
+        cleanup_error: None,
     }
 }
 
@@ -2236,6 +2299,99 @@ mod tests {
             },
         )
         .is_err());
+    }
+
+    #[test]
+    fn revocation_succeeds_with_pending_cleanup_when_runs_storage_is_unavailable() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        initialize_node(&context, &NodeConfig::default()).unwrap();
+        let identity = NodeIdentity::load_existing(&context).unwrap();
+        let request = peer_request(&identity);
+        let node_id = request.node_id.clone();
+        import_manual_trust(&context, request).unwrap();
+
+        let workspace = crate::workspace::Workspace::new(temp.path().join("workspace"));
+        workspace.ensure_layout().unwrap();
+        let history = workspace.history_dir().to_path_buf();
+        let history_backup = temp.path().join("history-backup");
+        fs::rename(&history, &history_backup).unwrap();
+        fs::write(&history, "injected runs storage failure").unwrap();
+
+        let revoked = revoke_peer(
+            &context,
+            &workspace,
+            RevocationRequest {
+                node_id,
+                actor: "operator".into(),
+                reason: "lost device".into(),
+                confirmed: true,
+            },
+        )
+        .expect("trust withdrawal must not depend on runs storage");
+        assert_eq!(revoked.state, "revoked");
+        assert!(revoked.cleanup_pending);
+        assert!(revoked
+            .cleanup_error
+            .as_deref()
+            .is_some_and(|error| error.contains("runs database")));
+    }
+
+    #[test]
+    fn revoked_cue_cleanup_reconciles_after_runs_storage_returns() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        initialize_node(&context, &NodeConfig::default()).unwrap();
+        let identity = NodeIdentity::load_existing(&context).unwrap();
+        let request = peer_request(&identity);
+        let node_id = request.node_id.clone();
+        import_manual_trust(&context, request).unwrap();
+
+        let workspace = crate::workspace::Workspace::new(temp.path().join("workspace"));
+        workspace.ensure_layout().unwrap();
+        let conn = crate::runs::open(&workspace).unwrap();
+        let row = crate::runs::enqueue(
+            &conn,
+            "/workspace/deploy.sh",
+            &[],
+            crate::runs::EnqueueOptions {
+                actor: node_id.clone(),
+                trigger: crate::runs::RunTrigger::Cue,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+
+        let history = workspace.history_dir().to_path_buf();
+        let history_backup = temp.path().join("history-backup");
+        fs::rename(&history, &history_backup).unwrap();
+        fs::write(&history, "injected runs storage failure").unwrap();
+        let revoked = revoke_peer(
+            &context,
+            &workspace,
+            RevocationRequest {
+                node_id: node_id.clone(),
+                actor: "operator".into(),
+                reason: "lost device".into(),
+                confirmed: true,
+            },
+        )
+        .unwrap();
+        assert!(revoked.cleanup_pending);
+
+        fs::remove_file(&history).unwrap();
+        fs::rename(&history_backup, &history).unwrap();
+        let reconciled = reconcile_revoked_cue_runs(&context, &workspace).unwrap();
+        assert_eq!(reconciled, vec![row.run_id.clone()]);
+        let conn = crate::runs::open(&workspace).unwrap();
+        assert_eq!(
+            crate::runs::get_run(&conn, &row.run_id)
+                .unwrap()
+                .unwrap()
+                .state,
+            crate::runs::RunState::Cancelled
+        );
     }
 
     #[test]

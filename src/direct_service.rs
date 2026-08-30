@@ -102,6 +102,15 @@ pub enum DirectServiceError {
         state: &'static str,
         protocol: TransportError,
     },
+    /// A receiver authorized a Cue but could not persist its run locally.
+    ///
+    /// This is intentionally not a protocol error: no peer acknowledgement is
+    /// sent for it. The owning service records the stable local failure instead
+    /// of turning it into the same unanswered result used for silent refusal.
+    #[error("direct transport Cue enqueue failed locally: {error}")]
+    CueEnqueueFailed {
+        error: crate::remote_cue::CueEnqueueError,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -487,6 +496,25 @@ impl ConnectionState {
                 .last_errors
                 .insert(node_id.to_string(), error.code().as_str().to_string());
         }
+    }
+
+    fn record_direct_error(&self, node_id: &str, error: &DirectServiceError) {
+        if let DirectServiceError::CueEnqueueFailed { .. } = error {
+            if let Ok(mut status) = self.status.lock() {
+                status
+                    .last_errors
+                    .insert(node_id.to_string(), "cue_enqueue_failed".to_string());
+            }
+            return;
+        }
+        let transport = match error {
+            DirectServiceError::Protocol(error) => TransportError::from_code(error.code()),
+            DirectServiceError::PeerNotActive { protocol, .. } => {
+                TransportError::from_code(protocol.code())
+            }
+            _ => TransportError::Internal,
+        };
+        self.record_error(node_id, &transport);
     }
 
     /// Drop a peer's recorded failure now that it holds a session again.
@@ -1434,8 +1462,8 @@ fn dialer_loop(
         match connect_and_hold(&peer, &context, &state, &resolver) {
             Ok(()) => failures = 0,
             Err(error) => {
-                state.record_error(&peer.node_id, &error);
-                if is_fatal_connection_error(&error) {
+                state.record_direct_error(&peer.node_id, &error);
+                if is_fatal_connection_error(&error_to_transport(error)) {
                     return;
                 }
                 // Nothing respawns this thread, so a peer that is merely
@@ -1494,7 +1522,7 @@ fn connect_and_hold(
     context: &NodeContext,
     state: &Arc<ConnectionState>,
     resolver: &Resolver,
-) -> Result<(), TransportError> {
+) -> Result<(), DirectServiceError> {
     let deadline = initiator_deadline(Instant::now());
     let endpoints = resolver.resolve(&peer.endpoint, deadline, &state.stop)?;
     // Everything that can fail without a socket is done before there is one.
@@ -1562,7 +1590,7 @@ fn connect_and_hold(
         .cloned()
         .ok_or(TransportError::HandshakeFailed)?;
     if remote.node_id() != peer.node_id {
-        return Err(TransportError::IdentityMismatch);
+        return Err(TransportError::IdentityMismatch.into());
     }
     let trusted = registry
         .transport_peer(remote.node_id(), &hex(remote.identity_key()))
@@ -1592,10 +1620,10 @@ fn connect_and_hold(
     // itself so `is_fatal_connection_error` can retire this dialer instead of
     // reading a refusal as a transient fault and retrying it forever.
     if let Some(stated) = crate::direct_transport::stated_error(&response) {
-        return Err(stated);
+        return Err(stated.into());
     }
     if response.kind != ENVELOPE_KIND {
-        return Err(TransportError::InvalidFrame);
+        return Err(TransportError::InvalidFrame.into());
     }
     verify_envelope(
         &response.body,
@@ -1694,12 +1722,12 @@ fn hold_session(
     mut health: Option<HealthSession<'_>>,
     mut cue: Option<crate::remote_cue::CueSession<'_>>,
     mut baseline: Option<crate::baseline_push::BaselineSession<'_>>,
-) -> Result<(), TransportError> {
+) -> Result<(), DirectServiceError> {
     if health.as_ref().is_some_and(|health| !health.engaged()) {
         health = None;
     }
     let Some(health) = health.as_mut() else {
-        return hold_session_idle(stream, session, state);
+        return hold_session_idle(stream, session, state).map_err(Into::into);
     };
     stream
         .set_read_timeout(Some(crate::direct_health::TICK))
@@ -1736,8 +1764,8 @@ fn hold_session(
             if let Ok(Some(authorization)) = registry.health_authorization(peer_node_id) {
                 if authorization.state != PeerState::Active {
                     return Err(match authorization.state {
-                        PeerState::Revoked => TransportError::Revoked,
-                        _ => TransportError::NotEnrolled,
+                        PeerState::Revoked => DirectServiceError::Protocol(TransportError::Revoked),
+                        _ => DirectServiceError::Protocol(TransportError::NotEnrolled),
                     });
                 }
             }
@@ -1806,7 +1834,7 @@ fn hold_session(
                 continue;
             }
             Readiness::Closed => return Ok(()),
-            Readiness::Failed(error) => return Err(error),
+            Readiness::Failed(error) => return Err(error.into()),
         }
         let deadline = Instant::now() + IDLE_TIMEOUT;
         let encoded = match read_frame(stream, deadline) {
@@ -1819,11 +1847,11 @@ fn hold_session(
             {
                 return Ok(());
             }
-            Err(error) => return Err(error_to_transport(error)),
+            Err(error) => return Err(error_to_transport(error).into()),
         };
         let frame = Frame::parse(&encoded)?;
         if frame.kind != 2 {
-            return Err(TransportError::InvalidFrame);
+            return Err(TransportError::InvalidFrame.into());
         }
         let message = session.read(&encoded)?;
         last_activity = Instant::now();
@@ -1903,13 +1931,21 @@ fn hold_session(
                     // The Cue session verifies the envelope against the same
                     // handshake identity and session id the Health Plane uses;
                     // nothing here decides anything.
-                    if cue.handle_envelope(&message.body, unix_seconds() as i64)
-                        != CueOutcome::NotCue
-                    {
-                        if let Some(reply) = cue.take_reply() {
-                            write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
-                                .map_err(error_to_transport)?;
+                    match cue.handle_envelope(&message.body, unix_seconds() as i64) {
+                        CueOutcome::EnqueueFailed(error) => {
+                            return Err(DirectServiceError::CueEnqueueFailed { error });
                         }
+                        CueOutcome::Decided(_) | CueOutcome::Repeat => {
+                            if let Some(reply) = cue.take_reply() {
+                                write_bytes(
+                                    stream,
+                                    &session.write(ENVELOPE_KIND, &reply)?,
+                                    deadline,
+                                )
+                                .map_err(error_to_transport)?;
+                            }
+                        }
+                        CueOutcome::NotCue => {}
                     }
                 }
             }
@@ -3266,12 +3302,12 @@ fn serve_connection(
             Some(health),
             Some(cue),
             Some(baseline),
-        )
-        .map_err(DirectServiceError::Protocol)?;
+        )?;
         Ok(())
     })();
     let rejection_audit = if let Err(error) = &result {
         let node_id = remote_node_id.as_deref().unwrap_or(UNKNOWN_NODE_ID);
+        state.record_direct_error(node_id, error);
         let protocol = match error {
             DirectServiceError::Protocol(error) => Some(error.code() as u16),
             _ => None,
@@ -3553,6 +3589,41 @@ mod tests {
         )
         .expect("sign the cue ack")
         .encoded()
+    }
+
+    #[test]
+    fn a_local_cue_enqueue_failure_is_visible_in_transport_status() {
+        let temp = tempfile::tempdir().expect("node root");
+        let context = test_node_context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).expect("initialize identity");
+        let state = ConnectionState::new(
+            context,
+            &identity,
+            &[],
+            Arc::new(AtomicBool::new(false)),
+            true,
+            Arc::new(AdmissionController {
+                state: Mutex::new(AdmissionState::default()),
+            }),
+            None,
+            None,
+        );
+        let error = DirectServiceError::CueEnqueueFailed {
+            error: crate::remote_cue::CueEnqueueError::Failed(
+                crate::operations::OperationErrorCode::IoFailed,
+            ),
+        };
+
+        state.record_direct_error("peer", &error);
+
+        assert_eq!(
+            state.status.lock().unwrap().last_errors.get("peer"),
+            Some(&"cue_enqueue_failed".to_string())
+        );
+        assert_eq!(
+            error.to_string(),
+            "direct transport Cue enqueue failed locally: io_failed"
+        );
     }
 
     /// An accepted Cue's ack belongs to the Cue that sent it.
@@ -3943,8 +4014,10 @@ mod tests {
                 node_id: "zzzz-remote-peer".to_string(),
                 endpoint: address.to_string(),
             };
-            let error = connect_and_hold(&peer, context, state, &resolver)
-                .expect_err("the local fault must fail the dial");
+            let error = error_to_transport(
+                connect_and_hold(&peer, context, state, &resolver)
+                    .expect_err("the local fault must fail the dial"),
+            );
             resolver.shutdown();
             let opened = match listener.accept() {
                 Ok(_) => true,

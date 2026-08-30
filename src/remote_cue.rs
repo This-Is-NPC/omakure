@@ -18,6 +18,8 @@ use crate::node_registry::{PeerRole, PeerState};
 use crate::ports::ScriptRepository;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::collections::VecDeque;
+use std::fs::{File, OpenOptions};
 
 /// Stable rejection codes, frozen in `docs/internal/remote-cue-contract.md`.
 ///
@@ -117,8 +119,45 @@ pub const CAPABILITY_REMOTE_RUN: &str = "remote-run";
 /// to create work whose result is unobservable.
 pub const CAPABILITY_NOTIFICATIONS: &str = "notifications";
 
+/// Serialize authorization changes with the final worker check and process spawn.
+pub struct ExecutionGuard {
+    _file: File,
+}
+
+impl ExecutionGuard {
+    pub fn acquire(context: &crate::node::NodeContext, actor: &str) -> Result<Self, String> {
+        use fs2::FileExt;
+        use sha2::{Digest, Sha256};
+
+        context
+            .ensure_state_directory()
+            .map_err(|error| format!("cannot prepare Cue execution lock: {error}"))?;
+        let digest = Sha256::digest(actor.as_bytes());
+        let path = context
+            .state_dir()
+            .join(format!(".cue-execution-{digest:x}.lock"));
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)
+            .map_err(|error| format!("cannot open Cue execution lock: {error}"))?;
+        file.lock_exclusive()
+            .map_err(|error| format!("cannot acquire Cue execution lock: {error}"))?;
+        Ok(Self { _file: file })
+    }
+}
+
 /// The frozen maximum lifetime of a Cue, in seconds.
 pub const MAX_LIFETIME_SECONDS: i64 = 300;
+/// Frozen per-peer receive limits. The burst is deliberately additive to the
+/// sustained minute budget, matching the existing Health Plane convention.
+pub const MAX_CUES_PER_MINUTE: usize = 10;
+pub const RATE_BURST_ALLOWANCE: usize = 5;
+pub const MAX_RETAINED_CUE_RECORDS: usize = 64;
+pub const CUE_RETENTION_SECONDS: i64 = 7 * 24 * 60 * 60;
+pub const MAX_CANONICAL_CUE_DISPATCH: usize = 512;
 
 /// Everything the gates read, all of it local to the receiver.
 ///
@@ -340,6 +379,17 @@ struct CueDispatch {
 impl CueDispatch {
     fn parse(payload: &serde_json::Value) -> Option<Self> {
         let object = payload.as_object()?;
+        const FIELDS: &[&str] = &[
+            "version",
+            "cue_id",
+            "script",
+            "not_before",
+            "expires_at",
+            "reason",
+        ];
+        if object.keys().any(|key| !FIELDS.contains(&key.as_str())) {
+            return None;
+        }
         if object.get("version").and_then(serde_json::Value::as_u64) != Some(1) {
             return None;
         }
@@ -386,6 +436,13 @@ pub const MAX_REASON_BYTES: usize = 128;
 struct ScriptBinding {
     path: std::path::PathBuf,
     content_hash: String,
+}
+
+#[derive(Debug, Clone)]
+struct CueDecisionRecord {
+    cue_id: String,
+    decided_at: i64,
+    reply: Option<Vec<u8>>,
 }
 
 /// SHA-256 of a script's bytes, or `None` if it cannot be read.
@@ -445,24 +502,10 @@ pub struct CueSession<'a> {
     remote_cues_enabled: bool,
     declared_scripts: Vec<String>,
     declared_batteries: Vec<String>,
-    /// Cue ids already decided on this session.
-    ///
-    /// Deliberately in-session only. It covers the realistic duplicate — a
-    /// retransmission on a live connection — and nothing else, which is honest
-    /// about what it is.
-    ///
-    /// Durable at-most-once does not belong here, because in this wave
-    /// "accepting" writes an audit row and nothing more: a duplicate is a
-    /// cosmetic repeat in a log, not a repeated side effect. It starts
-    /// mattering when acceptance causes work, and at that point the natural key
-    /// already exists -- `runs.run_id` is a TEXT PRIMARY KEY derived from the
-    /// cue id, so the database refuses the second insert itself.
-    ///
-    /// Reusing `health_replay_keys` was considered and rejected: it evicts rows
-    /// older than the 180-second replay security floor, while a Cue may live
-    /// 300 seconds, so a still-valid cue id could be evicted under capacity
-    /// pressure. The numbers do not fit.
-    seen_cue_ids: std::collections::HashSet<String>,
+    /// Bounded live-session decisions. Durable at-most-once remains the run
+    /// primary key; this cache exists to replay a reportable ACK without
+    /// re-evaluating gates or leaking a refusal after a duplicate.
+    cue_records: VecDeque<CueDecisionRecord>,
     /// A signed `cue_ack` the dispatcher should write back, if the refusal is
     /// one this sender is allowed to be told about.
     pending_reply: Option<Vec<u8>>,
@@ -483,6 +526,38 @@ pub enum CueOutcome {
     /// A cue id already decided on this session; answered from the first
     /// decision rather than evaluated again.
     Repeat,
+    /// Enqueue failed after the authorization gates passed. This is deliberately
+    /// not a Cue rejection: the failure is local to the receiver and must not be
+    /// misreported as a duplicate or as a sender error.
+    EnqueueFailed(CueEnqueueError),
+}
+
+/// The result of trying to turn an accepted Cue into a durable run.
+///
+/// Only the run-id uniqueness constraint proves that this Cue already has a
+/// durable run. Every other failure is retained as a stable local operation
+/// error and fails closed without an acknowledgement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CueEnqueueError {
+    NoWorkspace,
+    Duplicate,
+    Failed(crate::operations::OperationErrorCode),
+}
+
+impl CueEnqueueError {
+    pub(crate) fn stable_name(&self) -> &'static str {
+        match self {
+            Self::NoWorkspace => CueCode::ScriptUnresolvable.name(),
+            Self::Duplicate => CueCode::Duplicate.name(),
+            Self::Failed(code) => code.as_str(),
+        }
+    }
+}
+
+impl std::fmt::Display for CueEnqueueError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.stable_name())
+    }
 }
 
 /// Read `trust.allow_remote_cues` from this node's own configuration.
@@ -545,7 +620,7 @@ impl<'a> CueSession<'a> {
             remote_cues_enabled: policy.enabled,
             declared_scripts: policy.declared_scripts,
             declared_batteries: policy.declared_batteries,
-            seen_cue_ids: std::collections::HashSet::new(),
+            cue_records: VecDeque::new(),
             pending_reply: None,
         }
     }
@@ -560,6 +635,7 @@ impl<'a> CueSession<'a> {
     /// session by `verify_envelope`. The message supplies the *subject* of the
     /// decision, which script and which cue id, and never an input to it.
     pub fn handle_envelope(&mut self, encoded: &[u8], now: i64) -> CueOutcome {
+        self.pending_reply = None;
         let Some(kind) = crate::direct_transport::envelope_kind_hint(encoded) else {
             return CueOutcome::NotCue;
         };
@@ -594,13 +670,39 @@ impl<'a> CueSession<'a> {
         let Ok(view) = crate::direct_transport::envelope_view(encoded) else {
             return self.refuse(None, CueCode::InvalidMessage, now);
         };
+        let canonical_len = encoded.len().saturating_sub(64);
+        if canonical_len > MAX_CANONICAL_CUE_DISPATCH {
+            return self.refuse(None, CueCode::InvalidMessage, now);
+        }
         let Some(dispatch) = CueDispatch::parse(&view.payload) else {
             return self.refuse(None, CueCode::InvalidMessage, now);
         };
 
-        if !self.seen_cue_ids.insert(dispatch.cue_id.clone()) {
-            self.audit("cue_rejected", "rejected", Some(CueCode::Duplicate));
+        self.prune_cue_state(now);
+        if let Some(record) = self
+            .cue_records
+            .iter()
+            .find(|record| record.cue_id == dispatch.cue_id)
+        {
+            self.pending_reply = record.reply.clone();
+            self.audit(
+                "cue_rejected",
+                "rejected",
+                Some(CueCode::Duplicate),
+                Some(&dispatch),
+            );
             return CueOutcome::Repeat;
+        }
+        match self.registry.consume_cue_rate(&self.remote_node_id, now) {
+            Ok(true) => {}
+            Ok(false) => return self.refuse(Some(&dispatch), CueCode::RateLimited, now),
+            Err(_) => {
+                self.audit("cue_rate_check_failed", "internal", None, Some(&dispatch));
+                self.remember_cue(&dispatch.cue_id, now);
+                return CueOutcome::EnqueueFailed(CueEnqueueError::Failed(
+                    crate::operations::OperationErrorCode::IoFailed,
+                ));
+            }
         }
 
         if let Err(code) = within_validity_window(dispatch.not_before, dispatch.expires_at, now) {
@@ -642,14 +744,33 @@ impl<'a> CueSession<'a> {
             &binding.content_hash,
         ) {
             Ok(_) => {
-                self.audit("cue_accepted", "accepted", None);
+                self.audit("cue_accepted", "accepted", None, Some(&dispatch));
                 self.queue_reply(&dispatch.cue_id, None, at_accept);
+                self.remember_cue(&dispatch.cue_id, at_accept);
                 CueOutcome::Decided(GateDecision::Accepted)
             }
-            // The run id is derived from the cue id and is the table's primary
-            // key, so a refused insert means this Cue already became a run.
-            // Failing here is the at-most-once guarantee working.
-            Err(code) => self.refuse(Some(&dispatch), code, at_accept),
+            Err(CueEnqueueError::Duplicate) => {
+                // The run id is derived from the cue id and is the table's
+                // primary key, so this specific refused insert means this Cue
+                // already became a run. Failing here is the at-most-once
+                // guarantee working.
+                self.refuse(Some(&dispatch), CueCode::Duplicate, at_accept)
+            }
+            Err(error) => {
+                // There is no Cue wire code for a local storage/operation
+                // failure. Do not fabricate one: no acknowledgement means the
+                // sender cannot mistake a local fault for acceptance or a
+                // duplicate, while the stable operation code remains visible
+                // to the caller and in this session outcome.
+                self.audit(
+                    "cue_enqueue_failed",
+                    error.stable_name(),
+                    None,
+                    Some(&dispatch),
+                );
+                self.remember_cue(&dispatch.cue_id, at_accept);
+                CueOutcome::EnqueueFailed(error)
+            }
         }
     }
 
@@ -706,8 +827,15 @@ impl<'a> CueSession<'a> {
         }
     }
 
-    fn audit(&self, event: &str, outcome: &str, code: Option<CueCode>) {
-        let _ = self.registry.record_transport_audit(
+    fn audit(
+        &self,
+        event: &str,
+        outcome: &str,
+        code: Option<CueCode>,
+        dispatch: Option<&CueDispatch>,
+    ) {
+        let metadata = dispatch.filter(|_| code.is_none_or(CueCode::is_reportable));
+        let _ = self.registry.record_cue_transport_audit(
             event,
             &self.remote_node_id,
             Some(&self.session_id),
@@ -715,20 +843,45 @@ impl<'a> CueSession<'a> {
             0,
             outcome,
             code.map(CueCode::code),
+            metadata.map(|dispatch| dispatch.cue_id.as_str()),
+            metadata.map(|dispatch| dispatch.script.as_str()),
+            metadata.map(|dispatch| dispatch.reason.as_str()),
         );
     }
 
     /// Audit the true code, report the narrowed one, and only to a sender
     /// already authorized to have been evaluated.
     fn refuse(&mut self, dispatch: Option<&CueDispatch>, code: CueCode, now: i64) -> CueOutcome {
-        self.audit("cue_rejected", "rejected", Some(code));
+        self.audit("cue_rejected", "rejected", Some(code), dispatch);
         if code.is_reportable() {
             if let Some(dispatch) = dispatch {
                 let reported = code.reply_code();
                 self.queue_reply(&dispatch.cue_id, Some(reported), now);
             }
         }
+        if let Some(dispatch) = dispatch {
+            self.remember_cue(&dispatch.cue_id, now);
+        }
         CueOutcome::Decided(GateDecision::Rejected(code))
+    }
+
+    fn prune_cue_state(&mut self, now: i64) {
+        let floor = now.saturating_sub(CUE_RETENTION_SECONDS);
+        self.cue_records.retain(|record| record.decided_at >= floor);
+        while self.cue_records.len() > MAX_RETAINED_CUE_RECORDS {
+            self.cue_records.pop_front();
+        }
+    }
+
+    fn remember_cue(&mut self, cue_id: &str, now: i64) {
+        self.cue_records.push_back(CueDecisionRecord {
+            cue_id: cue_id.to_string(),
+            decided_at: now,
+            reply: self.pending_reply.clone(),
+        });
+        while self.cue_records.len() > MAX_RETAINED_CUE_RECORDS {
+            self.cue_records.pop_front();
+        }
     }
 
     fn queue_reply(&mut self, cue_id: &str, code: Option<CueCode>, now: i64) {
@@ -773,7 +926,12 @@ impl<'a> CueSession<'a> {
     /// for one instruction, which makes the trail harder to read for no gain.
     pub fn decide(&mut self, cue_id: Option<&str>) -> CueOutcome {
         if let Some(cue_id) = cue_id {
-            if !self.seen_cue_ids.insert(cue_id.to_string()) {
+            self.prune_cue_state(unix_now());
+            if self
+                .cue_records
+                .iter()
+                .any(|record| record.cue_id == cue_id)
+            {
                 let _ = self.registry.record_transport_audit(
                     "cue_rejected",
                     &self.remote_node_id,
@@ -785,6 +943,7 @@ impl<'a> CueSession<'a> {
                 );
                 return CueOutcome::Repeat;
             }
+            self.remember_cue(cue_id, unix_now());
         }
 
         let authority = LocalAuthority {
@@ -831,16 +990,19 @@ impl<'a> CueSession<'a> {
     /// only this answers "make it happen".
     ///
     /// The run id is supplied by the caller and derived from the cue id, so the
-    /// primary key refuses a second insert. Enqueue therefore *failing* is the
-    /// success path for a duplicate, not an error to paper over.
+    /// primary key refuses a second insert. Only that uniqueness failure is a
+    /// duplicate; all other operation failures remain visible and fail closed.
     pub fn enqueue_accepted(
         &self,
         cue_id: &str,
         script: &str,
         reason: &str,
         authorized_content_hash: &str,
-    ) -> Result<String, CueCode> {
-        let workspace = self.workspace.as_ref().ok_or(CueCode::ScriptUnresolvable)?;
+    ) -> Result<String, CueEnqueueError> {
+        let workspace = self
+            .workspace
+            .as_ref()
+            .ok_or(CueEnqueueError::NoWorkspace)?;
         let run_id = derive_run_id(cue_id);
         crate::operations::core::enqueue_cue_run(
             workspace,
@@ -860,7 +1022,19 @@ impl<'a> CueSession<'a> {
             authorized_content_hash,
         )
         .map(|_| run_id)
-        .map_err(|_| CueCode::Duplicate)
+        .map_err(classify_enqueue_error)
+    }
+}
+
+fn classify_enqueue_error(error: crate::operations::OperationError) -> CueEnqueueError {
+    if error.code == crate::operations::OperationErrorCode::IoFailed
+        && error
+            .message
+            .ends_with("UNIQUE constraint failed: runs.run_id")
+    {
+        CueEnqueueError::Duplicate
+    } else {
+        CueEnqueueError::Failed(error.code)
     }
 }
 
@@ -1455,6 +1629,43 @@ mod tests {
         }
     }
 
+    #[test]
+    fn cue_payload_rejects_unknown_fields() {
+        let payload = serde_json::json!({
+            "version": 1,
+            "cue_id": "0123456789abcdef0123456789abcdef",
+            "script": "deploy.sh",
+            "not_before": 100,
+            "expires_at": 200,
+            "reason": "approved",
+            "arguments": []
+        });
+        assert!(CueDispatch::parse(&payload).is_none());
+    }
+
+    #[test]
+    fn cue_retained_state_bounds_are_frozen() {
+        assert_eq!(MAX_RETAINED_CUE_RECORDS, 64);
+        assert_eq!(CUE_RETENTION_SECONDS, 604800);
+        assert_eq!(MAX_CANONICAL_CUE_DISPATCH, 512);
+    }
+
+    #[test]
+    fn duplicate_cache_retains_reportable_ack_and_silent_refusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let (identity, registry) = identity_and_registry(dir.path());
+        let workspace = workspace_with_declared_script(dir.path());
+        let mut session = cue_session(&registry, &identity, [7u8; 32], workspace);
+
+        session.pending_reply = Some(vec![1, 2, 3]);
+        session.remember_cue("0123456789abcdef0123456789abcdef", 100);
+        session.pending_reply = None;
+        session.remember_cue("fedcba9876543210fedcba9876543210", 100);
+
+        assert_eq!(session.cue_records[0].reply, Some(vec![1, 2, 3]));
+        assert_eq!(session.cue_records[1].reply, None);
+    }
+
     /// A file swapped after gate E must not be enqueued under that decision.
     ///
     /// Written against `content_hash` directly because the swap window is
@@ -1552,7 +1763,8 @@ mod tests {
         )
     }
 
-    /// The same Cue arriving on a second session must not run a second time.
+    /// The same Cue arriving after the node session is restarted must not run a
+    /// second time.
     ///
     /// `a_new_session_does_not_inherit_the_seen_set` establishes that the
     /// in-session guard dies with the connection, and `seen_cue_ids` above says
@@ -1566,7 +1778,7 @@ mod tests {
     /// Conductor whose session drops mid-Cue and redispatches is exactly the
     /// duplicate the in-session set cannot see.
     #[test]
-    fn the_same_cue_id_on_a_second_session_does_not_enqueue_a_second_run() {
+    fn the_same_cue_id_on_a_restarted_session_does_not_enqueue_a_second_run() {
         let dir = tempfile::tempdir().expect("tempdir");
         let (identity, registry) = identity_and_registry(dir.path());
         let cue_id = "0123456789abcdef0123456789abcdef";
@@ -1586,6 +1798,11 @@ mod tests {
             "the run id must be derived from the cue id, or the primary key guards nothing"
         );
         drop(first);
+        // Close and reopen both node-owned state handles, as a service restart
+        // does. The run database is reopened by the enqueue operation itself.
+        drop(registry);
+        drop(identity);
+        let (identity, registry) = identity_and_registry(dir.path());
 
         // A different session id, so `seen_cue_ids` is empty and cannot be the
         // thing that refuses this.
@@ -1597,7 +1814,7 @@ mod tests {
         );
         assert_eq!(
             second.enqueue_accepted(cue_id, "deploy.sh", "redelivery", "authorized-hash"),
-            Err(CueCode::Duplicate),
+            Err(CueEnqueueError::Duplicate),
             "a redelivered cue id must be refused as a duplicate, not as a script fault"
         );
 
@@ -1624,6 +1841,119 @@ mod tests {
             ids,
             vec![enqueued.as_str()],
             "two deliveries of one cue id must leave exactly one run"
+        );
+    }
+
+    #[test]
+    fn the_same_cue_id_on_one_session_is_a_duplicate_after_the_first_enqueue() {
+        let dir = tempfile::tempdir().unwrap();
+        let (identity, registry) = identity_and_registry(dir.path());
+        let session = cue_session(
+            &registry,
+            &identity,
+            [7u8; 32],
+            workspace_with_declared_script(dir.path()),
+        );
+        let cue_id = "0123456789abcdef0123456789abcdef";
+
+        session
+            .enqueue_accepted(cue_id, "deploy.sh", "first delivery", "authorized-hash")
+            .expect("the first delivery must enqueue");
+        assert_eq!(
+            session.enqueue_accepted(cue_id, "deploy.sh", "retry", "authorized-hash"),
+            Err(CueEnqueueError::Duplicate)
+        );
+    }
+
+    #[test]
+    fn a_unique_cue_id_creates_a_distinct_durable_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let (identity, registry) = identity_and_registry(dir.path());
+        let session = cue_session(
+            &registry,
+            &identity,
+            [7u8; 32],
+            workspace_with_declared_script(dir.path()),
+        );
+
+        let first = session
+            .enqueue_accepted(
+                "0123456789abcdef0123456789abcdef",
+                "deploy.sh",
+                "first",
+                "authorized-hash",
+            )
+            .expect("first Cue must create a run");
+        let second = session
+            .enqueue_accepted(
+                "fedcba9876543210fedcba9876543210",
+                "deploy.sh",
+                "second",
+                "authorized-hash",
+            )
+            .expect("a distinct Cue must create a distinct run");
+
+        assert_ne!(first, second);
+        let workspace = crate::workspace::Workspace::new(dir.path().join("workspace"));
+        let runs = crate::operations::core::list_runs(
+            &workspace,
+            crate::operations::core::ListRunsRequest {
+                state_set: Some("all".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(runs.len(), 2, "distinct Cue ids must create two runs");
+        assert!(runs
+            .iter()
+            .all(|run| run.trigger == crate::runs::RunTrigger::Cue));
+    }
+
+    #[test]
+    fn a_non_duplicate_enqueue_failure_keeps_its_stable_operation_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let (identity, registry) = identity_and_registry(dir.path());
+        let workspace = workspace_with_declared_script(dir.path());
+
+        // Make opening runs.sqlite fail without changing the script or the
+        // authorization inputs. This is a local storage fault, not a run-id
+        // conflict.
+        std::fs::remove_dir_all(workspace.history_dir()).unwrap();
+        std::fs::write(workspace.history_dir(), "not a directory").unwrap();
+
+        let session = cue_session(&registry, &identity, [7u8; 32], workspace);
+        assert_eq!(
+            session.enqueue_accepted(
+                "0123456789abcdef0123456789abcdef",
+                "deploy.sh",
+                "storage fault",
+                "authorized-hash",
+            ),
+            Err(CueEnqueueError::Failed(
+                crate::operations::OperationErrorCode::IoFailed
+            )),
+            "a storage failure must not be reported as a duplicate"
+        );
+    }
+
+    #[test]
+    fn only_the_run_id_uniqueness_error_is_a_duplicate() {
+        let run_id_conflict = crate::operations::OperationError::new(
+            crate::operations::OperationErrorCode::IoFailed,
+            "Insert run failed: UNIQUE constraint failed: runs.run_id",
+        );
+        assert_eq!(
+            classify_enqueue_error(run_id_conflict),
+            CueEnqueueError::Duplicate
+        );
+
+        let unrelated_conflict = crate::operations::OperationError::new(
+            crate::operations::OperationErrorCode::IoFailed,
+            "Insert run failed: UNIQUE constraint failed: run_script_hashes.run_id",
+        );
+        assert_eq!(
+            classify_enqueue_error(unrelated_conflict),
+            CueEnqueueError::Failed(crate::operations::OperationErrorCode::IoFailed)
         );
     }
 }

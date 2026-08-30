@@ -122,7 +122,6 @@ pub fn run(
 
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
-
     let direct_bind = match (args.direct_bind, configured.direct_bind.as_deref()) {
         (Some(bind), _) => Some(bind),
         (None, Some(bind)) => Some(bind.parse()?),
@@ -163,6 +162,12 @@ pub fn run(
     // harvest, which seeds and returns nothing -- the Conductor would wait on
     // an outcome that was never going to be sent.
     health_reporter.seed_run_watermark();
+    if let Err(error) = crate::operations::node::reconcile_revoked_cue_runs(&context, &workspace) {
+        eprintln!("omakure: revoked Cue cleanup remains pending: {error}");
+    }
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    queue::install_signal_handlers(Arc::clone(&cancel_flag));
 
     let mut direct_service = if direct_bind.is_some() || !static_peers.is_empty() {
         Some(crate::direct_service::DirectService::start(
@@ -242,8 +247,6 @@ pub fn run(
         (cancel, handle)
     });
 
-    let cancel_flag = Arc::new(AtomicBool::new(false));
-    queue::install_signal_handlers(Arc::clone(&cancel_flag));
     if boot.auth.is_file_mode() {
         crate::auth::install_sighup_reload(boot.auth.clone());
     }
@@ -255,13 +258,22 @@ pub fn run(
         for thread_idx in 0..workers {
             let ws = workspace.clone_for_executor();
             let flag = Arc::clone(&cancel_flag);
+            let worker_context = context.clone();
             let actor_filter = args.worker_actor_filter.clone();
             let script_filter = args.worker_script_filter.clone();
             let worker_id = format!("node-worker:{}-t{}", std::process::id(), thread_idx);
             let lifecycle = Arc::clone(&worker_lifecycle);
             worker_handles.push(thread::spawn(move || {
                 run_tracked_loop(lifecycle, || {
-                    queue::worker_loop(ws, worker_id, flag, actor_filter, script_filter, false);
+                    queue::worker_loop_with_context(
+                        ws,
+                        worker_id,
+                        flag,
+                        actor_filter,
+                        script_filter,
+                        false,
+                        worker_context,
+                    );
                 });
             }));
         }
@@ -275,8 +287,9 @@ pub fn run(
     // ceiling without operator action.
     let health_maintenance = {
         let context = context.clone();
+        let workspace = workspace.clone_for_executor();
         let flag = Arc::clone(&cancel_flag);
-        thread::spawn(move || health_maintenance_loop(context, flag))
+        thread::spawn(move || health_maintenance_loop(context, workspace, flag))
     };
 
     let scheduler_handle = if scheduler_enabled {
@@ -364,12 +377,16 @@ const HEALTH_MAINTENANCE_SLICE: Duration = Duration::from_millis(200);
 /// nothing, writes no Health Plane row itself, and never touches identity,
 /// trust, revocation, or run state. A failure is a bounded no-op that is
 /// retried on the next pass rather than a reason to stop serving.
-fn health_maintenance_loop(context: crate::node::NodeContext, cancel_flag: Arc<AtomicBool>) {
+fn health_maintenance_loop(
+    context: crate::node::NodeContext,
+    workspace: Workspace,
+    cancel_flag: Arc<AtomicBool>,
+) {
     loop {
         if cancel_flag.load(Ordering::SeqCst) {
             return;
         }
-        run_health_maintenance(&context);
+        run_health_maintenance(&context, &workspace);
         let deadline = std::time::Instant::now() + HEALTH_MAINTENANCE_INTERVAL;
         while std::time::Instant::now() < deadline {
             if cancel_flag.load(Ordering::SeqCst) {
@@ -380,7 +397,20 @@ fn health_maintenance_loop(context: crate::node::NodeContext, cancel_flag: Arc<A
     }
 }
 
-fn run_health_maintenance(context: &crate::node::NodeContext) {
+fn run_health_maintenance(context: &crate::node::NodeContext, workspace: &Workspace) {
+    match crate::runs::open(workspace)
+        .and_then(|conn| crate::runs::recover_abandoned_cue_runs(&conn))
+    {
+        Ok(recovered) => {
+            for run_id in recovered {
+                eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");
+            }
+        }
+        Err(error) => eprintln!("omakure: abandoned Cue recovery remains pending: {error}"),
+    }
+    if let Err(error) = crate::operations::node::reconcile_revoked_cue_runs(context, workspace) {
+        eprintln!("omakure: revoked Cue cleanup remains pending: {error}");
+    }
     let Ok(identity) = crate::node_identity::NodeIdentity::load_existing(context) else {
         return;
     };

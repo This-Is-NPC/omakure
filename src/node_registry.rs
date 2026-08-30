@@ -1923,6 +1923,142 @@ impl NodeRegistry {
         })
     }
 
+    /// Append a transport audit row with the bounded Cue correlation fields.
+    /// The caller omits these fields for trust failures so unauthorized peers
+    /// cannot turn the audit path into a subject-disclosure channel.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_cue_transport_audit(
+        &self,
+        event_type: &str,
+        node_id: &str,
+        session_id: Option<&[u8; 32]>,
+        direction: Option<u8>,
+        byte_count: usize,
+        outcome: &str,
+        error_code: Option<u16>,
+        cue_id: Option<&str>,
+        cue_script: Option<&str>,
+        cue_reason: Option<&str>,
+    ) -> Result<(), RegistryError> {
+        if cue_id.is_some() != cue_script.is_some() || cue_id.is_some() != cue_reason.is_some() {
+            return Err(RegistryError::InvalidInput(
+                "Cue audit correlation must be complete".to_string(),
+            ));
+        }
+        if let Some(cue_id) = cue_id {
+            if cue_id.len() != 32
+                || !cue_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Err(RegistryError::InvalidInput(
+                    "Cue audit id must be 32 lowercase hex characters".to_string(),
+                ));
+            }
+            validate_bounded_text("Cue audit script", cue_script.unwrap_or_default(), 64)?;
+            validate_bounded_text("Cue audit reason", cue_reason.unwrap_or_default(), 128)?;
+        }
+        validate_bounded_text("transport event type", event_type, 64)?;
+        validate_node_id(node_id)?;
+        validate_bounded_text("transport outcome", outcome, 32)?;
+        if let Some(session_id) = session_id {
+            if session_id.len() != 32 {
+                return Err(RegistryError::InvalidInput(
+                    "transport session ID must be 32 bytes".to_string(),
+                ));
+            }
+        }
+        if !matches!(direction, None | Some(0) | Some(1))
+            || error_code.is_some_and(|code| !(1000..=1999).contains(&code))
+        {
+            return Err(RegistryError::InvalidInput(
+                "transport audit metadata is invalid".to_string(),
+            ));
+        }
+        let now = chrono::Utc::now().timestamp();
+        self.with_connection(|connection| {
+            ensure_transport_audit_cue_columns(connection)?;
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let audit_count: i64 =
+                transaction
+                    .query_row("SELECT COUNT(*) FROM transport_audit", [], |row| row.get(0))?;
+            if audit_count >= MAX_TRANSPORT_AUDIT_ROWS {
+                return Err(RegistryError::AuditCapacity);
+            }
+            transaction.execute(
+                "INSERT INTO transport_audit
+                 (event_type, node_id, session_id, bundle_id, direction, byte_count, outcome,
+                  error_code, cue_id, cue_script, cue_reason, occurred_at)
+                 VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    event_type,
+                    node_id,
+                    session_id.map(|value| value.as_slice()),
+                    direction,
+                    i64::try_from(byte_count).map_err(|_| RegistryError::InvalidInput(
+                        "transport byte count is too large".to_string()
+                    ))?,
+                    outcome,
+                    error_code,
+                    cue_id,
+                    cue_script,
+                    cue_reason,
+                    now,
+                ],
+            )?;
+            transaction.commit()?;
+            Ok(())
+        })
+    }
+
+    /// Atomically consume one Cue rate token for a peer. This state lives in
+    /// the registry so reconnects and multiple live sessions cannot reset or
+    /// bypass the per-peer bound.
+    pub fn consume_cue_rate(&self, node_id: &str, now: i64) -> Result<bool, RegistryError> {
+        validate_node_id(node_id)?;
+        if now <= 0 {
+            return Err(RegistryError::InvalidInput(
+                "Cue rate timestamp must be positive".to_string(),
+            ));
+        }
+        self.with_connection(|connection| {
+            ensure_transport_audit_cue_columns(connection)?;
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let existing: Option<(i64, i64)> = transaction
+                .query_row(
+                    "SELECT window_start, count FROM cue_rate_limits WHERE node_id = ?1",
+                    [node_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?;
+            let (window_start, count) = match existing {
+                Some((window_start, count)) if now.saturating_sub(window_start) < 60 => {
+                    (window_start, count)
+                }
+                _ => (now, 0),
+            };
+            if count
+                >= (crate::remote_cue::MAX_CUES_PER_MINUTE
+                    + crate::remote_cue::RATE_BURST_ALLOWANCE) as i64
+            {
+                transaction.commit()?;
+                return Ok(false);
+            }
+            transaction.execute(
+                "INSERT INTO cue_rate_limits (node_id, window_start, count)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(node_id) DO UPDATE SET
+                   window_start = excluded.window_start,
+                   count = excluded.count",
+                params![node_id, window_start, count + 1],
+            )?;
+            transaction.commit()?;
+            Ok(true)
+        })
+    }
+
     pub fn record_enrollment_audit(
         &self,
         event_code: &str,
@@ -2102,7 +2238,46 @@ fn initialize_database(
     if version == 7 {
         migrate_v7_to_v8(connection)?;
     }
+    ensure_transport_audit_cue_columns(connection)?;
     validate_schema(connection, registry)
+}
+
+/// Add the Cue-only schema pieces to registries created before Cue support.
+/// This is intentionally additive and does not alter the trust schema version:
+/// old audit rows remain valid with NULL Cue metadata.
+fn ensure_transport_audit_cue_columns(connection: &Connection) -> Result<(), RegistryError> {
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS cue_rate_limits (
+           node_id TEXT PRIMARY KEY,
+           window_start INTEGER NOT NULL CHECK (window_start > 0),
+           count INTEGER NOT NULL CHECK (count >= 0)
+         )",
+    )?;
+    let mut statement = connection.prepare("PRAGMA table_info(transport_audit)")?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<std::collections::HashSet<_>, _>>()?;
+    drop(statement);
+
+    if !columns.contains("cue_id") {
+        connection.execute(
+            "ALTER TABLE transport_audit ADD COLUMN cue_id TEXT NULL CHECK (cue_id IS NULL OR length(cue_id) = 32)",
+            [],
+        )?;
+    }
+    if !columns.contains("cue_script") {
+        connection.execute(
+            "ALTER TABLE transport_audit ADD COLUMN cue_script TEXT NULL CHECK (cue_script IS NULL OR length(CAST(cue_script AS BLOB)) BETWEEN 1 AND 64)",
+            [],
+        )?;
+    }
+    if !columns.contains("cue_reason") {
+        connection.execute(
+            "ALTER TABLE transport_audit ADD COLUMN cue_reason TEXT NULL CHECK (cue_reason IS NULL OR length(CAST(cue_reason AS BLOB)) BETWEEN 1 AND 128)",
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 /// Widen the stored Profile with the baseline a Performer holds.
@@ -2982,9 +3157,17 @@ fn create_v2_schema(transaction: &Transaction<'_>) -> Result<(), RegistryError> 
           bundle_id BLOB NULL CHECK (bundle_id IS NULL OR length(bundle_id) = 16),
           direction INTEGER NULL CHECK (direction IS NULL OR direction IN (0, 1)),
           byte_count INTEGER NOT NULL CHECK (byte_count >= 0),
-          outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
-          error_code INTEGER NULL CHECK (error_code IS NULL OR error_code BETWEEN 1000 AND 1999),
-          occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
+           outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
+           error_code INTEGER NULL CHECK (error_code IS NULL OR error_code BETWEEN 1000 AND 1999),
+           cue_id TEXT NULL CHECK (cue_id IS NULL OR length(cue_id) = 32),
+           cue_script TEXT NULL CHECK (cue_script IS NULL OR length(CAST(cue_script AS BLOB)) BETWEEN 1 AND 64),
+           cue_reason TEXT NULL CHECK (cue_reason IS NULL OR length(CAST(cue_reason AS BLOB)) BETWEEN 1 AND 128),
+           occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
+        );
+        CREATE TABLE cue_rate_limits (
+          node_id TEXT PRIMARY KEY,
+          window_start INTEGER NOT NULL CHECK (window_start > 0),
+          count INTEGER NOT NULL CHECK (count >= 0)
         );
         CREATE INDEX transport_key_epochs_state_idx ON transport_key_epochs(state, node_id);
         CREATE UNIQUE INDEX transport_key_epochs_one_active
@@ -3397,8 +3580,16 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
             "byte_count",
             "outcome",
             "error_code",
+            "cue_id",
+            "cue_script",
+            "cue_reason",
             "occurred_at",
         ],
+    )?;
+    validate_columns(
+        connection,
+        "cue_rate_limits",
+        &["node_id", "window_start", "count"],
     )?;
     validate_columns(
         connection,
@@ -3549,6 +3740,7 @@ fn validate_objects(
         ("table".to_string(), "audit_events".to_string()),
         ("table".to_string(), "bootstrap_proofs".to_string()),
         ("table".to_string(), "channel_sessions".to_string()),
+        ("table".to_string(), "cue_rate_limits".to_string()),
         ("table".to_string(), "enrollment_audits".to_string()),
         ("table".to_string(), "enrollment_replays".to_string()),
         ("table".to_string(), "inbox".to_string()),
@@ -4650,6 +4842,90 @@ mod tests {
             None,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn cue_rate_limit_is_durable_and_allows_the_frozen_burst() {
+        let temp = TempDir::new().unwrap();
+        let node_context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
+        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        let peer = identity.public_status().node_id.clone();
+
+        for _ in
+            0..(crate::remote_cue::MAX_CUES_PER_MINUTE + crate::remote_cue::RATE_BURST_ALLOWANCE)
+        {
+            assert!(registry.consume_cue_rate(&peer, 100).unwrap());
+        }
+        assert!(!registry.consume_cue_rate(&peer, 101).unwrap());
+        drop(registry);
+        drop(identity);
+        let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
+        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        assert!(!registry.consume_cue_rate(&peer, 101).unwrap());
+        assert!(registry.consume_cue_rate(&peer, 160).unwrap());
+    }
+
+    #[test]
+    fn cue_audit_persists_correlation_without_changing_legacy_rows() {
+        let temp = TempDir::new().unwrap();
+        let node_context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
+        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        let cue_id = "0123456789abcdef0123456789abcdef";
+
+        registry
+            .record_cue_transport_audit(
+                "cue_rejected",
+                &identity.public_status().node_id,
+                None,
+                None,
+                0,
+                "rejected",
+                Some(1206),
+                Some(cue_id),
+                Some("deploy.sh"),
+                Some("approved by operator"),
+            )
+            .unwrap();
+        registry
+            .record_transport_audit(
+                "legacy_event",
+                &identity.public_status().node_id,
+                None,
+                None,
+                0,
+                "accepted",
+                None,
+            )
+            .unwrap();
+
+        let connection = Connection::open(node_context.database_path()).unwrap();
+        let stored: (String, String, String) = connection
+            .query_row(
+                "SELECT cue_id, cue_script, cue_reason FROM transport_audit
+                 WHERE cue_id = ?1",
+                [cue_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            stored,
+            (
+                cue_id.into(),
+                "deploy.sh".into(),
+                "approved by operator".into()
+            )
+        );
+        let legacy_nulls: (Option<String>, Option<String>, Option<String>) = connection
+            .query_row(
+                "SELECT cue_id, cue_script, cue_reason FROM transport_audit
+                 WHERE event_type = 'legacy_event'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(legacy_nulls, (None, None, None));
     }
 
     fn seed_v3_pending_enrollment() -> (TempDir, NodeContext, NodeRegistry, [u8; 16], String) {

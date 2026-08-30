@@ -117,7 +117,8 @@ cue_runs_are_lease_stealable = false
 expired_lease_terminal_state = "failed"
 
 [liveness]
-gates_reevaluated_in_accept_transaction = true
+registry_and_runs_share_an_accept_transaction = false
+worker_trust_preflight_before_execution = true
 revocation_cancels_in_flight_run = true
 pre_revocation_cue_ids_permanently_rejected = true
 expiry_checked_at_both_transitions = true

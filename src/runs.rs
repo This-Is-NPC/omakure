@@ -843,6 +843,70 @@ pub fn enqueue(
     Ok(row)
 }
 
+/// Enqueue a Cue in one run-database transaction so the run row and its
+/// deny-all/hash metadata become visible together. Revocation races are closed
+/// by the worker's registry preflight immediately before execution.
+pub fn enqueue_cue(
+    conn: &mut Connection,
+    script_path: &str,
+    args: &[String],
+    opts: EnqueueOptions,
+) -> Result<RunRow, String> {
+    if opts.trigger != RunTrigger::Cue {
+        return Err("Cue enqueue requires RunTrigger::Cue".to_string());
+    }
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|err| format!("Begin Cue enqueue failed: {}", err))?;
+    let now = current_unix_ms();
+    let row = RunRow {
+        run_id: opts.run_id.unwrap_or_else(generate_run_id),
+        script_path: script_path.to_string(),
+        script_name: opts.script_name,
+        args_json: serde_json::to_string(args).unwrap_or_else(|_| "[]".to_string()),
+        actor: if opts.actor.is_empty() {
+            "human".to_string()
+        } else {
+            opts.actor
+        },
+        reason: opts.reason,
+        state: RunState::Queued,
+        priority: opts.priority,
+        enqueued_at: now,
+        worker_id: None,
+        lease_until: None,
+        timeout_ms: opts.timeout_ms,
+        cron_schedule_id: opts.cron_schedule_id,
+        trigger: opts.trigger,
+        started_at: None,
+        finished_at: None,
+        duration_ms: None,
+        exit_code: None,
+        success: None,
+        stdout: String::new(),
+        stderr: String::new(),
+        error: None,
+        parent_run_id: opts.parent_run_id,
+        omakure_version: opts.omakure_version,
+    };
+    insert_run(&transaction, &row)?;
+    match opts.allowed_secret_refs.as_deref() {
+        Some(refs) => set_run_secret_refs(&transaction, &row.run_id, refs)?,
+        None => set_run_secret_refs(
+            &transaction,
+            &row.run_id,
+            &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
+        )?,
+    }
+    if let Some(hash) = opts.script_content_hash.as_deref() {
+        set_run_script_hash(&transaction, &row.run_id, hash)?;
+    }
+    transaction
+        .commit()
+        .map_err(|err| format!("Commit Cue enqueue failed: {}", err))?;
+    Ok(row)
+}
+
 /// Insert a row directly in `state='running'`, skipping the queued step.
 /// Used by the synchronous `omakure run` fast path so the row is visible
 /// to `history list --state running` immediately.
@@ -1002,6 +1066,7 @@ pub fn get_run_script_hash(conn: &Connection, run_id: &str) -> Result<Option<Str
 pub struct ClaimFilters {
     pub actor: Option<String>,
     pub script: Option<String>,
+    pub exclude_cues: bool,
 }
 
 /// Claim the next eligible job atomically, transitioning it from
@@ -1035,6 +1100,15 @@ pub fn claim_next(
           AND lease_until < :now AND trigger <> '{}'))",
         RunTrigger::Cue.as_str()
     )];
+    where_clauses.push(format!(
+        "NOT (trigger = '{}' AND EXISTS (\
+            SELECT 1 FROM runs AS active_cue \
+             WHERE active_cue.trigger = '{}' \
+               AND active_cue.actor = runs.actor \
+               AND active_cue.state = 'running'))",
+        RunTrigger::Cue.as_str(),
+        RunTrigger::Cue.as_str(),
+    ));
     let mut named_params: Vec<(&str, Box<dyn rusqlite::ToSql>)> = Vec::new();
     named_params.push((":now", Box::new(now)));
     named_params.push((":worker_id", Box::new(worker_id.to_string())));
@@ -1050,6 +1124,9 @@ pub fn claim_next(
         );
         named_params.push((":script", Box::new(script.clone())));
         named_params.push((":script_like", Box::new(format!("%{}%", script))));
+    }
+    if filters.exclude_cues {
+        where_clauses.push(format!("trigger <> '{}'", RunTrigger::Cue.as_str()));
     }
 
     let sql = format!(
@@ -1199,80 +1276,78 @@ pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, Stri
     let now = current_unix_ms();
     let mut statement = conn
         .prepare(
-            "SELECT run_id FROM runs
+            "UPDATE runs
+                SET state = 'failed',
+                    finished_at = ?1,
+                    duration_ms = MAX(0, ?1 - COALESCE(started_at, ?1)),
+                    exit_code = NULL,
+                    success = 0,
+                    stdout = '',
+                    stderr = '',
+                    error = ?2,
+                    lease_until = NULL
               WHERE state = 'running'
-                AND trigger = ?1
+                AND trigger = ?3
                 AND lease_until IS NOT NULL
-                AND lease_until < ?2",
+                AND lease_until < ?1
+              RETURNING run_id",
         )
         .map_err(|err| format!("Prepare cue recovery failed: {}", err))?;
-    let ids: Vec<String> = statement
-        .query_map(params![RunTrigger::Cue.as_str(), now], |row| row.get(0))
+    let recovered = statement
+        .query_map(
+            params![
+                now,
+                "the worker holding this remote run stopped; it was not re-run because a remote instruction must execute at most once",
+                RunTrigger::Cue.as_str()
+            ],
+            |row| row.get(0),
+        )
         .map_err(|err| format!("Query cue recovery failed: {}", err))?
         .collect::<Result<Vec<String>, _>>()
         .map_err(|err| format!("Read cue recovery failed: {}", err))?;
-    drop(statement);
-
-    for run_id in &ids {
-        finalize(
-            conn,
-            run_id,
-            RunState::Failed,
-            &RunCompletion {
-                stdout: String::new(),
-                stderr: String::new(),
-                exit_code: None,
-                success: false,
-                error: Some(
-                    "the worker holding this remote run stopped; it was not re-run because a \
-                     remote instruction must execute at most once"
-                        .to_string(),
-                ),
-            },
-        )?;
-    }
-    Ok(ids)
+    Ok(recovered)
 }
 
-/// Cancel every unfinished Cue-origin run this peer caused.
-///
-/// Withdrawing trust must reach work already in flight, not just future
-/// instructions. Cancelling the row is the whole mechanism: the executor's
-/// heartbeat already kills the child as soon as the row leaves `running`, so
-/// there is no new cancel plumbing and no second way to stop a run.
+/// Cancel every unfinished Cue-origin run this peer caused in one atomic SQL
+/// statement. A failure aborts the statement and is returned; no row is
+/// silently skipped. The executor heartbeat kills a child as soon as its
+/// running row leaves `running`.
 ///
 /// Scoped to `trigger = 'cue'` on purpose. A revoked peer's name may also
 /// appear on locally-initiated work, and revoking a peer is not a licence to
-/// cancel what this node's own owner started.
+/// cancel what this node's owner started.
 pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, String> {
+    let now = current_unix_ms();
     let mut statement = conn
         .prepare(
-            "SELECT run_id FROM runs
-              WHERE trigger = ?1
-                AND actor = ?2
-                AND state IN ('queued', 'running')",
+            "UPDATE runs
+                SET state = 'cancelled',
+                    finished_at = ?1,
+                    duration_ms = CASE
+                        WHEN state = 'queued' THEN 0
+                        ELSE MAX(0, ?1 - COALESCE(started_at, ?1))
+                    END,
+                    success = 0,
+                    error = CASE
+                        WHEN state = 'running' THEN
+                            COALESCE(error, 'cancelled because the peer was revoked')
+                        ELSE error
+                    END,
+                    reason = 'the peer that asked for this run was revoked',
+                    lease_until = NULL
+              WHERE trigger = ?2
+                AND actor = ?3
+                AND state IN ('queued', 'running')
+              RETURNING run_id",
         )
         .map_err(|err| format!("Prepare cue revocation failed: {}", err))?;
-    let ids: Vec<String> = statement
-        .query_map(params![RunTrigger::Cue.as_str(), actor], |row| row.get(0))
-        .map_err(|err| format!("Query cue revocation failed: {}", err))?
+    let cancelled = statement
+        .query_map(params![now, RunTrigger::Cue.as_str(), actor], |row| {
+            row.get(0)
+        })
+        .map_err(|err| format!("Cancel cue runs failed: {}", err))?
         .collect::<Result<Vec<String>, _>>()
-        .map_err(|err| format!("Read cue revocation failed: {}", err))?;
-    drop(statement);
-
-    let mut cancelled = Vec::new();
-    for run_id in ids {
-        if cancel(
-            conn,
-            &run_id,
-            Some("the peer that asked for this run was revoked".to_string()),
-            None,
-        )
-        .is_ok()
-        {
-            cancelled.push(run_id);
-        }
-    }
+        .map_err(|err| format!("Read cancelled Cue runs failed: {}", err))?;
     Ok(cancelled)
 }
 
@@ -2020,6 +2095,57 @@ mod tests {
         let _ = fs::remove_dir_all(ws.root());
     }
 
+    #[test]
+    fn cue_revocation_failure_is_atomic_and_is_not_reported_as_cleanup_success() {
+        let ws = unique_workspace("cue_revocation_fault");
+        let conn = open(&ws).expect("open");
+        let peer = "omk1_peer";
+        let running = enqueue(
+            &conn,
+            "/x/running.sh",
+            &[],
+            EnqueueOptions {
+                actor: peer.into(),
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        let queued = enqueue(
+            &conn,
+            "/x/queued.sh",
+            &[],
+            EnqueueOptions {
+                actor: peer.into(),
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        claim_next(&conn, "worker", &ClaimFilters::default())
+            .unwrap()
+            .unwrap();
+        conn.execute_batch(
+            "CREATE TRIGGER cue_cancel_fault
+             BEFORE UPDATE OF state ON runs
+             WHEN NEW.trigger = 'Cue' AND NEW.state = 'cancelled'
+             BEGIN SELECT RAISE(ABORT, 'injected Cue cancellation failure'); END",
+        )
+        .unwrap();
+
+        let error = cancel_cue_runs_for_actor(&conn, peer).unwrap_err();
+        assert!(error.contains("injected Cue cancellation failure"));
+        assert_eq!(
+            get_run(&conn, &running.run_id).unwrap().unwrap().state,
+            RunState::Running
+        );
+        assert_eq!(
+            get_run(&conn, &queued.run_id).unwrap().unwrap().state,
+            RunState::Queued
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
     /// Without the exclusion this test fails by *succeeding* — `claim_next`
     /// hands the row back and the script runs a second time.
     #[test]
@@ -2118,6 +2244,17 @@ mod tests {
             "the row must reach a terminal state or the Conductor waits forever"
         );
         assert!(loaded.error.unwrap_or_default().contains("at most once"));
+
+        assert!(
+            claim_next(&conn, "w3", &ClaimFilters::default())
+                .unwrap()
+                .is_none(),
+            "recovery must leave an abandoned Cue terminal, never claimable"
+        );
+        assert!(
+            recover_abandoned_cue_runs(&conn).unwrap().is_empty(),
+            "terminal recovery must be idempotent"
+        );
 
         assert_eq!(
             fs::read_to_string(&effects).unwrap(),
@@ -2303,6 +2440,110 @@ mod tests {
         assert!(claim_next(&conn, "w", &ClaimFilters::default())
             .unwrap()
             .is_none());
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn claim_next_can_exclude_cues_for_context_free_workers() {
+        let ws = unique_workspace("claim_excludes_cues");
+        let conn = open(&ws).expect("open");
+        let cue = enqueue(
+            &conn,
+            "/x/remote.sh",
+            &[],
+            EnqueueOptions {
+                actor: "omk1_peer".into(),
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        let local = enqueue(&conn, "/x/local.sh", &[], enqueue_opts()).unwrap();
+
+        let claimed = claim_next(
+            &conn,
+            "generic-worker",
+            &ClaimFilters {
+                exclude_cues: true,
+                ..ClaimFilters::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(claimed.run_id, local.run_id);
+        assert_eq!(
+            get_run(&conn, &cue.run_id).unwrap().unwrap().state,
+            RunState::Queued
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    fn claim_next_allows_only_one_running_cue_per_actor() {
+        let ws = unique_workspace("claim_cue_actor_bound");
+        let conn = open(&ws).expect("open");
+        let peer = "omk1_peer";
+        let first = enqueue(
+            &conn,
+            "/x/first.sh",
+            &[],
+            EnqueueOptions {
+                actor: peer.into(),
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        let second = enqueue(
+            &conn,
+            "/x/second.sh",
+            &[],
+            EnqueueOptions {
+                actor: peer.into(),
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            claim_next(&conn, "w1", &ClaimFilters::default())
+                .unwrap()
+                .unwrap()
+                .run_id,
+            first.run_id
+        );
+        assert!(
+            claim_next(&conn, "w2", &ClaimFilters::default())
+                .unwrap()
+                .is_none(),
+            "a second Cue from the same peer must wait while the first is running"
+        );
+
+        let other_peer = enqueue(
+            &conn,
+            "/x/other.sh",
+            &[],
+            EnqueueOptions {
+                actor: "omk1_other".into(),
+                trigger: RunTrigger::Cue,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            claim_next(&conn, "w3", &ClaimFilters::default())
+                .unwrap()
+                .unwrap()
+                .run_id,
+            other_peer.run_id,
+            "the bound is per peer, not a global Cue worker limit"
+        );
+        assert_eq!(
+            get_run(&conn, &second.run_id).unwrap().unwrap().state,
+            RunState::Queued
+        );
         let _ = fs::remove_dir_all(ws.root());
     }
 

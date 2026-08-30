@@ -15,7 +15,7 @@ use crate::cli::args::{
 use crate::cli::json::{self, codes};
 use crate::operations::core::{self, CancelRunRequest, DeadLetterRunRequest, EnqueueRunRequest};
 use crate::operations::{OperationError, OperationErrorCode};
-use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
+use crate::run_executor::ExecutionTerminal;
 use crate::runs::{self, ClaimFilters, RunCompletion, RunRow};
 use crate::workspace::Workspace;
 use serde_json::json;
@@ -208,9 +208,54 @@ pub(crate) fn worker_loop(
     script_filter: Option<String>,
     once: bool,
 ) {
+    worker_loop_inner(
+        workspace,
+        worker_id,
+        cancel_flag,
+        actor_filter,
+        script_filter,
+        once,
+        None,
+    );
+}
+
+/// Worker entry point used by `node serve`, which can re-check local trust
+/// immediately before executing a Cue. Standalone queue workers have no node
+/// identity context and therefore fail closed for Cue rows through the wrapper
+/// above.
+pub(crate) fn worker_loop_with_context(
+    workspace: Workspace,
+    worker_id: String,
+    cancel_flag: Arc<AtomicBool>,
+    actor_filter: Option<String>,
+    script_filter: Option<String>,
+    once: bool,
+    context: crate::node::NodeContext,
+) {
+    worker_loop_inner(
+        workspace,
+        worker_id,
+        cancel_flag,
+        actor_filter,
+        script_filter,
+        once,
+        Some(context),
+    );
+}
+
+fn worker_loop_inner(
+    workspace: Workspace,
+    worker_id: String,
+    cancel_flag: Arc<AtomicBool>,
+    actor_filter: Option<String>,
+    script_filter: Option<String>,
+    once: bool,
+    trust_context: Option<crate::node::NodeContext>,
+) {
     let filters = ClaimFilters {
         actor: actor_filter,
         script: script_filter,
+        exclude_cues: trust_context.is_none(),
     };
 
     // Resolve remote runs abandoned by a previous worker, before claiming any
@@ -259,7 +304,12 @@ pub(crate) fn worker_loop(
             thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
             continue;
         };
-        execute_and_finalize(&workspace, &row, Arc::clone(&cancel_flag));
+        execute_and_finalize(
+            &workspace,
+            &row,
+            Arc::clone(&cancel_flag),
+            trust_context.as_ref(),
+        );
         if once {
             return;
         }
@@ -268,7 +318,37 @@ pub(crate) fn worker_loop(
 
 /// Execute one claimed row through the shared executor and write the
 /// terminal transition.
-fn execute_and_finalize(workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>) {
+fn execute_and_finalize(
+    workspace: &Workspace,
+    row: &RunRow,
+    cancel_flag: Arc<AtomicBool>,
+    trust_context: Option<&crate::node::NodeContext>,
+) {
+    if row.trigger == runs::RunTrigger::Cue {
+        let context = trust_context.expect("generic workers cannot claim Cue rows");
+        let guard = match crate::remote_cue::ExecutionGuard::acquire(context, &row.actor) {
+            Ok(guard) => guard,
+            Err(error) => {
+                cancel_without_execution(workspace, row, error);
+                return;
+            }
+        };
+        if let Err(error) = cue_worker_preflight(context, workspace, row) {
+            cancel_without_execution(workspace, row, error);
+            return;
+        }
+        execute_and_finalize_inner(workspace, row, cancel_flag, Some(guard));
+        return;
+    }
+    execute_and_finalize_inner(workspace, row, cancel_flag, None);
+}
+
+fn execute_and_finalize_inner(
+    workspace: &Workspace,
+    row: &RunRow,
+    cancel_flag: Arc<AtomicBool>,
+    spawn_guard: Option<crate::remote_cue::ExecutionGuard>,
+) {
     // Layer 2 of the env-injection precedence table
     // (`docs/internal/env-injection-spec.md` §1): the active managed env. Reserved
     // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
@@ -304,7 +384,13 @@ fn execute_and_finalize(workspace: &Workspace, row: &RunRow, cancel_flag: Arc<At
         }
         None => crate::adapters::environments::resolve_active_env(workspace.envs_dir()),
     };
-    let result = execute_with_heartbeat(workspace, row, extra_env, Some(cancel_flag));
+    let result = crate::run_executor::execute_with_heartbeat_guarded(
+        workspace,
+        row,
+        extra_env,
+        Some(cancel_flag),
+        spawn_guard,
+    );
     let conn = match runs::open(workspace) {
         Ok(c) => c,
         Err(_) => return,
@@ -327,6 +413,62 @@ fn execute_and_finalize(workspace: &Workspace, row: &RunRow, cancel_flag: Arc<At
             let _ = runs::record_cancelled_output(&conn, &row.run_id, result.completion);
         }
     }
+}
+
+fn cue_worker_preflight(
+    context: &crate::node::NodeContext,
+    workspace: &Workspace,
+    row: &RunRow,
+) -> Result<(), String> {
+    let identity = crate::node_identity::NodeIdentity::load_existing(context)
+        .map_err(|error| format!("Cue trust preflight could not load identity: {error}"))?;
+    let registry =
+        crate::node_registry::NodeRegistry::open_existing(context, identity.public_status())
+            .map_err(|error| format!("Cue trust preflight could not open registry: {error}"))?;
+    let authorization = registry
+        .health_authorization(&row.actor)
+        .map_err(|error| format!("Cue trust preflight could not read peer trust: {error}"))?;
+    let Some(authorization) = authorization else {
+        return Err("Cue sender is no longer an active trusted peer".to_string());
+    };
+    if authorization.state != crate::node_registry::PeerState::Active
+        || authorization.role != crate::node_registry::PeerRole::Conductor
+    {
+        return Err("Cue sender is no longer an active conductor".to_string());
+    }
+    let policy = crate::remote_cue::read_policy(context);
+    let authority = crate::remote_cue::LocalAuthority {
+        remote_cues_enabled: policy.enabled,
+        authorization: Some(authorization),
+        declared_scripts: policy.declared_scripts.clone(),
+        declared_batteries: policy.declared_batteries.clone(),
+    };
+    if crate::remote_cue::evaluate_gates(&authority) != crate::remote_cue::GateDecision::Accepted {
+        return Err("Cue sender no longer passes local authorization policy".to_string());
+    }
+    let script_name = row
+        .script_name
+        .as_deref()
+        .ok_or_else(|| "Cue run has no recorded script name".to_string())?;
+    crate::remote_cue::is_declared_or_from_declared_battery(
+        script_name,
+        std::path::Path::new(&row.script_path),
+        &policy,
+        workspace,
+    )
+    .map_err(|_| "Cue script is no longer declared by local policy".to_string())?;
+    Ok(())
+}
+
+fn cancel_without_execution(workspace: &Workspace, row: &RunRow, error: String) {
+    eprintln!(
+        "omakure: cancelled remote run {} before execution: {error}",
+        row.run_id
+    );
+    let Ok(conn) = runs::open(workspace) else {
+        return;
+    };
+    let _ = runs::cancel(&conn, &row.run_id, Some(error), None);
 }
 
 fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String) {

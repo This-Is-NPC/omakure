@@ -66,6 +66,16 @@ pub fn execute_with_heartbeat(
     extra_env: Vec<(String, String)>,
     cancel: Option<CancelFlag>,
 ) -> ExecutionResult {
+    execute_with_heartbeat_guarded(workspace, row, extra_env, cancel, None)
+}
+
+pub fn execute_with_heartbeat_guarded(
+    workspace: &Workspace,
+    row: &RunRow,
+    extra_env: Vec<(String, String)>,
+    cancel: Option<CancelFlag>,
+    spawn_guard: Option<crate::remote_cue::ExecutionGuard>,
+) -> ExecutionResult {
     // Resolve the script path. The row stores an absolute path; if the
     // file does not exist (e.g. it was deleted between enqueue and
     // claim), record an Errored result so the worker marks the row
@@ -214,7 +224,9 @@ pub fn execute_with_heartbeat(
         }
     };
 
-    let mut child = match command.spawn() {
+    let child_result = command.spawn();
+    drop(spawn_guard);
+    let mut child = match child_result {
         Ok(c) => c,
         Err(err) => {
             return ExecutionResult {

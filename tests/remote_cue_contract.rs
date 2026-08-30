@@ -18,10 +18,13 @@
 
 use k256::schnorr::{signature::hazmat::PrehashSigner, SigningKey};
 use omakure::direct_transport::{envelope_nonce, verify_envelope};
+use omakure::health_plane::model::{RunFact, RunnerFact};
+use omakure::health_plane::report::{HealthFactsSource, HealthReporter, ProfileFacts, PulseFacts};
 use omakure::remote_cue::CueCode;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 const ENVELOPE_DOMAIN: &[u8] = b"omakure/direct-envelope/v1\0";
 const RUN_ID_DOMAIN: &[u8] = b"omakure/cue-run-id/v1\0";
@@ -383,11 +386,77 @@ fn idempotency_rests_on_the_database_primary_key() {
     ));
 }
 
+struct TerminalRunSource {
+    runs: Arc<Mutex<Vec<RunFact>>>,
+}
+
+impl HealthFactsSource for TerminalRunSource {
+    fn profile_facts(&self) -> ProfileFacts {
+        ProfileFacts::default()
+    }
+
+    fn pulse_facts(&self) -> PulseFacts {
+        PulseFacts {
+            runner: RunnerFact {
+                queue_depth: 0,
+                scheduler: "disabled".to_string(),
+                state: "idle".to_string(),
+                workers_busy: 0,
+                workers_configured: 1,
+            },
+            last_run: None,
+            uptime_seconds: 1,
+        }
+    }
+
+    fn terminal_runs(&self, _limit: usize) -> Vec<RunFact> {
+        self.runs.lock().expect("terminal runs lock").clone()
+    }
+}
+
+#[test]
+fn a_completed_cue_run_produces_one_terminal_signal_candidate() {
+    let cue_id = "0123456789abcdef0123456789abcdef";
+    let run_id =
+        omakure::health_plane::report::opaque_run_id(&omakure::remote_cue::derive_run_id(cue_id));
+    let runs = Arc::new(Mutex::new(Vec::new()));
+    let reporter = HealthReporter::new(Box::new(TerminalRunSource {
+        runs: Arc::clone(&runs),
+    }));
+
+    // A service seeds pre-existing history before accepting new Cues. This run
+    // is added after that point, so it is eligible for exactly one harvest.
+    reporter.seed_run_watermark();
+    runs.lock().unwrap().push(RunFact {
+        exit_code: Some(0),
+        finished_at: 1_800_000_001,
+        run_id: run_id.clone(),
+        script: "deploy.sh".to_string(),
+        started_at: Some(1_800_000_000),
+        state: "completed".to_string(),
+        trigger: Some("Cue".to_string()),
+    });
+
+    let emitted = reporter.run_signals();
+    assert_eq!(emitted.len(), 1, "one terminal Cue run gets one Signal");
+    assert_eq!(emitted[0].run_id, run_id);
+    assert!(
+        reporter.run_signals().is_empty(),
+        "the same terminal Cue run is not harvested twice"
+    );
+    let signal_id = omakure::health_plane::report::run_signal_id(&run_id);
+    assert_eq!(
+        signal_id,
+        omakure::health_plane::report::run_signal_id(&emitted[0].run_id),
+        "reconnects and restarts retain the same Signal idempotency key"
+    );
+}
+
 #[test]
 fn liveness_rules_close_the_revocation_windows() {
     let v = vectors();
     for rule in [
-        "gates_reevaluated_in_accept_transaction",
+        "worker_trust_preflight_before_execution",
         "revocation_cancels_in_flight_run",
         "pre_revocation_cue_ids_permanently_rejected",
         "expiry_checked_at_both_transitions",

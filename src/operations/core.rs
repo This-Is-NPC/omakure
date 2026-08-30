@@ -358,6 +358,7 @@ pub fn enqueue_cue_run(
     request: EnqueueRunRequest,
     authorized_content_hash: &str,
 ) -> OperationResult<RunRow> {
+    let script_name = request.script.clone();
     let path = resolve_script_path(&request.script, workspace.scripts_root())?;
     let canonical = std::fs::canonicalize(&path).unwrap_or(path);
     // No environment is injected and no secret is resolvable: an empty scope
@@ -378,9 +379,9 @@ pub fn enqueue_cue_run(
         )
     })?;
 
-    let conn = runs::open(workspace).map_err(io_error_string)?;
-    runs::enqueue(
-        &conn,
+    let mut conn = runs::open(workspace).map_err(io_error_string)?;
+    runs::enqueue_cue(
+        &mut conn,
         canonical.to_string_lossy().as_ref(),
         &resolved_args.persisted_args,
         EnqueueOptions {
@@ -391,7 +392,7 @@ pub fn enqueue_cue_run(
             timeout_ms: request.timeout_ms,
             parent_run_id: None,
             cron_schedule_id: None,
-            script_name: None,
+            script_name: Some(script_name),
             omakure_version: app_meta::APP_VERSION.to_string(),
             trigger: runs::RunTrigger::Cue,
             env_name: None,

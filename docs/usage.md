@@ -30,7 +30,7 @@ manages it.
 omakure --help
 omakure help-ai
 omakure --json config
-omakure --json doctor
+omakure doctor
 omakure --json scripts
 omakure --scripts-dir /path/to/workspace --json scripts
 ```
@@ -113,6 +113,13 @@ omakure node serve --workers 1 --tokens-file /run/secrets/omakure_tokens.toml
 The default bind is `127.0.0.1:7878`; non-loopback binding requires
 `--allow-non-loopback`. Prefer tokens-file auth with per-token scopes. Legacy
 `OMAKURE_API_TOKEN` plus `--capability` remains available for local migration.
+
+The local CLI handoff used by `omakure node cue` and `omakure node baseline
+push` does not read the tokens file. Set `OMAKURE_API_TOKEN` in that CLI process
+to the plaintext value of a token whose tokens-file entry grants `node:write`.
+The service can remain in tokens-file mode; the variable supplies the local
+client with the bearer token it sends to the loopback API. Alternatively, call
+`POST /v1/node/cues` or `POST /v1/node/baselines` directly with that token.
 
 Unauthenticated probes:
 
@@ -467,7 +474,9 @@ omakure serve --uninstall
 ```
 
 `node serve` enables the scheduler by default; use `--no-scheduler` for API-only
-or worker-only test fixtures. See `scheduling.md` for cron and overlap rules.
+or worker-only test fixtures. Scheduler and workers must use one host-local
+workspace and its `.history/runs.sqlite`; this is not a cross-host queue. See
+`scheduling.md` for cron and overlap rules.
 
 ## Batteries, tokens, and lifecycle
 
@@ -484,5 +493,7 @@ omakure update --version vX.Y.Z
 omakure uninstall
 ```
 
-Cached Battery repositories are untrusted and never run directly. `update` and
+Cached Battery repositories are untrusted and never run directly. Battery
+installation is Unix-only and is a local act that an authenticated HTTP
+operator may initiate, but a peer or Remote Cue never may. `update` and
 `uninstall` are local lifecycle operations and are not HTTP routes.

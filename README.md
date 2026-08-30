@@ -1,142 +1,141 @@
-# omakure
+# Omakure
 
-Omakure is a headless Rust automation runner. The product surface is a
-machine-readable CLI plus an authenticated HTTP API. `omakure node serve` is
-the machine-owned service that combines the API, optional queue workers, and
-the schedule scanner into one deployable process.
+Omakure is a headless automation runner with authenticated node-to-node
+coordination. It runs ordinary Bash, PowerShell, Python, and embedded Lua
+scripts, then keeps queue state, run history, and structured traces in local
+SQLite. The machine-owned `omakure node serve` process combines the management
+API, optional workers, the scheduler, identity, trust, and direct transport.
 
-Scripts are ordinary Bash, PowerShell, or Python files with an embedded JSON
-schema between `OMAKURE_SCHEMA_START` and `OMAKURE_SCHEMA_END`. Runs, queue
-state, and structured traces are recorded in SQLite under the workspace.
+It is deliberately smaller than an MDM. Omakure provides the execution and
+trust layer; each organization still decides what its operations actually do.
 
-## Requirements
+## Three planes, one trusted session
 
-- Rust toolchain for development
-- Git, Bash, and `jq` for the required runtime checks
-- Optional PowerShell (`pwsh`) for `.ps1` scripts
-- Optional Python 3 for `.py` scripts
-- Nothing for `.lua` scripts: the Lua runtime is embedded in the binary
+One authenticated direct session carries three separate application planes:
 
-The default workspace is `~/Documents/omakure-scripts` on Linux/macOS and
-`%USERPROFILE%\Documents\omakure-scripts` on Windows. Set
-`OMAKURE_SCRIPTS_DIR` or pass `--scripts-dir <PATH>` to select another one.
+| Plane | Direction | Responsibility |
+|---|---|---|
+| **Health** | Performer to Conductor | Reports bounded current facts, liveness, run outcomes, and Baseline state. |
+| **Cue** | Conductor to Performer | Names one script the receiving node already declared as remotely runnable. |
+| **Baseline** | Publisher through Conductor to Performer | Delivers a signed, versioned script set under two independent authorities. |
+
+The planes share transport but not authority. A Conductor may ask. A Publisher
+may sign code. A Performer decides which peers, publishers, and scripts it
+accepts. [Read the fleet model](docs/fleet-model.md).
+
+## A Cue names. It never carries code.
+
+A Cue contains no script body, arguments, environment, secret, or working
+directory. The receiver verifies the session, reads trust and capabilities from
+its own registry, resolves its own allow-list, binds the authorized content hash,
+and executes the local bytes at most once. A script with secret-bearing fields is
+refused before it becomes a run.
+
+The immediate acknowledgement and eventual `run-completed` Signal are separate,
+so dispatch remains bounded while the outcome stays correlated by run ID. See
+[Remote Cues](docs/usage.md#remote-cues) and the
+[implemented contract](docs/internal/remote-cue-contract.md).
+
+## What ships today
+
+| Area | Current behavior |
+|---|---|
+| Scripts | `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`; Lua 5.4 is embedded. |
+| Execution | Direct runs, local SQLite queue workers, cron scheduling, cancellation, timeout, redaction, history, and traces. |
+| Interfaces | Machine-readable CLI, stable JSON envelope, and authenticated HTTP management API over shared operations. |
+| Nodes | Persistent machine identity, explicit trust and capabilities, revocation, LAN discovery, manual enrollment, and signed-bundle enrollment. |
+| Transport | Authenticated encrypted direct sessions with replay limits and redacted audit outcomes. |
+| Fleet | Current Health projection, authorized Remote Cues, signed Baseline delivery, drift detection, and verified local rollback. |
+| Batteries | External script repositories that remain untrusted until a local install validates and copies a selected script. |
+
+Release and CI targets cover x86_64 Linux, macOS, and Windows. Linux also runs
+bounded multi-container transport and Health certification gates. Platform
+installer evidence is stated separately in [Installation](docs/installation.md)
+rather than inferred from a successful build.
+
+## Boundaries, on purpose
+
+- The run queue and detailed history are local SQLite state, not a distributed
+  queue or shared multi-host database.
+- Cue and Baseline dispatch target one peer at a time. Campaigns and fan-out are
+  not implemented.
+- Nostr transport is not implemented; the shipped node-to-node path is direct.
+- Omakure is not an MDM today. It does not provide device wipe, package
+  inventory, compliance scoring, configuration enforcement, or unattended
+  provisioning.
+- The official machine service runs as a restricted service account. Omakure
+  does not provide a privilege broker or built-in administrative elevation.
+- Remote Cues cannot introduce code or consume Omakure-managed secrets.
+
+These are product boundaries, not hidden roadmap claims. The exact privacy,
+authorization, retention, and size limits live in the implemented contracts
+under [`docs/internal/`](docs/internal/).
 
 ## Quick start
 
-Install a release:
+Requirements for development are Rust, Git, Bash, and `jq`.
+
+- Optional PowerShell (`pwsh`) runs `.ps1` scripts.
+- Optional Python 3 runs `.py` scripts.
+- Lua needs no system interpreter because Lua 5.4 is embedded.
+
+Build this checkout and inspect the machine surface:
+
+```bash
+cargo build
+cargo test --locked
+cargo run --bin omakure -- --help
+cargo run --bin omakure -- help-ai
+```
+
+Create and run a local script:
+
+```bash
+cargo run --bin omakure -- init hello.lua \
+  --schema-json '{"Name":"hello","Fields":[]}' \
+  --body-stdin <<'LUA'
+print("hello from " .. _VERSION)
+LUA
+
+cargo run --bin omakure -- --json run hello.lua --actor local --reason smoke-test
+cargo run --bin omakure -- --json history list --limit 5
+```
+
+After installing a release, use `omakure doctor` to verify the workspace,
+required tools, optional runtimes, and every discovered script schema.
+
+Install the latest tagged release on Linux or macOS:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh \
   | bash -s -- --repo This-Is-NPC/omakure
 ```
 
-Discover the compiled CLI surface and inspect the workspace:
-
-```bash
-omakure --help
-omakure help-ai
-omakure doctor
-omakure --json scripts
-```
-
-Start a local node service. This example uses the legacy local token mode;
-deployments should prefer a `--tokens-file` with scoped Argon2id tokens.
-
-```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure node serve --workers 1 --no-scheduler \
-  --capability all >./omakure-node.log 2>&1 &
-NODE_PID=$!
-trap 'kill "$NODE_PID" 2>/dev/null || true' EXIT
-
-curl -fsS http://127.0.0.1:7878/v1/health
-curl -fsS http://127.0.0.1:7878/v1/ready
-curl -fsS -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
-  http://127.0.0.1:7878/v1/scripts
-```
-
-Create and run a representative script through the CLI:
-
-```bash
-omakure --json init hello.sh \
-  --schema-json '{"Name":"hello","Fields":[]}' \
-  --body-stdin <<'BODY'
-#!/usr/bin/env bash
-printf 'hello from omakure\n'
-BODY
-omakure --json run hello.sh --actor local --reason smoke-test
-```
-
-The CLI and HTTP API use the same operations. `--json` emits the stable
-`{ ok, data, error, schema_version }` envelope. Use `omakure config` to verify
-resolved paths and `omakure doctor` to validate runtimes and schemas.
-
-## Common workflows
-
-```bash
-# Catalogue and inspect scripts
-omakure --json scripts --tag ops
-omakure --json describe tools/deploy.py
-omakure --json search deploy --tag production
-
-# Run directly or queue for a worker
-omakure --json run tools/deploy.py --actor agent -- --target prod
-omakure --json queue add tools/deploy.py --actor agent -- --target prod
-omakure queue worker --concurrency 4
-
-# Inspect runs and traces
-omakure --json history list --state-set all --limit 20
-omakure --json history stats
-omakure --json history traces RUN_ID
-```
-
-For schedules, use `omakure serve` or enable the scheduler in `omakure node serve`.
-For a single deploy unit, use `node serve`; it exposes `/v1/health` and
-`/v1/ready` without authentication and protects all other routes with bearer
-auth.
-
-## Node Registry Foundation
-
-The portable node foundation owns machine-state `node.sqlite` separately from the
-workspace `.history/runs.sqlite`. The headless `node init`, `node status`,
-`node peers`, `node trust`, `node capabilities`, and `node revoke` commands,
-plus the authenticated `/v1/node/*` management routes, use shared operations.
-Public output contains only the x-only identity and redacted/bounded state.
-Trust mutations require explicit confirmation, actor, and reason evidence.
-`node serve` is the completed portable node lifecycle foundation. It creates
-one machine identity and an empty trust registry on first start, preserves
-them across restarts, workspaces, updates, and uninstall, and requires
-`omakure node reset --confirmed` for destructive removal. Peer discovery,
-direct transport, LAN discovery, manual enrollment, and signed-bundle enrollment
-are implemented and covered by focused protocol tests plus the bounded Linux
-certification gate. Nostr, Pulses, Profiles, Signals, remote Cues, campaigns,
-MDM, and Lua remain explicitly deferred. Installed-service ownership and ACLs
-are platform-specific release gates; this Linux development run does not
-fabricate macOS or Windows runtime evidence.
+Start with [CLI and HTTP usage](docs/usage.md) for local and multi-node
+workflows. Use [Deployment](docs/deployment.md) before exposing a node service.
 
 ## Documentation
 
-- `docs/internal/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
-- `docs/README.md`: documentation index
-- `docs/usage.md`: CLI and HTTP workflows
-- `docs/ai-interface.md`: JSON, queue, history, trace, and agent contract
-- `docs/http-api.md`: routes, authentication, policy, and parity
-- `docs/deployment.md`: node-service/container deployment and security
-- `docs/recovery.md`: restart, revocation, reset, and identity-replacement recovery
-- `docs/workspace.md`: on-disk state and ownership
-- `docs/scripts-path.md`: workspace resolution and ignore files
-- `docs/how-to-create-a-script.md`: schema and script authoring
-- `docs/scheduling.md`: cron scheduler lifecycle
-- `docs/headless-migration.md`: breaking removals and migration actions
-- `docs/headless-release.md`: current headless release contract
-- `docs/internal/development.md`: local build, test, lint, and node-service checks
-- `docs/internal/architecture.md`: source structure and retained dependencies
-- `docs/internal/requirements.md`: implemented requirements with source references
+- [Documentation map](docs/README.md)
+- [Fleet model](docs/fleet-model.md)
+- [CLI and HTTP usage](docs/usage.md)
+- [Installation and machine services](docs/installation.md)
+- [Deployment and security checklist](docs/deployment.md)
+- [Batteries](docs/batteries.md)
+- [Script authoring](docs/how-to-create-a-script.md)
+- [Architecture](docs/internal/architecture.md)
+- [Implemented requirements](docs/internal/requirements.md)
 
-Historical release notes retain the behavior of the releases that produced
-them. The current headless breaking changes are documented separately in the
-migration and release documents above.
+## Validation
+
+```bash
+cargo test --all-targets --locked
+cargo clippy --all-targets --locked -- -D warnings
+cargo fmt --check
+```
+
+The release archive contains only `omakure` or `omakure.exe`.
 
 ## License
 
-Apache-2.0. See `LICENSE`.
+Omakure is available under the [MIT License](LICENSE).

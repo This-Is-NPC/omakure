@@ -499,10 +499,10 @@ omakure --json history list --actor ai --since 1h
 
 ## Concurrency
 
-The run log uses SQLite WAL mode with a 500ms busy timeout (the same
-PRAGMA setup as `search-index.sqlite`). Two `omakure run` invocations
-against the same workspace can write concurrently without corrupting
-the log.
+The run log uses SQLite WAL mode with a 2-second busy timeout. The separate
+`search-index.sqlite` uses a 500ms busy timeout; they do not share the same
+busy-timeout setting. Two `omakure run` invocations against the same workspace
+can write concurrently without corrupting the log.
 
 ## Run state machine
 

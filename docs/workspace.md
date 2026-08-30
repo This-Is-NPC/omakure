@@ -37,6 +37,10 @@ The `.history/` directory is private Omakure state. Use `history`, `queue`, and
 Run rows use canonical script paths and include state-machine, actor, trigger,
 timing, output, and provenance fields.
 
+The run database uses a 2-second SQLite busy timeout. The separate
+`search-index.sqlite` database uses a 500-millisecond busy timeout. Both are
+workspace-local files and are not supported as shared network storage.
+
 ## Ignore rules
 
 `.omakureignore` files can be placed at the workspace root or below it. Rules

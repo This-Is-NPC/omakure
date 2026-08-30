@@ -1,8 +1,8 @@
 # How to create a script
 
 Generate a starter file with `omakure init`, or write a supported Bash,
-PowerShell, or Python script directly. Omakure discovers it from the selected
-workspace when the file extension and schema markers are valid.
+PowerShell, Python, or Lua script directly. Omakure discovers it from the
+selected workspace when the file extension and schema markers are valid.
 
 ```bash
 omakure init tools/hello.sh
@@ -94,7 +94,7 @@ exist. Name the file explicitly if you mean the Lua one.
 Validate and run it through named, headless commands:
 
 ```bash
-omakure --json doctor
+omakure doctor
 omakure --json describe hello.sh
 omakure --json run hello.sh --actor local --reason smoke
 omakure --json history list --limit 5

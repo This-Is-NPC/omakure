@@ -24,7 +24,7 @@ explicit root.
 
 ```bash
 omakure --scripts-dir /srv/omakure-scripts --json scripts
-OMAKURE_SCRIPTS_DIR=/srv/omakure-scripts omakure --json doctor
+OMAKURE_SCRIPTS_DIR=/srv/omakure-scripts omakure doctor
 ```
 
 On Windows, the Documents directory is resolved through the registry before

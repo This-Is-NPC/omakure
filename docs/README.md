@@ -1,36 +1,71 @@
-# Documentation index
+# Documentation
 
-The repository is a headless automation product. Its supported integration
-surfaces are the CLI, the HTTP management API, and the machine-owned `node serve`
-process.
+Omakure is a headless automation runner with three supported surfaces: the CLI,
+the authenticated HTTP management API, and the machine-owned `node serve`
+process. This index separates the product tour from operator guides and
+normative protocol contracts so status claims have one clear owner.
 
-## Users and operators
+## Start here
 
-- `internal/direct-transport-contract.md`: implemented direct transport/enrollment wire and state contract
-- `internal/health-plane-contract.md`: frozen Profile/Pulse/Signal wire, authorization, and bounds contract (pending owner review)
-- `internal/remote-cue-contract.md`: frozen Cue wire, authorization gates, and refusal codes
-- `internal/baseline-delivery.md`: frozen signed-baseline manifest, carriage, install, and rollback contract
-- `installation.md`: install, update, uninstall, and version pinning.
-- `usage.md`: CLI commands and common workflows.
-- `deployment.md`: API/node-service topologies, containers, volumes, and security.
-- `recovery.md`: restart, revocation, reset, and identity-replacement recovery.
-- `http-api.md`: HTTP routes, auth, policy, limits, and shared operations.
-- `scheduling.md`: cron scheduler lifecycle and systemd autostart.
-- `workspace.md`: workspace layout and SQLite runtime state.
-- `scripts-path.md`: workspace resolution and `.omakureignore` rules.
-- `environments.md`: managed environment files and runtime injection.
-- `batteries.md`: reusable script repositories and provenance.
-- `how-to-create-a-script.md`: schema and script authoring.
+- [Fleet model](fleet-model.md): Publisher, Conductor, Performer, and the Health,
+  Cue, and Baseline planes.
+- [CLI and HTTP usage](usage.md): local runs, enrollment, fleet health, Remote
+  Cues, and Baselines.
+- [Installation](installation.md): release installation, machine services,
+  updates, and the exact platform evidence.
+- [Deployment](deployment.md): API and node-service topologies, containers,
+  volumes, policy, and security.
 
-## AI and integration
+## Scripts and local automation
 
-- `ai-interface.md`: JSON envelope, agent verbs, queue, history, and traces.
-- `cli-http-parity.md`: CLI, shared operation, and HTTP parity matrix.
+- [Create a script](how-to-create-a-script.md): schema-bearing Bash,
+  PowerShell, Python, and embedded Lua scripts.
+- [Batteries](batteries.md): external script repositories, provenance, local
+  installation, and HTTP restrictions.
+- [Environments](environments.md): managed environment files and runtime
+  injection.
+- [Scheduling](scheduling.md): cron scanning and scheduler lifecycle.
+- [Workspace](workspace.md): workspace layout and local SQLite state.
+- [Script paths](scripts-path.md): workspace resolution and
+  `.omakureignore` rules.
+- [Recovery](recovery.md): restart, revocation, reset, and identity replacement.
+
+## Integration
+
+- [HTTP API](http-api.md): routes, authentication, policy, limits, and shared
+  operations.
+- [AI interface](ai-interface.md): stable JSON envelope, agent verbs, queue,
+  history, and traces.
+- [CLI and HTTP parity](cli-http-parity.md): adapter coverage and deliberately
+  local operations.
+
+## Implemented protocol contracts
+
+- [Direct transport and enrollment](internal/direct-transport-contract.md):
+  Noise transport, identity binding, enrollment, replay, and revocation.
+- [Health Plane](internal/health-plane-contract.md): Profile, Pulse, Signal,
+  authorization, privacy classes, retention, and bounds.
+- [Remote Cue](internal/remote-cue-contract.md): receiver-owned authorization,
+  refusal codes, secret denial, content binding, and at-most-once execution.
+- [Baseline delivery](internal/baseline-delivery.md): signed manifest, two
+  authorities, atomic installation, drift, and verified rollback.
 
 ## Contributors
 
-- `internal/development.md`: build, test, lint, integration checks, and `mise` tasks.
-- `internal/architecture.md`: retained stack, source structure, and boundaries.
-- `internal/requirements.md`: implemented requirements with source references.
-- `internal/release-artifacts.md`: binary-only release archive contract.
-- `internal/env-injection-spec.md`: environment precedence and secret non-persistence.
+- [Architecture](internal/architecture.md): stack, source structure, execution
+  paths, and boundaries.
+- [Implemented requirements](internal/requirements.md): behavior-to-source
+  traceability inventory.
+- [Development](internal/development.md): build, test, lint, integration checks,
+  and `mise` tasks.
+- [E2E testing](testing/e2e/README.md): end-to-end coverage and its evidence
+  boundaries.
+- [Release artifacts](internal/release-artifacts.md): binary-only release
+  contract.
+- [Environment injection specification](internal/env-injection-spec.md):
+  precedence and secret non-persistence.
+
+The requirements inventory owns shipped feature status. Operator guides own
+workflows. Internal contracts own wire compatibility and quantitative bounds.
+When prose disagrees with the implementation, update both the prose and its
+source reference in the same change.

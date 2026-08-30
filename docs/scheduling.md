@@ -58,14 +58,20 @@ with `error.code = "schema_invalid"`.
 ```bash
 omakure serve                     # foreground; Ctrl+C stops
 omakure serve -d                  # detached daemon (Unix only)
-omakure serve --stop              # SIGTERM + 5s grace
+omakure serve --stop              # stop a running daemon (Unix and Windows)
 omakure serve --no-worker         # scheduler only; workers run elsewhere
 omakure serve --concurrency 4     # in-process worker pool size (default 1)
 ```
 
 By default an in-process worker drains the queue so a single invocation
-is end-to-end. Pair with `omakure queue worker` on another host/process
-when you need cross-node workers.
+is end-to-end. Pair with `omakure queue worker` in another process on the
+**same host**, using the same local workspace directory, when you need separate
+workers. The scheduler and every worker that handles its rows must share that
+workspace's local `.history/runs.sqlite`; Omakure does not provide a
+cross-host or network-filesystem queue.
+
+`serve --stop` is supported on Unix and Windows. Windows supports the
+foreground process lifecycle only; `--detach` remains Unix-only.
 
 ## Lifecycle of one fire
 

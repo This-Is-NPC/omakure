@@ -39,6 +39,39 @@ init -> scripts/describe -> run or queue add -> worker/executor -> history/trace
                                        \-> serve/node-service scheduler for Schedule
 ```
 
+```mermaid
+flowchart LR
+    cli[CLI] --> operations[Shared operations]
+    http[Authenticated HTTP] --> operations
+    scheduler[Schedule scanner] --> operations
+    operations --> runs[(Local runs.sqlite)]
+    runs --> worker[Local worker]
+    worker --> executor[run_executor]
+    executor --> runtime[Bash · PowerShell · Python · embedded Lua]
+    executor --> history[History · traces · redacted output]
+```
+
+### Fleet planes
+
+One authenticated direct session carries three separate application planes.
+The transport authenticates carriage; each plane still authorizes against the
+receiving node's own registry and configuration.
+
+```mermaid
+flowchart LR
+    publisher[Publisher] -->|signed manifest| conductor[Conductor]
+    conductor == Noise direct session ==> performer[Performer]
+    performer -->|Profile · Pulse · Signal| conductor
+    conductor -->|Cue names local script| performer
+    conductor -->|signed Baseline| performer
+```
+
+Health carries closed, privacy-bounded facts. A Cue names code already present
+and declared on the Performer. A Baseline carries code and therefore requires
+both an authorized Conductor and a trusted Publisher signature. The conceptual
+model and current product limits are summarized in `docs/fleet-model.md`; exact
+wire rules stay in the implemented contracts under `docs/internal/`.
+
 Use `help-ai` once per binary version to discover the complete command tree and
 data shapes. Use `config` and `doctor` before execution when an agent needs to
 verify workspace paths or host runtimes.
@@ -136,7 +169,7 @@ src/
 - Direct runs, queue workers, and scheduled runs all use
   `run_executor::execute_with_heartbeat`, including cancellation, timeout,
   reserved environment variables, and output redaction.
- - `node serve` validates and initializes machine state before binding HTTP,
+- `node serve` validates and initializes machine state before binding HTTP,
    then starts optional workers and scheduler and shuts
   them down in reverse order. `/v1/health` and `/v1/ready` are unauthenticated;
   other routes require bearer auth and policy scopes.

@@ -46,14 +46,19 @@ through shared operations and the HTTP management API.
 | `omakure battery sync <name> --json` | `sync_battery` | `POST /v1/batteries/{battery_id}/sync` | Full | Shared operation. |
 | `omakure battery inspect <name> --json` | `inspect_battery` | `GET /v1/batteries/{battery_id}` | Full | Shared operation. |
 | `omakure battery scripts <name> --json` | `list_battery_scripts` | `GET /v1/batteries/{battery_id}/scripts` | Full | Shared operation. |
-| `omakure battery install <name> <script-id> --json` | `install_battery_script` | `POST /v1/batteries/{battery_id}/scripts/{script_id}/install` | Full | Shared operation. |
+| `omakure battery install <name> <script-id> --json` | `install_battery_script` | `POST /v1/batteries/{battery_id}/scripts/{script_id}/install` | Full | Shared operation; Unix-only. A local CLI or authenticated HTTP operator may initiate it, never a peer or Remote Cue. |
 | `omakure battery remove <name> --json` | `remove_battery` | `DELETE /v1/batteries/{battery_id}` | Full | Supports `remove_cache` query option. |
 
 ### Node plane
 
-The fleet control surface. Every route below is under `node:read` or
-`node:write`; the authorization that decides whether a *peer* may act stays on
-the receiving node and is never a property of these routes.
+The fleet control surface. The route scopes are `node:read` for node status,
+health, signals, and peer reads; `discovery:read` for discovery; `node:write`
+for initialization, Cue/Baseline dispatch, and local rollback; `trust:write`
+for peer trust mutations; and `enrollment:read`/`enrollment:write` for the
+corresponding enrollment reads and writes. The authorization that decides
+whether a *peer* may act stays on the receiving node and is never a property of
+these routes. Deploy gates `routes.node`, `routes.trust`, and
+`routes.enrollment` are additional checks, before token scopes.
 
 | CLI | Operation | HTTP | Status | Notes |
 |---|---|---|---|---|
@@ -67,7 +72,7 @@ the receiving node and is never a property of these routes.
 | provisioning delivery | `apply_signed_bundle_from_local_token` | `POST /v1/node/enrollment/bundle` | HTTP-only | The route a fleet uses to hand a provisioned machine its membership. There is no CLI equivalent because the node being enrolled is the one that must apply it, and nothing is typed into that machine. Bounded by its own body limit. |
 | `omakure node health` | `fleet_status` | `GET /v1/node/health` | Full | Presence, Profile, runner status, and baseline drift. |
 | `omakure node signals` | `signal_feed` | `GET /v1/node/signals` | Full | The bounded newest-first closed feed, read as one snapshot. |
-| `omakure node discovery` | `scan_discovery` | `GET /v1/node/discovery` | Full | One bounded in-memory LAN scan; creates no trust and no session. |
+| `omakure node discovery` | `scan_discovery` | `GET /v1/node/discovery` | Full | CLI performs a fresh temporary bounded LAN scan; HTTP returns the node service's live in-memory snapshot. Neither creates trust or a session. |
 | `omakure node cue` | Cue dispatch over the held session | `POST /v1/node/cues` | Full, and HTTP is the only path that works in a managed fleet | The route needs no capability of its own and is the only path that works in a managed fleet, because a separate process cannot dial a peer the running service already has a session with. Every authorization gate stays on the receiving node; the route decides only whether this operator may ask. |
 | `omakure node baseline push` | baseline dispatch over the held session | `POST /v1/node/baselines` | Full | `push` has parity: `POST /v1/node/baselines`, under `node:write`, and it is the *only* path — a baseline goes to a Performer this node already conducts, so there is no first-contact case a direct dial would serve, and adding one would be a second way into the responder for a case that does not exist. `rollback` has parity too: `POST /v1/node/baseline/rollback`, also under `node:write`, and it is local on both surfaces — it puts *this* machine back on the one baseline it retained and reaches no peer. `create-key` and `publish` are CLI-only and stay that way: both touch the baseline publisher key, which is held apart from everything the service process can reach, and a route that could sign would put authoring code and ordering runs back in one place. |
 | `omakure node baseline rollback` | `rollback_baseline` | `POST /v1/node/baseline/rollback` | Full | Local on both surfaces: it puts *this* machine back on the one baseline it retained and reaches no peer. |

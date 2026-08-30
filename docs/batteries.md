@@ -8,6 +8,7 @@ This document defines the Battery v1 contract. The HTTP management API is a
 transport adapter over the same Battery operations as the CLI, with the extra
 restriction that HTTP Battery registration and HTTP-triggered Battery use are
 limited to `https://` sources.
+Battery installation is currently Unix-only.
 
 ## Scope
 
@@ -123,8 +124,9 @@ description = "List Azure resource groups"
 tags = ["azure", "resource-groups", "read-only"]
 ```
 
-Script entries must point at `.bash`, `.sh`, `.ps1`, or `.py` files that contain
-a valid Omakure schema block. Paths are always relative to the Battery checkout.
+Script entries must point at `.bash`, `.sh`, `.ps1`, `.py`, or `.lua` files that
+contain a valid Omakure schema block. Paths are always relative to the Battery
+checkout.
 
 ## Safety Contract
 
@@ -149,7 +151,14 @@ exposing or installing any script:
 ## Install Contract
 
 `battery install` materializes one selected script into the trusted scripts
-workspace by copying it from the validated cache checkout.
+workspace by copying it from the validated cache checkout. It is a local act:
+it may be initiated by the local CLI or by an authenticated HTTP request to the
+install route, but never by a peer or by a Remote Cue. Non-Unix platforms reject
+the operation until their no-follow install protections are implemented.
+
+Fleet code delivery uses a separately signed Baseline; a Remote Cue may select a
+Battery-installed script only after the receiving node explicitly declares that
+Battery in `trust.remote_cue_batteries`.
 
 Rules:
 

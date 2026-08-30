@@ -1,12 +1,10 @@
 # Health Plane Contract
 
-**Status: FROZEN CONTRACT, PENDING OWNER REVIEW.** This document freezes the
-minimal Health Plane wire format, authorization mapping, state model, and every
-quantitative bound for Profile, Pulse, and the closed Signal lifecycle. It is the
-go/no-go gate for plan `health-plane-foundation` (#190). No Health Plane
-persistence, production message handling, CLI surface, or HTTP projection may be
-implemented until this document is owner-reviewed and the executable vectors in
-`tests/health_plane_contract.rs` are green.
+**Status: IMPLEMENTED CONTRACT.** This document freezes the minimal Health
+Plane wire format, authorization mapping, state model, and every quantitative
+bound implemented by the production node service for Profile, Pulse, and the
+closed Signal lifecycle. It remains the compatibility and review contract for
+the CLI, HTTP projection, persistence, and node-to-node carriage.
 
 Every number in this document is normative and final. There is no `TBD` and no
 "unspecified" bound. A later task that needs a limit not written here must amend
@@ -793,7 +791,7 @@ run history are not derived and are never touched by Health Plane recovery.
 | Migration retry | Only on explicit operator action; never automatic on every start |
 | Second database | Never created; the Health Plane lives only in `node.sqlite` |
 | Rows from schema versions 1 through 6 | Never mutated in place, never dropped by the Health Plane migration |
-| Downgrade | A node that finds `schema_version > 7` refuses to start rather than downgrading |
+| Downgrade | A node that finds `schema_version > 8` refuses to start rather than downgrading |
 | Single corrupt Health Plane row | Delete only that row, audit `health_corrupt_state` (1115), continue |
 | `SQLITE_CORRUPT` on a Health Plane table | Disable the Health Plane for the process lifetime, audit, keep transport and runs serving; never rebuild trust from incoming data |
 | Corrupt trust or identity state | The frozen transport behavior applies unchanged: fail closed and preserve evidence |
@@ -815,7 +813,7 @@ run history are not derived and are never touched by Health Plane recovery.
 | Wrong-direction message | Role check at step 8; a Performer cannot ack itself and a Conductor cannot report health; `health_wrong_role` (1105) |
 | Capability bypass | Capability check at step 9; `health_missing_capability` (1106) |
 | Resource exhaustion by flooding | Per-peer rate limits, burst allowance, bounded inbox/outbox, bounded reorder buffer, bounded replay table, and a hard 25,464,832-byte storage ceiling |
-| Amplification through error replies | Errors are at most 576 encoded bytes, are sent only to authenticated authorized target-bound peers, and carry only a code and its name |
+| Amplification through error replies | Errors are at most 832 encoded bytes, are sent only to authenticated authorized target-bound peers, and carry only a code and its name |
 | Information disclosure | Closed P0 field list, structural P1 rejection, grammars that cannot express paths or URLs, and payload-free audit rows |
 | Downgrade to an older schema | Strict `health_version == 1`, no field-omission fallback, no negotiation, refusal to start on a newer database |
 | Trust mutation by health data | The Health Plane may write only Health Plane rows and Health Plane audit rows; no code path from a Health Plane message reaches identity, trust, capability, revocation, or run state |
@@ -824,13 +822,15 @@ run history are not derived and are never touched by Health Plane recovery.
 
 ## Exclusions
 
-The following are explicitly out of scope for the Health Plane and for plan
-`health-plane-foundation`. Implementing any of them requires a new owner-approved
-contract.
+The following remain outside the Health Plane protocol. Adding any of them to
+Health messages requires a contract amendment.
 
 - Nostr transport, relays, gift wrapping, and any non-direct delivery backend.
-- Lua and any embedded script runtime.
-- Baselines and baseline push.
+- Script execution runtimes. Lua execution is shipped, but Profile v1 keeps its
+  frozen runtime-reporting allow-list.
+- Baseline content and push. Baseline delivery is a sibling plane; Health carries
+  only the frozen `baseline_id` and `baseline_observed_id` Profile fields used by
+  the fleet projection.
 - Dashboards, alert engines, notification routing, webhooks, and subscriptions.
 - Arbitrary metrics, custom fields, extensible payloads, and any generic event bus.
 - Long-term telemetry, time-series history, and any Profile or Pulse history
@@ -842,7 +842,7 @@ contract.
 - Any change to the frozen direct-transport identity construction, certificate,
   Noise handshake, framing, or enrollment authority.
 
-## Executable Vectors and Feasibility
+## Executable Vectors and Production Coverage
 
 `tests/fixtures/health_plane_vectors.toml` is the frozen public vector file. It
 records the contract identifiers, every bound in this document as a machine-
@@ -856,55 +856,23 @@ signature of each accepted vector with the production
 `omakure::direct_transport` signing and verification path, and asserts that each
 rejection vector produces its stable error code.
 
-`tests/health_plane_feasibility.rs` is the disposable production-listener
-feasibility probe. It starts two real `node serve` processes with the production
-direct listener, establishes a real Noise session with the production handshake
-and certificate path, sends real Health Plane envelopes over that session, and
-proves on the live `node.sqlite` of the running service that role and capability
-authorization is decidable for every kind. It adds no shipped Health Plane
-surface: the production listener has no Health Plane handler yet, so the probe
-asserts the current bounded rejection and the availability of the authorization
-inputs, not a Health Plane response.
+`tests/health_plane_feasibility.rs` remains the pre-implementation transport
+probe: it establishes a real production Noise session and proves that the
+frozen envelope and registry inputs needed no transport redesign. Its Health
+frames are deliberately discarded. Production Health carriage is covered by
+`tests/health_plane_transport_e2e.rs`, which exercises multi-node Profile,
+Pulse, Signal, authorization, and CLI/HTTP projection paths.
 
-### Production carriage feasibility
+Production carriage is split deliberately: `src/direct_health.rs` is the only
+seam between the direct session and the protocol-neutral Health Plane,
+`src/health_plane/` owns validation and lifecycle rules,
+`src/node_registry/health.rs` owns persistence and retention, and
+`src/operations/health.rs` owns the read projection shared by CLI and HTTP.
 
-The shipped production listener has no application dispatcher: `serve_connection`
-in `src/direct_service.rs` hardcodes the single expected first envelope kind
-`probe`, replies with `ack`, and then enters `hold_session`, which decrypts every
-later application frame and discards its plaintext. A Health Plane message
-therefore already traverses the complete production path today - outer frame,
-session ID, Noise transport decryption, inner sequence check - and is dropped
-without any state mutation.
-
-Implementation of the Health Plane consequently requires exactly these
-production seams, and no others:
-
-1. New `sign_health_*` wrappers around the existing private `sign_envelope` in
-   `src/direct_transport.rs`, plus one public accessor that reads the envelope
-   `kind` string so a receiver can dispatch before calling `verify_envelope`.
-   The signing construction itself is unchanged.
-2. A kind dispatch inside `hold_session` in `src/direct_service.rs`, which is the
-   single shared steady-state receive loop for both connection directions.
-3. The read-only role/capability projection described in Authorization Mapping.
-4. The schema version 7 migration and the Health Plane tables, and the version
-   8 migration that widened the stored Profile.
-
-No change to the certificate, the Noise handshake, the frame format, the inner
-control kinds, the admission controller, or the enrollment path is authorized.
-
-## Go/No-Go Gate
-
-This contract is the wave-1 gate for plan #190. Downstream tasks 2777, 2778,
-2779, and 2780 may not begin until:
-
-1. The owner has reviewed and accepted this document.
-2. `cargo test` and `cargo clippy --all-targets -- -D warnings` plus
-   `cargo fmt --check` are green.
-3. The vectors and the feasibility probe are green.
-
-If any bound in this document proves unenforceable during implementation, the
-plan stops and this contract is amended before work resumes. An implementation
-task MUST NOT invent a bound that is not written here.
+No implementation may change the certificate, Noise handshake, frame format,
+inner control kinds, admission controller, or enrollment path without first
+amending their own compatibility contracts. A future Health Plane change that
+needs a bound not written here must amend this contract before implementation.
 
 ## References
 

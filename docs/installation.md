@@ -12,8 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh
 Windows PowerShell:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command \
-  "irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.ps1 | iex"
 ```
 
 Verify an installation with named commands:
@@ -21,7 +20,7 @@ Verify an installation with named commands:
 ```bash
 omakure --version
 omakure --help
-omakure --json doctor
+omakure doctor
 ```
 
 The first workspace operation creates the selected workspace, `.omakure/`,
@@ -76,6 +75,13 @@ tokens DACLs contain only `SYSTEM` and `LocalService`. Default machine paths are
 `/Library/Application Support/Omakure` paths on macOS, and
 `%ProgramData%\Omakure` on Windows. The workspace is kept outside node state.
 
+These are restricted service identities, not an administrative execution
+broker. Omakure has no built-in `sudo`, privilege elevation, or per-Battery OS
+permission grant. An operation that changes machine configuration needs the
+deployment to grant the service account the narrow host permissions that
+operation requires; the official Linux unit additionally sets
+`NoNewPrivileges=true`.
+
 Reinstalling updates the binary and service definition but preserves
 `node.toml`, `identity.key`, `node.sqlite`, and registration. Remove only the
 service with `--uninstall-node-service`; deleting node state additionally
@@ -89,13 +95,18 @@ systemd unit, the launchd plist, and the `sc.exe` registration are written the
 way this page describes, with the node-state paths and ACLs it names. That is a
 static check of what the installers *say*.
 
-Only one test executes an installer at all, and only its uninstall path:
+The default Rust test suite executes only the Unix uninstall path:
 `install.sh --uninstall-node-service` runs with `systemctl` replaced by a shim
-that records what it was asked and does nothing. No test anywhere runs the
-install path, registers a real service, or starts one. The Docker gates start
+that records what it was asked and does nothing. This is mocked Unix coverage,
+not a native service uninstall. `tests/packaging_smoke.rs` statically inspects
+the Unix installer, the macOS launchd text, and the Windows installer sources;
+it does not execute a native macOS or Windows installer. No test anywhere runs
+the install path, registers a real service, or starts one. The Docker gates start
 `node serve` as a container entrypoint, which is not a service manager starting
 it at boot, and the macOS and Windows CI jobs run the test suite without
-touching either installer.
+touching either installer. The separate local certification described below is
+the Linux exception; it is not part of CI because it requires KVM and writable
+system libvirt.
 
 Outside the test suite, the Linux install path has been executed on two real
 Fedora virtual machines: `install.sh` created the unprivileged `omakure` service
@@ -122,6 +133,54 @@ Getting real evidence needs a disposable machine — `systemd-nspawn --boot`,
 a VM, or a CI runner discarded after the run. A privileged container sharing
 the host's cgroup or PID namespace is not a substitute: its init does not see
 itself as isolated and will signal host processes it judges orphaned.
+
+### Fedora VM privilege certification
+
+`mise run vm-privilege-certification` is the bounded, destructive local gate
+for Linux privilege delegation. It builds the current binary, verifies a pinned
+Fedora Cloud image by SHA-256, then boots a corporate Conductor, an intentionally
+broad root runner, and a primary Performer on `qemu:///system`. The comparison
+runner exposes the authenticated Omakure API and queue worker as root. It does
+not repurpose `omakure-node.service`: production node state is deliberately
+tied to the `omakure` system principal and rejects a root-owned replacement.
+The primary Performer keeps the shipped `User=omakure` and
+`NoNewPrivileges=true` settings and grants that principal only `start` on
+`omakure-certified-root-operation.service` through a fixed Polkit rule.
+
+The Conductor sends an authenticated queue request to the root comparison and a
+Battery-backed Remote Cue to the unprivileged Performer. The gate checks the
+real root effects, run history, returned Signal for the Cue, and exactly one
+observed effect per authorized request. It also checks undeclared-script
+rejection on the Performer, employee isolation, arbitrary-unit denial, and
+revocation. The `employee` guest account is not in
+`wheel`, cannot use passwordless sudo, cannot read tokens or node identity,
+cannot modify the workspace or policy, and cannot call a management API without
+a token.
+
+The host prerequisites are Linux with readable and writable `/dev/kvm`, the
+checkout's Fedora fixture directory, and these commands: `cargo`, `curl`,
+`jq`, `scp`, `sha256sum`, `ssh`, `ssh-keygen`, `stat`, `tar`, `timeout`,
+`virsh`, `virt-install`, and `xorriso`. Libvirt must be reachable at
+`qemu:///system` (by default), with an active `default` network, a running
+`images` storage pool, and permission to create, upload, destroy, and inspect
+domains and volumes there.
+
+The default base volume is `omakure-fedora-44-1.5-base.qcow2`, downloaded from
+`https://download.fedoraproject.org/pub/fedora/linux/releases/test/44_Beta/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44_Beta-1.5.x86_64.qcow2`
+and checked against SHA-256
+`28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f` before it
+is cached or uploaded. Override the URI, network, pool, base volume, image URL,
+checksum, or run project with `OMAKURE_VM_LIBVIRT_URI`,
+`OMAKURE_VM_NETWORK`, `OMAKURE_VM_STORAGE_POOL`, `OMAKURE_VM_BASE_VOLUME`,
+`OMAKURE_VM_IMAGE_URL`, `OMAKURE_VM_IMAGE_SHA256`, and
+`OMAKURE_VM_CERTIFICATION_PROJECT`, respectively. The checksum override must
+be a lowercase SHA-256 value. The verified base volume is retained as a cache.
+Every run-specific domain, overlay, seed ISO, temporary key, and token is
+removed by an exit trap. Cleanup verification fails closed: if domain or
+volume inspection errors, the certification fails rather than treating the
+resources as absent. Run `mise run vm-privilege-certification-cleanup` to
+induce a failure after the first VM is created and independently verify that
+cleanup.
 
 ## Unattended Signed-Bundle Enrollment
 

@@ -15,19 +15,42 @@ serializes the operation result.
 ## Node management
 
 Node routes use the shared machine-state operations and never access
-`.history/runs.sqlite`. `node:read` permits public status, bounded peer
-listing, and the bounded fleet-health projection; `node:write` permits explicit
-initialization; `trust:write` permits manual import, capability updates, and
-revocation. Trust mutation bodies must include `confirmed: true`, a non-empty
-`actor`, and a non-empty `reason`.
+`.history/runs.sqlite`. Their bearer scopes are deliberately separate:
 
-Routes are `GET /v1/node/status`, `POST /v1/node/init`, `GET /v1/node/health`,
-`GET /v1/node/signals`, `POST /v1/node/cues`, `POST /v1/node/baselines`,
-`POST /v1/node/baseline/rollback`, `GET` and `POST /v1/node/peers`, `PATCH
+| Route group | Required token scope |
+|---|---|
+| `GET /v1/node/status`, `GET /v1/node/health`, `GET /v1/node/signals`, `GET /v1/node/peers` | `node:read` |
+| `GET /v1/node/discovery` | `discovery:read` |
+| `POST /v1/node/init`, `POST /v1/node/cues`, `POST /v1/node/baselines`, `POST /v1/node/baseline/rollback` | `node:write` |
+| `POST /v1/node/peers`, `PATCH /v1/node/peers/:node_id/capabilities`, `POST /v1/node/peers/:node_id/revoke` | `trust:write` |
+| `GET /v1/node/enrollments` | `enrollment:read` |
+| `POST /v1/node/enrollments`, `POST /v1/node/enrollments/:node_id/approve`, `POST /v1/node/enrollments/:node_id/reject`, `POST /v1/node/enrollment/bundle` | `enrollment:write` |
+
+`discovery:read` returns a bounded LAN discovery view. `trust:write` permits
+manual trust import, capability updates, and revocation. All of these routes
+also pass the applicable general `routes.read` or `routes.writes` deploy gate.
+The `routes.node` gate covers every `/v1/node/...` route; `routes.trust` gates
+write routes in the peer group; and `routes.enrollment` gates write routes in
+the enrollment group. Deploy route gates are evaluated before token scopes.
+Trust mutation bodies must include `confirmed: true`, a non-empty `actor`, and a
+non-empty `reason`.
+
+Routes are `GET /v1/node/status`, `GET /v1/node/discovery`, `POST
+/v1/node/init`, `GET /v1/node/health`, `GET /v1/node/signals`, `POST
+/v1/node/cues`, `POST /v1/node/baselines`, `POST
+/v1/node/baseline/rollback`, `GET` and `POST /v1/node/peers`, `GET` and `POST
+/v1/node/enrollments`, `POST /v1/node/enrollments/:node_id/approve`, `POST
+/v1/node/enrollments/:node_id/reject`, `POST /v1/node/enrollment/bundle`, `PATCH
 /v1/node/peers/:node_id/capabilities`, and `POST
 /v1/node/peers/:node_id/revoke`. Responses use the standard JSON envelope.
 Private keys, plaintext secret values, revocation reasons, and unbounded audit
 history are never returned.
+
+`GET /v1/node/discovery` returns the node service's current bounded in-memory
+observation snapshot. It does not start a scan. The CLI `omakure node discovery`
+command instead starts a temporary bounded listener, waits for its requested
+scan interval, and returns a fresh scan snapshot; neither path creates trust or
+a session.
 
 `GET /v1/node/health` returns the Health Plane fleet-status projection: one row
 per actively trusted peer with its presence (`unknown`, `online`, `stale`,
@@ -131,6 +154,11 @@ Defaults and guards:
   `--capability` is ignored. Prefer plan scopes (`runs:enqueue`,
   `envs:read`, …). Legacy capability names (`env:read`, `runs:write`) are
   accepted as aliases.
+- Scope matching is coarse-to-fine only: `runs:write` covers
+  `runs:enqueue`, `runs:cancel`, and `runs:dead-letter`; `batteries:write`
+  covers its action scopes; `config:read` covers `doctor:read` and
+  `workspace:read`; and `scripts:read` covers `search:read`. A fine-grained
+  scope never satisfies its coarser parent. `*` is the explicit wildcard.
 - **Legacy mode** (no tokens file): capabilities are denied by default.
   Grant them with repeated `--capability` flags: `config:read`,
   `scripts:read`, `env:read`/`envs:read`, `env:write`/`envs:write`,
@@ -252,6 +280,10 @@ Error mapping:
 | unsupported operation | 501 |
 | internal I/O or unexpected error | 500 |
 
+The same illegal queue transition is rendered as CLI `invalid_argument` but as
+an HTTP `conflict` error with status `409`. This is an adapter-level error
+mapping; the underlying state-machine transition is rejected in both cases.
+
 Operation-specific errors keep their stable operation code, such as
 `not_synced`, `manifest_invalid`, `unsafe_path`, `git_failed`, or
 `registry_invalid`.
@@ -307,6 +339,12 @@ GET /v1/batteries
 GET /v1/batteries/{battery_id}
 GET /v1/batteries/{battery_id}/scripts
 GET /v1/secrets
+GET /v1/node/status
+GET /v1/node/discovery
+GET /v1/node/health
+GET /v1/node/signals
+GET /v1/node/peers
+GET /v1/node/enrollments
 ```
 
 `GET /v1/secrets` returns **metadata only** (`id`, `source`, `delivery`,
@@ -332,6 +370,17 @@ POST /v1/batteries
 POST /v1/batteries/{battery_id}/sync
 POST /v1/batteries/{battery_id}/scripts/{script_id}/install
 DELETE /v1/batteries/{battery_id}
+POST /v1/node/init
+POST /v1/node/cues
+POST /v1/node/baselines
+POST /v1/node/baseline/rollback
+POST /v1/node/peers
+POST /v1/node/enrollments
+POST /v1/node/enrollments/{node_id}/approve
+POST /v1/node/enrollments/{node_id}/reject
+POST /v1/node/enrollment/bundle
+PATCH /v1/node/peers/{node_id}/capabilities
+POST /v1/node/peers/{node_id}/revoke
 ```
 
 `POST /v1/runs` enqueues by default. It does not block on inline execution.

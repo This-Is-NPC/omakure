@@ -1,12 +1,10 @@
 # Remote Cue Contract
 
-**Status: FROZEN CONTRACT, PENDING OWNER REVIEW.** This document freezes the wire
-format, authorization mapping, idempotency rule, and every quantitative bound for
-authorized remote execution. It is the go/no-go gate for plan
-`remote-cue-authorized-execution` (#194). No inbound handling, dispatch,
-execution, CLI, or HTTP surface may be implemented until this document is
-owner-reviewed and the executable vectors in `tests/remote_cue_contract.rs` are
-green.
+**Status: IMPLEMENTED CONTRACT.** This document freezes the wire format,
+authorization mapping, idempotency rule, and every quantitative bound used by
+the production node service for authorized remote execution. It remains the
+compatibility and review contract for inbound handling, dispatch, execution,
+CLI, and HTTP behavior.
 
 Every number here is normative and final. There is no `TBD` and no "unspecified"
 bound. A later task needing a limit not written here must amend this contract
@@ -97,19 +95,17 @@ Canonical bytes are RFC-8785, as the direct envelope already requires. Maximum
 canonical `cue_dispatch` size is **512 bytes**; maximum `cue_ack` is **384**.
 Both are below the existing per-kind Health caps, because a Cue carries strictly
 less than a Profile.
+The dispatch object has exactly the six fields in this table; unknown fields are
+rejected rather than ignored.
 
 There is no argument list, no environment map, no working directory, no timeout
 override, and no payload of any kind. A Cue selects; it does not configure. Every
 one of those would be an input the receiver's owner did not write.
 
-**Deviation from the plan's council resolution, for owner review.** That
-resolution allowed *schema-declared fields* on the wire, on the grounds that a
-script with a required field is otherwise un-cueable. This contract carries none.
-A field is still an input chosen off-box, and the resolution's own safety
-argument — deny-all secrets, plus rejecting any script whose schema declares a
-secret — is what makes fields safe, not what makes them necessary. Scripts meant
-to be run remotely can declare no required field; the ones that cannot are, for
-now, not remotely runnable. Recorded rather than quietly implemented either way.
+**Implemented v1 choice.** The Cue payload carries no schema-declared fields. A
+field is still an input chosen off-box, and deny-all secrets do not make that
+input necessary. Scripts intended for Remote Cues therefore declare no required
+field; scripts that require one are not remotely runnable in v1.
 
 ## `cue_ack` Payload
 
@@ -233,9 +229,10 @@ that a secret-consuming script should run without its secrets.
 ## Script Resolution
 
 Resolution goes through the workspace repository listing, which already honours
-`.omakureignore` (`src/adapters/workspace_repository.rs:168`). That listing **is**
-the allow-list: a script the owner excluded from discovery is not remotely
-runnable, with no second mechanism to keep in sync.
+`.omakureignore` (`src/adapters/workspace_repository.rs:168`). That listing is a
+discovery filter, not the authorization allow-list: a script must be both
+discoverable and explicitly declared by Gate E. A script the owner excluded from
+discovery is not remotely runnable even when it is declared.
 
 Resolution is never a string comparison on the name. The resolved path must be a
 regular file by `symlink_metadata`, following the rejection pattern already used
@@ -299,16 +296,29 @@ reported as such. Re-running it requires a new `cue_id`.
 
 ## Liveness and Revocation
 
-- Gates are re-evaluated in the **same transaction** as the accept→run
-  transition. Checking at receive and acting later is a TOCTOU window against
-  revocation.
-- Revocation or suspension of the sending peer **mid-run** cancels the run row.
-  Trust withdrawn must stop work already in flight, or revocation is advisory.
+- The registry and run state use separate SQLite databases and cannot share a
+  transaction. Revocation withdraws trust first so an unavailable runs database
+  cannot prevent it. Every worker with node context performs a local trust
+  preflight immediately before a Cue can execute; a race therefore fails closed
+  at execution rather than pretending the two databases are atomic. Standalone
+  workers without node context refuse Cue execution.
+- Revocation or suspension of the sending peer **mid-run** attempts to cancel
+  the run row. A successful cancellation is confirmed in the revocation result;
+  a runs-database failure returns the peer as revoked with cleanup pending and
+  is retried on service restart/maintenance. Trust withdrawal is therefore
+  immediate, while cancellation of an existing process is only claimed when
+  its row transition succeeds.
 - A revoked-then-recovered peer's pre-revocation `cue_id`s stay **permanently
   rejected**. The `revocations` table is append-only, so this is a lookup, not a
   retention policy.
 - `expires_at` is checked at **both** transitions. A post-expiry replay lands
   `expired` (`1207`), never `accepted`.
+
+Rate-window counters are durable per peer, while retained duplicate ACKs are
+bounded to the live session. The durable run primary key still prevents an
+accepted Cue from running twice after restart; refusal decisions and their
+cached ACK bytes are not reconstructed after restart because they are not
+execution state and the registry/run databases have no shared transaction.
 
 ## Bounds
 
@@ -342,27 +352,33 @@ Band `1201..` inside the existing `transport_audit.error_code` range
 | `1211` | Malformed payload, size, or grammar violation |
 | `1212` | Script is not declared in `trust.remote_cue_scripts` (reported as `1206`) |
 
-Every rejection writes a durable redacted audit row. `reason` is recorded;
-nothing derived from the sender is ever interpolated into a command.
+Every rejection writes a durable redacted audit row. Once the sender has passed
+the trust gates, `reason` is recorded as bounded data; trust failures omit Cue
+subject metadata. Nothing derived from the sender is ever interpolated into a
+command.
 
 ## Audit
 
 Each accept and each rejection writes one `transport_audit` row carrying the
-sender node id, the `cue_id`, the outcome, and the code. The script name is
-recorded; the `reason` string is recorded verbatim as data. No payload field is
-ever logged in a position where it could be read back as a command.
+sender node id, the `cue_id`, the outcome, and the code. For decisions reached
+after the sender passes the trust gates, the bounded script name and `reason`
+are stored as data. Trust failures omit Cue subject metadata, so an
+unauthorized sender cannot use audit correlation as a disclosure channel. No
+payload field is ever logged in a position where it could be read back as a
+command.
 
 ## Explicitly Out of Scope
 
-Requiring a further owner-approved amendment:
+Dispatch is exposed through `omakure node cue` and `POST /v1/node/cues`. Both
+prefer the session already held by the running node service; the CLI keeps a
+bounded direct-dial fallback for first contact. The following remain out of
+scope and require a contract amendment:
 
 - A Cue that carries script content, arguments, environment, or any execution
   parameter.
-- Any HTTP surface for dispatch. `node cue` is CLI-only; `../cli-http-parity.md`
-  has a `CLI-only` status for recording that honestly.
-- A Conductor-side durable outbox. Dispatch is a one-shot dial mirroring the
-  existing `probe()`.
+- A Conductor-side durable outbox. Dispatch is one bounded request over the
+  held service session or the CLI's direct fallback.
 - A separate multi-state `inbox` table. `RunState` already models this, and a
   second state machine would need a `node.sqlite` bump that is a compile error
   until the frozen bound, the fixture, and this contract move together.
-- Baselines, MDM, fan-out to more than one peer per dispatch, and scheduling.
+- MDM, fan-out to more than one peer per dispatch, and Cue scheduling.

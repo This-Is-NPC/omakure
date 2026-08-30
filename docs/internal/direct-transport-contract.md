@@ -851,7 +851,7 @@ The executable contract and future E2E tests must cover:
 | Revocation/rotation | Reconnect with old and replacement material, stale bundle | Old material rejected; replacement transactional |
 | Nonce/rekey | Hit rekey threshold and approach counter exhaustion | Standard rekey; close before wrap |
 
-## Public Vectors and Feasibility
+## Public Vectors and Production Coverage
 
 `tests/fixtures/direct_transport_feasibility.toml` is format version 2 and
 contains independent initiator and responder public test vectors. It records
@@ -862,20 +862,17 @@ RFC test inputs and are explicitly not production secrets. The test
 `snow` handshake and transport ciphertext, exact framing, and mutations of
 certificate/frame bytes.
 
-The pinned pure-Rust dependency is a dev dependency for the contract fixture.
-Contract-freeze task #2718 adds no production transport; task #2719 owns the
-first production implementation and must promote the dependency and the
-fixture's `production_transport_claim` only when its runtime and E2E gates pass.
+The pinned pure-Rust `snow` crate is a production dependency. The shipped
+listener and outbound dialer live in `src/direct_service.rs`; contract vectors,
+direct transport end-to-end tests, and the bounded Linux certification exercise
+the same Noise handshake, framing, and authenticated session path used by
+`node serve`.
+
 The selected crate has no required OS crypto ABI with the selected resolver.
-The repository's locked CI matrix supplies Linux, macOS, and Windows build
-feasibility for the dependency graph; this Linux development environment does
-not claim native execution on the other two platforms. The later production
-implementation remains responsible for running the locked test/build matrix
-on all three targets before release. Local evidence is Linux: the full locked
-test, clippy, format, and diff checks pass. A local Windows GNU check was
-attempted but cannot run because `x86_64-w64-mingw32-gcc` is not installed;
-macOS targets are not installed here. No hosted macOS or Windows result is
-claimed by this task.
+The locked CI matrix builds and tests the dependency graph on Linux, macOS, and
+Windows. Native service-install evidence remains platform-specific and is
+documented separately in `docs/installation.md`; a successful cross-platform
+build is not presented as proof that every service installer ran.
 
 Rejected alternatives remain rejected for this contract: `libp2p-noise` has an
 experimental wire protocol and is X25519-only; HPKE is not an ordered mutually

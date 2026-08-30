@@ -115,6 +115,9 @@ max_concurrent_verifications = 2      # default; see Hard gates below
 | Setting | Effect |
 |---------|--------|
 | `routes.writes = false` | All write methods `403` (even `*` token) |
+| `routes.node = false` | All `/v1/node/...` routes `403` (even `*` token) |
+| `routes.trust = false` | Peer trust mutation routes `403`; peer reads remain governed by node/read gates |
+| `routes.enrollment = false` | Enrollment write routes `403`; enrollment listing remains a read route |
 | `routes.battery = false` | All `/v1/batteries…` `403` |
 | `sources.allow_https_batteries = false` | HTTPS Battery add `403` |
 | `sources.allow_local_batteries = false` | Local/file Battery URLs `403` on HTTP |
@@ -241,8 +244,9 @@ omakure queue worker
 
 Optional scheduler in a third process: `omakure serve --no-worker`.
 
-All processes must share the **same workspace directory** (same
-`.history/runs.sqlite`). Do not point them at different mounts.
+All processes must share the **same workspace directory on one host** (same
+local `.history/runs.sqlite`). Do not point them at different mounts, network
+filesystems, or another host: the queue is not distributed.
 
 ### Node service (recommended single-process deploy)
 
@@ -375,7 +379,9 @@ traffic, static-peer validation, partition/reconnect, revocation, and identity
 reset/replacement. Each rejection checks the matching durable redacted audit and
 full registry-state snapshot. It always removes the project, containers,
 network, and volumes on exit. The topology is for a bounded certification gate
-only and must not be treated as a general fleet launcher.
+only and must not be treated as a general fleet launcher. Cleanup verification
+fails closed: an error while inspecting containers, networks, or volumes is a
+failed gate, not evidence that cleanup succeeded.
 
 ## Health Plane certification topology
 
@@ -413,8 +419,9 @@ the one case where the Performer must be the initiator, so it runs as the
 process; no phase requires container-to-host reachability, and the gate is
 therefore unaffected by a default-deny host firewall. It always removes the
 project, containers, network, and volumes on exit, and fails if any survive.
-The topology is a bounded certification gate only and must not be treated as a
-general fleet launcher.
+Cleanup verification also fails closed when inspection errors occur, rather than
+treating the resources as absent. The topology is a bounded certification gate
+only and must not be treated as a general fleet launcher.
 
 ## Volume layout
 

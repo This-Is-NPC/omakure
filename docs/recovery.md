@@ -61,7 +61,7 @@ a remote instruction must execute at most once, so its row is instead resolved
 to `failed` by the recovery pass that runs at worker startup. Expect to find:
 
 ```bash
-omakure runs list --state failed
+omakure history list --state failed
 ```
 
 with the error `the worker holding this remote run stopped; it was not re-run

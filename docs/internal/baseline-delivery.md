@@ -1,10 +1,10 @@
 # Baseline Delivery Contract
 
-**Status: PENDING OWNER REVIEW.** This document records the wire format,
-authorization mapping, and every quantitative bound for putting a signed
-baseline onto a node, keeping one version behind it, and putting a machine back.
-It is the delivery half; the signing half is `src/baseline.rs` and
-`src/baseline_publisher.rs`.
+**Status: IMPLEMENTED CONTRACT.** This document records the wire format,
+authorization mapping, and every quantitative bound implemented for putting a
+signed baseline onto a node, keeping one version behind it, and putting a
+machine back. It is the delivery half; the signing half is `src/baseline.rs`
+and `src/baseline_publisher.rs`.
 
 Every number here is normative. A later task needing a limit not written here
 must amend this document first.
@@ -118,11 +118,12 @@ Enforced in three places:
 - **At send**, before any of it goes on the wire.
 - **At receive**, on declared length before any decoding allocates.
 
-A baseline over that bound is still signable and still installable locally. It
-is simply not pushable. `src/baseline_push.rs` carries a `const` assertion that
-breaks the build if a maximal signable baseline ever *does* fit in one frame,
-because at that point this bound would be an arbitrary restriction rather than
-a consequence.
+The shipped `omakure node baseline publish` operation rejects a set over that
+bound, before signing or writing a manifest, so every baseline produced by the
+CLI is deliverable in one push. `src/baseline_push.rs` carries a `const`
+assertion that breaks the build if a maximal schema-valid baseline ever *does*
+fit in one frame, because at that point this delivery bound would be an
+arbitrary restriction rather than a consequence.
 
 ## Rejection Codes
 

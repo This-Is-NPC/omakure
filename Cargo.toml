@@ -2,7 +2,7 @@
 name = "omakure"
 version = "0.3.0"
 repository = "https://github.com/This-Is-NPC/omakure"
-license = "Apache-2.0"
+license = "MIT"
 edition = "2021"
 
 [[bin]]

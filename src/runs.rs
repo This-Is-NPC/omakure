@@ -21,7 +21,8 @@
 
 use crate::workspace::Workspace;
 use rusqlite::{
-    params, params_from_iter, Connection, ErrorCode, OptionalExtension, TransactionBehavior,
+    params, params_from_iter, Connection, ErrorCode, OptionalExtension, Transaction,
+    TransactionBehavior,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -30,7 +31,33 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// SQLite's WAL-mode transition can briefly report `SQLITE_BUSY` or
+/// `SQLITE_LOCKED` when another process is opening the same database. The
+/// process-local open lock handles threads; these bounded delays cover the
+/// remaining cross-process handoff without treating other SQL failures as
+/// recoverable.
+const OPEN_RETRY_DELAYS: [Duration; 5] = [
+    Duration::from_millis(10),
+    Duration::from_millis(25),
+    Duration::from_millis(50),
+    Duration::from_millis(100),
+    Duration::from_millis(200),
+];
+static RUNS_OPEN_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+fn runs_open_lock() -> &'static Mutex<()> {
+    &RUNS_OPEN_LOCK
+}
+
+fn is_retryable_open_error(error: &rusqlite::Error) -> bool {
+    matches!(
+        error.sqlite_error_code(),
+        Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
+    )
+}
 
 /// Internal heartbeat lease duration in milliseconds (60 s).
 ///
@@ -419,9 +446,12 @@ pub struct RunStats {
 pub fn open(workspace: &Workspace) -> Result<Connection, String> {
     let history_dir = workspace.history_dir();
     fs::create_dir_all(history_dir).map_err(|err| format!("Create history dir failed: {}", err))?;
+    let _open_guard = runs_open_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     cleanup_legacy_json_files(history_dir);
     let db_path = runs_db_path(workspace);
-    let conn = open_connection(&db_path)?;
+    let conn = open_connection_inner(&db_path)?;
     rebuild_legacy_schema_if_needed(&conn)?;
     init_schema(&conn)?;
     Ok(conn)
@@ -432,7 +462,15 @@ pub fn runs_db_path(workspace: &Workspace) -> PathBuf {
     workspace.history_dir().join("runs.sqlite")
 }
 
+#[cfg(test)]
 fn open_connection(db_path: &Path) -> Result<Connection, String> {
+    let _open_guard = runs_open_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    open_connection_inner(db_path)
+}
+
+fn open_connection_inner(db_path: &Path) -> Result<Connection, String> {
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Create runs db folder failed: {}", err))?;
@@ -440,9 +478,17 @@ fn open_connection(db_path: &Path) -> Result<Connection, String> {
     let conn = Connection::open(db_path).map_err(|err| format!("Open runs db failed: {}", err))?;
     conn.busy_timeout(std::time::Duration::from_millis(2_000))
         .map_err(|err| format!("Runs db busy timeout failed: {}", err))?;
-    let _journal_mode: String = conn
-        .query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0))
-        .map_err(|err| format!("Enable WAL failed: {}", err))?;
+    let mut retry = 0;
+    let _journal_mode: String = loop {
+        match conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0)) {
+            Ok(mode) => break mode,
+            Err(err) if is_retryable_open_error(&err) && retry < OPEN_RETRY_DELAYS.len() => {
+                std::thread::sleep(OPEN_RETRY_DELAYS[retry]);
+                retry += 1;
+            }
+            Err(err) => return Err(format!("Enable WAL failed: {}", err)),
+        }
+    };
     // ON DELETE CASCADE on run_traces requires foreign keys to be enforced
     // explicitly: SQLite ships with foreign_keys=OFF for backward
     // compatibility.
@@ -630,6 +676,41 @@ pub fn get_run(conn: &Connection, run_id: &str) -> Result<Option<RunRow>, String
         .map_err(|err| format!("Query get_run failed: {}", err))?;
     Ok(row)
 }
+/// Return the most recent enqueue time for a schedule, or `None` when it has
+/// never produced a run.
+///
+/// Schedule state is intentionally derived from run rows rather than a second
+/// mutable cursor, so a successful enqueue and the scheduler's next scan
+/// cannot disagree about which fire was last recorded.
+pub fn last_scheduled_fire_ms(conn: &Connection, schedule_id: &str) -> Result<Option<i64>, String> {
+    conn.query_row(
+        "SELECT MAX(enqueued_at) FROM runs WHERE cron_schedule_id = ?",
+        [schedule_id],
+        |row| row.get::<_, Option<i64>>(0),
+    )
+    .map_err(|err| format!("Query last scheduled fire failed: {}", err))
+}
+
+/// Return whether a schedule currently has a queued or running row.
+///
+/// This is the scheduler's overlap guard. Terminal rows never block a later
+/// fire, while either in-flight state does, including a row that was queued
+/// but has not yet been claimed by a worker.
+pub fn has_live_scheduled_run(conn: &Connection, schedule_id: &str) -> Result<bool, String> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM runs
+             WHERE cron_schedule_id = ? AND state IN (?, ?)",
+            params![
+                schedule_id,
+                RunState::Queued.as_str(),
+                RunState::Running.as_str()
+            ],
+            |row| row.get(0),
+        )
+        .map_err(|err| format!("Query live scheduled run failed: {}", err))?;
+    Ok(count > 0)
+}
 
 /// Query rows matching the supplied filters. In-flight rows are surfaced
 /// first (by `enqueued_at DESC` so the most recently queued / running rows
@@ -787,13 +868,16 @@ pub struct EnqueueOptions {
 
 pub const ALLOW_ALL_SECRET_REFS_POLICY: &str = "__omakure_allow_all_secret_refs__";
 
-/// Insert a fresh `state='queued'` row. Returns the inserted [`RunRow`].
+/// Insert a fresh `state='queued'` row and its access metadata atomically.
+/// Returns the inserted [`RunRow`].
 pub fn enqueue(
     conn: &Connection,
     script_path: &str,
     args: &[String],
     opts: EnqueueOptions,
 ) -> Result<RunRow, String> {
+    let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
+        .map_err(|err| format!("Begin enqueue failed: {}", err))?;
     let now = current_unix_ms();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
@@ -825,22 +909,103 @@ pub fn enqueue(
         parent_run_id: opts.parent_run_id,
         omakure_version: opts.omakure_version,
     };
-    insert_run(conn, &row)?;
+    insert_run(&transaction, &row)?;
     if let Some(env_name) = opts.env_name.as_deref() {
-        set_run_env(conn, &row.run_id, env_name)?;
+        set_run_env(&transaction, &row.run_id, env_name)?;
     }
     match opts.allowed_secret_refs.as_deref() {
-        Some(refs) => set_run_secret_refs(conn, &row.run_id, refs)?,
+        Some(refs) => set_run_secret_refs(&transaction, &row.run_id, refs)?,
         None => set_run_secret_refs(
-            conn,
+            &transaction,
             &row.run_id,
             &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
         )?,
     }
     if let Some(hash) = opts.script_content_hash.as_deref() {
-        set_run_script_hash(conn, &row.run_id, hash)?;
+        set_run_script_hash(&transaction, &row.run_id, hash)?;
     }
+    transaction
+        .commit()
+        .map_err(|err| format!("Commit enqueue failed: {}", err))?;
     Ok(row)
+}
+
+/// Atomically claim an eligible scheduled fire and enqueue its run.
+///
+/// The immediate transaction serializes concurrent schedulers: after one
+/// scheduler acquires the write lock and inserts the queued row, the next
+/// scheduler observes the live row and returns `Ok(None)`. Any SQLite error
+/// aborts the transaction and is returned, so an unreadable schedule state
+/// can never be interpreted as an empty queue.
+pub fn enqueue_scheduled(
+    conn: &Connection,
+    script_path: &str,
+    args: &[String],
+    opts: EnqueueOptions,
+) -> Result<Option<RunRow>, String> {
+    if opts.trigger != RunTrigger::Scheduled {
+        return Err("Scheduled enqueue requires RunTrigger::Scheduled".to_string());
+    }
+    let schedule_id = opts
+        .cron_schedule_id
+        .as_deref()
+        .ok_or_else(|| "Scheduled enqueue requires cron_schedule_id".to_string())?;
+    let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
+        .map_err(|err| format!("Begin scheduled enqueue failed: {}", err))?;
+    if has_live_scheduled_run(&transaction, schedule_id)? {
+        return Ok(None);
+    }
+
+    let now = current_unix_ms();
+    let row = RunRow {
+        run_id: opts.run_id.unwrap_or_else(generate_run_id),
+        script_path: script_path.to_string(),
+        script_name: opts.script_name,
+        args_json: serde_json::to_string(args).unwrap_or_else(|_| "[]".to_string()),
+        actor: if opts.actor.is_empty() {
+            "human".to_string()
+        } else {
+            opts.actor
+        },
+        reason: opts.reason,
+        state: RunState::Queued,
+        priority: opts.priority,
+        enqueued_at: now,
+        worker_id: None,
+        lease_until: None,
+        timeout_ms: opts.timeout_ms,
+        cron_schedule_id: opts.cron_schedule_id,
+        trigger: opts.trigger,
+        started_at: None,
+        finished_at: None,
+        duration_ms: None,
+        exit_code: None,
+        success: None,
+        stdout: String::new(),
+        stderr: String::new(),
+        error: None,
+        parent_run_id: opts.parent_run_id,
+        omakure_version: opts.omakure_version,
+    };
+    insert_run(&transaction, &row)?;
+    if let Some(env_name) = opts.env_name.as_deref() {
+        set_run_env(&transaction, &row.run_id, env_name)?;
+    }
+    match opts.allowed_secret_refs.as_deref() {
+        Some(refs) => set_run_secret_refs(&transaction, &row.run_id, refs)?,
+        None => set_run_secret_refs(
+            &transaction,
+            &row.run_id,
+            &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
+        )?,
+    }
+    if let Some(hash) = opts.script_content_hash.as_deref() {
+        set_run_script_hash(&transaction, &row.run_id, hash)?;
+    }
+    transaction
+        .commit()
+        .map_err(|err| format!("Commit scheduled enqueue failed: {}", err))?;
+    Ok(Some(row))
 }
 
 /// Enqueue a Cue in one run-database transaction so the run row and its
@@ -1882,6 +2047,33 @@ mod tests {
     }
 
     #[test]
+    fn enqueue_rolls_back_row_when_metadata_write_fails() {
+        let ws = unique_workspace("enqueue_metadata_atomic");
+        let conn = open(&ws).expect("open");
+        conn.execute_batch(
+            "CREATE TRIGGER reject_run_secret_refs
+             BEFORE INSERT ON run_secret_refs
+             BEGIN
+                 SELECT RAISE(ABORT, 'injected metadata failure');
+             END;",
+        )
+        .expect("install metadata failure trigger");
+        let mut opts = enqueue_opts();
+        opts.allowed_secret_refs = Some(vec!["secret://env/TOKEN".into()]);
+        let error = enqueue(&conn, "/x/atomic.sh", &[], opts).unwrap_err();
+        assert!(error.contains("injected metadata failure"));
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM runs WHERE script_path = '/x/atomic.sh'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0, "failed metadata must roll back the run row");
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
     fn open_recreates_table_when_legacy_schema_detected() {
         let ws = unique_workspace("legacy_rebuild");
         // Manually create a legacy v0.1 table layout: no `state` column.
@@ -2768,6 +2960,80 @@ mod tests {
     // -----------------------------------------------------------------
 
     #[test]
+    fn scheduled_queries_cover_missing_overlap_completion_errors_and_concurrency() {
+        let ws = unique_workspace("scheduled_queries");
+        let conn = open(&ws).expect("open");
+        let schedule_id = "/scripts/job.sh@*/5 * * * * *";
+
+        assert_eq!(
+            last_scheduled_fire_ms(&conn, schedule_id).unwrap(),
+            None,
+            "a schedule with no rows has no last fire"
+        );
+        assert!(
+            !has_live_scheduled_run(&conn, schedule_id).unwrap(),
+            "a schedule with no rows does not overlap"
+        );
+
+        let row = enqueue(
+            &conn,
+            "/scripts/job.sh",
+            &[],
+            EnqueueOptions {
+                run_id: Some("scheduled-query-row".into()),
+                cron_schedule_id: Some(schedule_id.into()),
+                trigger: RunTrigger::Scheduled,
+                ..enqueue_opts()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            last_scheduled_fire_ms(&conn, schedule_id).unwrap(),
+            Some(row.enqueued_at)
+        );
+        assert!(has_live_scheduled_run(&conn, schedule_id).unwrap());
+
+        let db_path = runs_db_path(&ws);
+        let mut readers = Vec::new();
+        for _ in 0..3 {
+            let path = db_path.clone();
+            let schedule_id = schedule_id.to_string();
+            readers.push(std::thread::spawn(move || {
+                let conn = open_connection(&path).expect("open reader");
+                (
+                    last_scheduled_fire_ms(&conn, &schedule_id).unwrap(),
+                    has_live_scheduled_run(&conn, &schedule_id).unwrap(),
+                )
+            }));
+        }
+        for reader in readers {
+            assert_eq!(
+                reader.join().unwrap(),
+                (Some(row.enqueued_at), true),
+                "concurrent readers observe one scheduler state"
+            );
+        }
+
+        claim_next(&conn, "scheduler-worker", &ClaimFilters::default())
+            .unwrap()
+            .expect("scheduled row is claimable");
+        assert!(has_live_scheduled_run(&conn, schedule_id).unwrap());
+        complete(&conn, &row.run_id, ok_completion()).unwrap();
+        assert!(
+            !has_live_scheduled_run(&conn, schedule_id).unwrap(),
+            "terminal rows do not block the next fire"
+        );
+
+        let broken = Connection::open_in_memory().expect("in-memory connection");
+        let last_error = last_scheduled_fire_ms(&broken, schedule_id).unwrap_err();
+        assert!(last_error.contains("Query last scheduled fire failed"));
+        let live_error = has_live_scheduled_run(&broken, schedule_id).unwrap_err();
+        assert!(live_error.contains("Query live scheduled run failed"));
+
+        let _ = fs::remove_dir_all(ws.root());
+    }
+    #[test]
+
     fn stats_counts_per_state_and_actor() {
         let ws = unique_workspace("stats");
         let conn = open(&ws).expect("open");

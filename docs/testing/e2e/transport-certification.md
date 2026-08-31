@@ -33,9 +33,12 @@ The release workflow runs the same gate and requires it before publishing.
 
 ## Bounds and Cleanup
 
-Compose and Docker commands are bounded at 120 seconds. Service readiness is 45
-seconds, connection 90 seconds, disconnection 75 seconds, and the aggregate
-Rust/Docker phases are bounded by the script. Cleanup always runs and fails if
+Compose and Docker commands are bounded at 120 seconds, except the cold initial
+image build, which is bounded at 5 minutes to allow a clean checkout to compile
+the production binary while remaining inside the canonical gate's 20-minute
+outer timeout. Service readiness is 45 seconds, connection 90 seconds,
+disconnection 75 seconds, and the aggregate Rust/Docker phases are bounded by
+the script. Cleanup always runs after Compose state is initialized and fails if
 resource inspection fails or finds leftovers.
 
 ## Troubleshooting

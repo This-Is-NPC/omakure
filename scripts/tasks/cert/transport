@@ -10,9 +10,14 @@ compose_file="$root_dir/ci/compose/compose.transport-certification.e2e.yaml"
 project="${OMAKURE_CERTIFICATION_PROJECT:-omakure-transport-certification-${BASHPID}}"
 compose=(timeout --foreground --kill-after=5s 120s docker compose -f "$compose_file" -p "$project")
 docker_cmd=(timeout --foreground --kill-after=5s 120s docker)
+# A clean checkout can require more than the command budget below to compile
+# the image. Keep this build bound below the canonical gate's 20-minute outer
+# timeout while retaining the shorter budget for every other Docker command.
+image_build_cmd=(timeout --foreground --kill-after=30s 5m docker)
 tmp_dir=$(mktemp -d)
 induced_failure=${OMAKURE_CERTIFICATION_INDUCE_FAILURE:-0}
 old_c_state_dir=
+compose_env_initialized=0
 
 fail() {
     printf 'transport certification: %s\n' "$*" >&2
@@ -22,32 +27,34 @@ fail() {
 cleanup() {
     local exit_status=$?
     trap - EXIT INT TERM
-    if (( exit_status != 0 )); then
-        "${compose[@]}" logs --no-log-prefix cert-a cert-b cert-c cert-adversary >&2 || true
-    fi
-    if ! "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1; then
-        printf 'transport certification: Compose teardown failed for %s\n' "$project" >&2
-        exit_status=1
-    fi
-    if [[ -n "${old_c_state_dir:-}" && -d "$old_c_state_dir" ]]; then
-        "${docker_cmd[@]}" run --rm --user 0 \
-            -v "$old_c_state_dir:/var/lib/omakure" \
-            --entrypoint /usr/bin/chown omakure-node:transport-certification \
-            -R "$(id -u):$(id -g)" /var/lib/omakure >/dev/null 2>&1 || true
-    fi
-    for resource in container network volume; do
-        local remaining
-        if ! remaining=$("${docker_cmd[@]}" "$resource" ls -q \
-            --filter "label=com.docker.compose.project=$project"); then
-            printf 'transport certification: unable to inspect remaining %s resources for %s\n' \
-                "$resource" "$project" >&2
-            exit_status=1
-        elif [[ -n "$remaining" ]]; then
-            printf 'transport certification: project %s resources survived teardown for %s\n' \
-                "$resource" "$project" >&2
+    if (( compose_env_initialized )); then
+        if (( exit_status != 0 )); then
+            "${compose[@]}" logs --no-log-prefix cert-a cert-b cert-c cert-adversary >&2 || true
+        fi
+        if ! "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1; then
+            printf 'transport certification: Compose teardown failed for %s\n' "$project" >&2
             exit_status=1
         fi
-    done
+        if [[ -n "${old_c_state_dir:-}" && -d "$old_c_state_dir" ]]; then
+            "${docker_cmd[@]}" run --rm --user 0 \
+                -v "$old_c_state_dir:/var/lib/omakure" \
+                --entrypoint /usr/bin/chown omakure-node:transport-certification \
+                -R "$(id -u):$(id -g)" /var/lib/omakure >/dev/null 2>&1 || true
+        fi
+        for resource in container network volume; do
+            local remaining
+            if ! remaining=$("${docker_cmd[@]}" "$resource" ls -q \
+                --filter "label=com.docker.compose.project=$project"); then
+                printf 'transport certification: unable to inspect remaining %s resources for %s\n' \
+                    "$resource" "$project" >&2
+                exit_status=1
+            elif [[ -n "$remaining" ]]; then
+                printf 'transport certification: project %s resources survived teardown for %s\n' \
+                    "$resource" "$project" >&2
+                exit_status=1
+            fi
+        done
+    fi
     rm -rf "$tmp_dir"
     exit "$exit_status"
 }
@@ -95,7 +102,7 @@ generation_failure() {
 }
 
 printf 'transport certification: build current image\n'
-"${docker_cmd[@]}" build --pull=false --tag omakure-node:transport-certification "$root_dir" >/dev/null
+"${image_build_cmd[@]}" build --pull=false --tag omakure-node:transport-certification "$root_dir" >/dev/null
 
 auth=$(generate_auth cert-a --scope node:read --scope enrollment:read --scope enrollment:write --scope discovery:read) || fail "cert-a auth setup failed"
 IFS='|' read -r cert_a_tokens cert_a_client cert_a_curl <<<"$auth"
@@ -109,6 +116,7 @@ export OMAKURE_CERT_A_TOKENS_FILE="$cert_a_tokens" OMAKURE_CERT_A_CLIENT_FILE="$
 export OMAKURE_CERT_B_TOKENS_FILE="$cert_b_tokens" OMAKURE_CERT_B_CLIENT_FILE="$cert_b_client" OMAKURE_CERT_B_CURL_FILE="$cert_b_curl"
 export OMAKURE_CERT_C_TOKENS_FILE="$cert_c_tokens" OMAKURE_CERT_C_CLIENT_FILE="$cert_c_client" OMAKURE_CERT_C_CURL_FILE="$cert_c_curl"
 export OMAKURE_CERT_ADVERSARY_TOKENS_FILE="$adversary_tokens" OMAKURE_CERT_ADVERSARY_CLIENT_FILE="$adversary_client" OMAKURE_CERT_ADVERSARY_CURL_FILE="$adversary_curl"
+compose_env_initialized=1
 "${compose[@]}" build --pull=false >/dev/null
 
 run_node() {

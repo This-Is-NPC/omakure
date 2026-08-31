@@ -878,7 +878,7 @@ needs a bound not written here must amend this contract before implementation.
 
 - `docs/internal/direct-transport-contract.md` - frozen transport, certificate, envelope,
   enrollment, and registry contract.
-- `../usage.md` - the terms this contract uses: Conductor, Performer, Pulse,
+- `../fleet-operations.md` - the terms this contract uses: Conductor, Performer, Pulse,
   Profile, and Signal.
 - [RFC 8785 JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785)
 - [BIP-340 Schnorr Signatures](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)

@@ -6,13 +6,15 @@ contract — every AI-relevant verb produces a stable JSON envelope on
 stdout when called with `--json`, and the run history is persisted in a
 queryable SQLite database.
 
-## Certification command
+For the authenticated HTTP adapter, use the [HTTP API contract](http-api.md);
+deployment topology and readiness operation are defined in the
+[deployment guide](deployment.md). The machine-facing contract below remains
+unchanged.
 
-`help-ai` remains generated from the compiled CLI command tree and is unchanged
-by the repository-level certification runners. The bounded Linux gates are
-invoked through `mise run cert:transport` /
-`scripts/tasks/cert/transport` and `mise run cert:health` /
-`scripts/tasks/cert/health`; neither is an AI-facing node verb and neither adds
+## CLI generation
+
+`help-ai` is generated from the compiled CLI command tree and is the
+authoritative discovery surface for AI-facing verbs.
 
 The AI-facing Health Plane read surfaces stay exactly the two `--json` verbs the
 Signal wave shipped, `node health` and `node signals`. Health data is written

@@ -379,6 +379,95 @@ fn docs_index_links_deployment() {
 }
 
 #[test]
+fn docs_index_preserves_canonical_manual_ownership() {
+    let index = read("docs/README.md");
+    for (label, target) in [
+        ("CLI and local usage", "usage.md"),
+        ("Fleet operations manual", "fleet-operations.md"),
+        ("HTTP API", "http-api.md"),
+        ("Deployment", "deployment.md"),
+        ("AI interface", "ai-interface.md"),
+    ] {
+        assert!(
+            index.contains(&format!("[{label}]({target})")),
+            "docs/README.md must link canonical {label} manual"
+        );
+    }
+    let reference = index
+        .split_once("## Referência")
+        .map(|(_, body)| body)
+        .expect("docs/README.md must have Referência section");
+    for target in [
+        "cli-reference.md",
+        "usage/omakure.md",
+        "usage/omakure.1",
+        "usage/omakure.kdl",
+        "operation-catalog.md",
+        "operation-support-matrix.md",
+        "cli-http-parity.md",
+    ] {
+        assert!(
+            reference.contains(&format!("({target})")),
+            "Referência section must link {target}"
+        );
+    }
+}
+// These wrappers are Bash scripts with shebangs, so execute them only on Unix,
+// where `Command` can launch them directly. The cross-platform Rust freshness
+// contracts remain in `cli_reference_contract`: the Clap-rendered reference
+// and CLI/HTTP parity checks run on every target.
+#[cfg(unix)]
+#[test]
+fn generated_documentation_checks_are_read_only_and_fresh() {
+    let root = repo_root();
+    let artifacts = [
+        "docs/cli-reference.md",
+        "docs/usage/omakure.md",
+        "docs/usage/omakure.1",
+        "docs/usage/omakure.kdl",
+        "docs/usage/fidelity.json",
+        "docs/usage/overlay.json",
+        "docs/usage/unreportable-semantics.json",
+        "docs/usage/fidelity-allowlist.json",
+        "docs/operation-catalog.md",
+        "docs/operation-support-matrix.md",
+    ];
+    let before = artifacts
+        .iter()
+        .map(|path| {
+            (
+                path,
+                fs::read(root.join(path)).expect("read generated artifact"),
+            )
+        })
+        .collect::<Vec<_>>();
+    for script in [
+        "scripts/tasks/cli-reference",
+        "scripts/tasks/usage-kdl",
+        "scripts/tasks/usage-docs",
+        "scripts/tasks/operation-catalog",
+    ] {
+        let output = Command::new(root.join(script))
+            .arg("--check")
+            .current_dir(&root)
+            .output()
+            .unwrap_or_else(|error| panic!("run {script} --check: {error}"));
+        assert!(
+            output.status.success(),
+            "{script} --check failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    for (path, expected) in before {
+        assert_eq!(
+            fs::read(root.join(path)).expect("re-read generated artifact"),
+            expected,
+            "{path} changed during a read-only freshness check"
+        );
+    }
+}
+
+#[test]
 fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     let root = repo_root();
     for doc in [
@@ -387,6 +476,15 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
         "docs/internal/requirements.md",
         "docs/internal/development.md",
         "docs/usage.md",
+        "docs/fleet-operations.md",
+        "docs/fleet-model.md",
+        "docs/http-api.md",
+        "docs/deployment.md",
+        "docs/ai-interface.md",
+        "docs/cli-reference.md",
+        "docs/cli-http-parity.md",
+        "docs/operation-catalog.md",
+        "docs/operation-support-matrix.md",
         "docs/workspace.md",
         "docs/scripts-path.md",
         "docs/internal/release-artifacts.md",
@@ -404,10 +502,10 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     }
     assert!(!read("mise.toml").contains("[tasks.tui]"));
     let readme = read("README.md");
-    assert!(readme.contains("omakure doctor"));
+    assert!(readme.contains("cargo run --bin omakure -- doctor"));
     assert!(!readme.contains("omakure --json doctor"));
-    assert!(readme.contains("Optional PowerShell"));
-    assert!(readme.contains("Optional Python"));
+    assert!(readme.contains("Optional PowerShell or Python"));
+    assert!(readme.contains("Lua 5.4 is embedded"));
     let mise = read("mise.toml");
     assert!(mise.contains("OMAKURE_API_TOKEN"));
     assert!(mise.contains("openssl rand -hex 32"));

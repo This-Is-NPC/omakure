@@ -197,7 +197,7 @@ that battery would silently have made it remotely runnable.
 
 ## Refusing a baseline is not refusing to serve
 
-`docs/usage.md` froze this rule for enrollment and it applies unchanged. Every
+`docs/fleet-operations.md` freezes this rule for enrollment and it applies unchanged. Every
 refusal above is a decision about one message. The session stays up, the Health
 Plane keeps reporting, and the next baseline on the same session is decided
 normally.

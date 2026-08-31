@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="${MISE_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+cd "$project_root"
+exec cargo run --quiet --locked --bin operation-catalog -- "$@"

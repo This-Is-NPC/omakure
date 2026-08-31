@@ -67,6 +67,9 @@ run = "scripts/tasks/usage-kdl"
 [tasks."usage:docs"]
 description = "Generate or check deterministic Markdown and roff Usage documentation"
 run = "scripts/tasks/usage-docs"
+[tasks."operation:catalog"]
+description = "Generate or check the operation catalog artifacts"
+run = "scripts/tasks/operation-catalog"
 
 [tasks.install]
 description = "Install omakure locally (mutates the user installation prefix)"

@@ -1,0 +1,21 @@
+schema_version = 1
+catalog_version = "1.0.0"
+
+[[operations]]
+operation_id = "op.orphan"
+entry_id = "not-a-parity-entry"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = []
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "fixture"
+[operations.platforms.macos]
+supported = true
+reason = "fixture"
+[operations.platforms.windows]
+supported = true
+reason = "fixture"

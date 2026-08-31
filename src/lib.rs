@@ -26,6 +26,8 @@ pub mod node;
 pub mod node_identity;
 pub mod node_registry;
 pub mod node_transport;
+/// The canonical versioned operation metadata catalog.
+pub mod operation_catalog;
 pub mod operations;
 mod policy;
 mod ports;

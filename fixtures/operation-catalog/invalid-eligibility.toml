@@ -1,0 +1,21 @@
+schema_version = 1
+catalog_version = "1.0.0"
+
+[[operations]]
+operation_id = "op.doctor"
+entry_id = "doctor"
+plane = "service-observation"
+remote_eligibility = "control-execute"
+effect = "observe"
+mutability = "immutable"
+cli = ["doctor"]
+http = ["GET /v1/doctor"]
+[operations.platforms.linux]
+supported = true
+reason = "fixture"
+[operations.platforms.macos]
+supported = true
+reason = "fixture"
+[operations.platforms.windows]
+supported = true
+reason = "fixture"

@@ -38,6 +38,7 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | `mise run install` | install the binary without copying repository scripts |
 | `mise run usage:kdl` | generate or check pinned Clap-to-Usage compatibility artifacts |
 | `mise run usage:docs` | generate or check Markdown and roff documentation from checked Usage KDL |
+| `mise run operation:catalog` | generate or check the operation catalog artifacts |
 
 ## Usage compatibility artifacts
 
@@ -67,7 +68,8 @@ semantics record, or generated artifact. The checked residual for
 
 After KDL changes, run `mise run usage:docs -- --write` and then
 `mise run usage:docs -- --check`. The check command fails if either generated
-document is stale or missing.
+document is stale or missing. Both Usage checks and the operation catalog check
+are required in CI.
 
 The overlay is keyed by parity `entry_id` and `operation_family`, never by
 Usage's rename-sensitive `full_cmd`.

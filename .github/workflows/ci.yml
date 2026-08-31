@@ -177,6 +177,8 @@ jobs:
         run: cargo run --quiet --locked --features usage-generator --bin usage-kdl -- --check
       - name: Check generated Usage documentation
         run: scripts/tasks/usage-docs --check
+      - name: Check generated operation catalog
+        run: scripts/tasks/operation-catalog --check
   coverage:
     if: github.event_name == 'pull_request'
     name: Deterministic LLVM coverage and baseline gate

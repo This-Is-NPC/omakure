@@ -411,6 +411,12 @@ rejection_count() {
         "SELECT COUNT(*) FROM transport_audit WHERE outcome = 'rejected';"
 }
 
+rejection_count_after() {
+    local database=$1 before_id=$2 code=$3
+    timeout --foreground --kill-after=2s 10s sqlite3 "$database" \
+        "SELECT COUNT(*) FROM transport_audit WHERE id > $before_id AND event_type = 'probe_rejected' AND outcome = 'rejected' AND error_code = $code;"
+}
+
 run_raw_case() {
     local name=$1 frame=$2 expected_code=$3
     printf 'transport certification: adversary case %s\n' "$name"
@@ -539,7 +545,7 @@ restart_before_material=$(persisted_material_hashes cert-b)
 copy_b_db
 restart_before_audit=$(latest_audit_id_file "$tmp_dir/cert-b.sqlite")
 "${compose[@]}" stop cert-b >/dev/null
-"${compose[@]}" start cert-b >/dev/null
+"${compose[@]}" up -d --no-deps --no-recreate cert-b >/dev/null
 wait_service cert-b
 copy_b_db
 [[ "$restart_before_state" == "$(db_state_snapshot)" ]] || fail "cert-b restart changed identity, trust, epochs, pending, or session state"
@@ -554,15 +560,20 @@ printf 'transport certification: static locator mismatch and partition/reconnect
 mismatched_config=$(static_config certification-a "\"$c_id@cert-b:7879\"")
 write_config cert-a "$mismatched_config"
 "${compose[@]}" stop cert-a >/dev/null
-"${compose[@]}" start cert-a >/dev/null
-sleep 3
+"${compose[@]}" up -d --no-deps --no-recreate cert-a >/dev/null
+wait_service cert-a
 if output=$(status_http cert-a) \
     && jq -e '.data.transport.expected_connected_peer_count != 0' <<<"$output" >/dev/null; then
     fail "mismatched static locator connected"
 fi
 write_config cert-a "$static_a"
 "${compose[@]}" stop cert-a cert-b >/dev/null
-"${compose[@]}" start cert-b cert-a >/dev/null
+# Start the listener before the dialer so reconnect readiness never depends on
+# a fixed delay or a race between two independently restarting services.
+"${compose[@]}" up -d --no-deps --no-recreate cert-b >/dev/null
+wait_service cert-b
+"${compose[@]}" up -d --no-deps --no-recreate cert-a >/dev/null
+wait_service cert-a
 wait_connected cert-b "$a_id"
 wait_connected cert-a "$b_id"
 copy_db cert-a "$tmp_dir/cert-a-partition-before.sqlite"
@@ -577,7 +588,8 @@ copy_db cert-a "$tmp_dir/cert-a-partition-disconnected.sqlite"
 [[ "$(jq -r '.data.transport.peers[] | select(.node_id == "'"$b_id"'") | .state' <<<"$(status_http cert-a)")" == "disconnected" ]] \
     || fail "cert-a did not report cert-b disconnected during partition"
 "${docker_cmd[@]}" network connect "${project}_default" "$b_container"
-"${compose[@]}" start cert-b >/dev/null
+"${compose[@]}" up -d --no-deps --no-recreate cert-b >/dev/null
+wait_service cert-b
 wait_connected cert-a "$b_id"
 wait_connected cert-b "$a_id"
 copy_db cert-a "$tmp_dir/cert-a-partition-after.sqlite"
@@ -588,11 +600,16 @@ assert_new_session_after_partition cert-a "$partition_a_before" "$partition_a_af
 assert_new_session_after_partition cert-b "$partition_b_before" "$partition_b_after"
 
 printf 'transport certification: revocation and identity replacement/reset\n'
+copy_b_db
+revoked_before_audit=$(latest_audit_id_file "$tmp_dir/cert-b.sqlite")
 "${compose[@]}" stop cert-b >/dev/null
 run_node cert-b revoke "$a_id" --actor certification --reason "revocation lifecycle" --confirmed >/dev/null
-"${compose[@]}" start cert-b >/dev/null
+"${compose[@]}" up -d --no-deps --no-recreate cert-b >/dev/null
 wait_service cert-b
-sleep 3
+wait_for_exact_rejection cert-b "$revoked_before_audit" 1007 >/dev/null
+copy_b_db
+[[ "$(rejection_count_after "$tmp_dir/cert-b.sqlite" "$revoked_before_audit" 1007)" == "1" ]] \
+    || fail "revoked handshake did not produce exactly one durable 1007 audit"
 if output=$(status_http cert-b) \
     && jq -e --arg peer "$a_id" '.data.transport.peers | any(.[]; .node_id == $peer and .state == "connected")' <<<"$output" >/dev/null; then
     fail "revoked peer reconnected"
@@ -611,7 +628,7 @@ copy_db cert-c "$tmp_dir/cert-c-before-reset.sqlite"
 old_c_registry_state=$(db_state_snapshot_file "$tmp_dir/cert-c-before-reset.sqlite")
 "${compose[@]}" stop cert-c >/dev/null
 run_node cert-c reset --confirmed >/dev/null
-"${compose[@]}" start cert-c >/dev/null
+"${compose[@]}" up -d --no-deps --no-recreate cert-c >/dev/null
 wait_service cert-c
 new_c_status=$("${compose[@]}" exec -T cert-c /usr/local/bin/omakure --json node status)
 new_c_id=$(node_id <<<"$new_c_status")

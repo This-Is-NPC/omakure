@@ -3151,6 +3151,7 @@ fn serve_connection(
     let registry = NodeRegistry::open_existing(context, identity.public_status())?;
     let mut handshake = local.handshake(HandshakeRole::Responder)?;
     let mut remote_node_id = None;
+    let mut rejection_audit_recorded = false;
     let result = (|| {
         let frame = read_frame(&mut stream, deadline)?;
         handshake.read_next(&frame, unix_seconds())?;
@@ -3184,6 +3185,20 @@ fn serve_connection(
             .as_ref()
             .is_some_and(|peer| peer.state == PeerState::Revoked)
         {
+            // This peer authenticated successfully, so persist the specific
+            // revoked refusal before telling it to stop. The outer rejection
+            // audit below handles failures before authentication; recording
+            // here avoids turning one revoked handshake into two rows.
+            registry.record_transport_audit(
+                "probe_rejected",
+                remote.node_id(),
+                None,
+                Some(1),
+                0,
+                "rejected",
+                Some(TransportError::Revoked.code() as u16),
+            )?;
+            rejection_audit_recorded = true;
             let mut session = handshake.into_session()?;
             if let Ok(frame) =
                 session.write_error(crate::direct_transport::ProtocolErrorCode::Revoked)
@@ -3308,19 +3323,23 @@ fn serve_connection(
     let rejection_audit = if let Err(error) = &result {
         let node_id = remote_node_id.as_deref().unwrap_or(UNKNOWN_NODE_ID);
         state.record_direct_error(node_id, error);
-        let protocol = match error {
-            DirectServiceError::Protocol(error) => Some(error.code() as u16),
-            _ => None,
-        };
-        Some(registry.record_transport_audit(
-            "probe_rejected",
-            node_id,
-            None,
-            Some(1),
-            0,
-            "rejected",
-            protocol,
-        ))
+        if rejection_audit_recorded {
+            None
+        } else {
+            let protocol = match error {
+                DirectServiceError::Protocol(error) => Some(error.code() as u16),
+                _ => None,
+            };
+            Some(registry.record_transport_audit(
+                "probe_rejected",
+                node_id,
+                None,
+                Some(1),
+                0,
+                "rejected",
+                protocol,
+            ))
+        }
     } else {
         None
     };

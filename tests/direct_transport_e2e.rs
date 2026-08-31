@@ -1327,19 +1327,19 @@ fn a_revoked_peer_is_refused_with_revoked_and_told_so() {
          retries without limit"
     );
 
+    // The responder commits this row before sending the refusal, so inspect it
+    // while both services are still alive rather than relying on teardown to
+    // provide an arbitrary observation delay.
+    let codes = rejected_error_codes(responder);
+    assert_eq!(
+        codes,
+        vec![1007],
+        "the revoker must record exactly one durable revoked audit for the \
+         authenticated handshake, got {codes:?}"
+    );
+
     let _ = dialer_server.terminate();
     let _ = responder_server.terminate();
-
-    let codes = rejected_error_codes(responder);
-    assert!(
-        codes.contains(&1007),
-        "the revoker must record `revoked` for the handshake it turned away, got {codes:?}"
-    );
-    assert!(
-        !codes.contains(&1005),
-        "a revoked peer is not an identity mismatch; its identity is exactly the one \
-         that was revoked: {codes:?}"
-    );
 }
 
 /// Wait until `server` reports no session with `peer_node_id`.

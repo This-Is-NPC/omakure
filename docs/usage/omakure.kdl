@@ -199,7 +199,7 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
         flag --limit help="Number of rows to print (default: 10)" display_order=0 default="10" {
             arg <LIMIT>
         }
-        flag --follow help="Reserved for future use; rejected with error.code = \"not_implemented\"" display_order=1 default="false"
+        flag --follow help="Unsupported; rejected with error.code = \"not_implemented\"" display_order=1 default="false"
         flag --scripts-dir help="Scripts directory override" global=#true display_order=0 {
             arg <SCRIPTS_DIR>
         }

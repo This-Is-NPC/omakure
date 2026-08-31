@@ -1,8 +1,6 @@
-//! Disposable production-listener feasibility probe for the Health Plane
-//! contract freeze (task #2776).
+//! Production-listener compatibility coverage for the Health Plane contract.
 //!
-//! This probe proves three things without adding a single shipped Health Plane
-//! surface:
+//! This test proves three things against the shipped implementation:
 //!
 //! 1. A Health Plane message reaches the real production Noise listener over the
 //!    real handshake, certificate, framing, and session path.
@@ -14,8 +12,8 @@
 //!    certificate, and the same `verify_envelope` accept the Health Plane
 //!    envelopes.
 //!
-//! It is deliberately disposable. When the Health Plane is implemented, its own
-//! end-to-end tests replace this file.
+//! These assertions provide regression coverage for the production listener and
+//! transport compatibility that the shipped Health Plane relies on.
 
 mod support;
 

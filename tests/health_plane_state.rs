@@ -1,6 +1,5 @@
 //! Integration coverage for the bounded Health Plane state owned by
-//! `node.sqlite` and the protocol-neutral shared operations built on top of it
-//! (task #2777, wave 2 of plan `health-plane-foundation`).
+//! `node.sqlite` and the protocol-neutral shared operations built on top of it.
 //!
 //! Unlike the in-crate unit tests, this suite drives a node the way production
 //! does: it initializes real node state and real trust through the shipped CLI,
@@ -10,7 +9,8 @@
 //! that the public projection never carries a privacy class P1 field.
 //!
 //! It deliberately does not exercise transport scheduling, the Noise
-//! application dispatcher, or any CLI/HTTP adapter: those are waves 3 and 4.
+//! application dispatcher, or any CLI/HTTP adapter: those are covered by the
+//! corresponding transport and adapter integration suites.
 
 mod support;
 

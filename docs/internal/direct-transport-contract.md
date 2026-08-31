@@ -818,7 +818,7 @@ drop only with a local counter.
 
 ## Canonical E2E Topology
 
-Every later direct-channel E2E slice uses one independently stateful topology:
+The direct-channel E2E topology is independently stateful:
 
 | Container | Purpose | Required isolation |
 |---|---|---|
@@ -835,7 +835,7 @@ deterministic clocks, bounded skew, restarts, and redacted result collection.
 
 ## Required Adversarial Coverage
 
-The executable contract and future E2E tests must cover:
+The executable contract and E2E tests cover:
 
 | Case | Mutation or fault | Required result |
 |---|---|---|

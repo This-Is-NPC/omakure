@@ -7,8 +7,8 @@ closed Signal lifecycle. It remains the compatibility and review contract for
 the CLI, HTTP projection, persistence, and node-to-node carriage.
 
 Every number in this document is normative and final. There is no `TBD` and no
-"unspecified" bound. A later task that needs a limit not written here must amend
-this contract first.
+"unspecified" bound. Any additional limit not written here requires an amendment
+to this contract before it can be used.
 
 ## Decision
 
@@ -182,7 +182,7 @@ its own registry and never from this field.
 
 ### The baseline pair
 
-`baseline_id` and `baseline_observed_id` are the amendment item 8 needs, and
+`baseline_id` and `baseline_observed_id` support baseline drift projection, and
 they are two fields rather than one on purpose.
 
 `baseline_id` is the derived name of the set this Performer recorded
@@ -282,7 +282,8 @@ Pulse row per Performer and replaces it in place.
 Version 1 has exactly five numeric runner/liveness values: `queue_depth`,
 `workers_busy`, `workers_configured`, `uptime_seconds`, and `sequence`. **No CPU,
 memory, disk, network, temperature, battery, load-average, or any other gauge is
-permitted.** Adding one is an arbitrary metric and is excluded from this plan.
+permitted.** Adding one is an arbitrary metric and is excluded from this
+contract.
 
 Pulse never carries run arguments, run output, trace bodies, or a run's script
 path. `run_id` is opaque and `script` is a schema name.
@@ -856,10 +857,10 @@ signature of each accepted vector with the production
 `omakure::direct_transport` signing and verification path, and asserts that each
 rejection vector produces its stable error code.
 
-`tests/health_plane_feasibility.rs` remains the pre-implementation transport
-probe: it establishes a real production Noise session and proves that the
-frozen envelope and registry inputs needed no transport redesign. Its Health
-frames are deliberately discarded. Production Health carriage is covered by
+`tests/health_plane_feasibility.rs` is a transport compatibility probe: it
+establishes a real production Noise session and proves that the frozen envelope
+and registry inputs need no transport redesign. Its Health frames are
+deliberately discarded. Production Health carriage is covered by
 `tests/health_plane_transport_e2e.rs`, which exercises multi-node Profile,
 Pulse, Signal, authorization, and CLI/HTTP projection paths.
 
@@ -872,7 +873,7 @@ seam between the direct session and the protocol-neutral Health Plane,
 No implementation may change the certificate, Noise handshake, frame format,
 inner control kinds, admission controller, or enrollment path without first
 amending their own compatibility contracts. A future Health Plane change that
-needs a bound not written here must amend this contract before implementation.
+needs a bound not written here must amend this contract first.
 
 ## References
 

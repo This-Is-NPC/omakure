@@ -964,8 +964,8 @@ impl<'a> CueSession<'a> {
         };
 
         // Audit every decision, including acceptance. A remote instruction that
-        // left no trace would defeat the point of the roadmap item it belongs
-        // to, whose scope is distributed audit outcomes.
+        // left no trace would undermine the transport audit trail used to explain
+        // each outcome.
         let _ = self.registry.record_transport_audit(
             if code.is_some() {
                 "cue_rejected"

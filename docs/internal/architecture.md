@@ -203,7 +203,7 @@ src/
 - The portable node foundation includes direct Noise transport, trust-neutral LAN
   discovery, manual enrollment, signed-bundle enrollment, static-peer lifecycle,
   revocation, replay protection, and bounded transport audit events. Nostr,
-  campaigns and MDM remain future features.
+  campaigns, and MDM are outside the current product boundary.
 - Remote Cues ship behind five fail-closed gates, every input read from the
   receiving node's own registry and config. A Cue names a script the Performer
   already declared in `trust.remote_cue_scripts` or `trust.remote_cue_batteries`

@@ -396,7 +396,7 @@ pub struct HistoryTailArgs {
     #[arg(long, default_value_t = 10)]
     pub limit: i64,
 
-    /// Reserved for future use; rejected with error.code = "not_implemented"
+    /// Unsupported; rejected with error.code = "not_implemented"
     #[arg(long)]
     pub follow: bool,
 }

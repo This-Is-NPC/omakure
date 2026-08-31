@@ -137,10 +137,10 @@ omakure serve --uninstall        # disable --now + delete unit + daemon-reload
 journalctl --user -u <unit-name> -f
 ```
 
-macOS and Windows currently return `error.code = "not_implemented"` for
-these flags — wire the daemon up with your platform's service manager
-(launchd, Task Scheduler) pointing at `omakure serve` in the target
-workspace.
+macOS and Windows return `error.code = "not_implemented"` for these flags.
+Platform-specific service-manager integration is unsupported; use the
+foreground scheduler process or an external service manager to run
+`omakure serve` where appropriate.
 
 ## Manual replay
 

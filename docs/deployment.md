@@ -520,7 +520,7 @@ Omakure's run queue and history are **SQLite files under `.history/`**.
       container port publish).
 - [ ] Container runs as non-root; volume ownership matches.
 - [ ] Single replica / single host for the SQLite workspace.
-- [ ] On Unix, plan for `SIGHUP` token reload after rotation.
+- [ ] Use `SIGHUP` token reload after rotation on Unix.
 - [ ] Keep `OMAKURE_API_TOKEN` out of scripts and script environment files;
       rotate management tokens like any other secret.
 - [ ] Keep request bodies at the 1 MiB v1 limit and leave browser CORS
@@ -530,11 +530,6 @@ Omakure's run queue and history are **SQLite files under `.history/`**.
       directly from `.omakure/batteries/cache/`.
 - [ ] Register HTTP Batteries only from `https://` sources; use the local CLI
       for local development repositories.
-
-## Further work
-
-Product direction and future distribution work are tracked in the
-[Control GTM roadmap](control-roadmap.md), not in this operational guide.
 
 ## Smoke checklist
 

@@ -20,13 +20,33 @@ const PARITY: &str = include_str!(concat!(
 const CHANGED_PUBLIC_DOCS: &[&str] = &[
     "README.md",
     "docs/README.md",
-    "docs/control-roadmap.md",
     "docs/usage.md",
     "docs/fleet-operations.md",
     "docs/http-api.md",
     "docs/deployment.md",
     "docs/ai-interface.md",
 ];
+
+const AUDITED_TEMPORAL_PHRASES: &[&str] = &[
+    "control-roadmap.md",
+    "## roadmap",
+    "## product direction",
+    "optional later:",
+    "remain future features",
+    "deliberately deferred to task",
+    "for this wave",
+    "wave 2.",
+    "excluded from this plan",
+    "pre-implementation",
+    "future e2e tests",
+    "every later direct-channel",
+    "reserved for future use",
+    "roadmap item",
+    "task #",
+    "wave ",
+    "preimplementation",
+];
+
 const REFERENCE_TARGETS: &[&str] = &[
     "cli-reference.md",
     "usage/omakure.md",
@@ -39,6 +59,20 @@ const REFERENCE_TARGETS: &[&str] = &[
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn markdown_files_under(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("read documentation directory {directory:?}: {error}"))
+    {
+        let entry = entry.expect("read documentation directory entry");
+        let path = entry.path();
+        if path.is_dir() {
+            markdown_files_under(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "md") {
+            files.push(path);
+        }
+    }
 }
 
 fn docs_section<'a>(document: &'a str, heading: &str) -> &'a str {
@@ -341,6 +375,47 @@ fn public_docs_expose_all_audience_tracks() {
 #[test]
 fn changed_public_docs_have_resolved_repository_links() {
     assert_repository_relative_links_are_resolved();
+}
+
+#[test]
+fn current_docs_quarantine_deleted_roadmap_and_temporal_promises() {
+    let root = repo_root();
+    assert!(
+        !root.join("docs/control-roadmap.md").exists(),
+        "deleted control roadmap must not remain in the current docs tree"
+    );
+    for (document, text) in [
+        ("README.md", read_document(&root, "README.md")),
+        ("docs/README.md", DOCS_INDEX.to_string()),
+    ] {
+        let lower = text.to_ascii_lowercase();
+        for phrase in ["control-roadmap.md", "## roadmap", "## product direction"] {
+            assert!(
+                !lower.contains(phrase),
+                "{document} retains deleted roadmap wording {phrase:?}"
+            );
+        }
+    }
+
+    let mut documents = Vec::new();
+    markdown_files_under(&root.join("docs"), &mut documents);
+    documents.push(root.join("README.md"));
+    for path in documents {
+        let text = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read current documentation {path:?}: {error}"));
+        let lower = text.to_ascii_lowercase();
+        for phrase in AUDITED_TEMPORAL_PHRASES {
+            assert!(
+                !lower.contains(phrase),
+                "current documentation {path:?} retains audited stale phrase {phrase:?}"
+            );
+        }
+    }
+}
+
+fn read_document(root: &Path, relative: &str) -> String {
+    fs::read_to_string(root.join(relative))
+        .unwrap_or_else(|error| panic!("read {relative}: {error}"))
 }
 
 #[test]

@@ -420,7 +420,7 @@ Print the most recent N runs (no --follow in v1)
 
 ### Options
 
-- `--follow` — Reserved for future use; rejected with error.code = "not_implemented" (values: `false`, `true`)
+- `--follow` — Unsupported; rejected with error.code = "not_implemented" (values: `false`, `true`)
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
 - `--limit LIMIT` — Number of rows to print (default: 10) (default: `10`)
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override

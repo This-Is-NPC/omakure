@@ -194,7 +194,7 @@ Print the most recent N runs (no --follow in v1)
 
   **Default:** `10`
 - **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
-- **`--follow`** — Reserved for future use; rejected with error.code = "not_implemented"
+- **`--follow`** — Unsupported; rejected with error.code = "not_implemented"
 
   **Default:** `false`
 - **`--json`** — Emit machine-readable JSON output for AI-facing subcommands.

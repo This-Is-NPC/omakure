@@ -101,12 +101,12 @@ secret at clone/fetch time via a temporary `GIT_ASKPASS` helper:
 
 Git URLs must not embed credentials (`https://user:pass@…` is rejected).
 
-SSH deploy-key Battery auth is out of scope for this release.
+SSH deploy-key Battery auth is unsupported.
 
 ### Secret ACL gaps
 
 HTTP Battery auth reuses the process `--secret-ref` allow-list plus
-`credentials:use`. Remaining gaps vs a full plan ACL:
+`credentials:use`. Remaining ACL gaps are:
 
 - No per-Battery or per-script target binding beyond the shared ref list
 - No delivery-channel ACL (run vs battery) enforced at resolve time —
@@ -160,8 +160,8 @@ exposing or installing any script:
 `battery install` materializes one selected script into the trusted scripts
 workspace by copying it from the validated cache checkout. It is a local act:
 it may be initiated by the local CLI or by an authenticated HTTP request to the
-install route, but never by a peer or by a Remote Cue. Non-Unix platforms reject
-the operation until their no-follow install protections are implemented.
+install route, but never by a peer or by a Remote Cue. Non-Unix platforms
+reject the operation; no-follow install protections are unsupported there.
 
 Fleet code delivery uses a separately signed Baseline; a Remote Cue may select a
 Battery-installed script only after the receiving node explicitly declares that
@@ -207,7 +207,7 @@ Operations own:
 - safety checks
 - stable error codes and structured error context
 
-The initial operation error taxonomy is intentionally small:
+The operation error taxonomy is intentionally small:
 
 - `invalid_input`
 - `not_found`

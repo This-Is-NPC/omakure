@@ -1,5 +1,6 @@
-//! Wave 3 certification: Profile and Pulse over the production direct
-//! transport, and the bounded fleet-status projection both adapters render.
+//! Production transport integration coverage: Profile and Pulse over the
+//! direct transport, plus the bounded fleet-status projection both adapters
+//! render.
 //!
 //! Nothing here simulates the transport. Two independently stateful `node
 //! serve` processes complete the shipped Noise handshake against each other,
@@ -837,7 +838,8 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
 
     let mut performer_server = Some(serve(performer.path()));
 
-    // 1. SMART: the Performer reaches `online` inside the Wave 1 window.
+    // 1. SMART: the Performer reaches `online` inside the frozen presence
+    //    window.
     let started = Instant::now();
     let online = wait_for_presence(&conductor_server, &performer_id, "online");
     let reached = started.elapsed();
@@ -1316,7 +1318,7 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
 }
 
 // ---------------------------------------------------------------------------
-// Wave 4 SMART gate: three real nodes, one real run, one redacted Signal.
+// Signal SMART gate: three real nodes, one real run, one redacted Signal.
 // ---------------------------------------------------------------------------
 
 /// The frozen capability that authorizes the closed Signal feed.

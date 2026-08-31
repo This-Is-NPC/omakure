@@ -16,10 +16,10 @@ unchanged.
 `help-ai` is generated from the compiled CLI command tree and is the
 authoritative discovery surface for AI-facing verbs.
 
-The AI-facing Health Plane read surfaces stay exactly the two `--json` verbs the
-Signal wave shipped, `node health` and `node signals`. Health data is written
-only by the authenticated node-to-node exchange over the direct transport;
-management HTTP and the CLI can read that state and can never write it.
+The AI-facing Health Plane read surfaces are the two `--json` verbs
+`node health` and `node signals`. Health data is written only by the
+authenticated node-to-node exchange over the direct transport; management
+HTTP and the CLI can read that state and can never write it.
 
 `node health --json` also answers baseline drift, and answers it as a comparison
 rather than a claim: each row's `baseline_status` is `unknown`, `none`,
@@ -625,7 +625,7 @@ shorthand: `in_flight = {queued, running}`,
 `all = every state`. The two flags are mutually exclusive.
 
 When neither `--state` nor `--state-set` is set, `history list` defaults
-to `--state-set terminal` so v0.1 callers see no behavior change.
+to `--state-set terminal`, so callers see the documented terminal-state behavior.
 
 `history stats` returns counts per state and per actor in one envelope —
 the same data as `queue stats` but exposed under the visibility surface

@@ -42,13 +42,30 @@ fn dockerfile_is_multi_stage_node_entrypoint() {
 }
 
 #[test]
+fn temp_copies_are_ignored_and_docker_excluded() {
+    let gitignore = read(".gitignore");
+    assert!(
+        gitignore.lines().any(|line| line.trim() == ".temp/"),
+        ".gitignore must ignore temporary roadmap copies"
+    );
+
+    let dockerignore = read(".dockerignore");
+    assert!(
+        dockerignore
+            .lines()
+            .any(|line| matches!(line.trim(), ".temp" | ".temp/")),
+        ".dockerignore must exclude temporary roadmap copies"
+    );
+}
+
+#[test]
 fn dockerignore_excludes_heavy_paths() {
     let ignore = read(".dockerignore");
     for path in ["target", ".git", ".temp"] {
         assert!(
             ignore
                 .lines()
-                .any(|l| l.trim() == path || l.trim() == format!("{path}/")),
+                .any(|line| line.trim() == path || line.trim() == format!("{path}/")),
             ".dockerignore should exclude {path}"
         );
     }
@@ -254,11 +271,9 @@ fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results(
 /// What the install automation proves, and what it still does not, has to stay
 /// named where a reader looks.
 ///
-/// `docs/installation.md` is that place and is now the only one: the roadmap is
-/// no longer tracked and the release-notes document was retired, so a claim
-/// corrected here cannot be left standing somewhere else. The installers really
-/// do write a systemd unit, a launchd plist, and a Windows service, so the
-/// document is held to naming all three as well as the gaps -- a record that
+/// `docs/installation.md` is the authoritative place for this contract. The
+/// installers really do write a systemd unit, a launchd plist, and a Windows
+/// service, so the document must name all three as well as the gaps -- a record
 /// softened into "install automation does not ship" would be false in the other
 /// direction.
 ///
@@ -537,9 +552,8 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
     let cargo = read("Cargo.toml").to_lowercase();
     assert!(cargo.contains("name = \"omakure-installer\""));
     assert!(root.join("src/installer.rs").is_file());
-    // `mlua` used to be on this list, but it does not belong to this test's
-    // contract. This test guards the removal of the TUI *widget* runtime, which
-    // is a different Lua from the script kind roadmap item 5 introduced. The
+    // `mlua` does not belong to this list. This test guards the removal of the
+    // TUI *widget* runtime, which is distinct from the script runtime. The
     // widget stays gone; the script runtime is asserted present separately.
     for removed_dependency in ["crossterm", "ratatui", "rattles"] {
         assert!(
@@ -794,8 +808,8 @@ fn release_tarball_contains_only_the_required_binary() {
 ///
 /// Deliberately separate from the TUI-removal test above. That one guards the
 /// `lua_widget` runtime, which is still gone; this one guards the script kind,
-/// which is now shipped. Conflating them would let a future edit satisfy one
-/// contract by breaking the other.
+/// which is shipped. Conflating them would let this check pass by breaking the
+/// other contract.
 ///
 /// `vendored` is the load-bearing half: without it the binary would link
 /// against a system Lua and the whole point — a node that needs no Lua

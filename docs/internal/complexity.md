@@ -63,6 +63,7 @@ mise run quality:complexity-gate-test
 
 The dedicated CI workflow runs two native reports, gates the first against the
 second for deterministic output, publishes the gate's per-function evidence,
-and separately maintains the temporal informational soak. The seven-day/ten-run
-operational evidence is deliberately deferred to task #2890; its absence does
+and maintains the temporal informational soak. The soak audit records trusted
+successful runs and reports whether the chain has ten consecutive records
+spanning at least seven calendar days. This evidence is informational and does
 not weaken local changed-function enforcement.

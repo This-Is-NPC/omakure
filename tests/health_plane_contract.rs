@@ -1424,10 +1424,10 @@ fn fixture_pins_every_frozen_bound() {
         integer(&fixture, "registry_schema_version"),
         REGISTRY_SCHEMA_VERSION
     );
-    // Before the Health Plane migration shipped, the frozen target version was
-    // strictly ahead of the registry. Now that wave 2 has applied it, the
-    // registry must never lag the frozen target. The frozen value itself, 7, is
-    // asserted against the fixture immediately above and is unchanged.
+    // The registry schema is at least as new as the frozen Health Plane
+    // version, so the shipped implementation cannot lag the contract. The
+    // frozen value itself, 7, is asserted against the fixture immediately
+    // above and is unchanged.
     const {
         assert!(
             REGISTRY_SCHEMA_VERSION >= omakure::node_registry::SCHEMA_VERSION,
@@ -1592,7 +1592,7 @@ fn fixture_pins_every_frozen_bound() {
         fixture["new_capability_required"]
             .as_bool()
             .expect("new capability claim"),
-        "the contract must record that no new capability is required"
+        "the contract must record that a new capability is required"
     );
 }
 

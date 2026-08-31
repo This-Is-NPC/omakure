@@ -1005,7 +1005,11 @@ mod tests {
     #[test]
     fn current_catalog_and_support_matrix_are_fresh() {
         let catalog = validate_current().unwrap();
-        let matrix = render_support_matrix(&catalog);
+        let matrix_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(SUPPORT_MATRIX_PATH);
+        let matrix = std::fs::read_to_string(&matrix_path).unwrap_or_else(|error| {
+            panic!("failed to read {}: {error}", matrix_path.display())
+        });
         check_support_matrix_freshness(&catalog, &matrix).unwrap();
         assert!(check_support_matrix_freshness(&catalog, "stale").is_err());
         assert!(matrix.contains("Total operations: 72."));

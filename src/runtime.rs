@@ -138,7 +138,7 @@ pub fn command_for_script_with_env(
 pub(crate) const BASH_MISSING_HINT: &str =
     "Install Git for Windows (Git Bash) and ensure bash.exe is in PATH";
 
-fn path_value<'a>(env: &'a [(String, String)]) -> Option<&'a str> {
+pub(crate) fn path_value(env: &[(String, String)]) -> Option<&str> {
     let exact_path = env
         .iter()
         .rev()

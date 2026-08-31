@@ -1,6 +1,4 @@
 use std::ffi::OsStr;
-#[cfg(windows)]
-use std::path::Path;
 use std::process::Command;
 
 use crate::error::ScriptError;
@@ -8,28 +6,61 @@ use crate::error::ScriptError;
 use crate::runtime::BASH_MISSING_HINT;
 use crate::runtime::{powershell_program, python_program};
 
-/// Check that a command is available and runs successfully.
-fn ensure_command(program: &str, args: &[&str], not_found_hint: &str) -> Result<(), ScriptError> {
-    ensure_command_os(program, program, args, not_found_hint)
+/// Check that a command is available and runs successfully using the effective
+/// injected PATH. If no PATH override is supplied, preserve the normal parent
+/// environment lookup.
+fn ensure_command_with_env(
+    program: &str,
+    args: &[&str],
+    not_found_hint: &str,
+    env: &[(String, String)],
+) -> Result<(), ScriptError> {
+    let Some(injected_path) = crate::runtime::path_value(env) else {
+        return ensure_command(program, args, not_found_hint);
+    };
+    let Some(path) = crate::runtime::resolve_program_in_path(program, injected_path) else {
+        return Err(ScriptError::DependencyMissing {
+            name: program.to_string(),
+            hint: not_found_hint.to_string(),
+        });
+    };
+    ensure_command_os_with_env(path, program, args, not_found_hint, env)
 }
-#[cfg(windows)]
-fn ensure_command_path(
-    program: &Path,
+
+/// Check a command using an already-resolved executable and injected env.
+fn ensure_command_os_with_env(
+    program: impl AsRef<OsStr>,
     name: &str,
     args: &[&str],
     not_found_hint: &str,
+    env: &[(String, String)],
 ) -> Result<(), ScriptError> {
-    ensure_command_os(program, name, args, not_found_hint)
+    let mut command = Command::new(program);
+    command.envs(env.iter().map(|(key, value)| (key, value)));
+    ensure_command_output(command, name, args, not_found_hint)
 }
 
+/// Check a command using the parent environment.
 fn ensure_command_os(
     program: impl AsRef<OsStr>,
     name: &str,
     args: &[&str],
     not_found_hint: &str,
 ) -> Result<(), ScriptError> {
-    let program = program.as_ref();
-    match Command::new(program).args(args).output() {
+    ensure_command_output(Command::new(program), name, args, not_found_hint)
+}
+
+/// Check a command by name using the parent environment.
+fn ensure_command(program: &str, args: &[&str], not_found_hint: &str) -> Result<(), ScriptError> {
+    ensure_command_os(program, program, args, not_found_hint)
+}
+fn ensure_command_output(
+    mut command: Command,
+    name: &str,
+    args: &[&str],
+    not_found_hint: &str,
+) -> Result<(), ScriptError> {
+    match command.args(args).output() {
         Ok(output) => {
             if output.status.success() {
                 Ok(())
@@ -71,6 +102,17 @@ pub(crate) fn ensure_git_installed() -> Result<(), ScriptError> {
     )
 }
 
+pub(crate) fn ensure_git_installed_with_env(
+    env: &[(String, String)],
+) -> Result<(), ScriptError> {
+    let hint = if cfg!(windows) {
+        "Install Git for Windows (includes bash)"
+    } else {
+        "Install Git and ensure it is in PATH"
+    };
+    ensure_command_with_env("git", &["--version"], hint, env)
+}
+
 pub(crate) fn ensure_bash_installed() -> Result<(), ScriptError> {
     ensure_bash_installed_with_env(&[])
 }
@@ -83,19 +125,41 @@ pub(crate) fn ensure_bash_installed_with_env(env: &[(String, String)]) -> Result
             hint: BASH_MISSING_HINT.to_string(),
         });
     };
-    ensure_command_path(&program, "bash", &["--version"], BASH_MISSING_HINT)
+    ensure_command_os_with_env(&program, "bash", &["--version"], BASH_MISSING_HINT, env)
 }
 
-pub(crate) fn ensure_bash_installed_with_env(_env: &[(String, String)]) -> Result<(), ScriptError> {
-    ensure_command(
+#[cfg(not(windows))]
+pub(crate) fn ensure_bash_installed_with_env(env: &[(String, String)]) -> Result<(), ScriptError> {
+    let Some(injected_path) = crate::runtime::path_value(env) else {
+        return ensure_command(
+            "bash",
+            &["--version"],
+            "Install bash and ensure it is in PATH",
+        );
+    };
+    let Some(program) = crate::runtime::resolve_program_in_path("bash", injected_path) else {
+        return Err(ScriptError::DependencyMissing {
+            name: "bash".to_string(),
+            hint: "Install bash and ensure it is in PATH".to_string(),
+        });
+    };
+    ensure_command_os_with_env(
+        program,
         "bash",
         &["--version"],
         "Install bash and ensure it is in PATH",
+        env,
     )
 }
 
 pub(crate) fn ensure_jq_installed() -> Result<(), ScriptError> {
     ensure_command("jq", &["--version"], "Install jq and ensure it is in PATH")
+}
+
+pub(crate) fn ensure_jq_installed_with_env(
+    env: &[(String, String)],
+) -> Result<(), ScriptError> {
+    ensure_command_with_env("jq", &["--version"], "Install jq and ensure it is in PATH", env)
 }
 
 pub(crate) fn ensure_powershell_installed() -> Result<(), ScriptError> {
@@ -107,6 +171,19 @@ pub(crate) fn ensure_powershell_installed() -> Result<(), ScriptError> {
     )
 }
 
+pub(crate) fn ensure_powershell_installed_with_env(
+    env: &[(String, String)],
+) -> Result<(), ScriptError> {
+    let program = powershell_program();
+    let hint = format!("Install PowerShell and ensure {} is in PATH", program);
+    ensure_command_with_env(
+        program,
+        &["-NoProfile", "-Command", "$PSVersionTable.PSVersion"],
+        &hint,
+        env,
+    )
+}
+
 pub(crate) fn ensure_python_installed() -> Result<(), ScriptError> {
     let program = python_program();
     ensure_command(
@@ -114,6 +191,14 @@ pub(crate) fn ensure_python_installed() -> Result<(), ScriptError> {
         &["--version"],
         &format!("Install Python and ensure {} is in PATH", program),
     )
+}
+
+pub(crate) fn ensure_python_installed_with_env(
+    env: &[(String, String)],
+) -> Result<(), ScriptError> {
+    let program = python_program();
+    let hint = format!("Install Python and ensure {} is in PATH", program);
+    ensure_command_with_env(program, &["--version"], &hint, env)
 }
 
 #[cfg(test)]
@@ -220,5 +305,45 @@ mod tests {
     #[test]
     fn test_ensure_jq_installed_returns_result() {
         let _ = ensure_jq_installed();
+    }
+    #[cfg(unix)]
+    #[test]
+    fn test_dependency_checks_use_injected_path_for_every_runtime() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        for program in [
+            "git",
+            "jq",
+            "bash",
+            python_program(),
+            powershell_program(),
+        ] {
+            let path = dir.path().join(program);
+            std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&path, permissions).unwrap();
+        }
+        let env = vec![("PATH".to_string(), dir.path().display().to_string())];
+
+        assert!(ensure_git_installed_with_env(&env).is_ok());
+        assert!(ensure_jq_installed_with_env(&env).is_ok());
+        assert!(ensure_bash_installed_with_env(&env).is_ok());
+        assert!(ensure_python_installed_with_env(&env).is_ok());
+        assert!(ensure_powershell_installed_with_env(&env).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_dependency_checks_reject_missing_injected_path_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = vec![("PATH".to_string(), dir.path().display().to_string())];
+
+        let result = ensure_jq_installed_with_env(&env);
+        assert!(matches!(
+            result,
+            Err(ScriptError::DependencyMissing { name, .. }) if name == "jq"
+        ));
     }
 }

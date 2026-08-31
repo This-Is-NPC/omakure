@@ -1,6 +1,6 @@
 use crate::adapters::system_checks::{
-    ensure_bash_installed_with_env, ensure_git_installed, ensure_jq_installed,
-    ensure_powershell_installed, ensure_python_installed,
+    ensure_bash_installed_with_env, ensure_git_installed_with_env, ensure_jq_installed_with_env,
+    ensure_powershell_installed_with_env, ensure_python_installed_with_env,
 };
 use crate::error::{AppResult, ScriptError};
 use crate::runtime::{command_for_script_with_env, script_kind, ScriptKind};
@@ -45,18 +45,18 @@ impl MultiScriptRunner {
 fn ensure_runtime_for(script: &Path, env: &[(String, String)]) -> AppResult<()> {
     match script_kind(script).ok_or(ScriptError::UnsupportedType)? {
         ScriptKind::Bash => {
-            ensure_git_installed()?;
+            ensure_git_installed_with_env(env)?;
             ensure_bash_installed_with_env(env)?;
-            ensure_jq_installed()?;
+            ensure_jq_installed_with_env(env)?;
         }
         ScriptKind::PowerShell => {
-            ensure_powershell_installed()?;
+            ensure_powershell_installed_with_env(env)?;
         }
         // Nothing to ensure: the Lua runtime is compiled into this binary, so
         // there is no host dependency that could be missing.
         ScriptKind::Lua => {}
         ScriptKind::Python => {
-            ensure_python_installed()?;
+            ensure_python_installed_with_env(env)?;
         }
     }
     Ok(())
@@ -162,5 +162,71 @@ mod tests {
 
         let cmd = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
         assert_eq!(cmd.get_program(), shim.as_os_str());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_build_command_rejects_interpreter_omitted_from_injected_path() {
+        let empty_dir = TempDir::new().unwrap();
+        let script_dir = TempDir::new().unwrap();
+        let script = script_dir.path().join("job.py");
+        fs::write(&script, "print('x')").unwrap();
+        let env = vec![("PATH".to_string(), empty_dir.path().display().to_string())];
+
+        let result = MultiScriptRunner::build_command(&script, &[], &env);
+        assert!(matches!(
+            result,
+            Err(crate::error::AppError::Script(
+                ScriptError::DependencyMissing { name, .. }
+            )) if name == crate::runtime::python_program()
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_build_command_resolves_bash_against_injected_path() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let bin_dir = TempDir::new().unwrap();
+        for program in ["bash", "git", "jq"] {
+            let path = bin_dir.path().join(program);
+            fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            let mut permissions = fs::metadata(&path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&path, permissions).unwrap();
+        }
+
+        let script_dir = TempDir::new().unwrap();
+        let script = script_dir.path().join("job.sh");
+        fs::write(&script, "echo ok").unwrap();
+        let env = vec![("PATH".to_string(), bin_dir.path().display().to_string())];
+
+        let command = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
+        assert_eq!(
+            command.get_program(),
+            bin_dir.path().join("bash").as_os_str()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_build_command_resolves_powershell_against_injected_path() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let bin_dir = TempDir::new().unwrap();
+        let program = crate::runtime::powershell_program();
+        let path = bin_dir.path().join(program);
+        fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&path, permissions).unwrap();
+
+        let script_dir = TempDir::new().unwrap();
+        let script = script_dir.path().join("job.ps1");
+        fs::write(&script, "Write-Output ok").unwrap();
+        let env = vec![("PATH".to_string(), bin_dir.path().display().to_string())];
+
+        let command = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
+        assert_eq!(command.get_program(), path.as_os_str());
     }
 }

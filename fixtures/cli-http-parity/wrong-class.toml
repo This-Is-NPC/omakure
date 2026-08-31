@@ -1,0 +1,13 @@
+schema_version = 1
+
+[[entries]]
+entry_id = "wrong-class"
+class = "cli-only"
+operation_family = "fixture"
+docs_anchor = "wrong-class"
+cli_ids = ["run"]
+http_ids = ["GET /v1/health"]
+rationale = "fixture"
+[entries.adapter_only]
+auth = "fixture"
+lifecycle = "fixture"

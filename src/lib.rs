@@ -11,6 +11,8 @@ pub mod baseline_publisher;
 /// when the answer is yes.
 pub mod baseline_push;
 pub mod cli;
+/// The versioned, generated contract describing CLI and HTTP parity.
+pub mod cli_http_parity;
 pub mod direct_health;
 pub mod direct_service;
 pub mod direct_transport;

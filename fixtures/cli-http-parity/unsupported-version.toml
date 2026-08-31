@@ -1,0 +1,12 @@
+schema_version = 99
+
+[[entries]]
+entry_id = "version"
+class = "cli-only"
+operation_family = "fixture"
+docs_anchor = "version"
+cli_ids = ["run"]
+rationale = "fixture"
+[entries.adapter_only]
+auth = "fixture"
+lifecycle = "fixture"

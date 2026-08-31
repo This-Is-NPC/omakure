@@ -1,0 +1,12 @@
+schema_version = 1
+
+[[entries]]
+entry_id = "unknown"
+class = "cli-only"
+operation_family = "fixture"
+docs_anchor = "unknown"
+cli_ids = ["does-not-exist"]
+rationale = "fixture"
+[entries.adapter_only]
+auth = "fixture"
+lifecycle = "fixture"

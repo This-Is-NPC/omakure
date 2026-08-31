@@ -1,0 +1,17 @@
+schema_version = 1
+
+[[entries]]
+entry_id = "config"
+class = "semantic-mismatch"
+operation_family = "fixture"
+behavior_case = "fixture.case"
+docs_anchor = "config"
+cli_ids = ["config"]
+http_ids = ["GET /v1/health"]
+[entries.semantic_difference]
+kind = "fixture"
+cli_behavior = "fixture"
+http_behavior = "fixture"
+[entries.adapter_only]
+auth = "fixture"
+lifecycle = "fixture"

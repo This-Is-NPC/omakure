@@ -811,6 +811,7 @@ fn version_token(banner: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::health_plane::model::SignalKind;
 
     /// A wedged interpreter must not hold the Profile open.
     ///
@@ -973,6 +974,44 @@ mod tests {
         assert_ne!(
             drifted.baseline_observed_id, record.baseline_id,
             "editing a script does change what this node is holding"
+        );
+    }
+
+    #[test]
+    fn equal_signal_timestamps_use_the_signal_id_tiebreak() {
+        let mut entries = vec![
+            SignalEntry {
+                source: "peer".to_string(),
+                signal: SignalRecord {
+                    kind: SignalKind::RunCompleted,
+                    occurred_at: 1_700_000_000,
+                    run: None,
+                    sequence: 1,
+                    signal_id: "a".to_string(),
+                    subject: None,
+                },
+            },
+            SignalEntry {
+                source: "peer".to_string(),
+                signal: SignalRecord {
+                    kind: SignalKind::RunCompleted,
+                    occurred_at: 1_700_000_000,
+                    run: None,
+                    sequence: 2,
+                    signal_id: "b".to_string(),
+                    subject: None,
+                },
+            },
+        ];
+
+        reduce_to_newest(&mut entries, 2);
+
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.signal.signal_id.as_str())
+                .collect::<Vec<_>>(),
+            ["b", "a"]
         );
     }
 

@@ -16,10 +16,10 @@ RUN cargo build --release --bin omakure \
     && strip target/release/omakure
 
 # The Health Plane attempt-exhaustion harness. It is built here, rather than on
-# the host, so that `.scripts/health-plane-certification.sh` can run it as a
-# container on the certification network instead of as a host process. A host
-# process would need the Performer's container to dial the host, which any
-# default-deny INPUT firewall drops; inside the network the phase depends on
+# the host, so that `scripts/tasks/cert/health` can run it as a container on the
+# certification network instead of as a host process. A host process would need
+# the Performer's container to dial the host, which any default-deny INPUT
+# firewall drops; inside the network the phase depends on
 # nothing but Docker itself.
 #
 # These stages are deliberately placed before `runtime` so that the default

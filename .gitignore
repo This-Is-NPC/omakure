@@ -15,12 +15,11 @@ cobertura.xml
 .aider*/
 .continue/
 .windsurf/
-.omaken/
-scripts/.history/search-index.sqlite*
-scripts/.history/*
-!scripts/.history/.gitkeep
-scripts/.omakure/envs/*
-!scripts/.omakure/envs/env_template.conf
+scripts/workspace/.history/search-index.sqlite*
+scripts/workspace/.history/*
+!scripts/workspace/.history/.gitkeep
+scripts/workspace/.omakure/envs/*
+!scripts/workspace/.omakure/envs/env_template.conf
 .temp/
 
 # Planning notes, kept out of the product record.

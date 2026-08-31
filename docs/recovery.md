@@ -176,7 +176,7 @@ replacement explicitly; the old identity must not be silently reused.
 The bounded Linux recovery path is exercised by:
 
 ```bash
-mise run transport-certification
+mise run cert:transport
 ```
 
 That gate verifies partition/reconnect, revocation, reset/replacement, durable
@@ -186,7 +186,7 @@ Nostr, campaigns, or MDM behavior.
 Health Plane recovery has its own bounded Linux gate:
 
 ```bash
-mise run health-plane-certification
+mise run cert:health
 ```
 
 That gate verifies the recovery paths an operator actually depends on: a

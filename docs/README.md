@@ -58,6 +58,10 @@ normative protocol contracts so status claims have one clear owner.
   traceability inventory.
 - [Development](internal/development.md): build, test, lint, integration checks,
   and `mise` tasks.
+- [Deterministic coverage](internal/coverage.md): pinned LLVM reports,
+  baseline gate, source inventory, and Codecov patch status.
+- [Changed-function complexity](internal/complexity.md): native complexity
+  ratchet, exception lifecycle, deterministic evidence, and CI policy.
 - [E2E testing](testing/e2e/README.md): end-to-end coverage and its evidence
   boundaries.
 - [Release artifacts](internal/release-artifacts.md): binary-only release

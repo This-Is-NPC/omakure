@@ -5,7 +5,7 @@
 ## Source
 
 - `tests/docker_enrollment_e2e.rs`
-- Compose guard and runner in the Docker enrollment test and `.scripts/transport-certification.sh`
+- `scripts/tasks/cert/transport`
 
 ## Run
 

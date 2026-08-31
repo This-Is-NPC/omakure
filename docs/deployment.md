@@ -304,11 +304,11 @@ Artifacts in the repo root:
 | `Dockerfile` | Multi-stage build → `omakure` binary; `ENTRYPOINT`/`CMD` run `node serve` on `0.0.0.0:7878` with `--allow-non-loopback` |
 | `.dockerignore` | Keeps build context lean |
 | `compose.yaml` | Example: workspace and tokens-file volumes, host bind `127.0.0.1:7878`, fixed uid/gid `10001` |
-| `compose.transport-certification.e2e.yaml` | Isolated four-service Linux certification topology; not a production fleet deployment |
-| `.scripts/transport-certification.sh` | Bounded canonical certification runner used locally and in Linux CI |
-| `compose.health-plane-certification.e2e.yaml` | Isolated four-node Health Plane certification topology; not a production fleet deployment |
-| `.scripts/health-plane-certification.sh` | Bounded canonical Health Plane gate used locally and in Linux CI |
-| `.scripts/health-plane-certification-cleanup-test.sh` | Verifies Health Plane certification cleanup after induced failure and after interrupt |
+| `ci/compose/compose.transport-certification.e2e.yaml` | Isolated four-service Linux certification topology; not a production fleet deployment |
+| `scripts/tasks/cert/transport` | Bounded canonical certification runner used locally and in Linux CI |
+| `ci/compose/compose.health-plane-certification.e2e.yaml` | Isolated four-node Health Plane certification topology; not a production fleet deployment |
+| `scripts/tasks/cert/health` | Bounded canonical Health Plane gate used locally and in Linux CI |
+| `scripts/tasks/cert/health-cleanup` | Verifies Health Plane certification cleanup after induced failure and after interrupt |
 
 ### Base image runtimes
 
@@ -364,7 +364,7 @@ other bit is ever accepted there.
 The canonical Linux gate is deliberately separate from the example deployment:
 
 ```bash
-mise run transport-certification
+mise run cert:transport
 ```
 
 It builds the current image and starts `cert-a`, `cert-b`, `cert-c`, and an
@@ -389,7 +389,7 @@ The Health Plane has its own bounded Linux gate, separate again from both the
 example deployment and the transport gate:
 
 ```bash
-mise run health-plane-certification
+mise run cert:health
 ```
 
 It builds the current image and starts `hp-node-1` through `hp-node-4` on one

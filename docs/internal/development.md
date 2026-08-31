@@ -11,10 +11,10 @@ cargo build
 cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
-mise run dev
+mise run dev:smoke
 ```
 
-`mise run dev` builds the debug binary, starts a node service on a disposable local
+`mise run dev:smoke` builds the debug binary, starts a node service on a disposable
 port, verifies `/v1/health` and `/v1/ready`, then terminates it. It does not
 leave a daemon running or require a terminal UI. Set `OMAKURE_DEV_WORKSPACE`
 and `OMAKURE_DEV_PORT` to override its fixtures.
@@ -24,22 +24,26 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | Task | Purpose |
 |---|---|
 | `mise run build` | `cargo build` |
-| `mise run test` | `cargo test` |
-| `mise run lint` | clippy with warnings denied and `cargo fmt --check` |
-| `mise run dev` | bounded node-service health/readiness smoke check |
+| `mise run test` | unit, integration, and e2e test groups |
+| `mise run lint` | `lint:fmt` and `lint:clippy` |
+| `mise run dev:smoke` | bounded node-service health/readiness smoke check |
 | `mise run node` | run the node service in the foreground |
-| `mise run node-service-check` | focused CLI/HTTP/node-service integration tests |
-| `mise run transport-certification` | one bounded Linux command covering canonical Compose, production tests, retained Docker suites, direct Docker transport, and induced-failure cleanup |
-| `mise run transport-certification-cleanup-test` | internal/diagnostic induced-failure cleanup verification |
-| `mise run health-plane-certification` | one bounded Linux command covering the four-node Health Plane gate: Profile/Pulse, all three Signals, presence transitions, restart persistence, revocation, identity replacement, the adversarial matrix over production Noise, and verified teardown |
-| `mise run health-plane-certification-cleanup-test` | internal/diagnostic cleanup verification for induced partial startup, failure, and interrupt |
-| `mise run coverage` | tarpaulin coverage report |
-| `mise run install` | `cargo install --path .` |
+| `mise run test:node-service` | focused CLI/HTTP/node-service integration tests |
+| `mise run cert:transport` | bounded Linux transport certification |
+| `mise run cert:health` | bounded Linux Health Plane certification |
+| `mise run cert:vm-static` | static Fedora VM fixture checks |
+| `mise run cert:vm` | bounded Fedora VM certification |
+| `mise run coverage` | deterministic pinned LLVM HTML/LCOV/Cobertura reports plus the local baseline gate |
+| `mise run coverage:test` | offline threshold, inventory, and normalization fixtures |
+| `mise run install` | install the binary without copying repository scripts |
 
-The repository `scripts/` directory is a fixture workspace for debug builds.
-The global `--scripts-dir` flag and `OMAKURE_SCRIPTS_DIR` override it. Repo
-helpers live in `.scripts/`; they must use explicit CLI commands and bounded
-process cleanup.
+Repository automation is under `scripts/tasks/`, `scripts/install/`,
+`scripts/release/`, and `scripts/fixtures/`. `scripts/workspace/` is the
+dedicated debug fixture selected by Cargo builds. External Battery repositories
+own subject scripts; installers never copy repository automation into a
+workspace. Every resource-owning task is bounded and trap-cleaned, while
+stateful install, node, release, and live certification tasks are repeat-safe
+only under their documented preconditions.
 
 ## Architecture guide
 
@@ -68,8 +72,8 @@ cargo test --test policy_e2e
 cargo test --test packaging_smoke
 cargo test --test direct_transport_contract
 cargo test --test direct_transport_e2e
-mise run transport-certification
-mise run health-plane-certification
+mise run cert:transport
+mise run cert:health
 ```
 
 ## Certification toolchain

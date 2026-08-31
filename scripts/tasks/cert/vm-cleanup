@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project="omk-priv-cleanup-${BASHPID}"
+uri=${OMAKURE_VM_LIBVIRT_URI:-qemu:///system}
+pool=${OMAKURE_VM_STORAGE_POOL:-images}
+output=
+virsh_cmd=(timeout --foreground --kill-after=5s 60s virsh -q -c "$uri")
+
+for command in timeout virsh; do
+    command -v "$command" >/dev/null 2>&1 || {
+        printf 'Fedora VM privilege cleanup test: %s is required\n' "$command" >&2
+        exit 1
+    }
+done
+
+assert_removed() {
+    local shape=$1 domains_output volumes_output domain volume remaining='' inspection_status=0
+    if domains_output=$("${virsh_cmd[@]}" list --all --name 2>&1); then
+        while IFS= read -r domain; do
+            if [[ "$domain" == "$project"-* ]]; then
+                printf 'Fedora VM privilege cleanup test: domain survived: %s\n' "$domain" >&2
+                remaining+=" domain:$domain"
+            fi
+        done <<<"$domains_output"
+    else
+        printf 'Fedora VM privilege cleanup test: unable to inspect domains after %s: %s\n' \
+            "$shape" "$domains_output" >&2
+        inspection_status=1
+    fi
+
+    if volumes_output=$("${virsh_cmd[@]}" vol-list --pool "$pool" 2>&1); then
+        while read -r volume _; do
+            [[ -n "$volume" ]] || continue
+            if [[ "$volume" == "$project"-* ]]; then
+                printf 'Fedora VM privilege cleanup test: volume survived: %s\n' "$volume" >&2
+                remaining+=" volume:$volume"
+            fi
+        done <<<"$volumes_output"
+    else
+        printf 'Fedora VM privilege cleanup test: unable to inspect volumes after %s: %s\n' \
+            "$shape" "$volumes_output" >&2
+        inspection_status=1
+    fi
+
+    [[ -z "$remaining" && "$inspection_status" == 0 ]]
+}
+
+repo_root="${MISE_PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+repo_root="$(cd "$repo_root" && pwd)"
+if output=$(OMAKURE_VM_CERTIFICATION_PROJECT="$project" \
+    OMAKURE_VM_CERTIFICATION_INDUCE_FAILURE=after-first-vm \
+    timeout --foreground --kill-after=15s 20m \
+    "$repo_root/scripts/tasks/cert/vm" 2>&1); then
+    printf 'Fedora VM privilege cleanup test: induced failure unexpectedly passed\n' >&2
+    exit 1
+fi
+printf '%s\n' "$output"
+[[ "$output" == *'induced failure after first VM'* ]] || {
+    printf 'Fedora VM privilege cleanup test: harness failed before the induced checkpoint\n' >&2
+    exit 1
+}
+assert_removed "a real induced failure"
+
+inspection_project="omk-priv-inspect-${BASHPID}"
+if output=$(OMAKURE_VM_CERTIFICATION_PROJECT="$inspection_project" \
+    OMAKURE_VM_CERTIFICATION_INDUCE_FAILURE=after-first-vm \
+    OMAKURE_VM_CERTIFICATION_INDUCE_INSPECTION_FAILURE=both \
+    timeout --foreground --kill-after=15s 20m \
+    "$repo_root/scripts/tasks/cert/vm" 2>&1); then
+    printf 'Fedora VM privilege cleanup test: inspection failure unexpectedly passed\n' >&2
+    exit 1
+fi
+printf '%s\n' "$output"
+[[ "$output" == *'induced inspection failure: virsh list'* ]] || {
+    printf 'Fedora VM privilege cleanup test: list inspection fault was not surfaced\n' >&2
+    exit 1
+}
+[[ "$output" == *'induced inspection failure: virsh vol-list'* ]] || {
+    printf 'Fedora VM privilege cleanup test: volume inspection fault was not surfaced\n' >&2
+    exit 1
+}
+assert_removed "an induced inspection failure"
+
+printf 'Fedora VM privilege cleanup test: passed\n'

@@ -1,9 +1,8 @@
 //! The contracted Health Plane adversarial matrix, injected over one real
 //! production Noise session into a running packaged Conductor.
 //!
-//! This harness is driven by `.scripts/health-plane-certification.sh` and is
-//! ignored by default, because it requires that script's live Compose
-//! topology. It never simulates the transport: it completes the shipped
+//! This harness is driven by `scripts/tasks/cert/health` and is ignored by
+//! default, because it requires that script's live Compose topology. It never
 //! `Noise_XX_25519_ChaChaPoly_SHA256` handshake against the Conductor's
 //! production direct listener, signs every envelope with the frozen BIP-340
 //! construction, and reads the Conductor's durable audit trail out of its real
@@ -59,7 +58,7 @@ const FLOOD_CEILING: usize = (MAX_MESSAGES_PER_PEER_PER_MINUTE + RATE_BURST_ALLO
 
 fn env(name: &str) -> String {
     std::env::var(name)
-        .unwrap_or_else(|_| panic!("{name} must be set by .scripts/health-plane-certification.sh"))
+        .unwrap_or_else(|_| panic!("{name} must be set by scripts/tasks/cert/health"))
 }
 
 fn compose(args: &[&str]) -> std::process::Output {
@@ -734,7 +733,7 @@ impl CaseLog {
 }
 
 #[test]
-#[ignore = "requires the live topology started by .scripts/health-plane-certification.sh"]
+#[ignore = "requires the live topology started by scripts/tasks/cert/health"]
 fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     let mut cases = CaseLog::default();
     let state_dir = PathBuf::from(env("OMAKURE_HP_ADVERSARY_STATE"));

@@ -105,10 +105,10 @@ fn compose_example_is_host_loopback_with_workspace_and_tokens_file() {
 /// Recovery meant knowing to delete a directory the product had made.
 #[test]
 fn the_service_account_is_not_homed_in_the_node_state_directory() {
-    let shell = read("install.sh");
+    let shell = read("scripts/install/install.sh");
     assert!(
         shell.contains("--home-dir /var/lib/omakure-workspace"),
-        "install.sh must home the service account in the workspace"
+        "scripts/install/install.sh must home the service account in the workspace"
     );
     assert!(
         !shell.contains("--home-dir /var/lib/omakure "),
@@ -121,7 +121,7 @@ fn the_service_account_is_not_homed_in_the_node_state_directory() {
 
 #[test]
 fn machine_service_installers_are_explicit_and_preserve_node_state() {
-    let shell = read("install.sh");
+    let shell = read("scripts/install/install.sh");
     for needle in [
         "--install-node-service",
         "--node-tokens-file",
@@ -142,7 +142,7 @@ fn machine_service_installers_are_explicit_and_preserve_node_state() {
     ] {
         assert!(
             shell.contains(needle),
-            "install.sh should contain {needle:?}"
+            "scripts/install/install.sh should contain {needle:?}"
         );
     }
     assert!(shell.contains("if [[ ! -e \"${config_path}\" ]]"));
@@ -155,8 +155,9 @@ fn machine_service_installers_are_explicit_and_preserve_node_state() {
             < shell.find("VERSION=\"$(fetch_latest_version").unwrap(),
         "Unix uninstall must exit before release-version resolution"
     );
+    assert!(!shell.contains("sync_repo_scripts"));
 
-    let powershell = read("install.ps1");
+    let powershell = read("scripts/install/install.ps1");
     for needle in [
         "InstallNodeService",
         "NodeTokensFile",
@@ -178,6 +179,7 @@ fn machine_service_installers_are_explicit_and_preserve_node_state() {
         );
     }
     assert!(!powershell.contains("obj= \"NT SERVICE\\OmakureNode\""));
+    assert!(!powershell.contains("Copy-RepoScripts"));
     assert!(powershell.contains("[discovery]\nenabled = false"));
     let acl_start = powershell.find("function Set-ExactNodeAcl").unwrap();
     let acl_end = powershell[acl_start..]
@@ -226,7 +228,7 @@ fn unix_uninstall_service_path_skips_release_resolution_and_network() {
     }
 
     let output = Command::new("bash")
-        .arg(repo_root().join("install.sh"))
+        .arg(repo_root().join("scripts/install/install.sh"))
         .arg("--uninstall-node-service")
         .env("PATH", format!("{}:/usr/bin:/bin", shim_dir.display()))
         .env("OMAKURE_TEST_LOG", &log)
@@ -474,7 +476,7 @@ fn release_workflows_build_and_package_only_the_headless_binary() {
     assert!(ci.contains("cargo build --release --bin omakure"));
 
     let release = read(".github/workflows/release.yml");
-    assert!(release.contains(".github/package-release.sh"));
+    assert!(release.contains("scripts/release/package-release.sh"));
     assert!(release.contains("cargo test --all-targets"));
     assert!(release.contains("cargo build --release --bin omakure"));
     assert!(release.contains("archive contains only the headless binary"));
@@ -596,8 +598,8 @@ fn release_matrix_associates_every_target_with_its_asset_and_runner() {
 #[cfg(unix)]
 /// The installer's preference and the workflow's build must not drift apart.
 ///
-/// If the release stops producing the static archive, `install.sh` silently
-/// falls back to the glibc build — and the fallback is deliberately quiet,
+/// If the release stops producing the static archive, `scripts/install/install.sh`
+/// silently falls back to the glibc build — and the fallback is deliberately quiet,
 /// because it is the normal path for older releases. Nothing would report the
 /// loss until an install failed on a machine with an older glibc, which is
 /// exactly the machine that cannot be debugged remotely. So the two are
@@ -620,7 +622,7 @@ fn the_installer_preference_and_the_release_matrix_name_the_same_static_asset() 
          without it the job fails at link time"
     );
 
-    let installer = read("install.sh");
+    let installer = read("scripts/install/install.sh");
     assert!(
         installer.contains("${APP_NAME}-${VERSION}-linux-musl-${arch}.tar.gz"),
         "install.sh must ask for the asset name the workflow publishes"
@@ -635,7 +637,7 @@ fn the_installer_preference_and_the_release_matrix_name_the_same_static_asset() 
         "install.sh must select the asset architecture from the host"
     );
 
-    let powershell = read("install.ps1");
+    let powershell = read("scripts/install/install.ps1");
     assert!(
         powershell.contains("PROCESSOR_ARCHITECTURE") && powershell.contains("windows-$arch.zip"),
         "install.ps1 must select the matching Windows architecture asset"
@@ -664,7 +666,7 @@ fn release_tarball_contains_only_the_required_binary() {
     fs::copy(env!("CARGO_BIN_EXE_omakure"), &binary).expect("copy binary fixture");
     fs::write(temp.path().join("theme.toml"), "must not be packaged").expect("fixture");
     let archive = temp.path().join("omakure-test.tar.gz");
-    let script = repo_root().join(".github/package-release.sh");
+    let script = repo_root().join("scripts/release/package-release.sh");
 
     let output = Command::new("bash")
         .arg(script)

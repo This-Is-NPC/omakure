@@ -5,7 +5,7 @@
 ## Source
 
 - `tests/docker_signed_bundle_e2e.rs`
-- `compose.signed-bundle.e2e.yaml`
+- `ci/compose/compose.signed-bundle.e2e.yaml`
 
 ## Run
 

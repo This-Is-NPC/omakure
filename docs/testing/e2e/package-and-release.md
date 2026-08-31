@@ -6,7 +6,7 @@
 
 - `tests/packaging_smoke.rs`
 - `.github/workflows/ci.yml`, `.github/workflows/release.yml`
-- `.github/package-release.sh`, `Dockerfile`, `.dockerignore`
+- `scripts/release/package-release.sh`, `Dockerfile`, `.dockerignore`
 
 ## Run
 

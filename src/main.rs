@@ -24,7 +24,7 @@ fn scripts_dir_for(name: &str) -> PathBuf {
         }
     }
 
-    PathBuf::from("scripts")
+    PathBuf::from("scripts").join("workspace")
 }
 
 #[cfg(windows)]
@@ -114,7 +114,7 @@ fn scripts_dir() -> PathBuf {
     }
 
     if cfg!(debug_assertions) {
-        let dev_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts");
+        let dev_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/workspace");
         if dev_dir.is_dir() {
             return dev_dir;
         }

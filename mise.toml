@@ -1,68 +1,92 @@
 [tools]
-# PowerShell is deliberately not pinned. It is optional in the product --
-# `.ps1` is one of four script kinds and the node reports it unavailable
-# when absent -- and pinning "latest" resolved to a preview build that
-# aborts on every invocation, which the runtime probe then spawned once
-# per node process. Add a specific working version here if you need to
-# run `.ps1` scripts locally.
 rust = "1.97.1"
-
-[tasks.dev]
-description = "Build and run the bounded node-service smoke check"
-run = "./.scripts/dev-daemon.sh"
+[task_config]
+# Only repository automation is task-discoverable; fixtures, installers, and
+# the debug workspace remain outside mise's task search path.
+includes = ["scripts/tasks"]
 
 [tasks.node]
 description = "Run the authenticated machine node service in the foreground"
 run = "OMAKURE_API_TOKEN=\"$(openssl rand -hex 32)\" cargo run --bin omakure -- node serve --workers 1 --capability all"
+raw = true
 
-[tasks.node-service-check]
+[tasks.dev]
+description = "Run the bounded node-service smoke check"
+depends = ["dev:smoke"]
+
+[tasks."test:node-service"]
 description = "Run node-service, CLI, HTTP, and policy integration checks"
 run = "cargo test --test node_service_e2e --test http_api_e2e --test cli_surface_e2e --test policy_e2e"
 
-[tasks.transport-certification]
-description = "Run the complete bounded Linux transport certification and cleanup matrix"
-run = "./.scripts/transport-certification.sh"
+[tasks."test:unit"]
+description = "Run library and unit tests"
+run = "cargo test --lib"
 
-[tasks.transport-certification-cleanup-test]
-description = "Verify certification cleanup after an induced failure"
-run = "./.scripts/transport-certification-cleanup-test.sh"
+[tasks."test:integration"]
+description = "Run integration tests excluding live certification gates"
+run = "cargo test --tests"
 
-[tasks.health-plane-certification]
-description = "Run the complete bounded Linux Health Plane certification"
-run = "./.scripts/health-plane-certification.sh"
+[tasks."test:e2e"]
+description = "Run the end-to-end test suites"
+run = "cargo test --test direct_transport_e2e --test node_service_e2e --test http_api_e2e --test cli_surface_e2e --test policy_e2e"
 
-[tasks.health-plane-certification-cleanup-test]
-description = "Verify Health Plane certification cleanup after induced failure and interrupt"
-run = "./.scripts/health-plane-certification-cleanup-test.sh"
+[tasks.test]
+description = "Run the unit, integration, and end-to-end test groups"
+depends = ["test:unit", "test:integration", "test:e2e"]
+
+[tasks."lint:fmt"]
+description = "Check Rust formatting"
+run = "cargo fmt --check"
+
+[tasks."lint:clippy"]
+description = "Run Clippy with warnings denied"
+run = "cargo clippy --all-targets -- -D warnings"
+
+[tasks.lint]
+description = "Run formatting and Clippy checks"
+depends = ["lint:fmt", "lint:clippy"]
 
 [tasks.build]
 description = "Build the project in debug mode"
 run = "cargo build"
+sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
+outputs = ["target/debug/omakure"]
 
-[tasks.test]
-description = "Run all tests"
-run = "cargo test"
-
-[tasks.lint]
-description = "Run clippy and check formatting"
-run = ["cargo clippy --all-targets -- -D warnings", "cargo fmt --check"]
+[tasks."build:release"]
+description = "Build the release binary"
+run = "cargo build --release --bin omakure"
+sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
+outputs = ["target/release/omakure"]
 
 [tasks.install]
-description = "Install omakure locally"
-run = "cargo install --path ."
+description = "Install omakure locally (mutates the user installation prefix)"
+run = "bash scripts/install/install-from-source.sh"
 
-[tasks.coverage]
-description = "Run tests with tarpaulin and generate HTML coverage report"
-run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/update.rs' --skip-clean"
+[tasks."package:release"]
+description = "Package a built release binary into an archive"
+depends = ["build:release"]
+run = "scripts/release/package-release.sh target/release/omakure dist/omakure.tar.gz"
 
-[tasks.vm-privilege-certification-static]
-description = "Validate the Fedora VM privilege certification harness and fixed policy fixtures"
-run = "./.scripts/fedora-vm-privilege-certification-static-test.sh"
+[tasks."cert:vm-static"]
+description = "Validate Fedora VM certification scripts and fixed policy fixtures"
+run = "scripts/tasks/cert/vm-static"
 
-[tasks.vm-privilege-certification]
-description = "Run the manual KVM/libvirt Fedora privilege certification and clean up all run resources"
-run = "./.scripts/fedora-vm-privilege-certification-static-test.sh && timeout --foreground --kill-after=30s 30m ./.scripts/fedora-vm-privilege-certification.sh"
+[tasks."cert:transport-cleanup"]
+description = "Verify transport certification cleanup after induced failure"
+run = "scripts/tasks/cert/transport-cleanup"
 
-[tasks.vm-privilege-certification-cleanup]
-description = "Induce a Fedora VM certification failure and prove complete libvirt cleanup"
-run = "timeout --foreground --kill-after=30s 25m ./.scripts/fedora-vm-privilege-certification-cleanup-test.sh"
+[tasks."cert:health-cleanup"]
+description = "Verify Health Plane cleanup after failure and interrupt"
+run = "scripts/tasks/cert/health-cleanup"
+
+[tasks."cert:vm-cleanup"]
+description = "Verify Fedora VM certification cleanup after induced failures"
+run = "scripts/tasks/cert/vm-cleanup"
+
+[tasks."cert:vm"]
+description = "Run the Fedora VM privilege certification after static checks"
+depends = ["cert:vm-static"]
+
+[tasks.cert]
+description = "Run transport, Health Plane, and Fedora VM certification gates"
+depends = ["cert:transport", "cert:health", "cert:vm"]

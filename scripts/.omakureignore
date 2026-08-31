@@ -1,0 +1,5 @@
+# Repository automation and support files are not Battery subjects.
+/tasks/
+/fixtures/
+/install/
+/release/

@@ -5,14 +5,14 @@
 Linux/macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/scripts/install/install.sh \
   | bash -s -- --repo This-Is-NPC/omakure
 ```
 
 Windows PowerShell:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/This-Is-NPC/omakure/main/scripts/install/install.ps1 | iex"
 ```
 
 Verify an installation with named commands:
@@ -24,8 +24,12 @@ omakure doctor
 ```
 
 The first workspace operation creates the selected workspace, `.omakure/`,
-`.history/`, and `omakure.toml`. The binary itself is a CLI; deploy the
-headless `node serve` command when an HTTP endpoint and background loops are needed.
+`.history/`, and `omakure.toml`. Release and source installers install the
+binary only and never copy repository automation into the workspace. The
+binary itself is a CLI; deploy the headless `node serve` command when an HTTP
+endpoint and background loops are needed. External Battery repositories own
+subject scripts; register, sync, and explicitly install them with the Battery
+commands.
 
 ## Update
 
@@ -49,11 +53,11 @@ Back up `.history/` and `.omakure/` before the destructive form.
 ## Install from source
 
 ```bash
-bash install-from-source.sh
+bash scripts/install/install-from-source.sh
 ```
 
 For development, use `cargo build`, `cargo test`, `mise run lint`, and
-`mise run dev`; see `internal/development.md`.
+`mise run dev:smoke`; see `internal/development.md`.
 
 ## Machine Node Service
 
@@ -63,7 +67,7 @@ tokens TOML containing Argon2id hashes. The installer does not generate or
 print a service token:
 
 ```bash
-sudo bash install.sh --install-node-service \
+sudo bash scripts/install/install.sh --install-node-service \
   --node-tokens-file /secure/path/omakure_tokens.toml
 ```
 
@@ -96,7 +100,7 @@ way this page describes, with the node-state paths and ACLs it names. That is a
 static check of what the installers *say*.
 
 The default Rust test suite executes only the Unix uninstall path:
-`install.sh --uninstall-node-service` runs with `systemctl` replaced by a shim
+`scripts/install/install.sh --uninstall-node-service` runs with `systemctl` replaced by a shim
 that records what it was asked and does nothing. This is mocked Unix coverage,
 not a native service uninstall. `tests/packaging_smoke.rs` statically inspects
 the Unix installer, the macOS launchd text, and the Windows installer sources;
@@ -109,7 +113,7 @@ the Linux exception; it is not part of CI because it requires KVM and writable
 system libvirt.
 
 Outside the test suite, the Linux install path has been executed on two real
-Fedora virtual machines: `install.sh` created the unprivileged `omakure` service
+Fedora virtual machines: `scripts/install/install.sh` created the unprivileged `omakure` service
 account, wrote the unit, and systemd started `node serve` under it, and the pair
 was then driven through direct transport, an authorized Cue, baseline
 push/drift/rollback, and revocation. Restart was exercised, and two defects
@@ -136,7 +140,7 @@ itself as isolated and will signal host processes it judges orphaned.
 
 ### Fedora VM privilege certification
 
-`mise run vm-privilege-certification` is the bounded, destructive local gate
+`mise run cert:vm` is the bounded, destructive local gate
 for Linux privilege delegation. It builds the current binary, verifies a pinned
 Fedora Cloud image by SHA-256, then boots a corporate Conductor, an intentionally
 broad root runner, and a primary Performer on `qemu:///system`. The comparison
@@ -158,7 +162,7 @@ cannot modify the workspace or policy, and cannot call a management API without
 a token.
 
 The host prerequisites are Linux with readable and writable `/dev/kvm`, the
-checkout's Fedora fixture directory, and these commands: `cargo`, `curl`,
+checkout's `scripts/fixtures/fedora-vm-privilege/` directory, and these commands: `cargo`, `curl`,
 `jq`, `scp`, `sha256sum`, `ssh`, `ssh-keygen`, `stat`, `tar`, `timeout`,
 `virsh`, `virt-install`, and `xorriso`. Libvirt must be reachable at
 `qemu:///system` (by default), with an active `default` network, a running
@@ -178,9 +182,8 @@ be a lowercase SHA-256 value. The verified base volume is retained as a cache.
 Every run-specific domain, overlay, seed ISO, temporary key, and token is
 removed by an exit trap. Cleanup verification fails closed: if domain or
 volume inspection errors, the certification fails rather than treating the
-resources as absent. Run `mise run vm-privilege-certification-cleanup` to
-induce a failure after the first VM is created and independently verify that
-cleanup.
+resources as absent. Run `mise run cert:vm-cleanup` to induce a failure after
+the first VM is created and independently verify that cleanup.
 
 ## Unattended Signed-Bundle Enrollment
 

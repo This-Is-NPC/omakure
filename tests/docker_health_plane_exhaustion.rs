@@ -66,7 +66,7 @@ fn observation_window() -> Duration {
 
 fn env(name: &str) -> String {
     std::env::var(name)
-        .unwrap_or_else(|_| panic!("{name} must be set by .scripts/health-plane-certification.sh"))
+        .unwrap_or_else(|_| panic!("{name} must be set by scripts/tasks/cert/health"))
 }
 
 fn node_material(state_dir: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
@@ -132,7 +132,7 @@ fn read_frame_detailed(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
 }
 
 #[test]
-#[ignore = "requires the live topology started by .scripts/health-plane-certification.sh"]
+#[ignore = "requires the live topology started by scripts/tasks/cert/health"]
 fn an_unacknowledged_profile_stops_at_the_frozen_attempt_budget_on_one_session() {
     let bind = env("OMAKURE_HP_EXHAUSTION_BIND");
     let state_dir = PathBuf::from(env("OMAKURE_HP_ADVERSARY_STATE"));

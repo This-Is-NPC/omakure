@@ -16,7 +16,7 @@ target. It packages nothing else: no workspace scripts, no assets.
 | Windows x86_64 | `x86_64-pc-windows-msvc` | `omakure-vX.Y.Z-windows-x86_64.zip` |
 | Windows aarch64 | `aarch64-pc-windows-msvc` | `omakure-vX.Y.Z-windows-aarch64.zip` |
 
-`install.sh` selects the host architecture and prefers the matching `linux-musl`
+`scripts/install/install.sh` selects the host architecture and prefers the matching `linux-musl`
 archive, falling back to the matching glibc archive when a release predates it.
 The PowerShell installer selects the matching Windows `x86_64` or `aarch64`
 archive. Omakure is installed on machines the operator does not control, and a

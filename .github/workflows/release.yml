@@ -157,7 +157,7 @@ jobs:
             powershell -NoProfile -Command "Compress-Archive -Path \"${dist}\\${{ matrix.bin }}\" -DestinationPath \"${dist}\\${out}\" -Force"
             rm "${dist}/${{ matrix.bin }}"
           else
-            bash .github/package-release.sh \
+            bash scripts/release/package-release.sh \
               "target/${{ matrix.target }}/release/${{ matrix.bin }}" \
               "${dist}/${out}"
           fi
@@ -192,7 +192,7 @@ jobs:
       - name: Install certification inspection tools
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run bounded canonical gate
-        run: timeout --foreground --kill-after=15s 20m ./.scripts/transport-certification.sh
+        run: timeout --foreground --kill-after=15s 20m ./scripts/tasks/cert/transport
       - name: Verify Docker certification cleanup
         if: always()
         shell: bash

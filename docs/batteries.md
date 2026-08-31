@@ -10,7 +10,14 @@ restriction that HTTP Battery registration and HTTP-triggered Battery use are
 limited to `https://` sources.
 Battery installation is currently Unix-only.
 
-## Scope
+## Ownership boundaries
+
+Battery repositories own subject-script collections and manifests. The Omakure
+repository contains only product automation under `scripts/` and non-subject
+certification fixtures; neither is a Battery subject. Fedora certification
+creates disposable synthetic Battery input during the test and does not retain
+a subject collection in this repository.
+
 
 Battery v1 supports these commands:
 
@@ -26,7 +33,7 @@ All commands support the global `--json` flag.
 
 ## Non-Goals
 
-- No Omaken compatibility layer, migration, alias, or fallback behavior.
+- No legacy compatibility layer, migration, alias, or fallback behavior.
 - No direct execution from a Battery cache checkout.
 - No submodule checkout by default.
 - No manifest generator, hook, or repository-provided code execution during

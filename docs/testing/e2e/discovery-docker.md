@@ -5,7 +5,7 @@
 ## Source
 
 - `tests/docker_discovery_e2e.rs`
-- The Compose topology referenced by its `ComposeGuard` and `.scripts/transport-certification.sh`
+- `scripts/tasks/cert/transport`
 
 ## Run
 

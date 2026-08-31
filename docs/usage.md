@@ -36,9 +36,9 @@ omakure --scripts-dir /path/to/workspace --json scripts
 ```
 
 The workspace is selected by `--scripts-dir`, then `OMAKURE_SCRIPTS_DIR`, then
-legacy environment overrides, then the debug `scripts/` fixture and platform
-defaults. A positional path is not accepted and must not be reintroduced as a
-headless alias.
+legacy environment overrides, then the debug `scripts/workspace` fixture and
+platform defaults. A positional path is not accepted and must not be
+reintroduced as a headless alias.
 
 ## Scripts and runs
 
@@ -452,8 +452,8 @@ Two bounded Linux gates run the product against itself over real Compose
 topologies and production listeners, not mocks:
 
 ```bash
-mise run transport-certification
-mise run health-plane-certification
+mise run cert:transport
+mise run cert:health
 ```
 
 The first certifies direct transport and enrolment; the second certifies the

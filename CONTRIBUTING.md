@@ -100,3 +100,37 @@ gh project item-list 6 --owner This-Is-NPC --format json \
   `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`.
 - Any new `#[allow(clippy::…)]` requires a one-line comment justifying the
   suppression (pointing at the bug, audit note, or rationale).
+
+## Repository layout
+
+This is a headless Rust/HTTP product. Product documentation belongs under
+`docs/`; the conventional root exceptions are `README.md`, `AGENTS.md`,
+`CONTRIBUTING.md`, `LICENSE`, Cargo/Docker/mise manifests, and the canonical
+`compose.yaml`.
+
+All repository automation lives below `scripts/`: executable mise tasks are
+under `scripts/tasks/`, installers under `scripts/install/`, release tooling
+under `scripts/release/`, non-subject fixtures under `scripts/fixtures/`, and
+the isolated debug workspace under `scripts/workspace/`. Do not add a root
+script or a repository-owned Battery subject collection. External Battery
+repositories own subject scripts; use explicit Battery registration, sync, and
+install operations to materialize them into a workspace.
+
+## Mise task policy
+
+Prefer one atomic logical operation per task and express composition with
+`depends`, not shell `&&` chains. File tasks must resolve the project through
+`MISE_PROJECT_ROOT` with a direct-invocation fallback. Declare `sources` and
+`outputs` only for deterministic local tasks. Builds and cleanup should be
+repeat-safe; tests and linters rerun on every invocation. Install, release,
+node-service, and live Docker/libvirt certification tasks are stateful
+operations: document their preconditions and ensure bounded, trap-backed
+cleanup rather than claiming strict idempotence.
+
+## Focused validation
+
+Before submitting, run the narrow checks for changed surfaces first (for
+example `bash -n` on changed shell tasks, `mise tasks`, and the affected
+packaging/config tests), then the required `mise run lint` and relevant test
+suite. Do not hide generated state or Battery-installed scripts with broad
+ignore patterns.

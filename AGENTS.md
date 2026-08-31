@@ -13,8 +13,12 @@ runtime.
 
 **Key concepts:**
 
-- **Workspace**: one root containing scripts and Omakure metadata. Default:
-  `~/Documents/omakure-scripts`.
+- **Workspace**: one selected root containing Battery-installed subject scripts
+  and Omakure metadata. Default: `~/Documents/omakure-scripts`.
+- **Repository automation**: executable tasks, installers, release tooling, and
+  fixtures live below `scripts/`; they are not product subjects.
+- **Battery ownership**: subject-script collections come only from external
+  Battery repositories and are installed explicitly into a workspace.
 - **Schema**: PascalCase JSON embedded between
   `OMAKURE_SCHEMA_START` and `OMAKURE_SCHEMA_END`.
 - **Runtime state**: `.history/runs.sqlite` stores runs, queue state, and traces.
@@ -39,15 +43,15 @@ cargo test
 cargo run -- --help
 
 # Named headless development workflows
-mise run dev                # bounded node-service health/readiness smoke check
+mise run dev:smoke          # bounded node-service health/readiness smoke check
 mise run node               # foreground node service
-mise run node-service-check # focused CLI/HTTP/node-service integration tests
-mise run lint         # clippy -D warnings + fmt --check
+mise run test:node-service  # focused CLI/HTTP/node-service integration tests
+mise run lint               # clippy and fmt checks
 ```
 
 Never use bare `omakure` as an interactive app. No-argument invocation prints
 help; operational commands must be explicit (`omakure scripts`, `omakure run`,
-`omakure api`, or `omakure node serve`). The `.scripts/dev-daemon.sh` helper
+`omakure api`, or `omakure node serve`). The `scripts/tasks/dev/smoke` helper
 starts the node service on a temporary local port, checks health/readiness, and
 cleans up.
 
@@ -55,12 +59,14 @@ cleans up.
 
 `--scripts-dir` is the supported explicit override. Resolution then considers
 `OMAKURE_SCRIPTS_DIR`, legacy `OVERTURE_SCRIPTS_DIR` and
-`CLOUD_MGMT_SCRIPTS_DIR`, the debug `scripts/` fixture, platform defaults, and
-legacy default directory names. Positional script paths are not accepted.
+`CLOUD_MGMT_SCRIPTS_DIR`, the debug `scripts/workspace` fixture, platform
+defaults, and legacy default directory names. Positional script paths are not
+accepted.
 
-The debug build uses `scripts/` when it exists. Omakure creates `.omakure/`,
-`.history/`, and `omakure.toml` only below the selected workspace. `.omakure`
-and `.history` are runtime metadata, not script content.
+The debug build uses `scripts/workspace` when it exists. Omakure creates
+`.omakure/`, `.history/`, and `omakure.toml` only below the selected workspace.
+Repository automation under `scripts/tasks`, installers, release tooling, and
+fixtures is never a Battery subject.
 
 ## Architecture
 
@@ -127,9 +133,9 @@ kind, which is a different Lua from the removed TUI widget runtime.
 # OMAKURE_SCHEMA_END
 ```
 
-Supported script extensions are `.bash`, `.sh`, `.ps1`, and `.py`. Schema
-fields may be strings, numbers, booleans, or secrets. Optional `Schedule` data
-is consumed by `serve` and `node serve`; see `docs/scheduling.md`.
+Supported script extensions are `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`.
+Schema fields may be strings, numbers, booleans, or secrets. Optional
+`Schedule` data is consumed by `serve` and `node serve`; see `docs/scheduling.md`.
 
 ## JSON and HTTP contracts
 

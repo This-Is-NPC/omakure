@@ -194,8 +194,9 @@ These are future directions, not current capabilities:
 
 ## Quick start
 
-Development requires Rust, Git, Bash, and `jq`. PowerShell and Python are needed
-only for scripts using those runtimes; Lua 5.4 is embedded in Omakure.
+Development requires Rust, Git, Bash, and `jq`. Optional PowerShell support and
+Optional Python support are needed only for scripts using those runtimes; Lua
+5.4 is embedded in Omakure.
 
 Build the project and inspect the command surface:
 
@@ -222,12 +223,14 @@ cargo run --bin omakure -- --json history list --limit 5
 Install the latest tagged release on Linux or macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/This-Is-NPC/omakure/main/scripts/install/install.sh \
   | bash -s -- --repo This-Is-NPC/omakure
 ```
 
-After installation, run `omakure doctor` to verify the workspace, required
-tools, optional runtimes, and discovered script schemas.
+After installation, run `omakure doctor` to verify the workspace and required
+tools. Installers install the binary only; external Battery repositories own
+subject scripts, which are added, synchronized, and explicitly installed into
+the selected workspace.
 
 ## Documentation
 

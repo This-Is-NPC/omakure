@@ -18,10 +18,10 @@ fn every_shipped_config_template_matches_the_default_it_seeds() {
     let dockerfile = std::fs::read_to_string(root.join("Dockerfile")).expect("read Dockerfile");
     let installer =
         std::fs::read_to_string(root.join("src/installer.rs")).expect("read the installer");
-    let script = std::fs::read_to_string(root.join(".scripts/direct-transport-docker-e2e.sh"))
+    let script = std::fs::read_to_string(root.join("scripts/tasks/cert/direct-transport"))
         .expect("read the transport e2e script");
-    let installer_sh =
-        std::fs::read_to_string(root.join("install.sh")).expect("read the shell installer");
+    let installer_sh = std::fs::read_to_string(root.join("scripts/install/install.sh"))
+        .expect("read the shell installer");
 
     let expected = omakure::domain::NodeConfig::default();
     for (name, template) in [
@@ -34,7 +34,7 @@ fn every_shipped_config_template_matches_the_default_it_seeds() {
         // enrollment at all. The three templates that were covered had been
         // corrected; the one an operator actually runs had not.
         (
-            "install.sh",
+            "scripts/install/install.sh",
             extract_shell_installer_template(&installer_sh),
         ),
     ] {
@@ -77,7 +77,7 @@ fn every_shipped_config_template_matches_the_default_it_seeds() {
     ] {
         assert!(
             script.contains(key),
-            ".scripts/direct-transport-docker-e2e.sh is missing `{key}`, so the \
+            "scripts/tasks/cert/direct-transport is missing `{key}`, so the \
              node it starts takes the default for it without saying so"
         );
     }

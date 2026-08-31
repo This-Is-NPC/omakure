@@ -284,9 +284,9 @@ impl HttpServer {
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        // `--bind` must own the socket, so we cannot hold the probe listener
-        // across spawn. Retry on the bind→drop→spawn TOCTOU window (EADDRINUSE /
-        // readiness miss) instead of claiming the port is held until bind.
+        // Reserve a process-wide unique port before spawning. Unlike probing with
+        // a temporary listener here, this keeps sibling test servers from choosing
+        // the same port during their bind→spawn window.
         let attempt_timeout = timeout / 4;
         let attempt_timeout = if attempt_timeout.is_zero() {
             Duration::from_secs(2)
@@ -296,9 +296,7 @@ impl HttpServer {
         let deadline = Instant::now() + timeout;
         let mut last_addr = None;
         while Instant::now() < deadline {
-            let listener =
-                TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral localhost port");
-            let addr = listener.local_addr().expect("read local addr");
+            let addr = SocketAddr::from(([127, 0, 0, 1], unique_loopback_port()));
             last_addr = Some(addr);
             let mut command = omakure_command();
             command
@@ -320,7 +318,6 @@ impl HttpServer {
                 command.env(key, value);
             }
 
-            drop(listener);
             let child = spawn_guard(&mut command);
             let mut server = Self {
                 addr,
@@ -473,9 +470,21 @@ impl HttpServer {
         HttpResponse::parse(raw)
     }
 
-    fn try_wait_until_ready(&self, timeout: Duration) -> bool {
+    fn try_wait_until_ready(&mut self, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
+            // A successful probe is only ours if the process that was spawned
+            // for this address is still alive. This rejects a 200 from a
+            // different responder after our child lost the bind race.
+            if self
+                .child
+                .child_mut()
+                .try_wait()
+                .expect("poll HTTP child")
+                .is_some()
+            {
+                return false;
+            }
             if let Ok(mut stream) =
                 TcpStream::connect_timeout(&self.addr, Duration::from_millis(200))
             {
@@ -488,7 +497,12 @@ impl HttpServer {
                 if stream.write_all(request.as_bytes()).is_ok() {
                     let mut raw = String::new();
                     if stream.read_to_string(&mut raw).is_ok() && raw.contains(" 200 ") {
-                        return true;
+                        return self
+                            .child
+                            .child_mut()
+                            .try_wait()
+                            .expect("poll HTTP child after health probe")
+                            .is_none();
                     }
                 }
             }

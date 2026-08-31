@@ -337,10 +337,12 @@ fn sync_battery_with_access(
     let http_pin = resolve_public_git_endpoint(&registry.batteries[index].git_url)?;
     let auth = registry.batteries[index].auth.clone();
     let askpass = prepare_git_askpass(workspace, auth.as_ref(), access)?;
+    let git_config = prepare_git_config(workspace)?;
     let git_ctx = GitExecContext {
         policy,
         askpass: askpass.as_ref(),
         http_pin: http_pin.as_ref(),
+        global_config: Some(&git_config),
     };
     if http_pin.is_some() {
         assert_git_http_pinning_supported(&git_ctx)?;
@@ -446,6 +448,22 @@ struct GitExecContext<'a> {
     policy: GitTransportPolicy,
     askpass: Option<&'a GitAskpassGuard>,
     http_pin: Option<&'a GitHttpPin>,
+    global_config: Option<&'a Path>,
+}
+fn prepare_git_config(workspace: &Workspace) -> OperationResult<PathBuf> {
+    prepare_git_config_in(workspace.omakure_dir())
+}
+
+fn prepare_git_config_in(dir: &Path) -> OperationResult<PathBuf> {
+    fs::create_dir_all(dir).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to create git config directory: {err}"),
+        )
+    })?;
+    let path = dir.join("git-empty-config");
+    write_atomic(&path, b"", "git isolation config")?;
+    Ok(path)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -973,11 +991,12 @@ fn validate_battery_name(name: &str) -> OperationResult<()> {
 }
 
 fn validate_git_url(value: &str) -> OperationResult<()> {
-    if value.trim().is_empty()
-        || value.starts_with('-')
-        || value.chars().any(char::is_control)
-        || value.contains('?')
-        || value.contains('#')
+    let policy_value = windows_verbatim_prefix(value).unwrap_or(value);
+    if policy_value.trim().is_empty()
+        || policy_value.starts_with('-')
+        || policy_value.chars().any(char::is_control)
+        || policy_value.contains('?')
+        || policy_value.contains('#')
     {
         return Err(OperationError::new(
             OperationErrorCode::InvalidInput,
@@ -991,6 +1010,18 @@ fn validate_git_url(value: &str) -> OperationResult<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(windows)]
+fn windows_verbatim_prefix(value: &str) -> Option<&str> {
+    value
+        .strip_prefix("\\\\?\\")
+        .or_else(|| value.strip_prefix("//?/"))
+}
+
+#[cfg(not(windows))]
+fn windows_verbatim_prefix(_value: &str) -> Option<&str> {
+    None
 }
 
 /// Registration-time SSRF guard: reject Battery HTTP(S) sources whose host is a
@@ -1284,18 +1315,21 @@ pub fn assert_local_battery_allowed(allow_local: bool, git_url: &str) -> Operati
 }
 
 fn normalize_git_url(value: &str) -> OperationResult<String> {
-    if let Some((scheme, _)) = value.split_once("://") {
-        let scheme = scheme.to_ascii_lowercase();
-        if matches!(scheme.as_str(), "https" | "http" | "file") {
-            return Ok(value.to_string());
+    if windows_verbatim_prefix(value).is_none() {
+        if let Some((scheme, _)) = value.split_once("://") {
+            let scheme = scheme.to_ascii_lowercase();
+            if matches!(scheme.as_str(), "https" | "http" | "file") {
+                return Ok(value.to_string());
+            }
+            return Err(OperationError::new(
+                OperationErrorCode::InvalidInput,
+                "battery git url scheme is not allowed",
+            ));
         }
-        return Err(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            "battery git url scheme is not allowed",
-        ));
     }
 
-    let path = Path::new(value);
+    let local_value = windows_verbatim_path(value);
+    let path = Path::new(&local_value);
     let path = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -1314,7 +1348,37 @@ fn normalize_git_url(value: &str) -> OperationResult<String> {
             format!("battery local git source must exist: {err}"),
         )
     })?;
-    Ok(canonical.display().to_string())
+    Ok(strip_windows_verbatim_owned(
+        canonical.to_string_lossy().into_owned(),
+    ))
+}
+
+fn windows_verbatim_path(value: &str) -> String {
+    #[cfg(windows)]
+    if let Some(stripped) = windows_verbatim_prefix(value) {
+        if let Some(unc) = stripped
+            .strip_prefix("UNC\\")
+            .or_else(|| stripped.strip_prefix("UNC/"))
+        {
+            return format!("\\\\{unc}");
+        }
+        return stripped.to_string();
+    }
+    value.to_string()
+}
+
+fn strip_windows_verbatim_owned(value: String) -> String {
+    #[cfg(windows)]
+    if let Some(stripped) = windows_verbatim_prefix(&value) {
+        if let Some(unc) = stripped
+            .strip_prefix("UNC\\")
+            .or_else(|| stripped.strip_prefix("UNC/"))
+        {
+            return format!("\\\\{unc}");
+        }
+        return stripped.to_string();
+    }
+    value
 }
 
 fn validate_git_ref(value: &str) -> OperationResult<()> {
@@ -1430,12 +1494,31 @@ fn run_git_capture_with_policy(
     spec: GitCommandSpec,
     policy: GitTransportPolicy,
 ) -> OperationResult<String> {
+    let cache_path = spec
+        .args
+        .windows(2)
+        .find(|pair| pair[0] == "-C")
+        .map(|pair| PathBuf::from(&pair[1]))
+        .ok_or_else(|| {
+            OperationError::new(
+                OperationErrorCode::GitFailed,
+                "git command is missing an isolated working directory",
+            )
+        })?;
+    let git_config = match cache_path
+        .ancestors()
+        .find(|path| path.file_name().is_some_and(|name| name == ".omakure"))
+    {
+        Some(dir) => prepare_git_config_in(dir)?,
+        None => PathBuf::from(".omakure/git-empty-config"),
+    };
     run_git_capture_with_context(
         spec,
         &GitExecContext {
             policy,
             askpass: None,
             http_pin: None,
+            global_config: Some(&git_config),
         },
     )
 }
@@ -1604,6 +1687,7 @@ fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> Command {
             policy,
             askpass: None,
             http_pin: None,
+            global_config: Some(Path::new(".omakure/git-empty-config")),
         },
     )
 }
@@ -1623,9 +1707,13 @@ fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> 
         .args(&spec.args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", git_null_config_path())
-        .env("GIT_CONFIG_SYSTEM", git_null_config_path())
-        .env("GIT_ALLOW_PROTOCOL", ctx.policy.allowed_protocols())
+        .env("GIT_ALLOW_PROTOCOL", ctx.policy.allowed_protocols());
+    if let Some(path) = ctx.global_config {
+        command.env("GIT_CONFIG_GLOBAL", path);
+    } else {
+        command.env_remove("GIT_CONFIG_GLOBAL");
+    }
+    command
         .env_remove("SSH_ASKPASS")
         .env_remove("GIT_SSH")
         .env_remove("GIT_SSH_COMMAND")
@@ -1635,6 +1723,7 @@ fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> 
         .env_remove("XDG_CONFIG_HOME")
         .env_remove("XDG_CONFIG_DIRS")
         .env_remove("GIT_CONFIG")
+        .env_remove("GIT_CONFIG_SYSTEM")
         .env_remove("GIT_CONFIG_COUNT")
         .env_remove("GIT_CONFIG_PARAMETERS")
         .env_remove("OMAKURE_API_TOKEN")
@@ -1663,15 +1752,6 @@ fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> 
     command
 }
 
-#[cfg(windows)]
-fn git_null_config_path() -> &'static str {
-    "NUL"
-}
-
-#[cfg(not(windows))]
-fn git_null_config_path() -> &'static str {
-    "/dev/null"
-}
 
 fn verify_synced_checkout(cache_path: &Path, expected_commit: &str) -> OperationResult<()> {
     if !cache_path.join(".git").is_dir() {
@@ -3097,6 +3177,16 @@ pub fn git_checkout_detached_spec(cache_path: &Path, commit: &str) -> GitCommand
 mod tests {
     use super::*;
     use std::cell::Cell;
+    fn env_key_eq(key: &std::ffi::OsStr, expected: &str) -> bool {
+        #[cfg(windows)]
+        {
+            key.to_string_lossy().eq_ignore_ascii_case(expected)
+        }
+        #[cfg(not(windows))]
+        {
+            key == std::ffi::OsStr::new(expected)
+        }
+    }
     use tempfile::TempDir;
 
     fn valid_schema_script() -> String {
@@ -3635,12 +3725,13 @@ path = "scripts/ignored.sh"
         }));
         assert!(envs.iter().any(|(key, value)| {
             *key == "GIT_CONFIG_GLOBAL"
-                && value.map(|v| v == git_null_config_path()).unwrap_or(false)
+                && value
+                    .map(|v| v.to_string_lossy().ends_with("git-empty-config"))
+                    .unwrap_or(false)
         }));
-        assert!(envs.iter().any(|(key, value)| {
-            *key == "GIT_CONFIG_SYSTEM"
-                && value.map(|v| v == git_null_config_path()).unwrap_or(false)
-        }));
+        assert!(envs
+            .iter()
+            .any(|(key, value)| *key == "GIT_CONFIG_SYSTEM" && value.is_none()));
         assert!(envs
             .iter()
             .any(|(key, value)| *key == "GIT_CONFIG_COUNT" && value.is_none()));
@@ -3681,6 +3772,7 @@ path = "scripts/ignored.sh"
                 policy: GitTransportPolicy::HttpsOnly,
                 askpass: None,
                 http_pin: Some(&pin),
+                global_config: Some(Path::new(".omakure/git-empty-config")),
             },
         );
         let args: Vec<_> = command
@@ -3710,7 +3802,7 @@ path = "scripts/ignored.sh"
         ] {
             assert!(command
                 .get_envs()
-                .any(|(key, value)| key == proxy && value.is_none()));
+                .any(|(key, value)| env_key_eq(key, proxy) && value.is_none()));
         }
     }
 
@@ -4468,6 +4560,7 @@ tags = ["azure"]
                 policy: GitTransportPolicy::HttpsOnly,
                 askpass: Some(&guard),
                 http_pin: Some(&pin),
+                global_config: Some(Path::new(".omakure/git-empty-config")),
             },
         );
         let envs: Vec<_> = command.get_envs().collect();
@@ -4743,6 +4836,7 @@ tags = ["azure"]
         assert_eq!(err.code, OperationErrorCode::UnsafePath);
     }
 
+    #[cfg(unix)]
     #[test]
     fn install_battery_script_refuses_overwrite_without_force_and_writes_provenance() {
         let dir = TempDir::new().unwrap();
@@ -4783,6 +4877,7 @@ tags = ["azure"]
     }
 
     #[test]
+    #[cfg(unix)]
     fn install_battery_script_does_not_clobber_existing_predictable_temp_sibling() {
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);
@@ -4858,6 +4953,7 @@ tags = ["azure"]
     }
 
     #[test]
+    #[cfg(unix)]
     fn install_rolls_back_script_when_provenance_write_fails() {
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);
@@ -4884,6 +4980,7 @@ tags = ["azure"]
     }
 
     #[test]
+    #[cfg(unix)]
     fn force_install_restores_existing_script_when_provenance_write_fails() {
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);
@@ -4913,6 +5010,7 @@ tags = ["azure"]
     }
 
     #[test]
+    #[cfg(unix)]
     fn force_install_does_not_clobber_existing_backup_sibling() {
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);
@@ -4940,6 +5038,7 @@ tags = ["azure"]
     }
 
     #[test]
+    #[cfg(unix)]
     fn install_battery_script_force_overwrites_existing_target() {
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);

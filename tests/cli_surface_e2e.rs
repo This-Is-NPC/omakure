@@ -1283,6 +1283,7 @@ echo traced"##,
     assert_success(&delete);
 }
 
+#[cfg(unix)]
 #[test]
 fn battery_lifecycle_subcommands_work_against_local_repo() {
     let workspace = support::TestWorkspace::new("cli_surface_battery");

@@ -370,19 +370,32 @@ fn battery_install_policy_mismatch(parent: &BehavioralContext) -> Result<ProbeEv
     verify_synced_cache(&ctx, BATTERY, resolved_commit)?;
 
     let cli = ctx.cli_json(&["--json", "battery", "install", BATTERY, SCRIPT]);
-    if cli["ok"] != true
-        || cli["data"]["battery_name"] != BATTERY
-        || cli["data"]["script_id"] != SCRIPT
+    #[cfg(unix)]
     {
-        return Err(format!("CLI local battery install did not complete: {cli}"));
+        if cli["ok"] != true
+            || cli["data"]["battery_name"] != BATTERY
+            || cli["data"]["script_id"] != SCRIPT
+        {
+            return Err(format!("CLI local battery install did not complete: {cli}"));
+        }
+        verify_installed_script(&ctx)?;
     }
-    verify_installed_script(&ctx)?;
-
+    #[cfg(not(unix))]
+    {
+        if cli["ok"] != false || cli["error"]["code"] != "conflict" {
+            return Err(format!(
+                "non-Unix battery install must return conflict: {cli}"
+            ));
+        }
+        rewrite_source_https(&ctx)?;
+    }
+    let installed = cfg!(unix);
     let endpoint = &format!("/v1/batteries/{BATTERY}/scripts/{SCRIPT}/install");
     let body = json!({"force": true});
     let auth = assert_auth(&ctx, "POST", endpoint, Some(body.clone()));
     let response = ctx.server.post_json(endpoint, &body);
     let response_body = response.json();
+    #[cfg(unix)]
     if response.status != 400
         || response_body["ok"] != false
         || response_body["error"]["code"] != "invalid_input"
@@ -395,14 +408,25 @@ fn battery_install_policy_mismatch(parent: &BehavioralContext) -> Result<ProbeEv
             response.status
         ));
     }
-    // The policy rejection must not discard the real local install state.
+    #[cfg(not(unix))]
+    if response.status != 409
+        || response_body["ok"] != false
+        || response_body["error"]["code"] != "conflict"
+    {
+        return Err(format!(
+            "non-Unix HTTP battery install must return conflict: status={} body={response_body}",
+            response.status
+        ));
+    }
+    // The policy rejection must not discard the real local sync state.
     verify_synced_cache(&ctx, BATTERY, resolved_commit)?;
+    #[cfg(unix)]
     verify_installed_script(&ctx)?;
     let mut paired = evidence(
-        json!({"ok": cli["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": true, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": true}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
+        json!({"ok": cli["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": installed, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": installed}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
         (
             response.status,
-            json!({"ok": response_body["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": true, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": true}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
+            json!({"ok": response_body["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": installed, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": installed}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
         ),
     )?;
     paired.semantic_difference = Some("battery-https-policy".into());
@@ -429,6 +453,19 @@ fn add_local_battery(ctx: &BehavioralContext, name: &str) -> Result<(), String> 
     } else {
         Err(format!("CLI battery add failed: {:?}", output.status))
     }
+}
+
+#[cfg(not(unix))]
+fn rewrite_source_https(ctx: &BehavioralContext) -> Result<(), String> {
+    let registry_path = ctx.workspace.path().join(".omakure/batteries.json");
+    let mut registry = read_registry(&registry_path).map_err(|error| error.to_string())?;
+    let battery = registry
+        .batteries
+        .iter_mut()
+        .find(|battery| battery.name == BATTERY)
+        .ok_or("battery missing from registry")?;
+    battery.git_url = format!("https://example.invalid/{BATTERY}.git");
+    write_registry(&registry_path, &registry).map_err(|error| error.to_string())
 }
 fn verify_synced_cache(
     ctx: &BehavioralContext,

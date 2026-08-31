@@ -978,12 +978,24 @@ fn batteries_family_routes() {
         .iter()
         .any(|entry| entry["id"] == "local.echo"));
 
-    let install = server.post_json(
-        "/v1/batteries/fixture/scripts/local.echo/install",
-        &json!({ "force": true }),
-    );
-    assert_eq!(install.status, 200, "body: {}", install.safe_body());
-    assert!(workspace.path().join("scripts/echo.sh").exists());
+    #[cfg(unix)]
+    {
+        let install = server.post_json(
+            "/v1/batteries/fixture/scripts/local.echo/install",
+            &json!({ "force": true }),
+        );
+        assert_eq!(install.status, 200, "body: {}", install.safe_body());
+        assert!(workspace.path().join("scripts/echo.sh").exists());
+    }
+    #[cfg(not(unix))]
+    {
+        let install = server.post_json(
+            "/v1/batteries/fixture/scripts/local.echo/install",
+            &json!({ "force": true }),
+        );
+        assert_eq!(install.status, 409, "body: {}", install.safe_body());
+        assert_error_code(&install.json(), "conflict");
+    }
 
     // Sync route: nearest safe boundary is https-only validation without
     // contacting a remote host (local git URL is rejected).

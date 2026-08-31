@@ -5243,14 +5243,11 @@ echo ok
         let workspace = workspace_in(&dir);
         write_script(outside.path(), "outside.sh");
 
+        let outside_script = outside.path().join("outside.sh").display().to_string();
+        let request_body =
+            serde_json::to_string(&serde_json::json!({ "script": outside_script })).unwrap();
         let response = router(TOKEN.to_string(), workspace)
-            .oneshot(authed_json_request(
-                "/v1/runs",
-                &format!(
-                    r#"{{"script":"{}"}}"#,
-                    outside.path().join("outside.sh").display()
-                ),
-            ))
+            .oneshot(authed_json_request("/v1/runs", &request_body))
             .await
             .unwrap();
 

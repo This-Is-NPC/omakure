@@ -1510,6 +1510,7 @@ dependencies = [
  "signal-hook",
  "snow",
  "subtle",
+ "syn 2.0.112",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",

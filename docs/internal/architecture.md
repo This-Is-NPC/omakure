@@ -175,6 +175,13 @@ src/
   other routes require bearer auth and policy scopes.
 - Schedules are declared in script schemas. `serve` scans every five seconds,
   prevents overlapping fires, and records scheduler provenance in SQLite.
+- Scheduler run-table reads are exposed by the tested `runs.rs` APIs
+  `last_scheduled_fire_ms` and `has_live_scheduled_run`; `src/cli/serve.rs`
+  only discovers schedules and enqueues due work.
+- `tests/architecture_contract.rs` parses handwritten Rust with the pinned
+  `syn` development dependency and checks HTTP, domain, run-table SQL, and
+  executor-convergence boundaries. Its fixtures assert stable path/symbol
+  diagnostics for violations while allowing storage aliases and macros.
 - A workspace is one filesystem root. `--scripts-dir` selects it; positional
   paths are not a command mode. Metadata is created only below that root.
 - `.lua` is executed by a Lua runtime embedded in the binary, so a node runs

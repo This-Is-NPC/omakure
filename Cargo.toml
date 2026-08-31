@@ -52,6 +52,7 @@ libc = "0.2"
 rstest = "0.23"
 pretty_assertions = "1.4"
 tempfile = "3.10"
+syn = { version = "2.0", features = ["full", "visit"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

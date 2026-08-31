@@ -1449,7 +1449,6 @@ mod tests {
         assert!(super::check_docs_freshness(&manifest, &format!("{crlf}drift")).is_err());
     }
 
-
     #[test]
     fn rejects_wrong_class_side() {
         let mut manifest = valid();

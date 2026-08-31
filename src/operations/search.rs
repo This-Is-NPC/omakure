@@ -60,12 +60,8 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
 }
 
 fn logical_relative_path(path: &std::path::Path, root: &std::path::Path) -> String {
-    let canonical_root = root
-        .canonicalize()
-        .unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf());
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let path_text = canonical_path.to_string_lossy().replace('\\', "/");
     let root_text = canonical_root
         .to_string_lossy()

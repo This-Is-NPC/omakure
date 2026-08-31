@@ -184,12 +184,8 @@ fn canonical_scripts_root(scripts_root: &Path) -> OperationResult<PathBuf> {
 }
 
 fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let canonical_root = root
-        .canonicalize()
-        .unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf());
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let path_text = canonical_path.to_string_lossy().replace('\\', "/");
     let root_text = canonical_root
         .to_string_lossy()
@@ -202,7 +198,6 @@ fn logical_relative_path(path: &Path, root: &Path) -> String {
         .unwrap_or(&path_text)
         .to_string()
 }
-
 
 fn script_schema_from_domain(schema: crate::domain::Schema) -> ScriptSchema {
     let mut fields: Vec<ScriptField> = schema
@@ -859,7 +854,6 @@ mod tests {
 
         assert_eq!(description.relative_path, "deploy.sh");
     }
-
 
     #[test]
     fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {

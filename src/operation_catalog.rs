@@ -861,7 +861,6 @@ fn normalize_generated_text(text: &str) -> String {
     text.replace("\r\n", "\n")
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1027,7 +1026,6 @@ mod tests {
         check_support_matrix_freshness(&catalog, &crlf).unwrap();
         assert!(check_support_matrix_freshness(&catalog, &format!("{crlf}drift")).is_err());
     }
-
 
     #[test]
     fn catalog_header_and_identity_invariants_fail_closed() {

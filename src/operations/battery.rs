@@ -1752,7 +1752,6 @@ fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> 
     command
 }
 
-
 fn verify_synced_checkout(cache_path: &Path, expected_commit: &str) -> OperationResult<()> {
     if !cache_path.join(".git").is_dir() {
         return Err(OperationError::new(

@@ -1326,7 +1326,6 @@ enabled = true
         assert!(!serialized.contains(token));
     }
 
-
     /// Existing token stores must be replaced in place on Windows rather than
     /// removed before the staged file is installed.
     #[cfg(windows)]

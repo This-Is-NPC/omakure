@@ -411,9 +411,8 @@ fn compose_service_healthy(service: &str) -> bool {
 
 fn readiness_http_ready(port: u16) -> bool {
     let url = format!("http://127.0.0.1:{port}/v1/ready");
-    request_json("GET", &url, false, None).is_ok_and(|value| {
-        value["ok"] == true && value["data"]["status"] == "ready"
-    })
+    request_json("GET", &url, false, None)
+        .is_ok_and(|value| value["ok"] == true && value["data"]["status"] == "ready")
 }
 
 fn authenticated_node_status_ready(port: u16) -> bool {
@@ -528,9 +527,8 @@ fn request_json(
     if !output.status.success() {
         return Err(output_text(&output));
     }
-    serde_json::from_slice(&output.stdout).map_err(|error| {
-        format!("invalid JSON ({error}): {}", output_text(&output))
-    })
+    serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("invalid JSON ({error}): {}", output_text(&output)))
 }
 
 fn curl_json(method: &str, url: &str, include_addresses: bool, body: Option<&str>) -> Value {

@@ -157,12 +157,8 @@ fn canonical_scripts_root(workspace: &Workspace) -> OperationResult<PathBuf> {
     })
 }
 fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let canonical_root = root
-        .canonicalize()
-        .unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf());
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let path_text = canonical_path.to_string_lossy().replace('\\', "/");
     let root_text = canonical_root
         .to_string_lossy()
@@ -181,7 +177,6 @@ fn has_windows_prefix(path: &str) -> bool {
         || (path.as_bytes().get(1).is_some_and(|colon| *colon == b':')
             && path.as_bytes()[0].is_ascii_alphabetic())
 }
-
 
 fn resolve_workspace_path(path: &str, root: &Path) -> OperationResult<PathBuf> {
     if path.starts_with('/') || path.starts_with('\\') {

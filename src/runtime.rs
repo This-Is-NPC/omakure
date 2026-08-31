@@ -173,7 +173,10 @@ pub(crate) fn resolve_bash_program(env: &[(String, String)]) -> Option<PathBuf> 
 
 #[cfg(windows)]
 fn is_wsl_launcher(path: &Path) -> bool {
-    let normalized = path.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+    let normalized = path
+        .to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase();
     normalized.ends_with("\\windows\\system32\\bash.exe")
         || normalized.ends_with("\\windows\\sysnative\\bash.exe")
 }

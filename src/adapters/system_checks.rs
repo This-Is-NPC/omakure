@@ -4,9 +4,9 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::error::ScriptError;
-use crate::runtime::{powershell_program, python_program};
 #[cfg(windows)]
 use crate::runtime::BASH_MISSING_HINT;
+use crate::runtime::{powershell_program, python_program};
 
 /// Check that a command is available and runs successfully.
 fn ensure_command(program: &str, args: &[&str], not_found_hint: &str) -> Result<(), ScriptError> {
@@ -76,9 +76,7 @@ pub(crate) fn ensure_bash_installed() -> Result<(), ScriptError> {
 }
 
 #[cfg(windows)]
-pub(crate) fn ensure_bash_installed_with_env(
-    env: &[(String, String)],
-) -> Result<(), ScriptError> {
+pub(crate) fn ensure_bash_installed_with_env(env: &[(String, String)]) -> Result<(), ScriptError> {
     let Some(program) = crate::runtime::resolve_bash_program(env) else {
         return Err(ScriptError::DependencyMissing {
             name: "bash".to_string(),
@@ -88,9 +86,7 @@ pub(crate) fn ensure_bash_installed_with_env(
     ensure_command_path(&program, "bash", &["--version"], BASH_MISSING_HINT)
 }
 
-pub(crate) fn ensure_bash_installed_with_env(
-    _env: &[(String, String)],
-) -> Result<(), ScriptError> {
+pub(crate) fn ensure_bash_installed_with_env(_env: &[(String, String)]) -> Result<(), ScriptError> {
     ensure_command(
         "bash",
         &["--version"],

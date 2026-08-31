@@ -2427,8 +2427,7 @@ fn configure_connection(connection: &mut Connection) -> Result<(), RegistryError
 
 fn configure_connection_read_only(connection: &mut Connection) -> Result<(), RegistryError> {
     connection.busy_timeout(BUSY_TIMEOUT)?;
-    let journal_mode: String =
-        connection.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
+    let journal_mode: String = connection.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
     if !journal_mode.eq_ignore_ascii_case("wal") {
         return Err(RegistryError::InvalidSchema(format!(
             "journal mode is {journal_mode:?}, expected WAL"

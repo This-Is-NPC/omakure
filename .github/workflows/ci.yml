@@ -239,8 +239,11 @@ jobs:
         with:
           files: target/coverage-report/lcov.info
           flags: pull-request
-          fail_ci_if_error: true
+          # Keep this advisory until the repository owner installs and activates
+          # Codecov; make the external upload blocking only after activation.
+          fail_ci_if_error: false
           disable_search: true
+          slug: ${{ github.repository }}
           use_oidc: true
       - name: Make fork Codecov unavailability explicit
         if: github.event.pull_request.head.repo.full_name != github.repository

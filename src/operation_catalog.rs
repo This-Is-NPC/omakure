@@ -1002,4 +1002,159 @@ mod tests {
             Err(CatalogError::InvalidPlatform { .. })
         ));
     }
+    #[test]
+    fn current_catalog_and_support_matrix_are_fresh() {
+        let catalog = validate_current().unwrap();
+        let matrix = render_support_matrix(&catalog);
+        check_support_matrix_freshness(&catalog, &matrix).unwrap();
+        assert!(check_support_matrix_freshness(&catalog, "stale").is_err());
+        assert!(matrix.contains("Total operations: 72."));
+    }
+
+    #[test]
+    fn catalog_header_and_identity_invariants_fail_closed() {
+        let parity = cli_http_parity::checked_manifest().unwrap();
+        let mut catalog = checked_catalog().unwrap();
+        catalog.schema_version = 2;
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::UnsupportedSchema(2))
+        ));
+
+        let mut catalog = checked_catalog().unwrap();
+        catalog.catalog_version.clear();
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::EmptyField { field: "catalog_version", .. })
+        ));
+
+        let mut catalog = checked_catalog().unwrap();
+        catalog.catalog_version = "2.0.0".into();
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::UnsupportedCatalogVersion { .. })
+        ));
+
+        let mut catalog = checked_catalog().unwrap();
+        catalog.operations.clear();
+        assert!(matches!(catalog.validate(&parity), Err(CatalogError::EmptyCatalog)));
+
+        let mut catalog = checked_catalog().unwrap();
+        catalog.operations[0].operation_id.clear();
+        assert!(matches!(catalog.validate(&parity), Err(CatalogError::EmptyField { field: "operation_id", .. })));
+
+        let mut catalog = checked_catalog().unwrap();
+        catalog.operations[0].operation_id = "doctor".into();
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::InvalidOperationId(_))
+        ));
+
+        let mut catalog = checked_catalog().unwrap();
+        catalog.operations[0].entry_id.clear();
+        assert!(matches!(catalog.validate(&parity), Err(CatalogError::EmptyField { field: "entry_id", .. })));
+
+        let mut catalog = checked_catalog().unwrap();
+        catalog.operations[1].entry_id = catalog.operations[0].entry_id.clone();
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::DuplicateEntryId(_))
+        ));
+    }
+
+    #[test]
+    fn catalog_rejects_invalid_binding_and_effect_combinations() {
+        let parity = cli_http_parity::checked_manifest().unwrap();
+        let validate = |entry_id: &str, mutate: &dyn Fn(&mut Operation)| {
+            let mut catalog = checked_catalog().unwrap();
+            let operation = catalog
+                .operations
+                .iter_mut()
+                .find(|operation| operation.entry_id == entry_id)
+                .unwrap();
+            mutate(operation);
+            catalog.validate(&parity).unwrap_err()
+        };
+
+        assert!(matches!(
+            validate("doctor", &|operation| {
+                operation.remote_eligibility = RemoteEligibility::LocalOnly
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("doctor", &|operation| {
+                operation.mutability = Mutability::Idempotent
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("doctor", &|operation| {
+                operation.remote_eligibility = RemoteEligibility::ControlExecute
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("http-health", &|operation| {
+                operation.effect = Effect::Mutate
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("node-init", &|operation| {
+                operation.effect = Effect::Execute;
+                operation.remote_eligibility = RemoteEligibility::ControlObserve;
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("node-init", &|operation| {
+                operation.mutability = Mutability::Immutable
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("node-init", &|operation| {
+                operation.effect = Effect::Lifecycle;
+                operation.remote_eligibility = RemoteEligibility::ControlObserve;
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("cli-trace", &|operation| {
+                operation.remote_eligibility = RemoteEligibility::ControlObserve
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("cli-trace", &|operation| {
+                operation.mutability = Mutability::Immutable
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("cli-trace", &|operation| {
+                operation.plane = Plane::Domain
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("env-create", &|operation| {
+                operation.mutability = Mutability::Immutable
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("env-create", &|operation| {
+                operation.mutability = Mutability::Idempotent
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+        assert!(matches!(
+            validate("env-replace", &|operation| {
+                operation.mutability = Mutability::NonIdempotent
+            }),
+            CatalogError::InvalidCombination { .. }
+        ));
+    }
 }

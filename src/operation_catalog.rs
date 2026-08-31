@@ -219,45 +219,97 @@ pub enum CatalogError {
 impl fmt::Display for CatalogError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Parse(reason) => write!(f, "catalog parse error: {reason}"),
-            Self::UnsupportedSchema(version) => {
-                write!(f, "unsupported catalog schema version {version}")
+            Self::Parse(_)
+            | Self::UnsupportedSchema(_)
+            | Self::UnsupportedCatalogVersion { .. }
+            | Self::EmptyCatalog => fmt_catalog_error(self, f),
+            Self::EmptyField { .. }
+            | Self::DuplicateOperationId(_)
+            | Self::InvalidOperationId(_)
+            | Self::DuplicateEntryId(_)
+            | Self::MissingEntry(_)
+            | Self::OrphanEntry(_)
+            | Self::StableIdMismatch { .. }
+            | Self::MissingStableId(_) => fmt_identity_error(self, f),
+            Self::DuplicateBinding { .. }
+            | Self::MissingBinding { .. }
+            | Self::UnknownBinding { .. } => fmt_binding_error(self, f),
+            Self::InvalidCombination { .. } | Self::InvalidPlatform { .. } => {
+                fmt_constraint_error(self, f)
             }
-            Self::UnsupportedCatalogVersion { expected, actual } => write!(
+        }
+    }
+}
+
+fn fmt_catalog_error(error: &CatalogError, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match error {
+        CatalogError::Parse(reason) => write!(f, "catalog parse error: {reason}"),
+        CatalogError::UnsupportedSchema(version) => {
+            write!(f, "unsupported catalog schema version {version}")
+        }
+        CatalogError::UnsupportedCatalogVersion { expected, actual } => {
+            write!(
                 f,
                 "unsupported catalog version {actual}; expected {expected}"
-            ),
-            Self::EmptyCatalog => f.write_str("catalog has no operations"),
-            Self::EmptyField { operation, field } => write!(f, "{operation} has empty {field}"),
-            Self::DuplicateOperationId(id) => write!(f, "duplicate operation_id {id}"),
-            Self::InvalidOperationId(id) => write!(f, "invalid operation_id {id}"),
-            Self::DuplicateEntryId(id) => write!(f, "duplicate entry_id {id}"),
-            Self::MissingEntry(id) => write!(f, "catalog is missing parity entry {id}"),
-            Self::OrphanEntry(id) => write!(f, "catalog contains orphan entry {id}"),
-            Self::StableIdMismatch {
-                entry_id,
-                expected,
-                actual,
-            } => write!(
-                f,
-                "entry {entry_id} must retain stable operation_id {expected}, found {actual}"
-            ),
-            Self::MissingStableId(id) => {
-                write!(f, "catalog entry {id} has no stable operation_id baseline")
-            }
-            Self::DuplicateBinding { adapter, id } => write!(f, "duplicate {adapter} binding {id}"),
-            Self::MissingBinding { adapter, id } => write!(f, "missing {adapter} binding {id}"),
-            Self::UnknownBinding { adapter, id } => write!(f, "unknown {adapter} binding {id}"),
-            Self::InvalidCombination { operation, reason } => write!(
-                f,
-                "{operation} has invalid plane/eligibility/effect combination: {reason}"
-            ),
-            Self::InvalidPlatform {
-                operation,
-                platform,
-                reason,
-            } => write!(f, "{operation} has invalid {platform} support: {reason}"),
+            )
         }
+        CatalogError::EmptyCatalog => f.write_str("catalog has no operations"),
+        _ => unreachable!("non-catalog error passed to fmt_catalog_error"),
+    }
+}
+
+fn fmt_identity_error(error: &CatalogError, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match error {
+        CatalogError::EmptyField { operation, field } => {
+            write!(f, "{operation} has empty {field}")
+        }
+        CatalogError::DuplicateOperationId(id) => write!(f, "duplicate operation_id {id}"),
+        CatalogError::InvalidOperationId(id) => write!(f, "invalid operation_id {id}"),
+        CatalogError::DuplicateEntryId(id) => write!(f, "duplicate entry_id {id}"),
+        CatalogError::MissingEntry(id) => write!(f, "catalog is missing parity entry {id}"),
+        CatalogError::OrphanEntry(id) => write!(f, "catalog contains orphan entry {id}"),
+        CatalogError::StableIdMismatch {
+            entry_id,
+            expected,
+            actual,
+        } => write!(
+            f,
+            "entry {entry_id} must retain stable operation_id {expected}, found {actual}"
+        ),
+        CatalogError::MissingStableId(id) => {
+            write!(f, "catalog entry {id} has no stable operation_id baseline")
+        }
+        _ => unreachable!("non-identity error passed to fmt_identity_error"),
+    }
+}
+
+fn fmt_binding_error(error: &CatalogError, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match error {
+        CatalogError::DuplicateBinding { adapter, id } => {
+            write!(f, "duplicate {adapter} binding {id}")
+        }
+        CatalogError::MissingBinding { adapter, id } => {
+            write!(f, "missing {adapter} binding {id}")
+        }
+        CatalogError::UnknownBinding { adapter, id } => {
+            write!(f, "unknown {adapter} binding {id}")
+        }
+        _ => unreachable!("non-binding error passed to fmt_binding_error"),
+    }
+}
+
+fn fmt_constraint_error(error: &CatalogError, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match error {
+        CatalogError::InvalidCombination { operation, reason } => write!(
+            f,
+            "{operation} has invalid plane/eligibility/effect combination: {reason}"
+        ),
+        CatalogError::InvalidPlatform {
+            operation,
+            platform,
+            reason,
+        } => write!(f, "{operation} has invalid {platform} support: {reason}"),
+        _ => unreachable!("non-constraint error passed to fmt_constraint_error"),
     }
 }
 
@@ -291,132 +343,180 @@ impl Catalog {
     }
 
     pub fn validate(&self, parity: &ParityManifest) -> Result<(), CatalogError> {
-        if self.schema_version != SCHEMA_VERSION {
-            return Err(CatalogError::UnsupportedSchema(self.schema_version));
-        }
-        if self.catalog_version.trim().is_empty() {
-            return Err(CatalogError::EmptyField {
-                operation: "catalog".into(),
-                field: "catalog_version",
-            });
-        }
-        if self.catalog_version != CATALOG_VERSION {
-            return Err(CatalogError::UnsupportedCatalogVersion {
-                expected: CATALOG_VERSION,
-                actual: self.catalog_version.clone(),
-            });
-        }
-        if self.operations.is_empty() {
-            return Err(CatalogError::EmptyCatalog);
-        }
-        let parity_entries: BTreeMap<&str, &cli_http_parity::ParityEntry> = parity
+        validate_catalog_header(self)?;
+        let parity_entries = parity
             .entries
             .iter()
             .map(|entry| (entry.entry_id.as_str(), entry))
             .collect();
-        let stable_ids: BTreeMap<&str, &str> = OPERATION_ID_BASELINE.iter().copied().collect();
-        let mut operations = BTreeSet::new();
-        let mut entries = BTreeSet::new();
-        let mut cli_seen = BTreeSet::new();
-        let mut http_seen = BTreeSet::new();
+        let stable_ids = OPERATION_ID_BASELINE.iter().copied().collect();
+        let mut state = ValidationState::default();
+
         for operation in &self.operations {
-            if operation.operation_id.trim().is_empty() {
-                return Err(CatalogError::EmptyField {
-                    operation: operation.entry_id.clone(),
-                    field: "operation_id",
-                });
-            }
-            if !valid_operation_id(&operation.operation_id) {
-                return Err(CatalogError::InvalidOperationId(
-                    operation.operation_id.clone(),
-                ));
-            }
-            if operation.entry_id.trim().is_empty() {
-                return Err(CatalogError::EmptyField {
-                    operation: operation.operation_id.clone(),
-                    field: "entry_id",
-                });
-            }
-            if !operations.insert(operation.operation_id.as_str()) {
-                return Err(CatalogError::DuplicateOperationId(
-                    operation.operation_id.clone(),
-                ));
-            }
-            if !entries.insert(operation.entry_id.as_str()) {
-                return Err(CatalogError::DuplicateEntryId(operation.entry_id.clone()));
-            }
-            let expected = parity_entries
-                .get(operation.entry_id.as_str())
-                .ok_or_else(|| CatalogError::OrphanEntry(operation.entry_id.clone()))?;
-            let expected_operation_id = stable_ids
-                .get(operation.entry_id.as_str())
-                .ok_or_else(|| CatalogError::MissingStableId(operation.entry_id.clone()))?;
-            if operation.operation_id != *expected_operation_id {
-                return Err(CatalogError::StableIdMismatch {
-                    entry_id: operation.entry_id.clone(),
-                    expected: (*expected_operation_id).into(),
-                    actual: operation.operation_id.clone(),
-                });
-            }
-            validate_bindings(
-                operation,
-                expected.cli_ids.as_slice(),
-                expected.http_ids.as_slice(),
-                &mut cli_seen,
-                &mut http_seen,
-            )?;
-            if expected.class == ParityClass::CliOnly
-                && !matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly)
-            {
-                return Err(CatalogError::InvalidCombination {
-                    operation: operation.operation_id.clone(),
-                    reason: "CLI-only parity entries must be local-only".into(),
-                });
-            }
-            validate_platforms(operation)?;
-            validate_combination(operation)?;
+            validate_operation(operation, &parity_entries, &stable_ids, &mut state)?;
         }
-        for entry in &parity.entries {
-            if !entries.contains(entry.entry_id.as_str()) {
-                return Err(CatalogError::MissingEntry(entry.entry_id.clone()));
-            }
-        }
-        let parity_cli: BTreeSet<String> = parity
-            .entries
-            .iter()
-            .flat_map(|entry| entry.cli_ids.iter().cloned())
-            .collect();
-        let parity_http: BTreeSet<String> = parity
-            .entries
-            .iter()
-            .flat_map(|entry| entry.http_ids.iter().cloned())
-            .collect();
-        if let Some(id) = cli_seen.difference(&parity_cli).next() {
-            return Err(CatalogError::UnknownBinding {
-                adapter: "cli",
-                id: id.clone(),
-            });
-        }
-        if let Some(id) = http_seen.difference(&parity_http).next() {
-            return Err(CatalogError::UnknownBinding {
-                adapter: "http",
-                id: id.clone(),
-            });
-        }
-        if let Some(id) = parity_cli.difference(&cli_seen).next() {
-            return Err(CatalogError::MissingBinding {
-                adapter: "cli",
-                id: id.clone(),
-            });
-        }
-        if let Some(id) = parity_http.difference(&http_seen).next() {
-            return Err(CatalogError::MissingBinding {
-                adapter: "http",
-                id: id.clone(),
-            });
-        }
-        Ok(())
+        validate_catalog_completeness(parity, &state)
     }
+}
+#[derive(Default)]
+struct ValidationState<'a> {
+    operation_ids: BTreeSet<&'a str>,
+    entry_ids: BTreeSet<&'a str>,
+    cli_seen: BTreeSet<String>,
+    http_seen: BTreeSet<String>,
+}
+
+fn validate_catalog_header(catalog: &Catalog) -> Result<(), CatalogError> {
+    if catalog.schema_version != SCHEMA_VERSION {
+        return Err(CatalogError::UnsupportedSchema(catalog.schema_version));
+    }
+    if catalog.catalog_version.trim().is_empty() {
+        return Err(CatalogError::EmptyField {
+            operation: "catalog".into(),
+            field: "catalog_version",
+        });
+    }
+    if catalog.catalog_version != CATALOG_VERSION {
+        return Err(CatalogError::UnsupportedCatalogVersion {
+            expected: CATALOG_VERSION,
+            actual: catalog.catalog_version.clone(),
+        });
+    }
+    if catalog.operations.is_empty() {
+        return Err(CatalogError::EmptyCatalog);
+    }
+    Ok(())
+}
+
+fn validate_operation<'a>(
+    operation: &'a Operation,
+    parity_entries: &BTreeMap<&str, &cli_http_parity::ParityEntry>,
+    stable_ids: &BTreeMap<&str, &str>,
+    state: &mut ValidationState<'a>,
+) -> Result<(), CatalogError> {
+    validate_operation_identity(operation, state)?;
+    let expected = parity_entries
+        .get(operation.entry_id.as_str())
+        .ok_or_else(|| CatalogError::OrphanEntry(operation.entry_id.clone()))?;
+    validate_stable_id(operation, expected, stable_ids)?;
+    validate_bindings(
+        operation,
+        expected.cli_ids.as_slice(),
+        expected.http_ids.as_slice(),
+        &mut state.cli_seen,
+        &mut state.http_seen,
+    )?;
+    validate_cli_only(operation, expected.class)?;
+    validate_platforms(operation)?;
+    validate_combination(operation)
+}
+
+fn validate_operation_identity<'a>(
+    operation: &'a Operation,
+    state: &mut ValidationState<'a>,
+) -> Result<(), CatalogError> {
+    if operation.operation_id.trim().is_empty() {
+        return Err(CatalogError::EmptyField {
+            operation: operation.entry_id.clone(),
+            field: "operation_id",
+        });
+    }
+    if !valid_operation_id(&operation.operation_id) {
+        return Err(CatalogError::InvalidOperationId(
+            operation.operation_id.clone(),
+        ));
+    }
+    if operation.entry_id.trim().is_empty() {
+        return Err(CatalogError::EmptyField {
+            operation: operation.operation_id.clone(),
+            field: "entry_id",
+        });
+    }
+    if !state.operation_ids.insert(operation.operation_id.as_str()) {
+        return Err(CatalogError::DuplicateOperationId(
+            operation.operation_id.clone(),
+        ));
+    }
+    if !state.entry_ids.insert(operation.entry_id.as_str()) {
+        return Err(CatalogError::DuplicateEntryId(operation.entry_id.clone()));
+    }
+    Ok(())
+}
+
+fn validate_stable_id(
+    operation: &Operation,
+    expected: &cli_http_parity::ParityEntry,
+    stable_ids: &BTreeMap<&str, &str>,
+) -> Result<(), CatalogError> {
+    let expected_operation_id = stable_ids
+        .get(expected.entry_id.as_str())
+        .ok_or_else(|| CatalogError::MissingStableId(expected.entry_id.clone()))?;
+    if operation.operation_id != *expected_operation_id {
+        return Err(CatalogError::StableIdMismatch {
+            entry_id: operation.entry_id.clone(),
+            expected: (*expected_operation_id).into(),
+            actual: operation.operation_id.clone(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_cli_only(operation: &Operation, class: ParityClass) -> Result<(), CatalogError> {
+    if class == ParityClass::CliOnly
+        && !matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly)
+    {
+        return Err(CatalogError::InvalidCombination {
+            operation: operation.operation_id.clone(),
+            reason: "CLI-only parity entries must be local-only".into(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_catalog_completeness(
+    parity: &ParityManifest,
+    state: &ValidationState<'_>,
+) -> Result<(), CatalogError> {
+    for entry in &parity.entries {
+        if !state.entry_ids.contains(entry.entry_id.as_str()) {
+            return Err(CatalogError::MissingEntry(entry.entry_id.clone()));
+        }
+    }
+    let parity_cli = parity
+        .entries
+        .iter()
+        .flat_map(|entry| entry.cli_ids.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    let parity_http = parity
+        .entries
+        .iter()
+        .flat_map(|entry| entry.http_ids.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if let Some(id) = state.cli_seen.difference(&parity_cli).next() {
+        return Err(CatalogError::UnknownBinding {
+            adapter: "cli",
+            id: id.clone(),
+        });
+    }
+    if let Some(id) = state.http_seen.difference(&parity_http).next() {
+        return Err(CatalogError::UnknownBinding {
+            adapter: "http",
+            id: id.clone(),
+        });
+    }
+    if let Some(id) = parity_cli.difference(&state.cli_seen).next() {
+        return Err(CatalogError::MissingBinding {
+            adapter: "cli",
+            id: id.clone(),
+        });
+    }
+    if let Some(id) = parity_http.difference(&state.http_seen).next() {
+        return Err(CatalogError::MissingBinding {
+            adapter: "http",
+            id: id.clone(),
+        });
+    }
+    Ok(())
 }
 fn valid_operation_id(id: &str) -> bool {
     let Some(suffix) = id.strip_prefix("op.") else {
@@ -486,20 +586,40 @@ fn validate_platforms(operation: &Operation) -> Result<(), CatalogError> {
 }
 
 fn validate_combination(operation: &Operation) -> Result<(), CatalogError> {
-    let invalid = |reason: &str| CatalogError::InvalidCombination {
+    validate_local_only_http(operation)?;
+    validate_plane_combination(operation)?;
+    validate_future_contract(operation)?;
+    validate_effect_combination(operation)
+}
+
+fn invalid_combination(operation: &Operation, reason: &str) -> CatalogError {
+    CatalogError::InvalidCombination {
         operation: operation.operation_id.clone(),
         reason: reason.into(),
-    };
+    }
+}
+
+fn validate_local_only_http(operation: &Operation) -> Result<(), CatalogError> {
     if matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly)
         && !operation.http.is_empty()
     {
-        return Err(invalid("local-only operations cannot have HTTP bindings"));
+        return Err(invalid_combination(
+            operation,
+            "local-only operations cannot have HTTP bindings",
+        ));
     }
+    Ok(())
+}
+
+fn validate_plane_combination(operation: &Operation) -> Result<(), CatalogError> {
     match operation.plane {
         Plane::LocalLifecycle
             if !matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly) =>
         {
-            return Err(invalid("local-lifecycle operations are local-only"))
+            Err(invalid_combination(
+                operation,
+                "local-lifecycle operations are local-only",
+            ))
         }
         Plane::ServiceObservation
             if !matches!(operation.effect, Effect::Observe)
@@ -509,89 +629,127 @@ fn validate_combination(operation: &Operation) -> Result<(), CatalogError> {
                     RemoteEligibility::ControlObserve
                 ) =>
         {
-            return Err(invalid(
+            Err(invalid_combination(
+                operation,
                 "service-observation must be immutable observe/control-observe",
             ))
         }
-        _ => {}
+        _ => Ok(()),
     }
+}
+
+fn validate_future_contract(operation: &Operation) -> Result<(), CatalogError> {
     if matches!(
         operation.remote_eligibility,
         RemoteEligibility::FutureContract
     ) {
-        return Err(invalid(
+        return Err(invalid_combination(
+            operation,
             "future-contract is not a claim about a current parity operation",
         ));
     }
+    Ok(())
+}
+
+fn validate_effect_combination(operation: &Operation) -> Result<(), CatalogError> {
     match operation.effect {
-        Effect::Read | Effect::Observe => {
-            if !matches!(operation.mutability, Mutability::Immutable) {
-                return Err(invalid("read/observe effects must be immutable"));
-            }
-            if !matches!(
-                operation.remote_eligibility,
-                RemoteEligibility::ControlObserve | RemoteEligibility::LocalOnly
-            ) {
-                return Err(invalid(
-                    "read/observe effects require control-observe or local-only",
-                ));
-            }
-        }
-        Effect::Lifecycle => {
-            if !matches!(operation.mutability, Mutability::NonIdempotent) {
-                return Err(invalid("lifecycle effects must be non-idempotent"));
-            }
-            if !matches!(
-                operation.remote_eligibility,
-                RemoteEligibility::LocalOnly | RemoteEligibility::ControlExecute
-            ) {
-                return Err(invalid(
-                    "lifecycle effects require local-only or control-execute",
-                ));
-            }
-            if matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly)
-                && !matches!(operation.plane, Plane::LocalLifecycle)
-            {
-                return Err(invalid(
-                    "local-only lifecycle effects require local-lifecycle",
-                ));
-            }
-        }
-        Effect::Execute => {
-            if !matches!(operation.mutability, Mutability::NonIdempotent) {
-                return Err(invalid("execute effects must be non-idempotent"));
-            }
-            if !matches!(
-                operation.remote_eligibility,
-                RemoteEligibility::ControlExecute | RemoteEligibility::LocalOnly
-            ) {
-                return Err(invalid(
-                    "execute effects require control-execute or local-only",
-                ));
-            }
-            if matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly)
-                && !matches!(operation.plane, Plane::LocalLifecycle)
-            {
-                return Err(invalid(
-                    "local-only execute effects require local-lifecycle",
-                ));
-            }
-        }
-        Effect::Mutate => {
-            if matches!(operation.mutability, Mutability::Immutable) {
-                return Err(invalid("mutate effects cannot be immutable"));
-            }
-            let expected = if matches!(operation.mutability, Mutability::Idempotent) {
-                RemoteEligibility::ControlConverge
-            } else {
-                RemoteEligibility::ControlExecute
-            };
-            if operation.remote_eligibility != expected {
-                return Err(invalid(
-                    "idempotent mutations require control-converge; non-idempotent mutations require control-execute",
-                ));
-            }
-        }
+        Effect::Read | Effect::Observe => validate_read_observe(operation),
+        Effect::Lifecycle => validate_lifecycle(operation),
+        Effect::Execute => validate_execute(operation),
+        Effect::Mutate => validate_mutate(operation),
+    }
+}
+
+fn validate_read_observe(operation: &Operation) -> Result<(), CatalogError> {
+    if !matches!(operation.mutability, Mutability::Immutable) {
+        return Err(invalid_combination(
+            operation,
+            "read/observe effects must be immutable",
+        ));
+    }
+    if !matches!(
+        operation.remote_eligibility,
+        RemoteEligibility::ControlObserve | RemoteEligibility::LocalOnly
+    ) {
+        return Err(invalid_combination(
+            operation,
+            "read/observe effects require control-observe or local-only",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_lifecycle(operation: &Operation) -> Result<(), CatalogError> {
+    if !matches!(operation.mutability, Mutability::NonIdempotent) {
+        return Err(invalid_combination(
+            operation,
+            "lifecycle effects must be non-idempotent",
+        ));
+    }
+    if !matches!(
+        operation.remote_eligibility,
+        RemoteEligibility::LocalOnly | RemoteEligibility::ControlExecute
+    ) {
+        return Err(invalid_combination(
+            operation,
+            "lifecycle effects require local-only or control-execute",
+        ));
+    }
+    if matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly)
+        && !matches!(operation.plane, Plane::LocalLifecycle)
+    {
+        return Err(invalid_combination(
+            operation,
+            "local-only lifecycle effects require local-lifecycle",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_execute(operation: &Operation) -> Result<(), CatalogError> {
+    if !matches!(operation.mutability, Mutability::NonIdempotent) {
+        return Err(invalid_combination(
+            operation,
+            "execute effects must be non-idempotent",
+        ));
+    }
+    if !matches!(
+        operation.remote_eligibility,
+        RemoteEligibility::ControlExecute | RemoteEligibility::LocalOnly
+    ) {
+        return Err(invalid_combination(
+            operation,
+            "execute effects require control-execute or local-only",
+        ));
+    }
+    if matches!(operation.remote_eligibility, RemoteEligibility::LocalOnly)
+        && !matches!(operation.plane, Plane::LocalLifecycle)
+    {
+        return Err(invalid_combination(
+            operation,
+            "local-only execute effects require local-lifecycle",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_mutate(operation: &Operation) -> Result<(), CatalogError> {
+    if matches!(operation.mutability, Mutability::Immutable) {
+        return Err(invalid_combination(
+            operation,
+            "mutate effects cannot be immutable",
+        ));
+    }
+    let expected = match operation.mutability {
+        Mutability::Idempotent => RemoteEligibility::ControlConverge,
+        Mutability::NonIdempotent => RemoteEligibility::ControlExecute,
+        Mutability::Immutable => unreachable!("immutable mutation was rejected above"),
+    };
+    if operation.remote_eligibility != expected {
+        return Err(invalid_combination(
+            operation,
+            "idempotent mutations require control-converge; non-idempotent mutations require control-execute",
+        ));
     }
     Ok(())
 }

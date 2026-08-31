@@ -165,7 +165,7 @@ jobs:
           ./scripts/tasks/complexity-setup-test
 
   usage-artifacts:
-    name: Usage KDL artifact contract
+    name: Usage documentation and KDL artifact contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -175,7 +175,8 @@ jobs:
           toolchain: 1.97.1
       - name: Check generated Usage artifacts and reviewed losses
         run: cargo run --quiet --locked --features usage-generator --bin usage-kdl -- --check
-
+      - name: Check generated Usage documentation
+        run: scripts/tasks/usage-docs --check
   coverage:
     if: github.event_name == 'pull_request'
     name: Deterministic LLVM coverage and baseline gate

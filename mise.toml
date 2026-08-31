@@ -64,6 +64,10 @@ outputs = ["target/release/omakure"]
 description = "Generate or check the pinned Clap-to-Usage KDL compatibility artifacts"
 run = "scripts/tasks/usage-kdl"
 
+[tasks."usage:docs"]
+description = "Generate or check deterministic Markdown and roff Usage documentation"
+run = "scripts/tasks/usage-docs"
+
 [tasks.install]
 description = "Install omakure locally (mutates the user installation prefix)"
 run = "bash scripts/install/install-from-source.sh"

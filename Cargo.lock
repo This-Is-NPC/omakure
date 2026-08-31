@@ -1535,6 +1535,7 @@ dependencies = [
  "tokio",
  "toml",
  "tower",
+ "usage-lib",
  "windows-sys 0.61.2",
  "winreg",
 ]
@@ -1877,6 +1878,12 @@ dependencies = [
  "untrusted",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "roff"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "323c417e1d9665a65b263ec744ba09030cfb277e9daa0b018a4ab62e57bc8189"
 
 [[package]]
 name = "rstest"
@@ -2251,6 +2258,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tera"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52fca06a22977165c6821c26e2bf0387cd7e0822107a6854d5fbb787307c4194"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2523,8 +2539,10 @@ dependencies = [
  "log",
  "num-traits",
  "regex",
+ "roff",
  "semver",
  "serde",
+ "tera",
  "thiserror 2.0.20",
  "unicode-width",
  "winnow 1.0.4",

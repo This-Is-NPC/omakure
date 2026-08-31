@@ -37,7 +37,7 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | `mise run coverage:test` | offline threshold, inventory, and normalization fixtures |
 | `mise run install` | install the binary without copying repository scripts |
 | `mise run usage:kdl` | generate or check pinned Clap-to-Usage compatibility artifacts |
-
+| `mise run usage:docs` | generate or check Markdown and roff documentation from checked Usage KDL |
 
 ## Usage compatibility artifacts
 
@@ -48,6 +48,14 @@ version, git URL, requested revision, and lock-resolved commit from
 under `docs/usage/`. It is not linked into the default `omakure` binary or its
 completion generators.
 
+The feature-gated `usage-docs` binary parses the checked
+`docs/usage/omakure.kdl` and delegates Markdown and roff rendering to the
+pinned official Usage renderers. It writes `docs/usage/omakure.md` and
+`docs/usage/omakure.1`; these are deterministic checked-in artifacts covering
+all 65 canonical CLI leaves. The renderer is never used at runtime and does
+not make the shipped binary depend on a host path, timestamp, or external
+runtime.
+
 Run `mise run usage:kdl -- --review` when a Clap change may alter fidelity. It
 prints added and removed losses plus a complete candidate allowlist; inspect
 that report, update `docs/usage/fidelity-allowlist.json` manually only when
@@ -57,9 +65,12 @@ auto-approves a changed loss nor overwrites a stale allowlist, residual
 semantics record, or generated artifact. The checked residual for
 `init script` is also exercised through actual Clap parser outcomes.
 
-The check command is required in CI. The overlay is keyed by parity
-`entry_id` and `operation_family`, never by Usage's rename-sensitive
-`full_cmd`.
+After KDL changes, run `mise run usage:docs -- --write` and then
+`mise run usage:docs -- --check`. The check command fails if either generated
+document is stale or missing.
+
+The overlay is keyed by parity `entry_id` and `operation_family`, never by
+Usage's rename-sensitive `full_cmd`.
 
 Repository automation is under `scripts/tasks/`, `scripts/install/`,
 `scripts/release/`, and `scripts/fixtures/`. `scripts/workspace/` is the

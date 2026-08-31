@@ -59,6 +59,44 @@ fn temp_copies_are_ignored_and_docker_excluded() {
 }
 
 #[test]
+fn docker_builder_receives_compile_time_fixtures_without_runtime_copy() {
+    let df = read("Dockerfile");
+    let fixture_copy =
+        "COPY fixtures/cli-http-parity.toml fixtures/operation-catalog.toml ./fixtures/";
+    let builder_end = df
+        .find("FROM builder AS harness-builder")
+        .expect("Dockerfile should declare the harness builder after the release builder");
+    let builder = &df[..builder_end];
+    let fixture_position = builder
+        .find(fixture_copy)
+        .expect("builder should copy both compile-time fixture manifests");
+    let build_position = builder
+        .find("RUN cargo build --release --bin omakure")
+        .expect("builder should compile the release binary");
+    assert!(
+        fixture_position < build_position,
+        "compile-time fixtures must be available before cargo expands include_str!"
+    );
+
+    let runtime = df
+        .split_once(" AS runtime")
+        .map(|(_, runtime)| runtime)
+        .expect("Dockerfile should declare a runtime stage");
+    let expected_runtime_copy =
+        "COPY --from=builder /src/target/release/omakure /usr/local/bin/omakure";
+    let runtime_copies: Vec<_> = runtime
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("COPY ") || line.starts_with("ADD "))
+        .collect();
+    assert_eq!(
+        runtime_copies,
+        vec![expected_runtime_copy],
+        "runtime stage should copy only the release binary from the builder"
+    );
+}
+
+#[test]
 fn dockerignore_excludes_heavy_paths() {
     let ignore = read(".dockerignore");
     for path in ["target", ".git", ".temp"] {

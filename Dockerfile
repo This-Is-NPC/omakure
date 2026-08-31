@@ -11,6 +11,7 @@ WORKDIR /src
 # Cache dependency builds when only sources change.
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY fixtures/cli-http-parity.toml fixtures/operation-catalog.toml ./fixtures/
 
 RUN cargo build --release --bin omakure \
     && strip target/release/omakure

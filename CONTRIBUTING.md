@@ -15,12 +15,9 @@
 - Use lowercase kebab-case. Keep names short and descriptive.
 
 ### Default base branch
-
-- **Branch new work off `test`**, not `master`. `test` is the integration
-  branch and is always ahead of `master`. `master` is only updated when
-  `test` is merged for a release.
-- PRs targeting `master` are wrong by default — open them against `test`
-  unless the change is explicitly a release-branch fix.
+- **Branch new work off `master`**. `master` is the integration and release
+  branch.
+- Open pull requests directly against `master`.
 
 ## Task & Plan Management
 

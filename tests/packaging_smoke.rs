@@ -570,10 +570,159 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
     assert!(!String::from_utf8_lossy(&help.stdout).contains("theme"));
 }
 
+fn markdown_section(document: &str, heading: &str) -> String {
+    let mut section = Vec::new();
+    let mut in_section = false;
+
+    for line in document.lines() {
+        if line == heading {
+            in_section = true;
+            continue;
+        }
+        if in_section && line.starts_with("## ") {
+            break;
+        }
+        if in_section {
+            section.push(line);
+        }
+    }
+
+    section.join("\n")
+}
+
+fn workflow_trigger_branches(workflow: &str, event: &str) -> Vec<String> {
+    let lines: Vec<&str> = workflow.lines().collect();
+    let event_line = format!("  {event}:");
+    let event_index = lines
+        .iter()
+        .position(|line| *line == event_line)
+        .unwrap_or_else(|| panic!("workflow is missing the {event} trigger"));
+    let branch_index = (event_index + 1..lines.len())
+        .take_while(|&index| lines[index].trim().is_empty() || lines[index].starts_with("    "))
+        .find(|&index| lines[index].starts_with("    branches:"))
+        .unwrap_or_else(|| panic!("{event} trigger is missing branches"));
+    let branch_line = lines[branch_index];
+
+    if let Some(inline) = branch_line.strip_prefix("    branches:") {
+        let inline = inline.trim();
+        if !inline.is_empty() {
+            return inline
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .split(',')
+                .map(|branch| branch.trim().trim_matches(['\'', '"']).to_string())
+                .filter(|branch| !branch.is_empty())
+                .collect();
+        }
+    }
+
+    lines[branch_index + 1..]
+        .iter()
+        .take_while(|line| line.trim().is_empty() || line.starts_with("      - "))
+        .filter_map(|line| line.trim().strip_prefix("- "))
+        .map(|branch| branch.trim().trim_matches(['\'', '"']).to_string())
+        .collect()
+}
+
+fn workflow_job_names(workflow: &str) -> Vec<String> {
+    let lines: Vec<&str> = workflow.lines().collect();
+    let jobs_index = lines
+        .iter()
+        .position(|line| *line == "jobs:")
+        .expect("workflow is missing jobs");
+
+    lines[jobs_index + 1..]
+        .iter()
+        .filter(|line| line.starts_with("  ") && !line.starts_with("    "))
+        .filter_map(|line| line.trim().strip_suffix(':'))
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn workflow_job_field(workflow: &str, job: &str, field: &str) -> String {
+    let lines: Vec<&str> = workflow.lines().collect();
+    let job_line = format!("  {job}:");
+    let job_index = lines
+        .iter()
+        .position(|line| *line == job_line)
+        .unwrap_or_else(|| panic!("workflow is missing the {job} job"));
+    let field_prefix = format!("    {field}:");
+
+    lines[job_index + 1..]
+        .iter()
+        .take_while(|line| line.trim().is_empty() || line.starts_with("    "))
+        .find_map(|line| {
+            line.strip_prefix(&field_prefix)
+                .map(str::trim)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| panic!("{job} job is missing {field}"))
+}
+
+#[test]
+fn branch_policy_and_release_triggers_are_master_only() {
+    let contributing = read("CONTRIBUTING.md");
+    let branch_policy = markdown_section(&contributing, "### Default base branch");
+    assert!(
+        branch_policy.contains("Branch new work off `master`"),
+        "contributor flow must branch new work from master"
+    );
+    assert!(
+        branch_policy.contains("Open pull requests directly against `master`"),
+        "contributor flow must target master directly"
+    );
+    assert!(
+        !branch_policy.contains("test"),
+        "contributor flow must not retain a test-branch policy"
+    );
+
+    let ci = read(".github/workflows/ci.yml");
+    assert_eq!(
+        workflow_trigger_branches(&ci, "push"),
+        vec!["master".to_string()]
+    );
+    assert_eq!(
+        workflow_trigger_branches(&ci, "pull_request"),
+        vec!["master".to_string()]
+    );
+    let mut ci_jobs = workflow_job_names(&ci);
+    ci_jobs.sort();
+    assert_eq!(
+        ci_jobs,
+        vec![
+            "complexity-informational".to_string(),
+            "coverage".to_string(),
+            "docker-smoke".to_string(),
+            "health-plane-certification".to_string(),
+            "lint".to_string(),
+            "packaging".to_string(),
+            "platform".to_string(),
+            "release-ready".to_string(),
+            "transport-certification".to_string(),
+            "usage-artifacts".to_string(),
+        ]
+    );
+
+    let auto_release = read(".github/workflows/auto-release.yml");
+    assert_eq!(
+        workflow_trigger_branches(&auto_release, "pull_request_target"),
+        vec!["master".to_string()]
+    );
+
+    assert_eq!(
+        workflow_job_field(&auto_release, "tag", "if"),
+        "github.event.pull_request.merged == true"
+    );
+    assert_eq!(
+        workflow_job_field(&auto_release, "release", "uses"),
+        "./.github/workflows/release.yml"
+    );
+}
+
 #[test]
 fn release_workflows_build_and_package_only_the_headless_binary() {
     let ci = read(".github/workflows/ci.yml");
-    assert!(ci.contains("branches: [test, master]"));
     for platform in [
         "ubuntu-latest",
         "ubuntu-24.04-arm",

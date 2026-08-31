@@ -1,0 +1,124 @@
+name: Complexity Soak
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: complexity-soak-master
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    name: Trusted native complexity soak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore preceding trusted soak state
+        uses: actions/cache/restore@v4
+        with:
+          path: target/quality/complexity-soak-state
+          key: complexity-soak-dedicated-restore-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            complexity-soak-dedicated-
+      - name: Acquire and verify pinned native analyzers
+        run: ./scripts/tasks/complexity-setup
+      - name: Check fixed corpus and fail-closed native guards
+        run: ./scripts/tasks/complexity-test
+      - name: Check changed-function ratchet fixtures
+        run: ./scripts/tasks/complexity-gate-test
+      - name: Generate canonical reports and trusted evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/quality/complexity-evidence
+          ./scripts/tasks/complexity-report --source-root . \
+            --output target/quality/complexity-report-a.json
+          ./scripts/tasks/complexity-report --source-root . \
+            --output target/quality/complexity-report-b.json
+          cmp --silent target/quality/complexity-report-a.json \
+            target/quality/complexity-report-b.json
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          from pathlib import Path
+          report = json.loads(Path("target/quality/complexity-report-a.json").read_text())
+          evidence = {
+              "status": "success",
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "sequence": int(os.environ["GITHUB_RUN_NUMBER"]),
+              "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "schema_version": report["schema_version"],
+              "canonical_sha256": report["canonical_sha256"],
+              "candidates": report["candidates"],
+              "source_accounting": report["source_accounting"],
+              "audit": report["audit"],
+              "provenance": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+                  "event": os.environ["GITHUB_EVENT_NAME"],
+                  "ref": os.environ["GITHUB_REF"],
+                  "sha": os.environ["GITHUB_SHA"],
+                  "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              },
+          }
+          Path("target/quality/complexity-evidence/run.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n"
+          )
+          PY
+      - name: Enforce changed-function complexity ratchet
+        run: |
+          ./scripts/tasks/complexity-gate \
+            --report target/quality/complexity-report-a.json \
+            --repeat-report target/quality/complexity-report-b.json \
+            --baseline quality/complexity/baseline.json \
+            --exceptions quality/complexity/exceptions.json \
+            --output target/quality/complexity-evidence/gate.json
+      - name: Append trusted run to soak chain
+        id: append_chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/quality/complexity-soak-state
+          state=target/quality/complexity-soak-state/history.json
+          before_state=
+          if [[ -f "$state" ]]; then
+            before_state="$(sha256sum "$state" | cut -d' ' -f1)"
+          fi
+          update_output="$(
+            ./scripts/tasks/complexity-soak-audit \
+              --update \
+              --state "$state" \
+              --current target/quality/complexity-evidence/run.json
+          )"
+          printf '%s\n' "$update_output"
+          after_state="$(sha256sum "$state" | cut -d' ' -f1)"
+          if [[ -n "$before_state" && "$before_state" == "$after_state" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Audit ten-run temporal soak
+        run: ./scripts/tasks/complexity-soak-audit --state target/quality/complexity-soak-state/history.json
+      - name: Persist trusted soak state under an immutable key
+        if: steps.append_chain.outcome == 'success' && steps.append_chain.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: target/quality/complexity-soak-state
+          key: complexity-soak-dedicated-${{ github.run_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload trusted complexity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-soak-${{ github.run_id }}
+          path: |
+            target/quality/complexity-evidence/gate.json
+            target/quality/complexity-report-a.json
+            target/quality/complexity-report-b.json
+            target/quality/complexity-evidence/run.json
+            target/quality/complexity-soak-state/history.json

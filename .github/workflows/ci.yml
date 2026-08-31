@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [master]
   pull_request:
     branches: [test, master]
 
@@ -145,8 +147,8 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          scripts=(scripts/tasks/cert/* scripts/tasks/dev/smoke)
-          (( ${#scripts[@]} >= 4 )) || { echo "expected the certification scripts; found ${#scripts[@]}" >&2; exit 1; }
+          scripts=(scripts/tasks/cert/* scripts/tasks/dev/smoke scripts/tasks/complexity-setup-test)
+          (( ${#scripts[@]} >= 5 )) || { echo "expected the certification and complexity scripts; found ${#scripts[@]}" >&2; exit 1; }
           for script in "${scripts[@]}"; do bash -n "$script"; done
           # Fails on zero matches as well as on a parse error: a compose file
           # renamed or moved would otherwise leave this step green having
@@ -160,6 +162,111 @@ jobs:
               yaml.safe_load(open(path))
               print("ok", path)
           PY
+          ./scripts/tasks/complexity-setup-test
+
+  coverage:
+    if: github.event_name == 'pull_request'
+    name: Deterministic LLVM coverage and baseline gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+          components: llvm-tools-preview
+      - name: Run authoritative local coverage gate
+        env:
+          COVERAGE_TOOL_ROOT: ${{ runner.temp }}/cargo-llvm-cov
+        run: ./scripts/tasks/coverage
+      - name: Upload maintained Codecov patch status
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: codecov/codecov-action@v5.4.3
+        with:
+          files: target/coverage-report/lcov.info
+          flags: pull-request
+          fail_ci_if_error: true
+          disable_search: true
+          use_oidc: true
+      - name: Make fork Codecov unavailability explicit
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::Codecov patch status is unavailable for fork pull requests; the local project gate ran, but the required external status cannot be produced."
+          exit 1
+
+  complexity-informational:
+    name: Rust complexity calibration and ratchet gate
+    runs-on: ubuntu-latest
+    concurrency:
+      group: complexity-informational-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Acquire and verify pinned native analyzers
+        run: ./scripts/tasks/complexity-setup
+      - name: Check fixed corpus and fail-closed native guards
+        run: ./scripts/tasks/complexity-test
+      - name: Generate two canonical reports and evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/quality/complexity-evidence
+          ./scripts/tasks/complexity-report --source-root . \
+            --output target/quality/complexity-report-a.json
+          ./scripts/tasks/complexity-report --source-root . \
+            --output target/quality/complexity-report-b.json
+          cmp --silent target/quality/complexity-report-a.json \
+            target/quality/complexity-report-b.json
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          from pathlib import Path
+          report = json.loads(Path("target/quality/complexity-report-a.json").read_text())
+          evidence = {
+              "status": "success",
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "sequence": int(os.environ["GITHUB_RUN_NUMBER"]),
+              "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "schema_version": report["schema_version"],
+              "canonical_sha256": report["canonical_sha256"],
+              "candidates": report["candidates"],
+              "source_accounting": report["source_accounting"],
+              "audit": report["audit"],
+              "provenance": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+                  "event": os.environ["GITHUB_EVENT_NAME"],
+                  "ref": os.environ["GITHUB_REF"],
+                  "sha": os.environ["GITHUB_SHA"],
+                  "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              },
+          }
+          Path("target/quality/complexity-evidence/run.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n"
+          )
+          PY
+      - name: Enforce changed-function complexity ratchet
+        run: |
+          ./scripts/tasks/complexity-gate \
+            --report target/quality/complexity-report-a.json \
+            --repeat-report target/quality/complexity-report-b.json \
+            --baseline quality/complexity/baseline.json \
+            --exceptions quality/complexity/exceptions.json \
+            --output target/quality/complexity-evidence/gate.json
+      - name: Audit non-authoritative complexity evidence
+        run: ./scripts/tasks/complexity-soak-audit --directory target/quality/complexity-evidence
+      - name: Upload canonical complexity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-calibration-${{ github.run_id }}
+          path: |
+            target/quality/complexity-report-a.json
+            target/quality/complexity-report-b.json
+            target/quality/complexity-evidence/run.json
+            target/quality/complexity-evidence/gate.json
 
   packaging:
     runs-on: ubuntu-latest

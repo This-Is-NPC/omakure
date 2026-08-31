@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "hosts": [
+    {"uname_s": "Linux", "uname_m": "x86_64", "platform": "linux-x86_64", "big-code-analysis": "archive", "cccc": "archive"},
+    {"uname_s": "Linux", "uname_m": "aarch64", "platform": "linux-aarch64", "big-code-analysis": "archive", "cccc": "archive"},
+    {"uname_s": "Darwin", "uname_m": "arm64", "platform": "macos-aarch64", "big-code-analysis": "archive", "cccc": "archive"},
+    {"uname_s": "Darwin", "uname_m": "x86_64", "platform": "macos-x86_64", "big-code-analysis": "source_build", "cccc": "archive"},
+    {"uname_s": "MINGW64_NT", "uname_m": "x86_64", "platform": "windows-x86_64", "big-code-analysis": "archive", "cccc": "archive"}
+  ]
+}

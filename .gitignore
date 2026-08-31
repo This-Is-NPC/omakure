@@ -2,8 +2,9 @@
 /dist
 *.log
 *.tmp
-tarpaulin-report.html
-cobertura.xml
+*.profraw
+/target/coverage-report/
+/target/coverage-target/
 .DS_Store
 .env
 .env.*

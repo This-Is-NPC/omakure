@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "${MISE_PROJECT_ROOT:-$(dirname "$0")/../..}" && pwd)"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/omakure-complexity-gate.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+python3 - "$root/scripts/tasks/complexity-gate" "$tmp" <<'PY'
+import copy
+import datetime as dt
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+gate, directory = Path(sys.argv[1]), Path(sys.argv[2])
+directory.mkdir(parents=True, exist_ok=True)
+sha = "a" * 64
+
+def row(path, signature, cc, cog, source="handwritten"):
+    name = signature[3:-2]
+    occurrence = "crate::fixture::" + name
+    return {"identity": occurrence, "signature": signature,
+            "path": path, "line": 1, "kind": "function", "name": name,
+            "cyclomatic": cc, "cognitive": cog,
+            "native": {"analyzer": "cccc", "name": name, "kind": "function",
+                       "line": 1, "cyclomatic": cc, "cognitive": cog},
+            "derived": {"identity": occurrence, "signature": signature,
+                        "path": path, "source_class": source},
+            "source_class": source}
+
+def canonical(rows):
+    return {"functions": rows, "files": [{"path": path, "source_class": cls,
+        "native": {"cyclomatic": 0, "cognitive": 0}, "macro": {"declarations": 0,
+        "invocations": 0, "expansion": "not_measured", "score_inclusion": "native_source_ast_only"}}
+        for path, cls in sorted({(r["path"], r["source_class"]) for r in rows})]}
+
+def report(rows):
+    can = canonical(rows)
+    return {"schema_version": 2, "mode": "offline-native", "canonical": can,
+      "canonical_sha256": hashlib.sha256(json.dumps(can, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest(),
+      "source_accounting": {"parse_failures": 0},
+      "audit": {"schema_drift": False, "nondeterministic_output": False},
+      "candidates": {"cccc": {"executed": True, "execution": "native-binary", "version": "1.6.0",
+        "binary_sha256": sha, "config_identity": "no-config",
+        "schema": {"sha256": "b" * 64, "paths": ["$:object"]}}}}
+
+baseline_rows = [
+ row("src/legacy.rs", "fn legacy()", 11, 16),
+ row("src/boundary.rs", "fn cc_boundary()", 10, 1),
+ row("src/boundary.rs", "fn cognitive_boundary()", 1, 15),
+ row("src/regression.rs", "fn regressed()", 10, 15),
+ row("src/before.rs", "fn old_name()", 1, 1),
+]
+current_rows = copy.deepcopy(baseline_rows)
+current_rows[3]["cyclomatic"], current_rows[3]["cognitive"] = 11, 16
+current_rows[3]["native"]["cyclomatic"], current_rows[3]["native"]["cognitive"] = 11, 16
+current_rows += [row("src/new.rs", "fn new_pass()", 10, 15),
+                 row("src/new_hot.rs", "fn new_hot()", 11, 16),
+                 row("src/after.rs", "fn new_name()", 11, 16)]
+
+def write_inputs(rows=current_rows, exceptions=None, focus=None, name="run", baseline_input=baseline_rows):
+    (directory / "report.json").write_text(json.dumps(report(rows), indent=2) + "\n")
+    base = canonical(baseline_input)
+    baseline = {"schema_version": 2, "analyzer": "cccc", "version": "1.6.0", "tool_version": "1.6.0",
+      "binary_sha256": sha, "config_identity": "no-config", "canonical": base,
+      "canonical_sha256": hashlib.sha256(json.dumps(base, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()}
+    (directory / "baseline.json").write_text(json.dumps(baseline, indent=2) + "\n")
+    (directory / "exceptions.json").write_text(json.dumps(exceptions or {"schema_version": 1, "exceptions": []}, indent=2) + "\n")
+    (directory / "focus.json").write_text(json.dumps(focus or {"tests": [{"id": "fixture-boundary", "status": "passed"}]}, indent=2) + "\n")
+    return [str(gate), "--report", str(directory / "report.json"), "--baseline", str(directory / "baseline.json"),
+      "--exceptions", str(directory / "exceptions.json"), "--focused-tests", str(directory / "focus.json"),
+      "--output", str(directory / (name + ".evidence.json")), "--as-of", "2026-08-30T00:00:00Z"]
+
+def run(rows=current_rows, exceptions=None, focus=None, name="run", baseline_input=baseline_rows):
+    return subprocess.run(write_inputs(rows, exceptions, focus, name, baseline_input), text=True, capture_output=True)
+
+def assert_fail(result, text):
+    assert result.returncode != 0, (text, result.stdout, result.stderr)
+    assert text in result.stderr, (text, result.stderr)
+
+# Boundary values, unchanged legacy debt, and independent rename/new/regression triggers.
+result = run(name="trigger")
+assert_fail(result, "new function exceeds review threshold")
+assert "src/new_hot.rs" in result.stderr
+def exception(path, symbol):
+    return {
+      "owner": "platform-team", "created_at": "2026-08-30T00:00:00Z", "reviewed_at": "2026-08-30T00:00:00Z", "expires_at": "2026-11-28T00:00:00Z",
+      "analyzer": "cccc", "tool_version": "1.6.0", "config_identity": "no-config", "path": path, "symbol": symbol,
+      "ceiling": {"cyclomatic": 11, "cognitive": 16}, "rationale": "fixture exception", "focused_test_ids": ["fixture-boundary"]
+    }
+valid = {"schema_version": 1, "exceptions": [
+  exception("src/new_hot.rs", "fn new_hot()"),
+  exception("src/regression.rs", "fn regressed()"),
+  exception("src/after.rs", "fn new_name()"),
+]}
+result = run(exceptions=valid, name="valid")
+assert result.returncode == 0, result.stderr
+proof = json.loads((directory / "valid.evidence.json").read_text())
+assert proof["summary"]["informational_legacy"] == 1
+assert any(x["status"] == "regressed" for x in proof["functions"])
+assert any(x["status"] == "new" for x in proof["functions"])
+assert proof["trends"], proof
+renamed = copy.deepcopy(valid)
+renamed["exceptions"] = [copy.deepcopy(valid["exceptions"][1]), copy.deepcopy(valid["exceptions"][2])]
+rename_rows = [row for row in current_rows if row["path"] != "src/new_hot.rs"]
+rename_result = run(rows=rename_rows, exceptions=renamed, name="rename")
+assert rename_result.returncode == 0, rename_result.stderr
+
+cases = {}
+for field in ("owner", "created_at", "reviewed_at", "expires_at", "rationale", "focused_test_ids"):
+    item = copy.deepcopy(valid["exceptions"][0]); item.pop(field)
+    cases["missing " + field] = {"schema_version": 1, "exceptions": [item]}
+item = copy.deepcopy(valid["exceptions"][0]); item["owner"] = ""
+cases["nonempty owner"] = {"schema_version": 1, "exceptions": [item]}
+for label, changes in {
+  "non-UTC": {"created_at": "2026-08-30T00:00:00+01:00"},
+  "invalid date": {"reviewed_at": "not-a-date"},
+  "review after 90 days": {"reviewed_at": "2026-12-01T00:00:00Z"},
+  "future created": {"created_at": "2026-09-01T00:00:00Z", "reviewed_at": "2026-09-01T00:00:00Z", "expires_at": "2026-11-29T00:00:00Z"},
+  "expired": {"expires_at": "2026-08-29T00:00:00Z"},
+  "symbol drift": {"symbol": "fn missing()"},
+  "tool drift": {"tool_version": "9.9.9"},
+  "score exceeds its recorded ceiling": {"ceiling": {"cyclomatic": 10, "cognitive": 15}},
+}.items():
+    item = copy.deepcopy(valid["exceptions"][0]); item.update(changes)
+    cases[label] = {"schema_version": 1, "exceptions": [item]}
+item = copy.deepcopy(valid["exceptions"][0]); cases["failing focused test"] = {"schema_version": 1, "exceptions": [item]}
+for label, payload in cases.items():
+    focus_payload = {"tests": [{"id": "fixture-boundary", "status": "failed"}]} if label == "failing focused test" else None
+    expected = "missing nonempty " + label.removeprefix("missing ") if label.startswith("missing ") else label
+    expected = {"non-UTC": "UTC timestamp", "invalid date": "UTC timestamp", "review after 90 days": "dates are out of order", "future created": "not effective", "expired": "dates are out of order", "tool drift": "identity drifted"}.get(label, expected)
+    if label == "missing focused_test_ids":
+        expected = "must be nonempty"
+    if label == "nonempty owner":
+        expected = "missing nonempty owner"
+    if label == "failing focused test":
+        expected = "missing or failing"
+    assert_fail(run(exceptions=payload, focus=focus_payload, name="invalid"), expected)
+# Missing baseline, source classification, report/tool failure, and nondeterminism all fail closed.
+assert_fail(subprocess.run([str(gate), "--report", str(directory / "report.json"), "--baseline", str(directory / "absent.json"), "--exceptions", str(directory / "exceptions.json"), "--output", str(directory / "missing.json")], text=True, capture_output=True), "cannot be read as JSON")
+bad_rows = copy.deepcopy(current_rows); bad_rows[0]["source_class"] = "unknown"
+bad_source = copy.deepcopy(current_rows)
+bad_source[0]["source_class"] = "generated"
+bad_source[0]["derived"]["source_class"] = "generated"
+assert_fail(run(rows=bad_source, exceptions=valid, name="source-drift"), "source classification drifted")
+# A function rewrite/rename cannot hide a handwritten file by reclassifying it.
+for source in ("generated", "dependency"):
+    rewritten = copy.deepcopy(current_rows)
+    rewritten[0] = row("src/legacy.rs", "fn rewritten()", 11, 16, source)
+    assert_fail(run(rows=rewritten, exceptions=valid, name="rename-" + source),
+                "source classification drifted for file src/legacy.rs")
+
+# The reverse transition is equally explicit, even when both the function and
+# its source classification change at once.
+for source in ("generated", "dependency"):
+    old_non_handwritten = [row("src/reclassified.rs", "fn before()", 1, 1, source)]
+    new_handwritten = [row("src/reclassified.rs", "fn after()", 11, 16)]
+    assert_fail(run(rows=new_handwritten, baseline_input=old_non_handwritten,
+                    name="reclassify-" + source),
+                "source classification drifted for file src/reclassified.rs")
+
+# Row-native provenance is checked independently of the canonical hash.
+write_inputs(exceptions=valid, name="native-tamper")
+tampered_report = json.loads((directory / "report.json").read_text())
+tampered_report["canonical"]["functions"][0]["native"]["cyclomatic"] += 1
+tampered_report["canonical_sha256"] = hashlib.sha256(json.dumps(tampered_report["canonical"], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+(directory / "report.json").write_text(json.dumps(tampered_report))
+native_args = [str(gate), "--report", str(directory / "report.json"), "--baseline", str(directory / "baseline.json"),
+               "--exceptions", str(directory / "exceptions.json"), "--focused-tests", str(directory / "focus.json"),
+               "--output", str(directory / "native.json")]
+assert_fail(subprocess.run(native_args, text=True, capture_output=True), "native.cyclomatic")
+write_inputs(exceptions=valid, name="identity-tamper")
+tampered_identity = json.loads((directory / "report.json").read_text())
+tampered_identity["canonical"]["functions"][0]["identity"] = "crate::fixture::imposter"
+tampered_identity["canonical"]["functions"][0]["derived"]["identity"] = "crate::fixture::imposter"
+tampered_identity["canonical_sha256"] = hashlib.sha256(json.dumps(tampered_identity["canonical"], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+(directory / "report.json").write_text(json.dumps(tampered_identity))
+identity_args = [str(gate), "--report", str(directory / "report.json"), "--baseline", str(directory / "baseline.json"),
+                 "--exceptions", str(directory / "exceptions.json"), "--focused-tests", str(directory / "focus.json"),
+                 "--output", str(directory / "identity.json")]
+assert_fail(subprocess.run(identity_args, text=True, capture_output=True), "identity does not match native function name")
+
+# Repeat reports must carry the same native candidate and schema identity.
+for field, value in (
+    ("version", "1.6.1"),
+    ("binary_sha256", "c" * 64),
+    ("config_identity", "changed-config"),
+    ("schema", {"sha256": "d" * 64, "paths": ["$:object", "$.files:array"]}),
+):
+    write_inputs(exceptions=valid, name="repeat-identity")
+    shutil.copyfile(directory / "report.json", directory / "repeat.json")
+    repeat = json.loads((directory / "repeat.json").read_text())
+    repeat["candidates"]["cccc"][field] = value
+    (directory / "repeat.json").write_text(json.dumps(repeat))
+    repeat_args = write_inputs(exceptions=valid, name="repeat-run") + ["--repeat-report", str(directory / "repeat.json")]
+    assert_fail(subprocess.run(repeat_args, text=True, capture_output=True), "native identity drifted")
+
+# The baseline file inventory is required and must cover every function path.
+write_inputs(exceptions=valid, name="inventory")
+tampered_baseline = json.loads((directory / "baseline.json").read_text())
+tampered_baseline["canonical"]["files"] = []
+tampered_baseline["canonical_sha256"] = hashlib.sha256(json.dumps(tampered_baseline["canonical"], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+(directory / "baseline.json").write_text(json.dumps(tampered_baseline))
+inventory_args = [str(gate), "--report", str(directory / "report.json"), "--baseline", str(directory / "baseline.json"),
+                  "--exceptions", str(directory / "exceptions.json"), "--focused-tests", str(directory / "focus.json"),
+                  "--output", str(directory / "inventory.json")]
+assert_fail(subprocess.run(inventory_args, text=True, capture_output=True), "missing function path")
+assert_fail(run(rows=bad_rows, exceptions=valid, name="unclassified"), "unclassified source")
+write_inputs(exceptions=valid, name="inventory-row-tamper")
+tampered_report = json.loads((directory / "report.json").read_text())
+tampered_report["canonical"]["files"][0]["source_class"] = "generated"
+tampered_report["canonical_sha256"] = hashlib.sha256(json.dumps(tampered_report["canonical"], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+(directory / "report.json").write_text(json.dumps(tampered_report))
+assert_fail(subprocess.run(inventory_args, text=True, capture_output=True),
+            "source classification disagrees with function row")
+write_inputs(exceptions=valid, name="audit")
+payload = json.loads((directory / "report.json").read_text())
+payload["audit"]["nondeterministic_output"] = True
+(directory / "report.json").write_text(json.dumps(payload))
+audit_args = [str(gate), "--report", str(directory / "report.json"), "--baseline", str(directory / "baseline.json"), "--exceptions", str(directory / "exceptions.json"), "--output", str(directory / "audit.json")]
+assert_fail(subprocess.run(audit_args, text=True, capture_output=True), "audit is not clean")
+# The checker also verifies canonical hash before inspecting the gate outcome.
+payload["canonical_sha256"] = "0" * 64
+(directory / "report.json").write_text(json.dumps(payload))
+assert_fail(subprocess.run(audit_args, text=True, capture_output=True), "canonical hash mismatch")
+print("complexity gate fixtures: PASS (10/11 and 15/16 boundaries, ratchet, unchanged legacy, rename, strict exceptions, fail-closed evidence, deterministic trends)")
+PY

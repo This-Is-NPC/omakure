@@ -364,6 +364,13 @@ Artifacts in the repo root:
 | `scripts/tasks/cert/health` | Bounded canonical Health Plane gate used locally and in Linux CI |
 | `scripts/tasks/cert/health-cleanup` | Verifies Health Plane certification cleanup after induced failure and after interrupt |
 
+The `enrollment-target` and `enrollment-candidate` services in `compose.yaml`
+are the Docker discovery E2E fixture, not a production topology. Each service
+healthcheck validates the semantic `GET /v1/ready` response, and
+`enrollment-candidate` is ordered after a healthy target. Both services pass
+`--readiness-requires-worker`, so a process with a dead in-process worker never
+reports ready to Compose.
+
 ### Base image runtimes
 
 The default runtime image installs **bash**, **git**, **jq**, and **curl** (required for

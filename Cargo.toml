@@ -13,7 +13,19 @@ path = "src/main.rs"
 name = "omakure-installer"
 path = "src/installer.rs"
 
+[[bin]]
+name = "usage-kdl"
+path = "src/bin/usage-kdl.rs"
+required-features = ["usage-generator"]
+
+[features]
+default = []
+usage-generator = ["dep:clap_usage"]
+
 [dependencies]
+# Build-only compatibility artifact; kept out of default/runtime targets.
+clap_usage = { version = "=5.0.0", git = "https://github.com/jdx/usage", rev = "9732c63", optional = true }
+
 # Embedded Lua host. `vendored` builds the interpreter from source so a node
 # needs no system Lua, which is what roadmap item 5 means by "first-class".
 mlua = { version = "0.10", features = ["lua54", "vendored"] }

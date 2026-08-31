@@ -1,0 +1,50 @@
+[
+  {
+    "command": [
+      "omakure",
+      "api"
+    ],
+    "argument": "policy",
+    "feature": "Environment",
+    "detail": "env=OMAKURE_POLICY_FILE"
+  },
+  {
+    "command": [
+      "omakure",
+      "api"
+    ],
+    "argument": "tokens_file",
+    "feature": "Environment",
+    "detail": "env=OMAKURE_TOKENS_FILE"
+  },
+  {
+    "command": [
+      "omakure",
+      "node",
+      "serve"
+    ],
+    "argument": "bootstrap_token_file",
+    "feature": "Environment",
+    "detail": "env=OMAKURE_BOOTSTRAP_TOKEN_FILE"
+  },
+  {
+    "command": [
+      "omakure",
+      "node",
+      "serve"
+    ],
+    "argument": "policy",
+    "feature": "Environment",
+    "detail": "env=OMAKURE_POLICY_FILE"
+  },
+  {
+    "command": [
+      "omakure",
+      "node",
+      "serve"
+    ],
+    "argument": "tokens_file",
+    "feature": "Environment",
+    "detail": "env=OMAKURE_TOKENS_FILE"
+  }
+]

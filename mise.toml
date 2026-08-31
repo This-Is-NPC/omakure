@@ -60,6 +60,10 @@ run = "cargo build --release --bin omakure"
 sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
 outputs = ["target/release/omakure"]
 
+[tasks."usage:kdl"]
+description = "Generate or check the pinned Clap-to-Usage KDL compatibility artifacts"
+run = "scripts/tasks/usage-kdl"
+
 [tasks.install]
 description = "Install omakure locally (mutates the user installation prefix)"
 run = "bash scripts/install/install-from-source.sh"

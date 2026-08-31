@@ -36,6 +36,30 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | `mise run coverage` | deterministic pinned LLVM HTML/LCOV/Cobertura reports plus the local baseline gate |
 | `mise run coverage:test` | offline threshold, inventory, and normalization fixtures |
 | `mise run install` | install the binary without copying repository scripts |
+| `mise run usage:kdl` | generate or check pinned Clap-to-Usage compatibility artifacts |
+
+
+## Usage compatibility artifacts
+
+Clap remains the sole source of truth for parsing, help, and shell
+completions. The feature-gated `usage-kdl` binary uses the exact `clap_usage`
+version, git URL, requested revision, and lock-resolved commit from
+`Cargo.toml` and `Cargo.lock` to generate the presentation-only Usage artifact
+under `docs/usage/`. It is not linked into the default `omakure` binary or its
+completion generators.
+
+Run `mise run usage:kdl -- --review` when a Clap change may alter fidelity. It
+prints added and removed losses plus a complete candidate allowlist; inspect
+that report, update `docs/usage/fidelity-allowlist.json` manually only when
+the change is reviewed, then run `mise run usage:kdl -- --write` followed by
+`mise run usage:kdl -- --check`. Write and check are fail-closed: neither
+auto-approves a changed loss nor overwrites a stale allowlist, residual
+semantics record, or generated artifact. The checked residual for
+`init script` is also exercised through actual Clap parser outcomes.
+
+The check command is required in CI. The overlay is keyed by parity
+`entry_id` and `operation_family`, never by Usage's rename-sensitive
+`full_cmd`.
 
 Repository automation is under `scripts/tasks/`, `scripts/install/`,
 `scripts/release/`, and `scripts/fixtures/`. `scripts/workspace/` is the

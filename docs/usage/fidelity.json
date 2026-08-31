@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "generator": "Cli::command() -> clap_usage::spec_with_report",
+  "clap_usage_git": "https://github.com/jdx/usage",
+  "clap_usage_version": "5.0.0",
+  "clap_usage_revision": "9732c63",
+  "clap_usage_commit": "9732c6365fceabea524ba850b758564d48e37941",
+  "command_count": 75,
+  "leaf_count": 65,
+  "losses": [
+    {
+      "command": [
+        "omakure",
+        "api"
+      ],
+      "argument": "policy",
+      "feature": "Environment",
+      "detail": "env=OMAKURE_POLICY_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "api"
+      ],
+      "argument": "tokens_file",
+      "feature": "Environment",
+      "detail": "env=OMAKURE_TOKENS_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "node",
+        "serve"
+      ],
+      "argument": "bootstrap_token_file",
+      "feature": "Environment",
+      "detail": "env=OMAKURE_BOOTSTRAP_TOKEN_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "node",
+        "serve"
+      ],
+      "argument": "policy",
+      "feature": "Environment",
+      "detail": "env=OMAKURE_POLICY_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "node",
+        "serve"
+      ],
+      "argument": "tokens_file",
+      "feature": "Environment",
+      "detail": "env=OMAKURE_TOKENS_FILE"
+    }
+  ],
+  "unreportable_semantics": [
+    {
+      "command": [
+        "omakure",
+        "api"
+      ],
+      "argument": "policy",
+      "kind": "environment-fallback",
+      "detail": "env=OMAKURE_POLICY_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "api"
+      ],
+      "argument": "tokens_file",
+      "kind": "environment-fallback",
+      "detail": "env=OMAKURE_TOKENS_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "init"
+      ],
+      "argument": "script",
+      "kind": "required-unless-present",
+      "detail": "required_unless_present=name"
+    },
+    {
+      "command": [
+        "omakure",
+        "node",
+        "serve"
+      ],
+      "argument": "bootstrap_token_file",
+      "kind": "environment-fallback",
+      "detail": "env=OMAKURE_BOOTSTRAP_TOKEN_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "node",
+        "serve"
+      ],
+      "argument": "policy",
+      "kind": "environment-fallback",
+      "detail": "env=OMAKURE_POLICY_FILE"
+    },
+    {
+      "command": [
+        "omakure",
+        "node",
+        "serve"
+      ],
+      "argument": "tokens_file",
+      "kind": "environment-fallback",
+      "detail": "env=OMAKURE_TOKENS_FILE"
+    }
+  ]
+}

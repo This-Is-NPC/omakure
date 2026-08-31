@@ -1291,7 +1291,7 @@ fn class_name(class: ParityClass) -> &'static str {
 
 pub fn check_docs_freshness(manifest: &Manifest, docs: &str) -> Result<(), ManifestError> {
     let generated = render_markdown(manifest);
-    if docs != generated {
+    if normalize_generated_text(docs) != generated {
         return Err(ManifestError::Parse(
             "generated parity documentation is stale; regenerate from the manifest".into(),
         ));
@@ -1306,6 +1306,10 @@ pub fn check_docs_freshness(manifest: &Manifest, docs: &str) -> Result<(), Manif
         }
     }
     Ok(())
+}
+
+fn normalize_generated_text(text: &str) -> String {
+    text.replace("\r\n", "\n")
 }
 
 #[cfg(test)]
@@ -1435,6 +1439,16 @@ mod tests {
         let manifest = super::checked_manifest().unwrap();
         assert!(super::check_docs_freshness(&manifest, "stale").is_err());
     }
+    #[test]
+    fn freshness_accepts_checkout_crlf_without_masking_content_changes() {
+        let manifest = super::checked_manifest().unwrap();
+        let generated = super::render_markdown(&manifest);
+        let crlf = generated.replace('\n', "\r\n");
+
+        super::check_docs_freshness(&manifest, &crlf).unwrap();
+        assert!(super::check_docs_freshness(&manifest, &format!("{crlf}drift")).is_err());
+    }
+
 
     #[test]
     fn rejects_wrong_class_side() {

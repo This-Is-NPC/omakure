@@ -116,11 +116,7 @@ pub(crate) fn build_payload(
         .unwrap_or_else(|_| script_path.to_path_buf())
         .to_string_lossy()
         .to_string();
-    let relative_path = script_path
-        .strip_prefix(root)
-        .unwrap_or(script_path)
-        .to_string_lossy()
-        .to_string();
+    let relative_path = logical_relative_path(script_path, root);
 
     DescribePayload {
         absolute_path,
@@ -159,6 +155,26 @@ fn payload_from_description(description: ScriptDescription) -> DescribePayload {
             })
             .collect(),
     }
+}
+
+fn logical_relative_path(path: &std::path::Path, root: &std::path::Path) -> String {
+    let canonical_root = root
+        .canonicalize()
+        .unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf());
+    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
+    let root_text = canonical_root
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    path_text
+        .strip_prefix(&root_text)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(&path_text)
+        .to_string()
 }
 
 fn print_human_payload(payload: &DescribePayload) {
@@ -379,6 +395,16 @@ mod tests {
         )
         .unwrap_err();
         assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn build_payload_normalizes_windows_relative_separators() {
+        let root = PathBuf::from(r"C:\workspace\scripts");
+        let script = PathBuf::from(r"C:\workspace\scripts\tools\deploy.sh");
+
+        let payload = build_payload(&script, &root, &test_schema());
+
+        assert_eq!(payload.relative_path, "tools/deploy.sh");
     }
 
     #[test]

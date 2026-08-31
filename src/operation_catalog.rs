@@ -836,7 +836,7 @@ fn display<T: Serialize>(value: &T) -> String {
 }
 
 pub fn check_docs_freshness(catalog: &Catalog, docs: &str) -> Result<(), CatalogError> {
-    if docs != render_markdown(catalog) {
+    if normalize_generated_text(docs) != render_markdown(catalog) {
         return Err(CatalogError::Parse(
             "generated operation catalog documentation is stale; regenerate from the catalog"
                 .into(),
@@ -849,13 +849,18 @@ pub fn check_support_matrix_freshness(
     catalog: &Catalog,
     support_matrix: &str,
 ) -> Result<(), CatalogError> {
-    if support_matrix != render_support_matrix(catalog) {
+    if normalize_generated_text(support_matrix) != render_support_matrix(catalog) {
         return Err(CatalogError::Parse(
             "generated operation support matrix is stale; regenerate from the catalog".into(),
         ));
     }
     Ok(())
 }
+
+fn normalize_generated_text(text: &str) -> String {
+    text.replace("\r\n", "\n")
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -1013,6 +1018,16 @@ mod tests {
         assert!(check_support_matrix_freshness(&catalog, "stale").is_err());
         assert!(matrix.contains("Total operations: 72."));
     }
+    #[test]
+    fn generated_freshness_accepts_crlf_without_masking_drift() {
+        let catalog = validate_current().unwrap();
+        let generated = render_support_matrix(&catalog);
+        let crlf = generated.replace('\n', "\r\n");
+
+        check_support_matrix_freshness(&catalog, &crlf).unwrap();
+        assert!(check_support_matrix_freshness(&catalog, &format!("{crlf}drift")).is_err());
+    }
+
 
     #[test]
     fn catalog_header_and_identity_invariants_fail_closed() {

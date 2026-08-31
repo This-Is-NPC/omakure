@@ -1,0 +1,4 @@
+# Generated documentation is compared byte-for-byte after LF normalization.
+docs/cli-http-parity.md text eol=lf
+docs/operation-catalog.md text eol=lf
+docs/operation-support-matrix.md text eol=lf

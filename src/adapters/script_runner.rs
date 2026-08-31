@@ -1,6 +1,6 @@
 use crate::adapters::system_checks::{
-    ensure_bash_installed, ensure_git_installed, ensure_jq_installed, ensure_powershell_installed,
-    ensure_python_installed,
+    ensure_bash_installed_with_env, ensure_git_installed, ensure_jq_installed,
+    ensure_powershell_installed, ensure_python_installed,
 };
 use crate::error::{AppResult, ScriptError};
 use crate::runtime::{command_for_script_with_env, script_kind, ScriptKind};
@@ -25,7 +25,7 @@ impl MultiScriptRunner {
         args: &[String],
         env: &[(String, String)],
     ) -> AppResult<Command> {
-        ensure_runtime_for(script)?;
+        ensure_runtime_for(script, env)?;
         // Resolve the interpreter against the injected PATH (if any) so a
         // venv-prepended PATH runs the venv interpreter, not the system one.
         let mut cmd = command_for_script_with_env(script, env)?;
@@ -42,11 +42,11 @@ impl MultiScriptRunner {
     }
 }
 
-fn ensure_runtime_for(script: &Path) -> AppResult<()> {
+fn ensure_runtime_for(script: &Path, env: &[(String, String)]) -> AppResult<()> {
     match script_kind(script).ok_or(ScriptError::UnsupportedType)? {
         ScriptKind::Bash => {
             ensure_git_installed()?;
-            ensure_bash_installed()?;
+            ensure_bash_installed_with_env(env)?;
             ensure_jq_installed()?;
         }
         ScriptKind::PowerShell => {
@@ -75,6 +75,13 @@ mod tests {
         fs::write(&script, "#!/bin/bash\necho hello").unwrap();
 
         let cmd = MultiScriptRunner::build_command(&script, &[], &[]).unwrap();
+        #[cfg(windows)]
+        assert!(cmd
+            .get_program()
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .ends_with(r"\bash.exe"));
+        #[cfg(not(windows))]
         assert_eq!(cmd.get_program(), "bash");
     }
 

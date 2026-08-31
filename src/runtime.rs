@@ -93,8 +93,8 @@ pub fn command_for_script_with_env(
     let kind = script_kind(script).ok_or(ScriptError::UnsupportedType)?;
 
     // Lua is embedded, so there is no interpreter to look up. Returning before
-    // `resolve_interpreter` keeps the Bash/PowerShell/Python construction
-    // byte-identical, which is what makes the regression surface here zero.
+    // `resolve_interpreter` keeps the embedded-host construction separate from
+    // the host-runtime resolution below.
     if kind == ScriptKind::Lua {
         let mut command = Command::new(lua_host_binary()?);
         command.arg(LUA_HOST_ARG).arg(script);
@@ -107,12 +107,17 @@ pub fn command_for_script_with_env(
         ScriptKind::Python => python_program(),
         ScriptKind::Lua => unreachable!("Lua returns before interpreter resolution"),
     };
-
-    // Resolve to an absolute path only when an injected PATH is present and
-    // actually contains the interpreter; otherwise keep name-based behavior.
-    let mut command = match resolve_interpreter(program, env) {
-        Some(abs_path) => Command::new(abs_path),
-        None => Command::new(program),
+    let mut command = match kind {
+        ScriptKind::Bash => bash_command_with_env(env)?,
+        ScriptKind::PowerShell => match resolve_interpreter(program, env) {
+            Some(abs_path) => Command::new(abs_path),
+            None => Command::new(program),
+        },
+        ScriptKind::Python => match resolve_interpreter(program, env) {
+            Some(abs_path) => Command::new(abs_path),
+            None => Command::new(program),
+        },
+        ScriptKind::Lua => unreachable!("Lua returns before interpreter resolution"),
     };
 
     match kind {
@@ -128,24 +133,82 @@ pub fn command_for_script_with_env(
     Ok(command)
 }
 
+/// The hint used when a Windows installation has no native Git Bash.
+#[cfg(windows)]
+pub(crate) const BASH_MISSING_HINT: &str =
+    "Install Git for Windows (Git Bash) and ensure bash.exe is in PATH";
+
+fn path_value<'a>(env: &'a [(String, String)]) -> Option<&'a str> {
+    let exact_path = env
+        .iter()
+        .rev()
+        .find(|(k, _)| k == "PATH")
+        .map(|(_, v)| v.as_str());
+    exact_path.or_else(|| {
+        env.iter()
+            .rev()
+            .find(|(k, _)| k.eq_ignore_ascii_case("PATH"))
+            .map(|(_, v)| v.as_str())
+    })
+}
+
+/// Resolve the native Bash executable used for Windows script execution.
+///
+/// Windows commonly exposes `C:\Windows\System32\bash.exe`, but that binary
+/// is the WSL launcher rather than Git Bash. It is deliberately skipped so
+/// dependency checks and script execution cannot disagree about the runtime.
+pub(crate) fn resolve_bash_program(env: &[(String, String)]) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        let path = path_value(env)
+            .map(str::to_owned)
+            .or_else(|| std::env::var("PATH").ok())?;
+        return resolve_program_in_path("bash", &path).filter(|path| !is_wsl_launcher(path));
+    }
+    #[cfg(not(windows))]
+    {
+        resolve_interpreter("bash", env)
+    }
+}
+
+#[cfg(windows)]
+fn is_wsl_launcher(path: &Path) -> bool {
+    let normalized = path.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+    normalized.ends_with("\\windows\\system32\\bash.exe")
+        || normalized.ends_with("\\windows\\sysnative\\bash.exe")
+}
+
+fn bash_command_with_env(env: &[(String, String)]) -> Result<Command, ScriptError> {
+    #[cfg(windows)]
+    {
+        let path = resolve_bash_program(env).ok_or_else(|| ScriptError::DependencyMissing {
+            name: "bash".to_string(),
+            hint: BASH_MISSING_HINT.to_string(),
+        })?;
+        Ok(Command::new(path))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(match resolve_bash_program(env) {
+            Some(path) => Command::new(path),
+            None => Command::new("bash"),
+        })
+    }
+}
+
 /// Return the injected `PATH` value from `env`, then resolve `program` against
 /// it. An exact `PATH` key is preferred because that is what Unix exec lookup
 /// uses; if absent, fall back to a case-insensitive match so Windows-style
 /// `Path` remains useful. Within each key class, last write wins, matching
 /// `cmd.env` semantics.
 pub(crate) fn resolve_interpreter(program: &str, env: &[(String, String)]) -> Option<PathBuf> {
-    let exact_path = env
-        .iter()
-        .rev()
-        .find(|(k, _)| k == "PATH")
-        .map(|(_, v)| v.as_str());
-    let injected_path = exact_path.or_else(|| {
-        env.iter()
-            .rev()
-            .find(|(k, _)| k.eq_ignore_ascii_case("PATH"))
-            .map(|(_, v)| v.as_str())
-    })?;
-    resolve_program_in_path(program, injected_path)
+    let injected_path = path_value(env)?;
+    let resolved = resolve_program_in_path(program, injected_path);
+    #[cfg(windows)]
+    if program.eq_ignore_ascii_case("bash") {
+        return resolved.filter(|path| !is_wsl_launcher(path));
+    }
+    resolved
 }
 
 /// Which-style lookup: resolve a bare program name to the first executable
@@ -303,6 +366,37 @@ mod tests {
     #[test]
     fn test_python_program_is_python3_on_unix() {
         assert_eq!(python_program(), "python3");
+    }
+    #[cfg(windows)]
+    #[test]
+    fn resolve_bash_program_skips_wsl_launcher_and_uses_git_bash() {
+        let root = tempfile::tempdir().unwrap();
+        let wsl_dir = root.path().join("Windows").join("System32");
+        let git_dir = root.path().join("Git").join("bin");
+        std::fs::create_dir_all(&wsl_dir).unwrap();
+        std::fs::create_dir_all(&git_dir).unwrap();
+        let wsl = wsl_dir.join("bash.exe");
+        let git = git_dir.join("bash.exe");
+        std::fs::write(&wsl, "wsl launcher").unwrap();
+        std::fs::write(&git, "git bash").unwrap();
+
+        let env = vec![(
+            "PATH".to_string(),
+            format!("{};{}", wsl_dir.display(), git_dir.display()),
+        )];
+        assert_eq!(resolve_bash_program(&env), Some(git));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_bash_program_returns_none_when_only_wsl_launcher_is_available() {
+        let root = tempfile::tempdir().unwrap();
+        let wsl_dir = root.path().join("Windows").join("System32");
+        std::fs::create_dir_all(&wsl_dir).unwrap();
+        std::fs::write(wsl_dir.join("bash.exe"), "wsl launcher").unwrap();
+
+        let env = vec![("PATH".to_string(), wsl_dir.display().to_string())];
+        assert_eq!(resolve_bash_program(&env), None);
     }
 
     // --- Task 1755: absolute-path interpreter resolution against injected PATH ---

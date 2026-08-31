@@ -47,7 +47,7 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
         .unwrap_or(joined)
         .to_string_lossy()
         .to_string();
-    let relative_path = result.script_path.to_string_lossy().to_string();
+    let relative_path = logical_relative_path(&result.script_path, root);
     ScriptSummary {
         absolute_path,
         relative_path,
@@ -57,6 +57,29 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
         field_count: 0,
         schema_error: result.schema_error,
     }
+}
+
+fn logical_relative_path(path: &std::path::Path, root: &std::path::Path) -> String {
+    if !path.is_absolute() {
+        return path.to_string_lossy().replace('\\', "/");
+    }
+    let canonical_root = root
+        .canonicalize()
+        .unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf());
+    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
+    let root_text = canonical_root
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    path_text
+        .strip_prefix(&root_text)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(&path_text)
+        .to_string()
 }
 
 fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
@@ -102,6 +125,14 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
+        let root = std::path::Path::new(r"C:\workspace\scripts");
+        let path = std::path::Path::new(r"C:\workspace\scripts\tools\deploy.sh");
+
+        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
     }
 
     #[test]

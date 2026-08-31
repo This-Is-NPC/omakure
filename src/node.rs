@@ -1436,7 +1436,7 @@ fn owner_policy(
 fn validate_directory_security(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
 ) -> Result<(), NodeError> {
     #[cfg(unix)]
@@ -1458,6 +1458,8 @@ fn validate_directory_security(
     }
     #[cfg(windows)]
     validate_windows_security(path, true, _test_mode)?;
+    #[cfg(not(unix))]
+    let _ = owner;
     let _ = path;
     Ok(())
 }
@@ -1465,7 +1467,7 @@ fn validate_directory_security(
 fn validate_file_security(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
 ) -> Result<(), NodeError> {
     let metadata = fs::symlink_metadata(path)?;
@@ -1478,7 +1480,7 @@ fn validate_file_security(
 fn validate_file_security_mode(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
     _expected_mode: u32,
 ) -> Result<(), NodeError> {
@@ -1510,7 +1512,7 @@ fn validate_file_security_metadata(
     path: &Path,
     metadata: &fs::Metadata,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
     expected_mode: u32,
 ) -> Result<(), NodeError> {
@@ -1544,6 +1546,8 @@ fn validate_file_security_metadata(
         }
     }
     let _ = (path, metadata, _test_mode, expected_mode);
+    #[cfg(not(unix))]
+    let _ = owner;
     Ok(())
 }
 

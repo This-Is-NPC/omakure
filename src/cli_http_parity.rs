@@ -1866,7 +1866,8 @@ mod tests {
         assert!(validate_observable_schema(&schema).is_err());
 
         let mut schema = comparison_schema();
-        schema.allowed_normalizations
+        schema
+            .allowed_normalizations
             .push(NormalizationRule::Envelope);
         assert!(validate_observable_schema(&schema).is_err());
 
@@ -1875,7 +1876,8 @@ mod tests {
         assert!(validate_observable_schema(&schema).is_err());
 
         let mut schema = comparison_schema();
-        schema.allowed_normalizations
+        schema
+            .allowed_normalizations
             .retain(|rule| *rule != NormalizationRule::NondeterministicTimestamp);
         assert!(validate_observable_schema(&schema).is_err());
 
@@ -1904,7 +1906,9 @@ mod tests {
         assert!(validate_observable_schema(&schema).is_err());
 
         let mut schema = comparison_schema();
-        schema.case_requirements.push(schema.case_requirements[0].clone());
+        schema
+            .case_requirements
+            .push(schema.case_requirements[0].clone());
         assert!(validate_observable_schema(&schema).is_err());
 
         let mut schema = comparison_schema();
@@ -1976,14 +1980,18 @@ mod tests {
         ));
 
         for envelope in ["result", "response", "body"] {
-            let wrapped = serde_json::json!({envelope: {"status": "ok", "id": "same", "created_at": "now"}});
+            let wrapped =
+                serde_json::json!({envelope: {"status": "ok", "id": "same", "created_at": "now"}});
             let mut schema = comparison_schema();
-            schema.allowed_normalizations
+            schema
+                .allowed_normalizations
                 .retain(|rule| *rule != NormalizationRule::GeneratedId);
             assert!(compare_observables(&schema, &wrapped, &wrapped).is_ok());
         }
         let schema = comparison_schema();
         let value = serde_json::json!({"status": "ok", "id": "same", "created_at": "now"});
-        assert!(compare_observables(&schema, &value, &serde_json::json!({"transport": true})).is_err());
+        assert!(
+            compare_observables(&schema, &value, &serde_json::json!({"transport": true})).is_err()
+        );
     }
 }

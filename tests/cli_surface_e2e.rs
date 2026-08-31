@@ -537,19 +537,35 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
 
     // Host-safe boundary: status probe must not mutate systemd units.
     let serve_status = omakure(workspace.path(), &["serve", "--status"]);
-    assert_eq!(
-        serve_status.status.code(),
-        Some(0),
-        "serve --status must exit 0 (stdout_len={}, stderr_len={})",
-        serve_status.stdout.len(),
-        serve_status.stderr.len()
-    );
-    let status_out = String::from_utf8_lossy(&serve_status.stdout);
-    assert!(
-        status_out.contains("unit:") && status_out.contains("installed:"),
-        "serve --status missing expected markers (stdout_len={})",
-        serve_status.stdout.len()
-    );
+    #[cfg(target_os = "linux")]
+    {
+        assert_eq!(
+            serve_status.status.code(),
+            Some(0),
+            "serve --status must exit 0 (stdout_len={}, stderr_len={})",
+            serve_status.stdout.len(),
+            serve_status.stderr.len()
+        );
+        let status_out = String::from_utf8_lossy(&serve_status.stdout);
+        assert!(
+            status_out.contains("unit:") && status_out.contains("installed:"),
+            "serve --status missing expected markers (stdout_len={})",
+            serve_status.stdout.len()
+        );
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        assert_eq!(
+            serve_status.status.code(),
+            Some(1),
+            "serve --status must report unsupported on this platform"
+        );
+        let status_err = String::from_utf8_lossy(&serve_status.stderr);
+        assert!(
+            status_err.contains("unsupported") && status_err.contains("Linux"),
+            "serve --status must explain its Linux-only contract: {status_err}"
+        );
+    }
 
     let config_json = omakure(workspace.path(), &["--json", "config"]);
     assert_success(&config_json);

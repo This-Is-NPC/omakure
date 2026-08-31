@@ -103,7 +103,7 @@ fn acquire_lock(workspace: &Workspace) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct WindowsPidFile {
     pid: u32,
     stop_event: String,
@@ -1062,7 +1062,7 @@ mod tests {
         .unwrap();
 
         let event = acquire_lock(&ws).expect("dead PID should be reclaimed");
-        release_lock(&ws);
+        release_lock(&ws, &event.identity);
         drop(event);
     }
 

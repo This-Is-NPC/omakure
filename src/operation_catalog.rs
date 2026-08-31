@@ -1007,9 +1007,8 @@ mod tests {
         let catalog = validate_current().unwrap();
         let matrix_path =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(SUPPORT_MATRIX_PATH);
-        let matrix = std::fs::read_to_string(&matrix_path).unwrap_or_else(|error| {
-            panic!("failed to read {}: {error}", matrix_path.display())
-        });
+        let matrix = std::fs::read_to_string(&matrix_path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", matrix_path.display()));
         check_support_matrix_freshness(&catalog, &matrix).unwrap();
         assert!(check_support_matrix_freshness(&catalog, "stale").is_err());
         assert!(matrix.contains("Total operations: 72."));
@@ -1029,7 +1028,10 @@ mod tests {
         catalog.catalog_version.clear();
         assert!(matches!(
             catalog.validate(&parity),
-            Err(CatalogError::EmptyField { field: "catalog_version", .. })
+            Err(CatalogError::EmptyField {
+                field: "catalog_version",
+                ..
+            })
         ));
 
         let mut catalog = checked_catalog().unwrap();
@@ -1041,11 +1043,20 @@ mod tests {
 
         let mut catalog = checked_catalog().unwrap();
         catalog.operations.clear();
-        assert!(matches!(catalog.validate(&parity), Err(CatalogError::EmptyCatalog)));
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::EmptyCatalog)
+        ));
 
         let mut catalog = checked_catalog().unwrap();
         catalog.operations[0].operation_id.clear();
-        assert!(matches!(catalog.validate(&parity), Err(CatalogError::EmptyField { field: "operation_id", .. })));
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::EmptyField {
+                field: "operation_id",
+                ..
+            })
+        ));
 
         let mut catalog = checked_catalog().unwrap();
         catalog.operations[0].operation_id = "doctor".into();
@@ -1056,7 +1067,13 @@ mod tests {
 
         let mut catalog = checked_catalog().unwrap();
         catalog.operations[0].entry_id.clear();
-        assert!(matches!(catalog.validate(&parity), Err(CatalogError::EmptyField { field: "entry_id", .. })));
+        assert!(matches!(
+            catalog.validate(&parity),
+            Err(CatalogError::EmptyField {
+                field: "entry_id",
+                ..
+            })
+        ));
 
         let mut catalog = checked_catalog().unwrap();
         catalog.operations[1].entry_id = catalog.operations[0].entry_id.clone();

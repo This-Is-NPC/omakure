@@ -101,7 +101,10 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
-
+      - name: Use canonical macOS temporary directory for tests
+        if: contains(matrix.target, '-apple-darwin')
+        shell: bash
+        run: echo 'TMPDIR=/private/tmp' >> "$GITHUB_ENV"
       - name: Install musl toolchain
         if: endsWith(matrix.target, '-unknown-linux-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -134,7 +137,7 @@ jobs:
           esac
           file_output="$(file "${binary}")"
           echo "${file_output}"
-          grep -qi 'statically linked' <<<"${file_output}"
+          grep -Eqi 'static(ally|-pie) linked' <<<"${file_output}"
           case "${{ matrix.target }}" in
             x86_64-*) grep -Eqi 'x86-64|x86_64' <<<"${file_output}" ;;
             aarch64-*) grep -Eqi 'aarch64|ARM' <<<"${file_output}" ;;

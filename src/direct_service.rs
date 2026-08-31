@@ -4751,4 +4751,62 @@ mod tests {
             )],
         )
     }
+    #[test]
+    fn pending_outboxes_are_fifo_and_empty_after_drain() {
+        let temp = tempfile::tempdir().expect("temporary node root");
+        let context = test_node_context(&temp);
+        let (cue_reply, _cue_answers) = std::sync::mpsc::sync_channel(1);
+        let (baseline_reply, _baseline_answers) = std::sync::mpsc::sync_channel(1);
+        let state = ConnectionState {
+            local_node_id: "local-peer".to_string(),
+            context,
+            identity_status: test_identity_status("local-peer"),
+            expected: HashSet::new(),
+            stop: Arc::new(AtomicBool::new(false)),
+            active: Mutex::new(HashMap::new()),
+            outbox: Mutex::new(HashMap::new()),
+            baseline_outbox: Mutex::new(HashMap::new()),
+            status: Arc::new(Mutex::new(TransportStatus::default())),
+            admission: Arc::new(AdmissionController {
+                state: Mutex::new(AdmissionState::default()),
+            }),
+            reporter: None,
+            workspace_root: None,
+        };
+        let pending = PendingCue {
+            cue_id: "cue".to_string(),
+            script: "declared.sh".to_string(),
+            reason: "unit test".to_string(),
+            expected_run_id: "run".to_string(),
+            deadline: Instant::now() + Duration::from_secs(60),
+            reply: cue_reply,
+        };
+        let baseline = PendingBaseline {
+            manifest: Vec::new(),
+            bodies: Vec::new(),
+            baseline_id: "baseline".to_string(),
+            deadline: Instant::now() + Duration::from_secs(60),
+            reply: baseline_reply,
+        };
+
+        state
+            .outbox
+            .lock()
+            .unwrap()
+            .entry("peer".to_string())
+            .or_default()
+            .push(pending);
+        state
+            .baseline_outbox
+            .lock()
+            .unwrap()
+            .entry("peer".to_string())
+            .or_default()
+            .push(baseline);
+
+        assert!(state.take_pending_cue("peer").is_some());
+        assert!(state.take_pending_cue("peer").is_none());
+        assert!(state.take_pending_baseline("peer").is_some());
+        assert!(state.take_pending_baseline("peer").is_none());
+    }
 }

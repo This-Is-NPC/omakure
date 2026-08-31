@@ -2,12 +2,14 @@
 use std::error::Error;
 #[cfg(windows)]
 use std::path::Path;
+#[cfg(windows)]
+use winreg::enums::HKEY_CURRENT_USER;
+#[cfg(windows)]
+use winreg::RegKey;
 
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn Error>> {
     use std::fs;
-    use winreg::enums::*;
-    use winreg::RegKey;
 
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     let install_service = args.iter().any(|arg| arg == "--install-node-service");

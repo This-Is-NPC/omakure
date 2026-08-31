@@ -101,10 +101,42 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
-      - name: Use canonical macOS temporary directory for tests
+      - name: Configure private macOS temporary directory
         if: contains(matrix.target, '-apple-darwin')
         shell: bash
-        run: echo 'TMPDIR=/private/tmp' >> "$GITHUB_ENV"
+        run: |
+          set -euo pipefail
+          runner_temp="$(cd -- "${RUNNER_TEMP}" && pwd -P)"
+          current_owner_group="$(id -u):$(id -g)"
+          runner_owner_group="$(stat -f '%u:%g' "${runner_temp}")"
+          [[ "${runner_owner_group}" == "${current_owner_group}" ]] || {
+            echo "RUNNER_TEMP is not owned by the current user/group" >&2
+            exit 1
+          }
+          tmpdir="${runner_temp}/omakure-tmp"
+          [[ ! -L "${tmpdir}" ]] || {
+            echo "refusing symlinked macOS temporary directory" >&2
+            exit 1
+          }
+          if [[ ! -e "${tmpdir}" ]]; then
+            mkdir "${tmpdir}"
+          fi
+          [[ -d "${tmpdir}" ]] || {
+            echo "macOS temporary path is not a directory" >&2
+            exit 1
+          }
+          physical_tmpdir="$(cd -- "${tmpdir}" && pwd -P)"
+          [[ "${physical_tmpdir}" == "${tmpdir}" ]] || {
+            echo "refusing non-physical macOS temporary directory" >&2
+            exit 1
+          }
+          chmod 700 "${physical_tmpdir}"
+          tmpdir_owner_group="$(stat -f '%u:%g' "${physical_tmpdir}")"
+          [[ "${tmpdir_owner_group}" == "${current_owner_group}" ]] || {
+            echo "macOS temporary directory is not owned by the current user/group" >&2
+            exit 1
+          }
+          printf 'TMPDIR=%s\n' "${physical_tmpdir}" >> "${GITHUB_ENV}"
       - name: Install musl toolchain
         if: endsWith(matrix.target, '-unknown-linux-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools

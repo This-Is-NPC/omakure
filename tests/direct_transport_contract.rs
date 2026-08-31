@@ -613,7 +613,7 @@ fn production_manual_request_with_pairing(
 ) -> Result<Vec<u8>, omakure::enrollment::EnrollmentError> {
     let temp = TempDir::new().unwrap();
     let context = NodeContext::resolve_for(
-        NodePlatform::Linux,
+        NodePlatform::current(),
         NodePathOverrides::new(
             Some(temp.path().join("state")),
             Some(temp.path().join("node.toml")),

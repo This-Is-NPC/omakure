@@ -1852,7 +1852,7 @@ mod tests {
 
     fn context(temp: &TempDir) -> NodeContext {
         NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),
@@ -2223,7 +2223,7 @@ mod tests {
     fn status_treats_missing_config_parent_as_uninitialized() {
         let temp = TempDir::new().unwrap();
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("missing/node.toml")),
@@ -2657,7 +2657,7 @@ mod tests {
         std::fs::write(&real_config, NodeConfig::default().to_toml().unwrap()).unwrap();
         symlink(&real_parent, &link_parent).unwrap();
         let linked_context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(context.state_dir().to_path_buf()),
                 Some(link_parent.join("node.toml")),

@@ -289,6 +289,8 @@ pub struct NodeRegistry {
     publisher_key_path: PathBuf,
     local_node_id: String,
     local_public_key: String,
+    /// Observational opens must not migrate the schema or change journal mode.
+    schema_mutation_allowed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -335,6 +337,7 @@ impl NodeRegistry {
             publisher_key_path: context.publisher_key_path(),
             local_node_id: node_id,
             local_public_key: public_key,
+            schema_mutation_allowed: true,
         };
         registry.with_connection(|connection| {
             if !database_existed {
@@ -353,10 +356,9 @@ impl NodeRegistry {
         })?;
         Ok(registry)
     }
-
-    /// Open and validate an existing registry without creating a state
-    /// directory or initializing a missing database. Read-only status paths
-    /// use this to avoid turning observation into initialization.
+    /// Open and validate an existing registry without creating state or
+    /// mutating its schema. Schema creation and migrations belong to the
+    /// serialized node initialization path (`open`).
     pub fn open_existing(
         context: &NodeContext,
         identity: &NodeIdentityStatus,
@@ -390,16 +392,11 @@ impl NodeRegistry {
             publisher_key_path: context.publisher_key_path(),
             local_node_id: node_id,
             local_public_key: public_key,
+            schema_mutation_allowed: false,
         };
         registry.with_connection(|connection| {
             validate_database_security(context, &registry.path)?;
-            let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-            if version == 0 {
-                return Err(RegistryError::InvalidSchema(
-                    "existing node.sqlite has no schema version".to_string(),
-                ));
-            }
-            initialize_database(connection, &registry)
+            validate_existing_database(connection, &registry)
         })?;
         Ok(registry)
     }
@@ -2094,7 +2091,11 @@ impl NodeRegistry {
         operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
     ) -> Result<T, RegistryError> {
         let mut connection = Connection::open(&self.path)?;
-        configure_connection(&mut connection)?;
+        if self.schema_mutation_allowed {
+            configure_connection(&mut connection)?;
+        } else {
+            configure_connection_read_only(&mut connection)?;
+        }
         operation(&mut connection)
     }
 }
@@ -2181,6 +2182,39 @@ fn set_new_database_mode(path: &Path) -> Result<(), RegistryError> {
     }
     let _ = path;
     Ok(())
+}
+
+fn validate_existing_database(
+    connection: &Connection,
+    registry: &NodeRegistry,
+) -> Result<(), RegistryError> {
+    integrity_check(connection)?;
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 0 {
+        return Err(RegistryError::InvalidSchema(
+            "existing node.sqlite has no schema version".to_string(),
+        ));
+    }
+    if version > SCHEMA_VERSION {
+        return Err(RegistryError::InvalidSchema(format!(
+            "database version {version} is newer than supported version {SCHEMA_VERSION}"
+        )));
+    }
+    if version < SCHEMA_VERSION {
+        let health_plane: Option<String> = connection
+            .query_row(
+                "SELECT value FROM metadata WHERE key = 'health_plane'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if !(version == 6 && health_plane.as_deref() == Some(HEALTH_PLANE_DISABLED)) {
+            return Err(RegistryError::InvalidSchema(format!(
+                "database schema marker is {version}, expected {SCHEMA_VERSION}"
+            )));
+        }
+    }
+    validate_schema(connection, registry)
 }
 
 fn initialize_database(
@@ -2376,6 +2410,25 @@ fn configure_connection(connection: &mut Connection) -> Result<(), RegistryError
     if !journal_mode.eq_ignore_ascii_case("wal") {
         journal_mode = connection.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0))?;
     }
+    if !journal_mode.eq_ignore_ascii_case("wal") {
+        return Err(RegistryError::InvalidSchema(format!(
+            "journal mode is {journal_mode:?}, expected WAL"
+        )));
+    }
+    connection.execute_batch("PRAGMA foreign_keys = ON")?;
+    let foreign_keys: i64 = connection.query_row("PRAGMA foreign_keys", [], |row| row.get(0))?;
+    if foreign_keys != 1 {
+        return Err(RegistryError::InvalidSchema(
+            "foreign key enforcement is disabled".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn configure_connection_read_only(connection: &mut Connection) -> Result<(), RegistryError> {
+    connection.busy_timeout(BUSY_TIMEOUT)?;
+    let journal_mode: String =
+        connection.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
     if !journal_mode.eq_ignore_ascii_case("wal") {
         return Err(RegistryError::InvalidSchema(format!(
             "journal mode is {journal_mode:?}, expected WAL"
@@ -4831,7 +4884,7 @@ mod tests {
 
     fn context(temp: &TempDir) -> NodeContext {
         NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),
@@ -5056,7 +5109,7 @@ mod tests {
     /// A second identity, to stand in for the peer being trusted.
     fn remote_identity(temp: &TempDir) -> (NodeContext, NodeIdentity) {
         let remote_context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("remote-state")),
                 Some(temp.path().join("remote-node.toml")),

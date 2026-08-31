@@ -973,7 +973,7 @@ mod tests {
     fn test_identity() -> (TempDir, NodeIdentity) {
         let temp = TempDir::new().unwrap();
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),

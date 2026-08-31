@@ -2067,21 +2067,49 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_principal_lookup_is_safe_under_concurrency() {
-        use std::ffi::CString;
+        use std::ffi::CStr;
+        use std::ptr;
         use std::sync::{Arc, Barrier};
 
         const THREADS: usize = 16;
+        let euid = unsafe { libc::geteuid() };
+        let (principal, expected_uid, expected_gid) = {
+            let mut entry = unsafe { std::mem::zeroed::<libc::passwd>() };
+            let mut result = ptr::null_mut();
+            let mut buffer = vec![0_u8; 16 * 1024];
+            loop {
+                let status = unsafe {
+                    libc::getpwuid_r(
+                        euid,
+                        &mut entry,
+                        buffer.as_mut_ptr().cast(),
+                        buffer.len(),
+                        &mut result,
+                    )
+                };
+                if status == libc::ERANGE {
+                    grow_principal_lookup_buffer(&mut buffer).unwrap();
+                    continue;
+                }
+                assert_eq!(status, 0, "resolve current euid");
+                assert!(!result.is_null(), "current euid has a passwd entry");
+                let principal = unsafe { CStr::from_ptr(entry.pw_name) }.to_owned();
+                break (principal, entry.pw_uid as u32, entry.pw_gid as u32);
+            }
+        };
+        assert_eq!(expected_uid, euid as u32);
+
         let barrier = Arc::new(Barrier::new(THREADS));
         let handles = (0..THREADS)
             .map(|_| {
                 let barrier = Arc::clone(&barrier);
+                let principal = principal.clone();
                 std::thread::spawn(move || {
-                    let root = CString::new("root").unwrap();
                     barrier.wait();
                     for _ in 0..256 {
-                        let owner = lookup_unix_principal(&root).unwrap();
-                        assert_eq!(owner.uid, 0);
-                        assert_eq!(owner.gid, 0);
+                        let owner = lookup_unix_principal(&principal).unwrap();
+                        assert_eq!(owner.uid, expected_uid);
+                        assert_eq!(owner.gid, expected_gid);
                     }
                 })
             })

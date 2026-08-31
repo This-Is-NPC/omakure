@@ -3547,7 +3547,7 @@ mod tests {
     fn node_context_under(root: &std::path::Path) -> NodeContext {
         use crate::node::{NodePathOverrides, NodePlatform};
         NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(Some(root.join("state")), Some(root.join("node.toml"))),
             true,
             None,
@@ -3982,7 +3982,7 @@ mod tests {
 
         fn context_for(temp: &TempDir) -> NodeContext {
             NodeContext::resolve_for(
-                NodePlatform::Linux,
+                NodePlatform::current(),
                 NodePathOverrides::new(
                     Some(temp.path().join("state")),
                     Some(temp.path().join("node.toml")),
@@ -4511,7 +4511,7 @@ mod tests {
 
         let temp = TempDir::new().unwrap();
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),

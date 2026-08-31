@@ -324,7 +324,14 @@ impl HttpServer {
                 child,
                 token: token.to_string(),
             };
-            if server.try_wait_until_ready(attempt_timeout) {
+            if server.try_wait_until_ready(
+                attempt_timeout,
+                if command_name == "node" {
+                    "/v1/ready"
+                } else {
+                    "/v1/health"
+                },
+            ) {
                 return server;
             }
             let _ = server.child.child_mut().kill();
@@ -402,14 +409,12 @@ impl HttpServer {
         self.request_with_auth("GET", path, None, AuthMode::Bearer(token))
     }
 
-    /// Poll `/v1/ready` until the service reports ready.
+    /// Poll `/v1/ready` until the service reports semantic readiness.
     ///
-    /// Startup is gated on `/v1/health`, which answers as soon as the listener
-    /// binds. A service started with `--readiness-requires-worker` or
-    /// `--readiness-requires-scheduler` is not ready until those loops mark
-    /// themselves alive, and that happens *after* the listener is up — so
-    /// asking once, immediately, races them. Under parallel-suite load the
-    /// window is wide enough to lose.
+    /// Node-service startup performs identity, registry/schema, and transport
+    /// setup before this endpoint is allowed to return 200. Worker, scheduler,
+    /// and transport requirements are then reflected by the same gate, so a
+    /// successful probe is safe for callers to use immediately.
     ///
     /// A service that never becomes ready still fails the test: once the
     /// deadline passes the last response is returned as-is, so the caller's
@@ -470,7 +475,7 @@ impl HttpServer {
         HttpResponse::parse(raw)
     }
 
-    fn try_wait_until_ready(&mut self, timeout: Duration) -> bool {
+    fn try_wait_until_ready(&mut self, timeout: Duration, path: &str) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             // A successful probe is only ours if the process that was spawned
@@ -489,7 +494,7 @@ impl HttpServer {
                 TcpStream::connect_timeout(&self.addr, Duration::from_millis(200))
             {
                 let request = format!(
-                    "GET /v1/health HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
+                    "GET {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
                     self.addr
                 );
                 let _ = stream.set_read_timeout(Some(Duration::from_millis(200)));

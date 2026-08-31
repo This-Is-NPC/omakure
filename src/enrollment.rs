@@ -819,7 +819,7 @@ mod tests {
     fn identity() -> (TempDir, NodeIdentity) {
         let temp = TempDir::new().unwrap();
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),
@@ -890,7 +890,7 @@ mod tests {
     fn signed_bundle_is_canonical_and_binds_authority_audience_and_certificate() {
         let manager_temp = TempDir::new().unwrap();
         let manager_context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(manager_temp.path().join("state")),
                 Some(manager_temp.path().join("node.toml")),
@@ -907,7 +907,7 @@ mod tests {
                 .unwrap();
         let target_temp = TempDir::new().unwrap();
         let target_context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(target_temp.path().join("state")),
                 Some(target_temp.path().join("node.toml")),

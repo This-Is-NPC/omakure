@@ -821,6 +821,12 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     );
 
     let conductor_server = serve(conductor.path());
+    let first_health = conductor_server.get("/v1/node/health");
+    assert_eq!(
+        first_health.status, 200,
+        "first node health must be available after semantic readiness: {}",
+        first_health.safe_body()
+    );
 
     // Before the Performer ever runs, both trusted peers are visible with the
     // frozen `unknown` presence and no Profile or Pulse.

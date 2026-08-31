@@ -34,6 +34,36 @@ fn support_harness_provides_workspace_script_json_and_secret_assertions() {
     support::assert_no_secret_leak(&output.stdout, b"super-secret-token");
 }
 
+/// Successful commands must be able to return output larger than an OS pipe
+/// buffer. This mirrors the expanded `help-ai` response that originally
+/// deadlocked the timeout harness.
+#[test]
+fn command_timeout_drains_large_successful_json_output() {
+    let workspace = support::TestWorkspace::new("harness_large_output");
+    let output = support::command_with_timeout(
+        support::omakure_command()
+            .arg("--scripts-dir")
+            .arg(workspace.path())
+            .arg("help-ai"),
+        Duration::from_secs(10),
+    );
+
+    assert!(
+        output.status.success(),
+        "expected help-ai success, status: {:?}, stderr_len: {}",
+        output.status.code(),
+        output.stderr.len()
+    );
+    assert!(
+        output.stdout.len() > 64 * 1024,
+        "help-ai regression fixture must exceed pipe capacity, got {} bytes",
+        output.stdout.len()
+    );
+    let envelope = support::json_envelope(&output.stdout);
+    assert_eq!(envelope["ok"], true);
+    assert!(envelope["data"]["verbs"].as_array().is_some());
+}
+
 #[test]
 fn support_harness_provides_http_port_readiness_and_teardown() {
     let workspace = support::TestWorkspace::new("harness_http_self_test");

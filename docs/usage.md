@@ -40,6 +40,12 @@ legacy environment overrides, then the debug `scripts/workspace` fixture and
 platform defaults. A positional path is not accepted and must not be
 reintroduced as a headless alias.
 
+`check` is the visible alias for the same workspace diagnostics:
+
+```bash
+omakure check
+```
+
 ## Scripts and runs
 
 ```bash
@@ -72,6 +78,14 @@ omakure --json history show RUN_ID
 omakure --json history stats
 omakure --json history traces RUN_ID --since-sequence 0
 ```
+
+To supply a caller-owned correlation id, pass `--run-id`:
+
+```bash
+omakure --json queue add tools/deploy.py --run-id deploy-2026-08-30
+```
+
+The id is stored with the queued row and appears in worker/history output.
 
 Workers reclaim expired leases. Direct, queued, and scheduled runs share the
 same executor, timeout, cancellation, redaction, and SQLite state machine.
@@ -493,7 +507,137 @@ omakure update --version vX.Y.Z
 omakure uninstall
 ```
 
+For private HTTPS repositories, keep the credential out of the registry and
+store only a provider reference with `--token-ref`:
+
+```bash
+omakure battery add https://example.invalid/private.git --name private \
+  --token-ref secret://git/token
+```
+
+The configured secret provider must resolve the reference at sync time; a
+missing or unauthorized reference fails before the repository is fetched.
+
 Cached Battery repositories are untrusted and never run directly. Battery
 installation is Unix-only and is a local act that an authenticated HTTP
 operator may initiate, but a peer or Remote Cue never may. `update` and
 `uninstall` are local lifecycle operations and are not HTTP routes.
+## `omakure node direct-probe`
+
+**Synopsis:** `omakure node direct-probe --endpoint HOST:PORT --peer-node-id omk1_...`
+
+The node must already be initialized and the peer must be explicitly trusted;
+this command performs a bounded encrypted transport probe and does not mutate
+trust state. A successful probe prints the peer identity and authenticated
+session result. An unreachable endpoint or mismatched `--peer-node-id` is the
+principal failure and exits non-zero without changing the registry.
+
+```bash
+omakure node direct-probe --endpoint 127.0.0.1:7879 --peer-node-id omk1_example
+```
+
+Relevant flags are `--endpoint` and `--peer-node-id`. See the complete
+metadata in the [generated CLI reference](cli-reference.md#node-direct-probe).
+
+## `omakure node init`
+
+**Synopsis:** `omakure node init`
+
+Run this once on a new node after selecting its workspace. It creates the
+public node configuration, machine identity, and local trust state; it refuses
+to replace an existing identity. Success reports the canonical node ID and
+initialized paths. The principal failure is an existing or invalid identity,
+which leaves the existing state untouched.
+
+```bash
+omakure node init
+```
+
+There are no command-specific flags; use the global `--scripts-dir` and `--node-config` overrides when preparing a fixture. See the [generated CLI reference](cli-reference.md#node-init).
+
+## `omakure node discovery`
+
+**Synopsis:** `omakure node discovery [--wait-seconds SECONDS] [--include-addresses]`
+
+Discovery requires a reachable local network and an initialized node. It
+performs a bounded trust-neutral LAN scan and never writes a trust record.
+Success prints observed candidate node IDs (and addresses when requested).
+The principal failure is a timeout or malformed response; no candidate is
+trusted as a side effect.
+
+```bash
+omakure node discovery --wait-seconds 5 --include-addresses
+```
+
+Relevant flags are `--wait-seconds` (bounded to 1..=30) and
+`--include-addresses`. See the [generated CLI reference](cli-reference.md#node-discovery).
+
+## `omakure node trust`
+
+**Synopsis:** `omakure node trust --node-id ID --public-key HEX --actor ACTOR --reason TEXT --confirmed`
+
+The operator must possess the peer's canonical identity, public key, and
+transport certificate when one is required. This explicitly confirmed
+mutation writes the local trust registry and audit evidence. Success reports
+the trusted peer and role. The principal failure is invalid key/certificate
+material or missing `--confirmed`; the mutation is rejected before state
+changes.
+
+```bash
+omakure node trust --node-id omk1_peer --public-key HEX \
+  --actor operator --reason "approved fleet member" --confirmed
+```
+
+Relevant flags include `--node-id`, `--public-key`, `--transport-certificate`,
+`--role`, repeatable `--capability`, `--actor`, `--reason`, and `--confirmed`.
+See the [generated CLI reference](cli-reference.md#node-trust).
+
+## `omakure node capabilities`
+
+**Synopsis:** `omakure node capabilities --node-id ID --capability CAP --actor ACTOR --reason TEXT --confirmed`
+
+This requires an existing trusted peer and an operator decision. It replaces
+that peer's sorted capability allow-list and appends audit evidence; it does
+not enroll or revoke the peer. Success prints the resulting capabilities.
+The principal failure is an unknown peer or omitted confirmation, which leaves
+the current allow-list intact.
+
+```bash
+omakure node capabilities --node-id omk1_peer --capability inventory-health \
+  --actor operator --reason "grant health reporting" --confirmed
+```
+
+Relevant flags are `--node-id`, repeatable `--capability`, `--actor`,
+`--reason`, and `--confirmed`. See the [generated CLI reference](cli-reference.md#node-capabilities).
+
+## `omakure completion`
+
+**Synopsis:** `omakure completion SHELL`
+
+Completion generation requires only the installed binary and a supported shell.
+It writes a completion script to stdout and does not mutate workspace state.
+Success is shell syntax suitable for the shell's completion directory. The
+principal failure is an unsupported `SHELL` value; no file is written by the
+command itself.
+
+```bash
+omakure completion bash >> ~/.bash_completion
+```
+
+`SHELL` is one of `bash`, `zsh`, `fish`, or `pwsh`; the positional value is
+required. See the [generated CLI reference](cli-reference.md#completion).
+
+`omakure queue add` also accepts `--run-id ID` when a caller needs a stable
+correlation id, and `omakure battery add` accepts `--token-ref
+secret://provider/key` for private HTTPS sources. The visible `check` alias
+is equivalent to `omakure doctor`:
+
+```bash
+omakure queue add tools/deploy.py --run-id deploy-2026-08-30
+omakure battery add https://example.invalid/private.git --name private \
+  --token-ref secret://git/token
+omakure check
+```
+
+These options and the alias are also recorded in the [generated CLI
+reference](cli-reference.md).

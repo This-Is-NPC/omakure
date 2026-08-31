@@ -1313,7 +1313,7 @@ mod tests {
     }
 
     #[test]
-    fn test_omaken_install_command_is_removed() {
+    fn test_legacy_install_url_is_rejected() {
         let result = parse(&["install", "https://example.com/scripts.git"]);
         assert!(result.is_err());
     }

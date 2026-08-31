@@ -8,6 +8,7 @@ pub mod env;
 pub mod help_ai;
 pub mod history;
 pub mod init;
+pub mod inventory;
 pub mod json;
 pub mod list;
 pub mod local_api;

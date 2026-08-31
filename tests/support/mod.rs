@@ -128,24 +128,43 @@ pub fn assert_no_secret_leak(haystack: &[u8], secret: &[u8]) {
 pub fn command_with_timeout(command: &mut Command, timeout: Duration) -> Output {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = spawn_guard(command);
+    let stdout = child.child_mut().stdout.take().expect("child stdout pipe");
+    let stderr = child.child_mut().stderr.take().expect("child stderr pipe");
+    // Drain both pipes while the child runs. Waiting for the child before
+    // reading either pipe deadlocks when successful output exceeds pipe
+    // capacity (for example, `help-ai`).
+    let stdout_reader = thread::spawn(move || read_child_pipe(stdout));
+    let stderr_reader = thread::spawn(move || read_child_pipe(stderr));
     let deadline = Instant::now() + timeout;
 
-    loop {
-        if child
-            .child_mut()
-            .try_wait()
-            .expect("poll child process")
-            .is_some()
-        {
-            return child.wait_with_output();
+    let status = loop {
+        if let Some(status) = child.child_mut().try_wait().expect("poll child process") {
+            break status;
         }
 
         if Instant::now() >= deadline {
-            return child.kill_and_wait();
+            let process = child.child_mut();
+            let _ = process.kill();
+            break process.wait().expect("wait for killed child");
         }
 
         thread::sleep(Duration::from_millis(25));
+    };
+    // The process has been reaped; remove it from the guard so Drop does not
+    // attempt to kill it again.
+    let _ = child.take_child();
+
+    Output {
+        status,
+        stdout: stdout_reader.join().expect("read child stdout"),
+        stderr: stderr_reader.join().expect("read child stderr"),
     }
+}
+
+fn read_child_pipe(mut pipe: impl Read) -> Vec<u8> {
+    let mut output = Vec::new();
+    pipe.read_to_end(&mut output).expect("read child output");
+    output
 }
 
 pub fn spawn_guard(command: &mut Command) -> ChildGuard {

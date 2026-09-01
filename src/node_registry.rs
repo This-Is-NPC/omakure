@@ -365,6 +365,25 @@ impl NodeRegistry {
         context: &NodeContext,
         identity: &NodeIdentityStatus,
     ) -> Result<Self, RegistryError> {
+        Self::open_existing_with_integrity(context, identity, true)
+    }
+
+    /// Open an existing registry for Health's observational read surfaces.
+    ///
+    /// This performs the same filesystem, identity, and schema validation as
+    /// [`Self::open_existing`] but deliberately omits the full integrity scan.
+    pub(crate) fn open_health_observational(
+        context: &NodeContext,
+        identity: &NodeIdentityStatus,
+    ) -> Result<Self, RegistryError> {
+        Self::open_existing_with_integrity(context, identity, false)
+    }
+
+    fn open_existing_with_integrity(
+        context: &NodeContext,
+        identity: &NodeIdentityStatus,
+        run_integrity_check: bool,
+    ) -> Result<Self, RegistryError> {
         if !context.validate_existing_state_directory()? {
             return Err(RegistryError::NotFound(
                 "node state is not initialized".to_string(),
@@ -401,7 +420,9 @@ impl NodeRegistry {
         configure_connection_observational(&mut connection)?;
         validate_database_security(context, &registry.path)?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
-        integrity_check(&transaction)?;
+        if run_integrity_check {
+            integrity_check(&transaction)?;
+        }
         validate_existing_database(&transaction, &registry)?;
         transaction.commit()?;
         Ok(registry)
@@ -5885,6 +5906,10 @@ mod tests {
             )
             .unwrap();
         drop(connection);
+
+        let observational =
+            NodeRegistry::open_health_observational(&context, identity.public_status());
+        assert!(observational.is_ok(), "{observational:?}");
 
         let result = NodeRegistry::open_existing(&context, identity.public_status());
         assert!(

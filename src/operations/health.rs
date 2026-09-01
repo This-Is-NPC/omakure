@@ -377,7 +377,8 @@ fn open_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
         return Err(registry_error("node state is not initialized"));
     }
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
-    NodeRegistry::open_existing(context, identity.public_status()).map_err(map_registry_error)
+    NodeRegistry::open_health_observational(context, identity.public_status())
+        .map_err(map_registry_error)
 }
 
 /// The live local facts a Performer reports.

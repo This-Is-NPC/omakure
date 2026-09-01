@@ -1661,11 +1661,14 @@ fn fleet_peer_in(
 /// Newest-first in SQL rather than in the caller keeps the working set at one
 /// page no matter how many Performers this Conductor manages, which is what
 /// the per-peer loop it replaces achieved by reducing after every peer.
+type HealthFeedPage = (Vec<HealthFeedSignal>, Vec<CorruptSignalIdentity>);
+type CorruptSignalIdentity = (String, Vec<u8>);
+
 fn feed_page_in(
     transaction: &Transaction<'_>,
     limit: usize,
-) -> Result<(Vec<HealthFeedSignal>, Vec<(String, Vec<u8>)>), RegistryError> {
-    let mut corrupt: Vec<(String, Vec<u8>)> = Vec::new();
+) -> Result<HealthFeedPage, RegistryError> {
+    let mut corrupt: Vec<CorruptSignalIdentity> = Vec::new();
     let mut page = Vec::new();
     {
         // `signal_id` is a fixed 16-byte identifier, so ordering the blob

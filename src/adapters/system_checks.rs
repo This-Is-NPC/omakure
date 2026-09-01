@@ -205,6 +205,7 @@ pub(crate) fn ensure_python_installed_with_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    type DependencyCheck = fn(&[(String, String)]) -> Result<(), ScriptError>;
 
     #[test]
     fn test_ensure_command_success() {
@@ -329,7 +330,7 @@ mod tests {
         }
         let env = vec![("PATH".to_string(), dir.path().display().to_string())];
 
-        let checks: [(&str, fn(&[(String, String)]) -> Result<(), ScriptError>); 5] = [
+        let checks: [(&str, DependencyCheck); 5] = [
             ("git", ensure_git_installed_with_env),
             ("jq", ensure_jq_installed_with_env),
             ("bash", ensure_bash_installed_with_env),

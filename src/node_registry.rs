@@ -10,7 +10,9 @@ use crate::enrollment::{self, ManualEnrollmentRequest, SignedEnrollmentBundle};
 use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
 use chrono::{DateTime, SecondsFormat, Utc};
-use rusqlite::{params, Connection, OptionalExtension, Row, Transaction, TransactionBehavior};
+use rusqlite::{
+    params, Connection, OpenFlags, OptionalExtension, Row, Transaction, TransactionBehavior,
+};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -396,7 +398,12 @@ impl NodeRegistry {
         };
         registry.with_connection(|connection| {
             validate_database_security(context, &registry.path)?;
-            validate_existing_database(connection, &registry)
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
+            integrity_check(&transaction)?;
+            validate_existing_database(&transaction, &registry)?;
+            transaction.commit()?;
+            Ok(())
         })?;
         Ok(registry)
     }
@@ -2090,7 +2097,11 @@ impl NodeRegistry {
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
     ) -> Result<T, RegistryError> {
-        let mut connection = Connection::open(&self.path)?;
+        let mut connection = if self.schema_mutation_allowed {
+            Connection::open(&self.path)?
+        } else {
+            Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY)?
+        };
         if self.schema_mutation_allowed {
             configure_connection(&mut connection)?;
         } else {
@@ -2443,7 +2454,7 @@ fn configure_connection_read_only(connection: &mut Connection) -> Result<(), Reg
 }
 
 fn integrity_check(connection: &Connection) -> Result<(), RegistryError> {
-    let result: String = connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let result: String = connection.query_row("PRAGMA integrity_check(1)", [], |row| row.get(0))?;
     if result != "ok" {
         return Err(RegistryError::Corrupt(result));
     }
@@ -5437,7 +5448,18 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let node_context = context(&temp);
         let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
-        NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        registry
+            .record_transport_audit(
+                "snapshot_probe",
+                &identity.public_status().node_id,
+                None,
+                None,
+                0,
+                "accepted",
+                None,
+            )
+            .unwrap();
         let mut writer = Connection::open(node_context.database_path()).unwrap();
         configure_connection(&mut writer).unwrap();
         let writer_transaction = writer
@@ -5805,5 +5827,30 @@ mod tests {
             NodeRegistry::open(&context2, identity2.public_status()),
             Err(RegistryError::InvalidSchema(_))
         ));
+    }
+    #[test]
+    fn open_existing_rejects_corrupt_index() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        NodeRegistry::open(&context, identity.public_status()).unwrap();
+
+        let connection = Connection::open(context.database_path()).unwrap();
+        connection
+            .execute_batch(
+                "PRAGMA writable_schema = ON;
+                 UPDATE sqlite_master
+                    SET rootpage = 1
+                  WHERE type = 'index' AND name = 'peers_state_idx';
+                 PRAGMA writable_schema = OFF;",
+            )
+            .unwrap();
+        drop(connection);
+
+        let result = NodeRegistry::open_existing(&context, identity.public_status());
+        assert!(
+            matches!(result, Err(RegistryError::Corrupt(_))),
+            "{result:?}"
+        );
     }
 }

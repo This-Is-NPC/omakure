@@ -858,6 +858,22 @@ struct AppendLock {
     file: fs::File,
 }
 
+fn is_append_lock_contention(err: &std::io::Error) -> bool {
+    if err.kind() == std::io::ErrorKind::WouldBlock {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        // fs2 can surface these sharing errors directly instead of mapping
+        // them to WouldBlock when another process owns the lock.
+        matches!(err.raw_os_error(), Some(32 | 33))
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 impl AppendLock {
     fn acquire(tokens_path: &Path) -> Result<Self, AuthError> {
         let parent = tokens_path.parent().unwrap_or_else(|| Path::new("."));
@@ -880,7 +896,7 @@ impl AppendLock {
         loop {
             match fs2::FileExt::try_lock_exclusive(&file) {
                 Ok(()) => return Ok(Self { file }),
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(err) if is_append_lock_contention(&err) => {
                     if start.elapsed() >= APPEND_LOCK_TIMEOUT {
                         return Err(AuthError::Io(
                             "timed out waiting for another token-file append".to_string(),
@@ -1446,7 +1462,7 @@ enabled = true
 
     #[test]
     fn concurrent_process_appends_do_not_lose_updates() {
-        use std::process::Command;
+        use std::process::{Command, Stdio};
 
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("tokens.toml");
@@ -1467,13 +1483,22 @@ enabled = true
                     .env("OMAKURE_APPEND_TEST_PATH", &path)
                     .env("OMAKURE_APPEND_TEST_ID", &id)
                     .env("OMAKURE_APPEND_TEST_ENTRY", entry)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
                     .spawn()
                     .unwrap(),
             );
         }
 
-        for mut child in children {
-            assert!(child.wait().unwrap().success());
+        for child in children {
+            let output = child.wait_with_output().unwrap();
+            assert!(
+                output.status.success(),
+                "append worker failed with status {:?}\nstdout:\n{}\nstderr:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
         }
         let tokens = load_tokens_file(&path).unwrap();
         assert_eq!(tokens.len(), 6);

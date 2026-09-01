@@ -313,20 +313,36 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().unwrap();
-        for program in ["git", "jq", "bash", python_program(), powershell_program()] {
+        let programs = ["git", "jq", "bash", python_program(), powershell_program()];
+        // A local POSIX fixture is more stable than relying on whichever
+        // optional dependency happens to be installed on the test runner.
+        for program in programs {
             let path = dir.path().join(program);
-            std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
-            let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+            std::fs::write(&path, "#!/bin/sh\nexit 0\n")
+                .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
+            let mut permissions = std::fs::metadata(&path)
+                .unwrap_or_else(|error| panic!("stat {program} fixture: {error}"))
+                .permissions();
             permissions.set_mode(0o755);
-            std::fs::set_permissions(&path, permissions).unwrap();
+            std::fs::set_permissions(&path, permissions)
+                .unwrap_or_else(|error| panic!("make {program} executable: {error}"));
         }
         let env = vec![("PATH".to_string(), dir.path().display().to_string())];
 
-        assert!(ensure_git_installed_with_env(&env).is_ok());
-        assert!(ensure_jq_installed_with_env(&env).is_ok());
-        assert!(ensure_bash_installed_with_env(&env).is_ok());
-        assert!(ensure_python_installed_with_env(&env).is_ok());
-        assert!(ensure_powershell_installed_with_env(&env).is_ok());
+        let checks: [(&str, fn(&[(String, String)]) -> Result<(), ScriptError>); 5] = [
+            ("git", ensure_git_installed_with_env),
+            ("jq", ensure_jq_installed_with_env),
+            ("bash", ensure_bash_installed_with_env),
+            (python_program(), ensure_python_installed_with_env),
+            (powershell_program(), ensure_powershell_installed_with_env),
+        ];
+        for (program, check) in checks {
+            let result = check(&env);
+            assert!(
+                result.is_ok(),
+                "{program} dependency check failed using its injected fixture: {result:?}"
+            );
+        }
     }
 
     #[cfg(unix)]

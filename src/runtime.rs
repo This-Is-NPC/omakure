@@ -304,6 +304,13 @@ mod tests {
     use rstest::rstest;
     use std::path::Path;
 
+    #[cfg(windows)]
+    fn normalized_windows_path(path: &Path) -> String {
+        path.to_string_lossy()
+            .replace('/', "\\")
+            .to_ascii_lowercase()
+    }
+
     #[rstest]
     #[case::sh_extension("script.sh", Some(ScriptKind::Bash))]
     #[case::bash_extension("script.bash", Some(ScriptKind::Bash))]
@@ -372,22 +379,39 @@ mod tests {
     }
     #[cfg(windows)]
     #[test]
-    fn resolve_bash_program_skips_wsl_launcher_and_uses_git_bash() {
+    fn resolve_bash_program_skips_system32_wsl_and_uses_git_bash_case_insensitively() {
         let root = tempfile::tempdir().unwrap();
-        let wsl_dir = root.path().join("Windows").join("System32");
+        let system32_dir = root.path().join("Windows").join("System32");
+        let sysnative_dir = root.path().join("Windows").join("Sysnative");
         let git_dir = root.path().join("Git").join("bin");
-        std::fs::create_dir_all(&wsl_dir).unwrap();
-        std::fs::create_dir_all(&git_dir).unwrap();
-        let wsl = wsl_dir.join("bash.exe");
+        for dir in [&system32_dir, &sysnative_dir, &git_dir] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        for dir in [&system32_dir, &sysnative_dir] {
+            std::fs::write(dir.join("bash.exe"), "wsl launcher").unwrap();
+        }
         let git = git_dir.join("bash.exe");
-        std::fs::write(&wsl, "wsl launcher").unwrap();
         std::fs::write(&git, "git bash").unwrap();
 
+        // Use deliberately different path casing from the fixture creation.
+        // Windows lookup is case-insensitive, and WSL filtering must be too.
+        let uppercase = |path: &Path| path.to_string_lossy().to_ascii_uppercase();
+        let lowercase = |path: &Path| path.to_string_lossy().to_ascii_lowercase();
         let env = vec![(
             "PATH".to_string(),
-            format!("{};{}", wsl_dir.display(), git_dir.display()),
+            format!(
+                "{};{};{}",
+                uppercase(&system32_dir),
+                lowercase(&sysnative_dir),
+                uppercase(&git_dir)
+            ),
         )];
-        assert_eq!(resolve_bash_program(&env), Some(git));
+
+        let resolved = resolve_bash_program(&env).expect("Git Bash should be accepted");
+        assert_eq!(
+            normalized_windows_path(&resolved),
+            normalized_windows_path(&git)
+        );
     }
 
     #[cfg(windows)]
@@ -443,15 +467,26 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn resolve_program_in_path_finds_windows_exe_suffix() {
+    fn resolve_program_in_path_finds_windows_exe_suffix_case_insensitively() {
         let dir = tempfile::tempdir().unwrap();
-        let exe = dir.path().join("python.exe");
+        let exe = dir.path().join("python.EXE");
         std::fs::write(&exe, "shim").unwrap();
         let path_var = dir.path().display().to_string();
 
-        let resolved = resolve_program_in_path("python", &path_var).expect("python.exe found");
+        let resolved = resolve_program_in_path("python", &path_var).expect("python.EXE found");
 
-        assert_eq!(resolved, exe);
+        assert_eq!(
+            normalized_windows_path(&resolved),
+            normalized_windows_path(&exe)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn executable_candidate_names_keep_explicit_exe_suffix_deterministic() {
+        let candidates = executable_candidate_names("python.EXE");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].to_ascii_uppercase(), "PYTHON.EXE");
     }
 
     #[cfg(windows)]
@@ -465,7 +500,10 @@ mod tests {
         let resolved =
             resolve_program_in_path("powershell", &path_var).expect("powershell.exe found");
 
-        assert_eq!(resolved, exe);
+        assert_eq!(
+            normalized_windows_path(&resolved),
+            normalized_windows_path(&exe)
+        );
     }
 
     #[cfg(unix)]

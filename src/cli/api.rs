@@ -5836,7 +5836,10 @@ echo ok
             .unwrap();
         assert_eq!(install.status(), StatusCode::CONFLICT);
         let install_body = response_json(install).await;
+        #[cfg(unix)]
         assert_eq!(install_body["error"]["code"], "not_synced");
+        #[cfg(not(unix))]
+        assert_eq!(install_body["error"]["code"], "conflict");
     }
 
     #[tokio::test]

@@ -2066,26 +2066,11 @@ mod tests {
 
     #[test]
     fn platform_defaults_match_the_frozen_contract() {
-        let linux = NodeContext::resolve_for(
-            NodePlatform::Linux,
-            NodePathOverrides::default(),
-            false,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let linux = default_layout(NodePlatform::Linux, None).unwrap();
         assert_eq!(linux.config_path(), Path::new("/etc/omakure/node.toml"));
         assert_eq!(linux.state_dir(), Path::new("/var/lib/omakure"));
-        let mac = NodeContext::resolve_for(
-            NodePlatform::MacOs,
-            NodePathOverrides::default(),
-            false,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+
+        let mac = default_layout(NodePlatform::MacOs, None).unwrap();
         assert_eq!(
             mac.config_path(),
             Path::new("/Library/Application Support/Omakure/node.toml")
@@ -2094,15 +2079,9 @@ mod tests {
             mac.state_dir(),
             Path::new("/Library/Application Support/Omakure")
         );
-        let windows = NodeContext::resolve_for(
-            NodePlatform::Windows,
-            NodePathOverrides::default(),
-            false,
-            None,
-            None,
-            Some(PathBuf::from("/tmp/ProgramData")),
-        )
-        .unwrap();
+
+        let windows =
+            default_layout(NodePlatform::Windows, Some(Path::new("/tmp/ProgramData"))).unwrap();
         assert_eq!(
             windows.config_path(),
             Path::new("/tmp/ProgramData/Omakure/node.toml")
@@ -2228,36 +2207,37 @@ mod tests {
     #[cfg(debug_assertions)]
     #[test]
     fn cli_overrides_env_and_env_overrides_defaults() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cli_state = tmp.path().join("cli-state");
+        let cli_config = tmp.path().join("cli.toml");
+        let env_state = tmp.path().join("env-state");
+        let env_config = tmp.path().join("env.toml");
+
         let layout = NodeContext::resolve_for(
             NodePlatform::Linux,
-            NodePathOverrides::new(
-                Some(PathBuf::from("/tmp/cli-state")),
-                Some(PathBuf::from("/tmp/cli.toml")),
-            ),
+            NodePathOverrides::new(Some(cli_state.clone()), Some(cli_config.clone())),
             true,
-            Some(PathBuf::from("/tmp/env-state")),
-            Some(PathBuf::from("/tmp/env.toml")),
+            Some(env_state.clone()),
+            Some(env_config.clone()),
             None,
         )
         .unwrap();
-        assert_eq!(layout.state_dir(), Path::new("/tmp/cli-state"));
-        assert_eq!(layout.config_path(), Path::new("/tmp/cli.toml"));
+        assert_eq!(layout.state_dir(), cli_state.as_path());
+        assert_eq!(layout.config_path(), cli_config.as_path());
+
         let env_only = NodeContext::resolve_for(
             NodePlatform::Linux,
             NodePathOverrides::default(),
             true,
-            Some(PathBuf::from("/tmp/env-state")),
-            Some(PathBuf::from("/tmp/env.toml")),
+            Some(env_state.clone()),
+            Some(env_config),
             None,
         )
         .unwrap();
-        assert_eq!(env_only.state_dir(), Path::new("/tmp/env-state"));
+        assert_eq!(env_only.state_dir(), env_state.as_path());
         assert!(NodeContext::resolve_for(
             NodePlatform::Linux,
-            NodePathOverrides::new(
-                Some(PathBuf::from("/tmp/cli-state")),
-                Some(PathBuf::from("/tmp/cli.toml")),
-            ),
+            NodePathOverrides::new(Some(cli_state), Some(cli_config)),
             false,
             None,
             None,

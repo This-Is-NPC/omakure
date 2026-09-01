@@ -387,23 +387,22 @@ mod tests {
         for dir in [&system32_dir, &sysnative_dir, &git_dir] {
             std::fs::create_dir_all(dir).unwrap();
         }
-        for dir in [&system32_dir, &sysnative_dir] {
-            std::fs::write(dir.join("bash.exe"), "wsl launcher").unwrap();
-        }
-        let git = git_dir.join("bash.exe");
+        let system32_bash = system32_dir.join("BASH.EXE");
+        let sysnative_bash = sysnative_dir.join("BaSh.ExE");
+        let git = git_dir.join("bash.EXE");
+        std::fs::write(&system32_bash, "wsl launcher").unwrap();
+        std::fs::write(&sysnative_bash, "wsl launcher").unwrap();
         std::fs::write(&git, "git bash").unwrap();
 
-        // Use deliberately different path casing from the fixture creation.
-        // Windows lookup is case-insensitive, and WSL filtering must be too.
-        let uppercase = |path: &Path| path.to_string_lossy().to_ascii_uppercase();
-        let lowercase = |path: &Path| path.to_string_lossy().to_ascii_lowercase();
+        // Keep every temporary directory component in its original casing;
+        // vary only the executable component casing.
         let env = vec![(
             "PATH".to_string(),
             format!(
                 "{};{};{}",
-                uppercase(&system32_dir),
-                lowercase(&sysnative_dir),
-                uppercase(&git_dir)
+                system32_dir.display(),
+                sysnative_dir.display(),
+                git_dir.display()
             ),
         )];
 

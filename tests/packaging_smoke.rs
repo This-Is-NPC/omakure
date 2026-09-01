@@ -563,10 +563,19 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     assert!(readme.contains("Optional PowerShell or Python"));
     assert!(readme.contains("Lua 5.4 is embedded"));
     let mise = read("mise.toml");
-    assert!(mise.contains("OMAKURE_API_TOKEN"));
-    assert!(mise.contains("openssl rand -hex 32"));
-    assert!(mise.contains("--capability all"));
-    assert!(mise.contains("cargo run --bin omakure -- node serve"));
+    assert!(mise.contains(
+        "[tasks.node]\n\
+description = \"Run the authenticated machine node service in the foreground\"\n\
+run = \"scripts/mise/node\"\n\
+raw = true"
+    ));
+    let node = read("scripts/mise/node");
+    assert!(
+        node.contains("OMAKURE_API_TOKEN")
+            && node.contains("openssl rand -hex 32")
+            && node.contains("cargo run --bin omakure -- node serve")
+            && node.contains("--capability all")
+    );
     // The archive contract is as-is and keeps its own document.
     let artifacts = read("docs/internal/release-artifacts.md");
     assert!(artifacts.contains("Each archive contains exactly one root entry"));

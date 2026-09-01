@@ -98,6 +98,50 @@ gh project item-list 6 --owner This-Is-NPC --format json \
 - Any new `#[allow(clippy::…)]` requires a one-line comment justifying the
   suppression (pointing at the bug, audit note, or rationale).
 
+## Local checks and hooks
+
+Install the tracked hooks once from the repository root:
+
+```bash
+mise run hooks:install
+```
+
+The installer writes only this repository's local `core.hooksPath` setting; it
+does not modify global Git configuration. The pre-commit hook runs
+`scripts/tasks/check/fast`, which runs the shared static/fixture checks once
+followed by bounded formatting, Clippy, and locked library tests. The pre-push
+hook runs `scripts/tasks/check/full`, which runs the same shared checks once
+followed by the canonical bounded formatting/Clippy script, bounded
+all-target tests, and the complete locally executable Linux suite: usage and
+catalog checks, deterministic coverage, complexity
+calibration/ratchet/audit, release packaging, Docker smoke, transport and
+Health certification, and Health cleanup verification. It does not invoke
+fast, so the library test is not duplicated. Transport certification owns its
+retained-suite cleanup verification and intentionally runs its own
+`direct_transport_e2e` certification-context test a second time.
+
+Both hooks stop at the first failing command and return that failure status;
+cleanup owned by a certification script still runs through its trap. The full
+check is intentionally a long-running pre-push gate because it includes
+instrumented coverage and bounded multi-container certifications. Do not
+advertise bypassing the hooks; fix the reported prerequisite or check failure
+instead.
+
+Both checks require the pinned Rust toolchain, Python with PyYAML, and GNU
+`timeout`; GNU `timeout` is also required by the pre-commit fast check. The
+full check additionally requires Linux, Docker Engine and Compose, `jq`, and
+SQLite. Destructive
+Fedora VM/KVM certification is intentionally excluded from automatic
+pre-push. Run its explicit task when the host, libvirt, and VM prerequisites
+are available:
+
+```bash
+mise run cert:vm
+```
+
+The static VM policy check remains part of `check:full`; `cert:vm` is the
+separate destructive certification entry point.
+
 ## Repository layout
 
 This is a headless Rust/HTTP product. Product documentation belongs under

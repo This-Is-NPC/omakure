@@ -4,20 +4,70 @@ Omakure is built and exercised as a headless CLI/HTTP application. Do not use
 bare `omakure` as an application launch command: no-argument invocation only
 prints help and returns; development entry points must name a command.
 
-## Fast path
+## Checks and hooks
+
+Install the tracked repository hooks from the repository root:
 
 ```bash
-cargo build
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
-mise run dev:smoke
+mise run hooks:install
 ```
 
-`mise run dev:smoke` builds the debug binary, starts a node service on a disposable
-port, verifies `/v1/health` and `/v1/ready`, then terminates it. It does not
-leave a daemon running or require a terminal UI. Set `OMAKURE_DEV_WORKSPACE`
-and `OMAKURE_DEV_PORT` to override its fixtures.
+This sets local Git `core.hooksPath` to `.githooks` and leaves unrelated
+global Git configuration untouched. The hooks are thin wrappers around the
+canonical scripts:
+
+| Hook | Canonical script | Scope |
+|---|---|---|
+| pre-commit | `scripts/tasks/check/fast` | Shared static/fixture checks, then bounded formatting, Clippy, and `cargo test --lib --locked` |
+| pre-push | `scripts/tasks/check/full` | The same shared checks once, then bounded formatting/Clippy, bounded all-target tests, and the complete locally executable Linux gate |
+
+Run either script directly, or use the equivalent Mise tasks:
+
+```bash
+scripts/tasks/check/fast
+scripts/tasks/check/full
+mise run check:fast
+mise run check:full
+```
+
+`check:fast` and `check:full` each invoke the internal
+`scripts/tasks/check/shared` script exactly once. Fast then runs only
+formatting, Clippy, and locked library tests; it does not run Docker, coverage
+instrumentation, release builds, a network service, integration tests, or
+end-to-end tests. The shared checks include shell/YAML syntax, lightweight
+complexity contract fixtures, and the coverage contract fixtures.
+
+Full does not invoke fast (which would duplicate its unit test); it runs the
+shared checks once, then the canonical bounded formatting/Clippy script,
+bounded locked all-target tests, bounded development service smoke, bounded
+Usage KDL/Docs and operation catalog checks,
+deterministic local coverage, complexity setup/corpus calibration/two-report
+repeatability/ratchet/audit, packaging and a locked release build, VM policy
+static checks, `scripts/tasks/cert/docker-smoke`, transport and Health
+certification, and Health cleanup verification. Transport certification owns
+its retained-suite cleanup verification and intentionally runs its own
+`direct_transport_e2e` invocation in that certification context; the resulting
+second run is deliberate. Other end-to-end suites are not repeated after
+all-target tests or certification.
+
+Both checks require the pinned Rust toolchain, Python with PyYAML, and GNU
+`timeout`; GNU `timeout` is therefore also a pre-commit prerequisite. The full
+check additionally requires Linux, Docker Engine and Compose, `jq`, and SQLite.
+It is expected to be a long-running pre-push gate because it includes
+deterministic instrumented coverage and bounded multi-container certification;
+no duration estimate is promised. Commands run in order and stop at the first
+failure. Certification scripts retain their own trap-backed cleanup when a gate
+fails or is interrupted. Do not advertise bypassing hooks: resolve the missing
+prerequisite or reported failure.
+
+Destructive Fedora VM/KVM certification is intentionally not an automatic
+pre-push gate. The static policy inspection remains in `check:full`; run the
+explicit destructive task only on a prepared host with libvirt and its VM
+prerequisites:
+
+```bash
+mise run cert:vm
+```
 
 ## Mise tasks
 
@@ -39,6 +89,9 @@ and `OMAKURE_DEV_PORT` to override its fixtures.
 | `mise run usage:kdl` | generate or check pinned Clap-to-Usage compatibility artifacts |
 | `mise run usage:docs` | generate or check Markdown and roff documentation from checked Usage KDL |
 | `mise run operation:catalog` | generate or check the operation catalog artifacts |
+| `mise run check:fast` | canonical cheap pre-commit checks |
+| `mise run check:full` | canonical complete Linux pre-push suite |
+| `mise run hooks:install` | configure local tracked Git hooks |
 
 ## Usage compatibility artifacts
 

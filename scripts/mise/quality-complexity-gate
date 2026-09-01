@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="${MISE_PROJECT_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
+root="$(cd -- "$root" && pwd -P)"
+"$root/scripts/mise/quality-complexity-report"
+exec "$root/scripts/tasks/complexity-gate" \
+  --report "$root/target/quality/complexity-report.json" \
+  --baseline "$root/quality/complexity/baseline.json" \
+  --exceptions "$root/quality/complexity/exceptions.json" \
+  --output "$root/target/quality/complexity-evidence/gate.json" "$@"

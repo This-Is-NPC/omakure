@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+export MISE_PROJECT_ROOT="$root"
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || {
+        printf 'check:fast: required command is missing: %s\n' "$1" >&2
+        exit 1
+    }
+}
+
+require_command cargo
+require_command timeout
+timeout_version="$(timeout --version 2>&1 || true)"
+[[ "$timeout_version" == *"GNU coreutils"* ]] || {
+    printf 'check:fast: GNU timeout is required for bounded checks\n' >&2
+    exit 1
+}
+
+"$root/scripts/tasks/check/shared"
+
+printf 'check:fast: bounded formatting and Clippy\n'
+timeout --foreground --kill-after=10s 15m "$root/scripts/mise/lint"
+printf 'check:fast: library tests\n'
+timeout --foreground --kill-after=10s 15m cargo test --lib --locked
+printf 'check:fast: PASS\n'

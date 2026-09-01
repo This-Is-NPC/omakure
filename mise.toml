@@ -9,54 +9,54 @@ includes = ["scripts/tasks"]
 
 [tasks.node]
 description = "Run the authenticated machine node service in the foreground"
-run = "OMAKURE_API_TOKEN=\"$(openssl rand -hex 32)\" cargo run --bin omakure -- node serve --workers 1 --capability all"
+run = "scripts/mise/node"
 raw = true
 
 [tasks.dev]
 description = "Run the bounded node-service smoke check"
-depends = ["dev:smoke"]
+run = "scripts/mise/dev"
 
 [tasks."test:node-service"]
 description = "Run node-service, CLI, HTTP, and policy integration checks"
-run = "cargo test --test node_service_e2e --test http_api_e2e --test cli_surface_e2e --test policy_e2e"
+run = "scripts/mise/test-node-service"
 
 [tasks."test:unit"]
 description = "Run library and unit tests"
-run = "cargo test --lib"
+run = "scripts/mise/test-unit"
 
 [tasks."test:integration"]
 description = "Run integration tests excluding live certification gates"
-run = "cargo test --tests"
+run = "scripts/mise/test-integration"
 
 [tasks."test:e2e"]
 description = "Run the end-to-end test suites"
-run = "cargo test --test direct_transport_e2e --test node_service_e2e --test http_api_e2e --test cli_surface_e2e --test policy_e2e"
+run = "scripts/mise/test-e2e"
 
 [tasks.test]
 description = "Run the unit, integration, and end-to-end test groups"
-depends = ["test:unit", "test:integration", "test:e2e"]
+run = "scripts/mise/test"
 
 [tasks."lint:fmt"]
 description = "Check Rust formatting"
-run = "cargo fmt --check"
+run = "scripts/mise/lint-fmt"
 
 [tasks."lint:clippy"]
 description = "Run Clippy with warnings denied"
-run = "cargo clippy --all-targets -- -D warnings"
+run = "scripts/mise/lint-clippy"
 
 [tasks.lint]
 description = "Run formatting and Clippy checks"
-depends = ["lint:fmt", "lint:clippy"]
+run = "scripts/mise/lint"
 
 [tasks.build]
 description = "Build the project in debug mode"
-run = "cargo build"
+run = "scripts/mise/build"
 sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
 outputs = ["target/debug/omakure"]
 
 [tasks."build:release"]
 description = "Build the release binary"
-run = "cargo build --release --bin omakure"
+run = "scripts/mise/build-release"
 sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
 outputs = ["target/release/omakure"]
 
@@ -67,13 +67,14 @@ run = "scripts/tasks/usage-kdl"
 [tasks."usage:docs"]
 description = "Generate or check deterministic Markdown and roff Usage documentation"
 run = "scripts/tasks/usage-docs"
+
 [tasks."operation:catalog"]
 description = "Generate or check the operation catalog artifacts"
 run = "scripts/tasks/operation-catalog"
 
 [tasks.install]
 description = "Install omakure locally (mutates the user installation prefix)"
-run = "bash scripts/install/install-from-source.sh"
+run = "scripts/install/install-from-source.sh"
 
 [tasks.coverage]
 description = "Generate deterministic LLVM HTML, LCOV, and Cobertura reports and enforce the baseline"
@@ -82,18 +83,18 @@ run = "scripts/tasks/coverage"
 [tasks."coverage:test"]
 description = "Run offline coverage threshold and inventory fixtures"
 run = "scripts/tasks/coverage-test"
+
 [tasks."quality:complexity-setup"]
 description = "Explicitly acquire pinned complexity analyzers and verify SHA-256 digests"
 run = "scripts/tasks/complexity-setup"
 
 [tasks."quality:complexity-report"]
 description = "Run the offline informational Rust complexity report"
-run = "scripts/tasks/complexity-report --source-root . --output target/quality/complexity-report.json"
- 
+run = "scripts/mise/quality-complexity-report"
+
 [tasks."quality:complexity-gate"]
 description = "Enforce changed/new handwritten-function complexity and exception validity"
-depends = ["quality:complexity-report"]
-run = "scripts/tasks/complexity-gate --report target/quality/complexity-report.json --baseline quality/complexity/baseline.json --exceptions quality/complexity/exceptions.json --output target/quality/complexity-evidence/gate.json"
+run = "scripts/mise/quality-complexity-gate"
 
 [tasks."quality:complexity-gate-test"]
 description = "Validate changed-function boundaries, ratchet, and exception lifecycle"
@@ -102,18 +103,18 @@ run = "scripts/tasks/complexity-gate-test"
 [tasks."quality:complexity-test"]
 description = "Validate complexity corpus repeatability and fail-closed guards"
 run = "scripts/tasks/complexity-test"
+
 [tasks."quality:complexity-setup-test"]
 description = "Validate native complexity setup mappings across supported hosts"
 run = "scripts/tasks/complexity-setup-test"
+
 [tasks."quality:complexity-soak-audit"]
 description = "Audit persisted native complexity evidence for the ten-run temporal gate"
-run = "scripts/tasks/complexity-soak-audit --directory target/quality/complexity-evidence"
-
+run = "scripts/mise/quality-complexity-soak-audit"
 
 [tasks."package:release"]
 description = "Package a built release binary into an archive"
-depends = ["build:release"]
-run = "scripts/release/package-release.sh target/release/omakure dist/omakure.tar.gz"
+run = "scripts/mise/package-release"
 
 [tasks."cert:vm-static"]
 description = "Validate Fedora VM certification scripts and fixed policy fixtures"
@@ -133,8 +134,20 @@ run = "scripts/tasks/cert/vm-cleanup"
 
 [tasks."cert:vm"]
 description = "Run the Fedora VM privilege certification after static checks"
-depends = ["cert:vm-static"]
+run = "scripts/mise/cert-vm"
 
 [tasks.cert]
 description = "Run transport, Health Plane, and Fedora VM certification gates"
-depends = ["cert:transport", "cert:health", "cert:vm"]
+run = "scripts/mise/cert"
+
+[tasks."check:fast"]
+description = "Run cheap formatting, static, contract, and library checks"
+run = "scripts/tasks/check/fast"
+
+[tasks."check:full"]
+description = "Run the complete locally executable Linux suite"
+run = "scripts/tasks/check/full"
+
+[tasks."hooks:install"]
+description = "Configure the repository's tracked Git hooks locally"
+run = "scripts/install/install-hooks.sh"

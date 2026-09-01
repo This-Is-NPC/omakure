@@ -396,15 +396,14 @@ impl NodeRegistry {
             local_public_key: public_key,
             schema_mutation_allowed: false,
         };
-        registry.with_connection(|connection| {
-            validate_database_security(context, &registry.path)?;
-            let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
-            integrity_check(&transaction)?;
-            validate_existing_database(&transaction, &registry)?;
-            transaction.commit()?;
-            Ok(())
-        })?;
+        let mut connection =
+            Connection::open_with_flags(&registry.path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        configure_connection_read_only(&mut connection)?;
+        validate_database_security(context, &registry.path)?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
+        integrity_check(&transaction)?;
+        validate_existing_database(&transaction, &registry)?;
+        transaction.commit()?;
         Ok(registry)
     }
 
@@ -2097,11 +2096,7 @@ impl NodeRegistry {
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
     ) -> Result<T, RegistryError> {
-        let mut connection = if self.schema_mutation_allowed {
-            Connection::open(&self.path)?
-        } else {
-            Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY)?
-        };
+        let mut connection = Connection::open(&self.path)?;
         if self.schema_mutation_allowed {
             configure_connection(&mut connection)?;
         } else {

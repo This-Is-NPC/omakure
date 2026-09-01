@@ -299,11 +299,14 @@ fn unix_uninstall_service_path_skips_release_resolution_and_network() {
 fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results() {
     let ci = read(".github/workflows/ci.yml");
     assert!(ci.contains("cargo test --test node_service_e2e --test policy_e2e --locked"));
-    assert!(ci.contains("docker build --tag omakure-node:ci ."));
-    assert!(ci.contains("for path in health ready"));
-    assert!(ci.contains("docker volume create"));
-    assert!(ci.contains("chown 10001:10001"));
-    assert!(ci.contains("chmod 0700 /var/lib/omakure"));
+    assert!(ci.contains("run: ./scripts/tasks/cert/docker-smoke"));
+    let docker_smoke = read("scripts/tasks/cert/docker-smoke");
+    assert!(docker_smoke.contains("image='omakure-node:ci'"));
+    assert!(docker_smoke.contains("docker build --tag \"$image\" \"$root_dir\""));
+    assert!(docker_smoke.contains("for path in health ready"));
+    assert!(docker_smoke.contains("docker volume create"));
+    assert!(docker_smoke.contains("chown 10001:10001"));
+    assert!(docker_smoke.contains("chmod 0700 /var/lib/omakure"));
 }
 
 /// What the install automation proves, and what it still does not, has to stay

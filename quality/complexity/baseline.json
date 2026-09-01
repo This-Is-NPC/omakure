@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "46986f6ffb6f48562c22f9b2fb987a198662d5c7cfd95a1e25eefa9008a7f35b",
+  "canonical_sha256": "899af6ab54682118f34da96ba304f3cd911bcdb077e343a32a3c8a068fa0d07e",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -70779,22 +70779,22 @@
       "cognitive": 11,
       "cyclomatic": 11,
       "derived": {
-        "identity": "crate::node_registry::activate_signed_bundle_transaction::<closure>@960#3",
+        "identity": "crate::node_registry::activate_signed_bundle_transaction::<closure>@957#3",
         "macro_expansion": "not_measured",
         "path": "src/node_registry.rs",
         "signature": "self.with_connection(|connection| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::activate_signed_bundle_transaction::<closure>@960#3",
+      "identity": "crate::node_registry::activate_signed_bundle_transaction::<closure>@957#3",
       "kind": "closure",
-      "line": 960,
+      "line": 957,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 11,
         "kind": "closure",
-        "line": 960,
+        "line": 957,
         "name": "<closure>"
       },
       "path": "src/node_registry.rs",
@@ -71117,22 +71117,22 @@
       "cognitive": 9,
       "cyclomatic": 23,
       "derived": {
-        "identity": "crate::node_registry::approve_manual_enrollment::<closure>@1179#4",
+        "identity": "crate::node_registry::approve_manual_enrollment::<closure>@1176#4",
         "macro_expansion": "not_measured",
         "path": "src/node_registry.rs",
         "signature": "self.with_connection(|connection| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::approve_manual_enrollment::<closure>@1179#4",
+      "identity": "crate::node_registry::approve_manual_enrollment::<closure>@1176#4",
       "kind": "closure",
-      "line": 1179,
+      "line": 1176,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 9,
         "cyclomatic": 23,
         "kind": "closure",
-        "line": 1179,
+        "line": 1176,
         "name": "<closure>"
       },
       "path": "src/node_registry.rs",

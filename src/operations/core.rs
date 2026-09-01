@@ -953,12 +953,22 @@ mod tests {
     }
 
     #[test]
-    fn logical_relative_paths_handle_verbatim_windows_fixtures() {
-        let root = Path::new(r"\\?\C:\workspace\scripts");
-        let path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
+    fn logical_relative_paths_handle_windows_alias_fixtures() {
+        let verbatim_root = Path::new(r"\\?\C:\workspace\scripts");
+        let verbatim_path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
+        let short_root = Path::new(r"C:\PROGRA~1\OMAKURE\scripts");
+        let short_path = Path::new(r"C:\PROGRA~1\OMAKURE\scripts\tools\deploy.cmd");
 
-        assert_eq!(logical_relative_path(path, root), "tools/deploy.cmd");
+        assert_eq!(
+            logical_relative_path(verbatim_path, verbatim_root),
+            "tools/deploy.cmd"
+        );
+        assert_eq!(
+            logical_relative_path(short_path, short_root),
+            "tools/deploy.cmd"
+        );
     }
+
 
     #[test]
     fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {

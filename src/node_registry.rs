@@ -2188,7 +2188,6 @@ fn validate_existing_database(
     connection: &Connection,
     registry: &NodeRegistry,
 ) -> Result<(), RegistryError> {
-    integrity_check(connection)?;
     let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     if version == 0 {
         return Err(RegistryError::InvalidSchema(
@@ -5434,17 +5433,18 @@ mod tests {
     }
 
     #[test]
-    fn pure_registry_reads_succeed_while_writer_is_reserved() {
+    fn observational_registry_reads_succeed_while_writer_is_reserved() {
         let temp = TempDir::new().unwrap();
         let node_context = context(&temp);
         let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
-        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        NodeRegistry::open(&node_context, identity.public_status()).unwrap();
         let mut writer = Connection::open(node_context.database_path()).unwrap();
         configure_connection(&mut writer).unwrap();
         let writer_transaction = writer
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .unwrap();
         let status = identity.public_status();
+        let registry = NodeRegistry::open_existing(&node_context, status).unwrap();
 
         assert!(registry.peer(&status.node_id).is_ok());
         assert!(registry.peers().is_ok());

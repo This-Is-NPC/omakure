@@ -860,7 +860,7 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     assert_eq!(row["trust_state"], "active");
     assert_eq!(row["capabilities"], json!([CAPABILITY_PROFILE_PULSE]));
     assert_eq!(row["profile"]["role"], "performer");
-    assert_eq!(row["profile"]["platform"], "linux");
+    assert_eq!(row["profile"]["platform"], std::env::consts::OS);
     assert!(row["profile"]["profile_revision"].as_u64().unwrap() >= 1);
     assert_eq!(row["pulse"]["runner"]["scheduler"], "disabled");
     assert_eq!(row["pulse"]["runner"]["workers_configured"], 1);

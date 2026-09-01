@@ -1595,11 +1595,18 @@ fn connect_and_hold(
     let trusted = registry
         .transport_peer(remote.node_id(), &hex(remote.identity_key()))
         .map_err(|_| TransportError::Internal)?;
-    authorize_peer(
+    if let Err(error) = authorize_peer(
         &remote,
         trusted.as_ref().map(peer_authorization),
         unix_seconds(),
-    )?;
+    ) {
+        // The remote is authenticated, but this node's local authorization
+        // refuses it before a TransportSession or probe exists. Record the
+        // single redacted initiator-side refusal before returning; the
+        // responder will never receive a probe to audit as a duplicate.
+        audit_error(&registry, remote.node_id(), None, &error)?;
+        return Err(error.into());
+    }
     state
         .admission
         .migrate_node(&mut reservation, remote.node_id())?;
@@ -1733,7 +1740,6 @@ fn hold_session(
         .set_read_timeout(Some(crate::direct_health::TICK))
         .map_err(|_| TransportError::Internal)?;
     let mut last_activity = Instant::now();
-    let mut last_trust_check = Instant::now();
     let mut outbound_cue: Option<OutboundCue> = None;
     let mut outbound_baseline: Option<OutboundBaseline> = None;
     // Anything still queued when this session ends must not wait out its
@@ -1743,33 +1749,6 @@ fn hold_session(
         peer_node_id,
     };
     while !state.stop.load(Ordering::SeqCst) {
-        // Revocation is immediate or it is not revocation.
-        //
-        // A session is authorized once, when it opens, and nothing re-read that
-        // decision afterwards. So an operator who revoked a peer went on being
-        // told it was `connected` -- for as long as the link stayed up, which
-        // on an idle link is five minutes and on a busy one is unbounded --
-        // and `connected` is the evidence `docs/recovery.md` sends them to
-        // read when it says to confirm the revoked peer cannot establish a
-        // useful direct session. Nothing they could see said otherwise.
-        //
-        // Only a positive reading ends the session. A registry that will not
-        // answer leaves the link alone and asks again next tick: `not_enrolled`
-        // is fatal to a dialer, so treating a transient read failure as an
-        // answer would retire a healthy link permanently over a locked
-        // database. The sender-side gate already refuses to *use* a session it
-        // cannot prove is trusted, so nothing rides on this being pessimistic.
-        if last_trust_check.elapsed() >= crate::direct_health::TICK {
-            last_trust_check = Instant::now();
-            if let Ok(Some(authorization)) = registry.health_authorization(peer_node_id) {
-                if authorization.state != PeerState::Active {
-                    return Err(match authorization.state {
-                        PeerState::Revoked => DirectServiceError::Protocol(TransportError::Revoked),
-                        _ => DirectServiceError::Protocol(TransportError::NotEnrolled),
-                    });
-                }
-            }
-        }
         // One Cue in flight per session, which is the bound the contract
         // already freezes at `concurrent_cue_runs_per_peer = 1`.
         if outbound_cue.is_none() {
@@ -1786,11 +1765,6 @@ fn hold_session(
                     // dropped; the caller is waiting on the channel.
                     Err(_) => pending.answer(false, false, CueCode::InvalidMessage.code(), false),
                 }
-            }
-        }
-        if let Some(in_flight) = outbound_cue.as_mut() {
-            if in_flight.resolve(registry, peer_node_id) {
-                outbound_cue = None;
             }
         }
         // One baseline in flight per session. A second would put megabytes on
@@ -1816,6 +1790,11 @@ fn hold_session(
                 }
             }
         }
+        if let Some(in_flight) = outbound_cue.as_mut() {
+            if in_flight.resolve(registry, peer_node_id) {
+                outbound_cue = None;
+            }
+        }
         if let Some(in_flight) = outbound_baseline.as_mut() {
             in_flight.expire_if_due();
         }
@@ -1828,6 +1807,12 @@ fn hold_session(
         match wait_readable(stream, crate::direct_health::TICK) {
             Readiness::Readable => {}
             Readiness::Idle => {
+                // An idle session still closes as soon as local authorization
+                // is withdrawn; no inbound frame is available to hand to
+                // HealthSession first.
+                if let Some(error) = health_authorization_error(registry, peer_node_id) {
+                    return Err(error);
+                }
                 if last_activity.elapsed() >= IDLE_TIMEOUT {
                     return Ok(());
                 }
@@ -1857,6 +1842,14 @@ fn hold_session(
         last_activity = Instant::now();
         if message.kind != ENVELOPE_KIND {
             continue;
+        }
+        // Readable frames get one and only one Health Plane ingest attempt
+        // before the proactive authorization close. In particular, a revoked
+        // peer's queued Health message records durable 1107 while the shared
+        // operations leave all Health state untouched.
+        let health_outcome = health.handle_envelope(&message.body);
+        if let Some(error) = health_authorization_error(registry, peer_node_id) {
+            return Err(error);
         }
         if let Some(in_flight) = outbound_cue.as_mut() {
             match in_flight.absorb_ack(
@@ -1907,7 +1900,7 @@ fn hold_session(
                 }
             }
         }
-        match health.handle_envelope(&message.body) {
+        match health_outcome {
             // A non-health envelope used to be discarded here without a trace.
             // Cue traffic is decided and audited instead; anything else keeps
             // the original silence, so the dispatcher never becomes an oracle
@@ -3447,6 +3440,22 @@ fn peer_authorization(
     )
 }
 
+fn health_authorization_error(
+    registry: &NodeRegistry,
+    peer_node_id: &str,
+) -> Option<DirectServiceError> {
+    let Ok(Some(authorization)) = registry.health_authorization(peer_node_id) else {
+        return None;
+    };
+    if authorization.state == PeerState::Active {
+        return None;
+    }
+    Some(match authorization.state {
+        PeerState::Revoked => DirectServiceError::Protocol(TransportError::Revoked),
+        _ => DirectServiceError::Protocol(TransportError::NotEnrolled),
+    })
+}
+
 fn audit_error(
     registry: &NodeRegistry,
     node_id: &str,
@@ -4756,6 +4765,41 @@ mod tests {
             }
             other => panic!("expected a not-enrolled refusal, got {other}"),
         }
+    }
+
+    #[test]
+    fn static_peer_dial_ownership_is_deterministic_for_both_node_id_orderings() {
+        fn state_for(local_node_id: &str) -> (tempfile::TempDir, ConnectionState) {
+            let temp = tempfile::TempDir::new().expect("node root");
+            let state = ConnectionState {
+                local_node_id: local_node_id.to_string(),
+                context: test_node_context(&temp),
+                identity_status: test_identity_status(local_node_id),
+                expected: HashSet::new(),
+                stop: Arc::new(AtomicBool::new(false)),
+                active: Mutex::new(HashMap::new()),
+                outbox: Mutex::new(HashMap::new()),
+                baseline_outbox: Mutex::new(HashMap::new()),
+                status: Arc::new(Mutex::new(TransportStatus::default())),
+                admission: Arc::new(AdmissionController {
+                    state: Mutex::new(AdmissionState::default()),
+                }),
+                reporter: None,
+                workspace_root: None,
+            };
+            (temp, state)
+        }
+
+        let (_lower_root, lower) = state_for("omk1_a");
+        let (_higher_root, higher) = state_for("omk1_b");
+        assert!(
+            lower.should_initiate("omk1_b"),
+            "the lexicographically lower node ID must own the dial"
+        );
+        assert!(
+            !higher.should_initiate("omk1_a"),
+            "the lexicographically higher node ID must remain listener-only"
+        );
     }
 
     fn blackhole_resolver_config() -> ResolverConfig {

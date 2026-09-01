@@ -867,13 +867,22 @@ fn cache_path_for_battery(workspace: &Workspace, name: &str) -> OperationResult<
     let path = cache_root.join(name);
     if path.exists() {
         reject_symlink_components(&cache_root, Path::new(name), true)?;
+        // `canonicalize` is used only for the containment decision. On
+        // Windows it returns a `\\?\` path, while the path handed to Git and
+        // the cache filesystem must remain in ordinary DOS form.
+        let canonical_root = cache_root.canonicalize().map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::UnsafePath,
+                format!("failed to canonicalize battery cache root: {err}"),
+            )
+        })?;
         let canonical = path.canonicalize().map_err(|err| {
             OperationError::new(
                 OperationErrorCode::UnsafePath,
                 format!("failed to canonicalize battery cache path: {err}"),
             )
         })?;
-        if !canonical.starts_with(&cache_root) {
+        if !canonical.starts_with(&canonical_root) {
             return Err(OperationError::new(
                 OperationErrorCode::UnsafePath,
                 format!("battery cache path escapes cache root: {name}"),
@@ -972,7 +981,11 @@ fn safe_battery_metadata_dir(
             format!("battery {label} directory escapes .omakure/batteries"),
         ));
     }
-    Ok(canonical)
+    // Keep canonical paths for the security comparison above, but never
+    // expose Windows' verbatim prefix to Git or cache operations.
+    Ok(PathBuf::from(strip_windows_verbatim_owned(
+        canonical.to_string_lossy().into_owned(),
+    )))
 }
 
 fn validate_battery_name(name: &str) -> OperationResult<()> {
@@ -2534,7 +2547,9 @@ pub fn confined_existing_path(root: &Path, relative: &Path) -> OperationResult<P
             format!("battery path escapes cache root: {}", relative.display()),
         ));
     }
-    Ok(full)
+    Ok(PathBuf::from(strip_windows_verbatim_owned(
+        full.to_string_lossy().into_owned(),
+    )))
 }
 
 pub fn reject_symlink(path: &Path) -> OperationResult<()> {
@@ -3040,6 +3055,10 @@ fn write_atomic(path: &Path, contents: &[u8], label: &str) -> OperationResult<()
                             format!("failed to write {label} temp file: {err}"),
                         )
                     })?;
+                // ReplaceFileW requires the replacement handle to be closed.
+                // Keep the temp file's lifetime explicit so repeated atomic
+                // writes work on Windows without a sharing violation.
+                drop(file);
                 #[cfg(windows)]
                 {
                     // `rename` cannot replace an existing file on Windows.
@@ -4027,9 +4046,25 @@ path = "scripts/ignored.sh"
 
         assert_eq!(
             normalized,
-            repo.canonicalize().unwrap().display().to_string()
+            strip_windows_verbatim_owned(repo.canonicalize().unwrap().display().to_string())
         );
         assert!(Path::new(&normalized).is_absolute());
+    }
+    #[cfg(windows)]
+    #[test]
+    fn local_git_source_normalizes_verbatim_input_for_git() {
+        let dir = TempDir::new().unwrap();
+        let repo = dir.path().join("repo");
+        fs::create_dir_all(&repo).unwrap();
+
+        let verbatim = format!(r"\\?\{}", repo.display());
+        let normalized = normalize_git_url(&verbatim).unwrap();
+
+        assert_eq!(
+            normalized,
+            strip_windows_verbatim_owned(repo.canonicalize().unwrap().display().to_string())
+        );
+        assert!(!normalized.starts_with(r"\\?\"));
     }
 
     #[test]
@@ -4770,7 +4805,7 @@ tags = ["azure"]
     }
 
     #[test]
-    fn sync_battery_clones_fetches_detached_commit_and_updates_registry() {
+    fn sync_battery_is_idempotent_on_repeated_prepare_and_sync() {
         let repo = create_battery_repo();
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);
@@ -4785,7 +4820,14 @@ tags = ["azure"]
         )
         .unwrap();
 
-        let summary = sync_battery(
+        let first = sync_battery(
+            &ws,
+            SyncBatteryRequest {
+                name: "azure".into(),
+            },
+        )
+        .unwrap();
+        let second = sync_battery(
             &ws,
             SyncBatteryRequest {
                 name: "azure".into(),
@@ -4793,10 +4835,10 @@ tags = ["azure"]
         )
         .unwrap();
 
-        assert!(summary.resolved_commit.is_some());
+        assert_eq!(second.resolved_commit, first.resolved_commit);
         assert!(ws
             .root()
-            .join(summary.cache_path)
+            .join(second.cache_path)
             .join(MANIFEST_FILE)
             .exists());
     }

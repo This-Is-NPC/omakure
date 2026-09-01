@@ -181,11 +181,11 @@ pub fn initialize_node(
     context: &NodeContext,
     config: &NodeConfig,
 ) -> OperationResult<NodeInitializationResult> {
-    let state_was_present = context
+    let lifecycle = context.acquire_lifecycle_lock().map_err(map_node_error)?;
+    context
         .validate_existing_state_directory()
         .map_err(map_node_error)?;
-    let _lifecycle = context.acquire_lifecycle_lock().map_err(map_node_error)?;
-    initialize_node_locked(context, config, state_was_present)
+    initialize_node_locked(context, config, lifecycle.state_was_present())
 }
 
 /// Initialize through an exposed control surface without waiting behind the
@@ -195,13 +195,13 @@ pub fn initialize_node_nonblocking(
     context: &NodeContext,
     config: &NodeConfig,
 ) -> OperationResult<NodeInitializationResult> {
-    let state_was_present = context
-        .validate_existing_state_directory()
-        .map_err(map_node_error)?;
-    let _lifecycle = context
+    let lifecycle = context
         .try_acquire_lifecycle_lock()
         .map_err(map_node_error)?;
-    initialize_node_locked(context, config, state_was_present)
+    context
+        .validate_existing_state_directory()
+        .map_err(map_node_error)?;
+    initialize_node_locked(context, config, lifecycle.state_was_present())
 }
 
 pub(crate) fn initialize_node_locked(
@@ -331,6 +331,21 @@ pub fn reset_node(context: &NodeContext, confirmed: bool) -> OperationResult<Nod
             "explicit confirmation is required for node factory reset",
         ));
     }
+    let state_exists = match std::fs::symlink_metadata(context.state_dir()) {
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(map_node_error(error.into())),
+    };
+    if !state_exists {
+        return Ok(NodeResetResult {
+            state_removed: false,
+            trust_removed: false,
+            identity_removed: false,
+        });
+    }
+    let _lifecycle = context
+        .try_acquire_lifecycle_lock()
+        .map_err(map_node_error)?;
     if !context
         .validate_existing_state_directory()
         .map_err(map_node_error)?
@@ -341,9 +356,6 @@ pub fn reset_node(context: &NodeContext, confirmed: bool) -> OperationResult<Nod
             identity_removed: false,
         });
     }
-    let _lifecycle = context
-        .try_acquire_lifecycle_lock()
-        .map_err(map_node_error)?;
     let had_identity = path_is_present(&context.identity_path(), "identity.key")?;
     let had_registry = path_is_present(&context.database_path(), "node.sqlite")?;
     let removed = NodeIdentity::execute_factory_reset(context).map_err(map_identity_error)?;

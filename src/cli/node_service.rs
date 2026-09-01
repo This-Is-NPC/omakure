@@ -94,12 +94,12 @@ pub fn run(
     if let Some(path) = &args.bootstrap_token_file {
         std::env::set_var("OMAKURE_BOOTSTRAP_TOKEN_FILE", path);
     }
-    let state_was_present = context.validate_existing_state_directory()?;
-    let _lifecycle = context.acquire_lifecycle_lock()?;
+    let lifecycle = context.acquire_lifecycle_lock()?;
+    context.validate_existing_state_directory()?;
     let initialized = crate::operations::node::initialize_node_locked(
         &context,
         &crate::domain::NodeConfig::default(),
-        state_was_present,
+        lifecycle.state_was_present(),
     )?;
     crate::operations::node::recover_local_bootstrap_token_tombstones(&context)?;
     let configured = initialized

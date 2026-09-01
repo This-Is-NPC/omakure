@@ -236,10 +236,11 @@ impl PrivateTokenLease {
         {
             cleanup_required = true;
         }
-        #[cfg(all(test, not(windows)))]
+        #[cfg(test)]
         let delete_failed = private_token_fault(PrivateTokenFault::Delete);
-        #[cfg(not(all(test, not(windows))))]
+        #[cfg(not(test))]
         let delete_failed = false;
+        drop(self.file);
         let deleted = !delete_failed && fs::remove_file(&self.tombstone_path).is_ok();
         let directory_sync_failed = deleted
             && self
@@ -884,10 +885,16 @@ impl NodeContext {
 /// or race a new service between deletion and cleanup.
 pub(crate) struct NodeLifecycleLock {
     file: fs::File,
+    state_was_present: bool,
 }
 
 impl NodeLifecycleLock {
     fn acquire(context: &NodeContext, nonblocking: bool) -> Result<Self, NodeError> {
+        let state_was_present = match fs::symlink_metadata(context.state_dir()) {
+            Ok(_) => true,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+            Err(error) => return Err(error.into()),
+        };
         context.ensure_state_directory()?;
         let path = context.state_dir().join(".node.lifecycle.lock");
         let mut options = fs::OpenOptions::new();
@@ -905,13 +912,7 @@ impl NodeLifecycleLock {
         }
         let file = match options.open(&path) {
             Ok(file) => file,
-            Err(error)
-                if nonblocking
-                    && matches!(
-                        error.kind(),
-                        io::ErrorKind::WouldBlock | io::ErrorKind::PermissionDenied
-                    ) =>
-            {
+            Err(error) if nonblocking && is_lifecycle_lock_contention(&error) => {
                 return Err(NodeError::LifecycleBusy);
             }
             Err(error) => return Err(error.into()),
@@ -928,18 +929,37 @@ impl NodeLifecycleLock {
             file.lock_exclusive()
         };
         match result {
-            Ok(()) => Ok(Self { file }),
-            Err(error)
-                if nonblocking
-                    && matches!(
-                        error.kind(),
-                        io::ErrorKind::WouldBlock | io::ErrorKind::PermissionDenied
-                    ) =>
-            {
+            Ok(()) => Ok(Self {
+                file,
+                state_was_present,
+            }),
+            Err(error) if nonblocking && is_lifecycle_lock_contention(&error) => {
                 Err(NodeError::LifecycleBusy)
             }
             Err(error) => Err(error.into()),
         }
+    }
+
+    pub(crate) fn state_was_present(&self) -> bool {
+        self.state_was_present
+    }
+}
+
+fn is_lifecycle_lock_contention(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::WouldBlock
+        || error.kind() == io::ErrorKind::PermissionDenied
+    {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        // Windows reports sharing and lock violations as raw Win32 errors
+        // instead of mapping them to WouldBlock.
+        matches!(error.raw_os_error(), Some(32 | 33))
+    }
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
@@ -993,6 +1013,9 @@ fn validate_absolute_path(
     }
     if path.components().any(|component| match component {
         Component::ParentDir | Component::CurDir => true,
+        #[cfg(windows)]
+        Component::Prefix(_) => false,
+        #[cfg(not(windows))]
         Component::Prefix(_) => platform != NodePlatform::Windows,
         _ => false,
     }) {
@@ -1321,7 +1344,10 @@ fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError> {
 }
 
 #[cfg(unix)]
-fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, NodeError> {
+fn lookup_unix_principal(
+    user_name: &std::ffi::CStr,
+    group_name: &std::ffi::CStr,
+) -> Result<UnixOwner, NodeError> {
     use std::ptr;
 
     let uid = {
@@ -1331,7 +1357,7 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
         loop {
             let status = unsafe {
                 libc::getpwnam_r(
-                    service_name.as_ptr(),
+                    user_name.as_ptr(),
                     &mut entry,
                     buffer.as_mut_ptr().cast(),
                     buffer.len(),
@@ -1344,13 +1370,13 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
             }
             if status != 0 {
                 return Err(NodeError::InsecurePath(format!(
-                    "failed to resolve configured node service principal: {}",
+                    "failed to resolve configured node service user: {}",
                     io::Error::from_raw_os_error(status)
                 )));
             }
             if result.is_null() {
                 return Err(NodeError::InsecurePath(
-                    "configured node service principal does not exist".to_string(),
+                    "configured node service user does not exist".to_string(),
                 ));
             }
             break entry.pw_uid;
@@ -1364,7 +1390,7 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
         loop {
             let status = unsafe {
                 libc::getgrnam_r(
-                    service_name.as_ptr(),
+                    group_name.as_ptr(),
                     &mut entry,
                     buffer.as_mut_ptr().cast(),
                     buffer.len(),
@@ -1377,13 +1403,13 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
             }
             if status != 0 {
                 return Err(NodeError::InsecurePath(format!(
-                    "failed to resolve configured node service principal: {}",
+                    "failed to resolve configured node service group: {}",
                     io::Error::from_raw_os_error(status)
                 )));
             }
             if result.is_null() {
                 return Err(NodeError::InsecurePath(
-                    "configured node service principal does not exist".to_string(),
+                    "configured node service group does not exist".to_string(),
                 ));
             }
             break entry.gr_gid;
@@ -1412,8 +1438,9 @@ fn owner_policy(
         NodePlatform::MacOs => "_omakure",
         NodePlatform::Windows => return Ok(UnixOwner { uid: 0, gid: 0 }),
     };
-    let service_name = CString::new(service_name).expect("static principal has no NUL");
-    let service_owner = lookup_unix_principal(&service_name)?;
+    let user_name = CString::new(service_name).expect("static principal has no NUL");
+    let group_name = CString::new(service_name).expect("static principal has no NUL");
+    let service_owner = lookup_unix_principal(&user_name, &group_name)?;
     if state {
         Ok(service_owner)
     } else {
@@ -1830,11 +1857,12 @@ fn windows_security_access_allowed(
 ) -> bool {
     const FILE_GENERIC_READ: u32 = 0x0012_0089;
     const FILE_GENERIC_WRITE: u32 = 0x0012_0116;
+    const FILE_WRITABLE_SPECIFIC: u32 = 0x0000_0116;
     if is_system == is_service || mask & FILE_GENERIC_READ != FILE_GENERIC_READ {
         return false;
     }
     (is_system && mask & FILE_GENERIC_WRITE == FILE_GENERIC_WRITE)
-        || (is_service && (directory || mask & FILE_GENERIC_WRITE == 0))
+        || (is_service && (directory || mask & FILE_WRITABLE_SPECIFIC == 0))
 }
 
 #[cfg(windows)]
@@ -2073,7 +2101,8 @@ mod tests {
 
         const THREADS: usize = 16;
         let euid = unsafe { libc::geteuid() };
-        let (principal, expected_uid, expected_gid) = {
+        let egid = unsafe { libc::getegid() };
+        let (user_name, expected_uid) = {
             let mut entry = unsafe { std::mem::zeroed::<libc::passwd>() };
             let mut result = ptr::null_mut();
             let mut buffer = vec![0_u8; 16 * 1024];
@@ -2093,21 +2122,47 @@ mod tests {
                 }
                 assert_eq!(status, 0, "resolve current euid");
                 assert!(!result.is_null(), "current euid has a passwd entry");
-                let principal = unsafe { CStr::from_ptr(entry.pw_name) }.to_owned();
-                break (principal, entry.pw_uid as u32, entry.pw_gid as u32);
+                let name = unsafe { CStr::from_ptr(entry.pw_name) }.to_owned();
+                break (name, entry.pw_uid as u32);
+            }
+        };
+        let (group_name, expected_gid) = {
+            let mut entry = unsafe { std::mem::zeroed::<libc::group>() };
+            let mut result = ptr::null_mut();
+            let mut buffer = vec![0_u8; 16 * 1024];
+            loop {
+                let status = unsafe {
+                    libc::getgrgid_r(
+                        egid,
+                        &mut entry,
+                        buffer.as_mut_ptr().cast(),
+                        buffer.len(),
+                        &mut result,
+                    )
+                };
+                if status == libc::ERANGE {
+                    grow_principal_lookup_buffer(&mut buffer).unwrap();
+                    continue;
+                }
+                assert_eq!(status, 0, "resolve current egid");
+                assert!(!result.is_null(), "current egid has a group entry");
+                let name = unsafe { CStr::from_ptr(entry.gr_name) }.to_owned();
+                break (name, entry.gr_gid as u32);
             }
         };
         assert_eq!(expected_uid, euid as u32);
+        assert_eq!(expected_gid, egid as u32);
 
         let barrier = Arc::new(Barrier::new(THREADS));
         let handles = (0..THREADS)
             .map(|_| {
                 let barrier = Arc::clone(&barrier);
-                let principal = principal.clone();
+                let user_name = user_name.clone();
+                let group_name = group_name.clone();
                 std::thread::spawn(move || {
                     barrier.wait();
                     for _ in 0..256 {
-                        let owner = lookup_unix_principal(&principal).unwrap();
+                        let owner = lookup_unix_principal(&user_name, &group_name).unwrap();
                         assert_eq!(owner.uid, expected_uid);
                         assert_eq!(owner.gid, expected_gid);
                     }
@@ -2429,11 +2484,42 @@ mod tests {
         assert!(unsafe_path.is_err());
     }
 
+    #[cfg(all(windows, debug_assertions))]
+    #[test]
+    fn windows_native_prefix_is_accepted_for_simulated_unix_layouts() {
+        for platform in [NodePlatform::Linux, NodePlatform::MacOs] {
+            let result = NodeContext::resolve_for(
+                platform,
+                NodePathOverrides::new(
+                    Some(PathBuf::from(r"C:\Temp\Omakure")),
+                    Some(PathBuf::from(r"C:\Temp\Omakure\node.toml")),
+                ),
+                true,
+                None,
+                None,
+                None,
+            );
+            assert!(result.is_ok(), "simulated {platform:?} layout");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_lifecycle_lock_sharing_errors_are_contention() {
+        for code in [32, 33] {
+            assert!(is_lifecycle_lock_contention(
+                &io::Error::from_raw_os_error(code)
+            ));
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_service_acl_policy_allows_only_required_principals_and_access() {
         const READ: u32 = 0x0012_0089;
         const WRITE: u32 = 0x0012_0116;
+        const WRITE_DAC: u32 = 0x0004_0000;
+        assert!(windows_security_access_allowed(false, false, true, READ | WRITE_DAC));
         assert!(windows_security_access_allowed(
             false,
             true,

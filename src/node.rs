@@ -946,8 +946,7 @@ impl NodeLifecycleLock {
 }
 
 fn is_lifecycle_lock_contention(error: &io::Error) -> bool {
-    if error.kind() == io::ErrorKind::WouldBlock
-        || error.kind() == io::ErrorKind::PermissionDenied
+    if error.kind() == io::ErrorKind::WouldBlock || error.kind() == io::ErrorKind::PermissionDenied
     {
         return true;
     }
@@ -2507,9 +2506,9 @@ mod tests {
     #[test]
     fn windows_lifecycle_lock_sharing_errors_are_contention() {
         for code in [32, 33] {
-            assert!(is_lifecycle_lock_contention(
-                &io::Error::from_raw_os_error(code)
-            ));
+            assert!(is_lifecycle_lock_contention(&io::Error::from_raw_os_error(
+                code
+            )));
         }
     }
 
@@ -2519,7 +2518,12 @@ mod tests {
         const READ: u32 = 0x0012_0089;
         const WRITE: u32 = 0x0012_0116;
         const WRITE_DAC: u32 = 0x0004_0000;
-        assert!(windows_security_access_allowed(false, false, true, READ | WRITE_DAC));
+        assert!(windows_security_access_allowed(
+            false,
+            false,
+            true,
+            READ | WRITE_DAC
+        ));
         assert!(windows_security_access_allowed(
             false,
             true,

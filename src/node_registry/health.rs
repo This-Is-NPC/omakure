@@ -326,7 +326,6 @@ impl NodeRegistry {
         Ok(peer)
     }
 
-
     /// The whole bounded Signal read surface, read as one snapshot.
     ///
     /// The per-peer counters, the bounded page of Signals they describe, and
@@ -1634,7 +1633,11 @@ fn fleet_peer_in(
     let (pulse, pulse_corrupt) = read_pulse_observational(transaction, &state.node_id)?;
     let mut corrupt = Vec::new();
     if profile_corrupt {
-        corrupt.push(("health_profiles", state.node_id.clone(), HealthKind::Profile));
+        corrupt.push((
+            "health_profiles",
+            state.node_id.clone(),
+            HealthKind::Profile,
+        ));
     }
     if pulse_corrupt {
         corrupt.push(("health_pulses", state.node_id.clone(), HealthKind::Pulse));
@@ -1808,7 +1811,13 @@ fn read_profile(
 ) -> Result<Option<ProfileSnapshot>, RegistryError> {
     let (profile, corrupt) = read_profile_observational(transaction, node_id)?;
     if corrupt {
-        quarantine_row(transaction, "health_profiles", node_id, HealthKind::Profile, now)?;
+        quarantine_row(
+            transaction,
+            "health_profiles",
+            node_id,
+            HealthKind::Profile,
+            now,
+        )?;
     }
     Ok(profile)
 }
@@ -1880,7 +1889,13 @@ fn read_pulse(
 ) -> Result<Option<PulseSnapshot>, RegistryError> {
     let (pulse, corrupt) = read_pulse_observational(transaction, node_id)?;
     if corrupt {
-        quarantine_row(transaction, "health_pulses", node_id, HealthKind::Pulse, now)?;
+        quarantine_row(
+            transaction,
+            "health_pulses",
+            node_id,
+            HealthKind::Pulse,
+            now,
+        )?;
     }
     Ok(pulse)
 }
@@ -1981,8 +1996,7 @@ fn cleanup_corrupt_health_rows(
         return Ok(());
     }
     registry.with_connection(|connection| {
-        let transaction =
-            connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         for (table, node_id, kind) in corrupt {
             quarantine_row(&transaction, table, node_id, *kind, now)?;
         }
@@ -2244,18 +2258,12 @@ mod tests {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .unwrap();
 
-        assert!(fixture
-            .registry
-            .health_fleet_snapshot(BASE_NOW)
-            .is_ok());
+        assert!(fixture.registry.health_fleet_snapshot(BASE_NOW).is_ok());
         assert!(fixture
             .registry
             .health_node_snapshot(&node_id, BASE_NOW)
             .is_ok());
-        assert!(fixture
-            .registry
-            .health_signal_feed(16, BASE_NOW)
-            .is_ok());
+        assert!(fixture.registry.health_signal_feed(16, BASE_NOW).is_ok());
 
         writer_transaction.rollback().unwrap();
     }
@@ -3213,7 +3221,6 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(fleet.snapshot.profile.is_none());
-
 
         let snapshot = fixture
             .registry

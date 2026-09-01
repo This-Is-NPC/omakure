@@ -557,10 +557,7 @@ fn resolve_with_extensions(path: PathBuf, scripts_root: &Path) -> OperationResul
     ))
 }
 
-fn reject_absolute_path_outside_root(
-    path: &Path,
-    scripts_root: &Path,
-) -> OperationResult<()> {
+fn reject_absolute_path_outside_root(path: &Path, scripts_root: &Path) -> OperationResult<()> {
     if !path.is_absolute() {
         return Ok(());
     }
@@ -968,7 +965,6 @@ mod tests {
             "tools/deploy.cmd"
         );
     }
-
 
     #[test]
     fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {

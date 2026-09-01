@@ -1254,7 +1254,11 @@ mod tests {
             "a revoked message must not mutate durable Health Plane state"
         );
         let audit = fixture.registry.health_audit_events(10).unwrap();
-        assert_eq!(audit.len(), 1, "one readable message must create one audit row");
+        assert_eq!(
+            audit.len(),
+            1,
+            "one readable message must create one audit row"
+        );
         assert_eq!(audit[0].event_code, "health_pulse");
         assert_eq!(audit[0].node_id, fixture.conductor);
         assert_eq!(audit[0].message_kind, "health_pulse");

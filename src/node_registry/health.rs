@@ -1632,15 +1632,21 @@ fn fleet_peer_in(
     let (profile, profile_corrupt) = read_profile_observational(transaction, &state.node_id)?;
     let (pulse, pulse_corrupt) = read_pulse_observational(transaction, &state.node_id)?;
     let mut corrupt = Vec::new();
-    if profile_corrupt {
-        corrupt.push((
-            "health_profiles",
-            state.node_id.clone(),
-            HealthKind::Profile,
-        ));
+    if let Some(profile_revision) = profile_corrupt {
+        corrupt.push(CorruptHealthRow {
+            table: "health_profiles",
+            node_id: state.node_id.clone(),
+            kind: HealthKind::Profile,
+            identity: CorruptHealthIdentity::Profile { profile_revision },
+        });
     }
-    if pulse_corrupt {
-        corrupt.push(("health_pulses", state.node_id.clone(), HealthKind::Pulse));
+    if let Some(sequence) = pulse_corrupt {
+        corrupt.push(CorruptHealthRow {
+            table: "health_pulses",
+            node_id: state.node_id.clone(),
+            kind: HealthKind::Pulse,
+            identity: CorruptHealthIdentity::Pulse { sequence },
+        });
     }
     Ok((
         HealthFleetPeer {
@@ -1813,7 +1819,7 @@ fn read_profile(
     now: i64,
 ) -> Result<Option<ProfileSnapshot>, RegistryError> {
     let (profile, corrupt) = read_profile_observational(transaction, node_id)?;
-    if corrupt {
+    if corrupt.is_some() {
         quarantine_row(
             transaction,
             "health_profiles",
@@ -1828,7 +1834,7 @@ fn read_profile(
 fn read_profile_observational(
     transaction: &Transaction<'_>,
     node_id: &str,
-) -> Result<(Option<ProfileSnapshot>, bool), RegistryError> {
+) -> Result<(Option<ProfileSnapshot>, Option<i64>), RegistryError> {
     let row = transaction
         .query_row(
             "SELECT profile_revision, agent_version, arch, capabilities, display_name,
@@ -1857,12 +1863,12 @@ fn read_profile_observational(
         )
         .optional()?;
     let Some(row) = row else {
-        return Ok((None, false));
+        return Ok((None, None));
     };
     let capabilities = serde_json::from_str::<Vec<String>>(&row.3);
     let runtimes = serde_json::from_str::<Vec<RuntimeFact>>(&row.11);
     let (Ok(capabilities), Ok(runtimes)) = (capabilities, runtimes) else {
-        return Ok((None, true));
+        return Ok((None, Some(row.0)));
     };
     Ok((
         Some(ProfileSnapshot {
@@ -1881,7 +1887,7 @@ fn read_profile_observational(
             role: row.10,
             runtimes,
         }),
-        false,
+        None,
     ))
 }
 
@@ -1891,7 +1897,7 @@ fn read_pulse(
     now: i64,
 ) -> Result<Option<PulseSnapshot>, RegistryError> {
     let (pulse, corrupt) = read_pulse_observational(transaction, node_id)?;
-    if corrupt {
+    if corrupt.is_some() {
         quarantine_row(
             transaction,
             "health_pulses",
@@ -1906,7 +1912,7 @@ fn read_pulse(
 fn read_pulse_observational(
     transaction: &Transaction<'_>,
     node_id: &str,
-) -> Result<(Option<PulseSnapshot>, bool), RegistryError> {
+) -> Result<(Option<PulseSnapshot>, Option<i64>), RegistryError> {
     let row = transaction
         .query_row(
             "SELECT sequence, emitted_at, profile_revision, runner_state, scheduler_state,
@@ -1930,13 +1936,13 @@ fn read_pulse_observational(
         )
         .optional()?;
     let Some(row) = row else {
-        return Ok((None, false));
+        return Ok((None, None));
     };
     let last_run = match row.9.as_deref() {
         None => None,
         Some(text) => match serde_json::from_str::<RunFact>(text) {
             Ok(fact) => Some(fact),
-            Err(_) => return Ok((None, true)),
+            Err(_) => return Ok((None, Some(row.0))),
         },
     };
     Ok((
@@ -1954,7 +1960,7 @@ fn read_pulse_observational(
             sequence: row.0.max(0) as u64,
             uptime_seconds: row.8.max(0) as u64,
         }),
-        false,
+        None,
     ))
 }
 
@@ -1988,7 +1994,58 @@ fn quarantine_row(
     Ok(())
 }
 
-type CorruptHealthRow = (&'static str, String, HealthKind);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CorruptHealthIdentity {
+    Profile { profile_revision: i64 },
+    Pulse { sequence: i64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CorruptHealthRow {
+    table: &'static str,
+    node_id: String,
+    kind: HealthKind,
+    identity: CorruptHealthIdentity,
+}
+
+fn quarantine_row_if_observed(
+    transaction: &Transaction<'_>,
+    row: &CorruptHealthRow,
+    now: i64,
+) -> Result<(), RegistryError> {
+    let deleted = match (row.table, row.identity) {
+        ("health_profiles", CorruptHealthIdentity::Profile { profile_revision }) => transaction
+            .execute(
+                "DELETE FROM health_profiles
+                 WHERE node_id = ?1 AND profile_revision = ?2",
+                params![row.node_id, profile_revision],
+            )?,
+        ("health_pulses", CorruptHealthIdentity::Pulse { sequence }) => transaction.execute(
+            "DELETE FROM health_pulses
+                 WHERE node_id = ?1 AND sequence = ?2",
+            params![row.node_id, sequence],
+        )?,
+        _ => {
+            return Err(RegistryError::Corrupt(format!(
+                "corrupt health row identity does not match table {:?}",
+                row.table
+            )))
+        }
+    };
+    if deleted == 1 {
+        record_health_audit_tx(
+            transaction,
+            "corrupt_row",
+            &row.node_id,
+            row.kind.wire(),
+            0,
+            "rejected",
+            Some(HealthCode::CorruptState.code()),
+            now,
+        )?;
+    }
+    Ok(())
+}
 
 fn cleanup_corrupt_health_rows(
     registry: &NodeRegistry,
@@ -2000,8 +2057,8 @@ fn cleanup_corrupt_health_rows(
     }
     registry.with_connection(|connection| {
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        for (table, node_id, kind) in corrupt {
-            quarantine_row(&transaction, table, node_id, *kind, now)?;
+        for row in corrupt {
+            quarantine_row_if_observed(&transaction, row, now)?;
         }
         transaction.commit()?;
         Ok(())
@@ -3251,6 +3308,102 @@ mod tests {
             ),
             accepted(0)
         );
+    }
+    #[test]
+    fn deferred_corrupt_health_cleanup_keeps_newer_replacements_without_audit() {
+        let fixture = fixture();
+        let node_id = performer(&fixture.registry);
+        let local = fixture.registry.local_node_id().to_string();
+
+        apply(
+            &fixture.registry,
+            &node_id,
+            &profile(&local, 1, 1),
+            BASE_NOW,
+        );
+        apply(
+            &fixture.registry,
+            &node_id,
+            &pulse(&local, 2, 1, BASE_NOW + 5),
+            BASE_NOW + 5,
+        );
+
+        let mut connection = Connection::open(fixture.registry.path()).unwrap();
+        connection
+            .execute(
+                "UPDATE health_profiles SET runtimes = 'not-json'
+                 WHERE node_id = ?1",
+                [&node_id],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE health_pulses SET last_run = 'not-json'
+                 WHERE node_id = ?1",
+                [&node_id],
+            )
+            .unwrap();
+
+        let corrupt = {
+            let transaction = connection
+                .transaction_with_behavior(TransactionBehavior::Deferred)
+                .unwrap();
+            let state = load_peer_state(&transaction, &node_id).unwrap().unwrap();
+            let (_, corrupt) = fleet_peer_in(&transaction, state).unwrap();
+            transaction.commit().unwrap();
+            corrupt
+        };
+        assert!(corrupt.iter().any(|row| {
+            matches!(
+                row.identity,
+                CorruptHealthIdentity::Profile {
+                    profile_revision: 1
+                }
+            )
+        }));
+        assert!(corrupt
+            .iter()
+            .any(|row| { matches!(row.identity, CorruptHealthIdentity::Pulse { sequence: 1 }) }));
+        drop(connection);
+
+        // These writes happen after observation but before deferred cleanup.
+        apply(
+            &fixture.registry,
+            &node_id,
+            &profile(&local, 3, 2),
+            BASE_NOW + 10,
+        );
+        apply(
+            &fixture.registry,
+            &node_id,
+            &pulse(&local, 4, 2, BASE_NOW + 15),
+            BASE_NOW + 15,
+        );
+        cleanup_corrupt_health_rows(&fixture.registry, &corrupt, BASE_NOW + 20).unwrap();
+
+        let connection = Connection::open(fixture.registry.path()).unwrap();
+        let profile_revision: i64 = connection
+            .query_row(
+                "SELECT profile_revision FROM health_profiles WHERE node_id = ?1",
+                [&node_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let sequence: i64 = connection
+            .query_row(
+                "SELECT sequence FROM health_pulses WHERE node_id = ?1",
+                [&node_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(profile_revision, 2);
+        assert_eq!(sequence, 2);
+        assert!(fixture
+            .registry
+            .health_audit_events(100)
+            .unwrap()
+            .iter()
+            .all(|event| event.event_code != "corrupt_row"));
     }
 
     #[test]

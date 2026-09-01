@@ -379,7 +379,7 @@ mod tests {
     }
     #[cfg(windows)]
     #[test]
-    fn resolve_bash_program_skips_system32_wsl_and_uses_git_bash_case_insensitively() {
+    fn resolve_bash_program_skips_wsl_launchers_and_uses_git_bash() {
         let root = tempfile::tempdir().unwrap();
         let system32_dir = root.path().join("Windows").join("System32");
         let sysnative_dir = root.path().join("Windows").join("Sysnative");
@@ -387,15 +387,18 @@ mod tests {
         for dir in [&system32_dir, &sysnative_dir, &git_dir] {
             std::fs::create_dir_all(dir).unwrap();
         }
-        let system32_bash = system32_dir.join("BASH.EXE");
-        let sysnative_bash = sysnative_dir.join("BaSh.ExE");
-        let git = git_dir.join("bash.EXE");
+        let system32_bash = system32_dir.join("bash.exe");
+        let sysnative_bash = sysnative_dir.join("bash.exe");
+        let git = git_dir.join("bash.exe");
         std::fs::write(&system32_bash, "wsl launcher").unwrap();
         std::fs::write(&sysnative_bash, "wsl launcher").unwrap();
         std::fs::write(&git, "git bash").unwrap();
 
-        // Keep every temporary directory component in its original casing;
-        // vary only the executable component casing.
+        // Exercise case-insensitive launcher classification without relying on
+        // case-mutated filesystem paths.
+        assert!(is_wsl_launcher(Path::new(r"C:\WINDOWS\SYSTEM32\BASH.EXE")));
+        assert!(is_wsl_launcher(Path::new(r"C:\Windows\SYSNATIVE\BASH.EXE")));
+
         let env = vec![(
             "PATH".to_string(),
             format!(

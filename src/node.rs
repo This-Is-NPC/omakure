@@ -890,58 +890,77 @@ pub(crate) struct NodeLifecycleLock {
 
 impl NodeLifecycleLock {
     fn acquire(context: &NodeContext, nonblocking: bool) -> Result<Self, NodeError> {
-        let state_was_present = match fs::symlink_metadata(context.state_dir()) {
-            Ok(_) => true,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => false,
-            Err(error) => return Err(error.into()),
-        };
-        context.ensure_state_directory()?;
+        let state_was_present = prepare_lifecycle_state(context)?;
         let path = context.state_dir().join(".node.lifecycle.lock");
-        let mut options = fs::OpenOptions::new();
-        options.read(true).write(true).create(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-        }
-        let file = match options.open(&path) {
-            Ok(file) => file,
-            Err(error) if nonblocking && is_lifecycle_lock_contention(&error) => {
-                return Err(NodeError::LifecycleBusy);
-            }
-            Err(error) => return Err(error.into()),
-        };
-        if fs::symlink_metadata(&path)?.file_type().is_symlink() {
-            return Err(NodeError::InsecurePath(
-                "node lifecycle lock is a symlink".to_string(),
-            ));
-        }
-        context.validate_private_file(&path)?;
-        let result = if nonblocking {
-            file.try_lock_exclusive()
-        } else {
-            file.lock_exclusive()
-        };
-        match result {
-            Ok(()) => Ok(Self {
-                file,
-                state_was_present,
-            }),
-            Err(error) if nonblocking && is_lifecycle_lock_contention(&error) => {
-                Err(NodeError::LifecycleBusy)
-            }
-            Err(error) => Err(error.into()),
-        }
+        let file = open_lifecycle_lock(context, &path, nonblocking)?;
+        let file = lock_lifecycle_file(file, nonblocking)?;
+        Ok(Self {
+            file,
+            state_was_present,
+        })
     }
 
     pub(crate) fn state_was_present(&self) -> bool {
         self.state_was_present
+    }
+}
+
+fn prepare_lifecycle_state(context: &NodeContext) -> Result<bool, NodeError> {
+    let state_was_present = match fs::symlink_metadata(context.state_dir()) {
+        Ok(_) => true,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.into()),
+    };
+    context.ensure_state_directory()?;
+    Ok(state_was_present)
+}
+
+fn open_lifecycle_lock(
+    context: &NodeContext,
+    path: &Path,
+    nonblocking: bool,
+) -> Result<fs::File, NodeError> {
+    let mut options = fs::OpenOptions::new();
+    options.read(true).write(true).create(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| classify_lifecycle_lock_error(error, nonblocking))?;
+    if fs::symlink_metadata(path)?.file_type().is_symlink() {
+        return Err(NodeError::InsecurePath(
+            "node lifecycle lock is a symlink".to_string(),
+        ));
+    }
+    context.validate_private_file(path)?;
+    Ok(file)
+}
+
+fn lock_lifecycle_file(file: fs::File, nonblocking: bool) -> Result<fs::File, NodeError> {
+    let result = if nonblocking {
+        file.try_lock_exclusive()
+    } else {
+        file.lock_exclusive()
+    };
+    result
+        .map(|()| file)
+        .map_err(|error| classify_lifecycle_lock_error(error, nonblocking))
+}
+
+fn classify_lifecycle_lock_error(error: io::Error, nonblocking: bool) -> NodeError {
+    if nonblocking && is_lifecycle_lock_contention(&error) {
+        NodeError::LifecycleBusy
+    } else {
+        error.into()
     }
 }
 

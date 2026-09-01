@@ -46,7 +46,7 @@ job, then follow the topic owner for the details.
 - [Implemented requirements](internal/requirements.md): behavior-to-source
   traceability inventory.
 - [Deterministic coverage](internal/coverage.md): pinned LLVM reports,
-  baseline gate, source inventory, and Codecov patch status.
+  repository-owned baseline gate, and source inventory.
 - [Changed-function complexity](internal/complexity.md): native complexity
   ratchet, exception lifecycle, deterministic evidence, and CI policy.
 - [E2E testing](testing/e2e/README.md): end-to-end coverage and its evidence

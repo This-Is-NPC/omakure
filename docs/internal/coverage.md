@@ -29,9 +29,8 @@ repository-relative names. Reports are written below
 - `inventory.json`
 
 If the pinned tool or LLVM component is not already present, the task performs
-the explicitly pinned setup step. That is the only network-dependent part of the
-workflow. `mise run coverage:test` is the offline fixture and never installs a
-tool or contacts a service.
+the explicitly pinned setup step. `mise run coverage:test` is the offline
+fixture and never installs a tool.
 
 ## Baseline and gate
 
@@ -70,13 +69,9 @@ seeded uncovered production line, deterministic normalized output, complete
 source inventory handling, collision-resistant external exclusions, explicit
 classification, rejection of unclassified paths, and runner preflight ordering.
 
-## CI and Codecov
+## CI
 
-The `coverage` CI job runs the local gate first. It uploads the LCOV report with
-the pinned `codecov/codecov-action@v5.4.3` action and
-`fail_ci_if_error: true` for same-repository pull requests. Codecov supplies the
-maintained changed-line (patch) status; no local diff engine is implemented.
-For fork pull requests, the upload is unavailable and CI emits an explicit
-failure after the local project gate, rather than silently treating a missing
-required status as green. Network or service failures likewise fail the upload
-step while leaving the local gate's result visible.
+The `coverage` CI job runs `./scripts/tasks/coverage` for pull requests. The
+repository-owned baseline gate is the sole coverage decision, and reports are
+generated under `target/coverage-report/`. Fork and same-repository pull
+requests use identical local behavior.

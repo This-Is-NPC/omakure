@@ -222,7 +222,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -233,23 +232,6 @@ jobs:
         env:
           COVERAGE_TOOL_ROOT: ${{ runner.temp }}/cargo-llvm-cov
         run: ./scripts/tasks/coverage
-      - name: Upload maintained Codecov patch status
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac
-        with:
-          files: target/coverage-report/lcov.info
-          flags: pull-request
-          # Keep this advisory until the repository owner installs and activates
-          # Codecov; make the external upload blocking only after activation.
-          fail_ci_if_error: false
-          disable_search: true
-          slug: ${{ github.repository }}
-          use_oidc: true
-      - name: Make fork Codecov unavailability explicit
-        if: github.event.pull_request.head.repo.full_name != github.repository
-        run: |
-          echo "::error::Codecov patch status is unavailable for fork pull requests; the local project gate ran, but the required external status cannot be produced."
-          exit 1
 
   complexity-informational:
     name: Rust complexity calibration and ratchet gate

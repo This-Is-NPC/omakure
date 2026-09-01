@@ -528,6 +528,7 @@ fn has_windows_prefix(path: &str) -> bool {
 }
 
 fn resolve_with_extensions(path: PathBuf, scripts_root: &Path) -> OperationResult<PathBuf> {
+    reject_absolute_path_outside_root(&path, scripts_root)?;
     if path.exists() {
         if path.is_file() {
             return canonical_script_path(&path, scripts_root);
@@ -554,6 +555,45 @@ fn resolve_with_extensions(path: PathBuf, scripts_root: &Path) -> OperationResul
         OperationErrorCode::NotFound,
         format!("script not found: {}", path.display()),
     ))
+}
+
+fn reject_absolute_path_outside_root(
+    path: &Path,
+    scripts_root: &Path,
+) -> OperationResult<()> {
+    if !path.is_absolute() {
+        return Ok(());
+    }
+    let canonical_root = scripts_root.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    let mut probe = path;
+    loop {
+        match probe.canonicalize() {
+            Ok(canonical) => {
+                if canonical.starts_with(&canonical_root) {
+                    return Ok(());
+                }
+                return Err(OperationError::new(
+                    OperationErrorCode::UnsafePath,
+                    format!("script path escapes scripts root: {}", path.display()),
+                ));
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                let Some(parent) = probe.parent() else {
+                    return Err(io_error(err));
+                };
+                if parent == probe {
+                    return Err(io_error(err));
+                }
+                probe = parent;
+            }
+            Err(err) => return Err(io_error(err)),
+        }
+    }
 }
 
 fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<PathBuf> {
@@ -836,6 +876,27 @@ mod tests {
                 timeout_ms: None,
                 parent_run_id: None,
                 cron_schedule_id: None,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[test]
+    fn script_resolution_rejects_missing_absolute_paths_outside_workspace() {
+        let dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+
+        let err = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: outside
+                    .path()
+                    .join("missing.sh")
+                    .to_string_lossy()
+                    .into_owned(),
             },
         )
         .unwrap_err();

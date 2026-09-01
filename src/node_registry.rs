@@ -397,8 +397,8 @@ impl NodeRegistry {
             schema_mutation_allowed: false,
         };
         let mut connection =
-            Connection::open_with_flags(&registry.path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-        configure_connection_read_only(&mut connection)?;
+            Connection::open_with_flags(&registry.path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+        configure_connection_observational(&mut connection)?;
         validate_database_security(context, &registry.path)?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
         integrity_check(&transaction)?;
@@ -2443,6 +2443,18 @@ fn configure_connection_read_only(connection: &mut Connection) -> Result<(), Reg
     if foreign_keys != 1 {
         return Err(RegistryError::InvalidSchema(
             "foreign key enforcement is disabled".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn configure_connection_observational(connection: &mut Connection) -> Result<(), RegistryError> {
+    configure_connection_read_only(connection)?;
+    connection.execute_batch("PRAGMA query_only = ON")?;
+    let query_only: i64 = connection.query_row("PRAGMA query_only", [], |row| row.get(0))?;
+    if query_only != 1 {
+        return Err(RegistryError::InvalidSchema(
+            "SQLite query-only mode could not be enabled".to_string(),
         ));
     }
     Ok(())
@@ -5811,6 +5823,7 @@ mod tests {
         let context2 = context(&temp);
         let identity2 = NodeIdentity::load_or_initialize(&context2).unwrap();
         let connection = Connection::open(context2.database_path()).unwrap();
+
         connection
             .execute(
                 "UPDATE metadata SET value = '0' WHERE key = 'schema_version'",
@@ -5822,6 +5835,37 @@ mod tests {
             NodeRegistry::open(&context2, identity2.public_status()),
             Err(RegistryError::InvalidSchema(_))
         ));
+    }
+    #[test]
+    fn open_existing_succeeds_after_clean_close_without_sidecars() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        {
+            let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+            registry
+                .record_transport_audit(
+                    "cold_open_probe",
+                    &identity.public_status().node_id,
+                    None,
+                    None,
+                    0,
+                    "accepted",
+                    None,
+                )
+                .unwrap();
+        }
+
+        for sidecar in database_sidecar_paths(&context.database_path()) {
+            assert!(
+                !sidecar.exists(),
+                "clean close left SQLite sidecar behind: {}",
+                sidecar.display()
+            );
+        }
+
+        let reopened = NodeRegistry::open_existing(&context, identity.public_status()).unwrap();
+        assert!(reopened.peers().is_ok());
     }
     #[test]
     fn open_existing_rejects_corrupt_index() {

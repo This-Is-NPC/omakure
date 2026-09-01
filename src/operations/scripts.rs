@@ -208,7 +208,17 @@ fn resolve_workspace_path(path: &str, root: &Path) -> OperationResult<PathBuf> {
             "path targets hidden Omakure metadata",
         ));
     }
-    let candidate = root.join(path);
+    // Callers normally pass the result of `canonical_scripts_root`, but this
+    // helper is also the boundary for direct resolution. Canonicalize the raw
+    // root here so aliases (including Windows short/verbatim spellings) are
+    // compared with the candidate in the same namespace.
+    let canonical_root = root.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    let candidate = canonical_root.join(path);
     let canonical = candidate.canonicalize().map_err(|err| {
         if err.kind() == std::io::ErrorKind::NotFound {
             OperationError::new(
@@ -219,7 +229,7 @@ fn resolve_workspace_path(path: &str, root: &Path) -> OperationResult<PathBuf> {
             io_error(err)
         }
     })?;
-    if canonical.starts_with(root) {
+    if canonical.starts_with(&canonical_root) {
         Ok(canonical)
     } else {
         Err(OperationError::new(
@@ -233,10 +243,16 @@ fn open_script_file(path: &Path, root: &Path) -> OperationResult<std::fs::File> 
     let file = open_no_follow(path)?;
     #[cfg(unix)]
     {
+        let canonical_root = root.canonicalize().map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to canonicalize scripts root: {err}"),
+            )
+        })?;
         use std::os::unix::io::AsRawFd;
         let fd_path = PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
         if let Ok(opened) = fd_path.canonicalize() {
-            if !opened.starts_with(root) {
+            if !opened.starts_with(&canonical_root) {
                 return Err(OperationError::new(
                     OperationErrorCode::UnsafePath,
                     "path escapes scripts root",
@@ -485,6 +501,35 @@ mod tests {
             logical_relative_path(&resolved, workspace.scripts_root()),
             "tools/deploy.sh"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolver_canonicalizes_a_raw_workspace_alias() {
+        use std::os::unix::fs::symlink;
+
+        let real = TempDir::new().unwrap();
+        let alias_parent = TempDir::new().unwrap();
+        let alias = alias_parent.path().join("workspace");
+        symlink(real.path(), &alias).unwrap();
+        let workspace = Workspace::new(alias);
+        workspace.ensure_layout().unwrap();
+        std::fs::create_dir_all(workspace.scripts_root().join("tools")).unwrap();
+        let script = workspace.scripts_root().join("tools/deploy.sh");
+        std::fs::write(&script, "#!/bin/sh\necho ok\n").unwrap();
+
+        let resolved = resolve_workspace_path(r"tools\deploy.sh", workspace.scripts_root())
+            .expect("raw workspace aliases must be canonicalized before containment");
+
+        assert_eq!(resolved, script.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn logical_relative_paths_handle_verbatim_windows_fixtures() {
+        let root = Path::new(r"\\?\C:\workspace\scripts");
+        let path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
+
+        assert_eq!(logical_relative_path(path, root), "tools/deploy.cmd");
     }
 
     #[test]

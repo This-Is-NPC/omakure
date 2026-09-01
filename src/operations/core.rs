@@ -506,12 +506,11 @@ fn resolve_script_path(script: &str, scripts_root: &Path) -> OperationResult<Pat
             format!("script path escapes scripts root: {script}"),
         ));
     }
-    if path.is_absolute() && !path.starts_with(&root) {
-        return Err(OperationError::new(
-            OperationErrorCode::UnsafePath,
-            format!("script path escapes scripts root: {script}"),
-        ));
-    }
+    // Absolute paths are validated after resolution.  Do not compare their
+    // spelling with the canonical root here: Windows may present the same
+    // path through an 8.3 or verbatim alias (and may normalize its case).
+    // `canonical_script_path` performs the containment check on canonical
+    // paths once the candidate exists.
     let candidate = if path.is_absolute() {
         path
     } else if has_separator {
@@ -564,7 +563,13 @@ fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<Pa
             format!("failed to canonicalize script path: {err}"),
         )
     })?;
-    if canonical.starts_with(scripts_root) {
+    let canonical_root = scripts_root.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    if canonical.starts_with(&canonical_root) {
         Ok(canonical)
     } else {
         Err(OperationError::new(
@@ -853,6 +858,45 @@ mod tests {
         .unwrap();
 
         assert_eq!(description.relative_path, "deploy.sh");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn script_resolution_accepts_absolute_paths_through_workspace_alias() {
+        use std::os::unix::fs::symlink;
+
+        let real = TempDir::new().unwrap();
+        let alias_parent = TempDir::new().unwrap();
+        let alias = alias_parent.path().join("workspace");
+        symlink(real.path(), &alias).unwrap();
+        // Keep the workspace's configured root as the symlink alias. The
+        // absolute request therefore has a different spelling from the
+        // canonical root, just as an 8.3/verbatim Windows path can.
+        let ws = Workspace::new(alias);
+        ws.ensure_layout().unwrap();
+        write_script(ws.scripts_root(), "deploy.sh", &[]);
+
+        let description = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: ws
+                    .scripts_root()
+                    .join("deploy.sh")
+                    .to_string_lossy()
+                    .into_owned(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(description.relative_path, "deploy.sh");
+    }
+
+    #[test]
+    fn logical_relative_paths_handle_verbatim_windows_fixtures() {
+        let root = Path::new(r"\\?\C:\workspace\scripts");
+        let path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
+
+        assert_eq!(logical_relative_path(path, root), "tools/deploy.cmd");
     }
 
     #[test]

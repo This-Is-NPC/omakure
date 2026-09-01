@@ -93,8 +93,8 @@ gh project item-list 6 --owner This-Is-NPC --format json \
 
 ## Code Standards
 
-- `mise run lint` must exit 0 before opening a PR. It runs
-  `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`.
+- `mise run lint` must exit 0 before opening a PR. It routes to the canonical
+  formatting and Clippy atomics.
 - Any new `#[allow(clippy::…)]` requires a one-line comment justifying the
   suppression (pointing at the bug, audit note, or rationale).
 
@@ -107,33 +107,48 @@ mise run hooks:install
 ```
 
 The installer writes only this repository's local `core.hooksPath` setting; it
-does not modify global Git configuration. The pre-commit hook runs
-`scripts/tasks/check/fast`, which runs the shared static/fixture checks once
-followed by bounded formatting, Clippy, and locked library tests. The pre-push
-hook runs `scripts/tasks/check/full`, which runs the same shared checks once
-followed by the canonical bounded formatting/Clippy script, bounded
-all-target tests, and the complete locally executable Linux suite: usage and
-catalog checks, deterministic coverage, complexity
-calibration/ratchet/audit, release packaging, Docker smoke, transport and
-Health certification, and Health cleanup verification. It does not invoke
-fast, so the library test is not duplicated. Transport certification owns its
-retained-suite cleanup verification and intentionally runs its own
-`direct_transport_e2e` certification-context test a second time.
+does not modify global Git configuration. Hooks are exact, thin routes:
+`pre-commit` executes `scripts/tasks/check/fast`, and `pre-push` executes
+`scripts/tasks/check/full`. The checks stop at the first failure and preserve
+trap-backed cleanup owned by certification scripts.
 
-Both hooks stop at the first failing command and return that failure status;
-cleanup owned by a certification script still runs through its trap. The full
-check is intentionally a long-running pre-push gate because it includes
-instrumented coverage and bounded multi-container certifications. Do not
-advertise bypassing the hooks; fix the reported prerequisite or check failure
-instead.
+The automation layers have deliberately different responsibilities:
+
+- An **atomic** under `scripts/tasks/atomic/` performs one logical operation
+  (formatting, one test group, a build, a package check, or a contract).
+- A **suite** under `scripts/tasks/suite/` aggregates atomics or retained
+  certification scripts. `native-tests` covers the local library, bins,
+  examples, docs, and every `tests/*.rs` target once through
+  `native-integration`.
+- `check/fast` and `check/full` are the only aggregate local gates. Fast is
+  the cheap pre-commit gate. Full is the complete locally executable Linux
+  gate and does not invoke fast a second time.
+- `check/platform/` has four matrix-facing suites:
+  `linux-gnu`, `linux-musl`, `macos`, and `windows`. They validate the runner
+  and target, then route to native tests, release/build, static-link checks
+  where applicable, and binary smoke.
+
+The same call graph is used locally and in hosted CI:
+
+```text
+hook -> check/{fast,full} -> atomic/suite
+mise task -> one canonical atomic, suite, check, installer, or retained script
+CI/release matrix -> check/platform/${platform} ${target}
+```
 
 Both checks require the pinned Rust toolchain, Python with PyYAML, and GNU
-`timeout`; GNU `timeout` is also required by the pre-commit fast check. The
-full check additionally requires Linux, Docker Engine and Compose, `jq`, and
-SQLite. Destructive
-Fedora VM/KVM certification is intentionally excluded from automatic
-pre-push. Run its explicit task when the host, libvirt, and VM prerequisites
-are available:
+`timeout`; GNU `timeout` is also required by the fast check. Full additionally
+requires Linux, Docker Engine and Compose, `jq`, and SQLite. macOS runners
+need an owned physical `RUNNER_TEMP`; Windows runners need the supported
+MSVC target and static CRT setup; musl runners need `musl-tools` and
+`musl-gcc`. A local Linux host is the only platform on which the complete full
+scope is available.
+
+Full includes usage/catalog validation, deterministic coverage, complexity
+calibration/ratchet/audit, release packaging, Docker smoke, transport and
+Health certification, and cleanup verification. Destructive Fedora VM/KVM
+certification is intentionally excluded from automatic pre-push. Run it only
+on a prepared host with libvirt and its VM prerequisites:
 
 ```bash
 mise run cert:vm
@@ -149,8 +164,11 @@ This is a headless Rust/HTTP product. Product documentation belongs under
 `CONTRIBUTING.md`, `LICENSE`, Cargo/Docker/mise manifests, and the canonical
 `compose.yaml`.
 
-All repository automation lives below `scripts/`: executable mise tasks are
-under `scripts/tasks/`, installers under `scripts/install/`, release tooling
+All repository automation lives below `scripts/`: canonical user-facing routes
+are atomics under `scripts/tasks/atomic/`, suites under `scripts/tasks/suite/`,
+and platform gates under `scripts/tasks/check/`. Retained certification and
+developer implementations live under `scripts/tasks/cert/` and
+`scripts/tasks/dev/`; installers are under `scripts/install/`, release tooling
 under `scripts/release/`, non-subject fixtures under `scripts/fixtures/`, and
 the isolated debug workspace under `scripts/workspace/`. Do not add a root
 script or a repository-owned Battery subject collection. External Battery
@@ -159,19 +177,26 @@ install operations to materialize them into a workspace.
 
 ## Mise task policy
 
-Prefer one atomic logical operation per task and express composition with
-`depends`, not shell `&&` chains. File tasks must resolve the project through
-`MISE_PROJECT_ROOT` with a direct-invocation fallback. Declare `sources` and
-`outputs` only for deterministic local tasks. Builds and cleanup should be
-repeat-safe; tests and linters rerun on every invocation. Install, release,
-node-service, and live Docker/libvirt certification tasks are stateful
-operations: document their preconditions and ensure bounded, trap-backed
-cleanup rather than claiming strict idempotence.
+Every Mise `run` entry is a direct invocation of one existing executable
+repository script. Keep composition in the canonical shell suites rather than
+embedding command chains or dependencies in `mise.toml`. File tasks must resolve
+the project through `MISE_PROJECT_ROOT` with a direct-invocation fallback.
+Declare `sources` and `outputs` only for deterministic local tasks. Builds and
+cleanup should be repeat-safe; tests and linters rerun on every invocation.
+Install, release, node-service, and live Docker/libvirt certification tasks are
+stateful operations: document their preconditions and ensure bounded,
+trap-backed cleanup rather than claiming strict idempotence.
 
 ## Focused validation
 
-Before submitting, run the narrow checks for changed surfaces first (for
-example `bash -n` on changed shell tasks, `mise tasks`, and the affected
-packaging/config tests), then the required `mise run lint` and relevant test
-suite. Do not hide generated state or Battery-installed scripts with broad
-ignore patterns.
+Before submitting, run the narrow checks for changed surfaces first:
+
+```bash
+bash -n scripts/tasks/atomic/shell-syntax
+scripts/tasks/atomic/shell-syntax
+mise run check:fast
+mise run test:integration
+```
+
+Then run `mise run lint` and the relevant test or certification suite. Do not
+hide generated state or Battery-installed scripts with broad ignore patterns.

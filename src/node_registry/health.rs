@@ -285,16 +285,21 @@ impl NodeRegistry {
     /// the trust decision of every peer, so the report describes a fleet the
     /// node actually had rather than a mixture of instants.
     pub fn health_fleet_snapshot(&self, now: i64) -> Result<Vec<HealthFleetPeer>, RegistryError> {
-        self.with_connection(|connection| {
+        let (peers, corrupt) = self.with_connection(|connection| {
             let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let mut peers = Vec::new();
+            let mut corrupt = Vec::new();
             for state in peer_states_in(&transaction)? {
-                peers.push(fleet_peer_in(&transaction, state, now)?);
+                let (peer, mut peer_corrupt) = fleet_peer_in(&transaction, state)?;
+                peers.push(peer);
+                corrupt.append(&mut peer_corrupt);
             }
             transaction.commit()?;
-            Ok(peers)
-        })
+            Ok((peers, corrupt))
+        })?;
+        cleanup_corrupt_health_rows(self, &corrupt, now)?;
+        Ok(peers)
     }
 
     /// The fleet-status projection input for one peer, read as one snapshot.
@@ -304,17 +309,23 @@ impl NodeRegistry {
         now: i64,
     ) -> Result<Option<HealthFleetPeer>, RegistryError> {
         validate_node_id(node_id)?;
-        self.with_connection(|connection| {
+        let (peer, corrupt) = self.with_connection(|connection| {
             let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let peer = match load_peer_state(&transaction, node_id)? {
-                Some(state) => Some(fleet_peer_in(&transaction, state, now)?),
-                None => None,
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
+            let result = match load_peer_state(&transaction, node_id)? {
+                Some(state) => {
+                    let (peer, corrupt) = fleet_peer_in(&transaction, state)?;
+                    (Some(peer), corrupt)
+                }
+                None => (None, Vec::new()),
             };
             transaction.commit()?;
-            Ok(peer)
-        })
+            Ok(result)
+        })?;
+        cleanup_corrupt_health_rows(self, &corrupt, now)?;
+        Ok(peer)
     }
+
 
     /// The whole bounded Signal read surface, read as one snapshot.
     ///
@@ -329,9 +340,9 @@ impl NodeRegistry {
         now: i64,
     ) -> Result<HealthSignalFeed, RegistryError> {
         let limit = limit.min(SIGNAL_INBOX_CAPACITY as usize);
-        self.with_connection(|connection| {
+        let (peers, signals, lifecycle, corrupt) = self.with_connection(|connection| {
             let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let mut peers = Vec::new();
             for state in peer_states_in(&transaction)? {
                 let authorization = authorization_in(&transaction, &state.node_id)?;
@@ -340,16 +351,32 @@ impl NodeRegistry {
                     authorization,
                 });
             }
-            let signals = feed_page_in(&transaction, limit, now)?;
+            let (signals, corrupt) = feed_page_in(&transaction, limit)?;
             // The lifecycle projection collapses transitions per peer, so it
             // needs the whole bounded scan window rather than one page of it.
             let lifecycle = lifecycle_trust_events_in(&transaction, usize::MAX)?;
             transaction.commit()?;
-            Ok(HealthSignalFeed {
-                peers,
-                signals,
-                lifecycle,
-            })
+            Ok((peers, signals, lifecycle, corrupt))
+        })?;
+
+        // A malformed Signal is quarantined after the consistent read snapshot
+        // commits. Keeping cleanup in its own Immediate transaction means a
+        // concurrent writer cannot make the observational transaction fail to
+        // upgrade, while cleanup is still durable and never silently skipped.
+        if !corrupt.is_empty() {
+            self.with_connection(|connection| {
+                let transaction =
+                    connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                cleanup_corrupt_signal_rows(&transaction, &corrupt, now)?;
+                transaction.commit()?;
+                Ok(())
+            })?;
+        }
+
+        Ok(HealthSignalFeed {
+            peers,
+            signals,
+            lifecycle,
         })
     }
 
@@ -1601,19 +1628,28 @@ fn authorization_in(
 fn fleet_peer_in(
     transaction: &Transaction<'_>,
     state: HealthPeerState,
-    now: i64,
-) -> Result<HealthFleetPeer, RegistryError> {
+) -> Result<(HealthFleetPeer, Vec<CorruptHealthRow>), RegistryError> {
     let authorization = authorization_in(transaction, &state.node_id)?;
-    let profile = read_profile(transaction, &state.node_id, now)?;
-    let pulse = read_pulse(transaction, &state.node_id, now)?;
-    Ok(HealthFleetPeer {
-        snapshot: HealthPeerSnapshot {
-            state,
-            profile,
-            pulse,
+    let (profile, profile_corrupt) = read_profile_observational(transaction, &state.node_id)?;
+    let (pulse, pulse_corrupt) = read_pulse_observational(transaction, &state.node_id)?;
+    let mut corrupt = Vec::new();
+    if profile_corrupt {
+        corrupt.push(("health_profiles", state.node_id.clone(), HealthKind::Profile));
+    }
+    if pulse_corrupt {
+        corrupt.push(("health_pulses", state.node_id.clone(), HealthKind::Pulse));
+    }
+    Ok((
+        HealthFleetPeer {
+            snapshot: HealthPeerSnapshot {
+                state,
+                profile,
+                pulse,
+            },
+            authorization,
         },
-        authorization,
-    })
+        corrupt,
+    ))
 }
 
 /// The bounded, newest-first page of Signals across the actively trusted
@@ -1625,8 +1661,7 @@ fn fleet_peer_in(
 fn feed_page_in(
     transaction: &Transaction<'_>,
     limit: usize,
-    now: i64,
-) -> Result<Vec<HealthFeedSignal>, RegistryError> {
+) -> Result<(Vec<HealthFeedSignal>, Vec<(String, Vec<u8>)>), RegistryError> {
     let mut corrupt: Vec<(String, Vec<u8>)> = Vec::new();
     let mut page = Vec::new();
     {
@@ -1663,7 +1698,15 @@ fn feed_page_in(
             }
         }
     }
-    for (node_id, signal_id) in &corrupt {
+    Ok((page, corrupt))
+}
+
+fn cleanup_corrupt_signal_rows(
+    transaction: &Transaction<'_>,
+    corrupt: &[(String, Vec<u8>)],
+    now: i64,
+) -> Result<(), RegistryError> {
+    for (node_id, signal_id) in corrupt {
         transaction.execute(
             "DELETE FROM health_signals WHERE node_id = ?1 AND signal_id = ?2",
             params![node_id, signal_id],
@@ -1679,7 +1722,7 @@ fn feed_page_in(
             now,
         )?;
     }
-    Ok(page)
+    Ok(())
 }
 
 /// The one predicate that decides whether a peer is still actively trusted.
@@ -1763,6 +1806,17 @@ fn read_profile(
     node_id: &str,
     now: i64,
 ) -> Result<Option<ProfileSnapshot>, RegistryError> {
+    let (profile, corrupt) = read_profile_observational(transaction, node_id)?;
+    if corrupt {
+        quarantine_row(transaction, "health_profiles", node_id, HealthKind::Profile, now)?;
+    }
+    Ok(profile)
+}
+
+fn read_profile_observational(
+    transaction: &Transaction<'_>,
+    node_id: &str,
+) -> Result<(Option<ProfileSnapshot>, bool), RegistryError> {
     let row = transaction
         .query_row(
             "SELECT profile_revision, agent_version, arch, capabilities, display_name,
@@ -1791,36 +1845,32 @@ fn read_profile(
         )
         .optional()?;
     let Some(row) = row else {
-        return Ok(None);
+        return Ok((None, false));
     };
     let capabilities = serde_json::from_str::<Vec<String>>(&row.3);
     let runtimes = serde_json::from_str::<Vec<RuntimeFact>>(&row.11);
     let (Ok(capabilities), Ok(runtimes)) = (capabilities, runtimes) else {
-        quarantine_row(
-            transaction,
-            "health_profiles",
-            node_id,
-            HealthKind::Profile,
-            now,
-        )?;
-        return Ok(None);
+        return Ok((None, true));
     };
-    Ok(Some(ProfileSnapshot {
-        agent_version: row.1,
-        arch: row.2,
-        baseline_id: row.12,
-        baseline_observed_id: row.13,
-        capabilities,
-        display_name: row.4,
-        distro_id: row.5,
-        distro_version: row.6,
-        omarchy_channel: row.7,
-        omarchy_version: row.8,
-        platform: row.9,
-        profile_revision: row.0.max(0) as u64,
-        role: row.10,
-        runtimes,
-    }))
+    Ok((
+        Some(ProfileSnapshot {
+            agent_version: row.1,
+            arch: row.2,
+            baseline_id: row.12,
+            baseline_observed_id: row.13,
+            capabilities,
+            display_name: row.4,
+            distro_id: row.5,
+            distro_version: row.6,
+            omarchy_channel: row.7,
+            omarchy_version: row.8,
+            platform: row.9,
+            profile_revision: row.0.max(0) as u64,
+            role: row.10,
+            runtimes,
+        }),
+        false,
+    ))
 }
 
 fn read_pulse(
@@ -1828,6 +1878,17 @@ fn read_pulse(
     node_id: &str,
     now: i64,
 ) -> Result<Option<PulseSnapshot>, RegistryError> {
+    let (pulse, corrupt) = read_pulse_observational(transaction, node_id)?;
+    if corrupt {
+        quarantine_row(transaction, "health_pulses", node_id, HealthKind::Pulse, now)?;
+    }
+    Ok(pulse)
+}
+
+fn read_pulse_observational(
+    transaction: &Transaction<'_>,
+    node_id: &str,
+) -> Result<(Option<PulseSnapshot>, bool), RegistryError> {
     let row = transaction
         .query_row(
             "SELECT sequence, emitted_at, profile_revision, runner_state, scheduler_state,
@@ -1851,38 +1912,32 @@ fn read_pulse(
         )
         .optional()?;
     let Some(row) = row else {
-        return Ok(None);
+        return Ok((None, false));
     };
     let last_run = match row.9.as_deref() {
         None => None,
         Some(text) => match serde_json::from_str::<RunFact>(text) {
             Ok(fact) => Some(fact),
-            Err(_) => {
-                quarantine_row(
-                    transaction,
-                    "health_pulses",
-                    node_id,
-                    HealthKind::Pulse,
-                    now,
-                )?;
-                return Ok(None);
-            }
+            Err(_) => return Ok((None, true)),
         },
     };
-    Ok(Some(PulseSnapshot {
-        emitted_at: row.1,
-        last_run,
-        profile_revision: row.2.max(0) as u64,
-        runner: RunnerFact {
-            queue_depth: row.5.max(0) as u64,
-            scheduler: row.4,
-            state: row.3,
-            workers_busy: row.6.max(0) as u64,
-            workers_configured: row.7.max(0) as u64,
-        },
-        sequence: row.0.max(0) as u64,
-        uptime_seconds: row.8.max(0) as u64,
-    }))
+    Ok((
+        Some(PulseSnapshot {
+            emitted_at: row.1,
+            last_run,
+            profile_revision: row.2.max(0) as u64,
+            runner: RunnerFact {
+                queue_depth: row.5.max(0) as u64,
+                scheduler: row.4,
+                state: row.3,
+                workers_busy: row.6.max(0) as u64,
+                workers_configured: row.7.max(0) as u64,
+            },
+            sequence: row.0.max(0) as u64,
+            uptime_seconds: row.8.max(0) as u64,
+        }),
+        false,
+    ))
 }
 
 fn quarantine_row(
@@ -1913,6 +1968,27 @@ fn quarantine_row(
         now,
     )?;
     Ok(())
+}
+
+type CorruptHealthRow = (&'static str, String, HealthKind);
+
+fn cleanup_corrupt_health_rows(
+    registry: &NodeRegistry,
+    corrupt: &[CorruptHealthRow],
+    now: i64,
+) -> Result<(), RegistryError> {
+    if corrupt.is_empty() {
+        return Ok(());
+    }
+    registry.with_connection(|connection| {
+        let transaction =
+            connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        for (table, node_id, kind) in corrupt {
+            quarantine_row(&transaction, table, node_id, *kind, now)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    })
 }
 
 type StoredSignalRow = (Vec<u8>, i64, String, i64, Option<String>, Option<String>);
@@ -1962,7 +2038,7 @@ mod tests {
     use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
     use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
     use crate::node_registry::{PeerRegistration, PeerSource};
-    use rusqlite::Connection;
+    use rusqlite::{Connection, TransactionBehavior};
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -2156,6 +2232,32 @@ mod tests {
 
     fn accepted(cursor: u64) -> HealthDecision {
         HealthDecision::Accepted { cursor }
+    }
+
+    #[test]
+    fn pure_health_reads_succeed_while_writer_is_reserved() {
+        let fixture = fixture();
+        let node_id = performer(&fixture.registry);
+        let mut writer = Connection::open(fixture.registry.path()).unwrap();
+        super::super::configure_connection(&mut writer).unwrap();
+        let writer_transaction = writer
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .unwrap();
+
+        assert!(fixture
+            .registry
+            .health_fleet_snapshot(BASE_NOW)
+            .is_ok());
+        assert!(fixture
+            .registry
+            .health_node_snapshot(&node_id, BASE_NOW)
+            .is_ok());
+        assert!(fixture
+            .registry
+            .health_signal_feed(16, BASE_NOW)
+            .is_ok());
+
+        writer_transaction.rollback().unwrap();
     }
 
     #[test]
@@ -3131,6 +3233,42 @@ mod tests {
             ),
             accepted(0)
         );
+    }
+
+    #[test]
+    fn a_corrupt_signal_in_feed_is_quarantined_after_snapshot() {
+        let fixture = fixture();
+        let node_id = performer(&fixture.registry);
+        let local = fixture.registry.local_node_id().to_string();
+
+        assert_eq!(
+            apply(
+                &fixture.registry,
+                &node_id,
+                &signal(&local, 1, 1, 101, BASE_NOW),
+                BASE_NOW,
+            ),
+            accepted(1)
+        );
+        let connection = Connection::open(fixture.registry.path()).unwrap();
+        connection
+            .execute("UPDATE health_signals SET run = 'not-json'", [])
+            .unwrap();
+
+        let feed = fixture
+            .registry
+            .health_signal_feed(16, BASE_NOW + 1)
+            .unwrap();
+        assert!(feed.signals.is_empty(), "the corrupt Signal is hidden");
+        let rows: i64 = connection
+            .query_row("SELECT COUNT(*) FROM health_signals", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
+        let audit = fixture.registry.health_audit_events(10).unwrap();
+        assert!(audit.iter().any(|event| {
+            event.event_code == "corrupt_row"
+                && event.error_code == Some(HealthCode::CorruptState.code())
+        }));
     }
 
     #[test]

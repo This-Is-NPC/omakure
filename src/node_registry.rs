@@ -1675,7 +1675,7 @@ impl NodeRegistry {
         validate_node_id(node_id)?;
         self.with_connection(|connection| {
             let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let peer = load_peer(&transaction, node_id)?;
             transaction.commit()?;
             Ok(peer)
@@ -1684,7 +1684,7 @@ impl NodeRegistry {
 
     pub fn peers(&self) -> Result<Vec<PeerRecord>, RegistryError> {
         self.with_connection(|connection| {
-            let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let transaction = connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let mut statement = transaction.prepare(
                 "SELECT node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source
                  FROM peers ORDER BY node_id",
@@ -1704,7 +1704,7 @@ impl NodeRegistry {
             ));
         }
         self.with_connection(|connection| {
-            let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let transaction = connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let mut statement = transaction.prepare(
                 "SELECT node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source
                  FROM peers ORDER BY node_id LIMIT ?1",
@@ -1737,7 +1737,7 @@ impl NodeRegistry {
     pub fn revocations(&self) -> Result<Vec<RevocationRecord>, RegistryError> {
         self.with_connection(|connection| {
             let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let mut statement = transaction.prepare(
                 "SELECT id, node_id, public_key, revoked_at, reason, replacement_node_id
                  FROM revocations ORDER BY id",
@@ -1753,7 +1753,7 @@ impl NodeRegistry {
     pub fn audit_events(&self) -> Result<Vec<AuditEvent>, RegistryError> {
         self.with_connection(|connection| {
             let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let mut statement = transaction.prepare(
                 "SELECT id, event_type, node_id, from_state, to_state, actor, reason, occurred_at
                  FROM audit_events ORDER BY id",
@@ -1791,7 +1791,7 @@ impl NodeRegistry {
         let identity_key = decode_hex(public_key_hex)?;
         self.with_connection(|connection| {
             let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
             let peer = transaction
                 .query_row(
                     "SELECT r.node_id, r.identity_key, r.state,
@@ -5431,6 +5431,31 @@ mod tests {
             PeerState::Pending
         );
         assert_eq!(registry.audit_events().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn pure_registry_reads_succeed_while_writer_is_reserved() {
+        let temp = TempDir::new().unwrap();
+        let node_context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
+        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        let mut writer = Connection::open(node_context.database_path()).unwrap();
+        configure_connection(&mut writer).unwrap();
+        let writer_transaction = writer
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .unwrap();
+        let status = identity.public_status();
+
+        assert!(registry.peer(&status.node_id).is_ok());
+        assert!(registry.peers().is_ok());
+        assert!(registry.peers_limited(1).is_ok());
+        assert!(registry.revocations().is_ok());
+        assert!(registry.audit_events().is_ok());
+        assert!(registry
+            .transport_peer(&status.node_id, &status.public_key_hex)
+            .is_ok());
+
+        writer_transaction.rollback().unwrap();
     }
 
     #[test]

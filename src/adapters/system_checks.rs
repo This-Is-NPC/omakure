@@ -102,9 +102,7 @@ pub(crate) fn ensure_git_installed() -> Result<(), ScriptError> {
     )
 }
 
-pub(crate) fn ensure_git_installed_with_env(
-    env: &[(String, String)],
-) -> Result<(), ScriptError> {
+pub(crate) fn ensure_git_installed_with_env(env: &[(String, String)]) -> Result<(), ScriptError> {
     let hint = if cfg!(windows) {
         "Install Git for Windows (includes bash)"
     } else {
@@ -156,10 +154,13 @@ pub(crate) fn ensure_jq_installed() -> Result<(), ScriptError> {
     ensure_command("jq", &["--version"], "Install jq and ensure it is in PATH")
 }
 
-pub(crate) fn ensure_jq_installed_with_env(
-    env: &[(String, String)],
-) -> Result<(), ScriptError> {
-    ensure_command_with_env("jq", &["--version"], "Install jq and ensure it is in PATH", env)
+pub(crate) fn ensure_jq_installed_with_env(env: &[(String, String)]) -> Result<(), ScriptError> {
+    ensure_command_with_env(
+        "jq",
+        &["--version"],
+        "Install jq and ensure it is in PATH",
+        env,
+    )
 }
 
 pub(crate) fn ensure_powershell_installed() -> Result<(), ScriptError> {
@@ -312,13 +313,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().unwrap();
-        for program in [
-            "git",
-            "jq",
-            "bash",
-            python_program(),
-            powershell_program(),
-        ] {
+        for program in ["git", "jq", "bash", python_program(), powershell_program()] {
             let path = dir.path().join(program);
             std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
             let mut permissions = std::fs::metadata(&path).unwrap().permissions();

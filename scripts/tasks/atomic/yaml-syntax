@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+command -v python3 >/dev/null 2>&1 || { printf 'atomic/yaml-syntax: python3 is required\n' >&2; exit 1; }
+exec python3 - <<'PY'
+import glob
+
+try:
+    import yaml
+except ImportError as exc:
+    raise SystemExit(f"atomic/yaml-syntax: PyYAML is required: {exc}")
+paths = sorted(glob.glob("ci/compose/*.yaml")) + sorted(glob.glob(".github/workflows/*.yml"))
+if len(paths) < 6:
+    raise SystemExit(f"atomic/yaml-syntax: expected at least 6 YAML files, found {len(paths)}")
+for path in paths:
+    with open(path, encoding="utf-8") as stream:
+        yaml.safe_load(stream)
+    print(f"ok {path}")
+PY

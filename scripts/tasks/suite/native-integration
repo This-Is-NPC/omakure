@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+runner="$root/scripts/tasks/atomic/test-target"
+[[ -x "$runner" ]] || { printf 'suite/native-integration: missing executable %s\n' "$runner" >&2; exit 1; }
+
+# Keep this list explicit and sorted: every tests/*.rs target is run once.
+targets=(
+  architecture_contract
+  baseline_push_e2e
+  behavioral_adapter_parity
+  cli_battery
+  cli_no_subcommand
+  cli_reference_contract
+  cli_surface_e2e
+  direct_transport_contract
+  direct_transport_e2e
+  discovery_udp_e2e
+  docker_discovery_e2e
+  docker_enrollment_e2e
+  docker_health_plane_adversary
+  docker_health_plane_exhaustion
+  docker_signed_bundle_e2e
+  enrollment_authority_e2e
+  health_plane_contract
+  health_plane_feasibility
+  health_plane_signals
+  health_plane_state
+  health_plane_transport_e2e
+  http_api_e2e
+  lua_script_kind_e2e
+  node_service_e2e
+  packaging_smoke
+  policy_e2e
+  remote_cue_authorization
+  remote_cue_contract
+  remote_cue_e2e
+  secret_cli_e2e
+  shipped_config_templates
+  spike_command_path_resolution
+  support_harness
+)
+
+for target in "${targets[@]}"; do
+  "$runner" "$target" "$@"
+done

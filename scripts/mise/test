@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-root="${MISE_PROJECT_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
-root="$(cd -- "$root" && pwd -P)"
-"$root/scripts/mise/test-unit" "$@"
-"$root/scripts/mise/test-integration" "$@"
-exec "$root/scripts/mise/test-e2e" "$@"

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+for command in musl-gcc file readelf; do
+  command -v "$command" >/dev/null 2>&1 || { printf 'atomic/musl-static: %s is required\n' "$command" >&2; exit 1; }
+done
+(( $# == 1 )) || { printf 'atomic/musl-static: exactly one musl target triple is required\n' >&2; exit 2; }
+target="$1"
+case "$target" in
+  x86_64-unknown-linux-musl) expected_arch='x86-64'; expected_machine='x86_64' ;;
+  aarch64-unknown-linux-musl) expected_arch='ARM aarch64'; expected_machine='aarch64' ;;
+  *) printf 'atomic/musl-static: unsupported musl target triple: %s\n' "$target" >&2; exit 2 ;;
+esac
+binary="$root/target/$target/release/omakure"
+[[ -x "$binary" ]] || { printf 'atomic/musl-static: release binary is missing or not executable: %s\n' "$binary" >&2; exit 1; }
+machine="$(musl-gcc -dumpmachine)"
+[[ "$machine" == "$expected_machine"* ]] || {
+  printf 'atomic/musl-static: musl-gcc targets %s, expected %s\n' "$machine" "$expected_machine" >&2
+  exit 1
+}
+file_output="$(file "$binary")"
+[[ "$file_output" == *"$expected_arch"* ]] || {
+  printf 'atomic/musl-static: unexpected binary architecture: %s\n' "$file_output" >&2
+  exit 1
+}
+if [[ "$file_output" != *'statically linked'* && "$file_output" != *'static-pie linked'* ]]; then
+  printf 'atomic/musl-static: binary is not statically linked: %s\n' "$file_output" >&2
+  exit 1
+fi
+if readelf -l "$binary" | grep -q 'INTERP'; then
+  printf 'atomic/musl-static: binary has a dynamic interpreter: %s\n' "$binary" >&2
+  exit 1
+fi
+printf 'atomic/musl-static: static binary verified: %s\n' "$binary"

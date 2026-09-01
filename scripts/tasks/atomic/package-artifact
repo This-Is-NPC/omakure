@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+(( $# == 0 )) || { printf 'atomic/package-artifact: does not accept arguments\n' >&2; exit 2; }
+command -v tar >/dev/null 2>&1 || { printf 'atomic/package-artifact: tar is required\n' >&2; exit 1; }
+package="$root/scripts/release/package-release.sh"
+binary="$root/target/release/omakure"
+[[ -x "$package" ]] || { printf 'atomic/package-artifact: missing executable %s\n' "$package" >&2; exit 1; }
+[[ -f "$binary" ]] || { printf 'atomic/package-artifact: release binary is missing: %s\n' "$binary" >&2; exit 1; }
+exec "$package" "$binary" "$root/dist/omakure.tar.gz"

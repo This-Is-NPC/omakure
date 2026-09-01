@@ -2,87 +2,76 @@
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
-root="$(cd -- "$root" && pwd -P)"
 cd "$root"
-export MISE_PROJECT_ROOT="$root"
 
-require_command() {
-    command -v "$1" >/dev/null 2>&1 || {
-        printf 'check:full: required command is missing: %s\n' "$1" >&2
+require_script() {
+    [[ -x "$root/$1" ]] || {
+        printf 'check:full: missing executable script: %s\n' "$1" >&2
         exit 1
     }
 }
 
-if [[ "$(uname -s)" != Linux ]]; then
-    printf 'check:full: the complete local suite requires Linux\n' >&2
-    exit 1
-fi
-for command in cargo docker jq python3 sqlite3 timeout; do
-    require_command "$command"
+
+for script in \
+    scripts/tasks/atomic/full-prerequisites \
+    scripts/tasks/atomic/shell-syntax \
+    scripts/tasks/atomic/yaml-syntax \
+    scripts/tasks/atomic/complexity-contract \
+    scripts/tasks/atomic/coverage-contract \
+    scripts/tasks/atomic/fmt \
+    scripts/tasks/atomic/clippy \
+    scripts/tasks/check/platform/linux-gnu \
+    scripts/tasks/atomic/dev-smoke \
+    scripts/tasks/atomic/usage-kdl \
+    scripts/tasks/atomic/usage-docs \
+    scripts/tasks/atomic/operation-catalog \
+    scripts/tasks/atomic/complexity \
+    scripts/tasks/atomic/package-artifact \
+    scripts/tasks/atomic/vm-static \
+    scripts/tasks/cert/docker-smoke \
+    scripts/tasks/cert/transport \
+    scripts/tasks/cert/health \
+    scripts/tasks/cert/health-cleanup
+do
+    require_script "$script"
 done
-timeout_version="$(timeout --version 2>&1 || true)"
-[[ "$timeout_version" == *"GNU coreutils"* ]] || {
-    printf 'check:full: GNU timeout is required for bounded checks\n' >&2
-    exit 1
-}
-docker compose version >/dev/null 2>&1 || {
-    printf 'check:full: Docker Compose is required\n' >&2
-    exit 1
-}
+printf 'check:full: environment prerequisites\n'
+"$root/scripts/tasks/atomic/full-prerequisites"
 
-"$root/scripts/tasks/check/shared"
-printf 'check:full: bounded formatting and Clippy\n'
-timeout --foreground --kill-after=10s 15m "$root/scripts/mise/lint"
+printf 'check:full: shell syntax\n'
+"$root/scripts/tasks/atomic/shell-syntax"
+printf 'check:full: YAML syntax\n'
+"$root/scripts/tasks/atomic/yaml-syntax"
+printf 'check:full: complexity contract fixtures\n'
+"$root/scripts/tasks/atomic/complexity-contract"
+printf 'check:full: coverage contract fixtures\n'
+"$root/scripts/tasks/atomic/coverage-contract"
+printf 'check:full: formatting\n'
+"$root/scripts/tasks/atomic/fmt"
+printf 'check:full: Clippy\n'
+"$root/scripts/tasks/atomic/clippy"
 
-printf 'check:full: all-target tests\n'
-timeout --foreground --kill-after=10s 30m cargo test --all-targets --locked
-
-printf 'check:full: bounded development service smoke\n'
-timeout --foreground --kill-after=10s 15m "$root/scripts/tasks/dev/smoke"
-
-printf 'check:full: bounded usage and catalog artifact checks\n'
-timeout --foreground --kill-after=10s 5m "$root/scripts/tasks/usage-kdl" --check
-timeout --foreground --kill-after=10s 5m "$root/scripts/tasks/usage-docs" --check
-timeout --foreground --kill-after=10s 5m "$root/scripts/tasks/operation-catalog" --check
-
+printf 'check:full: Linux GNU platform suite\n'
+"$root/scripts/tasks/check/platform/linux-gnu"
+printf 'check:full: development service smoke\n'
+"$root/scripts/tasks/atomic/dev-smoke"
+printf 'check:full: Usage KDL and docs/catalog checks\n'
+"$root/scripts/tasks/atomic/usage-kdl" --check
+"$root/scripts/tasks/atomic/usage-docs" --check
+"$root/scripts/tasks/atomic/operation-catalog" --check
 printf 'check:full: deterministic coverage\n'
-timeout --foreground --kill-after=10s 45m "$root/scripts/tasks/coverage"
-
-printf 'check:full: complexity calibration\n'
-"$root/scripts/tasks/complexity-setup"
-"$root/scripts/tasks/complexity-test"
-mkdir -p target/quality/complexity-evidence
-"$root/scripts/tasks/complexity-report" --source-root . \
-    --output target/quality/complexity-report-a.json
-"$root/scripts/tasks/complexity-report" --source-root . \
-    --output target/quality/complexity-report-b.json
-cmp --silent target/quality/complexity-report-a.json \
-    target/quality/complexity-report-b.json
-"$root/scripts/tasks/complexity-gate" \
-    --report target/quality/complexity-report-a.json \
-    --repeat-report target/quality/complexity-report-b.json \
-    --baseline quality/complexity/baseline.json \
-    --exceptions quality/complexity/exceptions.json \
-    --output target/quality/complexity-evidence/gate.json
-"$root/scripts/tasks/complexity-soak-audit" \
-    --directory target/quality/complexity-evidence
-
-printf 'check:full: release and package checks\n'
-timeout --foreground --kill-after=10s 30m cargo build --release --bin omakure --locked
-"$root/scripts/release/package-release.sh" \
-    target/release/omakure dist/omakure.tar.gz
-
-printf 'check:full: Fedora VM static policy checks\n'
-"$root/scripts/tasks/cert/vm-static"
-
+"$root/scripts/tasks/atomic/coverage"
+printf 'check:full: complexity calibration and gate\n'
+"$root/scripts/tasks/atomic/complexity"
+printf 'check:full: package release artifact\n'
+"$root/scripts/tasks/atomic/package-artifact"
+printf 'check:full: Fedora VM static policy\n'
+"$root/scripts/tasks/atomic/vm-static"
 printf 'check:full: Docker smoke\n'
 "$root/scripts/tasks/cert/docker-smoke"
-
 printf 'check:full: transport certification\n'
 "$root/scripts/tasks/cert/transport"
 printf 'check:full: Health certification\n'
 "$root/scripts/tasks/cert/health"
 printf 'check:full: Health cleanup verification\n'
-"$root/scripts/tasks/cert/health-cleanup"
-
-printf 'check:full: PASS (manual Fedora VM/KVM certification remains explicit)\n'
+exec "$root/scripts/tasks/cert/health-cleanup"

@@ -10,46 +10,55 @@ jobs:
   platform:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: Linux headless test and release build
+            platform: linux-gnu
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             musl: false
             rustflags: ""
           - name: Linux musl static release build
+            platform: linux-musl
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             musl: true
             rustflags: ""
           - name: Linux ARM64 headless test and release build
+            platform: linux-gnu
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             musl: false
             rustflags: ""
           - name: Linux ARM64 musl static release build
+            platform: linux-musl
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
             musl: true
             rustflags: ""
           - name: macOS headless test and release build
+            platform: macos
             os: macos-15-intel
             target: x86_64-apple-darwin
             musl: false
             rustflags: ""
           - name: macOS ARM64 headless test and release build
+            platform: macos
             os: macos-15
             target: aarch64-apple-darwin
             musl: false
             rustflags: ""
           - name: Windows headless test and release build
+            platform: windows
             os: windows-latest
             target: x86_64-pc-windows-msvc
             musl: false
             rustflags: "-C target-feature=+crt-static"
           - name: Windows ARM64 headless test and release build
+            platform: windows
             os: windows-11-arm
             target: aarch64-pc-windows-msvc
             musl: false
@@ -60,112 +69,18 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
-      - name: Configure private macOS temporary directory
-        if: contains(matrix.target, '-apple-darwin')
-        shell: bash
-        run: |
-          set -euo pipefail
-          runner_temp="$(cd -- "${RUNNER_TEMP}" && pwd -P)"
-          current_owner_group="$(id -u):$(id -g)"
-          runner_owner_group="$(stat -f '%u:%g' "${runner_temp}")"
-          [[ "${runner_owner_group}" == "${current_owner_group}" ]] || {
-            echo "RUNNER_TEMP is not owned by the current user/group" >&2
-            exit 1
-          }
-          tmpdir="${runner_temp}/omakure-tmp"
-          [[ ! -L "${tmpdir}" ]] || {
-            echo "refusing symlinked macOS temporary directory" >&2
-            exit 1
-          }
-          if [[ ! -e "${tmpdir}" ]]; then
-            mkdir "${tmpdir}"
-          fi
-          [[ -d "${tmpdir}" ]] || {
-            echo "macOS temporary path is not a directory" >&2
-            exit 1
-          }
-          physical_tmpdir="$(cd -- "${tmpdir}" && pwd -P)"
-          [[ "${physical_tmpdir}" == "${tmpdir}" ]] || {
-            echo "refusing non-physical macOS temporary directory" >&2
-            exit 1
-          }
-          chmod 700 "${physical_tmpdir}"
-          tmpdir_owner_group="$(stat -f '%u:%g' "${physical_tmpdir}")"
-          [[ "${tmpdir_owner_group}" == "${current_owner_group}" ]] || {
-            echo "macOS temporary directory is not owned by the current user/group" >&2
-            exit 1
-          }
-          printf 'TMPDIR=%s\n' "${physical_tmpdir}" >> "${GITHUB_ENV}"
-
       - name: Install musl toolchain
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      # The Unix SIGTERM integration test is cfg(unix); Windows still runs the
-      # readiness and process-boundary tests and gets the same release build.
-      - name: Test headless binary
-        run: cargo test --all-targets --locked
-      - name: Test node-service lifecycle surface
-        run: cargo test --test node_service_e2e --test policy_e2e --locked
-      - name: Native protocol/build/lifecycle matrix (no Docker)
-        run: cargo test --test direct_transport_contract --test node_service_e2e --locked
-      # macOS and Windows runners have no usable Docker networking, so the
-      # multi-container Health Plane gate cannot run there. They keep honest
-      # native coverage instead: the frozen contract vectors, the bounded state
-      # and migration suite, the Signal lifecycle, and the multi-node reporting
-      # path that runs in-process rather than in containers.
-      #
-      # This adds no coverage over `--all-targets` above and is not meant to.
-      # Like the two steps before it, it names the platform guarantee the docs
-      # claim so a failure points at the claim instead of at a 900-test run.
-      - name: Native Health Plane protocol/migration/lifecycle matrix (no Docker)
-        run: >-
-          cargo test --test health_plane_contract --test health_plane_state
-          --test health_plane_signals --test health_plane_transport_e2e
-          --test health_plane_feasibility --locked
-      - name: Compile platform-specific node security paths
-        if: contains(matrix.target, 'windows')
-        run: cargo check --all-targets --locked
-      # The MSVC release artifact is built with `+crt-static`
-      # (.github/workflows/release.yml), but nothing in CI carried those flags.
-      # With a vendored C dependency that gap hides CRT-linkage failures
-      # (LNK2038/LNK4098) until a release tag, which is the worst place to find
-      # them. Build the same way here.
-      - name: Build release binary
+      - name: Run platform checks
+        shell: bash
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
-      - name: Verify musl binary is statically linked
-        if: matrix.musl
-        shell: bash
-        run: |
-          set -euo pipefail
-          binary="target/${{ matrix.target }}/release/omakure"
-          compiler_machine="$(musl-gcc -dumpmachine)"
-          case "${{ matrix.target }}" in
-            x86_64-*) [[ "${compiler_machine}" == *x86_64* ]] ;;
-            aarch64-*) [[ "${compiler_machine}" == *aarch64* ]] ;;
-            *) echo "unexpected musl target: ${{ matrix.target }}" >&2; exit 1 ;;
-          esac
-          file_output="$(file "${binary}")"
-          echo "${file_output}"
-          grep -Eqi 'static(ally|-pie) linked' <<<"${file_output}"
-          case "${{ matrix.target }}" in
-            x86_64-*) grep -Eqi 'x86-64|x86_64' <<<"${file_output}" ;;
-            aarch64-*) grep -Eqi 'aarch64|ARM' <<<"${file_output}" ;;
-          esac
-          ! readelf -l "${binary}" | grep -q 'INTERP'
-      - name: Run native release binary smoke test
-        shell: bash
-        run: |
-          if [[ "${{ matrix.target }}" == *windows* ]]; then
-            target/${{ matrix.target }}/release/omakure.exe --version
-          else
-            target/${{ matrix.target }}/release/omakure --version
-          fi
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"
 
   lint:
     runs-on: ubuntu-latest

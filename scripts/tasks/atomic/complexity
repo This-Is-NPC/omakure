@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+(( $# == 0 )) || { printf 'atomic/complexity: does not accept arguments\n' >&2; exit 2; }
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$bounded" ]] || { printf 'atomic/complexity: bounded runner is missing\n' >&2; exit 1; }
+for script in complexity-setup complexity-test complexity-report complexity-gate complexity-soak-audit; do
+  path="$root/scripts/tasks/$script"
+  [[ -x "$path" ]] || { printf 'atomic/complexity: missing executable %s\n' "$path" >&2; exit 1; }
+done
+command -v cmp >/dev/null 2>&1 || { printf 'atomic/complexity: cmp is required\n' >&2; exit 1; }
+"$bounded" 30m "$root/scripts/tasks/complexity-setup"
+"$bounded" 30m "$root/scripts/tasks/complexity-test"
+mkdir -p target/quality/complexity-evidence
+"$bounded" 30m "$root/scripts/tasks/complexity-report" --source-root . --output target/quality/complexity-report-a.json
+"$bounded" 30m "$root/scripts/tasks/complexity-report" --source-root . --output target/quality/complexity-report-b.json
+cmp --silent target/quality/complexity-report-a.json target/quality/complexity-report-b.json
+"$bounded" 15m "$root/scripts/tasks/complexity-gate" \
+  --report target/quality/complexity-report-a.json \
+  --repeat-report target/quality/complexity-report-b.json \
+  --baseline quality/complexity/baseline.json \
+  --exceptions quality/complexity/exceptions.json \
+  --output target/quality/complexity-evidence/gate.json
+exec "$bounded" 15m "$root/scripts/tasks/complexity-soak-audit" --directory target/quality/complexity-evidence

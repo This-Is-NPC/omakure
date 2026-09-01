@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
+cd "$root"
+export MISE_PROJECT_ROOT="$root"
+
+die() {
+    printf 'check:platform:linux-musl: %s\n' "$1" >&2
+    exit 2
+}
+
+(($# == 1)) || die 'usage: linux-musl target-triple'
+target="$1"
+case "$target" in
+    x86_64-unknown-linux-musl|aarch64-unknown-linux-musl) ;;
+    *) die "unsupported Linux musl target: $target" ;;
+esac
+
+printf 'check:platform:linux-musl: native host tests (%s)\n' "$target"
+"$root/scripts/tasks/suite/native-tests"
+printf 'check:platform:linux-musl: static release build (%s)\n' "$target"
+"$root/scripts/tasks/atomic/build-release" --target-triple "$target"
+printf 'check:platform:linux-musl: static ELF verification (%s)\n' "$target"
+"$root/scripts/tasks/atomic/musl-static" "$target"
+printf 'check:platform:linux-musl: binary smoke (%s)\n' "$target"
+"$root/scripts/tasks/atomic/binary-smoke" "$target"
+printf 'check:platform:linux-musl: PASS\n'

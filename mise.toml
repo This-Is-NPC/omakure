@@ -9,68 +9,68 @@ includes = ["scripts/tasks"]
 
 [tasks.node]
 description = "Run the authenticated machine node service in the foreground"
-run = "scripts/mise/node"
+run = "scripts/tasks/atomic/node-serve"
 raw = true
 
 [tasks.dev]
 description = "Run the bounded node-service smoke check"
-run = "scripts/mise/dev"
+run = "scripts/tasks/atomic/dev-smoke"
 
 [tasks."test:node-service"]
 description = "Run node-service, CLI, HTTP, and policy integration checks"
-run = "scripts/mise/test-node-service"
+run = "scripts/tasks/suite/test-node-service"
 
 [tasks."test:unit"]
 description = "Run library and unit tests"
-run = "scripts/mise/test-unit"
+run = "scripts/tasks/suite/test-unit"
 
 [tasks."test:integration"]
 description = "Run integration tests excluding live certification gates"
-run = "scripts/mise/test-integration"
+run = "scripts/tasks/suite/test-integration"
 
 [tasks."test:e2e"]
 description = "Run the end-to-end test suites"
-run = "scripts/mise/test-e2e"
+run = "scripts/tasks/suite/test-e2e"
 
 [tasks.test]
 description = "Run the unit, integration, and end-to-end test groups"
-run = "scripts/mise/test"
+run = "scripts/tasks/suite/native-tests"
 
 [tasks."lint:fmt"]
 description = "Check Rust formatting"
-run = "scripts/mise/lint-fmt"
+run = "scripts/tasks/atomic/fmt"
 
 [tasks."lint:clippy"]
 description = "Run Clippy with warnings denied"
-run = "scripts/mise/lint-clippy"
+run = "scripts/tasks/atomic/clippy"
 
 [tasks.lint]
 description = "Run formatting and Clippy checks"
-run = "scripts/mise/lint"
+run = "scripts/tasks/suite/lint"
 
 [tasks.build]
 description = "Build the project in debug mode"
-run = "scripts/mise/build"
+run = "scripts/tasks/atomic/build-debug"
 sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
 outputs = ["target/debug/omakure"]
 
 [tasks."build:release"]
 description = "Build the release binary"
-run = "scripts/mise/build-release"
+run = "scripts/tasks/atomic/build-release"
 sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
 outputs = ["target/release/omakure"]
 
 [tasks."usage:kdl"]
 description = "Generate or check the pinned Clap-to-Usage KDL compatibility artifacts"
-run = "scripts/tasks/usage-kdl"
+run = "scripts/tasks/atomic/usage-kdl"
 
 [tasks."usage:docs"]
 description = "Generate or check deterministic Markdown and roff Usage documentation"
-run = "scripts/tasks/usage-docs"
+run = "scripts/tasks/atomic/usage-docs"
 
 [tasks."operation:catalog"]
 description = "Generate or check the operation catalog artifacts"
-run = "scripts/tasks/operation-catalog"
+run = "scripts/tasks/atomic/operation-catalog"
 
 [tasks.install]
 description = "Install omakure locally (mutates the user installation prefix)"
@@ -78,11 +78,11 @@ run = "scripts/install/install-from-source.sh"
 
 [tasks.coverage]
 description = "Generate deterministic LLVM HTML, LCOV, and Cobertura reports and enforce the baseline"
-run = "scripts/tasks/coverage"
+run = "scripts/tasks/atomic/coverage"
 
 [tasks."coverage:test"]
 description = "Run offline coverage threshold and inventory fixtures"
-run = "scripts/tasks/coverage-test"
+run = "scripts/tasks/atomic/coverage-contract"
 
 [tasks."quality:complexity-setup"]
 description = "Explicitly acquire pinned complexity analyzers and verify SHA-256 digests"
@@ -90,11 +90,11 @@ run = "scripts/tasks/complexity-setup"
 
 [tasks."quality:complexity-report"]
 description = "Run the offline informational Rust complexity report"
-run = "scripts/mise/quality-complexity-report"
+run = "scripts/tasks/atomic/complexity-report"
 
 [tasks."quality:complexity-gate"]
 description = "Enforce changed/new handwritten-function complexity and exception validity"
-run = "scripts/mise/quality-complexity-gate"
+run = "scripts/tasks/atomic/complexity-gate"
 
 [tasks."quality:complexity-gate-test"]
 description = "Validate changed-function boundaries, ratchet, and exception lifecycle"
@@ -110,15 +110,15 @@ run = "scripts/tasks/complexity-setup-test"
 
 [tasks."quality:complexity-soak-audit"]
 description = "Audit persisted native complexity evidence for the ten-run temporal gate"
-run = "scripts/mise/quality-complexity-soak-audit"
+run = "scripts/tasks/atomic/complexity-soak-audit"
 
 [tasks."package:release"]
 description = "Package a built release binary into an archive"
-run = "scripts/mise/package-release"
+run = "scripts/tasks/suite/package-release"
 
 [tasks."cert:vm-static"]
 description = "Validate Fedora VM certification scripts and fixed policy fixtures"
-run = "scripts/tasks/cert/vm-static"
+run = "scripts/tasks/atomic/vm-static"
 
 [tasks."cert:transport-cleanup"]
 description = "Verify transport certification cleanup after induced failure"
@@ -134,11 +134,11 @@ run = "scripts/tasks/cert/vm-cleanup"
 
 [tasks."cert:vm"]
 description = "Run the Fedora VM privilege certification after static checks"
-run = "scripts/mise/cert-vm"
+run = "scripts/tasks/suite/cert-vm"
 
 [tasks.cert]
 description = "Run transport, Health Plane, and Fedora VM certification gates"
-run = "scripts/mise/cert"
+run = "scripts/tasks/suite/cert"
 
 [tasks."check:fast"]
 description = "Run cheap formatting, static, contract, and library checks"

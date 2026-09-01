@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-root="${MISE_PROJECT_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
-root="$(cd -- "$root" && pwd -P)"
-cd "$root"
-exec env OMAKURE_API_TOKEN="$(openssl rand -hex 32)" cargo run --bin omakure -- node serve --workers 1 --capability all "$@"

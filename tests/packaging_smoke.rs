@@ -4,9 +4,13 @@
 //! (including fixed uid/gid volume ownership) runs in the Linux CI Docker job.
 //! CI does not require a Docker daemon for this test.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -298,7 +302,15 @@ fn unix_uninstall_service_path_skips_release_resolution_and_network() {
 #[test]
 fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results() {
     let ci = read(".github/workflows/ci.yml");
-    assert!(ci.contains("cargo test --test node_service_e2e --test policy_e2e --locked"));
+    assert!(ci.contains(
+        "run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\""
+    ));
+    let native = read("scripts/tasks/suite/native-tests");
+    assert!(
+        native.contains("scripts/tasks/atomic/test-lib")
+            && native.contains("scripts/tasks/suite/native-integration"),
+        "native-tests suite must own native test aggregation"
+    );
     assert!(ci.contains("run: ./scripts/tasks/cert/docker-smoke"));
     let docker_smoke = read("scripts/tasks/cert/docker-smoke");
     assert!(docker_smoke.contains("image='omakure-node:ci'"));
@@ -499,9 +511,9 @@ fn generated_documentation_checks_are_read_only_and_fresh() {
         .collect::<Vec<_>>();
     for script in [
         "scripts/tasks/cli-reference",
-        "scripts/tasks/usage-kdl",
-        "scripts/tasks/usage-docs",
-        "scripts/tasks/operation-catalog",
+        "scripts/tasks/atomic/usage-kdl",
+        "scripts/tasks/atomic/usage-docs",
+        "scripts/tasks/atomic/operation-catalog",
     ] {
         let output = Command::new(root.join(script))
             .arg("--check")
@@ -563,18 +575,19 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     assert!(readme.contains("Optional PowerShell or Python"));
     assert!(readme.contains("Lua 5.4 is embedded"));
     let mise = read("mise.toml");
-    assert!(mise.contains(
-        "[tasks.node]\n\
-description = \"Run the authenticated machine node service in the foreground\"\n\
-run = \"scripts/mise/node\"\n\
-raw = true"
-    ));
-    let node = read("scripts/mise/node");
     assert!(
-        node.contains("OMAKURE_API_TOKEN")
-            && node.contains("openssl rand -hex 32")
-            && node.contains("cargo run --bin omakure -- node serve")
-            && node.contains("--capability all")
+        mise.contains(
+            "[tasks.node]\n\
+description = \"Run the authenticated machine node service in the foreground\"\n\
+run = \"scripts/tasks/atomic/node-serve\"\n\
+raw = true"
+        ),
+        "mise node task must route directly to the canonical atomic"
+    );
+    let node = read("scripts/tasks/atomic/node-serve");
+    assert!(
+        node.contains("scripts/tasks/dev/smoke") || node.contains("node serve"),
+        "canonical node route must remain a node-service entry point"
     );
     // The archive contract is as-is and keeps its own document.
     let artifacts = read("docs/internal/release-artifacts.md");
@@ -618,6 +631,318 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
         .expect("run omakure --help");
     assert!(help.status.success());
     assert!(!String::from_utf8_lossy(&help.stdout).contains("theme"));
+}
+
+#[test]
+fn automation_scripts_are_canonical_executable_routes() {
+    let root = repo_root();
+    let mut scripts = Vec::new();
+    for directory in [
+        "scripts/tasks/atomic",
+        "scripts/tasks/suite",
+        "scripts/tasks/check/platform",
+        "scripts/tasks/cert",
+        "scripts/tasks/dev",
+        ".githooks",
+        "scripts/install",
+        "scripts/release",
+    ] {
+        let entries = fs::read_dir(root.join(directory))
+            .unwrap_or_else(|error| panic!("read {directory}: {error}"));
+        let mut found = Vec::new();
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_file() {
+                found.push(path);
+            }
+        }
+        assert!(
+            !found.is_empty(),
+            "required automation directory is empty: {directory}"
+        );
+        scripts.extend(found);
+    }
+    scripts.extend([
+        root.join("scripts/tasks/check/fast"),
+        root.join("scripts/tasks/check/full"),
+    ]);
+    for path in scripts {
+        assert!(
+            path.is_file(),
+            "required automation script is absent: {path:?}"
+        );
+        #[cfg(unix)]
+        if path.extension().and_then(|ext| ext.to_str()) != Some("ps1") {
+            assert_ne!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o111,
+                0,
+                "required POSIX automation script is not executable: {path:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn hooks_and_mise_use_one_canonical_script_without_dependencies() {
+    let pre_commit = read(".githooks/pre-commit");
+    let pre_push = read(".githooks/pre-push");
+    assert_eq!(
+        pre_commit
+            .lines()
+            .filter(|line| line.trim() == r#"exec "$root/scripts/tasks/check/fast" "$@""#)
+            .count(),
+        1,
+        "pre-commit must route exactly once to check/fast"
+    );
+    assert_eq!(
+        pre_push
+            .lines()
+            .filter(|line| line.trim() == r#"exec "$root/scripts/tasks/check/full" "$@""#)
+            .count(),
+        1,
+        "pre-push must route exactly once to check/full"
+    );
+    assert!(!pre_commit.contains("check/full"));
+    assert!(!pre_push.contains("check/fast"));
+
+    let mise = read("mise.toml");
+    assert!(
+        !mise
+            .lines()
+            .any(|line| line.trim_start().starts_with("depends")),
+        "mise routes must not grow dependency orchestration"
+    );
+    let root = repo_root();
+    assert!(
+        !root.join("scripts/mise").exists(),
+        "removed scripts/mise directory must stay absent"
+    );
+    assert!(
+        !root.join("scripts/tasks/check/shared").exists(),
+        "removed check/shared route must stay absent"
+    );
+    assert!(
+        !mise.contains("scripts/mise/") && !mise.contains("check/shared"),
+        "removed script routes must stay absent from Mise"
+    );
+    let routes = mise
+        .lines()
+        .filter(|line| line.trim_start().starts_with("run ="))
+        .collect::<Vec<_>>();
+    assert!(!routes.is_empty(), "mise.toml must declare script routes");
+    for line in routes {
+        let (_, rest) = line
+            .split_once('"')
+            .expect("mise run must be a quoted script path");
+        let (value, suffix) = rest
+            .split_once('"')
+            .expect("mise run must have a closing quote");
+        assert!(
+            suffix.trim().is_empty(),
+            "mise run must not append inline commands: {line}"
+        );
+        assert_eq!(
+            value.split_whitespace().count(),
+            1,
+            "mise run must contain one script path: {value}"
+        );
+        let path = repo_root().join(value);
+        assert!(path.is_file(), "mise route points to no script: {value}");
+        #[cfg(unix)]
+        assert_ne!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o111,
+            0,
+            "mise route target must be executable: {value}"
+        );
+    }
+}
+
+#[test]
+fn native_integration_manifest_matches_every_rust_test_target_once() {
+    let script = read("scripts/tasks/suite/native-integration");
+    let start = script.match_indices("targets=(").collect::<Vec<_>>();
+    assert_eq!(
+        start.len(),
+        1,
+        "native-integration must have one target manifest"
+    );
+    let body = &script[start[0].0 + "targets=(".len()..];
+    let end = body
+        .find(')')
+        .expect("native-integration manifest must close");
+    let manifest = body[..end]
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.split('#').next().unwrap().trim().to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        manifest
+            .iter()
+            .all(|target| target.split_whitespace().count() == 1),
+        "native-integration target manifest entries must be single names"
+    );
+    let unique = manifest.iter().collect::<BTreeSet<_>>();
+    assert_eq!(
+        unique.len(),
+        manifest.len(),
+        "native-integration manifest contains duplicate targets"
+    );
+
+    let mut tests = fs::read_dir(repo_root().join("tests"))
+        .expect("read tests directory")
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
+        .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    tests.sort();
+    let mut actual = manifest;
+    actual.sort();
+    assert_eq!(
+        actual, tests,
+        "native-integration must list every tests/*.rs basename exactly once"
+    );
+    assert_eq!(
+        tests.len(),
+        33,
+        "the native integration manifest covers 33 tests"
+    );
+}
+
+#[test]
+fn routing_surfaces_do_not_duplicate_tool_or_test_orchestration() {
+    let mut surfaces = vec!["scripts/tasks/check/fast", "scripts/tasks/check/full"]
+        .into_iter()
+        .map(read)
+        .collect::<Vec<_>>();
+    for directory in ["scripts/tasks/suite", "scripts/tasks/check/platform"] {
+        for entry in fs::read_dir(repo_root().join(directory)).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_file() {
+                surfaces.push(read(
+                    path.strip_prefix(repo_root()).unwrap().to_str().unwrap(),
+                ));
+            }
+        }
+    }
+    for surface in surfaces {
+        for line in surface.lines() {
+            let trimmed = line.trim_start();
+            assert!(
+                !trimmed.contains("<<"),
+                "routing scripts must not embed heredoc test logic"
+            );
+            for tool in ["cargo ", "docker ", "python ", "python3 ", "openssl "] {
+                assert!(
+                    !trimmed.contains(tool),
+                    "routing surface contains non-atomic {tool:?} logic: {trimmed}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn bounded_and_packaging_atomics_own_shared_interfaces() {
+    let bounded = read("scripts/tasks/atomic/run-bounded");
+    assert!(
+        bounded.contains("duration=\"$1\"")
+            && bounded.contains("shift")
+            && bounded.contains("exec \"$timeout_bin\"")
+            && bounded.contains("exec gtimeout")
+            && bounded.contains(
+                "atomic/run-bounded: GNU timeout unavailable; operation-level timeout is unavailable and caller/platform CI 60-minute bound applies"
+            )
+            && bounded.contains("exec \"$@\""),
+        "run-bounded must enforce Linux bounds and explicitly report non-Linux fallback"
+    );
+    let package_suite = read("scripts/tasks/suite/package-release");
+    assert!(
+        package_suite.contains(r#""$root/scripts/tasks/atomic/build-release" "$@""#)
+            && package_suite.contains(r#"exec "$root/scripts/tasks/atomic/package-artifact""#)
+            && !package_suite.contains("package-artifact\" \"$@"),
+        "package-release suite must forward arguments to build-release and package without args"
+    );
+    let linux_gnu = read("scripts/tasks/check/platform/linux-gnu");
+    let local_branch = linux_gnu
+        .split_once("if (($# == 0)); then")
+        .and_then(|(_, rest)| rest.split_once("else").map(|(branch, _)| branch))
+        .expect("linux-gnu must provide a zero-argument local host branch");
+    for invocation in [
+        "\"$root/scripts/tasks/suite/native-tests\"",
+        "\"$root/scripts/tasks/atomic/build-release\"",
+        "\"$root/scripts/tasks/atomic/binary-smoke\"",
+    ] {
+        assert!(
+            local_branch.contains(invocation),
+            "linux-gnu local branch must invoke {invocation} without target arguments"
+        );
+    }
+    assert!(!local_branch.contains("CARGO_BUILD_TARGET"));
+    assert!(!local_branch.contains("--target"));
+    assert!(
+        linux_gnu
+            .contains("\"$root/scripts/tasks/atomic/build-release\" --target-triple \"$target\"")
+            && linux_gnu.contains("\"$root/scripts/tasks/atomic/binary-smoke\" \"$target\"")
+            && linux_gnu.contains("CARGO_BUILD_TARGET=\"$target\""),
+        "linux-gnu explicit target branch must remain target-specific"
+    );
+    let package_artifact = read("scripts/tasks/atomic/package-artifact");
+    assert!(
+        package_artifact.contains("scripts/release/package-release.sh")
+            && package_artifact.contains("binary=\"$root/target/release/omakure\"")
+            && package_artifact.contains("\"$root/dist/omakure.tar.gz\"")
+            && package_artifact.contains("\"$binary\""),
+        "package-artifact must own the exact local release binary path"
+    );
+    assert!(
+        !package_artifact.contains("rustc -vV")
+            && !package_artifact.contains("target/$host")
+            && !package_artifact.contains("binary=\"$root/target/$"),
+        "package-artifact must not probe alternate target-qualified paths"
+    );
+}
+
+#[test]
+fn ci_and_release_platform_steps_delegate_to_matrix_platform_scripts() {
+    for workflow_path in [".github/workflows/ci.yml", ".github/workflows/release.yml"] {
+        let workflow = read(workflow_path);
+        let step = workflow_step(&workflow, "Run platform checks");
+        assert!(
+            step.contains("run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\""),
+            "{workflow_path} platform step must invoke the matrix-selected platform script"
+        );
+        for line in step.lines() {
+            let command = line.trim_start();
+            for forbidden in [
+                "cargo test",
+                "cargo check",
+                "cargo build",
+                "readelf",
+                "binary-smoke",
+            ] {
+                assert!(
+                    !command.starts_with(forbidden),
+                    "{workflow_path} platform step must not run {forbidden} directly"
+                );
+            }
+        }
+    }
+}
+
+fn workflow_step(workflow: &str, name: &str) -> String {
+    let marker = format!("      - name: {name}");
+    let lines = workflow.lines().collect::<Vec<_>>();
+    let start = lines
+        .iter()
+        .position(|line| *line == marker)
+        .unwrap_or_else(|| panic!("workflow is missing step {name:?}"));
+    lines[start + 1..]
+        .iter()
+        .take_while(|line| !line.starts_with("      - name: "))
+        .copied()
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn markdown_section(document: &str, heading: &str) -> String {
@@ -783,126 +1108,94 @@ fn release_workflows_build_and_package_only_the_headless_binary() {
     ] {
         assert!(ci.contains(platform), "CI matrix must include {platform}");
     }
-    assert!(ci.contains("cargo test --all-targets"));
-    assert!(ci.contains("cargo build --release --bin omakure"));
+    assert!(ci.contains("scripts/tasks/check/platform/${{ matrix.platform }}"));
 
     let release = read(".github/workflows/release.yml");
     assert!(release.contains("scripts/release/package-release.sh"));
-    assert!(release.contains("cargo test --all-targets"));
-    assert!(release.contains("cargo build --release --bin omakure"));
+    assert!(release.contains("scripts/tasks/check/platform/${{ matrix.platform }}"));
     assert!(release.contains("archive contains only the headless binary"));
     assert!(release.contains("omakure.exe"));
     assert!(!release.contains("themes/") && !release.contains("tui/"));
     assert!(!ci.contains("macos-14"));
     assert!(!release.contains("macos-14"));
-}
-
-#[derive(Debug, PartialEq)]
-struct ReleaseMatrixTuple {
-    runner: String,
-    target: String,
-    asset_os: String,
-    asset_arch: String,
-}
-
-fn release_matrix_tuples(workflow: &str) -> Vec<ReleaseMatrixTuple> {
-    let mut tuples = Vec::new();
-    let mut current: Option<ReleaseMatrixTuple> = None;
-
-    for line in workflow.lines() {
-        if let Some(runner) = line.strip_prefix("          - os: ") {
-            if let Some(tuple) = current.take() {
-                tuples.push(tuple);
-            }
-            current = Some(ReleaseMatrixTuple {
-                runner: runner.to_string(),
-                target: String::new(),
-                asset_os: String::new(),
-                asset_arch: String::new(),
-            });
-        } else if let Some(tuple) = current.as_mut() {
-            if let Some(target) = line.strip_prefix("            target: ") {
-                tuple.target = target.to_string();
-            } else if let Some(asset_os) = line.strip_prefix("            asset_os: ") {
-                tuple.asset_os = asset_os.to_string();
-            } else if let Some(asset_arch) = line.strip_prefix("            asset_arch: ") {
-                tuple.asset_arch = asset_arch.to_string();
-            }
-        }
+    for (platform, runner, target, asset_os, asset_arch) in [
+        (
+            "linux-gnu",
+            "ubuntu-latest",
+            "x86_64-unknown-linux-gnu",
+            "linux",
+            "x86_64",
+        ),
+        (
+            "linux-musl",
+            "ubuntu-latest",
+            "x86_64-unknown-linux-musl",
+            "linux-musl",
+            "x86_64",
+        ),
+        (
+            "linux-gnu",
+            "ubuntu-24.04-arm",
+            "aarch64-unknown-linux-gnu",
+            "linux",
+            "aarch64",
+        ),
+        (
+            "linux-musl",
+            "ubuntu-24.04-arm",
+            "aarch64-unknown-linux-musl",
+            "linux-musl",
+            "aarch64",
+        ),
+        (
+            "macos",
+            "macos-15-intel",
+            "x86_64-apple-darwin",
+            "darwin",
+            "x86_64",
+        ),
+        (
+            "macos",
+            "macos-15",
+            "aarch64-apple-darwin",
+            "darwin",
+            "aarch64",
+        ),
+        (
+            "windows",
+            "windows-latest",
+            "x86_64-pc-windows-msvc",
+            "windows",
+            "x86_64",
+        ),
+        (
+            "windows",
+            "windows-11-arm",
+            "aarch64-pc-windows-msvc",
+            "windows",
+            "aarch64",
+        ),
+    ] {
+        let entry = format!(
+            "          - platform: {platform}\n            os: {runner}\n            target: {target}\n            asset_os: {asset_os}\n            asset_arch: {asset_arch}"
+        );
+        assert!(
+            release.contains(&entry),
+            "release matrix must include exact tuple {platform}/{runner}/{target}"
+        );
     }
-    if let Some(tuple) = current {
-        tuples.push(tuple);
-    }
-    tuples
-}
-
-#[test]
-fn release_matrix_associates_every_target_with_its_asset_and_runner() {
-    let workflow = read(".github/workflows/release.yml");
-    let expected = vec![
-        ReleaseMatrixTuple {
-            runner: "ubuntu-latest".to_string(),
-            target: "x86_64-unknown-linux-gnu".to_string(),
-            asset_os: "linux".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "ubuntu-latest".to_string(),
-            target: "x86_64-unknown-linux-musl".to_string(),
-            asset_os: "linux-musl".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "ubuntu-24.04-arm".to_string(),
-            target: "aarch64-unknown-linux-gnu".to_string(),
-            asset_os: "linux".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "ubuntu-24.04-arm".to_string(),
-            target: "aarch64-unknown-linux-musl".to_string(),
-            asset_os: "linux-musl".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "macos-15-intel".to_string(),
-            target: "x86_64-apple-darwin".to_string(),
-            asset_os: "darwin".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "macos-15".to_string(),
-            target: "aarch64-apple-darwin".to_string(),
-            asset_os: "darwin".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "windows-latest".to_string(),
-            target: "x86_64-pc-windows-msvc".to_string(),
-            asset_os: "windows".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "windows-11-arm".to_string(),
-            target: "aarch64-pc-windows-msvc".to_string(),
-            asset_os: "windows".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-    ];
-
-    assert_eq!(release_matrix_tuples(&workflow), expected);
-    assert!(workflow.contains("${{ matrix.asset_os }}-${{ matrix.asset_arch }}"));
-    assert!(workflow.contains("name: dist-${{ matrix.asset_os }}-${{ matrix.asset_arch }}"));
-    assert!(workflow.contains("Run native release binary smoke test"));
-    assert!(workflow.contains("Verify musl binary is statically linked"));
-    assert!(workflow.contains("musl-gcc -dumpmachine"));
-    assert!(workflow.contains("x86-64|x86_64"));
-    assert!(workflow.contains("aarch64|ARM"));
-    assert!(workflow.contains("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc"));
-    assert!(workflow.contains("windows-11-arm"));
+    let smoke = read("scripts/tasks/atomic/binary-smoke");
     assert!(
-        !workflow.contains("${{ matrix.asset_os }}-x86_64"),
-        "release archive names must not hardcode x86_64"
+        smoke.contains("target/$target/release/omakure")
+            && smoke.contains("exec \"$binary\" --version"),
+        "binary-smoke must resolve the matrix target and execute --version"
+    );
+    let musl = read("scripts/tasks/atomic/musl-static");
+    assert!(
+        musl.contains("target/$target/release/omakure")
+            && musl.contains("readelf -l")
+            && musl.contains("INTERP"),
+        "musl-static must own the static ELF verification"
     );
 }
 

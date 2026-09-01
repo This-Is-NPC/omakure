@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-root="${MISE_PROJECT_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
-root="$(cd -- "$root" && pwd -P)"
-cd "$root"
-exec cargo test --tests "$@"

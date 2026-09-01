@@ -3040,6 +3040,30 @@ fn write_atomic(path: &Path, contents: &[u8], label: &str) -> OperationResult<()
                             format!("failed to write {label} temp file: {err}"),
                         )
                     })?;
+                #[cfg(windows)]
+                {
+                    // `rename` cannot replace an existing file on Windows.
+                    // ReplaceFileW performs the replacement in one operation,
+                    // so readers never observe a remove gap.
+                    if path.exists() {
+                        replace_existing_windows(&tmp_path, path).map_err(|err| {
+                            let _ = fs::remove_file(&tmp_path);
+                            OperationError::new(
+                                OperationErrorCode::IoFailed,
+                                format!("failed to replace {label}: {err}"),
+                            )
+                        })?;
+                    } else {
+                        fs::rename(&tmp_path, path).map_err(|err| {
+                            let _ = fs::remove_file(&tmp_path);
+                            OperationError::new(
+                                OperationErrorCode::IoFailed,
+                                format!("failed to replace {label}: {err}"),
+                            )
+                        })?;
+                    }
+                }
+                #[cfg(not(windows))]
                 fs::rename(&tmp_path, path).map_err(|err| {
                     let _ = fs::remove_file(&tmp_path);
                     OperationError::new(
@@ -3062,6 +3086,44 @@ fn write_atomic(path: &Path, contents: &[u8], label: &str) -> OperationResult<()
         OperationErrorCode::Conflict,
         format!("failed to allocate a unique {label} temp file"),
     ))
+}
+
+/// Atomically install a staged file over an existing destination on Windows.
+/// ReplaceFileW preserves the destination's metadata and security descriptor;
+/// unlike remove-then-rename there is no observable delete gap.
+#[cfg(windows)]
+fn replace_existing_windows(tmp: &Path, destination: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+
+    let replacement = tmp
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let replaced = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    // SAFETY: Both paths are NUL-terminated UTF-16 strings that remain alive
+    // for the duration of the synchronous API call. The null backup and
+    // exclusion/preserve pointers request no backup and default behavior.
+    let result = unsafe {
+        ReplaceFileW(
+            replaced.as_ptr(),
+            replacement.as_ptr(),
+            std::ptr::null(),
+            0,
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    if result == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -3398,6 +3460,20 @@ echo ok
 
         assert_eq!(registry.version, REGISTRY_VERSION);
         assert!(registry.batteries.is_empty());
+    }
+
+    #[test]
+    fn git_config_preparation_is_idempotent() {
+        let dir = TempDir::new().unwrap();
+        let path = prepare_git_config_in(dir.path()).unwrap();
+        assert_eq!(path, dir.path().join("git-empty-config"));
+        assert!(fs::read(&path).unwrap().is_empty());
+
+        fs::write(&path, b"stale config").unwrap();
+        let repeated_path = prepare_git_config_in(dir.path()).unwrap();
+        assert_eq!(repeated_path, path);
+        assert!(fs::read(&path).unwrap().is_empty());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]

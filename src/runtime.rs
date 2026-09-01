@@ -91,46 +91,52 @@ pub fn command_for_script_with_env(
     env: &[(String, String)],
 ) -> Result<Command, ScriptError> {
     let kind = script_kind(script).ok_or(ScriptError::UnsupportedType)?;
-
-    // Lua is embedded, so there is no interpreter to look up. Returning before
-    // `resolve_interpreter` keeps the embedded-host construction separate from
-    // the host-runtime resolution below.
-    if kind == ScriptKind::Lua {
-        let mut command = Command::new(lua_host_binary()?);
-        command.arg(LUA_HOST_ARG).arg(script);
-        return Ok(command);
-    }
-
-    let program: &str = match kind {
-        ScriptKind::Bash => "bash",
-        ScriptKind::PowerShell => powershell_program(),
-        ScriptKind::Python => python_program(),
-        ScriptKind::Lua => unreachable!("Lua returns before interpreter resolution"),
-    };
-    let mut command = match kind {
-        ScriptKind::Bash => bash_command_with_env(env)?,
-        ScriptKind::PowerShell => match resolve_interpreter(program, env) {
-            Some(abs_path) => Command::new(abs_path),
-            None => Command::new(program),
-        },
-        ScriptKind::Python => match resolve_interpreter(program, env) {
-            Some(abs_path) => Command::new(abs_path),
-            None => Command::new(program),
-        },
-        ScriptKind::Lua => unreachable!("Lua returns before interpreter resolution"),
-    };
-
     match kind {
-        ScriptKind::Bash | ScriptKind::Python => {
-            command.arg(script);
-        }
-        ScriptKind::PowerShell => {
-            command.arg("-NoProfile").arg("-File").arg(script);
-        }
-        ScriptKind::Lua => unreachable!("handled before interpreter resolution"),
+        ScriptKind::Bash => bash_script_command(script, env),
+        ScriptKind::PowerShell => powershell_script_command(script, env),
+        ScriptKind::Python => python_script_command(script, env),
+        ScriptKind::Lua => lua_script_command(script),
     }
+}
 
+fn bash_script_command(
+    script: &Path,
+    env: &[(String, String)],
+) -> Result<Command, ScriptError> {
+    let mut command = bash_command_with_env(env)?;
+    command.arg(script);
     Ok(command)
+}
+
+fn powershell_script_command(
+    script: &Path,
+    env: &[(String, String)],
+) -> Result<Command, ScriptError> {
+    let mut command = command_for_interpreter(powershell_program(), env);
+    command.args(["-NoProfile", "-File"]).arg(script);
+    Ok(command)
+}
+
+fn python_script_command(
+    script: &Path,
+    env: &[(String, String)],
+) -> Result<Command, ScriptError> {
+    let mut command = command_for_interpreter(python_program(), env);
+    command.arg(script);
+    Ok(command)
+}
+
+fn lua_script_command(script: &Path) -> Result<Command, ScriptError> {
+    let mut command = Command::new(lua_host_binary()?);
+    command.arg(LUA_HOST_ARG).arg(script);
+    Ok(command)
+}
+
+fn command_for_interpreter(program: &str, env: &[(String, String)]) -> Command {
+    match resolve_interpreter(program, env) {
+        Some(abs_path) => Command::new(abs_path),
+        None => Command::new(program),
+    }
 }
 
 /// The hint used when a Windows installation has no native Git Bash.

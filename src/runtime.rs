@@ -99,10 +99,7 @@ pub fn command_for_script_with_env(
     }
 }
 
-fn bash_script_command(
-    script: &Path,
-    env: &[(String, String)],
-) -> Result<Command, ScriptError> {
+fn bash_script_command(script: &Path, env: &[(String, String)]) -> Result<Command, ScriptError> {
     let mut command = bash_command_with_env(env)?;
     command.arg(script);
     Ok(command)
@@ -117,10 +114,7 @@ fn powershell_script_command(
     Ok(command)
 }
 
-fn python_script_command(
-    script: &Path,
-    env: &[(String, String)],
-) -> Result<Command, ScriptError> {
+fn python_script_command(script: &Path, env: &[(String, String)]) -> Result<Command, ScriptError> {
     let mut command = command_for_interpreter(python_program(), env);
     command.arg(script);
     Ok(command)

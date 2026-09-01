@@ -3207,6 +3207,14 @@ mod tests {
             .execute("UPDATE health_profiles SET runtimes = 'not-json'", [])
             .unwrap();
 
+        let fleet = fixture
+            .registry
+            .health_node_snapshot(&node_id, BASE_NOW + 10)
+            .unwrap()
+            .unwrap();
+        assert!(fleet.snapshot.profile.is_none());
+
+
         let snapshot = fixture
             .registry
             .health_peer_snapshot(&node_id, BASE_NOW + 10)

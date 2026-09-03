@@ -163,7 +163,7 @@ pub(crate) fn resolve_bash_program(env: &[(String, String)]) -> Option<PathBuf> 
         let path = path_value(env)
             .map(str::to_owned)
             .or_else(|| std::env::var("PATH").ok())?;
-        return resolve_program_in_path("bash", &path).filter(|path| !is_wsl_launcher(path));
+        return resolve_bash_in_path(&path);
     }
     #[cfg(not(windows))]
     {
@@ -179,6 +179,26 @@ fn is_wsl_launcher(path: &Path) -> bool {
         .to_ascii_lowercase();
     normalized.ends_with("\\windows\\system32\\bash.exe")
         || normalized.ends_with("\\windows\\sysnative\\bash.exe")
+}
+/// Walk `path_var` left-to-right for the first executable `bash`, skipping WSL
+/// launchers so Git Bash later on PATH wins.
+#[cfg(windows)]
+fn resolve_bash_in_path(path_var: &str) -> Option<PathBuf> {
+    for dir in std::env::split_paths(path_var) {
+        if !dir.is_absolute() {
+            continue;
+        }
+        for candidate_name in executable_candidate_names("bash") {
+            let candidate = dir.join(candidate_name);
+            if is_executable_file(&candidate) {
+                if is_wsl_launcher(&candidate) {
+                    continue;
+                }
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }
 
 fn bash_command_with_env(env: &[(String, String)]) -> Result<Command, ScriptError> {
@@ -206,12 +226,11 @@ fn bash_command_with_env(env: &[(String, String)]) -> Result<Command, ScriptErro
 /// `cmd.env` semantics.
 pub(crate) fn resolve_interpreter(program: &str, env: &[(String, String)]) -> Option<PathBuf> {
     let injected_path = path_value(env)?;
-    let resolved = resolve_program_in_path(program, injected_path);
     #[cfg(windows)]
     if program.eq_ignore_ascii_case("bash") {
-        return resolved.filter(|path| !is_wsl_launcher(path));
+        return resolve_bash_in_path(injected_path);
     }
-    resolved
+    resolve_program_in_path(program, injected_path)
 }
 
 /// Which-style lookup: resolve a bare program name to the first executable

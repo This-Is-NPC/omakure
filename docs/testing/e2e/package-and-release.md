@@ -21,9 +21,11 @@ mise run package:release
 scripts/tasks/atomic/check-all-targets
 ```
 
-`package:release` owns the local build-to-archive interface. The release
-workflow packages each matrix artifact after the selected platform suite; it
-does not turn the packaging test into the platform test suite. Atomic commands
+`package:release` owns the local build-to-archive interface. On Linux x86_64 it
+builds and archives the musl-static binary so `dist/omakure.tar.gz` matches the
+GitHub `linux-musl` asset class. The release workflow packages each matrix
+artifact after the selected platform suite; it does not turn the packaging test
+into the platform test suite. Atomic commands
 forward their remaining arguments, and long-running workflow gates use
 `scripts/tasks/atomic/run-bounded` rather than open-ended command chains.
 

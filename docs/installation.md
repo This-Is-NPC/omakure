@@ -74,7 +74,9 @@ For development, use `cargo build`, `cargo test`, `mise run lint`, and
 
 Normal installer use is per-user and never provisions a privileged service.
 Machine-service setup is an explicit opt-in and requires an existing secure
-tokens TOML containing Argon2id hashes. The installer does not generate or
+tokens TOML containing Argon2id hashes. On Linux, a tarball from
+`mise run package:release` is the static `linux-musl` artifact and is suitable
+for `ARTIFACT=… sudo bash scripts/install/install.sh --artifact …`. The installer does not generate or
 print a service token:
 
 ```bash

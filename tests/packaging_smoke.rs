@@ -943,10 +943,23 @@ fn bounded_and_packaging_atomics_own_shared_interfaces() {
     );
     let package_suite = read("scripts/tasks/suite/package-release");
     assert!(
-        package_suite.contains(r#""$root/scripts/tasks/atomic/build-release" "$@""#)
-            && package_suite.contains(r#"exec "$root/scripts/tasks/atomic/package-artifact""#)
+        package_suite.contains(r#"exec "$root/scripts/tasks/atomic/package-artifact""#)
             && !package_suite.contains("package-artifact\" \"$@"),
-        "package-release suite must forward arguments to build-release and package without args"
+        "package-release suite must package without forwarding arguments to package-artifact"
+    );
+    assert!(
+        package_suite.contains("Linux:x86_64)")
+            && package_suite.contains("x86_64-unknown-linux-musl")
+            && package_suite.contains(
+                r#""$root/scripts/tasks/atomic/build-release" --target-triple "$target""#
+            )
+            && package_suite.contains(r#""$root/scripts/tasks/atomic/musl-static" "$target""#)
+            && package_suite.contains("export OMAKURE_RELEASE_BINARY="),
+        "package-release on Linux x86_64 must build musl, verify musl-static, and export OMAKURE_RELEASE_BINARY"
+    );
+    assert!(
+        package_suite.contains(r#""$root/scripts/tasks/atomic/build-release" "$@""#),
+        "package-release on other hosts must keep forwarding arguments to build-release"
     );
     let linux_gnu = read("scripts/tasks/check/platform/linux-gnu");
     let local_branch = linux_gnu
@@ -975,10 +988,11 @@ fn bounded_and_packaging_atomics_own_shared_interfaces() {
     let package_artifact = read("scripts/tasks/atomic/package-artifact");
     assert!(
         package_artifact.contains("scripts/release/package-release.sh")
-            && package_artifact.contains("binary=\"$root/target/release/omakure\"")
+            && package_artifact.contains("OMAKURE_RELEASE_BINARY:-$root/target/release/omakure")
+            && package_artifact.contains("target/release/omakure")
             && package_artifact.contains("\"$root/dist/omakure.tar.gz\"")
             && package_artifact.contains("\"$binary\""),
-        "package-artifact must own the exact local release binary path"
+        "package-artifact must prefer OMAKURE_RELEASE_BINARY and keep the default GNU binary path"
     );
     assert!(
         !package_artifact.contains("rustc -vV")
@@ -1345,6 +1359,25 @@ fn the_installer_preference_and_the_release_matrix_name_the_same_static_asset() 
     assert!(
         powershell.contains("Unsupported architecture"),
         "install.ps1 must reject unknown architectures"
+    );
+}
+
+/// Local `package:release` must archive the same static Linux artifact class as
+/// the GitHub `linux-musl` matrix job and `install.sh`.
+#[test]
+fn local_package_release_on_linux_x86_64_archives_musl_static() {
+    let package_suite = read("scripts/tasks/suite/package-release");
+    assert!(
+        package_suite.contains("x86_64-unknown-linux-musl")
+            && package_suite.contains(r#""$root/scripts/tasks/atomic/musl-static" "$target""#)
+            && package_suite.contains("export OMAKURE_RELEASE_BINARY="),
+        "package-release must build and verify the musl static binary before packaging"
+    );
+
+    let package_artifact = read("scripts/tasks/atomic/package-artifact");
+    assert!(
+        package_artifact.contains("OMAKURE_RELEASE_BINARY:-$root/target/release/omakure"),
+        "package-artifact must honor OMAKURE_RELEASE_BINARY when package-release exports it"
     );
 }
 

@@ -1231,6 +1231,14 @@ fn node_enroll_reject(parent: &BehavioralContext) -> Result<ProbeEvidence, Strin
 }
 
 fn node_discovery(parent: &BehavioralContext) -> Result<ProbeEvidence, String> {
+    if omakure::discovery::platform_supported() {
+        node_discovery_supported(parent)
+    } else {
+        node_discovery_unsupported_platform(parent)
+    }
+}
+
+fn node_discovery_supported(parent: &BehavioralContext) -> Result<ProbeEvidence, String> {
     let (cli, http_ctx) = pair(parent, "node_discovery");
     initialize(&cli)?;
     initialize(&http_ctx)?;
@@ -1303,6 +1311,61 @@ fn node_discovery(parent: &BehavioralContext) -> Result<ProbeEvidence, String> {
     }
     let cli_data = json!({"enabled": c_data["enabled"], "listening": c_data["listening"], "candidate_count": c_data["candidate_count"], "accepted_datagrams": c_data["accepted_datagrams"]});
     let http_data = json!({"enabled": h_data["enabled"], "listening": h_data["listening"], "candidate_count": h_data["candidate_count"], "accepted_datagrams": h_data["accepted_datagrams"]});
+    let mut result = evidence(
+        with_http_status(&projected(&c, cli_data), status),
+        (status, with_http_status(&projected(&h, http_data), status)),
+    )?;
+    result.semantic_difference = Some("discovery-snapshot".into());
+    Ok(result)
+}
+
+fn node_discovery_unsupported_platform(
+    parent: &BehavioralContext,
+) -> Result<ProbeEvidence, String> {
+    let (cli, http_ctx) = pair(parent, "node_discovery");
+    initialize(&cli)?;
+    initialize(&http_ctx)?;
+    edit_config(&cli, &[("enabled = false", "enabled = true".into())])?;
+    edit_config(&http_ctx, &[("enabled = false", "enabled = true".into())])?;
+    let c = node_cli_any(&cli, &["discovery", "--wait-seconds", "1"]);
+    if c["ok"] != false || c["error"]["code"] != "discovery_unsupported_platform" {
+        return Err(format!(
+            "CLI discovery must return discovery_unsupported_platform on unsupported platforms: {c}"
+        ));
+    }
+    let http_ctx = restart_node(http_ctx);
+    assert_get_auth(&http_ctx, "/v1/node/discovery?include_addresses=true")?;
+    let (status, h) = http(
+        &http_ctx,
+        http_ctx
+            .server
+            .get("/v1/node/discovery?include_addresses=true"),
+    )?;
+    expect_status(status, 200, &h)?;
+    require_ok(&h, "HTTP discovery")?;
+    let h_data = &h["data"];
+    if h_data["supported"] != false
+        || h_data["enabled"] != true
+        || h_data["listening"] != false
+        || h_data["candidate_count"] != 0
+        || h_data["accepted_datagrams"] != 0
+    {
+        return Err(format!(
+            "HTTP discovery did not expose disabled unsupported-platform status: {h}"
+        ));
+    }
+    let cli_data = json!({
+        "enabled": true,
+        "listening": false,
+        "candidate_count": 0,
+        "accepted_datagrams": 0,
+    });
+    let http_data = json!({
+        "enabled": h_data["enabled"],
+        "listening": h_data["listening"],
+        "candidate_count": h_data["candidate_count"],
+        "accepted_datagrams": h_data["accepted_datagrams"],
+    });
     let mut result = evidence(
         with_http_status(&projected(&c, cli_data), status),
         (status, with_http_status(&projected(&h, http_data), status)),

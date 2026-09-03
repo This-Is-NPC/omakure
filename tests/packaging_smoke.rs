@@ -299,6 +299,91 @@ fn unix_uninstall_service_path_skips_release_resolution_and_network() {
     assert!(!commands.contains("network"));
 }
 
+#[cfg(unix)]
+#[test]
+fn unix_install_artifact_skips_github_version_lookup() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let log = temp.path().join("commands.log");
+    let shim_dir = temp.path().join("shims");
+    fs::create_dir(&shim_dir).unwrap();
+    for (name, body) in [
+        (
+            "curl",
+            "#!/bin/sh\nprintf 'network\\n' >> \"$OMAKURE_TEST_LOG\"\nexit 99\n",
+        ),
+        (
+            "wget",
+            "#!/bin/sh\nprintf 'network\\n' >> \"$OMAKURE_TEST_LOG\"\nexit 99\n",
+        ),
+    ] {
+        let path = shim_dir.join(name);
+        fs::write(&path, body).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let artifact_dir = temp.path().join("artifact-build");
+    fs::create_dir_all(&artifact_dir).unwrap();
+    let stub = artifact_dir.join("omakure");
+    fs::write(
+        &stub,
+        "#!/bin/sh\ncase \"$1\" in\n  --version|-V|version)\n    echo 'omakure 9.9.9'\n    ;;\nesac\n",
+    )
+    .unwrap();
+    fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let artifact = temp.path().join("omakure-local.tar.gz");
+    let tar_status = Command::new("tar")
+        .args(["-czf"])
+        .arg(&artifact)
+        .arg("-C")
+        .arg(&artifact_dir)
+        .arg("omakure")
+        .status()
+        .unwrap();
+    assert!(
+        tar_status.success(),
+        "failed to build local artifact tarball"
+    );
+
+    let bin_dir = temp.path().join("bin");
+    fs::create_dir(&bin_dir).unwrap();
+
+    let output = Command::new("bash")
+        .arg(repo_root().join("scripts/install/install.sh"))
+        .arg("--artifact")
+        .arg(&artifact)
+        .arg("--bin-dir")
+        .arg(&bin_dir)
+        .env("PATH", format!("{}:/usr/bin:/bin", shim_dir.display()))
+        .env("OMAKURE_TEST_LOG", &log)
+        .env_remove("VERSION")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "install.sh failed: stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        stdout.contains("9.9.9"),
+        "success line should report the installed binary version, got: {stdout:?}"
+    );
+    assert!(
+        !stdout.contains("v0.2.0"),
+        "artifact install must not print a GitHub release tag: {stdout:?}"
+    );
+
+    let commands = fs::read_to_string(&log).unwrap_or_default();
+    assert!(
+        !commands.contains("network"),
+        "artifact install must not call curl or wget: {commands:?}"
+    );
+}
+
 #[test]
 fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results() {
     let ci = read(".github/workflows/ci.yml");

@@ -622,6 +622,18 @@ pub enum AuthMode<'a> {
     Bearer(&'a str),
 }
 
+/// Git `-c` flags that keep battery cache checkouts byte-identical across platforms.
+pub fn battery_cache_git_config_args() -> &'static [&'static str] {
+    #[cfg(windows)]
+    {
+        &["-c", "core.autocrlf=false", "-c", "core.filemode=false"]
+    }
+    #[cfg(not(windows))]
+    {
+        &["-c", "core.autocrlf=false"]
+    }
+}
+
 /// Write a local git battery fixture under `root` and return after the initial commit.
 pub fn write_local_battery_repo(root: &Path, battery_name: &str, description: &str) {
     fs::create_dir_all(root.join("scripts")).expect("create battery scripts dir");

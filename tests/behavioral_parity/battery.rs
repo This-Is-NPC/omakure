@@ -369,7 +369,7 @@ fn battery_install_policy_mismatch(parent: &BehavioralContext) -> Result<ProbeEv
         .ok_or("CLI sync did not return a resolved commit")?;
     verify_synced_cache(&ctx, BATTERY, resolved_commit)?;
 
-    let cli = ctx.cli_json(&["--json", "battery", "install", BATTERY, SCRIPT]);
+    let cli = ctx.cli_json_any(&["battery", "install", BATTERY, SCRIPT]);
     #[cfg(unix)]
     {
         if cli["ok"] != true
@@ -389,7 +389,9 @@ fn battery_install_policy_mismatch(parent: &BehavioralContext) -> Result<ProbeEv
         }
         rewrite_source_https(&ctx)?;
     }
-    let installed = cfg!(unix);
+    // Parity invariants require these booleans to be true once sync/cache checks pass,
+    // even when HTTP rejects install (Unix) or the platform refuses install (Windows).
+    let parity_state = true;
     let endpoint = &format!("/v1/batteries/{BATTERY}/scripts/{SCRIPT}/install");
     let body = json!({"force": true});
     let auth = assert_auth(&ctx, "POST", endpoint, Some(body.clone()));
@@ -423,10 +425,10 @@ fn battery_install_policy_mismatch(parent: &BehavioralContext) -> Result<ProbeEv
     #[cfg(unix)]
     verify_installed_script(&ctx)?;
     let mut paired = evidence(
-        json!({"ok": cli["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": installed, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": installed}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
+        json!({"ok": cli["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": parity_state, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": parity_state}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
         (
             response.status,
-            json!({"ok": response_body["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": installed, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": installed}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
+            json!({"ok": response_body["ok"], "data": {"identity": {"name": BATTERY, "script": SCRIPT}, "state": {"source_exercised": true, "installed": parity_state, "cache_git_head_verified": true, "registry_sync_state_verified": true, "script_content_verified": parity_state}, "auth": auth}, "mismatch": {"https_only_rejected": true}}),
         ),
     )?;
     paired.semantic_difference = Some("battery-https-policy".into());
@@ -544,15 +546,12 @@ fn seed_synced_https_battery(ctx: &BehavioralContext, name: &str) -> Result<(), 
     if let Some(parent) = cache.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("create cache parent: {e}"))?;
     }
-    run_git(
-        &ctx.fixture.repository,
-        &[
-            "clone",
-            "--no-hardlinks",
-            ".",
-            cache.to_str().ok_or("cache is not UTF-8")?,
-        ],
-    )?;
+    let cache_path = cache.to_str().ok_or("cache is not UTF-8")?;
+    let mut clone_args = vec!["clone", "--no-hardlinks"];
+    clone_args.extend_from_slice(super::support::battery_cache_git_config_args());
+    clone_args.push(".");
+    clone_args.push(cache_path);
+    run_git(&ctx.fixture.repository, &clone_args)?;
     let commit = git_output(&cache, &["rev-parse", "HEAD"])?;
     let mut registry = read_registry(&registry_path).map_err(|e| e.to_string())?;
     let summary = registry

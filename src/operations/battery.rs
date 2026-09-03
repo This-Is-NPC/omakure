@@ -1709,7 +1709,10 @@ fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> 
     let mut command = Command::new(&spec.program);
     command
         .args(["-c", "http.followRedirects=false"])
-        .args(["-c", "http.proxy="]);
+        .args(["-c", "http.proxy="])
+        .args(["-c", "core.autocrlf=false"]);
+    #[cfg(windows)]
+    command.args(["-c", "core.filemode=false"]);
     if let Some(pin) = ctx.http_pin {
         command.args([
             "-c",
@@ -3959,6 +3962,19 @@ path = "scripts/ignored.sh"
         assert!(clone.args.contains(&"core.hooksPath=/dev/null".to_string()));
         assert!(clone.args.contains(&"protocol.ext.allow=never".to_string()));
         assert!(clone.args.contains(&"--no-recurse-submodules".to_string()));
+
+        let command = git_command(&clone, GitTransportPolicy::Default);
+        let config_args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(config_args
+            .windows(2)
+            .any(|pair| { pair[0] == "-c" && pair[1] == "core.autocrlf=false" }));
+        #[cfg(windows)]
+        assert!(config_args
+            .windows(2)
+            .any(|pair| { pair[0] == "-c" && pair[1] == "core.filemode=false" }));
 
         let fetch = git_fetch_spec(cache, "main");
         assert!(fetch.args.contains(&"--no-recurse-submodules".to_string()));

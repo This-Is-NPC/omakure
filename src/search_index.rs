@@ -21,6 +21,7 @@ pub struct SearchResult {
     pub display_name: String,
     pub description: Option<String>,
     pub tags: Vec<String>,
+    pub field_count: usize,
     pub schema_error: Option<String>,
 }
 
@@ -100,7 +101,8 @@ impl SearchIndex {
 
         let tokens = split_query(query);
         let mut sql = String::from(
-            "SELECT script_path, display_name, description, tags, schema_error \
+            "SELECT script_path, display_name, description, tags, schema_error, \
+             (SELECT COUNT(*) FROM script_fields sf WHERE sf.script_path = script_index.script_path) \
              FROM script_index",
         );
         if !tokens.is_empty() {
@@ -129,11 +131,13 @@ impl SearchIndex {
                 let description: Option<String> = row.get(2)?;
                 let tags_raw: Option<String> = row.get(3)?;
                 let schema_error: Option<String> = row.get(4)?;
+                let field_count: i64 = row.get(5)?;
                 Ok(SearchResult {
                     script_path: PathBuf::from(script_path),
                     display_name,
                     description,
                     tags: parse_tags(tags_raw),
+                    field_count: usize::try_from(field_count).unwrap_or(0),
                     schema_error,
                 })
             })

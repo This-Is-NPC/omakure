@@ -900,6 +900,9 @@ Ask one trusted Performer to run a script it has already declared
   The service is preferred because it is the only thing that can reach a peer this node already has a session with. Use this for a peer there is no standing session with, or when no service is running.
 
   **Default:** `false`
+- **`--cue-id <CUE_ID>`** — Caller-supplied Cue id (32 lowercase hex). Omit to mint a new one.
+
+  The same id retries the same instruction; a new id is a new run.
 
 ## `omakure node baseline`
 

@@ -712,6 +712,12 @@ pub struct NodeCueArgs {
     /// no standing session with, or when no service is running.
     #[arg(long)]
     pub direct: bool,
+
+    /// Caller-supplied Cue id (32 lowercase hex). Omit to mint a new one.
+    ///
+    /// The same id retries the same instruction; a new id is a new run.
+    #[arg(long = "cue-id")]
+    pub cue_id: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -1613,6 +1619,56 @@ mod tests {
                     Some(std::path::Path::new("/tmp/p.toml"))
                 ),
                 _ => panic!("expected node serve"),
+            },
+            _ => panic!("expected Node"),
+        }
+    }
+
+    #[test]
+    fn test_parse_node_cue_cue_id() {
+        let without = parse(&[
+            "node",
+            "cue",
+            "--endpoint",
+            "127.0.0.1:7879",
+            "--peer-node-id",
+            "omk1_peer",
+            "--script",
+            "deploy.sh",
+            "--reason",
+            "roll out",
+        ])
+        .unwrap();
+        match without.command.unwrap() {
+            Commands::Node(args) => match args.command {
+                NodeCommand::Cue(args) => assert_eq!(args.cue_id, None),
+                _ => panic!("expected node cue"),
+            },
+            _ => panic!("expected Node"),
+        }
+
+        let with_id = parse(&[
+            "node",
+            "cue",
+            "--endpoint",
+            "127.0.0.1:7879",
+            "--peer-node-id",
+            "omk1_peer",
+            "--script",
+            "deploy.sh",
+            "--reason",
+            "roll out",
+            "--cue-id",
+            "0123456789abcdef0123456789abcdef",
+        ])
+        .unwrap();
+        match with_id.command.unwrap() {
+            Commands::Node(args) => match args.command {
+                NodeCommand::Cue(args) => assert_eq!(
+                    args.cue_id.as_deref(),
+                    Some("0123456789abcdef0123456789abcdef")
+                ),
+                _ => panic!("expected node cue"),
             },
             _ => panic!("expected Node"),
         }

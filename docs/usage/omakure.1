@@ -1519,6 +1519,11 @@ The service is preferred because it is the only thing that can reach a peer this
 .RS
 \fIDefault: \fRfalse
 .RE
+.TP
+\fB\-\-cue\-id\fR \fI<CUE_ID>\fR
+Caller\-supplied Cue id (32 lowercase hex). Omit to mint a new one.
+
+The same id retries the same instruction; a new id is a new run.
 .SH "OMAKURE NODE BASELINE"
 Publish and deliver the signed set of scripts a fleet runs
 .PP

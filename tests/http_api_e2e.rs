@@ -1944,6 +1944,26 @@ fn node_cue_route_requires_node_write_and_a_transport() {
         "with no direct transport there is no session to carry a cue: {}",
         without_transport.safe_body()
     );
+
+    let malformed_cue_id = serde_json::json!({
+        "peer_node_id": "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+        "script": "deploy.sh",
+        "reason": "scope check",
+        "wait_seconds": 1,
+        "cue_id": "not-hex",
+    });
+    let malformed = writer.post_json("/v1/node/cues", &malformed_cue_id);
+    assert_eq!(
+        malformed.status,
+        400,
+        "a malformed cue_id must be refused before transport checks: {}",
+        malformed.safe_body()
+    );
+    assert!(
+        malformed.json()["error"]["code"] == "invalid_input",
+        "malformed cue_id must be invalid_input: {}",
+        malformed.safe_body()
+    );
 }
 
 /// The baseline route is the delivery seam, and it is guarded the same way.

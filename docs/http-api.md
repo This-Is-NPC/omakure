@@ -44,6 +44,9 @@ the enrollment group. Deploy route gates are evaluated before token scopes.
 Trust mutation bodies must include `confirmed: true`, a non-empty `actor`, and a
 non-empty `reason`.
 
+`POST /v1/node/cues` accepts an optional `cue_id` (32 lowercase hex) as the
+caller-supplied idempotency key; omitting it mints a new id on dispatch.
+
 Routes are `GET /v1/node/status`, `GET /v1/node/discovery`, `POST
 /v1/node/init`, `GET /v1/node/health`, `GET /v1/node/signals`, `POST
 /v1/node/cues`, `POST /v1/node/baselines`, `POST

@@ -1975,6 +1975,7 @@ impl CueDispatcher {
         script: &str,
         reason: &str,
         wait: Duration,
+        cue_id: Option<&str>,
     ) -> Result<CueDispatchOutcome, DirectServiceError> {
         if !crate::remote_cue::is_well_formed_script_name(script) {
             return Err(TransportError::InvalidFrame.into());
@@ -1982,12 +1983,10 @@ impl CueDispatcher {
         if reason.is_empty() || reason.len() > crate::remote_cue::MAX_REASON_BYTES {
             return Err(TransportError::InvalidFrame.into());
         }
-        // Before a cue id is minted, so a refused instruction leaves no id an
+        // Before a cue id is resolved, so a refused instruction leaves no id an
         // operator could mistake for one that was sent.
         self.state.require_active_peer(peer_node_id)?;
-        let mut cue_id_bytes = [0u8; 16];
-        OsRng.fill_bytes(&mut cue_id_bytes);
-        let cue_id = hex(&cue_id_bytes);
+        let cue_id = resolve_cue_id(cue_id)?;
         let expected_run_id =
             crate::health_plane::report::opaque_run_id(&crate::remote_cue::derive_run_id(&cue_id));
         let (reply, answers) = std::sync::mpsc::sync_channel(1);
@@ -2707,6 +2706,7 @@ pub fn dispatch_cue(
     reason: &str,
     wait_seconds: u32,
     context: &NodeContext,
+    cue_id: Option<&str>,
 ) -> Result<CueDispatchOutcome, DirectServiceError> {
     if !crate::remote_cue::is_well_formed_script_name(script) {
         return Err(TransportError::InvalidFrame.into());
@@ -2774,9 +2774,7 @@ pub fn dispatch_cue(
         &probe_nonce,
     )?;
 
-    let mut cue_id_bytes = [0u8; 16];
-    OsRng.fill_bytes(&mut cue_id_bytes);
-    let cue_id = hex(&cue_id_bytes);
+    let cue_id = resolve_cue_id(cue_id)?;
     let now = unix_seconds();
     let mut nonce = [0u8; 16];
     OsRng.fill_bytes(&mut nonce);
@@ -3531,6 +3529,22 @@ fn write_bytes(
     Ok(())
 }
 
+/// Resolve a Cue id from an optional caller-supplied idempotency key.
+///
+/// A supplied id is the caller's idempotency key; omitting mints a new one.
+/// Malformed ids are refused before any mint or dial.
+fn resolve_cue_id(cue_id: Option<&str>) -> Result<String, DirectServiceError> {
+    match cue_id {
+        Some(id) if crate::remote_cue::is_well_formed_cue_id(id) => Ok(id.to_string()),
+        Some(_) => Err(TransportError::InvalidFrame.into()),
+        None => {
+            let mut cue_id_bytes = [0u8; 16];
+            OsRng.fill_bytes(&mut cue_id_bytes);
+            Ok(hex(&cue_id_bytes))
+        }
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -3543,6 +3557,16 @@ fn hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn resolve_cue_id_honors_a_supplied_idempotency_key() {
+        let known = "0123456789abcdef0123456789abcdef";
+        assert_eq!(resolve_cue_id(Some(known)).expect("well-formed id"), known);
+        assert!(resolve_cue_id(Some("not-hex")).is_err());
+        let minted = resolve_cue_id(None).expect("mint");
+        assert_eq!(minted.len(), 32);
+        assert!(crate::remote_cue::is_well_formed_cue_id(&minted));
+    }
+
     use super::*;
 
     static RESOLVER_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -4666,7 +4690,13 @@ mod tests {
         );
 
         let error = dispatcher
-            .dispatch(&peer_node_id, "cue-ok.sh", "why", Duration::from_millis(50))
+            .dispatch(
+                &peer_node_id,
+                "cue-ok.sh",
+                "why",
+                Duration::from_millis(50),
+                None,
+            )
             .expect_err("a Cue to a revoked peer must be refused");
         match &error {
             DirectServiceError::PeerNotActive {
@@ -4751,7 +4781,13 @@ mod tests {
             .clone();
         let dispatcher = CueDispatcher { state };
         let error = dispatcher
-            .dispatch(&stranger, "cue-ok.sh", "why", Duration::from_millis(50))
+            .dispatch(
+                &stranger,
+                "cue-ok.sh",
+                "why",
+                Duration::from_millis(50),
+                None,
+            )
             .expect_err("a Cue to an unknown peer must be refused");
         match &error {
             DirectServiceError::PeerNotActive {

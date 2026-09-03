@@ -611,6 +611,8 @@ struct NodeCueBody {
     reason: String,
     #[serde(default = "default_cue_wait_seconds")]
     wait_seconds: u32,
+    #[serde(default)]
+    cue_id: Option<String>,
 }
 
 fn default_cue_wait_seconds() -> u32 {
@@ -1451,6 +1453,16 @@ async fn node_cue_handler(
         Ok(body) => body,
         Err(error) => return operation_error_response(error),
     };
+    if body
+        .cue_id
+        .as_ref()
+        .is_some_and(|cue_id| !crate::remote_cue::is_well_formed_cue_id(cue_id))
+    {
+        return operation_error_response(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "cue id must be 32 lowercase hexadecimal characters",
+        ));
+    }
     let Some(dispatcher) = state.cues.clone() else {
         return operation_error_response(OperationError::new(
             OperationErrorCode::InvalidInput,
@@ -1470,7 +1482,13 @@ async fn node_cue_handler(
     // The dispatch blocks on the session thread, so it must not hold a runtime
     // worker for its whole budget.
     let dispatched = tokio::task::spawn_blocking(move || {
-        dispatcher.dispatch(&body.peer_node_id, &body.script, &body.reason, wait)
+        dispatcher.dispatch(
+            &body.peer_node_id,
+            &body.script,
+            &body.reason,
+            wait,
+            body.cue_id.as_deref(),
+        )
     })
     .await;
     let result = match dispatched {

@@ -649,6 +649,7 @@ Ask one trusted Performer to run a script it has already declared
 
 ### Options
 
+- `--cue-id CUE_ID` — Caller-supplied Cue id (32 lowercase hex). Omit to mint a new one
 - `--direct` — Dial the peer from this process instead of asking the running service (values: `false`, `true`)
 - `--endpoint ENDPOINT` — Peer direct transport address **(required)**
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)

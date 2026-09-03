@@ -449,6 +449,8 @@ never appears beyond the cursor reported next to it.
 An agent that dispatched work with `omakure node cue` correlates the outcome by
 matching the `expected_run_id` from the dispatch reply against `run-completed`
 in this feed. That is the whole correlation contract; there is no callback.
+When retrying an unanswered dispatch, pass `--cue-id` or JSON `cue_id` with the
+same id from the first reply instead of minting a second one.
 
 ## `run_id` format
 

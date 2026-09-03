@@ -578,13 +578,11 @@ fn history_show(parent: &BehavioralContext) -> Result<ProbeEvidence, String> {
 
 fn history_traces(parent: &BehavioralContext) -> Result<ProbeEvidence, String> {
     let ctx = parent.derive("history_traces", &["runs:read", "runs:enqueue"]);
-    let trace_command = format!(
-        "{} trace 'trace event' --level info",
-        super::support::omakure_bin().display()
-    );
+    let trace_command =
+        r#""$OMAKURE_BIN" --scripts-dir "$OMAKURE_SCRIPTS_DIR" trace 'trace event' --level info"#;
     let script = ctx
         .workspace
-        .write_schema_script("traces.sh", "traces", &trace_command);
+        .write_schema_script("traces.sh", "traces", trace_command);
     require_path(&script);
     let added = ctx.cli_json(&[
         "--json",

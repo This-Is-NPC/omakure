@@ -654,6 +654,8 @@ omakure trace "<message>" [--level info|warn|error|debug] [--data '<json>']
 Designed to be called **from inside a script** that was launched by
 `omakure run` or `omakure queue worker`. Both inject `OMAKURE_RUN_ID`
 into the child environment so the verb knows which run to attach to.
+Scripts should invoke nested trace via `"$OMAKURE_BIN"` (also injected)
+rather than hard-coding a path to the binary.
 
 Behavior:
 

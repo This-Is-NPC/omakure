@@ -99,9 +99,52 @@ pub fn command_for_script_with_env(
     }
 }
 
+/// Path normalized for Git Bash on Windows (MSYS `/c/...` paths).
+///
+/// Git Bash cannot open Windows extended-length paths (`\\?\`); strip them at
+/// the spawn boundary only. Canonical paths elsewhere may keep the verbatim
+/// prefix.
+pub(crate) fn bash_safe_path(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        let native = path.to_string_lossy().replace('\\', "/");
+        let stripped = strip_verbatim_prefix(native);
+        bash_safe_drive_path(&stripped)
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string_lossy().into_owned()
+    }
+}
+
+#[cfg(windows)]
+fn strip_verbatim_prefix(mut path: String) -> String {
+    let lower = path.to_ascii_lowercase();
+    const UNC_PREFIX: &str = "//?/unc/";
+    const VERBATIM_PREFIX: &str = "//?/";
+    if lower.starts_with(UNC_PREFIX) {
+        let rest = path[UNC_PREFIX.len()..].to_string();
+        path = format!("//{rest}");
+    } else if lower.starts_with(VERBATIM_PREFIX) {
+        path = path[VERBATIM_PREFIX.len()..].to_string();
+    }
+    path
+}
+
+#[cfg(windows)]
+fn bash_safe_drive_path(path: &str) -> String {
+    if let Some((drive, rest)) = path.split_once(':') {
+        if drive.len() == 1 && drive.chars().all(|c| c.is_ascii_alphabetic()) {
+            let rest = rest.strip_prefix('/').unwrap_or(rest);
+            return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
+        }
+    }
+    path.to_string()
+}
+
 fn bash_script_command(script: &Path, env: &[(String, String)]) -> Result<Command, ScriptError> {
     let mut command = bash_command_with_env(env)?;
-    command.arg(script);
+    command.arg(bash_safe_path(script));
     Ok(command)
 }
 
@@ -433,6 +476,25 @@ mod tests {
             normalized_windows_path(&resolved),
             normalized_windows_path(&git)
         );
+    }
+
+    #[cfg(windows)]
+    #[rstest]
+    #[case(r"\\?\C:\Git\omakure.exe", "/c/Git/omakure.exe")]
+    #[case(r"\\?\C:/Git/omakure.exe", "/c/Git/omakure.exe")]
+    #[case(r"C:\Git\bash.exe", "/c/Git/bash.exe")]
+    #[case(
+        r"\\?\UNC\server\share\bin\omakure.exe",
+        "//server/share/bin/omakure.exe"
+    )]
+    fn bash_safe_path_normalizes_windows_paths(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(bash_safe_path(Path::new(input)), expected);
+    }
+
+    #[test]
+    fn bash_safe_path_unix_unchanged() {
+        let path = "/home/user/script.sh";
+        assert_eq!(bash_safe_path(Path::new(path)), path);
     }
 
     #[cfg(windows)]

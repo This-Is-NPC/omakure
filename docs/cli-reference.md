@@ -449,7 +449,7 @@ Create a new script template
 
 ### Options
 
-- `--body-stdin` — Read the script body from stdin and write it verbatim under the schema header. Useful when an agent ships both schema and body in one call (values: `false`, `true`)
+- `--body-stdin` — Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written (values: `false`, `true`)
 - `--force` — Overwrite an existing script of the same name (values: `false`, `true`)
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
 - `--name SCRIPT` — Script path (legacy)
@@ -1016,7 +1016,7 @@ Run a script directly
 - `--actor ACTOR` — Actor tag recorded in the run history (default: `human`) (default: `human`)
 - `--env-file PATH` — Path to an env file whose `KEY=value` pairs are injected into the script process for this run only. Values override the managed active env for the same key, but omakure-reserved vars (`OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR`) always win. A missing or unreadable path is a hard error
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
-- `--no-prompt` — Fail with a structured error if any required field is missing instead of attempting to read stdin / open a TTY. Implied by `--json` (values: `false`, `true`)
+- `--no-prompt` — Fail with a structured error when required schema fields are missing instead of prompting on stdin or a TTY. Implied by `--json`. Does not disable prompts embedded in the script itself (for example `omakure init` templates that read optional values); for non-interactive runs pass arguments after `--` or use this flag and supply every required value (values: `false`, `true`)
 - `--parent-run-id PARENT_RUN_ID` — Optional parent run id, for chained agent workflows
 - `--reason REASON` — Optional free-form reason recorded in the run history
 - `--run-id RUN_ID` — Caller-provided run id; otherwise a fresh id is generated

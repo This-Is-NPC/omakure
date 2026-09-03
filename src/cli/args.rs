@@ -40,6 +40,13 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Run a script directly
+    ///
+    /// Without `--no-prompt` or `--json`, missing required schema fields
+    /// prompt on stdin or a TTY. Scripts generated with `omakure init` may
+    /// also prompt for values such as an optional `target`. When stdin is not
+    /// a TTY (closed stdin, pipes), those prompts can fail with exit code 1
+    /// and no extra omakure diagnostic — pass arguments after `--` or use
+    /// `--no-prompt`.
     Run(RunArgs),
 
     /// Check runtime dependencies and workspace
@@ -195,6 +202,10 @@ pub enum Commands {
     /// By default an in-process worker is spawned so scheduled rows
     /// execute without a separate process. Pass `--no-worker` when you
     /// run `omakure queue worker` elsewhere.
+    ///
+    /// Global `--json` applies to lifecycle probes (`--status`, `--stop`,
+    /// `--install`, `--uninstall`). Foreground serve and `--once` do not
+    /// emit a JSON envelope.
     Serve(ServeArgs),
 }
 
@@ -423,9 +434,11 @@ pub struct RunArgs {
     #[arg(long = "parent-run-id")]
     pub parent_run_id: Option<String>,
 
-    /// Fail with a structured error if any required field is missing
-    /// instead of attempting to read stdin / open a TTY. Implied by
-    /// `--json`.
+    /// Fail with a structured error when required schema fields are missing
+    /// instead of prompting on stdin or a TTY. Implied by `--json`. Does not
+    /// disable prompts embedded in the script itself (for example `omakure init`
+    /// templates that read optional values); for non-interactive runs pass
+    /// arguments after `--` or use this flag and supply every required value.
     #[arg(long = "no-prompt")]
     pub no_prompt: bool,
 
@@ -472,6 +485,12 @@ pub struct NodeArgs {
 #[derive(Subcommand, Debug)]
 pub enum NodeCommand {
     /// Run the machine-owned HTTP node service with optional workers and scheduler
+    ///
+    /// On Linux and macOS, production node configuration and state use
+    /// machine-owned paths (`/etc/omakure` and `/var/lib/omakure` on Linux).
+    /// A per-user binary install does not provision them; use the machine-service
+    /// installer (`sudo … --install-node-service`) so those directories exist and
+    /// `node serve` runs under the service account.
     Serve(NodeServeArgs),
 
     /// Establish a direct encrypted probe with one explicitly trusted peer
@@ -484,6 +503,11 @@ pub enum NodeCommand {
     Baseline(NodeBaselineArgs),
 
     /// Explicitly initialize public config, identity, and local trust state
+    ///
+    /// On Linux and macOS, production paths default to machine-owned
+    /// directories (`/etc/omakure/node.toml` and `/var/lib/omakure` on Linux).
+    /// A per-user install does not create them; initializing as an unprivileged
+    /// user against those paths fails with permission denied.
     Init,
 
     /// Inspect public node identity, redacted config, and bounded trust counts
@@ -1032,8 +1056,8 @@ pub struct InitArgs {
     pub schema_json: Option<String>,
 
     /// Read the script body from stdin and write it verbatim under the
-    /// schema header. Useful when an agent ships both schema and body in
-    /// one call.
+    /// schema header when `--schema-json` is set. Without `--schema-json`,
+    /// stdin is ignored and the default placeholder template is written.
     #[arg(long = "body-stdin")]
     pub body_stdin: bool,
 

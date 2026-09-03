@@ -306,12 +306,16 @@ results pipe between the two commands without translating fields.
 omakure search deploy --json
 ```
 
-### `omakure init <path> --schema-json '<json>|@file' [--body-stdin] [--force]`
+### `omakure init <path> [--schema-json '<json>|@file'] [--body-stdin] [--force]`
 
-Non-interactive script creation. The supplied schema is validated before
-the file is written, embedded between `OMAKURE_SCHEMA_START` /
-`OMAKURE_SCHEMA_END` with the right comment prefix for the extension,
-and (optionally) the body is read verbatim from stdin.
+Non-interactive script creation. Without `--schema-json`, writes the
+default placeholder template for the extension. With `--schema-json`, the
+supplied schema is validated before the file is written and embedded
+between `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` with the right
+comment prefix. `--body-stdin` applies only together with
+`--schema-json`: stdin is read verbatim and written under the schema
+header. Without `--schema-json`, `--body-stdin` is ignored and the
+default template is written.
 
 ```bash
 omakure --json init agent_made.sh \

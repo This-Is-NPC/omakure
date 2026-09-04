@@ -2010,6 +2010,15 @@ fn record_enrollment_audit_tx(
     Ok(())
 }
 
+fn ignore_vanished_private_file(
+    result: Result<(), crate::node::NodeError>,
+) -> Result<(), crate::node::NodeError> {
+    match result {
+        Err(error) if crate::node::is_not_found(&error) => Ok(()),
+        other => other,
+    }
+}
+
 fn validate_database_security(context: &NodeContext, path: &Path) -> Result<(), RegistryError> {
     context.validate_private_file(path)?;
     for suffix in ["-wal", "-shm"] {
@@ -2026,7 +2035,7 @@ fn validate_database_security(context: &NodeContext, path: &Path) -> Result<(), 
                     "node SQLite sidecar has an unexpected file type".to_string(),
                 ));
             }
-            Ok(_) => context.validate_private_file(&sidecar)?,
+            Ok(_) => ignore_vanished_private_file(context.validate_private_file(&sidecar))?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
@@ -5140,6 +5149,46 @@ mod tests {
             )
             .unwrap();
         assert_eq!(legacy_nulls, (None, None, None));
+    }
+    #[test]
+    fn ignore_vanished_private_file_skips_not_found_only() {
+        use std::io;
+
+        let not_found = crate::node::NodeError::Io(io::Error::new(io::ErrorKind::NotFound, "gone"));
+        assert!(ignore_vanished_private_file(Err(not_found)).is_ok());
+
+        let insecure = crate::node::NodeError::InsecurePath("bad".into());
+        assert!(matches!(
+            ignore_vanished_private_file(Err(insecure)),
+            Err(crate::node::NodeError::InsecurePath(_))
+        ));
+        assert!(ignore_vanished_private_file(Ok(())).is_ok());
+    }
+
+    #[test]
+    fn open_health_observational_tolerates_vanished_sqlite_sidecars() {
+        let temp = TempDir::new().unwrap();
+        let node_context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
+        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        drop(registry);
+
+        let wal = node_context
+            .database_path()
+            .with_file_name("node.sqlite-wal");
+        fs::write(&wal, b"wal").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&wal, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let status = identity.public_status();
+        assert!(NodeRegistry::open_health_observational(&node_context, status).is_ok());
+
+        if wal.exists() {
+            fs::remove_file(&wal).unwrap();
+        }
+        assert!(NodeRegistry::open_health_observational(&node_context, status).is_ok());
     }
 
     fn seed_v3_pending_enrollment() -> (TempDir, NodeContext, NodeRegistry, [u8; 16], String) {

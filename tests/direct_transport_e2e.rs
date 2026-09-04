@@ -17,6 +17,7 @@ use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 
 const TOKEN: &str = "direct-transport-e2e-token-with-enough-entropy-00001";
+const HANDSHAKE_IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn node_args(workspace: &Path) -> (String, String) {
     (
@@ -162,8 +163,23 @@ fn free_port() -> String {
     support::unique_loopback_port().to_string()
 }
 
+fn wait_until_direct_accepts(endpoint: &str) {
+    let deadline = Instant::now() + HANDSHAKE_IO_TIMEOUT;
+    loop {
+        if let Ok(stream) = TcpStream::connect(endpoint) {
+            drop(stream);
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "direct listener did not accept connections at {endpoint}"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
 fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpServer {
-    support::HttpServer::start_node_service(
+    let server = support::HttpServer::start_node_service(
         workspace,
         TOKEN,
         &[
@@ -177,7 +193,9 @@ fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpSe
         ],
         &[],
         Duration::from_secs(15),
-    )
+    );
+    wait_until_direct_accepts(&format!("127.0.0.1:{direct_port}"));
+    server
 }
 
 fn probe(workspace: &Path, endpoint: &str, peer_node_id: &str) -> Output {
@@ -331,10 +349,10 @@ fn raw_frame(version: u8, kind: u8, flags: u16, body: &[u8]) -> Vec<u8> {
 fn send_raw(endpoint: &str, bytes: &[u8]) {
     let mut stream = TcpStream::connect(endpoint).expect("connect raw adversary");
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set raw read timeout");
     stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
+        .set_write_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set raw write timeout");
     stream.write_all(bytes).expect("send raw adversary frame");
     let _ = stream.shutdown(Shutdown::Write);
@@ -401,10 +419,10 @@ fn custom_certificate_handshake(endpoint: &str, private: [u8; 32], certificate: 
         .expect("build Noise initiator");
     let mut stream = TcpStream::connect(endpoint).expect("connect custom handshake");
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set custom handshake read timeout");
     stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
+        .set_write_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set custom handshake write timeout");
     let mut message = vec![0_u8; 4096];
     let length = handshake
@@ -437,10 +455,10 @@ fn valid_session(
         .expect("build production Noise handshake");
     let mut stream = TcpStream::connect(endpoint).expect("connect valid session");
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set valid session read timeout");
     stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
+        .set_write_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set valid session write timeout");
     stream
         .write_all(&handshake.write_next().expect("write production message 1"))
@@ -670,6 +688,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         Duration::from_secs(15),
     );
     let endpoint = format!("127.0.0.1:{target_port}");
+    wait_until_direct_accepts(&endpoint);
     let (initiator_identity, private, valid_certificate) = node_material(initiator.path());
 
     let now = unix_seconds();
@@ -725,6 +744,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         &[],
         Duration::from_secs(15),
     );
+    wait_until_direct_accepts(&endpoint);
 
     let before_forged_envelope_state = full_registry_snapshot(target.path());
     let before_forged_envelope_rejections = protocol_audit_count(target.path());

@@ -270,20 +270,22 @@ pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     const ETXTBSY: i32 = 26;
-    const MAX_PROBE_ATTEMPTS: u32 = 8;
-    const PROBE_DELAY: Duration = Duration::from_millis(5);
+    const PROBE_CAP: Duration = Duration::from_secs(2);
+    const PROBE_RETRY_DELAY: Duration = Duration::from_millis(50);
 
-    let path = dir.join(program);
+    let final_path = dir.join(program);
+    let sibling = dir.join(format!(".{program}.install"));
+
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .mode(0o755)
-        .open(&path)
-        .unwrap_or_else(|error| panic!("open {program} fixture: {error}"));
+        .open(&sibling)
+        .unwrap_or_else(|error| panic!("open {program} fixture sibling: {error}"));
     file.write_all(b"#!/bin/sh\nexit 0\n")
         .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
     file.sync_all()
@@ -293,23 +295,30 @@ pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
         let _ = dir_file.sync_all();
     }
 
-    for attempt in 1..=MAX_PROBE_ATTEMPTS {
-        match Command::new(&path).status() {
+    std::fs::rename(&sibling, &final_path).unwrap_or_else(|error| {
+        let _ = std::fs::remove_file(&sibling);
+        panic!("rename {} fixture install: {error}", final_path.display());
+    });
+
+    let deadline = Instant::now() + PROBE_CAP;
+    loop {
+        match Command::new(&final_path).status() {
             Ok(status) if status.success() => return,
             Ok(status) => panic!(
                 "probe exec {} fixture: exited with {status}",
-                path.display()
+                final_path.display()
             ),
             Err(err) if err.raw_os_error() == Some(ETXTBSY) => {
-                if attempt == MAX_PROBE_ATTEMPTS {
+                if Instant::now() >= deadline {
                     panic!(
-                        "probe exec {} fixture still ETXTBSY after {MAX_PROBE_ATTEMPTS} attempts: {err}",
-                        path.display()
+                        "probe exec {} fixture still ETXTBSY after {:?}: {err}",
+                        final_path.display(),
+                        PROBE_CAP
                     );
                 }
-                thread::sleep(PROBE_DELAY);
+                thread::sleep(PROBE_RETRY_DELAY);
             }
-            Err(err) => panic!("probe exec {} fixture: {err}", path.display()),
+            Err(err) => panic!("probe exec {} fixture: {err}", final_path.display()),
         }
     }
 }

@@ -269,6 +269,12 @@ pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
     use std::fs::{File, OpenOptions};
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
+    use std::thread;
+    use std::time::Duration;
+
+    const ETXTBSY: i32 = 26;
+    const MAX_PROBE_ATTEMPTS: u32 = 8;
+    const PROBE_DELAY: Duration = Duration::from_millis(5);
 
     let path = dir.join(program);
     let mut file = OpenOptions::new()
@@ -285,6 +291,26 @@ pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
     drop(file);
     if let Ok(dir_file) = File::open(dir) {
         let _ = dir_file.sync_all();
+    }
+
+    for attempt in 1..=MAX_PROBE_ATTEMPTS {
+        match Command::new(&path).status() {
+            Ok(status) if status.success() => return,
+            Ok(status) => panic!(
+                "probe exec {} fixture: exited with {status}",
+                path.display()
+            ),
+            Err(err) if err.raw_os_error() == Some(ETXTBSY) => {
+                if attempt == MAX_PROBE_ATTEMPTS {
+                    panic!(
+                        "probe exec {} fixture still ETXTBSY after {MAX_PROBE_ATTEMPTS} attempts: {err}",
+                        path.display()
+                    );
+                }
+                thread::sleep(PROBE_DELAY);
+            }
+            Err(err) => panic!("probe exec {} fixture: {err}", path.display()),
+        }
     }
 }
 

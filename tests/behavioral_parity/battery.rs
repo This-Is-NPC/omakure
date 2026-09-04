@@ -238,11 +238,20 @@ fn battery_add_policy_mismatch(parent: &BehavioralContext) -> Result<ProbeEviden
     let http_ctx = parent.derive("battery_add_http", &["batteries:write", "batteries:read"]);
     write_local_repository(&cli_ctx, BATTERY);
     write_local_repository(&http_ctx, BATTERY);
-    let cli_url = cli_ctx
-        .fixture
-        .repository
-        .to_str()
-        .ok_or("CLI repository is not UTF-8")?;
+    #[cfg(unix)]
+    let cli_add_path = {
+        let repo = &cli_ctx.fixture.repository;
+        let link = cli_ctx.workspace.path().join("repo-link");
+        if link.exists() {
+            std::fs::remove_file(&link).map_err(|error| error.to_string())?;
+        }
+        std::os::unix::fs::symlink(repo, &link).map_err(|error| error.to_string())?;
+        link
+    };
+    #[cfg(not(unix))]
+    let cli_add_path = cli_ctx.fixture.repository.clone();
+    let cli_url = cli_add_path.to_str().ok_or("CLI repository is not UTF-8")?;
+    let expected_cli_git_url = normalized_local_git_url(&cli_add_path);
     let http_url = http_ctx
         .fixture
         .repository
@@ -256,7 +265,7 @@ fn battery_add_policy_mismatch(parent: &BehavioralContext) -> Result<ProbeEviden
     let cli_registered = cli_state["data"]
         .as_array()
         .and_then(|items| items.iter().find(|item| item["name"] == BATTERY))
-        .is_some_and(|item| item["git_url"] == cli_url);
+        .is_some_and(|item| item["git_url"] == expected_cli_git_url);
     if !cli_registered {
         return Err("CLI local battery add did not register the requested source".into());
     }

@@ -587,13 +587,13 @@ fn prepare_git_askpass(
         })?;
     }
     let token_path = dir.join("token");
-    write_secret_file(&token_path, token.as_bytes())?;
+    write_secret_file(&token_path, token.as_bytes(), 0o600)?;
     let script_path = dir.join("askpass.sh");
     // Resolve token via relative path under $0's directory — no shell-quoted
     // absolute paths (avoids `'` injection and path-with-spaces breakage).
     let script = "#!/bin/sh\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n[ -n \"$OMAKURE_GIT_AUTHORITY\" ] || exit 1\ncase \"$1\" in\n*\"//$OMAKURE_GIT_AUTHORITY/\"*|*\"//$OMAKURE_GIT_AUTHORITY'\"*|*\"@$OMAKURE_GIT_AUTHORITY/\"*|*\"@$OMAKURE_GIT_AUTHORITY'\"*) ;;\n*) exit 1 ;;\nesac\ncase \"$1\" in\n*Username*|*username*) printf '%s\\n' 'x-access-token' ;;\n*) cat \"$DIR/token\" ;;\nesac\n";
     let script_temp = dir.join(format!(".askpass.sh.{}.tmp", std::process::id()));
-    write_secret_file(&script_temp, script.as_bytes())?;
+    write_secret_file(&script_temp, script.as_bytes(), 0o700)?;
     fs::rename(&script_temp, &script_path).map_err(|err| {
         let _ = fs::remove_file(&script_temp);
         OperationError::new(
@@ -601,24 +601,9 @@ fn prepare_git_askpass(
             format!("failed to install askpass script: {err}"),
         )
     })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&script_path)
-            .map_err(|err| {
-                OperationError::new(
-                    OperationErrorCode::IoFailed,
-                    format!("failed to read askpass script metadata: {err}"),
-                )
-            })?
-            .permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&script_path, perms).map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::IoFailed,
-                format!("failed to set askpass script permissions: {err}"),
-            )
-        })?;
+    // Optional: fsync parent directory so rename is durable; errors are non-fatal.
+    if let Ok(parent) = File::open(&dir) {
+        let _ = parent.sync_all();
     }
     Ok(Some(GitAskpassGuard {
         dir,
@@ -627,14 +612,16 @@ fn prepare_git_askpass(
     }))
 }
 
-fn write_secret_file(path: &Path, contents: &[u8]) -> OperationResult<()> {
+fn write_secret_file(path: &Path, contents: &[u8], mode: u32) -> OperationResult<()> {
     let mut options = OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+        options.mode(mode);
     }
+    #[cfg(not(unix))]
+    let _ = mode;
     let mut file = options.open(path).map_err(|err| {
         OperationError::new(
             OperationErrorCode::IoFailed,
@@ -653,27 +640,9 @@ fn write_secret_file(path: &Path, contents: &[u8]) -> OperationResult<()> {
             format!("failed to sync secret file: {err}"),
         )
     })?;
-    // Close before chmod/rename so concurrent exec does not hit ETXTBSY (Linux/musl).
+    // Mode is set at create via OpenOptionsExt::mode; do not chmod after close.
+    // Post-close set_permissions on a path about to be exec'd can race ETXTBSY on Linux/musl.
     drop(file);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(path)
-            .map_err(|err| {
-                OperationError::new(
-                    OperationErrorCode::IoFailed,
-                    format!("failed to read secret file metadata: {err}"),
-                )
-            })?
-            .permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(path, perms).map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::IoFailed,
-                format!("failed to set secret file permissions: {err}"),
-            )
-        })?;
-    }
     Ok(())
 }
 
@@ -4730,21 +4699,18 @@ tags = ["azure"]
             .unwrap()
             .unwrap();
 
-        let allowed = Command::new(&guard.script_path)
-            .arg("Password for 'https://x-access-token@git.example.test':")
-            .env("OMAKURE_GIT_AUTHORITY", "git.example.test")
-            .output()
-            .unwrap();
-        let denied = Command::new(&guard.script_path)
-            .arg("Password for 'https://x-access-token@internal.example':")
-            .env("OMAKURE_GIT_AUTHORITY", "git.example.test")
-            .output()
-            .unwrap();
-        let suffix_denied = Command::new(&guard.script_path)
-            .arg("Password for 'https://x-access-token@git.example.test.evil':")
-            .env("OMAKURE_GIT_AUTHORITY", "git.example.test")
-            .output()
-            .unwrap();
+        let run_askpass = |prompt: &str| {
+            Command::new(&guard.script_path)
+                .arg(prompt)
+                .env("OMAKURE_GIT_AUTHORITY", "git.example.test")
+                .output()
+                .unwrap_or_else(|err| panic!("failed to execute askpass script: {err}"))
+        };
+
+        let allowed = run_askpass("Password for 'https://x-access-token@git.example.test':");
+        let denied = run_askpass("Password for 'https://x-access-token@internal.example':");
+        let suffix_denied =
+            run_askpass("Password for 'https://x-access-token@git.example.test.evil':");
 
         assert!(allowed.status.success());
         assert_eq!(

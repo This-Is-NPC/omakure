@@ -1333,16 +1333,19 @@ fn release_workflows_build_and_package_only_the_headless_binary() {
     }
     let smoke = read("scripts/tasks/atomic/binary-smoke");
     assert!(
-        smoke.contains("target/$target/release/omakure")
+        smoke.contains("target_dir=\"${CARGO_TARGET_DIR:-target}\"")
+            && smoke.contains("$target_dir/$target/release/omakure")
+            && smoke.contains("$target_dir/release/omakure")
             && smoke.contains("exec \"$binary\" --version"),
-        "binary-smoke must resolve the matrix target and execute --version"
+        "binary-smoke must honor CARGO_TARGET_DIR, resolve the matrix target, and execute --version"
     );
     let musl = read("scripts/tasks/atomic/musl-static");
     assert!(
-        musl.contains("target/$target/release/omakure")
+        musl.contains("target_dir=\"${CARGO_TARGET_DIR:-target}\"")
+            && musl.contains("$target_dir/$target/release/omakure")
             && musl.contains("readelf -l")
             && musl.contains("INTERP"),
-        "musl-static must own the static ELF verification"
+        "musl-static must honor CARGO_TARGET_DIR and own the static ELF verification"
     );
 }
 

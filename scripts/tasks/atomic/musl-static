@@ -3,6 +3,10 @@ set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 cd "$root"
+target_dir="${CARGO_TARGET_DIR:-target}"
+if [[ "$target_dir" != /* && ! "$target_dir" =~ ^[A-Za-z]: ]]; then
+  target_dir="$root/$target_dir"
+fi
 for command in musl-gcc file readelf; do
   command -v "$command" >/dev/null 2>&1 || { printf 'atomic/musl-static: %s is required\n' "$command" >&2; exit 1; }
 done
@@ -13,7 +17,7 @@ case "$target" in
   aarch64-unknown-linux-musl) expected_arch='ARM aarch64'; expected_machine='aarch64' ;;
   *) printf 'atomic/musl-static: unsupported musl target triple: %s\n' "$target" >&2; exit 2 ;;
 esac
-binary="$root/target/$target/release/omakure"
+binary="$target_dir/$target/release/omakure"
 [[ -x "$binary" ]] || { printf 'atomic/musl-static: release binary is missing or not executable: %s\n' "$binary" >&2; exit 1; }
 machine="$(musl-gcc -dumpmachine)"
 [[ "$machine" == "$expected_machine"* ]] || {

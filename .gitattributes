@@ -6,3 +6,4 @@ docs/cli-reference.md text eol=lf
 docs/usage/omakure.md text eol=lf
 docs/usage/omakure.1 text eol=lf
 docs/usage/omakure.kdl text eol=lf
+scripts/install/install.sh text eol=lf

@@ -287,19 +287,31 @@ mod tests {
 
     fn write_schema_script(tmp: &TempDir, name: &str, schema_json: &str, body: &str) -> PathBuf {
         let path = tmp.path().join(name);
-        write_file(
-            &path,
-            &format!(
-                "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {}\n# OMAKURE_SCHEMA_END\n{}\n",
-                schema_json, body
-            ),
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        let contents = format!(
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {}\n# OMAKURE_SCHEMA_END\n{}\n",
+            schema_json, body
         );
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&path).unwrap().permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&path, perms).unwrap();
+            use std::fs::OpenOptions;
+            use std::io::Write;
+            use std::os::unix::fs::OpenOptionsExt;
+
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o755)
+                .open(&path)
+                .unwrap();
+            file.write_all(contents.as_bytes()).unwrap();
+        }
+        #[cfg(not(unix))]
+        {
+            fs::write(&path, contents).unwrap();
         }
         path
     }

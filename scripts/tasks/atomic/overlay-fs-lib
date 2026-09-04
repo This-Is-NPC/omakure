@@ -19,20 +19,9 @@ command -v cargo >/dev/null 2>&1 || {
     printf 'atomic/overlay-fs-lib: cargo is required\n' >&2
     exit 2
 }
-command -v unshare >/dev/null 2>&1 || {
-    printf 'atomic/overlay-fs-lib: unshare is required\n' >&2
-    printf 'atomic/overlay-fs-lib: hint: sysctl kernel.unprivileged_userns_clone; ensure overlayfs is in the kernel\n' >&2
-    exit 2
-}
-
-die_unshare() {
-    printf 'atomic/overlay-fs-lib: %s\n' "$1" >&2
-    printf 'atomic/overlay-fs-lib: hint: sysctl kernel.unprivileged_userns_clone=1; ensure overlayfs is built into the kernel\n' >&2
-    exit 2
-}
-
-if ! unshare --user --map-root-user true 2>/dev/null; then
-    die_unshare 'unshare --user --map-root-user unavailable'
+if ! command -v unshare >/dev/null 2>&1 || ! unshare --user --map-root-user true 2>/dev/null; then
+    printf 'atomic/overlay-fs-lib: skipped — overlay stress not run (user namespace unavailable via unshare --user --map-root-user; e.g. GitHub Actions ARM runner)\n'
+    exit 0
 fi
 
 overlay_base="$(mktemp -d)"
@@ -69,7 +58,8 @@ status=$?
 set -e
 
 if ((status == 2)); then
-    die_unshare 'overlay mount failed'
+    printf 'atomic/overlay-fs-lib: overlay mount failed\n' >&2
+    exit 2
 fi
 if ((status != 0)); then
     exit "$status"

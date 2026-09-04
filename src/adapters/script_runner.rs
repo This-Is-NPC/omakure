@@ -141,16 +141,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_build_command_resolves_python_against_injected_path() {
-        use std::os::unix::fs::PermissionsExt;
         // Shim `python3` on an injected PATH must become the command program
         // as an absolute path, proving build_command threads env into
         // interpreter resolution (task 1755 wiring).
         let shim_dir = TempDir::new().unwrap();
-        let shim = shim_dir.path().join("python3");
-        fs::write(&shim, "#!/bin/sh\necho SHIM\n").unwrap();
-        let mut perms = fs::metadata(&shim).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&shim, perms).unwrap();
+        crate::adapters::system_checks::write_test_executable_shim(shim_dir.path(), "python3");
 
         let script_dir = TempDir::new().unwrap();
         let script = script_dir.path().join("job.py");
@@ -161,7 +156,10 @@ mod tests {
         let env = vec![("PATH".to_string(), injected)];
 
         let cmd = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
-        assert_eq!(cmd.get_program(), shim.as_os_str());
+        assert_eq!(
+            cmd.get_program(),
+            shim_dir.path().join("python3").as_os_str()
+        );
     }
 
     #[cfg(unix)]
@@ -185,15 +183,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_build_command_resolves_bash_against_injected_path() {
-        use std::os::unix::fs::PermissionsExt;
-
         let bin_dir = TempDir::new().unwrap();
         for program in ["bash", "git", "jq"] {
-            let path = bin_dir.path().join(program);
-            fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
-            let mut permissions = fs::metadata(&path).unwrap().permissions();
-            permissions.set_mode(0o755);
-            fs::set_permissions(&path, permissions).unwrap();
+            crate::adapters::system_checks::write_test_executable_shim(bin_dir.path(), program);
         }
 
         let script_dir = TempDir::new().unwrap();
@@ -211,15 +203,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_build_command_resolves_powershell_against_injected_path() {
-        use std::os::unix::fs::PermissionsExt;
-
         let bin_dir = TempDir::new().unwrap();
         let program = crate::runtime::powershell_program();
-        let path = bin_dir.path().join(program);
-        fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
-        let mut permissions = fs::metadata(&path).unwrap().permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&path, permissions).unwrap();
+        crate::adapters::system_checks::write_test_executable_shim(bin_dir.path(), program);
 
         let script_dir = TempDir::new().unwrap();
         let script = script_dir.path().join("job.ps1");
@@ -227,6 +213,9 @@ mod tests {
         let env = vec![("PATH".to_string(), bin_dir.path().display().to_string())];
 
         let command = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
-        assert_eq!(command.get_program(), path.as_os_str());
+        assert_eq!(
+            command.get_program(),
+            bin_dir.path().join(program).as_os_str()
+        );
     }
 }

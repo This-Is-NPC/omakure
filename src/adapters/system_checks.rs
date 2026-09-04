@@ -264,6 +264,30 @@ pub(crate) fn ensure_python_installed_with_env(
     ensure_command_with_env(program, &["--version"], &hint, env)
 }
 
+#[cfg(all(test, unix))]
+pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
+    use std::fs::{File, OpenOptions};
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let path = dir.join(program);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o755)
+        .open(&path)
+        .unwrap_or_else(|error| panic!("open {program} fixture: {error}"));
+    file.write_all(b"#!/bin/sh\nexit 0\n")
+        .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
+    file.sync_all()
+        .unwrap_or_else(|error| panic!("sync {program} fixture: {error}"));
+    drop(file);
+    if let Ok(dir_file) = File::open(dir) {
+        let _ = dir_file.sync_all();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -371,23 +395,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_dependency_checks_use_injected_path_for_every_runtime() {
-        use std::fs::OpenOptions;
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-
         let dir = tempfile::tempdir().unwrap();
         let programs = ["git", "jq", "bash", python_program(), powershell_program()];
         for program in programs {
-            let path = dir.path().join(program);
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o755)
-                .open(&path)
-                .unwrap_or_else(|error| panic!("open {program} fixture: {error}"));
-            file.write_all(b"#!/bin/sh\nexit 0\n")
-                .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
+            write_test_executable_shim(dir.path(), program);
         }
         let env = vec![("PATH".to_string(), dir.path().display().to_string())];
 
@@ -408,24 +419,6 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn write_executable_shim(dir: &Path, program: &str) {
-        use std::fs::OpenOptions;
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-
-        let path = dir.join(program);
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o755)
-            .open(&path)
-            .unwrap_or_else(|error| panic!("open {program} fixture: {error}"));
-        file.write_all(b"#!/bin/sh\nexit 0\n")
-            .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
-    }
-
-    #[cfg(unix)]
     fn huge_injected_path_with_shim_dir(shim_dir: &Path) -> String {
         let mut path = shim_dir.display().to_string();
         let mut index = 0usize;
@@ -440,8 +433,8 @@ mod tests {
     #[test]
     fn test_dependency_checks_succeed_with_huge_injected_path() {
         let dir = tempfile::tempdir().unwrap();
-        write_executable_shim(dir.path(), "git");
-        write_executable_shim(dir.path(), "jq");
+        write_test_executable_shim(dir.path(), "git");
+        write_test_executable_shim(dir.path(), "jq");
 
         let env = vec![(
             "PATH".to_string(),
@@ -460,6 +453,69 @@ mod tests {
             ensure_jq_installed_with_env(&env).is_ok(),
             "jq check should resolve via huge PATH and spawn via bounded child PATH"
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_spawn_of_file_open_for_write_is_etxtbsy() {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        fn assert_etxtbsy(result: Result<(), ScriptError>) {
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ScriptError::DependencyCheckFailed { name, message } => {
+                    assert_eq!(name, "git");
+                    assert!(
+                        message.contains("Text file busy") || message.contains("os error 26"),
+                        "expected ETXTBSY, got: {message}"
+                    );
+                }
+                other => panic!("expected DependencyCheckFailed, got {:?}", other),
+            }
+        }
+
+        fn message_is_etxtbsy(message: &str) -> bool {
+            message.contains("Text file busy") || message.contains("os error 26")
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("git");
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o755)
+            .open(&path)
+            .unwrap();
+        file.write_all(b"#!/bin/sh\nexit 0\n").unwrap();
+        file.sync_all().unwrap();
+
+        let shebang_result = ensure_command_os_with_env(&path, "git", &["--version"], "hint", &[]);
+        if matches!(
+            &shebang_result,
+            Err(ScriptError::DependencyCheckFailed { message, .. })
+                if message_is_etxtbsy(message)
+        ) {
+            assert_etxtbsy(shebang_result);
+            return;
+        }
+
+        // Shebang exec may not bump the kernel ELF i_writecount on every kernel;
+        // copy a real ELF binary and keep a writable fd open to force ETXTBSY.
+        drop(file);
+        let true_src = ["/usr/bin/true", "/bin/true"]
+            .into_iter()
+            .find(|candidate| Path::new(candidate).exists())
+            .expect("need /usr/bin/true or /bin/true for ELF ETXTBSY fixture");
+        std::fs::copy(true_src, &path).unwrap();
+        let file = OpenOptions::new().write(true).open(&path).unwrap();
+
+        let elf_result = ensure_command_os_with_env(&path, "git", &["--version"], "hint", &[]);
+        assert_etxtbsy(elf_result);
+        drop(file);
     }
 
     #[cfg(unix)]

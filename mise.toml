@@ -36,6 +36,10 @@ run = "scripts/tasks/suite/test-e2e"
 description = "Run the unit, integration, and end-to-end test groups"
 run = "scripts/tasks/suite/native-tests"
 
+[tasks."test:overlay-fs"]
+description = "re-run install-then-exec lib tests with TMPDIR on overlayfs (GHA runner FS)"
+run = "scripts/tasks/atomic/overlay-fs-lib"
+
 [tasks."lint:fmt"]
 description = "Check Rust formatting"
 run = "scripts/tasks/atomic/fmt"

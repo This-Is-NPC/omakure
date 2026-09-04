@@ -299,5 +299,56 @@ The implemented v1 server uses the same envelope helper as CLI JSON output.
 Health and readiness are unauthenticated:
 
 ```http
+GET /v1/health
+GET /v1/ready
+```
 
-[Showing lines 1-300 of 320. Use :301 to continue]
+`GET /v1/ready` uses the standard JSON envelope; `data` contains only
+`{ "status": "ready" | "not_ready" }` (HTTP 200 or 503). It must not
+expose token IDs, paths, or secrets.
+
+```json
+{
+  "ok": true,
+  "data": { "status": "ready" },
+  "error": null,
+  "schema_version": "1"
+}
+```
+
+Optional readiness gates are configured by `omakure node serve`; their
+deployment semantics are defined in the [deployment guide](deployment.md).
+
+Authenticated operator status (scope `admin:status`, or legacy `*`):
+
+```http
+GET /v1/admin/status
+```
+
+Returns readiness details (worker/scheduler gates and liveness) plus auth-file
+load/reload state (`mode`, `token_count`, `last_reload_ok`,
+`last_reload_error`, `last_reload_at_ms`). It never returns token IDs, hashes,
+plaintext secrets, or the tokens-file path.
+
+## Write Audit Expectations
+
+V1 write endpoints leave an audit trail equivalent to their CLI
+operation path. At minimum, writes must create or transition rows through the
+existing run state machine or Battery registry/provenance records. HTTP errors
+and responses redact bearer tokens.
+
+Authenticated HTTP requests also emit structured request audit lines on stderr
+(`omakure.http_audit {…}`) with `token_id`, `method`, `path`, `outcome`, and
+`status`. The `Authorization` header and raw bearer secrets are never logged.
+Operators correlate enqueue/cancel/dead-letter with `token_id` via these
+request logs (no runs.sqlite schema change in this increment).
+
+## Deployment and operations
+
+Deployment procedures and topology are canonical in the
+[deployment guide](deployment.md). It covers loopback and trusted internal
+network binds, policy load order and hard gates, workers and scheduler
+lifecycle, startup/readiness, containers, volumes, SQLite placement,
+certification, and smoke operation. This API contract retains the route,
+authentication, scope, envelope, limit, adapter, and audit semantics that
+apply in every deployment.

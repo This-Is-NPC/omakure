@@ -1625,7 +1625,14 @@ fn packaging_bash_skips_wsl_launcher_when_git_bash_exists() {
 
     let path_var = format!("{};{}", system32_dir.display(), git_dir.display());
     let resolved = resolve_packaging_bash_in_path(&path_var).expect("git bash on path");
-    assert_eq!(resolved, git_bash);
+    assert!(
+        resolved
+            .to_string_lossy()
+            .eq_ignore_ascii_case(git_bash.to_string_lossy().as_ref()),
+        "expected Git Bash at {}, got {}",
+        git_bash.display(),
+        resolved.display(),
+    );
     assert!(!is_packaging_wsl_launcher(&resolved));
 }
 

@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[cfg(unix)]
@@ -16,8 +16,53 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+fn normalize_line_endings(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 fn read(rel: &str) -> String {
-    fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"))
+    let contents =
+        fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"));
+    normalize_line_endings(&contents)
+}
+
+/// Path normalized for Git Bash on Windows (MSYS `/c/...` paths).
+fn bash_safe_path(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        let native = path.to_string_lossy().replace('\\', "/");
+        let stripped = strip_verbatim_prefix(native);
+        bash_safe_drive_path(&stripped)
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string_lossy().into_owned()
+    }
+}
+
+#[cfg(windows)]
+fn strip_verbatim_prefix(mut path: String) -> String {
+    let lower = path.to_ascii_lowercase();
+    const UNC_PREFIX: &str = "//?/unc/";
+    const VERBATIM_PREFIX: &str = "//?/";
+    if lower.starts_with(UNC_PREFIX) {
+        let rest = path[UNC_PREFIX.len()..].to_string();
+        path = format!("//{rest}");
+    } else if lower.starts_with(VERBATIM_PREFIX) {
+        path = path[VERBATIM_PREFIX.len()..].to_string();
+    }
+    path
+}
+
+#[cfg(windows)]
+fn bash_safe_drive_path(path: &str) -> String {
+    if let Some((drive, rest)) = path.split_once(':') {
+        if drive.len() == 1 && drive.chars().all(|c| c.is_ascii_alphabetic()) {
+            let rest = rest.strip_prefix('/').unwrap_or(rest);
+            return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
+        }
+    }
+    path.to_string()
 }
 
 #[test]
@@ -1391,9 +1436,9 @@ fn release_tarball_contains_only_the_required_binary() {
     let script = repo_root().join("scripts/release/package-release.sh");
 
     let output = Command::new("bash")
-        .arg(script)
-        .arg(&binary)
-        .arg(&archive)
+        .arg(bash_safe_path(&script))
+        .arg(bash_safe_path(&binary))
+        .arg(bash_safe_path(&archive))
         .output()
         .expect("run release packager");
     assert!(
@@ -1403,7 +1448,7 @@ fn release_tarball_contains_only_the_required_binary() {
     );
 
     let listing = Command::new("tar")
-        .args(["-tzf", archive.to_str().expect("archive path")])
+        .args(["-tzf", &bash_safe_path(&archive)])
         .output()
         .expect("list release archive");
     assert!(listing.status.success());

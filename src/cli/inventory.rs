@@ -224,6 +224,12 @@ fn inventory_option(argument: &clap::Arg) -> InventoryOption {
     }
 }
 
+/// Normalize generated documentation text for freshness comparisons on CRLF
+/// checkouts.
+pub fn normalize_generated_text(text: &str) -> String {
+    text.replace("\r\n", "\n")
+}
+
 /// Render the generated CLI reference body from the same inventory consumed by
 /// `help-ai`.  The output is deterministic and contains no environment data.
 pub fn render_cli_reference() -> String {
@@ -473,6 +479,14 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn generated_reference_freshness_treats_crlf_checkout_as_lf() {
+        let generated = render_cli_reference();
+        let crlf = generated.replace('\n', "\r\n");
+        assert_ne!(crlf, generated);
+        assert_eq!(normalize_generated_text(&crlf), generated);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use omakure::cli::inventory::render_cli_reference;
+use omakure::cli::inventory::{normalize_generated_text, render_cli_reference};
 use omakure::cli_http_parity::{check_docs_freshness, checked_manifest};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -316,9 +316,10 @@ fn assert_repository_relative_links_are_resolved() {
 
 #[test]
 fn generated_reference_matches_clap_inventory_byte_for_byte() {
-    assert_eq!(REFERENCE, render_cli_reference());
-    assert!(REFERENCE.starts_with("<!-- BEGIN GENERATED CLI REFERENCE -->\n"));
-    assert!(REFERENCE.ends_with("<!-- END GENERATED CLI REFERENCE -->\n"));
+    let reference = normalize_generated_text(REFERENCE);
+    assert_eq!(reference, render_cli_reference());
+    assert!(reference.starts_with("<!-- BEGIN GENERATED CLI REFERENCE -->\n"));
+    assert!(reference.ends_with("<!-- END GENERATED CLI REFERENCE -->\n"));
 }
 
 #[test]

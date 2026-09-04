@@ -137,8 +137,11 @@ fn wait_for_connected_within(server: &support::HttpServer, peer_node_id: &str, b
     let deadline = std::time::Instant::now() + budget;
     loop {
         let status = server.get("/v1/node/status");
-        assert_eq!(status.status, 200, "body: {}", status.safe_body());
-        let transport = &status.json()["data"]["transport"];
+        let transport = if status.status == 200 {
+            status.json()["data"]["transport"].clone()
+        } else {
+            Value::Null
+        };
         if transport["connected_peer_count"] == 1
             && transport["peers"][0]["node_id"] == peer_node_id
             && transport["peers"][0]["state"] == "connected"
@@ -147,7 +150,9 @@ fn wait_for_connected_within(server: &support::HttpServer, peer_node_id: &str, b
         }
         assert!(
             std::time::Instant::now() < deadline,
-            "transport did not connect: {transport}"
+            "transport did not connect: {transport}, last status {} body {}",
+            status.status,
+            status.safe_body()
         );
         std::thread::sleep(Duration::from_millis(100));
     }

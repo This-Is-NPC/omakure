@@ -27,6 +27,9 @@ fn read(rel: &str) -> String {
 }
 
 /// Path normalized for Git Bash on Windows (MSYS `/c/...` paths).
+///
+/// For bash argv only — never pass to native Windows `Command` args (e.g.
+/// `tar.exe` resolves to bsdtar and cannot open MSYS paths).
 fn bash_safe_path(path: &Path) -> String {
     #[cfg(windows)]
     {
@@ -1447,11 +1450,19 @@ fn release_tarball_contains_only_the_required_binary() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let listing = Command::new("tar")
-        .args(["-tzf", &bash_safe_path(&archive)])
+    let archive_path = bash_safe_path(&archive);
+    let listing = Command::new("bash")
+        .arg("-c")
+        .arg(format!("exec tar -tzf {archive_path}"))
         .output()
         .expect("list release archive");
-    assert!(listing.status.success());
+    assert!(
+        listing.status.success(),
+        "tar listing failed: status={:?} stdout={} stderr={}",
+        listing.status,
+        String::from_utf8_lossy(&listing.stdout),
+        String::from_utf8_lossy(&listing.stderr),
+    );
     assert_eq!(
         String::from_utf8_lossy(&listing.stdout),
         "omakure\n",

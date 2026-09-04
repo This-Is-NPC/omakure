@@ -35,8 +35,19 @@ fn ensure_command_os_with_env(
     not_found_hint: &str,
     env: &[(String, String)],
 ) -> Result<(), ScriptError> {
+    let program = program.as_ref();
     let mut command = Command::new(program);
-    command.envs(env.iter().map(|(key, value)| (key, value)));
+    if std::path::Path::new(program).is_absolute() {
+        // Lookup already used the injected PATH; re-applying a huge inherited
+        // PATH to the probe spawn can break exec on some Linux runners.
+        for (key, value) in env {
+            if !key.eq_ignore_ascii_case("PATH") {
+                command.env(key, value);
+            }
+        }
+    } else {
+        command.envs(env.iter().map(|(key, value)| (key, value)));
+    }
     ensure_command_output(command, name, args, not_found_hint)
 }
 

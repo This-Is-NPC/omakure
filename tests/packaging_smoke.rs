@@ -68,6 +68,136 @@ fn bash_safe_drive_path(path: &str) -> String {
     path.to_string()
 }
 
+fn bash_command() -> Command {
+    Command::new(packaging_bash())
+}
+
+fn packaging_bash() -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path) = resolve_packaging_bash_on_windows() {
+            return path;
+        }
+        panic!(
+            "packaging tests require Git Bash on Windows; WSL bash.exe is refused. \
+             Install Git for Windows and ensure bash.exe is on PATH or under \
+             %ProgramFiles%\\Git\\bin"
+        );
+    }
+    #[cfg(not(windows))]
+    {
+        if let Ok(path_var) = std::env::var("PATH") {
+            for dir in std::env::split_paths(&path_var) {
+                if !dir.is_absolute() {
+                    continue;
+                }
+                let candidate = dir.join("bash");
+                if is_unix_packaging_bash(&candidate) {
+                    return candidate;
+                }
+            }
+        }
+        PathBuf::from("bash")
+    }
+}
+
+#[cfg(unix)]
+fn is_unix_packaging_bash(path: &Path) -> bool {
+    path.is_file()
+        && fs::metadata(path)
+            .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn is_packaging_wsl_launcher(path: &Path) -> bool {
+    let normalized = path
+        .to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase();
+    normalized.ends_with("\\windows\\system32\\bash.exe")
+        || normalized.ends_with("\\windows\\sysnative\\bash.exe")
+}
+
+#[cfg(windows)]
+fn is_windows_packaging_bash(path: &Path) -> bool {
+    path.is_file() && !is_packaging_wsl_launcher(path)
+}
+
+#[cfg(windows)]
+fn packaging_bash_candidate_names() -> Vec<String> {
+    let mut names = vec!["bash".to_string()];
+    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+    for ext in pathext.split(';') {
+        let ext = ext.trim();
+        if ext.is_empty() {
+            continue;
+        }
+        let ext = if ext.starts_with('.') {
+            ext.to_string()
+        } else {
+            format!(".{ext}")
+        };
+        names.push(format!("bash{ext}"));
+    }
+    names
+}
+
+#[cfg(windows)]
+fn resolve_packaging_bash_in_path(path_var: &str) -> Option<PathBuf> {
+    for dir in std::env::split_paths(path_var) {
+        if !dir.is_absolute() {
+            continue;
+        }
+        for candidate_name in packaging_bash_candidate_names() {
+            let candidate = dir.join(candidate_name);
+            if is_windows_packaging_bash(&candidate) {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn well_known_git_bash_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Ok(program_files) = std::env::var("ProgramFiles") {
+        let git_root = PathBuf::from(program_files).join("Git");
+        paths.push(git_root.join("bin").join("bash.exe"));
+        paths.push(git_root.join("usr").join("bin").join("bash.exe"));
+    }
+    paths.push(PathBuf::from(r"C:\Program Files (x86)\Git\bin\bash.exe"));
+    paths
+}
+
+#[cfg(windows)]
+fn resolve_packaging_bash_on_windows() -> Option<PathBuf> {
+    if let Ok(path_var) = std::env::var("PATH") {
+        if let Some(path) = resolve_packaging_bash_in_path(&path_var) {
+            return Some(path);
+        }
+    }
+    for candidate in well_known_git_bash_paths() {
+        if is_windows_packaging_bash(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn decode_command_output(bytes: &[u8]) -> String {
+    if bytes.contains(&0) {
+        let utf16: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        String::from_utf16_lossy(&utf16)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 #[test]
 fn dockerfile_is_multi_stage_node_entrypoint() {
     let df = read("Dockerfile");
@@ -1441,7 +1571,7 @@ fn release_tarball_contains_only_the_required_binary() {
     let archive = temp.path().join("omakure-test.tar.gz");
     let script = repo_root().join("scripts/release/package-release.sh");
 
-    let output = Command::new("bash")
+    let output = bash_command()
         .arg(bash_safe_path(&script))
         .arg(bash_safe_path(&binary))
         .arg(bash_safe_path(&archive))
@@ -1449,12 +1579,14 @@ fn release_tarball_contains_only_the_required_binary() {
         .expect("run release packager");
     assert!(
         output.status.success(),
-        "packager failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+        "packager failed: status={:?} stdout={} stderr={}",
+        output.status,
+        decode_command_output(&output.stdout),
+        decode_command_output(&output.stderr),
     );
 
     let archive_path = bash_safe_path(&archive);
-    let listing = Command::new("bash")
+    let listing = bash_command()
         .arg("-c")
         .arg(format!("exec tar -tzf {archive_path}"))
         .output()
@@ -1471,6 +1603,30 @@ fn release_tarball_contains_only_the_required_binary() {
         "omakure\n",
         "release archive must contain exactly the root binary"
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn packaging_bash_skips_wsl_launcher_when_git_bash_exists() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let system32_dir = root.path().join("Windows").join("System32");
+    let git_dir = root.path().join("Git").join("bin");
+    fs::create_dir_all(&system32_dir).expect("system32 dir");
+    fs::create_dir_all(&git_dir).expect("git dir");
+
+    let wsl_bash = system32_dir.join("bash.exe");
+    let git_bash = git_dir.join("bash.exe");
+    fs::write(&wsl_bash, "wsl launcher").expect("wsl bash");
+    fs::write(&git_bash, "git bash").expect("git bash");
+
+    assert!(is_packaging_wsl_launcher(Path::new(
+        r"C:\Windows\System32\bash.exe"
+    )));
+
+    let path_var = format!("{};{}", system32_dir.display(), git_dir.display());
+    let resolved = resolve_packaging_bash_in_path(&path_var).expect("git bash on path");
+    assert_eq!(resolved, git_bash);
+    assert!(!is_packaging_wsl_launcher(&resolved));
 }
 
 /// The embedded Lua runtime must stay declared and vendored.

@@ -78,10 +78,32 @@ impl BehavioralContext {
         .env("OMAKURE_NODE_STATE_DIR", &state_arg)
         .env("OMAKURE_NODE_CONFIG", &config_arg);
         let output = support::command_with_timeout(&mut init, Duration::from_secs(10));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
             output.status.success(),
-            "node fixture initialization failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "node fixture initialization failed (status={}): stdout={stdout} stderr={stderr}",
+            output.status
+        );
+        let envelope = support::json_envelope(&output.stdout);
+        assert_eq!(
+            envelope.get("ok").and_then(Value::as_bool),
+            Some(true),
+            "node fixture initialization returned error: {}",
+            envelope
+                .get("error")
+                .map(|error| format!(
+                    "{}: {}",
+                    error
+                        .get("code")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown"),
+                    error
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown")
+                ))
+                .unwrap_or_else(|| envelope.to_string())
         );
         let mut args = Vec::with_capacity(capabilities.len() * 2);
         for capability in capabilities {

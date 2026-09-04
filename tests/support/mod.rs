@@ -523,6 +523,23 @@ impl Drop for HttpServer {
     }
 }
 
+/// Exit status after an intentional test-harness kill.
+/// Unix SIGKILL reports no exit code; Windows TerminateProcess uses code 1.
+pub fn terminated_exit_is_expected(status: std::process::ExitStatus) -> bool {
+    terminated_exit_is_expected_for_parts(status.success(), status.code())
+}
+
+pub fn terminated_exit_is_expected_for_parts(success: bool, code: Option<i32>) -> bool {
+    success || code.is_none() || (cfg!(windows) && code == Some(1))
+}
+
+pub fn assert_terminated(status: std::process::ExitStatus) {
+    assert!(
+        terminated_exit_is_expected(status),
+        "expected graceful exit or test-harness kill, got {status:?}"
+    );
+}
+
 /// Overall budget for one HTTP exchange made through [`HttpServer`].
 ///
 /// Deliberately far larger than the per-read socket timeout. `set_read_timeout`

@@ -637,7 +637,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     //    kinds that require it, with no other change.
     let _ = stream.shutdown(std::net::Shutdown::Both);
     let exit = conductor_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
 
     assert_success(&run_node(
         conductor.path(),

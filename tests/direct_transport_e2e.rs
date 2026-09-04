@@ -704,7 +704,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
     );
 
     let exit = target_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
     let target_server = support::HttpServer::start_node_service(
         target.path(),
         TOKEN,
@@ -786,7 +786,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         target_status["identity"]["node_id"]
     );
     let exit = target_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
 }
 
 #[test]
@@ -869,7 +869,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
         let _ = TcpStream::connect(&endpoint);
     }
     let exit = second_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
 
     let restarted = support::HttpServer::start_node_service(
         second.path(),
@@ -1168,7 +1168,7 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
     assert!(!transport.contains("127.0.0.1"));
 
     let exit = second_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
     let restarted = support::HttpServer::start_node_service(
         second.path(),
         TOKEN,

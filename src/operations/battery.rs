@@ -533,9 +533,9 @@ fn prepare_git_askpass(
             let mut bytes = [0u8; 8];
             rand::thread_rng().fill_bytes(&mut bytes);
             let candidate = tmp_root.join(format!(
-                "git-askpass-{}-{}-{}",
+                "git-askpass-{}-{:?}-{}",
                 std::process::id(),
-                format!("{:?}", std::thread::current().id()),
+                std::thread::current().id(),
                 u64::from_le_bytes(bytes)
             ));
             match fs::create_dir(&candidate) {

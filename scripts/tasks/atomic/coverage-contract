@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+checker="$root/scripts/tasks/coverage-test"
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$checker" && -x "$bounded" ]] || { printf 'atomic/coverage-contract: required scripts are missing\n' >&2; exit 1; }
+exec "$bounded" 5m "$checker" "$@"

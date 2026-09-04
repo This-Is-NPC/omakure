@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+command -v cargo >/dev/null 2>&1 || { printf 'atomic/build-release: cargo is required\n' >&2; exit 1; }
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$bounded" ]] || { printf 'atomic/build-release: bounded runner is missing\n' >&2; exit 1; }
+target_seen=0
+cargo_args=()
+while (($#)); do
+  if [[ "$1" == --target-triple ]]; then
+    (( target_seen == 0 )) || { printf 'atomic/build-release: --target-triple may be supplied once\n' >&2; exit 2; }
+    (($# >= 2)) || { printf 'atomic/build-release: --target-triple requires a value\n' >&2; exit 2; }
+    target="$2"
+    target_seen=1
+    shift 2
+  else
+    cargo_args+=("$1")
+    shift
+  fi
+done
+if (( target_seen )); then
+  [[ "$target" =~ ^[A-Za-z0-9_]+-[A-Za-z0-9_]+-[A-Za-z0-9_]+([.-][A-Za-z0-9_]+)*$ ]] || {
+    printf 'atomic/build-release: invalid target triple: %s\n' "$target" >&2
+    exit 2
+  }
+  cargo_args=(--target "$target" "${cargo_args[@]}")
+fi
+exec "$bounded" 30m cargo build --release --bin omakure --locked "${cargo_args[@]}"

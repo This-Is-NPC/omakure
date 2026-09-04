@@ -66,7 +66,8 @@ omakure history list --state failed
 
 with the error `the worker holding this remote run stopped; it was not re-run
 because a remote instruction must execute at most once`. Re-dispatch it
-deliberately if it should happen again; nothing will do so on its own.
+deliberately if it should happen again; nothing will do so on its own. Use
+`--cue-id` to retry the same instruction; a new id is a new run.
 
 ## A machine that did not join
 

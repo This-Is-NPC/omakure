@@ -31,6 +31,8 @@ AI integration: pass `--json` on supported subcommands to emit a `{ ok, data, er
 
 Run a script directly
 
+Without `--no-prompt` or `--json`, missing required schema fields prompt on stdin or a TTY. Scripts generated with `omakure init` may also prompt for values such as an optional `target`. When stdin is not a TTY (closed stdin, pipes), those prompts can fail with exit code 1 and no extra omakure diagnostic — pass arguments after `--` or use `--no-prompt`.
+
 ### Arguments
 - **`<SCRIPT>`** — Script name or path
 - **`[ARGS]…`** — Arguments forwarded to the script
@@ -48,7 +50,7 @@ Run a script directly
   **Default:** `false`
 - **`--run-id <RUN_ID>`** — Caller-provided run id; otherwise a fresh id is generated
 - **`--parent-run-id <PARENT_RUN_ID>`** — Optional parent run id, for chained agent workflows
-- **`--no-prompt`** — Fail with a structured error if any required field is missing instead of attempting to read stdin / open a TTY. Implied by `--json`
+- **`--no-prompt`** — Fail with a structured error when required schema fields are missing instead of prompting on stdin or a TTY. Implied by `--json`. Does not disable prompts embedded in the script itself (for example `omakure init` templates that read optional values); for non-interactive runs pass arguments after `--` or use this flag and supply every required value
 
   **Default:** `false`
 - **`--env-file <PATH>`** — Path to an env file whose `KEY=value` pairs are injected into the script process for this run only. Values override the managed active env for the same key, but omakure-reserved vars (`OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR`) always win. A missing or unreadable path is a hard error.
@@ -618,7 +620,7 @@ Create a new script template
   When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
 
   **Default:** `false`
-- **`--body-stdin`** — Read the script body from stdin and write it verbatim under the schema header. Useful when an agent ships both schema and body in one call
+- **`--body-stdin`** — Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written
 
   **Default:** `false`
 - **`--force`** — Overwrite an existing script of the same name
@@ -814,6 +816,8 @@ Inspect and explicitly manage the machine-owned node identity and trust registry
 
 Run the machine-owned HTTP node service with optional workers and scheduler
 
+On Linux and macOS, production node configuration and state use machine-owned paths (`/etc/omakure` and `/var/lib/omakure` on Linux). A per-user binary install does not provision them; use the machine-service installer (`sudo … --install-node-service`) so those directories exist and `node serve` runs under the service account.
+
 ### Flags
 - **`--bind <BIND>`** — Address to bind the HTTP API server to; defaults to node.toml `api.bind`
 - **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
@@ -896,6 +900,9 @@ Ask one trusted Performer to run a script it has already declared
   The service is preferred because it is the only thing that can reach a peer this node already has a session with. Use this for a peer there is no standing session with, or when no service is running.
 
   **Default:** `false`
+- **`--cue-id <CUE_ID>`** — Caller-supplied Cue id (32 lowercase hex). Omit to mint a new one.
+
+  The same id retries the same instruction; a new id is a new run.
 
 ## `omakure node baseline`
 
@@ -991,6 +998,8 @@ Exactly one previous baseline is retained, and this is a swap: rolling back twic
 - **Usage:** `omakure node init [--scripts-dir <SCRIPTS_DIR>] [--json]`
 
 Explicitly initialize public config, identity, and local trust state
+
+On Linux and macOS, production paths default to machine-owned directories (`/etc/omakure/node.toml` and `/var/lib/omakure` on Linux). A per-user install does not create them; initializing as an unprivileged user against those paths fails with permission denied.
 
 ### Flags
 - **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
@@ -1425,6 +1434,8 @@ Paths (per workspace):
 `--install`/`--uninstall`/`--status` manage a per-workspace systemd user unit so the daemon survives reboots (Linux only); after install tail with `journalctl --user -u <unit> -f`.
 
 By default an in-process worker is spawned so scheduled rows execute without a separate process. Pass `--no-worker` when you run `omakure queue worker` elsewhere.
+
+Global `--json` applies to lifecycle probes (`--status`, `--stop`, `--install`, `--uninstall`). Foreground serve and `--once` do not emit a JSON envelope.
 
 ### Flags
 - **`-d --detach`** — Run the scheduler as a detached background daemon (Unix only)

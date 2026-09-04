@@ -356,6 +356,51 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         dispatched["outcome_seen"], true,
         "the run-completed Signal must reach the Conductor: {dispatched}"
     );
+
+    let first_cue_id = dispatched["cue_id"]
+        .as_str()
+        .expect("the dispatcher must return the minted cue id")
+        .to_string();
+    let redispatched = assert_success_named(
+        "cue-retry",
+        &run_node(
+            conductor,
+            &[
+                "cue".to_string(),
+                "--endpoint".to_string(),
+                format!("127.0.0.1:{performer_port}"),
+                "--peer-node-id".to_string(),
+                performer_id.to_string(),
+                "--script".to_string(),
+                "deploy.sh".to_string(),
+                "--reason".to_string(),
+                "end to end certification".to_string(),
+                "--cue-id".to_string(),
+                first_cue_id.clone(),
+            ],
+        ),
+    );
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(
+        effect_count(&marker),
+        1,
+        "retrying with the same cue id must not run the script twice"
+    );
+    assert_eq!(
+        redispatched["cue_id"].as_str(),
+        Some(first_cue_id.as_str()),
+        "the retry must echo the supplied cue id: {redispatched}"
+    );
+    assert_eq!(
+        (
+            redispatched["answered"].as_bool(),
+            redispatched["accepted"].as_bool(),
+            redispatched["code"].as_u64()
+        ),
+        (Some(true), Some(false), Some(1208)),
+        "the Performer must answer duplicate from the existing run: {redispatched}"
+    );
+
     assert!(
         wait_for_signal(conductor, &expected),
         "the Conductor's own Signal feed must show the outcome it correlated. \

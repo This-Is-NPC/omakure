@@ -12,16 +12,27 @@
 ///
 /// Comparing the parsed template to `NodeConfig::default()` catches it at the
 /// commit that introduces it rather than in a container weeks later.
+fn normalize_line_endings(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 #[test]
 fn every_shipped_config_template_matches_the_default_it_seeds() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dockerfile = std::fs::read_to_string(root.join("Dockerfile")).expect("read Dockerfile");
-    let installer =
-        std::fs::read_to_string(root.join("src/installer.rs")).expect("read the installer");
-    let script = std::fs::read_to_string(root.join("scripts/tasks/cert/direct-transport"))
-        .expect("read the transport e2e script");
-    let installer_sh = std::fs::read_to_string(root.join("scripts/install/install.sh"))
-        .expect("read the shell installer");
+    let dockerfile = normalize_line_endings(
+        &std::fs::read_to_string(root.join("Dockerfile")).expect("read Dockerfile"),
+    );
+    let installer = normalize_line_endings(
+        &std::fs::read_to_string(root.join("src/installer.rs")).expect("read the installer"),
+    );
+    let script = normalize_line_endings(
+        &std::fs::read_to_string(root.join("scripts/tasks/cert/direct-transport"))
+            .expect("read the transport e2e script"),
+    );
+    let installer_sh = normalize_line_endings(
+        &std::fs::read_to_string(root.join("scripts/install/install.sh"))
+            .expect("read the shell installer"),
+    );
 
     let expected = omakure::domain::NodeConfig::default();
     for (name, template) in [

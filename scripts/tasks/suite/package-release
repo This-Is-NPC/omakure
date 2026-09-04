@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64)
+    target='x86_64-unknown-linux-musl'
+    "$root/scripts/tasks/atomic/build-release" --target-triple "$target"
+    "$root/scripts/tasks/atomic/musl-static" "$target"
+    export OMAKURE_RELEASE_BINARY="$root/target/$target/release/omakure"
+    ;;
+  *)
+    "$root/scripts/tasks/atomic/build-release" "$@"
+    ;;
+esac
+exec "$root/scripts/tasks/atomic/package-artifact"

@@ -4,41 +4,103 @@ Omakure is built and exercised as a headless CLI/HTTP application. Do not use
 bare `omakure` as an application launch command: no-argument invocation only
 prints help and returns; development entry points must name a command.
 
-## Fast path
+## Checks and hooks
+
+Install the tracked repository hooks from the repository root:
 
 ```bash
-cargo build
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
-mise run dev:smoke
+mise run hooks:install
 ```
 
-`mise run dev:smoke` builds the debug binary, starts a node service on a disposable
-port, verifies `/v1/health` and `/v1/ready`, then terminates it. It does not
-leave a daemon running or require a terminal UI. Set `OMAKURE_DEV_WORKSPACE`
-and `OMAKURE_DEV_PORT` to override its fixtures.
+This sets local Git `core.hooksPath` to `.githooks` and leaves unrelated global
+Git configuration untouched. The hooks are exact thin wrappers:
+
+| Hook | Canonical script | Scope |
+|---|---|---|
+| pre-commit | `scripts/tasks/check/fast` | Shared static/fixture checks, formatting, Clippy, and the library test atomic |
+| pre-push | `scripts/tasks/check/full` | The shared checks once, then the complete locally executable Linux gate |
+
+Run the gates directly or through their direct Mise routes:
+
+```bash
+scripts/tasks/check/fast
+scripts/tasks/check/full
+mise run check:fast
+mise run check:full
+```
+
+An atomic under `scripts/tasks/atomic/` performs one operation. A suite under
+`scripts/tasks/suite/` aggregates atomics or retained certification scripts.
+The four platform suites under `scripts/tasks/check/platform/` are
+`linux-gnu`, `linux-musl`, `macos`, and `windows`; each validates its target
+runner and delegates tests/builds/smoke to the canonical atomics and suites.
+Neither check gate duplicates the other.
+
+Fast is intentionally limited to shell/YAML/static contract fixtures,
+formatting, Clippy, and the library tests. Full adds all-target native tests,
+development smoke, Usage and operation-catalog checks, deterministic
+coverage, complexity calibration/ratchet/audit, release packaging, VM policy
+inspection, Docker smoke, transport and Health certification, and cleanup
+verification. Full requires Linux, Docker Engine and Compose, `jq`, SQLite,
+Python with PyYAML, GNU `timeout`, and the pinned Rust toolchain. A local Linux
+host is the only host with the complete full scope.
+
+Hosted CI and release reuse the same call graph:
+
+```text
+hook -> check/{fast,full} -> atomic/suite
+mise task -> one canonical atomic, suite, check, installer, or retained script
+CI/release matrix -> scripts/tasks/check/platform/${platform} "${target}"
+```
+
+The release workflow's package step creates each matrix artifact; it is
+distinct from the local `mise run package:release` suite, which forwards its
+arguments to the release build atomic and then invokes the package-artifact
+atomic without arguments. Atomics forward remaining arguments. The
+`scripts/tasks/atomic/run-bounded` atomic requires GNU `timeout` on Linux and
+enforces per-operation bounds with a kill-after margin. On macOS and Windows
+it uses `gtimeout` when available; otherwise it explicitly relies on the
+platform job's 60-minute bound rather than claiming silent per-operation
+enforcement.
+
+The native platform runners have explicit prerequisites. Linux musl runners
+need `musl-tools` and `musl-gcc`; macOS needs an owned physical `RUNNER_TEMP`;
+Windows needs the supported MSVC target and static CRT setup. macOS and
+Windows do not claim Linux Docker certification.
+
+Destructive Fedora VM/KVM certification is intentionally excluded from
+automatic pre-push. The static policy inspection remains in `check:full`; run
+the destructive entry point only on a prepared host:
+
+```bash
+mise run cert:vm
+```
 
 ## Mise tasks
 
+Mise routes each task to one existing executable script; aggregation remains in
+the shell suites rather than inline task commands or dependencies.
+
 | Task | Purpose |
 |---|---|
-| `mise run build` | `cargo build` |
-| `mise run test` | unit, integration, and e2e test groups |
-| `mise run lint` | `lint:fmt` and `lint:clippy` |
-| `mise run dev:smoke` | bounded node-service health/readiness smoke check |
-| `mise run node` | run the node service in the foreground |
-| `mise run test:node-service` | focused CLI/HTTP/node-service integration tests |
-| `mise run cert:transport` | bounded Linux transport certification |
-| `mise run cert:health` | bounded Linux Health Plane certification |
-| `mise run cert:vm-static` | static Fedora VM fixture checks |
-| `mise run cert:vm` | bounded Fedora VM certification |
-| `mise run coverage` | deterministic pinned LLVM HTML/LCOV/Cobertura reports plus the local baseline gate |
-| `mise run coverage:test` | offline threshold, inventory, and normalization fixtures |
-| `mise run install` | install the binary without copying repository scripts |
-| `mise run usage:kdl` | generate or check pinned Clap-to-Usage compatibility artifacts |
-| `mise run usage:docs` | generate or check Markdown and roff documentation from checked Usage KDL |
-| `mise run operation:catalog` | generate or check the operation catalog artifacts |
+| `mise run build` | debug build atomic |
+| `mise run build:release` | release build atomic |
+| `mise run test` | unit, integration, and e2e suite aggregate |
+| `mise run test:unit` | library and unit-test atomic |
+| `mise run test:integration` | every native `tests/*.rs` target once |
+| `mise run test:e2e` | selected end-to-end suite |
+| `mise run lint` | formatting and Clippy suite |
+| `mise run dev` | bounded node-service smoke atomic |
+| `mise run node` | authenticated node service atomic |
+| `mise run cert` | transport, Health, and VM certification suite |
+| `mise run cert:vm` | destructive Fedora VM certification |
+| `mise run coverage` | deterministic coverage atomic |
+| `mise run coverage:test` | offline coverage contract fixtures |
+| `mise run usage:kdl` / `mise run usage:docs` | Usage artifact atomics |
+| `mise run operation:catalog` | operation catalog atomic |
+| `mise run package:release` | release packaging atomic |
+| `mise run check:fast` / `mise run check:full` | canonical local gates |
+| `mise run hooks:install` | configure local tracked Git hooks |
 
 ## Usage compatibility artifacts
 
@@ -74,10 +136,12 @@ are required in CI.
 The overlay is keyed by parity `entry_id` and `operation_family`, never by
 Usage's rename-sensitive `full_cmd`.
 
-Repository automation is under `scripts/tasks/`, `scripts/install/`,
-`scripts/release/`, and `scripts/fixtures/`. `scripts/workspace/` is the
-dedicated debug fixture selected by Cargo builds. External Battery repositories
-own subject scripts; installers never copy repository automation into a
+Repository automation is under `scripts/tasks/atomic/`, `scripts/tasks/suite/`,
+and `scripts/tasks/check/`. The latter exposes the four platform suites;
+retained certification and developer implementations stay under
+`scripts/tasks/cert/` and `scripts/tasks/dev/`. Installers are under
+`scripts/install/`, release tooling under `scripts/release/`, and fixtures
+under `scripts/fixtures/`. Installers never copy repository automation into a
 workspace. Every resource-owning task is bounded and trap-cleaned, while
 stateful install, node, release, and live certification tasks are repeat-safe
 only under their documented preconditions.
@@ -101,17 +165,22 @@ SQLite from route handlers or duplicate CLI logic in HTTP handlers.
 
 ## Focused tests
 
+Use the canonical suites so local runs match hook and CI routing:
+
 ```bash
-cargo test --test cli_surface_e2e
-cargo test --test node_service_e2e
-cargo test --test http_api_e2e
-cargo test --test policy_e2e
-cargo test --test packaging_smoke
-cargo test --test direct_transport_contract
-cargo test --test direct_transport_e2e
-mise run cert:transport
-mise run cert:health
+mise run test:unit
+mise run test:integration
+mise run test:e2e
+mise run test:node-service
+scripts/tasks/cert/transport
+scripts/tasks/cert/health
+mise run check:fast
 ```
+
+`test:integration` is manifest-driven and runs each current `tests/*.rs`
+basename exactly once. Platform matrix jobs use
+`scripts/tasks/check/platform/{linux-gnu,linux-musl,macos,windows}` instead of
+embedding test or build commands in workflow YAML.
 
 ## Certification toolchain
 
@@ -153,8 +222,10 @@ operations, state transitions, redaction, and runtime resolution.
 
 ## Release checks
 
-CI runs `cargo test --all-targets --locked`, release builds for Linux/macOS/
-Windows, clippy, formatting, packaging assertions, and release-note/version
-validation. Before changing a command contract, run `omakure help-ai` from the
-built binary and update `docs/ai-interface.md`, `docs/cli-http-parity.md`,
-and the relevant tests.
+CI and release jobs invoke the matrix-selected platform suite, which owns
+native tests, target builds, static-link verification, and binary smoke. The
+workflow files retain packaging/archive assertions but do not duplicate those
+commands. Release archives are produced once per target and reuse the same
+platform routing as CI. Before changing a command contract, run `omakure
+help-ai` from the built binary and update `docs/ai-interface.md`,
+`docs/cli-http-parity.md`, and the relevant tests.

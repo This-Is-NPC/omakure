@@ -44,6 +44,9 @@ the enrollment group. Deploy route gates are evaluated before token scopes.
 Trust mutation bodies must include `confirmed: true`, a non-empty `actor`, and a
 non-empty `reason`.
 
+`POST /v1/node/cues` accepts an optional `cue_id` (32 lowercase hex) as the
+caller-supplied idempotency key; omitting it mints a new id on dispatch.
+
 Routes are `GET /v1/node/status`, `GET /v1/node/discovery`, `POST
 /v1/node/init`, `GET /v1/node/health`, `GET /v1/node/signals`, `POST
 /v1/node/cues`, `POST /v1/node/baselines`, `POST
@@ -60,6 +63,12 @@ observation snapshot. It does not start a scan. The CLI `omakure node discovery`
 command instead starts a temporary bounded listener, waits for its requested
 scan interval, and returns a fresh scan snapshot; neither path creates trust or
 a session.
+
+`GET /v1/node/status` is observational: it reports the node's current identity,
+trust, and transport snapshot without running a full `PRAGMA integrity_check` on
+every request. The same registry opener backs this route and the CLI
+`omakure node status --json` command, matching the observational posture of
+`GET /v1/node/health` and `GET /v1/node/signals`.
 
 `GET /v1/node/health` returns the Health Plane fleet-status projection: one row
 per actively trusted peer with its presence (`unknown`, `online`, `stale`,
@@ -294,8 +303,19 @@ GET /v1/health
 GET /v1/ready
 ```
 
-`GET /v1/ready` returns only a minimal `{ "status": "ready" | "not_ready" }`
-payload (HTTP 200 or 503). It must not expose token IDs, paths, or secrets.
+`GET /v1/ready` uses the standard JSON envelope; `data` contains only
+`{ "status": "ready" | "not_ready" }` (HTTP 200 or 503). It must not
+expose token IDs, paths, or secrets.
+
+```json
+{
+  "ok": true,
+  "data": { "status": "ready" },
+  "error": null,
+  "schema_version": "1"
+}
+```
+
 Optional readiness gates are configured by `omakure node serve`; their
 deployment semantics are defined in the [deployment guide](deployment.md).
 
@@ -309,276 +329,6 @@ Returns readiness details (worker/scheduler gates and liveness) plus auth-file
 load/reload state (`mode`, `token_count`, `last_reload_ok`,
 `last_reload_error`, `last_reload_at_ms`). It never returns token IDs, hashes,
 plaintext secrets, or the tokens-file path.
-
-### Route groups and required scopes
-
-Every authenticated route also passes the deploy-policy route gates. The
-required bearer scopes for ordinary (non-node) routes are:
-
-| Route group | Methods and paths | Required scope |
-|---|---|---|
-| Configuration and diagnostics | `GET /v1/config`, `/v1/doctor`, `/v1/workspace` | `config:read` |
-| Scripts and tree | `GET /v1/search`, `/v1/tree...`, `/v1/scripts...` | `scripts:read` |
-| Run and queue reads | `GET /v1/runs...`, `GET /v1/queue/stats` | `runs:read` |
-| Run enqueue | `POST /v1/runs` | `runs:enqueue` |
-| Run cancellation/dead-letter | `POST /v1/runs/:run_id/cancel`, `/dead-letter` | `runs:cancel` or `runs:dead-letter` |
-| Environment reads | `GET /v1/envs...` | `envs:read` |
-| Environment writes | `POST`, `PUT`, `PATCH`, or `DELETE /v1/envs...` | `envs:write` |
-| Environment activation | `POST /v1/envs/:name/activate`, `DELETE /v1/envs/active` | `envs:activate` |
-| Battery reads | `GET /v1/batteries...` | `batteries:read` |
-| Battery registration/sync | `POST /v1/batteries`, `/v1/batteries/:battery_id/sync` | `batteries:add` or `batteries:sync` |
-| Battery installation/removal | `POST .../install`, `DELETE /v1/batteries/:battery_id` | `batteries:install` or `batteries:remove` |
-| Secret metadata | `GET /v1/secrets` | `secrets:read-metadata` |
-| Admin status | `GET /v1/admin/status` | `admin:status` |
-
-Run enqueue may additionally require `envs:use` for explicit environment
-selection and `secrets:use` for secret references; schema defaults can also
-require `envs:use` or `secrets:use`. Node route scopes are listed separately
-above.
-
-Read endpoints require auth:
-
-```http
-GET /v1/config
-GET /v1/doctor
-GET /v1/workspace
-GET /v1/search
-GET /v1/tree
-GET /v1/tree/{path}
-GET /v1/scripts
-GET /v1/scripts/{script_id}
-GET /v1/scripts/{script_id}/schema
-GET /v1/scripts/{script_id}/content
-GET /v1/runs
-GET /v1/runs/{run_id}
-GET /v1/runs/{run_id}/traces
-GET /v1/queue/stats
-GET /v1/envs
-GET /v1/envs/{name}
-GET /v1/batteries
-GET /v1/batteries/{battery_id}
-GET /v1/batteries/{battery_id}/scripts
-GET /v1/secrets
-GET /v1/node/status
-GET /v1/node/discovery
-GET /v1/node/health
-GET /v1/node/signals
-GET /v1/node/peers
-GET /v1/node/enrollments
-```
-
-`GET /v1/secrets` returns **metadata only** (`id`, `source`, `delivery`,
-`allowed_targets`) for refs allowed by the token ACL. It never returns secret
-values. Requires scope `secrets:read-metadata` and deploy policy
-`secrets.metadata_endpoint = true` (otherwise `404`).
-
-Write endpoints require auth:
-
-```http
-POST /v1/runs
-POST /v1/runs/{run_id}/cancel
-POST /v1/runs/{run_id}/dead-letter
-POST /v1/envs
-PUT /v1/envs/{name}
-PATCH /v1/envs/{name}
-DELETE /v1/envs/{name}
-POST /v1/envs/{name}/activate
-DELETE /v1/envs/active
-PUT /v1/envs/{name}/params/{key}
-DELETE /v1/envs/{name}/params/{key}
-POST /v1/batteries
-POST /v1/batteries/{battery_id}/sync
-POST /v1/batteries/{battery_id}/scripts/{script_id}/install
-DELETE /v1/batteries/{battery_id}
-POST /v1/node/init
-POST /v1/node/cues
-POST /v1/node/baselines
-POST /v1/node/baseline/rollback
-POST /v1/node/peers
-POST /v1/node/enrollments
-POST /v1/node/enrollments/{node_id}/approve
-POST /v1/node/enrollments/{node_id}/reject
-POST /v1/node/enrollment/bundle
-PATCH /v1/node/peers/{node_id}/capabilities
-POST /v1/node/peers/{node_id}/revoke
-```
-
-`POST /v1/runs` enqueues by default. It does not block on inline execution.
-
-Write request bodies:
-
-```json
-POST /v1/runs
-{
-  "script": "tools/job",
-  "args": ["--flag"],
-  "env": "prod",
-  "secret_fields": { "TOKEN": "secret://prod/token" },
-  "run_id": "optional-caller-id",
-  "actor": "agent",
-  "reason": "why this was queued",
-  "priority": 10,
-  "timeout_ms": 60000,
-  "parent_run_id": null,
-  "cron_schedule_id": null
-}
-```
-
-Defaults: `args=[]`, `secret_fields={}`, `actor="human"`, `priority=0`.
-`env` names a managed environment file under `.omakure/envs/` and overlays it
-for the queued run when the worker drains it. `secret_fields` supplies
-reconstructable `secret://...` references for schema fields whose `Type` is
-`secret`; queued HTTP runs reject plaintext `secret_fields` because the worker
-cannot reconstruct them without persisting plaintext. Forwarded `args` for
-secret schema fields must also use `secret://...` refs. Responses and stored run
-args redact plaintext secret values as `<redacted>` and retain provider refs.
-
-```json
-POST /v1/runs/{run_id}/cancel
-{ "reason": "optional" }
-
-POST /v1/runs/{run_id}/dead-letter
-{ "reason": "optional" }
-
-POST /v1/envs
-{
-  "name": "prod",
-  "params": [
-    { "key": "HOST", "value": "prod.example.com" },
-    { "key": "API_KEY", "value": "secret://prod/api_key" }
-  ]
-}
-
-PUT /v1/envs/prod
-{
-  "params": [
-    { "key": "HOST", "value": "prod.example.com" }
-  ]
-}
-
-PATCH /v1/envs/prod
-{
-  "params": [
-    { "key": "REGION", "value": "eastus" }
-  ]
-}
-
-PUT /v1/envs/prod/params/API_KEY
-{ "value": "secret://prod/api_key" }
-
-POST /v1/batteries
-{
-  "name": "azure",
-  "git_url": "https://example.invalid/azure.git",
-  "requested_ref": "main",
-  "token_ref": "secret://creds/git_token"
-}
-
-POST /v1/batteries/{battery_id}/scripts/{script_id}/install
-{ "force": false }
-```
-
-Battery defaults: `requested_ref="main"`, `force=false`, and
-`DELETE /v1/batteries/{battery_id}` defaults to keeping the cache. Add
-`?remove_cache=true` to delete the cached clone while unregistering.
-
-HTTP Battery registration accepts `https://` Git URLs only. Local paths,
-`file://`, and plaintext `http://` sources remain outside the HTTP API trust
-boundary; use the local CLI for local development sources.
-
-Optional `token_ref` enables private HTTPS clone/fetch via `GIT_ASKPASS`. The
-registry stores `auth.method` + `auth.token_ref` only — never plaintext.
-Private HTTPS add/sync require `credentials:use` plus
-`sources.allow_private_https_batteries` in deploy policy. Embedded URL
-credentials are rejected.
-
-Read query parameters and safety policy:
-
-- `GET /v1/config` returns the full config shape, but HTTP masks every active
-  environment value. Plaintext env diagnostics are CLI-only.
-- `GET /v1/envs` lists managed `.omakure/envs/*.conf` files and marks the
-  active one. `GET /v1/envs/{name}` returns parsed entries with sensitive values
-  masked as `****`.
-- Env writes validate managed environment names and keys, reject path escapes,
-  write single-line values atomically, and never operate outside
-  `.omakure/envs/`.
-- Bearer auth is required for every env endpoint. Internal capability policy
-  checks apply `EnvRead`, `EnvWrite`, `EnvActivate`, `EnvUse`, and
-  `SecretProviderUse`; a token without the required capability receives
-  `403 forbidden`.
-- `POST /v1/runs` requires `EnvUse` when the body includes `env`. It requires
-  `SecretProviderUse` when the body includes `secret_fields` or any forwarded
-  arg value beginning with `secret://`; provider refs are also checked against
-  the token's allowed ref ACL before enqueue and the allowed ref set is sealed
-  with the queued run for worker-time resolution.
-- `GET /v1/search?q=<query>&tag=<tag>` searches scripts using the existing
-  SQLite index. HTTP does not rebuild the index per request. `query` is accepted
-  as an alias for `q`; repeated `tag` parameters are AND-filtered. Empty queries
-  are rejected. Query length is capped at 256 bytes; tags are capped at 16 total
-  and 64 bytes each.
-- `GET /v1/tree/{path}` lists directories/scripts under the scripts root. It
-  honors nested `.omakureignore` files through the shared workspace repository.
-  Listings are capped at 1000 entries.
-- `GET /v1/scripts/{script_id}/content` returns UTF-8 script content only.
-  Content is capped at 1 MiB, must be a supported script type, and cannot escape
-  the scripts root through `..`, absolute paths, or symlinks.
-- Tree/content routes reject `.omakure`, `.history`, and `.git` metadata paths.
-
-## CLI / HTTP parity
-
-Recorded in `cli-http-parity.md`, which is the single copy: it carries the
-status and the notes as well as the mapping, and a second hand-maintained
-table here had already drifted from it.
-
-## Shared Operations
-
-HTTP routes call shared operations for these core resources:
-
-- `config_summary`
-- `doctor_report`
-- `workspace_summary`
-- `search_scripts`
-- `list_tree`
-- `read_script_content`
-- `list_scripts`
-- `describe_script`
-- `script_schema` via the `describe_script` operation output
-- `list_runs`
-- `show_run`
-- `list_traces`
-- `queue_stats`
-- `enqueue_run`
-- `cancel_run`
-- `dead_letter_run`
-- `list_envs`
-- `create_env`
-- `show_env`
-- `replace_env`
-- `set_param`
-- `remove_param`
-- `activate_env`
-- `deactivate_env`
-- `delete_env`
-- `list_batteries`
-- `add_battery`
-- `sync_battery`
-- `inspect_battery`
-- `list_battery_scripts`
-- `install_battery_script`
-- `remove_battery`
-
-These operations own validation and stable errors. HTTP route handlers do not
-call CLI modules and do not open SQLite directly.
-
-The current HTTP API does not expose these CLI surfaces:
-
-- `omakure update`: mutates binary/scripts from a remote release.
-- `omakure uninstall`: destructive local operation.
-- `omakure serve`: daemon lifecycle management.
-- `omakure queue worker`: long-running process lifecycle.
-- inline `omakure run`: synchronous execution surface; use `POST /v1/runs` to
-  enqueue instead.
-- HTTP trace ingestion.
 
 ## Write Audit Expectations
 

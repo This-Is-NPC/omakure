@@ -168,6 +168,11 @@ from the existing run instead of starting a second one. A Cue-origin run left
 contract](internal/remote-cue-contract.md#the-at-most-once-rule) for the
 at-most-once rule.
 
+Pass `--cue-id` (or JSON `cue_id` on `POST /v1/node/cues`) when retrying an
+unanswered dispatch so the same instruction is retried instead of minting a
+new id. The same id is duplicate `1208` / the existing run; a new id starts a
+new run.
+
 **Which session carries it.** A node holds one session per peer, so a separate
 process cannot dial a peer the running service is already connected to—the
 normal state of a managed fleet. `omakure node cue` therefore asks the running

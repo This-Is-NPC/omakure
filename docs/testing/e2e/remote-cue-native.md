@@ -16,6 +16,7 @@ cargo test --test remote_cue_e2e --locked -- --ignored --nocapture
 ## Proves
 
 - Two real `node serve` processes exchange an authorized Cue over Noise and execute the declared script exactly once.
+- A second dispatch with the same `--cue-id` does not run the script twice.
 - The service path is used when a standing session already exists.
 - A fully trusted conductor cannot run an undeclared performer script.
 - Cue/run correlation and outcome Signal handling are asserted through operator-facing CLI state.

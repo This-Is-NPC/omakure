@@ -4,16 +4,68 @@
 //! (including fixed uid/gid volume ownership) runs in the Linux CI Docker job.
 //! CI does not require a Docker daemon for this test.
 
+use std::collections::BTreeSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+fn normalize_line_endings(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 fn read(rel: &str) -> String {
-    fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"))
+    let contents =
+        fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"));
+    normalize_line_endings(&contents)
+}
+
+/// Path normalized for Git Bash on Windows (MSYS `/c/...` paths).
+///
+/// For bash argv only — never pass to native Windows `Command` args (e.g.
+/// `tar.exe` resolves to bsdtar and cannot open MSYS paths).
+fn bash_safe_path(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        let native = path.to_string_lossy().replace('\\', "/");
+        let stripped = strip_verbatim_prefix(native);
+        bash_safe_drive_path(&stripped)
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string_lossy().into_owned()
+    }
+}
+
+#[cfg(windows)]
+fn strip_verbatim_prefix(mut path: String) -> String {
+    let lower = path.to_ascii_lowercase();
+    const UNC_PREFIX: &str = "//?/unc/";
+    const VERBATIM_PREFIX: &str = "//?/";
+    if lower.starts_with(UNC_PREFIX) {
+        let rest = path[UNC_PREFIX.len()..].to_string();
+        path = format!("//{rest}");
+    } else if lower.starts_with(VERBATIM_PREFIX) {
+        path = path[VERBATIM_PREFIX.len()..].to_string();
+    }
+    path
+}
+
+#[cfg(windows)]
+fn bash_safe_drive_path(path: &str) -> String {
+    if let Some((drive, rest)) = path.split_once(':') {
+        if drive.len() == 1 && drive.chars().all(|c| c.is_ascii_alphabetic()) {
+            let rest = rest.strip_prefix('/').unwrap_or(rest);
+            return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
+        }
+    }
+    path.to_string()
 }
 
 #[test]
@@ -295,15 +347,111 @@ fn unix_uninstall_service_path_skips_release_resolution_and_network() {
     assert!(!commands.contains("network"));
 }
 
+#[cfg(unix)]
+#[test]
+fn unix_install_artifact_skips_github_version_lookup() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let log = temp.path().join("commands.log");
+    let shim_dir = temp.path().join("shims");
+    fs::create_dir(&shim_dir).unwrap();
+    for (name, body) in [
+        (
+            "curl",
+            "#!/bin/sh\nprintf 'network\\n' >> \"$OMAKURE_TEST_LOG\"\nexit 99\n",
+        ),
+        (
+            "wget",
+            "#!/bin/sh\nprintf 'network\\n' >> \"$OMAKURE_TEST_LOG\"\nexit 99\n",
+        ),
+    ] {
+        let path = shim_dir.join(name);
+        fs::write(&path, body).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let artifact_dir = temp.path().join("artifact-build");
+    fs::create_dir_all(&artifact_dir).unwrap();
+    let stub = artifact_dir.join("omakure");
+    fs::write(
+        &stub,
+        "#!/bin/sh\ncase \"$1\" in\n  --version|-V|version)\n    echo 'omakure 9.9.9'\n    ;;\nesac\n",
+    )
+    .unwrap();
+    fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let artifact = temp.path().join("omakure-local.tar.gz");
+    let tar_status = Command::new("tar")
+        .args(["-czf"])
+        .arg(&artifact)
+        .arg("-C")
+        .arg(&artifact_dir)
+        .arg("omakure")
+        .status()
+        .unwrap();
+    assert!(
+        tar_status.success(),
+        "failed to build local artifact tarball"
+    );
+
+    let bin_dir = temp.path().join("bin");
+    fs::create_dir(&bin_dir).unwrap();
+
+    let output = Command::new("bash")
+        .arg(repo_root().join("scripts/install/install.sh"))
+        .arg("--artifact")
+        .arg(&artifact)
+        .arg("--bin-dir")
+        .arg(&bin_dir)
+        .env("PATH", format!("{}:/usr/bin:/bin", shim_dir.display()))
+        .env("OMAKURE_TEST_LOG", &log)
+        .env_remove("VERSION")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "install.sh failed: stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        stdout.contains("9.9.9"),
+        "success line should report the installed binary version, got: {stdout:?}"
+    );
+    assert!(
+        !stdout.contains("v0.2.0"),
+        "artifact install must not print a GitHub release tag: {stdout:?}"
+    );
+
+    let commands = fs::read_to_string(&log).unwrap_or_default();
+    assert!(
+        !commands.contains("network"),
+        "artifact install must not call curl or wget: {commands:?}"
+    );
+}
+
 #[test]
 fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results() {
     let ci = read(".github/workflows/ci.yml");
-    assert!(ci.contains("cargo test --test node_service_e2e --test policy_e2e --locked"));
-    assert!(ci.contains("docker build --tag omakure-node:ci ."));
-    assert!(ci.contains("for path in health ready"));
-    assert!(ci.contains("docker volume create"));
-    assert!(ci.contains("chown 10001:10001"));
-    assert!(ci.contains("chmod 0700 /var/lib/omakure"));
+    assert!(ci.contains(
+        "run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\""
+    ));
+    let native = read("scripts/tasks/suite/native-tests");
+    assert!(
+        native.contains("scripts/tasks/atomic/test-lib")
+            && native.contains("scripts/tasks/suite/native-integration"),
+        "native-tests suite must own native test aggregation"
+    );
+    assert!(ci.contains("run: ./scripts/tasks/cert/docker-smoke"));
+    let docker_smoke = read("scripts/tasks/cert/docker-smoke");
+    assert!(docker_smoke.contains("image='omakure-node:ci'"));
+    assert!(docker_smoke.contains("docker build --tag \"$image\" \"$root_dir\""));
+    assert!(docker_smoke.contains("for path in health ready"));
+    assert!(docker_smoke.contains("docker volume create"));
+    assert!(docker_smoke.contains("chown 10001:10001"));
+    assert!(docker_smoke.contains("chmod 0700 /var/lib/omakure"));
 }
 
 /// What the install automation proves, and what it still does not, has to stay
@@ -496,9 +644,9 @@ fn generated_documentation_checks_are_read_only_and_fresh() {
         .collect::<Vec<_>>();
     for script in [
         "scripts/tasks/cli-reference",
-        "scripts/tasks/usage-kdl",
-        "scripts/tasks/usage-docs",
-        "scripts/tasks/operation-catalog",
+        "scripts/tasks/atomic/usage-kdl",
+        "scripts/tasks/atomic/usage-docs",
+        "scripts/tasks/atomic/operation-catalog",
     ] {
         let output = Command::new(root.join(script))
             .arg("--check")
@@ -560,10 +708,20 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
     assert!(readme.contains("Optional PowerShell or Python"));
     assert!(readme.contains("Lua 5.4 is embedded"));
     let mise = read("mise.toml");
-    assert!(mise.contains("OMAKURE_API_TOKEN"));
-    assert!(mise.contains("openssl rand -hex 32"));
-    assert!(mise.contains("--capability all"));
-    assert!(mise.contains("cargo run --bin omakure -- node serve"));
+    assert!(
+        mise.contains(
+            "[tasks.node]\n\
+description = \"Run the authenticated machine node service in the foreground\"\n\
+run = \"scripts/tasks/atomic/node-serve\"\n\
+raw = true"
+        ),
+        "mise node task must route directly to the canonical atomic"
+    );
+    let node = read("scripts/tasks/atomic/node-serve");
+    assert!(
+        node.contains("scripts/tasks/dev/smoke") || node.contains("node serve"),
+        "canonical node route must remain a node-service entry point"
+    );
     // The archive contract is as-is and keeps its own document.
     let artifacts = read("docs/internal/release-artifacts.md");
     assert!(artifacts.contains("Each archive contains exactly one root entry"));
@@ -606,6 +764,332 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
         .expect("run omakure --help");
     assert!(help.status.success());
     assert!(!String::from_utf8_lossy(&help.stdout).contains("theme"));
+}
+
+#[test]
+fn automation_scripts_are_canonical_executable_routes() {
+    let root = repo_root();
+    let mut scripts = Vec::new();
+    for directory in [
+        "scripts/tasks/atomic",
+        "scripts/tasks/suite",
+        "scripts/tasks/check/platform",
+        "scripts/tasks/cert",
+        "scripts/tasks/dev",
+        ".githooks",
+        "scripts/install",
+        "scripts/release",
+    ] {
+        let entries = fs::read_dir(root.join(directory))
+            .unwrap_or_else(|error| panic!("read {directory}: {error}"));
+        let mut found = Vec::new();
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_file() {
+                found.push(path);
+            }
+        }
+        assert!(
+            !found.is_empty(),
+            "required automation directory is empty: {directory}"
+        );
+        scripts.extend(found);
+    }
+    scripts.extend([
+        root.join("scripts/tasks/check/fast"),
+        root.join("scripts/tasks/check/full"),
+    ]);
+    for path in scripts {
+        assert!(
+            path.is_file(),
+            "required automation script is absent: {path:?}"
+        );
+        #[cfg(unix)]
+        if path.extension().and_then(|ext| ext.to_str()) != Some("ps1") {
+            assert_ne!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o111,
+                0,
+                "required POSIX automation script is not executable: {path:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn hooks_and_mise_use_one_canonical_script_without_dependencies() {
+    let pre_commit = read(".githooks/pre-commit");
+    let pre_push = read(".githooks/pre-push");
+    assert_eq!(
+        pre_commit
+            .lines()
+            .filter(|line| line.trim() == r#"exec "$root/scripts/tasks/check/fast" "$@""#)
+            .count(),
+        1,
+        "pre-commit must route exactly once to check/fast"
+    );
+    assert_eq!(
+        pre_push
+            .lines()
+            .filter(|line| line.trim() == r#"exec "$root/scripts/tasks/check/full" "$@""#)
+            .count(),
+        1,
+        "pre-push must route exactly once to check/full"
+    );
+    assert!(!pre_commit.contains("check/full"));
+    assert!(!pre_push.contains("check/fast"));
+
+    let mise = read("mise.toml");
+    assert!(
+        !mise
+            .lines()
+            .any(|line| line.trim_start().starts_with("depends")),
+        "mise routes must not grow dependency orchestration"
+    );
+    let root = repo_root();
+    assert!(
+        !root.join("scripts/mise").exists(),
+        "removed scripts/mise directory must stay absent"
+    );
+    assert!(
+        !root.join("scripts/tasks/check/shared").exists(),
+        "removed check/shared route must stay absent"
+    );
+    assert!(
+        !mise.contains("scripts/mise/") && !mise.contains("check/shared"),
+        "removed script routes must stay absent from Mise"
+    );
+    let routes = mise
+        .lines()
+        .filter(|line| line.trim_start().starts_with("run ="))
+        .collect::<Vec<_>>();
+    assert!(!routes.is_empty(), "mise.toml must declare script routes");
+    for line in routes {
+        let (_, rest) = line
+            .split_once('"')
+            .expect("mise run must be a quoted script path");
+        let (value, suffix) = rest
+            .split_once('"')
+            .expect("mise run must have a closing quote");
+        assert!(
+            suffix.trim().is_empty(),
+            "mise run must not append inline commands: {line}"
+        );
+        assert_eq!(
+            value.split_whitespace().count(),
+            1,
+            "mise run must contain one script path: {value}"
+        );
+        let path = repo_root().join(value);
+        assert!(path.is_file(), "mise route points to no script: {value}");
+        #[cfg(unix)]
+        assert_ne!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o111,
+            0,
+            "mise route target must be executable: {value}"
+        );
+    }
+}
+
+#[test]
+fn native_integration_manifest_matches_every_rust_test_target_once() {
+    let script = read("scripts/tasks/suite/native-integration");
+    let start = script.match_indices("targets=(").collect::<Vec<_>>();
+    assert_eq!(
+        start.len(),
+        1,
+        "native-integration must have one target manifest"
+    );
+    let body = &script[start[0].0 + "targets=(".len()..];
+    let end = body
+        .find(')')
+        .expect("native-integration manifest must close");
+    let manifest = body[..end]
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.split('#').next().unwrap().trim().to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        manifest
+            .iter()
+            .all(|target| target.split_whitespace().count() == 1),
+        "native-integration target manifest entries must be single names"
+    );
+    let unique = manifest.iter().collect::<BTreeSet<_>>();
+    assert_eq!(
+        unique.len(),
+        manifest.len(),
+        "native-integration manifest contains duplicate targets"
+    );
+
+    let mut tests = fs::read_dir(repo_root().join("tests"))
+        .expect("read tests directory")
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
+        .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    tests.sort();
+    let mut actual = manifest;
+    actual.sort();
+    assert_eq!(
+        actual, tests,
+        "native-integration must list every tests/*.rs basename exactly once"
+    );
+    assert_eq!(
+        tests.len(),
+        33,
+        "the native integration manifest covers 33 tests"
+    );
+}
+
+#[test]
+fn routing_surfaces_do_not_duplicate_tool_or_test_orchestration() {
+    let mut surfaces = vec!["scripts/tasks/check/fast", "scripts/tasks/check/full"]
+        .into_iter()
+        .map(read)
+        .collect::<Vec<_>>();
+    for directory in ["scripts/tasks/suite", "scripts/tasks/check/platform"] {
+        for entry in fs::read_dir(repo_root().join(directory)).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_file() {
+                surfaces.push(read(
+                    path.strip_prefix(repo_root()).unwrap().to_str().unwrap(),
+                ));
+            }
+        }
+    }
+    for surface in surfaces {
+        for line in surface.lines() {
+            let trimmed = line.trim_start();
+            assert!(
+                !trimmed.contains("<<"),
+                "routing scripts must not embed heredoc test logic"
+            );
+            for tool in ["cargo ", "docker ", "python ", "python3 ", "openssl "] {
+                assert!(
+                    !trimmed.contains(tool),
+                    "routing surface contains non-atomic {tool:?} logic: {trimmed}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn bounded_and_packaging_atomics_own_shared_interfaces() {
+    let bounded = read("scripts/tasks/atomic/run-bounded");
+    assert!(
+        bounded.contains("duration=\"$1\"")
+            && bounded.contains("shift")
+            && bounded.contains("exec \"$timeout_bin\"")
+            && bounded.contains("exec gtimeout")
+            && bounded.contains(
+                "atomic/run-bounded: GNU timeout unavailable; operation-level timeout is unavailable and caller/platform CI 60-minute bound applies"
+            )
+            && bounded.contains("exec \"$@\""),
+        "run-bounded must enforce Linux bounds and explicitly report non-Linux fallback"
+    );
+    let package_suite = read("scripts/tasks/suite/package-release");
+    assert!(
+        package_suite.contains(r#"exec "$root/scripts/tasks/atomic/package-artifact""#)
+            && !package_suite.contains("package-artifact\" \"$@"),
+        "package-release suite must package without forwarding arguments to package-artifact"
+    );
+    assert!(
+        package_suite.contains("Linux:x86_64)")
+            && package_suite.contains("x86_64-unknown-linux-musl")
+            && package_suite.contains(
+                r#""$root/scripts/tasks/atomic/build-release" --target-triple "$target""#
+            )
+            && package_suite.contains(r#""$root/scripts/tasks/atomic/musl-static" "$target""#)
+            && package_suite.contains("export OMAKURE_RELEASE_BINARY="),
+        "package-release on Linux x86_64 must build musl, verify musl-static, and export OMAKURE_RELEASE_BINARY"
+    );
+    assert!(
+        package_suite.contains(r#""$root/scripts/tasks/atomic/build-release" "$@""#),
+        "package-release on other hosts must keep forwarding arguments to build-release"
+    );
+    let linux_gnu = read("scripts/tasks/check/platform/linux-gnu");
+    let local_branch = linux_gnu
+        .split_once("if (($# == 0)); then")
+        .and_then(|(_, rest)| rest.split_once("else").map(|(branch, _)| branch))
+        .expect("linux-gnu must provide a zero-argument local host branch");
+    for invocation in [
+        "\"$root/scripts/tasks/suite/native-tests\"",
+        "\"$root/scripts/tasks/atomic/build-release\"",
+        "\"$root/scripts/tasks/atomic/binary-smoke\"",
+    ] {
+        assert!(
+            local_branch.contains(invocation),
+            "linux-gnu local branch must invoke {invocation} without target arguments"
+        );
+    }
+    assert!(!local_branch.contains("CARGO_BUILD_TARGET"));
+    assert!(!local_branch.contains("--target"));
+    assert!(
+        linux_gnu
+            .contains("\"$root/scripts/tasks/atomic/build-release\" --target-triple \"$target\"")
+            && linux_gnu.contains("\"$root/scripts/tasks/atomic/binary-smoke\" \"$target\"")
+            && linux_gnu.contains("CARGO_BUILD_TARGET=\"$target\""),
+        "linux-gnu explicit target branch must remain target-specific"
+    );
+    let package_artifact = read("scripts/tasks/atomic/package-artifact");
+    assert!(
+        package_artifact.contains("scripts/release/package-release.sh")
+            && package_artifact.contains("OMAKURE_RELEASE_BINARY:-$root/target/release/omakure")
+            && package_artifact.contains("target/release/omakure")
+            && package_artifact.contains("\"$root/dist/omakure.tar.gz\"")
+            && package_artifact.contains("\"$binary\""),
+        "package-artifact must prefer OMAKURE_RELEASE_BINARY and keep the default GNU binary path"
+    );
+    assert!(
+        !package_artifact.contains("rustc -vV")
+            && !package_artifact.contains("target/$host")
+            && !package_artifact.contains("binary=\"$root/target/$"),
+        "package-artifact must not probe alternate target-qualified paths"
+    );
+}
+
+#[test]
+fn ci_and_release_platform_steps_delegate_to_matrix_platform_scripts() {
+    for workflow_path in [".github/workflows/ci.yml", ".github/workflows/release.yml"] {
+        let workflow = read(workflow_path);
+        let step = workflow_step(&workflow, "Run platform checks");
+        assert!(
+            step.contains("run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\""),
+            "{workflow_path} platform step must invoke the matrix-selected platform script"
+        );
+        for line in step.lines() {
+            let command = line.trim_start();
+            for forbidden in [
+                "cargo test",
+                "cargo check",
+                "cargo build",
+                "readelf",
+                "binary-smoke",
+            ] {
+                assert!(
+                    !command.starts_with(forbidden),
+                    "{workflow_path} platform step must not run {forbidden} directly"
+                );
+            }
+        }
+    }
+}
+
+fn workflow_step(workflow: &str, name: &str) -> String {
+    let marker = format!("      - name: {name}");
+    let lines = workflow.lines().collect::<Vec<_>>();
+    let start = lines
+        .iter()
+        .position(|line| *line == marker)
+        .unwrap_or_else(|| panic!("workflow is missing step {name:?}"));
+    lines[start + 1..]
+        .iter()
+        .take_while(|line| !line.starts_with("      - name: "))
+        .copied()
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn markdown_section(document: &str, heading: &str) -> String {
@@ -771,126 +1255,97 @@ fn release_workflows_build_and_package_only_the_headless_binary() {
     ] {
         assert!(ci.contains(platform), "CI matrix must include {platform}");
     }
-    assert!(ci.contains("cargo test --all-targets"));
-    assert!(ci.contains("cargo build --release --bin omakure"));
+    assert!(ci.contains("scripts/tasks/check/platform/${{ matrix.platform }}"));
 
     let release = read(".github/workflows/release.yml");
     assert!(release.contains("scripts/release/package-release.sh"));
-    assert!(release.contains("cargo test --all-targets"));
-    assert!(release.contains("cargo build --release --bin omakure"));
+    assert!(release.contains("scripts/tasks/check/platform/${{ matrix.platform }}"));
     assert!(release.contains("archive contains only the headless binary"));
     assert!(release.contains("omakure.exe"));
     assert!(!release.contains("themes/") && !release.contains("tui/"));
     assert!(!ci.contains("macos-14"));
     assert!(!release.contains("macos-14"));
-}
-
-#[derive(Debug, PartialEq)]
-struct ReleaseMatrixTuple {
-    runner: String,
-    target: String,
-    asset_os: String,
-    asset_arch: String,
-}
-
-fn release_matrix_tuples(workflow: &str) -> Vec<ReleaseMatrixTuple> {
-    let mut tuples = Vec::new();
-    let mut current: Option<ReleaseMatrixTuple> = None;
-
-    for line in workflow.lines() {
-        if let Some(runner) = line.strip_prefix("          - os: ") {
-            if let Some(tuple) = current.take() {
-                tuples.push(tuple);
-            }
-            current = Some(ReleaseMatrixTuple {
-                runner: runner.to_string(),
-                target: String::new(),
-                asset_os: String::new(),
-                asset_arch: String::new(),
-            });
-        } else if let Some(tuple) = current.as_mut() {
-            if let Some(target) = line.strip_prefix("            target: ") {
-                tuple.target = target.to_string();
-            } else if let Some(asset_os) = line.strip_prefix("            asset_os: ") {
-                tuple.asset_os = asset_os.to_string();
-            } else if let Some(asset_arch) = line.strip_prefix("            asset_arch: ") {
-                tuple.asset_arch = asset_arch.to_string();
-            }
-        }
+    for (platform, runner, target, asset_os, asset_arch) in [
+        (
+            "linux-gnu",
+            "ubuntu-latest",
+            "x86_64-unknown-linux-gnu",
+            "linux",
+            "x86_64",
+        ),
+        (
+            "linux-musl",
+            "ubuntu-latest",
+            "x86_64-unknown-linux-musl",
+            "linux-musl",
+            "x86_64",
+        ),
+        (
+            "linux-gnu",
+            "ubuntu-24.04-arm",
+            "aarch64-unknown-linux-gnu",
+            "linux",
+            "aarch64",
+        ),
+        (
+            "linux-musl",
+            "ubuntu-24.04-arm",
+            "aarch64-unknown-linux-musl",
+            "linux-musl",
+            "aarch64",
+        ),
+        (
+            "macos",
+            "macos-15-intel",
+            "x86_64-apple-darwin",
+            "darwin",
+            "x86_64",
+        ),
+        (
+            "macos",
+            "macos-15",
+            "aarch64-apple-darwin",
+            "darwin",
+            "aarch64",
+        ),
+        (
+            "windows",
+            "windows-latest",
+            "x86_64-pc-windows-msvc",
+            "windows",
+            "x86_64",
+        ),
+        (
+            "windows",
+            "windows-11-arm",
+            "aarch64-pc-windows-msvc",
+            "windows",
+            "aarch64",
+        ),
+    ] {
+        let entry = format!(
+            "          - platform: {platform}\n            os: {runner}\n            target: {target}\n            asset_os: {asset_os}\n            asset_arch: {asset_arch}"
+        );
+        assert!(
+            release.contains(&entry),
+            "release matrix must include exact tuple {platform}/{runner}/{target}"
+        );
     }
-    if let Some(tuple) = current {
-        tuples.push(tuple);
-    }
-    tuples
-}
-
-#[test]
-fn release_matrix_associates_every_target_with_its_asset_and_runner() {
-    let workflow = read(".github/workflows/release.yml");
-    let expected = vec![
-        ReleaseMatrixTuple {
-            runner: "ubuntu-latest".to_string(),
-            target: "x86_64-unknown-linux-gnu".to_string(),
-            asset_os: "linux".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "ubuntu-latest".to_string(),
-            target: "x86_64-unknown-linux-musl".to_string(),
-            asset_os: "linux-musl".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "ubuntu-24.04-arm".to_string(),
-            target: "aarch64-unknown-linux-gnu".to_string(),
-            asset_os: "linux".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "ubuntu-24.04-arm".to_string(),
-            target: "aarch64-unknown-linux-musl".to_string(),
-            asset_os: "linux-musl".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "macos-15-intel".to_string(),
-            target: "x86_64-apple-darwin".to_string(),
-            asset_os: "darwin".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "macos-15".to_string(),
-            target: "aarch64-apple-darwin".to_string(),
-            asset_os: "darwin".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "windows-latest".to_string(),
-            target: "x86_64-pc-windows-msvc".to_string(),
-            asset_os: "windows".to_string(),
-            asset_arch: "x86_64".to_string(),
-        },
-        ReleaseMatrixTuple {
-            runner: "windows-11-arm".to_string(),
-            target: "aarch64-pc-windows-msvc".to_string(),
-            asset_os: "windows".to_string(),
-            asset_arch: "aarch64".to_string(),
-        },
-    ];
-
-    assert_eq!(release_matrix_tuples(&workflow), expected);
-    assert!(workflow.contains("${{ matrix.asset_os }}-${{ matrix.asset_arch }}"));
-    assert!(workflow.contains("name: dist-${{ matrix.asset_os }}-${{ matrix.asset_arch }}"));
-    assert!(workflow.contains("Run native release binary smoke test"));
-    assert!(workflow.contains("Verify musl binary is statically linked"));
-    assert!(workflow.contains("musl-gcc -dumpmachine"));
-    assert!(workflow.contains("x86-64|x86_64"));
-    assert!(workflow.contains("aarch64|ARM"));
-    assert!(workflow.contains("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc"));
-    assert!(workflow.contains("windows-11-arm"));
+    let smoke = read("scripts/tasks/atomic/binary-smoke");
     assert!(
-        !workflow.contains("${{ matrix.asset_os }}-x86_64"),
-        "release archive names must not hardcode x86_64"
+        smoke.contains("target_dir=\"${CARGO_TARGET_DIR:-target}\"")
+            && smoke.contains("$target_dir/$target/release/omakure")
+            && smoke.contains("$target_dir/release/omakure")
+            && smoke.contains("exec \"$binary\" --version"),
+        "binary-smoke must honor CARGO_TARGET_DIR, resolve the matrix target, and execute --version"
+    );
+    let musl = read("scripts/tasks/atomic/musl-static");
+    assert!(
+        musl.contains("target_dir=\"${CARGO_TARGET_DIR:-target}\"")
+            && musl.contains("$target_dir/$target/release/omakure")
+            && musl.contains("readelf -l")
+            && musl.contains("INTERP"),
+        "musl-static must honor CARGO_TARGET_DIR and own the static ELF verification"
     );
 }
 
@@ -958,6 +1413,25 @@ fn the_installer_preference_and_the_release_matrix_name_the_same_static_asset() 
     );
 }
 
+/// Local `package:release` must archive the same static Linux artifact class as
+/// the GitHub `linux-musl` matrix job and `install.sh`.
+#[test]
+fn local_package_release_on_linux_x86_64_archives_musl_static() {
+    let package_suite = read("scripts/tasks/suite/package-release");
+    assert!(
+        package_suite.contains("x86_64-unknown-linux-musl")
+            && package_suite.contains(r#""$root/scripts/tasks/atomic/musl-static" "$target""#)
+            && package_suite.contains("export OMAKURE_RELEASE_BINARY="),
+        "package-release must build and verify the musl static binary before packaging"
+    );
+
+    let package_artifact = read("scripts/tasks/atomic/package-artifact");
+    assert!(
+        package_artifact.contains("OMAKURE_RELEASE_BINARY:-$root/target/release/omakure"),
+        "package-artifact must honor OMAKURE_RELEASE_BINARY when package-release exports it"
+    );
+}
+
 #[test]
 fn release_tarball_contains_only_the_required_binary() {
     let temp = tempfile::tempdir().expect("create packaging fixture");
@@ -968,9 +1442,9 @@ fn release_tarball_contains_only_the_required_binary() {
     let script = repo_root().join("scripts/release/package-release.sh");
 
     let output = Command::new("bash")
-        .arg(script)
-        .arg(&binary)
-        .arg(&archive)
+        .arg(bash_safe_path(&script))
+        .arg(bash_safe_path(&binary))
+        .arg(bash_safe_path(&archive))
         .output()
         .expect("run release packager");
     assert!(
@@ -979,11 +1453,19 @@ fn release_tarball_contains_only_the_required_binary() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let listing = Command::new("tar")
-        .args(["-tzf", archive.to_str().expect("archive path")])
+    let archive_path = bash_safe_path(&archive);
+    let listing = Command::new("bash")
+        .arg("-c")
+        .arg(format!("exec tar -tzf {archive_path}"))
         .output()
         .expect("list release archive");
-    assert!(listing.status.success());
+    assert!(
+        listing.status.success(),
+        "tar listing failed: status={:?} stdout={} stderr={}",
+        listing.status,
+        String::from_utf8_lossy(&listing.stdout),
+        String::from_utf8_lossy(&listing.stderr),
+    );
     assert_eq!(
         String::from_utf8_lossy(&listing.stdout),
         "omakure\n",

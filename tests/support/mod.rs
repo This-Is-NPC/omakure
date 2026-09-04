@@ -523,6 +523,23 @@ impl Drop for HttpServer {
     }
 }
 
+/// Exit status after an intentional test-harness kill.
+/// Unix SIGKILL reports no exit code; Windows TerminateProcess uses code 1.
+pub fn terminated_exit_is_expected(status: std::process::ExitStatus) -> bool {
+    terminated_exit_is_expected_for_parts(status.success(), status.code())
+}
+
+pub fn terminated_exit_is_expected_for_parts(success: bool, code: Option<i32>) -> bool {
+    success || code.is_none() || (cfg!(windows) && code == Some(1))
+}
+
+pub fn assert_terminated(status: std::process::ExitStatus) {
+    assert!(
+        terminated_exit_is_expected(status),
+        "expected graceful exit or test-harness kill, got {status:?}"
+    );
+}
+
 /// Overall budget for one HTTP exchange made through [`HttpServer`].
 ///
 /// Deliberately far larger than the per-read socket timeout. `set_read_timeout`
@@ -620,6 +637,18 @@ fn parse_http_url(url: &str) -> (SocketAddr, String, String) {
 pub enum AuthMode<'a> {
     None,
     Bearer(&'a str),
+}
+
+/// Git `-c` flags that keep battery cache checkouts byte-identical across platforms.
+pub fn battery_cache_git_config_args() -> &'static [&'static str] {
+    #[cfg(windows)]
+    {
+        &["-c", "core.autocrlf=false", "-c", "core.filemode=false"]
+    }
+    #[cfg(not(windows))]
+    {
+        &["-c", "core.autocrlf=false"]
+    }
 }
 
 /// Write a local git battery fixture under `root` and return after the initial commit.

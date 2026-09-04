@@ -31,6 +31,17 @@ endpoint and background loops are needed. External Battery repositories own
 subject scripts; register, sync, and explicitly install them with the Battery
 commands.
 
+A per-user release install only copies the `omakure` binary into your home
+directory. It does not create node configuration, state directories, or a
+background service. On Linux, `omakure node init` and `omakure node serve`
+default to `/etc/omakure/node.toml` and `/var/lib/omakure`; an unprivileged
+user cannot create those paths, so `Permission denied` is expected. Release
+builds do not treat `OMAKURE_NODE_STATE_DIR` as a supported production
+override (it is honored only under `OMAKURE_NODE_TEST_MODE` in test builds).
+To run `node serve` with those paths provisioned, use the machine-service
+installer (`sudo … --install-node-service --node-tokens-file`); see
+[Machine Node Service](#machine-node-service) below.
+
 ## Update
 
 ```bash
@@ -63,7 +74,9 @@ For development, use `cargo build`, `cargo test`, `mise run lint`, and
 
 Normal installer use is per-user and never provisions a privileged service.
 Machine-service setup is an explicit opt-in and requires an existing secure
-tokens TOML containing Argon2id hashes. The installer does not generate or
+tokens TOML containing Argon2id hashes. On Linux, a tarball from
+`mise run package:release` is the static `linux-musl` artifact and is suitable
+for `ARTIFACT=… sudo bash scripts/install/install.sh --artifact …`. The installer does not generate or
 print a service token:
 
 ```bash

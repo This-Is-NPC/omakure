@@ -10,46 +10,55 @@ jobs:
   platform:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: Linux headless test and release build
+            platform: linux-gnu
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             musl: false
             rustflags: ""
           - name: Linux musl static release build
+            platform: linux-musl
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             musl: true
             rustflags: ""
           - name: Linux ARM64 headless test and release build
+            platform: linux-gnu
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             musl: false
             rustflags: ""
           - name: Linux ARM64 musl static release build
+            platform: linux-musl
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
             musl: true
             rustflags: ""
           - name: macOS headless test and release build
+            platform: macos
             os: macos-15-intel
             target: x86_64-apple-darwin
             musl: false
             rustflags: ""
           - name: macOS ARM64 headless test and release build
+            platform: macos
             os: macos-15
             target: aarch64-apple-darwin
             musl: false
             rustflags: ""
           - name: Windows headless test and release build
+            platform: windows
             os: windows-latest
             target: x86_64-pc-windows-msvc
             musl: false
             rustflags: "-C target-feature=+crt-static"
           - name: Windows ARM64 headless test and release build
+            platform: windows
             os: windows-11-arm
             target: aarch64-pc-windows-msvc
             musl: false
@@ -60,112 +69,18 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
-      - name: Configure private macOS temporary directory
-        if: contains(matrix.target, '-apple-darwin')
-        shell: bash
-        run: |
-          set -euo pipefail
-          runner_temp="$(cd -- "${RUNNER_TEMP}" && pwd -P)"
-          current_owner_group="$(id -u):$(id -g)"
-          runner_owner_group="$(stat -f '%u:%g' "${runner_temp}")"
-          [[ "${runner_owner_group}" == "${current_owner_group}" ]] || {
-            echo "RUNNER_TEMP is not owned by the current user/group" >&2
-            exit 1
-          }
-          tmpdir="${runner_temp}/omakure-tmp"
-          [[ ! -L "${tmpdir}" ]] || {
-            echo "refusing symlinked macOS temporary directory" >&2
-            exit 1
-          }
-          if [[ ! -e "${tmpdir}" ]]; then
-            mkdir "${tmpdir}"
-          fi
-          [[ -d "${tmpdir}" ]] || {
-            echo "macOS temporary path is not a directory" >&2
-            exit 1
-          }
-          physical_tmpdir="$(cd -- "${tmpdir}" && pwd -P)"
-          [[ "${physical_tmpdir}" == "${tmpdir}" ]] || {
-            echo "refusing non-physical macOS temporary directory" >&2
-            exit 1
-          }
-          chmod 700 "${physical_tmpdir}"
-          tmpdir_owner_group="$(stat -f '%u:%g' "${physical_tmpdir}")"
-          [[ "${tmpdir_owner_group}" == "${current_owner_group}" ]] || {
-            echo "macOS temporary directory is not owned by the current user/group" >&2
-            exit 1
-          }
-          printf 'TMPDIR=%s\n' "${physical_tmpdir}" >> "${GITHUB_ENV}"
-
       - name: Install musl toolchain
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      # The Unix SIGTERM integration test is cfg(unix); Windows still runs the
-      # readiness and process-boundary tests and gets the same release build.
-      - name: Test headless binary
-        run: cargo test --all-targets --locked
-      - name: Test node-service lifecycle surface
-        run: cargo test --test node_service_e2e --test policy_e2e --locked
-      - name: Native protocol/build/lifecycle matrix (no Docker)
-        run: cargo test --test direct_transport_contract --test node_service_e2e --locked
-      # macOS and Windows runners have no usable Docker networking, so the
-      # multi-container Health Plane gate cannot run there. They keep honest
-      # native coverage instead: the frozen contract vectors, the bounded state
-      # and migration suite, the Signal lifecycle, and the multi-node reporting
-      # path that runs in-process rather than in containers.
-      #
-      # This adds no coverage over `--all-targets` above and is not meant to.
-      # Like the two steps before it, it names the platform guarantee the docs
-      # claim so a failure points at the claim instead of at a 900-test run.
-      - name: Native Health Plane protocol/migration/lifecycle matrix (no Docker)
-        run: >-
-          cargo test --test health_plane_contract --test health_plane_state
-          --test health_plane_signals --test health_plane_transport_e2e
-          --test health_plane_feasibility --locked
-      - name: Compile platform-specific node security paths
-        if: contains(matrix.target, 'windows')
-        run: cargo check --all-targets --locked
-      # The MSVC release artifact is built with `+crt-static`
-      # (.github/workflows/release.yml), but nothing in CI carried those flags.
-      # With a vendored C dependency that gap hides CRT-linkage failures
-      # (LNK2038/LNK4098) until a release tag, which is the worst place to find
-      # them. Build the same way here.
-      - name: Build release binary
+      - name: Run platform checks
+        shell: bash
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
-      - name: Verify musl binary is statically linked
-        if: matrix.musl
-        shell: bash
-        run: |
-          set -euo pipefail
-          binary="target/${{ matrix.target }}/release/omakure"
-          compiler_machine="$(musl-gcc -dumpmachine)"
-          case "${{ matrix.target }}" in
-            x86_64-*) [[ "${compiler_machine}" == *x86_64* ]] ;;
-            aarch64-*) [[ "${compiler_machine}" == *aarch64* ]] ;;
-            *) echo "unexpected musl target: ${{ matrix.target }}" >&2; exit 1 ;;
-          esac
-          file_output="$(file "${binary}")"
-          echo "${file_output}"
-          grep -Eqi 'static(ally|-pie) linked' <<<"${file_output}"
-          case "${{ matrix.target }}" in
-            x86_64-*) grep -Eqi 'x86-64|x86_64' <<<"${file_output}" ;;
-            aarch64-*) grep -Eqi 'aarch64|ARM' <<<"${file_output}" ;;
-          esac
-          ! readelf -l "${binary}" | grep -q 'INTERP'
-      - name: Run native release binary smoke test
-        shell: bash
-        run: |
-          if [[ "${{ matrix.target }}" == *windows* ]]; then
-            target/${{ matrix.target }}/release/omakure.exe --version
-          else
-            target/${{ matrix.target }}/release/omakure --version
-          fi
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"
 
   lint:
     runs-on: ubuntu-latest
@@ -319,416 +234,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Build node image
-        run: timeout --foreground --kill-after=10s 10m docker build --tag omakure-node:ci .
-      - name: Start node service and check health/readiness
-        shell: bash
-        run: |
-          set -euo pipefail
-          workspace_volume="omakure-workspace-ci"
-          state_volume="omakure-node-state-ci"
-           timeout --foreground --kill-after=5s 30s docker volume create "${workspace_volume}" >/dev/null
-           timeout --foreground --kill-after=5s 30s docker volume create "${state_volume}" >/dev/null
-           timeout --foreground --kill-after=5s 60s docker run --rm --user 0 \
-            --volume "${workspace_volume}:/workspace" \
-            --volume "${state_volume}:/var/lib/omakure" \
-            --entrypoint /bin/sh omakure-node:ci \
-            -c 'chown 10001:10001 /workspace /var/lib/omakure && chmod 0750 /workspace && chmod 0700 /var/lib/omakure'
-          token='ci-node-service-token-with-enough-entropy-00001'
-           timeout --foreground --kill-after=10s 60s docker run --detach --name omakure-node-ci \
-            --env OMAKURE_API_TOKEN="${token}" \
-            --volume "${workspace_volume}:/workspace" \
-            --volume "${state_volume}:/var/lib/omakure" \
-            --publish 127.0.0.1:7878:7878 \
-            omakure-node:ci
-           cleanup() {
-             timeout --foreground --kill-after=5s 30s docker logs omakure-node-ci || true
-             timeout --foreground --kill-after=5s 30s docker rm -f omakure-node-ci || true
-             timeout --foreground --kill-after=5s 30s docker volume rm "${workspace_volume}" "${state_volume}" >/dev/null 2>&1 || true
-           }
-           trap cleanup EXIT
-           for path in health ready; do
-             for attempt in {1..30}; do
-               if timeout --foreground --kill-after=2s 10s curl --fail --silent \
-                 --connect-timeout 3 --max-time 8 "http://127.0.0.1:7878/v1/${path}"; then
-                 break
-              fi
-              if [[ "${attempt}" == 30 ]]; then
-                echo "${path} did not become healthy" >&2
-                exit 1
-              fi
-               sleep 1
-             done
-           done
-      # Self-containment, falsifiable rather than asserted. The runtime image
-      # installs only bash, ca-certificates, curl, git, jq and tini, so if
-      # `command -v lua` ever succeeds the base image gained a Lua package and
-      # this proof has silently become decoration. Checking the absence first is
-      # what keeps the second half meaningful.
-      - name: Prove .lua runs with no system Lua in the image
-        run: |
-          set -euo pipefail
-          if timeout --foreground --kill-after=5s 30s docker run --rm \
-            --entrypoint /bin/sh omakure-node:ci -c 'command -v lua'; then
-            echo "the runtime image now ships a system Lua; the embedded-runtime proof below is void" >&2
-            exit 1
-          fi
-          output="$(timeout --foreground --kill-after=5s 60s docker run --rm \
-            --entrypoint /bin/sh omakure-node:ci -c \
-            'printf "print(\"lua runs: \" .. _VERSION)\n" > /tmp/probe.lua \
-             && omakure --__omakure-lua-host /tmp/probe.lua')"
-          echo "$output"
-          case "$output" in
-            "lua runs: Lua 5.4"*) ;;
-            *) echo "the embedded Lua runtime did not execute the script" >&2; exit 1 ;;
-          esac
-
-      # One authorized Cue on the packaged image. The in-process e2e proves the
-      # protocol; this proves the *artifact* -- two containers of the shipped
-      # image, on a real network, exchanging trust and carrying one instruction
-      # to its outcome. It is one step by design: no new compose file, no new
-      # scripts/tasks entry, no new mise task.
-      - name: Carry one authorized Cue end to end between two containers
-        shell: bash
-        run: |
-          set -euo pipefail
-          net=omakure-cue-ci
-          tok='ci-node-service-token-with-enough-entropy-00001'
-          d() { timeout --foreground --kill-after=10s "$@"; }
-          cleanup() {
-            for n in conductor performer; do
-              d 30s docker logs "omakure-cue-${n}" 2>&1 | tail -20 || true
-              d 30s docker rm -f "omakure-cue-${n}" >/dev/null 2>&1 || true
-              d 30s docker volume rm "omakure-cue-ws-${n}" "omakure-cue-state-${n}" \
-                "omakure-cue-etc-${n}" >/dev/null 2>&1 || true
-            done
-            d 30s docker network rm "$net" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-          d 30s docker network create "$net" >/dev/null
-          for n in conductor performer; do
-            for v in ws state etc; do d 30s docker volume create "omakure-cue-${v}-${n}" >/dev/null; done
-            d 60s docker run --rm --user 0 \
-              --volume "omakure-cue-ws-${n}:/workspace" \
-              --volume "omakure-cue-state-${n}:/var/lib/omakure" \
-              --volume "omakure-cue-etc-${n}:/etc/omakure" \
-              --entrypoint /bin/sh omakure-node:ci -c \
-              'chown 10001:10001 /workspace /var/lib/omakure /etc/omakure \
-               && chmod 0750 /workspace /etc/omakure && chmod 0700 /var/lib/omakure'
-          done
-          one() { n="$1"; shift; d 60s docker run --rm --network "$net" \
-            --env OMAKURE_API_TOKEN="$tok" \
-            --volume "omakure-cue-ws-${n}:/workspace" \
-            --volume "omakure-cue-state-${n}:/var/lib/omakure" \
-            --volume "omakure-cue-etc-${n}:/etc/omakure" omakure-node:ci "$@"; }
-          sh_in() { n="$1"; shift; d 60s docker run --rm --user 0 \
-            --volume "omakure-cue-ws-${n}:/workspace" \
-            --volume "omakure-cue-state-${n}:/var/lib/omakure" \
-            --volume "omakure-cue-etc-${n}:/etc/omakure" \
-            --entrypoint /bin/sh omakure-node:ci -c "$*"; }
-          for n in conductor performer; do one "$n" --json node init >/dev/null; done
-          for n in conductor performer; do
-            eval "${n}_id=$(one "$n" --json node status | jq -r '.data.identity.node_id')"
-            eval "${n}_pk=$(one "$n" --json node status | jq -r '.data.identity.public_key')"
-            eval "${n}_cert=$(sh_in "$n" "od -An -v -tx1 /var/lib/omakure/transport.cert | tr -d ' \n'")"
-          done
-          one performer node trust --node-id "$conductor_id" --public-key "$conductor_pk" \
-            --transport-certificate "$conductor_cert" --role conductor --actor ci \
-            --reason "cue smoke" --confirmed --capability inventory-health \
-            --capability notifications --capability remote-run >/dev/null
-          one conductor node trust --node-id "$performer_id" --public-key "$performer_pk" \
-            --transport-certificate "$performer_cert" --role performer --actor ci \
-            --reason "cue smoke" --confirmed --capability inventory-health \
-            --capability notifications --capability remote-run >/dev/null
-          # Declared, not inferred: the Performer writes down the one script a
-          # Conductor may name. Enrollment must be enabled for any remote
-          # capability, which is a pre-existing rule rather than a Cue rule.
-          sh_in performer "sed -i \
-            -e 's|enrollment = \"disabled\"|enrollment = \"manual\"|' \
-            -e 's|allow_remote_cues = false|allow_remote_cues = true|' \
-            -e 's|remote_cue_scripts = \[\]|remote_cue_scripts = [\"deploy.sh\"]|' \
-            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$conductor_id\"'@conductor:7879\"]|' \
-            /etc/omakure/node.toml"
-          # Both sides name the other. That is what a managed fleet looks like,
-          # and what dial ownership requires: `should_initiate` gives the dial
-          # to whichever node id sorts lower, so configuring one side leaves no
-          # session at all half the time. It is also the arrangement in which a
-          # separate process cannot dial that peer, so the Cue must travel on
-          # the session the service already holds.
-          sh_in conductor "sed -i 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$performer_id\"'@performer:7879\"]|' /etc/omakure/node.toml"
-          sh_in performer "printf '#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\":\"deploy\",\"Description\":\"cue smoke\",\"Fields\":[]}\n# OMAKURE_SCHEMA_END\necho cue-ran\n' > /workspace/deploy.sh \
-             && chmod 0755 /workspace/deploy.sh && chown 10001:10001 /workspace/deploy.sh"
-          for n in conductor performer; do
-            d 60s docker run --detach --name "omakure-cue-${n}" --network "$net" \
-              --network-alias "$n" --env OMAKURE_API_TOKEN="$tok" \
-              --volume "omakure-cue-ws-${n}:/workspace" \
-              --volume "omakure-cue-state-${n}:/var/lib/omakure" \
-              --volume "omakure-cue-etc-${n}:/etc/omakure" \
-              --env OMAKURE_API_CAPABILITIES=node:read,node:write \
-              omakure-node:ci node serve --bind 0.0.0.0:7878 --allow-non-loopback \
-              --allow-non-loopback-direct --workers 1 --no-scheduler \
-              --capability node:read --capability node:write >/dev/null
-          done
-          # Wait on the fact, not on a duration: dispatching before the session
-          # exists would fall back to the direct dial and pass for the wrong
-          # reason.
-          for attempt in $(seq 1 60); do
-            connected="$(d 30s docker exec omakure-cue-conductor curl --fail --silent \
-              --max-time 5 -H "Authorization: Bearer ${tok}" \
-              http://127.0.0.1:7878/v1/node/status \
-              | jq -r '.data.transport.expected_connected_peer_count // 0' || echo 0)"
-            [ "$connected" = "1" ] && break
-            if [ "$attempt" = 60 ]; then
-              echo "the Conductor never established its standing session" >&2
-              exit 1
-            fi
-            sleep 1
-          done
-          # `--endpoint` takes a socket address, not a hostname. It is only the
-          # fallback path's argument here -- with a session up, the dispatch
-          # goes through the service and the endpoint is not used.
-          performer_ip="$(d 30s docker inspect \
-            -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' omakure-cue-performer)"
-          out="$(d 180s docker exec omakure-cue-conductor omakure --json node cue \
-            --endpoint "${performer_ip}:7879" --peer-node-id "$performer_id" \
-            --script deploy.sh --reason "cue smoke" --wait-seconds 90)"
-          echo "$out"
-          # `via` is asserted too: passing through the direct dial would mean the
-          # standing session never came up, and the fleet path went untested.
-          echo "$out" | jq -e '.ok == true and .data.via == "service" and .data.accepted == true' >/dev/null \
-            || { echo "the packaged image did not carry one authorized Cue over its standing session" >&2; exit 1; }
-
-      - name: Push a signed baseline, drift it, and roll it back across three containers
-        shell: bash
-        run: |
-          set -euo pipefail
-          net=omakure-baseline-ci
-          tok='ci-node-service-token-with-enough-entropy-00002'
-          d() { timeout --foreground --kill-after=10s "$@"; }
-          cleanup() {
-            for n in conductor performer; do
-              d 30s docker logs "omakure-baseline-${n}" 2>&1 | tail -20 || true
-              d 30s docker rm -f "omakure-baseline-${n}" >/dev/null 2>&1 || true
-            done
-            for n in conductor performer publisher; do
-              d 30s docker volume rm "omakure-baseline-ws-${n}" "omakure-baseline-state-${n}" \
-                "omakure-baseline-etc-${n}" >/dev/null 2>&1 || true
-            done
-            d 30s docker network rm "$net" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-          d 30s docker network create "$net" >/dev/null
-          # Three principals, because two of them may never be one. `node_registry`
-          # refuses to let a node hold a publisher key and record a Performer, so the
-          # machine that signs the code is not the machine that orders it installed.
-          for n in conductor performer publisher; do
-            for v in ws state etc; do d 30s docker volume create "omakure-baseline-${v}-${n}" >/dev/null; done
-            d 60s docker run --rm --user 0 \
-              --volume "omakure-baseline-ws-${n}:/workspace" \
-              --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
-              --volume "omakure-baseline-etc-${n}:/etc/omakure" \
-              --entrypoint /bin/sh omakure-node:ci -c \
-              'chown 10001:10001 /workspace /var/lib/omakure /etc/omakure \
-               && chmod 0750 /workspace /etc/omakure && chmod 0700 /var/lib/omakure'
-          done
-          one() { n="$1"; shift; d 120s docker run --rm --network "$net" \
-            --env OMAKURE_API_TOKEN="$tok" \
-            --volume "omakure-baseline-ws-${n}:/workspace" \
-            --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
-            --volume "omakure-baseline-etc-${n}:/etc/omakure" omakure-node:ci "$@"; }
-          sh_in() { n="$1"; shift; d 60s docker run --rm --user 0 \
-            --volume "omakure-baseline-ws-${n}:/workspace" \
-            --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
-            --volume "omakure-baseline-etc-${n}:/etc/omakure" \
-            --entrypoint /bin/sh omakure-node:ci -c "$*"; }
-          # Base64 rather than quoted heredocs: the bytes of a script are what a
-          # baseline's identity is a hash of, so they must survive this transport exactly.
-          put_script() { sh_in "$1" "echo '$3' | base64 -d > /workspace/$2 \
-            && chown 10001:10001 /workspace/$2 && chmod 0755 /workspace/$2"; }
-          v1_deploy="$(printf '#!/usr/bin/env bash\necho deploy v1\n' | base64 -w0)"
-          v1_audit="$(printf '#!/usr/bin/env bash\necho audit v1\n' | base64 -w0)"
-          v2_deploy="$(printf '#!/usr/bin/env bash\necho deploy v2\n' | base64 -w0)"
-          v2_audit="$(printf '#!/usr/bin/env bash\necho audit v2\n' | base64 -w0)"
-
-          for n in conductor performer publisher; do one "$n" --json node init >/dev/null; done
-          for n in conductor performer; do
-            eval "${n}_id=$(one "$n" --json node status | jq -r '.data.identity.node_id')"
-            eval "${n}_pk=$(one "$n" --json node status | jq -r '.data.identity.public_key')"
-            eval "${n}_cert=$(sh_in "$n" "od -An -v -tx1 /var/lib/omakure/transport.cert | tr -d ' \n'")"
-          done
-
-          created="$(one publisher --json node baseline create-key)"
-          key_id="$(echo "$created" | jq -r '.data.key_id')"
-          publisher_key="$(echo "$created" | jq -r '.data.public_key')"
-          for n in publisher performer; do
-            sh_in "$n" "sed -i 's|^id = \"\"|id = \"ci-fleet\"|' /etc/omakure/node.toml"
-          done
-
-          # The Performer names the publisher it will take code from and the Conductor it
-          # takes orders from. Neither substitutes for the other, which is the whole
-          # point of the plane.
-          sh_in performer "sed -i \
-            -e 's|enrollment = \"disabled\"|enrollment = \"manual\"|' \
-            -e 's|allow_baseline_push = false|allow_baseline_push = true|' \
-            -e 's|baseline_publishers = \[\]|baseline_publishers = [{ key_id = \"$key_id\", public_key = \"$publisher_key\", revoked = false }]|' \
-            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$conductor_id\"'@conductor:7879\"]|' \
-            /etc/omakure/node.toml"
-          sh_in conductor "sed -i \
-            -e 's|enrollment = \"disabled\"|enrollment = \"manual\"|' \
-            -e 's|static_peers = \[\]|direct_bind = \"0.0.0.0:7879\"\nstatic_peers = [\"'\"$performer_id\"'@performer:7879\"]|' \
-            /etc/omakure/node.toml"
-          one performer node trust --node-id "$conductor_id" --public-key "$conductor_pk" \
-            --transport-certificate "$conductor_cert" --role conductor --actor ci \
-            --reason "baseline smoke" --confirmed --capability baseline-push \
-            --capability inventory-health --capability notifications >/dev/null
-          one conductor node trust --node-id "$performer_id" --public-key "$performer_pk" \
-            --transport-certificate "$performer_cert" --role performer --actor ci \
-            --reason "baseline smoke" --confirmed --capability baseline-push \
-            --capability inventory-health --capability notifications >/dev/null
-
-          publish() {
-            deploy="$1"; audit="$2"; out="$3"
-            put_script publisher deploy.sh "$deploy"
-            put_script publisher audit.sh "$audit"
-            # The Conductor carries the bytes it was given; it never signs them, and it
-            # holds no path to the publisher key.
-            put_script conductor deploy.sh "$deploy"
-            put_script conductor audit.sh "$audit"
-            one publisher --json node baseline publish --script deploy.sh --script audit.sh \
-              --lifetime-seconds 3600 --out "/workspace/$out"
-            manifest="$(sh_in publisher "base64 -w0 /workspace/$out")"
-            sh_in conductor "echo '$manifest' | base64 -d > /workspace/$out && chown 10001:10001 /workspace/$out"
-          }
-          published_v1="$(publish "$v1_deploy" "$v1_audit" base-v1.omb | tail -1)"
-          v1_id="$(echo "$published_v1" | jq -r '.data.baseline_id')"
-
-          for n in conductor performer; do
-            d 60s docker run --detach --name "omakure-baseline-${n}" --network "$net" \
-              --network-alias "$n" --env OMAKURE_API_TOKEN="$tok" \
-              --volume "omakure-baseline-ws-${n}:/workspace" \
-              --volume "omakure-baseline-state-${n}:/var/lib/omakure" \
-              --volume "omakure-baseline-etc-${n}:/etc/omakure" \
-              --env OMAKURE_API_CAPABILITIES=node:read,node:write \
-              omakure-node:ci node serve --bind 0.0.0.0:7878 --allow-non-loopback \
-              --allow-non-loopback-direct --workers 1 --no-scheduler \
-              --capability node:read --capability node:write >/dev/null
-          done
-          # Every wait below fails by falling out of its loop rather than by matching a
-          # duplicated attempt count. A bound written twice is a bound that can go out of
-          # step, and a poll that runs out of attempts and returns success is an
-          # assertion that cannot fail.
-          budget=90
-          session_up=no
-          for _ in $(seq 1 "$budget"); do
-            connected="$(d 30s docker exec omakure-baseline-conductor curl --fail --silent \
-              --max-time 5 -H "Authorization: Bearer ${tok}" \
-              http://127.0.0.1:7878/v1/node/status \
-              | jq -r '.data.transport.expected_connected_peer_count // 0' || echo 0)"
-            if [ "$connected" = "1" ]; then session_up=yes; break; fi
-            sleep 1
-          done
-          [ "$session_up" = yes ] || { echo "the Conductor never established its standing session" >&2; exit 1; }
-
-          # Every assertion below reads the shipped fleet projection, never a database.
-          await_status() {
-            want="$1"; want_id="$2"; why="$3"
-            status=absent
-            reported=""
-            for _ in $(seq 1 "$budget"); do
-              row="$(d 30s docker exec omakure-baseline-conductor curl --fail --silent \
-                --max-time 5 -H "Authorization: Bearer ${tok}" \
-                http://127.0.0.1:7878/v1/node/health \
-                | jq -c --arg id "$performer_id" '.data.nodes[] | select(.node_id == $id)' || echo '{}')"
-              status="$(echo "$row" | jq -r '.baseline_status // "absent"')"
-              reported="$(echo "$row" | jq -r '.profile.baseline_id // ""')"
-              if [ "$status" = "$want" ] && [ "$reported" = "$want_id" ]; then
-                echo "  fleet projection: $status ${reported:-<none>}"
-                return 0
-              fi
-              sleep 1
-            done
-            echo "$why (saw $status ${reported:-<none>})" >&2
-            exit 1
-          }
-
-          push() {
-            out="$(d 180s docker exec omakure-baseline-conductor omakure --json node baseline push \
-              --peer-node-id "$performer_id" --manifest "/workspace/$1" --wait-seconds 90)"
-            echo "$out"
-            echo "$out" | jq -e '.ok == true and .data.via == "service" and .data.accepted == true' >/dev/null \
-              || { echo "the packaged image did not install a signed baseline over its standing session" >&2; exit 1; }
-          }
-          # Before anything is pushed: neither drifted nor in sync, because there is no
-          # baseline. Asserted here rather than after the push, where "the ack has not
-          # become a Profile yet" would look identical.
-          await_status none "" "a Performer that was never pushed a baseline must report having none"
-
-          push base-v1.omb
-          await_status in_sync "$v1_id" "a Performer running what it was pushed must read as in sync"
-
-          # Drift, with a script that still runs: the set on disk is no longer the set
-          # that was signed, and nothing but the bytes changed.
-          d 30s docker exec --user 10001 omakure-baseline-performer \
-            sh -c "printf 'echo edited underneath\n' >> /workspace/deploy.sh"
-          await_status drifted "$v1_id" "a Performer whose scripts changed underneath it must read as drifted"
-
-          published_v2="$(publish "$v2_deploy" "$v2_audit" base-v2.omb | tail -1)"
-          v2_id="$(echo "$published_v2" | jq -r '.data.baseline_id')"
-          push base-v2.omb
-          await_status in_sync "$v2_id" "a second push must land and clear the drift"
-
-          # Rollback, through the shipped route on the machine that holds the scripts.
-          rollback() { d 60s docker exec omakure-baseline-performer curl --silent \
-            --max-time 30 -X POST -H "Authorization: Bearer ${tok}" \
-            -H 'content-type: application/json' --data '{"confirmed":true}' \
-            http://127.0.0.1:7878/v1/node/baseline/rollback; }
-          rolled="$(rollback)"
-          echo "$rolled"
-          echo "$rolled" | jq -e --arg id "$v1_id" '.ok == true and .data.baseline_id == $id' >/dev/null \
-            || { echo "rollback did not restore the previous version" >&2; exit 1; }
-          # The retained copy is the signed bytes, not whatever was on disk when the next
-          # push replaced it, so rolling back also undoes the drift.
-          await_status in_sync "$v1_id" "a rolled-back Performer must read as in sync against the version it was put back on"
-
-          # A publisher revoked since the install must make the rollback fail: a rollback
-          # to a no-longer-verifiable state would launder code past the publisher check.
-          sh_in performer "sed -i 's|revoked = false|revoked = true|' /etc/omakure/node.toml"
-          refused="$(rollback)"
-          echo "$refused"
-          echo "$refused" | jq -e '.ok == false and (.error.message | contains("baseline_publisher_revoked"))' >/dev/null \
-            || { echo "a rollback under a revoked publisher was not refused" >&2; exit 1; }
-          await_status in_sync "$v1_id" "a refused rollback must leave the machine where it was"
-
-          echo "signed baseline push, drift, and verified rollback carried on the packaged image"
-
-      - name: Cleanup and verify Docker smoke resources
-        if: always()
-        shell: bash
-        run: |
-          set -uo pipefail
-          failures=0
-          timeout --foreground --kill-after=5s 30s docker rm -f omakure-node-ci >/dev/null 2>&1 || true
-          timeout --foreground --kill-after=5s 30s docker volume rm omakure-workspace-ci omakure-node-state-ci >/dev/null 2>&1 || true
-          for name in omakure-node-ci omakure-workspace-ci omakure-node-state-ci \
-            omakure-cue-conductor omakure-cue-performer omakure-cue-ci \
-            omakure-cue-ws-conductor omakure-cue-state-conductor omakure-cue-etc-conductor \
-            omakure-cue-ws-performer omakure-cue-state-performer omakure-cue-etc-performer \
-            omakure-baseline-conductor omakure-baseline-performer omakure-baseline-ci \
-            omakure-baseline-ws-conductor omakure-baseline-state-conductor omakure-baseline-etc-conductor \
-            omakure-baseline-ws-performer omakure-baseline-state-performer omakure-baseline-etc-performer \
-            omakure-baseline-ws-publisher omakure-baseline-state-publisher omakure-baseline-etc-publisher; do
-            for resource in container network volume; do
-              if ! remaining="$(timeout --foreground --kill-after=5s 30s docker "$resource" ls -q \
-                --filter name="$name")"; then
-                echo "unable to inspect Docker $resource resources for $name" >&2
-                failures=1
-              elif [[ -n "$remaining" ]]; then
-                echo "Docker smoke $resource resources survived cleanup for $name: $remaining" >&2
-                failures=1
-              fi
-            done
-          done
-          exit "$failures"
+      - name: Run canonical Docker smoke certification
+        run: ./scripts/tasks/cert/docker-smoke
 
   transport-certification:
     name: Linux canonical multi-node transport certification

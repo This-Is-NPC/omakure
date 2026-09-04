@@ -4,8 +4,8 @@ set -euo pipefail
 # This is the one bounded Linux certification command. It deliberately uses
 # the production node binary and direct TCP ingress; management HTTP is used
 # only for health/status observation.
-root_dir="${MISE_PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
-root_dir="$(cd "$root_dir" && pwd)"
+root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+export MISE_PROJECT_ROOT="$root_dir"
 compose_file="$root_dir/ci/compose/compose.transport-certification.e2e.yaml"
 project="${OMAKURE_CERTIFICATION_PROJECT:-omakure-transport-certification-${BASHPID}}"
 compose=(timeout --foreground --kill-after=5s 120s docker compose -f "$compose_file" -p "$project")

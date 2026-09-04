@@ -588,7 +588,10 @@ impl NodeContext {
         }
         for entry in fs::read_dir(self.state_dir())? {
             let entry = entry?;
-            let metadata = fs::symlink_metadata(entry.path())?;
+            let metadata = match symlink_metadata_if_present(&entry.path())? {
+                Some(metadata) => metadata,
+                None => continue,
+            };
             let name = entry.file_name();
             let name = name.to_string_lossy();
             if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
@@ -1509,6 +1512,18 @@ fn validate_directory_security(
     Ok(())
 }
 
+fn symlink_metadata_if_present(path: &Path) -> Result<Option<fs::Metadata>, NodeError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(Some(metadata)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub(crate) fn is_not_found(error: &NodeError) -> bool {
+    matches!(error, NodeError::Io(io) if io.kind() == io::ErrorKind::NotFound)
+}
+
 fn validate_file_security(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
@@ -1606,7 +1621,11 @@ fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError> {
     wide.push(0);
     let attributes = unsafe { GetFileAttributesW(wide.as_ptr()) };
     if attributes == INVALID_FILE_ATTRIBUTES {
-        return Err(NodeError::Io(io::Error::last_os_error()));
+        let err = io::Error::last_os_error();
+        return Err(NodeError::Io(io::Error::new(
+            err.kind(),
+            format!("{}: {err}", path.display()),
+        )));
     }
     Ok(attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0)
 }
@@ -2740,5 +2759,26 @@ mod tests {
             mode_reason, parse_reason,
             "a permissions failure and a malformed config must not read the same"
         );
+    }
+    #[cfg(debug_assertions)]
+    #[test]
+    fn symlink_metadata_if_present_treats_missing_paths_as_absent() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let missing = tmp.path().join("node.sqlite-wal");
+        assert!(symlink_metadata_if_present(&missing).unwrap().is_none());
+
+        let present = tmp.path().join("present.txt");
+        fs::write(&present, b"x").unwrap();
+        assert!(symlink_metadata_if_present(&present).unwrap().is_some());
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn is_not_found_matches_io_not_found_only() {
+        let not_found = NodeError::Io(io::Error::new(io::ErrorKind::NotFound, "gone"));
+        assert!(is_not_found(&not_found));
+        let permission = NodeError::Io(io::Error::new(io::ErrorKind::PermissionDenied, "nope"));
+        assert!(!is_not_found(&permission));
+        assert!(!is_not_found(&NodeError::InsecurePath("bad".into())));
     }
 }

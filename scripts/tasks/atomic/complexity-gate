@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+bounded="$root/scripts/tasks/atomic/run-bounded"
+report="$root/scripts/tasks/atomic/complexity-report"
+gate="$root/scripts/tasks/complexity-gate"
+[[ -x "$report" && -x "$gate" && -x "$bounded" ]] || { printf 'atomic/complexity-gate: complexity scripts are missing or not executable\n' >&2; exit 1; }
+"$report"
+exec "$bounded" 15m "$gate" --report target/quality/complexity-report.json --baseline quality/complexity/baseline.json --exceptions quality/complexity/exceptions.json --output target/quality/complexity-evidence/gate.json "$@"

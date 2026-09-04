@@ -210,6 +210,29 @@ fn node_service_sigterm_stops_cleanly() {
 }
 
 #[test]
+fn harness_kill_exit_is_expected_on_this_platform() {
+    assert!(support::terminated_exit_is_expected_for_parts(
+        true,
+        Some(0)
+    ));
+    assert!(support::terminated_exit_is_expected_for_parts(false, None));
+    assert!(!support::terminated_exit_is_expected_for_parts(
+        false,
+        Some(2)
+    ));
+    #[cfg(windows)]
+    assert!(support::terminated_exit_is_expected_for_parts(
+        false,
+        Some(1)
+    ));
+    #[cfg(not(windows))]
+    assert!(!support::terminated_exit_is_expected_for_parts(
+        false,
+        Some(1)
+    ));
+}
+
+#[test]
 fn node_service_can_be_terminated_and_restarted_portably() {
     let workspace = support::TestWorkspace::new("node_service_restart");
     let server = support::HttpServer::start_node_service(
@@ -222,10 +245,7 @@ fn node_service_can_be_terminated_and_restarted_portably() {
     let identity_before = fs::read(workspace.path().join(".node-state/identity.key")).unwrap();
     assert_eq!(server.await_ready(Duration::from_secs(10)).status, 200);
     let status = server.terminate();
-    assert!(
-        status.success() || status.code().is_none(),
-        "status: {status:?}"
-    );
+    support::assert_terminated(status);
 
     let restarted = support::HttpServer::start_node_service(
         workspace.path(),

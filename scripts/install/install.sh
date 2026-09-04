@@ -30,11 +30,11 @@ Usage: install.sh [--repo owner/name] [--version vX.Y.Z] [--bin-dir path]
                   [--uninstall-node-service [--uninstall-node-state --confirmed]]
 
 Environment variables:
-  ARTIFACT Local release tarball to install instead of downloading
+  ARTIFACT Local release tarball to install instead of downloading (skips GitHub download and latest-version lookup)
   REPO     GitHub repository, e.g. org/omakure
-  VERSION  Release tag, e.g. v0.1.0 (defaults to latest)
+  VERSION  Release tag, e.g. v0.1.0 (defaults to latest when not using ARTIFACT)
   BIN_DIR  Install directory (default: ~/.local/bin)
-  --artifact path         Install this tarball instead of downloading one.
+  --artifact path         Install this tarball instead of downloading (skips GitHub version lookup).
   --install-node-service  Opt into privileged machine-service provisioning.
   --node-tokens-file path  Existing hashed tokens TOML for the machine service.
   --uninstall-node-service  Remove only the native service registration.
@@ -421,29 +421,49 @@ fi
 
 require_cmd tar
 
-if [[ -z "${VERSION}" ]]; then
-  VERSION="$(fetch_latest_version "${REPO}")"
-fi
+if [[ -n "${ARTIFACT}" ]]; then
+  if [[ -z "${VERSION}" ]]; then
+    asset="omakure-local.tar.gz"
+  else
+    case "$(uname -m)" in
+      x86_64|amd64)
+        arch="x86_64"
+        ;;
+      arm64|aarch64)
+        arch="aarch64"
+        ;;
+      *)
+        echo "Unsupported architecture: $(uname -m)" >&2
+        exit 1
+        ;;
+    esac
+    asset="${APP_NAME}-${VERSION}-${os}-${arch}.tar.gz"
+  fi
+else
+  if [[ -z "${VERSION}" ]]; then
+    VERSION="$(fetch_latest_version "${REPO}")"
+  fi
 
-if [[ -z "${VERSION}" ]]; then
-  echo "Failed to resolve release version" >&2
-  exit 1
-fi
-
-case "$(uname -m)" in
-  x86_64|amd64)
-    arch="x86_64"
-    ;;
-  arm64|aarch64)
-    arch="aarch64"
-    ;;
-  *)
-    echo "Unsupported architecture: $(uname -m)" >&2
+  if [[ -z "${VERSION}" ]]; then
+    echo "Failed to resolve release version" >&2
     exit 1
-    ;;
- esac
+  fi
 
-asset="${APP_NAME}-${VERSION}-${os}-${arch}.tar.gz"
+  case "$(uname -m)" in
+    x86_64|amd64)
+      arch="x86_64"
+      ;;
+    arm64|aarch64)
+      arch="aarch64"
+      ;;
+    *)
+      echo "Unsupported architecture: $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+
+  asset="${APP_NAME}-${VERSION}-${os}-${arch}.tar.gz"
+fi
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
@@ -509,5 +529,17 @@ if ! echo ":${PATH}:" | grep -q ":${BIN_DIR}:"; then
   echo "  export PATH=\"${BIN_DIR}:\\$PATH\"" >&2
 fi
 
-echo "Installed ${APP_NAME} ${VERSION} to ${BIN_DIR}/${APP_NAME}"
+display_version="${VERSION}"
+if [[ -x "${BIN_DIR}/${APP_NAME}" ]]; then
+  binary_version="$("${BIN_DIR}/${APP_NAME}" --version 2>/dev/null | head -n1 | tr -d '\r')"
+  if [[ -n "${binary_version}" ]]; then
+    if [[ "${binary_version}" == "${APP_NAME} "* ]]; then
+      display_version="${binary_version#${APP_NAME} }"
+    else
+      display_version="${binary_version}"
+    fi
+  fi
+fi
+
+echo "Installed ${APP_NAME} ${display_version} to ${BIN_DIR}/${APP_NAME}"
 echo "Run '${APP_NAME}' from your terminal."

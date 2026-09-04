@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+
+require_script() {
+    [[ -x "$root/$1" ]] || {
+        printf 'check:fast: missing executable script: %s\n' "$1" >&2
+        exit 1
+    }
+}
+
+for script in \
+    scripts/tasks/atomic/shell-syntax \
+    scripts/tasks/atomic/yaml-syntax \
+    scripts/tasks/atomic/complexity-contract \
+    scripts/tasks/atomic/coverage-contract \
+    scripts/tasks/atomic/fmt \
+    scripts/tasks/atomic/clippy \
+    scripts/tasks/atomic/test-lib
+do
+    require_script "$script"
+done
+
+printf 'check:fast: shell syntax\n'
+"$root/scripts/tasks/atomic/shell-syntax"
+printf 'check:fast: YAML syntax\n'
+"$root/scripts/tasks/atomic/yaml-syntax"
+printf 'check:fast: complexity contract fixtures\n'
+"$root/scripts/tasks/atomic/complexity-contract"
+printf 'check:fast: coverage contract fixtures\n'
+"$root/scripts/tasks/atomic/coverage-contract"
+printf 'check:fast: formatting\n'
+"$root/scripts/tasks/atomic/fmt"
+printf 'check:fast: Clippy\n'
+"$root/scripts/tasks/atomic/clippy"
+printf 'check:fast: library tests\n'
+exec "$root/scripts/tasks/atomic/test-lib"

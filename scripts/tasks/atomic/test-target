@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+command -v cargo >/dev/null 2>&1 || { printf 'atomic/test-target: cargo is required\n' >&2; exit 1; }
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$bounded" ]] || { printf 'atomic/test-target: bounded runner is missing\n' >&2; exit 1; }
+(( $# >= 1 )) || { printf 'atomic/test-target: a test target basename is required\n' >&2; exit 2; }
+target="$1"
+shift
+[[ "$target" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || {
+  printf 'atomic/test-target: unsafe test target basename: %s\n' "$target" >&2
+  exit 2
+}
+[[ -f "$root/tests/$target.rs" ]] || {
+  printf 'atomic/test-target: test target does not exist: %s\n' "$target" >&2
+  exit 2
+}
+exec "$bounded" 30m cargo test --test "$target" --locked "$@"

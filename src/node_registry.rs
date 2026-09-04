@@ -15,6 +15,8 @@ use rusqlite::{
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+#[cfg(test)]
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
@@ -37,12 +39,40 @@ const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
 /// this only bounds how far back a single read may look.
 const MAX_LIFECYCLE_SCAN_ROWS: usize = 4_096;
 const HEALTH_PLANE_DISABLED: &str = "disabled";
-/// Test-only fault injection for the Health Plane migration, so the
-/// "migration failed, keep serving with the plane disabled" path can be proven
-/// without leaving unexpected schema objects behind.
+
 #[cfg(test)]
-static HEALTH_MIGRATION_FAULT: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+thread_local! {
+    /// Test-only fault injection for the Health Plane migration, so the
+    /// "migration failed, keep serving with the plane disabled" path can be proven
+    /// without leaving unexpected schema objects behind.
+    static HEALTH_MIGRATION_FAULT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Arms [`HEALTH_MIGRATION_FAULT`] for the current thread and restores the
+/// previous value on drop (including panic unwinding).
+#[cfg(test)]
+struct HealthMigrationFaultGuard {
+    previous: bool,
+}
+
+#[cfg(test)]
+impl HealthMigrationFaultGuard {
+    fn arm() -> Self {
+        HEALTH_MIGRATION_FAULT.with(|fault| {
+            let previous = fault.get();
+            fault.set(true);
+            Self { previous }
+        })
+    }
+}
+
+#[cfg(test)]
+impl Drop for HealthMigrationFaultGuard {
+    fn drop(&mut self) {
+        HEALTH_MIGRATION_FAULT.with(|fault| fault.set(self.previous));
+    }
+}
+
 const HEALTH_PLANE_ENABLED: &str = "enabled";
 const MAX_ENROLLMENT_REPLAY_ROWS: i64 = 1_000_000;
 const MAX_ENROLLMENT_AUDIT_ROWS: i64 = 1_000_000;
@@ -368,7 +398,8 @@ impl NodeRegistry {
         Self::open_existing_with_integrity(context, identity, true)
     }
 
-    /// Open an existing registry for Health's observational read surfaces.
+    /// Open an existing registry for observational read surfaces shared by
+    /// Health and public node status.
     ///
     /// This performs the same filesystem, identity, and schema validation as
     /// [`Self::open_existing`] but deliberately omits the full integrity scan.
@@ -986,95 +1017,17 @@ impl NodeRegistry {
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             cleanup_enrollment_replays(&transaction, now)?;
             cleanup_bootstrap_proofs(&transaction, now)?;
-            let proof_exists: Option<(Option<i64>, Option<Vec<u8>>)> = transaction
-                .query_row(
-                    "SELECT consumed_at, bundle_id FROM bootstrap_proofs
-                     WHERE target_node_id = ?1 AND organization = ?2
-                       AND token_hash = ?3 AND nonce_hash = ?4",
-                    params![
-                        &self.local_node_id,
-                        &bundle.organization,
-                        token_hash.as_slice(),
-                        nonce_hash.as_slice(),
-                    ],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )
-                .optional()?;
-            if proof_exists.as_ref().is_some_and(|(consumed_at, _)| consumed_at.is_some()) {
-                return Err(RegistryError::BootstrapProofConsumed);
-            }
-            if proof_exists.is_none() {
-                let proof_count: i64 = transaction.query_row(
-                    "SELECT COUNT(*) FROM bootstrap_proofs",
-                    [],
-                    |row| row.get(0),
-                )?;
-                if proof_count >= MAX_BOOTSTRAP_PROOF_ROWS {
-                    return Err(RegistryError::BundleCapacity);
-                }
-                transaction.execute(
-                    "INSERT INTO bootstrap_proofs
-                     (target_node_id, organization, token_hash, nonce_hash, expires_at, consumed_at, bundle_id, cleanup_state)
-                     VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL)",
-                    params![
-                        &self.local_node_id,
-                        &bundle.organization,
-                        token_hash.as_slice(),
-                        nonce_hash.as_slice(),
-                        i64::try_from(bundle.replay_expiry()).map_err(|_| {
-                            RegistryError::InvalidInput("bootstrap proof expiry is too large".into())
-                        })?,
-                    ],
-                )?;
-            }
-            if transaction.query_row(
-                "SELECT EXISTS(SELECT 1 FROM enrollment_replays
-                 WHERE replay_kind = 'bundle' AND replay_id = ?1)",
-                [&bundle.bundle_id[..]],
-                |row| row.get::<_, i64>(0),
-            )? != 0
-            {
-                return Err(RegistryError::BundleReplay);
-            }
-            let replay_count: i64 = transaction.query_row(
-                "SELECT COUNT(*) FROM enrollment_replays",
-                [],
-                |row| row.get(0),
-            )?;
-            if replay_count >= MAX_ENROLLMENT_REPLAY_ROWS {
-                return Err(RegistryError::BundleCapacity);
-            }
-            let rate_floor = first_seen.saturating_sub(60);
-            let recent_attempts: i64 = transaction.query_row(
-                "SELECT COUNT(*) FROM enrollment_audits
-                 WHERE event_code IN ('bundle_completed', 'concurrent', 'revoked_authority')
-                   AND occurred_at >= ?1",
-                [rate_floor],
-                |row| row.get(0),
-            )?;
-            if recent_attempts >= MAX_BUNDLE_ACTIVATIONS_PER_MINUTE {
-                return Err(RegistryError::BundleRateLimited);
-            }
-            reject_retained_revocation(
+            ensure_bundle_bootstrap_proof(
                 &transaction,
-                &registration.node_id,
-                &registration.public_key,
+                &self.local_node_id,
+                &bundle.organization,
+                token_hash,
+                nonce_hash,
+                replay_expiry,
             )?;
-            if peer_exists(&transaction, &registration.node_id)?
-                || public_key_exists(&transaction, &registration.public_key)?
-            {
-                return Err(RegistryError::BundleConflict);
-            }
-            self.reject_publisher_conflict(registration.role)?;
-            if registration.role == PeerRole::Conductor
-                && transaction.query_row(
-                    "SELECT EXISTS(SELECT 1 FROM peers WHERE role = 'conductor' AND state = 'active')",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )? != 0
-            {
-                return Err(RegistryError::ConductorConflict);
-            }
+            ensure_bundle_replay_available(&transaction, &bundle.bundle_id)?;
+            ensure_bundle_rate_limit(&transaction, first_seen)?;
+            ensure_bundle_peer_available(self, &transaction, &registration)?;
             let timestamp = now_timestamp();
             transaction.execute(
                 "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
@@ -1205,98 +1158,26 @@ impl NodeRegistry {
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let current = load_peer(&transaction, &registration.node_id)?
                 .ok_or_else(|| RegistryError::NotFound(registration.node_id.clone()))?;
-            let staged: Option<StagedManualEnrollment> = transaction
-                .query_row(
-                    "SELECT pairing_id, request_bytes, request_digest, code_hash, identity_key, transport_key,
-                            request_created_at, request_expires_at, certificate, certificate_digest,
-                            certificate_id, key_epoch, not_before, not_after, state, source
-                     FROM manual_enrollment_requests WHERE request_id = ?1",
-                    [&request.request_id[..]],
-                    |row| {
-                        Ok((
-                            row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?,
-                            row.get(5)?, row.get(6)?, row.get(7)?, row.get(8)?, row.get(9)?,
-                            row.get(10)?, row.get(11)?, row.get(12)?, row.get(13)?, row.get(14)?,
-                            row.get(15)?,
-                        ))
-                    },
-                )
-                .optional()?;
-            let Some((
-                staged_pairing_id,
-                staged_bytes,
-                staged_digest,
-                staged_code_hash,
-                staged_identity_key,
-                staged_transport_key,
-                staged_created_at,
-                staged_expires_at,
-                staged_certificate,
-                staged_certificate_digest,
-                staged_certificate_id,
-                staged_key_epoch,
-                staged_not_before,
-                staged_not_after,
-                staged_state,
-                staged_source,
-            )) = staged
-            else {
-                return Err(RegistryError::NotFound(registration.node_id.clone()));
-            };
-            if staged_source != "manual" || staged_state != "pending" {
-                return Err(RegistryError::EnrollmentConflict);
-            }
-            if staged_pairing_id.as_deref() != Some(request.pairing_id.as_slice())
-                || staged_bytes != request_bytes
-                || staged_digest != request_digest
-                || staged_code_hash != request.code_hash
-                || staged_identity_key != request.proposer_xonly
-                || staged_transport_key != request.proposer_transport_x25519
-                || staged_created_at != i64::try_from(request.created_at).unwrap_or_default()
-                || staged_expires_at != i64::try_from(request.expires_at).unwrap_or_default()
-                || staged_certificate != certificate.as_bytes()
-                || staged_certificate_digest != certificate_digest
-                || staged_certificate_id != certificate.certificate_id()
-                || staged_key_epoch != i64::try_from(certificate.key_epoch()).unwrap_or_default()
-                || staged_not_before != i64::try_from(certificate.not_before()).unwrap_or_default()
-                || staged_not_after != i64::try_from(certificate.not_after()).unwrap_or_default()
-            {
-                return Err(RegistryError::EnrollmentMismatch);
-            }
-            if current.source != PeerSource::Manual {
-                return Err(RegistryError::EnrollmentConflict);
-            }
-            if current.public_key != registration.public_key
-                || current.role != registration.role
-                || current.capabilities != registration.capabilities
-            {
-                return Err(RegistryError::InvalidInput(
-                    "manual enrollment request does not match pending identity".into(),
-                ));
-            }
-            if current.state != PeerState::Pending {
-                return Err(RegistryError::InvalidTransition {
-                    from: current.state,
-                    to: PeerState::Active,
-                });
-            }
+            let staged = load_staged_manual_enrollment(
+                &transaction,
+                &request.request_id,
+                &registration.node_id,
+            )?;
+            ensure_staged_manual_enrollment_matches(
+                &staged,
+                request,
+                &request_bytes,
+                &request_digest,
+                &certificate,
+                &certificate_digest,
+            )?;
+            ensure_manual_peer_can_be_approved(&current, &registration)?;
             reject_retained_revocation(
                 &transaction,
                 &registration.node_id,
                 &registration.public_key,
             )?;
-            let pending_transport: Option<Vec<u8>> = transaction
-                .query_row(
-                    "SELECT public_key FROM transport_key_epochs WHERE node_id = ?1 AND state = 'pending'",
-                    [&registration.node_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if pending_transport.as_deref() != Some(certificate.transport_public().as_slice()) {
-                return Err(RegistryError::InvalidInput(
-                    "manual enrollment transport key does not match pending identity".into(),
-                ));
-            }
+            ensure_pending_transport_key(&transaction, &registration.node_id, &certificate)?;
             transaction.execute(
                 "UPDATE peers SET state = 'active', updated_at = ?1 WHERE node_id = ?2 AND state = 'pending'",
                 params![now_timestamp, registration.node_id],
@@ -2160,6 +2041,15 @@ fn record_enrollment_audit_tx(
     Ok(())
 }
 
+fn ignore_vanished_private_file(
+    result: Result<(), crate::node::NodeError>,
+) -> Result<(), crate::node::NodeError> {
+    match result {
+        Err(error) if crate::node::is_not_found(&error) => Ok(()),
+        other => other,
+    }
+}
+
 fn validate_database_security(context: &NodeContext, path: &Path) -> Result<(), RegistryError> {
     context.validate_private_file(path)?;
     for suffix in ["-wal", "-shm"] {
@@ -2176,7 +2066,7 @@ fn validate_database_security(context: &NodeContext, path: &Path) -> Result<(), 
                     "node SQLite sidecar has an unexpected file type".to_string(),
                 ));
             }
-            Ok(_) => context.validate_private_file(&sidecar)?,
+            Ok(_) => ignore_vanished_private_file(context.validate_private_file(&sidecar))?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
@@ -2926,7 +2816,7 @@ fn migrate_v5_to_v6(connection: &mut Connection) -> Result<(), RegistryError> {
 /// mutates, drops, or rewrites a row created by schema versions 1 through 6.
 fn migrate_v6_to_v7(connection: &mut Connection) -> Result<(), RegistryError> {
     #[cfg(test)]
-    if HEALTH_MIGRATION_FAULT.load(std::sync::atomic::Ordering::SeqCst) {
+    if HEALTH_MIGRATION_FAULT.with(|fault| fault.get()) {
         return Err(RegistryError::InvalidSchema(
             "injected health plane migration failure".to_string(),
         ));
@@ -3486,6 +3376,280 @@ fn bundle_failure_detail(error: &RegistryError) -> &'static str {
         RegistryError::BundleRateLimited => "signed enrollment rate limit exceeded",
         _ => "signed enrollment activation was rejected",
     }
+}
+
+fn ensure_bundle_bootstrap_proof(
+    transaction: &Transaction<'_>,
+    local_node_id: &str,
+    organization: &str,
+    token_hash: &[u8; 32],
+    nonce_hash: &[u8; 32],
+    replay_expiry: i64,
+) -> Result<(), RegistryError> {
+    let proof_exists: Option<(Option<i64>, Option<Vec<u8>>)> = transaction
+        .query_row(
+            "SELECT consumed_at, bundle_id FROM bootstrap_proofs
+             WHERE target_node_id = ?1 AND organization = ?2
+               AND token_hash = ?3 AND nonce_hash = ?4",
+            params![
+                local_node_id,
+                organization,
+                token_hash.as_slice(),
+                nonce_hash.as_slice(),
+            ],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    if proof_exists
+        .as_ref()
+        .is_some_and(|(consumed_at, _)| consumed_at.is_some())
+    {
+        return Err(RegistryError::BootstrapProofConsumed);
+    }
+    if proof_exists.is_none() {
+        let proof_count: i64 =
+            transaction.query_row("SELECT COUNT(*) FROM bootstrap_proofs", [], |row| {
+                row.get(0)
+            })?;
+        if proof_count >= MAX_BOOTSTRAP_PROOF_ROWS {
+            return Err(RegistryError::BundleCapacity);
+        }
+        transaction.execute(
+            "INSERT INTO bootstrap_proofs
+             (target_node_id, organization, token_hash, nonce_hash, expires_at, consumed_at, bundle_id, cleanup_state)
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL)",
+            params![
+                local_node_id,
+                organization,
+                token_hash.as_slice(),
+                nonce_hash.as_slice(),
+                replay_expiry,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn ensure_bundle_replay_available(
+    transaction: &Transaction<'_>,
+    bundle_id: &[u8; 16],
+) -> Result<(), RegistryError> {
+    if transaction.query_row(
+        "SELECT EXISTS(SELECT 1 FROM enrollment_replays
+         WHERE replay_kind = 'bundle' AND replay_id = ?1)",
+        [bundle_id.as_slice()],
+        |row| row.get::<_, i64>(0),
+    )? != 0
+    {
+        return Err(RegistryError::BundleReplay);
+    }
+    let replay_count: i64 =
+        transaction.query_row("SELECT COUNT(*) FROM enrollment_replays", [], |row| {
+            row.get(0)
+        })?;
+    if replay_count >= MAX_ENROLLMENT_REPLAY_ROWS {
+        return Err(RegistryError::BundleCapacity);
+    }
+    Ok(())
+}
+
+fn ensure_bundle_rate_limit(
+    transaction: &Transaction<'_>,
+    first_seen: i64,
+) -> Result<(), RegistryError> {
+    let rate_floor = first_seen.saturating_sub(60);
+    let recent_attempts: i64 = transaction.query_row(
+        "SELECT COUNT(*) FROM enrollment_audits
+         WHERE event_code IN ('bundle_completed', 'concurrent', 'revoked_authority')
+           AND occurred_at >= ?1",
+        [rate_floor],
+        |row| row.get(0),
+    )?;
+    if recent_attempts >= MAX_BUNDLE_ACTIVATIONS_PER_MINUTE {
+        return Err(RegistryError::BundleRateLimited);
+    }
+    Ok(())
+}
+
+fn ensure_bundle_peer_available(
+    registry: &NodeRegistry,
+    transaction: &Transaction<'_>,
+    registration: &PeerRegistration,
+) -> Result<(), RegistryError> {
+    reject_retained_revocation(transaction, &registration.node_id, &registration.public_key)?;
+    if peer_exists(transaction, &registration.node_id)?
+        || public_key_exists(transaction, &registration.public_key)?
+    {
+        return Err(RegistryError::BundleConflict);
+    }
+    registry.reject_publisher_conflict(registration.role)?;
+    if registration.role == PeerRole::Conductor
+        && transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM peers WHERE role = 'conductor' AND state = 'active')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? != 0
+    {
+        return Err(RegistryError::ConductorConflict);
+    }
+    Ok(())
+}
+
+fn load_staged_manual_enrollment(
+    transaction: &Transaction<'_>,
+    request_id: &[u8; 16],
+    node_id: &str,
+) -> Result<StagedManualEnrollment, RegistryError> {
+    transaction
+        .query_row(
+            "SELECT pairing_id, request_bytes, request_digest, code_hash, identity_key, transport_key,
+                    request_created_at, request_expires_at, certificate, certificate_digest,
+                    certificate_id, key_epoch, not_before, not_after, state, source
+             FROM manual_enrollment_requests WHERE request_id = ?1",
+            [request_id.as_slice()],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                    row.get(11)?,
+                    row.get(12)?,
+                    row.get(13)?,
+                    row.get(14)?,
+                    row.get(15)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or_else(|| RegistryError::NotFound(node_id.to_string()))
+}
+
+fn ensure_staged_manual_enrollment_matches(
+    staged: &StagedManualEnrollment,
+    request: &ManualEnrollmentRequest,
+    request_bytes: &[u8],
+    request_digest: &[u8; 32],
+    certificate: &TransportCertificate,
+    certificate_digest: &[u8; 32],
+) -> Result<(), RegistryError> {
+    let staged_source = &staged.15;
+    let staged_state = &staged.14;
+    if staged_source.as_str() != "manual" || staged_state.as_str() != "pending" {
+        return Err(RegistryError::EnrollmentConflict);
+    }
+    ensure_staged_request_fields_match(staged, request, request_bytes, request_digest)?;
+    ensure_staged_certificate_fields_match(staged, certificate, certificate_digest)
+}
+
+fn ensure_staged_request_fields_match(
+    staged: &StagedManualEnrollment,
+    request: &ManualEnrollmentRequest,
+    request_bytes: &[u8],
+    request_digest: &[u8; 32],
+) -> Result<(), RegistryError> {
+    if staged.0.as_deref() != Some(request.pairing_id.as_slice()) {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.1.as_slice() != request_bytes {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.2.as_slice() != request_digest.as_slice() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.3.as_slice() != request.code_hash.as_slice() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.4.as_slice() != request.proposer_xonly.as_slice() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.5.as_slice() != request.proposer_transport_x25519.as_slice() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.6 != i64::try_from(request.created_at).unwrap_or_default() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.7 != i64::try_from(request.expires_at).unwrap_or_default() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    Ok(())
+}
+
+fn ensure_staged_certificate_fields_match(
+    staged: &StagedManualEnrollment,
+    certificate: &TransportCertificate,
+    certificate_digest: &[u8; 32],
+) -> Result<(), RegistryError> {
+    if staged.8.as_slice() != certificate.as_bytes() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.9.as_slice() != certificate_digest.as_slice() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.10.as_slice() != certificate.certificate_id().as_slice() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.11 != i64::try_from(certificate.key_epoch()).unwrap_or_default() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.12 != i64::try_from(certificate.not_before()).unwrap_or_default() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    if staged.13 != i64::try_from(certificate.not_after()).unwrap_or_default() {
+        return Err(RegistryError::EnrollmentMismatch);
+    }
+    Ok(())
+}
+
+fn ensure_manual_peer_can_be_approved(
+    current: &PeerRecord,
+    registration: &PeerRegistration,
+) -> Result<(), RegistryError> {
+    if current.source != PeerSource::Manual {
+        return Err(RegistryError::EnrollmentConflict);
+    }
+    if current.public_key != registration.public_key
+        || current.role != registration.role
+        || current.capabilities != registration.capabilities
+    {
+        return Err(RegistryError::InvalidInput(
+            "manual enrollment request does not match pending identity".into(),
+        ));
+    }
+    if current.state != PeerState::Pending {
+        return Err(RegistryError::InvalidTransition {
+            from: current.state,
+            to: PeerState::Active,
+        });
+    }
+    Ok(())
+}
+
+fn ensure_pending_transport_key(
+    transaction: &Transaction<'_>,
+    node_id: &str,
+    certificate: &TransportCertificate,
+) -> Result<(), RegistryError> {
+    let pending_transport: Option<Vec<u8>> = transaction
+        .query_row(
+            "SELECT public_key FROM transport_key_epochs WHERE node_id = ?1 AND state = 'pending'",
+            [node_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if pending_transport.as_deref() != Some(certificate.transport_public().as_slice()) {
+        return Err(RegistryError::InvalidInput(
+            "manual enrollment transport key does not match pending identity".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn cleanup_enrollment_replays(
@@ -5017,6 +5181,46 @@ mod tests {
             .unwrap();
         assert_eq!(legacy_nulls, (None, None, None));
     }
+    #[test]
+    fn ignore_vanished_private_file_skips_not_found_only() {
+        use std::io;
+
+        let not_found = crate::node::NodeError::Io(io::Error::new(io::ErrorKind::NotFound, "gone"));
+        assert!(ignore_vanished_private_file(Err(not_found)).is_ok());
+
+        let insecure = crate::node::NodeError::InsecurePath("bad".into());
+        assert!(matches!(
+            ignore_vanished_private_file(Err(insecure)),
+            Err(crate::node::NodeError::InsecurePath(_))
+        ));
+        assert!(ignore_vanished_private_file(Ok(())).is_ok());
+    }
+
+    #[test]
+    fn open_health_observational_tolerates_vanished_sqlite_sidecars() {
+        let temp = TempDir::new().unwrap();
+        let node_context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
+        let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+        drop(registry);
+
+        let wal = node_context
+            .database_path()
+            .with_file_name("node.sqlite-wal");
+        fs::write(&wal, b"wal").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&wal, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let status = identity.public_status();
+        assert!(NodeRegistry::open_health_observational(&node_context, status).is_ok());
+
+        if wal.exists() {
+            fs::remove_file(&wal).unwrap();
+        }
+        assert!(NodeRegistry::open_health_observational(&node_context, status).is_ok());
+    }
 
     fn seed_v3_pending_enrollment() -> (TempDir, NodeContext, NodeRegistry, [u8; 16], String) {
         let temp = TempDir::new().unwrap();
@@ -5742,68 +5946,70 @@ mod tests {
         set_new_database_mode(&context.database_path()).unwrap();
         drop(connection);
 
-        HEALTH_MIGRATION_FAULT.store(true, std::sync::atomic::Ordering::SeqCst);
         let identity = NodeIdentity::load_existing(&context).unwrap();
-        let degraded = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        assert!(!degraded.health_plane_enabled().unwrap());
+        let reopened;
+        {
+            let _fault_guard = HealthMigrationFaultGuard::arm();
+            let degraded = NodeRegistry::open(&context, identity.public_status()).unwrap();
+            assert!(!degraded.health_plane_enabled().unwrap());
 
-        let connection = Connection::open(context.database_path()).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, 6, "the database stays at version 6");
-        let audits: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM transport_audit
-                 WHERE event_type = 'health_plane_migration' AND error_code = 1115",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(audits, 1, "the failure is audited once");
-        let health_tables: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'health!_%' ESCAPE '!'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(health_tables, 0, "the failed migration left nothing behind");
-        drop(connection);
+            let connection = Connection::open(context.database_path()).unwrap();
+            let version: i64 = connection
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 6, "the database stays at version 6");
+            let audits: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM transport_audit
+                     WHERE event_type = 'health_plane_migration' AND error_code = 1115",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(audits, 1, "the failure is audited once");
+            let health_tables: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'health!_%' ESCAPE '!'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(health_tables, 0, "the failed migration left nothing behind");
+            drop(connection);
 
-        // Trust operations keep working while the Health Plane is disabled.
-        let remote = k256::schnorr::SigningKey::from_slice(&[5; 32]).unwrap();
-        let xonly = remote.verifying_key().to_bytes();
-        let public_key: String = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
-        degraded
-            .import_manual_peer(PeerRegistration {
-                node_id: node_id_for_x_only_public_key(&xonly),
-                public_key,
-                role: PeerRole::Performer,
-                capabilities: vec!["inventory-health".to_string()],
-                source: PeerSource::Manual,
-                actor: "operator".to_string(),
-                reason: "degraded mode still serves trust".to_string(),
-            })
-            .unwrap();
+            // Trust operations keep working while the Health Plane is disabled.
+            let remote = k256::schnorr::SigningKey::from_slice(&[5; 32]).unwrap();
+            let xonly = remote.verifying_key().to_bytes();
+            let public_key: String = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+            degraded
+                .import_manual_peer(PeerRegistration {
+                    node_id: node_id_for_x_only_public_key(&xonly),
+                    public_key,
+                    role: PeerRole::Performer,
+                    capabilities: vec!["inventory-health".to_string()],
+                    source: PeerSource::Manual,
+                    actor: "operator".to_string(),
+                    reason: "degraded mode still serves trust".to_string(),
+                })
+                .unwrap();
 
-        // A restart never retries the migration on its own.
-        let reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        assert!(!reopened.health_plane_enabled().unwrap());
-        let connection = Connection::open(context.database_path()).unwrap();
-        let audits: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM transport_audit
-                 WHERE event_type = 'health_plane_migration' AND error_code = 1115",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(audits, 1, "retry is never automatic");
-        drop(connection);
+            // A restart never retries the migration on its own.
+            reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
+            assert!(!reopened.health_plane_enabled().unwrap());
+            let connection = Connection::open(context.database_path()).unwrap();
+            let audits: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM transport_audit
+                     WHERE event_type = 'health_plane_migration' AND error_code = 1115",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(audits, 1, "retry is never automatic");
+            drop(connection);
+        }
 
         // An explicit operator retry moves the registry forward.
-        HEALTH_MIGRATION_FAULT.store(false, std::sync::atomic::Ordering::SeqCst);
         assert!(reopened.clear_health_plane_migration_block().unwrap());
         let repaired = NodeRegistry::open(&context, identity.public_status()).unwrap();
         assert!(repaired.health_plane_enabled().unwrap());

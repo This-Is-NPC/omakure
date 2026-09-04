@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+script="$root/scripts/tasks/usage-kdl"
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$script" && -x "$bounded" ]] || { printf 'atomic/usage-kdl: required scripts are missing\n' >&2; exit 1; }
+exec "$bounded" 5m "$script" "$@"

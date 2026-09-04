@@ -306,12 +306,16 @@ results pipe between the two commands without translating fields.
 omakure search deploy --json
 ```
 
-### `omakure init <path> --schema-json '<json>|@file' [--body-stdin] [--force]`
+### `omakure init <path> [--schema-json '<json>|@file'] [--body-stdin] [--force]`
 
-Non-interactive script creation. The supplied schema is validated before
-the file is written, embedded between `OMAKURE_SCHEMA_START` /
-`OMAKURE_SCHEMA_END` with the right comment prefix for the extension,
-and (optionally) the body is read verbatim from stdin.
+Non-interactive script creation. Without `--schema-json`, writes the
+default placeholder template for the extension. With `--schema-json`, the
+supplied schema is validated before the file is written and embedded
+between `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` with the right
+comment prefix. `--body-stdin` applies only together with
+`--schema-json`: stdin is read verbatim and written under the schema
+header. Without `--schema-json`, `--body-stdin` is ignored and the
+default template is written.
 
 ```bash
 omakure --json init agent_made.sh \
@@ -445,6 +449,8 @@ never appears beyond the cursor reported next to it.
 An agent that dispatched work with `omakure node cue` correlates the outcome by
 matching the `expected_run_id` from the dispatch reply against `run-completed`
 in this feed. That is the whole correlation contract; there is no callback.
+When retrying an unanswered dispatch, pass `--cue-id` or JSON `cue_id` with the
+same id from the first reply instead of minting a second one.
 
 ## `run_id` format
 
@@ -648,6 +654,8 @@ omakure trace "<message>" [--level info|warn|error|debug] [--data '<json>']
 Designed to be called **from inside a script** that was launched by
 `omakure run` or `omakure queue worker`. Both inject `OMAKURE_RUN_ID`
 into the child environment so the verb knows which run to attach to.
+Scripts should invoke nested trace via `"$OMAKURE_BIN"` (also injected)
+rather than hard-coding a path to the binary.
 
 Behavior:
 

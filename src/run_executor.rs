@@ -14,6 +14,7 @@ use crate::adapters::script_runner::MultiScriptRunner;
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::ports::ScriptRepository;
 use crate::runs::{self, RunCompletion, RunRow, RunState, RunTrigger};
+use crate::runtime::bash_safe_path;
 use crate::workspace::Workspace;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -199,14 +200,7 @@ pub fn execute_with_heartbeat_guarded(
             file.path.to_string_lossy().to_string(),
         ));
     }
-    env.push(("OMAKURE_RUN_ID".to_string(), row.run_id.clone()));
-    // Pin the workspace so nested `omakure trace` invocations write to
-    // the same `runs.sqlite` even when the worker was launched against
-    // a non-default scripts dir (or a temp dir under `--scripts-dir`).
-    env.push((
-        "OMAKURE_SCRIPTS_DIR".to_string(),
-        workspace.root().to_string_lossy().to_string(),
-    ));
+    push_reserved_run_env(&mut env, workspace, &row.run_id);
 
     let mut command = match MultiScriptRunner::build_command(&script_path, &args, &env) {
         Ok(cmd) => cmd,
@@ -602,6 +596,22 @@ fn check_required_fields(
     Ok(())
 }
 
+/// Path to the running omakure binary, normalized for bash scripts on Windows.
+fn push_reserved_run_env(env: &mut Vec<(String, String)>, workspace: &Workspace, run_id: &str) {
+    env.push(("OMAKURE_RUN_ID".to_string(), run_id.to_string()));
+    env.push((
+        "OMAKURE_SCRIPTS_DIR".to_string(),
+        bash_safe_path(workspace.root()),
+    ));
+    if let Some(bin) = bash_safe_current_exe() {
+        env.push(("OMAKURE_BIN".to_string(), bin));
+    }
+}
+
+fn bash_safe_current_exe() -> Option<String> {
+    std::env::current_exe().ok().map(|exe| bash_safe_path(&exe))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -809,6 +819,38 @@ mod tests {
                 .ends_with(ws.root().to_string_lossy().as_ref()),
             "expected stdout to end with workspace root, got: {:?}",
             result.completion.stdout
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn execute_injects_omakure_bin_env_var() {
+        let ws = make_workspace("omakure_bin_env");
+        let script = write_bash_stub(&ws, "echobin.sh", "echo $OMAKURE_BIN");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        let expected = bash_safe_current_exe().expect("current_exe");
+        assert!(!expected.is_empty());
+        assert!(Path::new(&expected).is_absolute());
+        assert_eq!(
+            result.completion.stdout.trim(),
+            expected,
+            "expected OMAKURE_BIN to match bash-safe current_exe"
         );
         let _ = fs::remove_dir_all(ws.root());
     }

@@ -85,6 +85,24 @@ fn run_tracked_loop(lifecycle: Arc<LoopLifecycle>, run_loop: impl FnOnce()) {
     let _guard = lifecycle.enter();
     run_loop();
 }
+fn start_discovery_service(
+    settings: crate::domain::DiscoverySettings,
+    context: crate::node::NodeContext,
+    direct_port: Option<u16>,
+    secret: Option<String>,
+) -> Result<Option<crate::discovery::DiscoveryService>, crate::discovery::DiscoveryError> {
+    if !settings.enabled {
+        return Ok(None);
+    }
+    match crate::discovery::DiscoveryService::start(settings.clone(), context, direct_port, secret)
+    {
+        Ok(service) => Ok(Some(service)),
+        Err(crate::discovery::DiscoveryError::UnsupportedPlatform) => Ok(Some(
+            crate::discovery::DiscoveryService::disabled(settings, false),
+        )),
+        Err(error) => Err(error),
+    }
+}
 
 pub fn run(
     scripts_dir: PathBuf,
@@ -181,8 +199,8 @@ pub fn run(
         None
     };
 
-    let mut discovery_service = if node_config.discovery.enabled {
-        let secret = if node_config.organization.discovery_secret_ref.is_empty() {
+    let discovery_secret = if node_config.discovery.enabled {
+        if node_config.organization.discovery_secret_ref.is_empty() {
             None
         } else {
             Some(
@@ -193,16 +211,16 @@ pub fn run(
                 )
                 .map_err(|_| "discovery_secret_invalid")?,
             )
-        };
-        Some(crate::discovery::DiscoveryService::start(
-            node_config.discovery.clone(),
-            context.clone(),
-            direct_bind.map(|bind| bind.port()),
-            secret,
-        )?)
+        }
     } else {
         None
     };
+    let mut discovery_service = start_discovery_service(
+        node_config.discovery.clone(),
+        context.clone(),
+        direct_bind.map(|bind| bind.port()),
+        discovery_secret,
+    )?;
 
     let readiness_requires_worker =
         args.readiness_requires_worker || boot.deploy.node.readiness_requires_worker;

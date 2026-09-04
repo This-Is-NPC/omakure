@@ -1,6 +1,6 @@
 //! Generate and check the deterministic Clap-derived CLI reference.
 
-use omakure::cli::inventory::render_cli_reference;
+use omakure::cli::inventory::{normalize_generated_text, render_cli_reference};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -26,7 +26,12 @@ fn main() {
     };
 
     if check {
-        if current.as_deref() != Some(expected.as_str()) {
+        let current_normalized = current
+            .as_deref()
+            .map(normalize_generated_text)
+            .unwrap_or_default();
+        let expected_normalized = normalize_generated_text(&expected);
+        if current_normalized != expected_normalized {
             eprintln!("{REFERENCE} is stale; run `cargo run --bin cli-reference`");
             std::process::exit(1);
         }

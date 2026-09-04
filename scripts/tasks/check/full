@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+
+require_script() {
+    [[ -x "$root/$1" ]] || {
+        printf 'check:full: missing executable script: %s\n' "$1" >&2
+        exit 1
+    }
+}
+
+
+for script in \
+    scripts/tasks/atomic/full-prerequisites \
+    scripts/tasks/atomic/shell-syntax \
+    scripts/tasks/atomic/yaml-syntax \
+    scripts/tasks/atomic/complexity-contract \
+    scripts/tasks/atomic/coverage-contract \
+    scripts/tasks/atomic/fmt \
+    scripts/tasks/atomic/clippy \
+    scripts/tasks/check/platform/linux-gnu \
+    scripts/tasks/atomic/dev-smoke \
+    scripts/tasks/atomic/usage-kdl \
+    scripts/tasks/atomic/usage-docs \
+    scripts/tasks/atomic/operation-catalog \
+    scripts/tasks/atomic/complexity \
+    scripts/tasks/atomic/package-artifact \
+    scripts/tasks/atomic/vm-static \
+    scripts/tasks/cert/docker-smoke \
+    scripts/tasks/cert/transport \
+    scripts/tasks/cert/health \
+    scripts/tasks/cert/health-cleanup
+do
+    require_script "$script"
+done
+printf 'check:full: environment prerequisites\n'
+"$root/scripts/tasks/atomic/full-prerequisites"
+
+printf 'check:full: shell syntax\n'
+"$root/scripts/tasks/atomic/shell-syntax"
+printf 'check:full: YAML syntax\n'
+"$root/scripts/tasks/atomic/yaml-syntax"
+printf 'check:full: complexity contract fixtures\n'
+"$root/scripts/tasks/atomic/complexity-contract"
+printf 'check:full: coverage contract fixtures\n'
+"$root/scripts/tasks/atomic/coverage-contract"
+printf 'check:full: formatting\n'
+"$root/scripts/tasks/atomic/fmt"
+printf 'check:full: Clippy\n'
+"$root/scripts/tasks/atomic/clippy"
+
+printf 'check:full: Linux GNU platform suite\n'
+"$root/scripts/tasks/check/platform/linux-gnu"
+printf 'check:full: development service smoke\n'
+"$root/scripts/tasks/atomic/dev-smoke"
+printf 'check:full: Usage KDL and docs/catalog checks\n'
+"$root/scripts/tasks/atomic/usage-kdl" --check
+"$root/scripts/tasks/atomic/usage-docs" --check
+"$root/scripts/tasks/atomic/operation-catalog" --check
+printf 'check:full: deterministic coverage\n'
+"$root/scripts/tasks/atomic/coverage"
+printf 'check:full: complexity calibration and gate\n'
+"$root/scripts/tasks/atomic/complexity"
+printf 'check:full: package release artifact\n'
+"$root/scripts/tasks/atomic/package-artifact"
+printf 'check:full: Fedora VM static policy\n'
+"$root/scripts/tasks/atomic/vm-static"
+printf 'check:full: Docker smoke\n'
+"$root/scripts/tasks/cert/docker-smoke"
+printf 'check:full: transport certification\n'
+"$root/scripts/tasks/cert/transport"
+printf 'check:full: Health certification\n'
+"$root/scripts/tasks/cert/health"
+printf 'check:full: Health cleanup verification\n'
+exec "$root/scripts/tasks/cert/health-cleanup"

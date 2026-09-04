@@ -27,11 +27,13 @@ env:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - platform: linux-gnu
+            os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             asset_os: linux
             asset_arch: x86_64
@@ -40,14 +42,16 @@ jobs:
             rustflags: ""
           # Statically linked, so it runs on any Linux regardless of the host
           # glibc. This is the asset `install.sh` prefers on Linux.
-          - os: ubuntu-latest
+          - platform: linux-musl
+            os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             asset_os: linux-musl
             asset_arch: x86_64
             ext: tar.gz
             bin: omakure
             rustflags: ""
-          - os: ubuntu-24.04-arm
+          - platform: linux-gnu
+            os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             asset_os: linux
             asset_arch: aarch64
@@ -56,35 +60,40 @@ jobs:
             rustflags: ""
           # Native ARM64 musl build and smoke test. This is statically linked,
           # so it runs on any ARM64 Linux regardless of the host glibc.
-          - os: ubuntu-24.04-arm
+          - platform: linux-musl
+            os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
             asset_os: linux-musl
             asset_arch: aarch64
             ext: tar.gz
             bin: omakure
             rustflags: ""
-          - os: macos-15-intel
+          - platform: macos
+            os: macos-15-intel
             target: x86_64-apple-darwin
             asset_os: darwin
             asset_arch: x86_64
             ext: tar.gz
             bin: omakure
             rustflags: ""
-          - os: macos-15
+          - platform: macos
+            os: macos-15
             target: aarch64-apple-darwin
             asset_os: darwin
             asset_arch: aarch64
             ext: tar.gz
             bin: omakure
             rustflags: ""
-          - os: windows-latest
+          - platform: windows
+            os: windows-latest
             target: x86_64-pc-windows-msvc
             asset_os: windows
             asset_arch: x86_64
             ext: zip
             bin: omakure.exe
             rustflags: "-C target-feature=+crt-static"
-          - os: windows-11-arm
+          - platform: windows
+            os: windows-11-arm
             target: aarch64-pc-windows-msvc
             asset_os: windows
             asset_arch: aarch64
@@ -101,84 +110,19 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
-      - name: Configure private macOS temporary directory
-        if: contains(matrix.target, '-apple-darwin')
-        shell: bash
-        run: |
-          set -euo pipefail
-          runner_temp="$(cd -- "${RUNNER_TEMP}" && pwd -P)"
-          current_owner_group="$(id -u):$(id -g)"
-          runner_owner_group="$(stat -f '%u:%g' "${runner_temp}")"
-          [[ "${runner_owner_group}" == "${current_owner_group}" ]] || {
-            echo "RUNNER_TEMP is not owned by the current user/group" >&2
-            exit 1
-          }
-          tmpdir="${runner_temp}/omakure-tmp"
-          [[ ! -L "${tmpdir}" ]] || {
-            echo "refusing symlinked macOS temporary directory" >&2
-            exit 1
-          }
-          if [[ ! -e "${tmpdir}" ]]; then
-            mkdir "${tmpdir}"
-          fi
-          [[ -d "${tmpdir}" ]] || {
-            echo "macOS temporary path is not a directory" >&2
-            exit 1
-          }
-          physical_tmpdir="$(cd -- "${tmpdir}" && pwd -P)"
-          [[ "${physical_tmpdir}" == "${tmpdir}" ]] || {
-            echo "refusing non-physical macOS temporary directory" >&2
-            exit 1
-          }
-          chmod 700 "${physical_tmpdir}"
-          tmpdir_owner_group="$(stat -f '%u:%g' "${physical_tmpdir}")"
-          [[ "${tmpdir_owner_group}" == "${current_owner_group}" ]] || {
-            echo "macOS temporary directory is not owned by the current user/group" >&2
-            exit 1
-          }
-          printf 'TMPDIR=%s\n' "${physical_tmpdir}" >> "${GITHUB_ENV}"
       - name: Install musl toolchain
         if: endsWith(matrix.target, '-unknown-linux-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      - name: Test headless binary
-        run: cargo test --all-targets --locked
-      - name: Test node-service lifecycle surface
-        run: cargo test --test node_service_e2e --test policy_e2e --locked
-
-      - name: Build
+      - name: Run platform checks
+        shell: bash
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: cargo build --release --bin omakure --target ${{ matrix.target }} --locked
-
-      - name: Verify musl binary is statically linked
-        if: endsWith(matrix.target, '-unknown-linux-musl')
-        shell: bash
-        run: |
-          set -euo pipefail
-          binary="target/${{ matrix.target }}/release/${{ matrix.bin }}"
-          compiler_machine="$(musl-gcc -dumpmachine)"
-          case "${{ matrix.target }}" in
-            x86_64-*) [[ "${compiler_machine}" == *x86_64* ]] ;;
-            aarch64-*) [[ "${compiler_machine}" == *aarch64* ]] ;;
-            *) echo "unexpected musl target: ${{ matrix.target }}" >&2; exit 1 ;;
-          esac
-          file_output="$(file "${binary}")"
-          echo "${file_output}"
-          grep -Eqi 'static(ally|-pie) linked' <<<"${file_output}"
-          case "${{ matrix.target }}" in
-            x86_64-*) grep -Eqi 'x86-64|x86_64' <<<"${file_output}" ;;
-            aarch64-*) grep -Eqi 'aarch64|ARM' <<<"${file_output}" ;;
-          esac
-          ! readelf -l "${binary}" | grep -q 'INTERP'
-
-      - name: Run native release binary smoke test
-        shell: bash
-        run: target/${{ matrix.target }}/release/${{ matrix.bin }} --version
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"
 
       - name: Package
         shell: bash

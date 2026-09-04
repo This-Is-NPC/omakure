@@ -170,7 +170,23 @@ impl BehavioralContext {
         }
         json_args.extend_from_slice(args);
         let output = self.cli(&json_args);
-        assert!(output.status.success(), "CLI failed for {args:?}");
+        assert!(
+            output.status.success(),
+            "CLI failed for {args:?}\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        support::json_envelope(&output.stdout)
+    }
+
+    /// Parse JSON CLI output without requiring a successful process exit.
+    pub fn cli_json_any(&self, args: &[&str]) -> Value {
+        let mut json_args = Vec::with_capacity(args.len() + 1);
+        if !args.contains(&"--json") {
+            json_args.push("--json");
+        }
+        json_args.extend_from_slice(args);
+        let output = self.cli(&json_args);
         support::json_envelope(&output.stdout)
     }
 

@@ -287,6 +287,14 @@ pub fn within_validity_window(not_before: i64, expires_at: i64, now: i64) -> Res
     Ok(())
 }
 
+/// The frozen `cue_id` grammar: 32 lowercase hex chars.
+pub fn is_well_formed_cue_id(cue_id: &str) -> bool {
+    cue_id.len() == crate::health_plane::bounds::OPAQUE_ID_HEX_CHARS
+        && cue_id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 /// The frozen script-name grammar: `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`.
 ///
 /// This is a *shape* check, never the authorization decision. A well-formed name
@@ -394,11 +402,7 @@ impl CueDispatch {
             return None;
         }
         let cue_id = object.get("cue_id")?.as_str()?.to_string();
-        if cue_id.len() != crate::health_plane::bounds::OPAQUE_ID_HEX_CHARS
-            || !cue_id
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
+        if !is_well_formed_cue_id(&cue_id) {
             return None;
         }
         let script = object.get("script")?.as_str()?.to_string();
@@ -1604,6 +1608,21 @@ mod tests {
         }))
         .unwrap();
         assert!(!declares_secret_field(&without));
+    }
+
+    #[test]
+    fn the_cue_id_grammar_is_the_frozen_one() {
+        assert!(is_well_formed_cue_id("0123456789abcdef0123456789abcdef"));
+        for bad in [
+            "",
+            "0123456789abcdef0123456789abcde",
+            "0123456789abcdef0123456789abcdef0",
+            "0123456789ABCDEF0123456789ABCDEF",
+            "0123456789abcdef0123456789abcdeg",
+            "0123456789AbCdEf0123456789AbCdEf",
+        ] {
+            assert!(!is_well_formed_cue_id(bad), "{bad:?} should be invalid");
+        }
     }
 
     #[test]

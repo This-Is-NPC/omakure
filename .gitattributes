@@ -2,3 +2,8 @@
 docs/cli-http-parity.md text eol=lf
 docs/operation-catalog.md text eol=lf
 docs/operation-support-matrix.md text eol=lf
+docs/cli-reference.md text eol=lf
+docs/usage/omakure.md text eol=lf
+docs/usage/omakure.1 text eol=lf
+docs/usage/omakure.kdl text eol=lf
+scripts/install/install.sh text eol=lf

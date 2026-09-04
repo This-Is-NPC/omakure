@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+script="$root/scripts/tasks/complexity-report"
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$script" && -x "$bounded" ]] || { printf 'atomic/complexity-report: required scripts are missing\n' >&2; exit 1; }
+exec "$bounded" 30m "$script" --source-root . --output target/quality/complexity-report.json "$@"

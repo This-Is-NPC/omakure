@@ -55,7 +55,7 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
         name: Some(result.display_name),
         description: result.description,
         tags: result.tags,
-        field_count: 0,
+        field_count: result.field_count,
         schema_error: result.schema_error,
     }
 }
@@ -139,6 +139,7 @@ mod tests {
                 display_name: "manifest".into(),
                 description: None,
                 tags: Vec::new(),
+                field_count: 0,
                 schema_error: None,
             },
             scripts_root.path(),
@@ -181,6 +182,34 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].relative_path, "deploy.sh");
+    }
+
+    #[test]
+    fn search_scripts_field_count_matches_indexed_schema_fields() {
+        let dir = TempDir::new().unwrap();
+        let workspace = Workspace::new(dir.path().to_path_buf());
+        std::fs::write(
+            workspace.scripts_root().join("form.sh"),
+            r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"Form","Description":"Ship","Fields":[{"Name":"alpha","Type":"string","Order":0,"Required":true},{"Name":"beta","Type":"string","Order":1}]}
+# OMAKURE_SCHEMA_END
+"#,
+        )
+        .unwrap();
+
+        let results = search_scripts(
+            &workspace,
+            SearchScriptsRequest {
+                query: "form".into(),
+                tags: Vec::new(),
+                refresh: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].field_count, 2);
     }
 
     #[test]

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+for command in cargo openssl; do
+  command -v "$command" >/dev/null 2>&1 || { printf 'atomic/node-serve: %s is required\n' "$command" >&2; exit 1; }
+done
+exec env OMAKURE_API_TOKEN="$(openssl rand -hex 32)" cargo run --bin omakure -- node serve --workers 1 --capability all "$@"

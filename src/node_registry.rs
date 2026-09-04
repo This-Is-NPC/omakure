@@ -15,6 +15,8 @@ use rusqlite::{
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+#[cfg(test)]
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
@@ -37,12 +39,40 @@ const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
 /// this only bounds how far back a single read may look.
 const MAX_LIFECYCLE_SCAN_ROWS: usize = 4_096;
 const HEALTH_PLANE_DISABLED: &str = "disabled";
-/// Test-only fault injection for the Health Plane migration, so the
-/// "migration failed, keep serving with the plane disabled" path can be proven
-/// without leaving unexpected schema objects behind.
+
 #[cfg(test)]
-static HEALTH_MIGRATION_FAULT: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+thread_local! {
+    /// Test-only fault injection for the Health Plane migration, so the
+    /// "migration failed, keep serving with the plane disabled" path can be proven
+    /// without leaving unexpected schema objects behind.
+    static HEALTH_MIGRATION_FAULT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Arms [`HEALTH_MIGRATION_FAULT`] for the current thread and restores the
+/// previous value on drop (including panic unwinding).
+#[cfg(test)]
+struct HealthMigrationFaultGuard {
+    previous: bool,
+}
+
+#[cfg(test)]
+impl HealthMigrationFaultGuard {
+    fn arm() -> Self {
+        HEALTH_MIGRATION_FAULT.with(|fault| {
+            let previous = fault.get();
+            fault.set(true);
+            Self { previous }
+        })
+    }
+}
+
+#[cfg(test)]
+impl Drop for HealthMigrationFaultGuard {
+    fn drop(&mut self) {
+        HEALTH_MIGRATION_FAULT.with(|fault| fault.set(self.previous));
+    }
+}
+
 const HEALTH_PLANE_ENABLED: &str = "enabled";
 const MAX_ENROLLMENT_REPLAY_ROWS: i64 = 1_000_000;
 const MAX_ENROLLMENT_AUDIT_ROWS: i64 = 1_000_000;
@@ -2786,7 +2816,7 @@ fn migrate_v5_to_v6(connection: &mut Connection) -> Result<(), RegistryError> {
 /// mutates, drops, or rewrites a row created by schema versions 1 through 6.
 fn migrate_v6_to_v7(connection: &mut Connection) -> Result<(), RegistryError> {
     #[cfg(test)]
-    if HEALTH_MIGRATION_FAULT.load(std::sync::atomic::Ordering::SeqCst) {
+    if HEALTH_MIGRATION_FAULT.with(|fault| fault.get()) {
         return Err(RegistryError::InvalidSchema(
             "injected health plane migration failure".to_string(),
         ));
@@ -5916,68 +5946,70 @@ mod tests {
         set_new_database_mode(&context.database_path()).unwrap();
         drop(connection);
 
-        HEALTH_MIGRATION_FAULT.store(true, std::sync::atomic::Ordering::SeqCst);
         let identity = NodeIdentity::load_existing(&context).unwrap();
-        let degraded = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        assert!(!degraded.health_plane_enabled().unwrap());
+        let reopened;
+        {
+            let _fault_guard = HealthMigrationFaultGuard::arm();
+            let degraded = NodeRegistry::open(&context, identity.public_status()).unwrap();
+            assert!(!degraded.health_plane_enabled().unwrap());
 
-        let connection = Connection::open(context.database_path()).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, 6, "the database stays at version 6");
-        let audits: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM transport_audit
-                 WHERE event_type = 'health_plane_migration' AND error_code = 1115",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(audits, 1, "the failure is audited once");
-        let health_tables: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'health!_%' ESCAPE '!'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(health_tables, 0, "the failed migration left nothing behind");
-        drop(connection);
+            let connection = Connection::open(context.database_path()).unwrap();
+            let version: i64 = connection
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 6, "the database stays at version 6");
+            let audits: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM transport_audit
+                     WHERE event_type = 'health_plane_migration' AND error_code = 1115",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(audits, 1, "the failure is audited once");
+            let health_tables: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'health!_%' ESCAPE '!'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(health_tables, 0, "the failed migration left nothing behind");
+            drop(connection);
 
-        // Trust operations keep working while the Health Plane is disabled.
-        let remote = k256::schnorr::SigningKey::from_slice(&[5; 32]).unwrap();
-        let xonly = remote.verifying_key().to_bytes();
-        let public_key: String = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
-        degraded
-            .import_manual_peer(PeerRegistration {
-                node_id: node_id_for_x_only_public_key(&xonly),
-                public_key,
-                role: PeerRole::Performer,
-                capabilities: vec!["inventory-health".to_string()],
-                source: PeerSource::Manual,
-                actor: "operator".to_string(),
-                reason: "degraded mode still serves trust".to_string(),
-            })
-            .unwrap();
+            // Trust operations keep working while the Health Plane is disabled.
+            let remote = k256::schnorr::SigningKey::from_slice(&[5; 32]).unwrap();
+            let xonly = remote.verifying_key().to_bytes();
+            let public_key: String = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+            degraded
+                .import_manual_peer(PeerRegistration {
+                    node_id: node_id_for_x_only_public_key(&xonly),
+                    public_key,
+                    role: PeerRole::Performer,
+                    capabilities: vec!["inventory-health".to_string()],
+                    source: PeerSource::Manual,
+                    actor: "operator".to_string(),
+                    reason: "degraded mode still serves trust".to_string(),
+                })
+                .unwrap();
 
-        // A restart never retries the migration on its own.
-        let reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        assert!(!reopened.health_plane_enabled().unwrap());
-        let connection = Connection::open(context.database_path()).unwrap();
-        let audits: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM transport_audit
-                 WHERE event_type = 'health_plane_migration' AND error_code = 1115",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(audits, 1, "retry is never automatic");
-        drop(connection);
+            // A restart never retries the migration on its own.
+            reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
+            assert!(!reopened.health_plane_enabled().unwrap());
+            let connection = Connection::open(context.database_path()).unwrap();
+            let audits: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM transport_audit
+                     WHERE event_type = 'health_plane_migration' AND error_code = 1115",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(audits, 1, "retry is never automatic");
+            drop(connection);
+        }
 
         // An explicit operator retry moves the registry forward.
-        HEALTH_MIGRATION_FAULT.store(false, std::sync::atomic::Ordering::SeqCst);
         assert!(reopened.clear_health_plane_migration_block().unwrap());
         let repaired = NodeRegistry::open(&context, identity.public_status()).unwrap();
         assert!(repaired.health_plane_enabled().unwrap());

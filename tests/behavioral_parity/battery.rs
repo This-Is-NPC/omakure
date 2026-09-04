@@ -36,6 +36,29 @@ pub fn probes() -> Vec<(&'static str, Probe)> {
 
 const BATTERY: &str = "fixture-battery";
 const SCRIPT: &str = "local.echo";
+fn normalized_local_git_url(path: &Path) -> String {
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    strip_windows_verbatim_owned(canonical.to_string_lossy().into_owned())
+}
+
+#[cfg(windows)]
+fn strip_windows_verbatim_owned(value: String) -> String {
+    if let Some(stripped) = value.strip_prefix(r"\\?\") {
+        if let Some(unc) = stripped
+            .strip_prefix("UNC\\")
+            .or_else(|| stripped.strip_prefix("UNC/"))
+        {
+            return format!(r"\\{unc}");
+        }
+        return stripped.to_string();
+    }
+    value
+}
+
+#[cfg(not(windows))]
+fn strip_windows_verbatim_owned(value: String) -> String {
+    value
+}
 
 fn battery_list(parent: &BehavioralContext) -> Result<ProbeEvidence, String> {
     let ctx = parent.derive("battery_list", &["batteries:read"]);
@@ -60,15 +83,11 @@ fn battery_list(parent: &BehavioralContext) -> Result<ProbeEvidence, String> {
     let http = ctx.http_json(ctx.server.get(endpoint));
     let cli_data = battery_list_projection(&cli);
     let http_data = battery_list_projection(&http.1);
+    let expected_git_url = normalized_local_git_url(&ctx.fixture.repository);
     if cli_data.as_array().is_none_or(|items| {
         items.len() != 1
             || items[0]["name"] != BATTERY
-            || items[0]["git_url"]
-                != ctx
-                    .fixture
-                    .repository
-                    .to_str()
-                    .expect("repository path is UTF-8")
+            || items[0]["git_url"] != expected_git_url
             || items[0]["requested_ref"] != "main"
     }) {
         return Err(format!(

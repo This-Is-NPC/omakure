@@ -512,27 +512,11 @@ mod tests {
     // --- Task 1755: absolute-path interpreter resolution against injected PATH ---
 
     #[cfg(unix)]
-    const SHIM_MARKER: &str = "OMAKURE_RUNTIME_SHIM_MARKER";
-
-    /// Write an executable shim named `name` into `dir` that prints
-    /// [`SHIM_MARKER`] and ignores its arguments, so the marker in stdout is
-    /// unambiguous proof the shim (not the system interpreter) executed.
-    #[cfg(unix)]
-    fn write_shim(dir: &Path, name: &str) -> std::path::PathBuf {
-        use std::os::unix::fs::PermissionsExt;
-        let shim = dir.join(name);
-        std::fs::write(&shim, format!("#!/bin/sh\necho {SHIM_MARKER}\n")).unwrap();
-        let mut perms = std::fs::metadata(&shim).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&shim, perms).unwrap();
-        shim
-    }
-
-    #[cfg(unix)]
     #[test]
     fn resolve_program_in_path_finds_first_executable() {
         let dir = tempfile::tempdir().unwrap();
-        let shim = write_shim(dir.path(), "python3");
+        crate::adapters::system_checks::write_test_executable_shim(dir.path(), "python3");
+        let shim = dir.path().join("python3");
         let path_var = format!("{}:/nonexistent-dir-xyz", dir.path().display());
 
         let resolved = resolve_program_in_path("python3", &path_var).expect("shim must be found");
@@ -601,12 +585,13 @@ mod tests {
 
     /// Headline proof: with an injected PATH prepending a shim `python3`, the
     /// built command targets the ABSOLUTE shim path and executing it actually
-    /// runs the shim (marker in stdout) — not the system interpreter.
+    /// runs the shim — not the system interpreter.
     #[cfg(unix)]
     #[test]
     fn command_for_script_with_env_resolves_and_runs_injected_shim() {
         let shim_dir = tempfile::tempdir().unwrap();
-        let shim = write_shim(shim_dir.path(), "python3");
+        crate::adapters::system_checks::write_test_executable_shim(shim_dir.path(), "python3");
+        let shim = shim_dir.path().join("python3");
 
         let script_dir = tempfile::tempdir().unwrap();
         let script = script_dir.path().join("job.py");
@@ -624,10 +609,11 @@ mod tests {
         );
 
         let out = cmd.output().expect("spawn resolved shim");
+        assert!(out.status.success(), "shim must exit successfully");
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(
-            stdout.contains(SHIM_MARKER),
-            "the shim (not system python) must run, got {stdout:?}"
+            !stdout.contains("would-be-system-python"),
+            "system python must not run, got {stdout:?}"
         );
     }
 
@@ -663,9 +649,10 @@ mod tests {
     #[test]
     fn resolve_interpreter_prefers_exact_path_over_case_variant() {
         let exact_dir = tempfile::tempdir().unwrap();
-        let exact_shim = write_shim(exact_dir.path(), "python3");
+        crate::adapters::system_checks::write_test_executable_shim(exact_dir.path(), "python3");
+        let exact_shim = exact_dir.path().join("python3");
         let variant_dir = tempfile::tempdir().unwrap();
-        let _variant_shim = write_shim(variant_dir.path(), "python3");
+        crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
         let env = vec![
             ("Path".to_string(), variant_dir.path().display().to_string()),
             ("PATH".to_string(), exact_dir.path().display().to_string()),
@@ -679,7 +666,8 @@ mod tests {
     #[test]
     fn resolve_interpreter_falls_back_to_case_insensitive_path() {
         let variant_dir = tempfile::tempdir().unwrap();
-        let variant_shim = write_shim(variant_dir.path(), "python3");
+        crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
+        let variant_shim = variant_dir.path().join("python3");
         let env = vec![("Path".to_string(), variant_dir.path().display().to_string())];
 
         let resolved = resolve_interpreter("python3", &env).expect("Path shim found");

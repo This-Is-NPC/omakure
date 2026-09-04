@@ -533,8 +533,9 @@ fn prepare_git_askpass(
             let mut bytes = [0u8; 8];
             rand::thread_rng().fill_bytes(&mut bytes);
             let candidate = tmp_root.join(format!(
-                "git-askpass-{}-{}",
+                "git-askpass-{}-{}-{}",
                 std::process::id(),
+                format!("{:?}", std::thread::current().id()),
                 u64::from_le_bytes(bytes)
             ));
             match fs::create_dir(&candidate) {
@@ -591,7 +592,15 @@ fn prepare_git_askpass(
     // Resolve token via relative path under $0's directory — no shell-quoted
     // absolute paths (avoids `'` injection and path-with-spaces breakage).
     let script = "#!/bin/sh\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n[ -n \"$OMAKURE_GIT_AUTHORITY\" ] || exit 1\ncase \"$1\" in\n*\"//$OMAKURE_GIT_AUTHORITY/\"*|*\"//$OMAKURE_GIT_AUTHORITY'\"*|*\"@$OMAKURE_GIT_AUTHORITY/\"*|*\"@$OMAKURE_GIT_AUTHORITY'\"*) ;;\n*) exit 1 ;;\nesac\ncase \"$1\" in\n*Username*|*username*) printf '%s\\n' 'x-access-token' ;;\n*) cat \"$DIR/token\" ;;\nesac\n";
-    write_secret_file(&script_path, script.as_bytes())?;
+    let script_temp = dir.join(format!(".askpass.sh.{}.tmp", std::process::id()));
+    write_secret_file(&script_temp, script.as_bytes())?;
+    fs::rename(&script_temp, &script_path).map_err(|err| {
+        let _ = fs::remove_file(&script_temp);
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to install askpass script: {err}"),
+        )
+    })?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -644,6 +653,8 @@ fn write_secret_file(path: &Path, contents: &[u8]) -> OperationResult<()> {
             format!("failed to sync secret file: {err}"),
         )
     })?;
+    // Close before chmod/rename so concurrent exec does not hit ETXTBSY (Linux/musl).
+    drop(file);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

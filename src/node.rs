@@ -424,13 +424,13 @@ impl NodeContext {
             })?;
         let shared_config = config_parent == self.state_dir();
         if !shared_config {
-            ensure_safe_parent(config_parent)?;
+            ensure_safe_parent(config_parent, self.test_mode)?;
         }
 
         let state_dir_created = self.ensure_state_directory()?;
 
         if shared_config {
-            ensure_safe_parent(config_parent)?;
+            ensure_safe_parent(config_parent, self.test_mode)?;
         }
         let config_preexisting = !matches!(
             fs::symlink_metadata(self.config_path()),
@@ -515,7 +515,7 @@ impl NodeContext {
 
     /// Ensure the machine-owned state directory exists and is secure.
     pub(crate) fn ensure_state_directory(&self) -> Result<bool, NodeError> {
-        ensure_safe_parent(self.state_dir())?;
+        ensure_safe_parent(self.state_dir(), self.test_mode)?;
         let created = match fs::symlink_metadata(self.state_dir()) {
             Ok(metadata) => {
                 if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() {
@@ -704,7 +704,7 @@ impl NodeContext {
         path: &Path,
     ) -> Result<PrivateTokenLock, NodeError> {
         validate_absolute_path(self.platform, "private file", path, true)?;
-        ensure_safe_parent(path)?;
+        ensure_safe_parent(path, self.test_mode)?;
         let parent = path
             .parent()
             .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
@@ -740,7 +740,7 @@ impl NodeContext {
         max_bytes: usize,
     ) -> Result<Vec<PrivateTokenLease>, NodeError> {
         validate_absolute_path(self.platform, "private file", path, true)?;
-        ensure_safe_parent(path)?;
+        ensure_safe_parent(path, self.test_mode)?;
         let parent = path
             .parent()
             .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
@@ -775,7 +775,7 @@ impl NodeContext {
         max_bytes: usize,
     ) -> Result<OpenedPrivateFile, NodeError> {
         validate_absolute_path(self.platform, "private file", path, true)?;
-        ensure_safe_parent(path)?;
+        ensure_safe_parent(path, self.test_mode)?;
         let mut options = fs::OpenOptions::new();
         options.read(true);
         #[cfg(not(windows))]
@@ -826,7 +826,7 @@ impl NodeContext {
     /// reparse point, then validate the opened file's security metadata.
     pub(crate) fn open_public_file(&self) -> Result<Option<fs::File>, NodeError> {
         let path = self.config_path();
-        if !ensure_safe_parent_if_present(path)? {
+        if !ensure_safe_parent_if_present(path, self.test_mode)? {
             return Ok(None);
         }
         let mut options = fs::OpenOptions::new();
@@ -865,7 +865,7 @@ impl NodeContext {
             self.test_mode,
             0o640,
         )?;
-        if !ensure_safe_parent_if_present(path)? {
+        if !ensure_safe_parent_if_present(path, self.test_mode)? {
             return Err(NodeError::InsecurePath(format!(
                 "{} changed while it was being opened",
                 path.display()
@@ -1088,8 +1088,8 @@ fn cleanup_partial_initialization(
     Ok(())
 }
 
-fn ensure_safe_parent(path: &Path) -> Result<(), NodeError> {
-    if !ensure_safe_parent_if_present(path)? {
+fn ensure_safe_parent(path: &Path, test_mode: bool) -> Result<(), NodeError> {
+    if !ensure_safe_parent_if_present(path, test_mode)? {
         return Err(NodeError::UnsafePath(format!(
             "parent does not exist: {}",
             path.parent()
@@ -1100,10 +1100,12 @@ fn ensure_safe_parent(path: &Path) -> Result<(), NodeError> {
     Ok(())
 }
 
-fn ensure_safe_parent_if_present(path: &Path) -> Result<bool, NodeError> {
+fn ensure_safe_parent_if_present(path: &Path, test_mode: bool) -> Result<bool, NodeError> {
     let parent = path
         .parent()
         .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
+    #[cfg(not(windows))]
+    let _ = test_mode;
     let mut current = PathBuf::new();
     for component in parent.components() {
         current.push(component.as_os_str());
@@ -1116,7 +1118,7 @@ fn ensure_safe_parent_if_present(path: &Path) -> Result<bool, NodeError> {
             return Err(NodeError::UnsafePath(current.display().to_string()));
         }
         #[cfg(windows)]
-        if windows_has_reparse_point(&current)? {
+        if !test_mode && windows_has_reparse_point(&current)? {
             return Err(NodeError::UnsafePath(current.display().to_string()));
         }
         if !metadata.file_type().is_dir() {

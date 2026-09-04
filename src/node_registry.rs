@@ -368,7 +368,8 @@ impl NodeRegistry {
         Self::open_existing_with_integrity(context, identity, true)
     }
 
-    /// Open an existing registry for Health's observational read surfaces.
+    /// Open an existing registry for observational read surfaces shared by
+    /// Health and public node status.
     ///
     /// This performs the same filesystem, identity, and schema validation as
     /// [`Self::open_existing`] but deliberately omits the full integrity scan.

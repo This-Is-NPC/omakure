@@ -307,7 +307,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
     }
 
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
-    let registry = NodeRegistry::open_existing(context, identity.public_status())
+    let registry = NodeRegistry::open_health_observational(context, identity.public_status())
         .map_err(map_registry_error)?;
     let counts = registry.peer_counts().map_err(map_registry_error)?;
     Ok(NodeStatus {

@@ -64,6 +64,12 @@ command instead starts a temporary bounded listener, waits for its requested
 scan interval, and returns a fresh scan snapshot; neither path creates trust or
 a session.
 
+`GET /v1/node/status` is observational: it reports the node's current identity,
+trust, and transport snapshot without running a full `PRAGMA integrity_check` on
+every request. The same registry opener backs this route and the CLI
+`omakure node status --json` command, matching the observational posture of
+`GET /v1/node/health` and `GET /v1/node/signals`.
+
 `GET /v1/node/health` returns the Health Plane fleet-status projection: one row
 per actively trusted peer with its presence (`unknown`, `online`, `stale`,
 `offline`), its `baseline_status` (`unknown`, `none`, `in_sync`, `drifted`), its
@@ -293,24 +299,5 @@ The implemented v1 server uses the same envelope helper as CLI JSON output.
 Health and readiness are unauthenticated:
 
 ```http
-GET /v1/health
-GET /v1/ready
-```
 
-`GET /v1/ready` uses the standard JSON envelope; `data` contains only
-`{ "status": "ready" | "not_ready" }` (HTTP 200 or 503). It must not
-expose token IDs, paths, or secrets.
-
-```json
-{
-  "ok": true,
-  "data": { "status": "ready" },
-  "error": null,
-  "schema_version": "1"
-}
-```
-
-Optional readiness gates are configured by `omakure node serve`; their
-deployment semantics are defined in the [deployment guide](deployment.md).
-
-[Showing lines 1-300 of 605. Use :301 to continue]
+[Showing lines 1-300 of 320. Use :301 to continue]

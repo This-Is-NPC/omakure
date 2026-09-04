@@ -1,4 +1,6 @@
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
+use std::io;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::error::ScriptError;
@@ -27,6 +29,50 @@ fn ensure_command_with_env(
     ensure_command_os_with_env(path, program, args, not_found_hint, env)
 }
 
+const MAX_INJECTED_PATH_BYTES: usize = 32 * 1024;
+
+/// Build a minimal PATH for spawning an already-resolved absolute executable.
+fn bounded_spawn_path(program: &Path) -> OsString {
+    let mut paths = Vec::new();
+    if let Some(parent) = program.parent() {
+        if !parent.as_os_str().is_empty() {
+            paths.push(parent.to_path_buf());
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        let system_root =
+            std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from("C:\\Windows"));
+        paths.push(PathBuf::from(system_root).join("System32"));
+    }
+
+    #[cfg(all(unix, target_os = "macos"))]
+    {
+        paths.push(PathBuf::from("/usr/bin"));
+        paths.push(PathBuf::from("/bin"));
+        paths.push(PathBuf::from("/usr/sbin"));
+        paths.push(PathBuf::from("/sbin"));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        paths.push(PathBuf::from("/usr/bin"));
+        paths.push(PathBuf::from("/bin"));
+    }
+
+    std::env::join_paths(paths).expect("bounded PATH components are valid")
+}
+
+fn child_path_for_absolute_spawn(program: &Path, env: &[(String, String)]) -> Option<OsString> {
+    let injected = crate::runtime::path_value(env)?;
+    if injected.len() <= MAX_INJECTED_PATH_BYTES {
+        Some(OsString::from(injected))
+    } else {
+        Some(bounded_spawn_path(program))
+    }
+}
+
 /// Check a command using an already-resolved executable and injected env.
 fn ensure_command_os_with_env(
     program: impl AsRef<OsStr>,
@@ -37,13 +83,14 @@ fn ensure_command_os_with_env(
 ) -> Result<(), ScriptError> {
     let program = program.as_ref();
     let mut command = Command::new(program);
-    if std::path::Path::new(program).is_absolute() {
-        // Lookup already used the injected PATH; re-applying a huge inherited
-        // PATH to the probe spawn can break exec on some Linux runners.
+    if Path::new(program).is_absolute() {
         for (key, value) in env {
             if !key.eq_ignore_ascii_case("PATH") {
                 command.env(key, value);
             }
+        }
+        if let Some(child_path) = child_path_for_absolute_spawn(Path::new(program), env) {
+            command.env("PATH", child_path);
         }
     } else {
         command.envs(env.iter().map(|(key, value)| (key, value)));
@@ -88,9 +135,13 @@ fn ensure_command_output(
                 })
             }
         }
-        Err(_) => Err(ScriptError::DependencyMissing {
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(ScriptError::DependencyMissing {
             name: name.to_string(),
             hint: not_found_hint.to_string(),
+        }),
+        Err(err) => Err(ScriptError::DependencyCheckFailed {
+            name: name.to_string(),
+            message: err.to_string(),
         }),
     }
 }
@@ -304,9 +355,6 @@ mod tests {
 
     #[test]
     fn test_ensure_powershell_installed_returns_result() {
-        // Only assert that the call returns a Result; pwsh may or may not
-        // be installed in the dev environment. The point is to exercise
-        // the wrapper code path.
         let _ = ensure_powershell_installed();
     }
 
@@ -319,25 +367,27 @@ mod tests {
     fn test_ensure_jq_installed_returns_result() {
         let _ = ensure_jq_installed();
     }
+
     #[cfg(unix)]
     #[test]
     fn test_dependency_checks_use_injected_path_for_every_runtime() {
-        use std::os::unix::fs::PermissionsExt;
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
 
         let dir = tempfile::tempdir().unwrap();
         let programs = ["git", "jq", "bash", python_program(), powershell_program()];
-        // A local POSIX fixture is more stable than relying on whichever
-        // optional dependency happens to be installed on the test runner.
         for program in programs {
             let path = dir.path().join(program);
-            std::fs::write(&path, "#!/bin/sh\nexit 0\n")
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o755)
+                .open(&path)
+                .unwrap_or_else(|error| panic!("open {program} fixture: {error}"));
+            file.write_all(b"#!/bin/sh\nexit 0\n")
                 .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
-            let mut permissions = std::fs::metadata(&path)
-                .unwrap_or_else(|error| panic!("stat {program} fixture: {error}"))
-                .permissions();
-            permissions.set_mode(0o755);
-            std::fs::set_permissions(&path, permissions)
-                .unwrap_or_else(|error| panic!("make {program} executable: {error}"));
         }
         let env = vec![("PATH".to_string(), dir.path().display().to_string())];
 
@@ -354,6 +404,98 @@ mod tests {
                 result.is_ok(),
                 "{program} dependency check failed using its injected fixture: {result:?}"
             );
+        }
+    }
+
+    #[cfg(unix)]
+    fn write_executable_shim(dir: &Path, program: &str) {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let path = dir.join(program);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o755)
+            .open(&path)
+            .unwrap_or_else(|error| panic!("open {program} fixture: {error}"));
+        file.write_all(b"#!/bin/sh\nexit 0\n")
+            .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
+    }
+
+    #[cfg(unix)]
+    fn huge_injected_path_with_shim_dir(shim_dir: &Path) -> String {
+        let mut path = shim_dir.display().to_string();
+        let mut index = 0usize;
+        while path.len() <= MAX_INJECTED_PATH_BYTES {
+            path.push_str(&format!(":/tmp/omakure-path-padding-{index}"));
+            index += 1;
+        }
+        path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_dependency_checks_succeed_with_huge_injected_path() {
+        let dir = tempfile::tempdir().unwrap();
+        write_executable_shim(dir.path(), "git");
+        write_executable_shim(dir.path(), "jq");
+
+        let env = vec![(
+            "PATH".to_string(),
+            huge_injected_path_with_shim_dir(dir.path()),
+        )];
+        assert!(
+            env[0].1.len() > MAX_INJECTED_PATH_BYTES,
+            "fixture PATH must exceed the bounded-spawn threshold"
+        );
+
+        assert!(
+            ensure_git_installed_with_env(&env).is_ok(),
+            "git check should resolve via huge PATH and spawn via bounded child PATH"
+        );
+        assert!(
+            ensure_jq_installed_with_env(&env).is_ok(),
+            "jq check should resolve via huge PATH and spawn via bounded child PATH"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_ensure_command_os_spawn_error_is_check_failed_not_missing() {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("not-executable");
+        {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o644)
+                .open(&path)
+                .unwrap();
+            file.write_all(b"not a script\n").unwrap();
+        }
+
+        let result = ensure_command_os_with_env(&path, "probe", &["--version"], "hint", &[]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ScriptError::DependencyCheckFailed { name, message } => {
+                assert_eq!(name, "probe");
+                assert!(
+                    !message.is_empty(),
+                    "spawn failure should surface the underlying io error"
+                );
+            }
+            ScriptError::DependencyMissing { .. } => {
+                panic!("expected DependencyCheckFailed for non-NotFound spawn error");
+            }
+            other => panic!("unexpected error: {other:?}"),
         }
     }
 

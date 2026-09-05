@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
+cd "$root"
+export MISE_PROJECT_ROOT="$root"
+
+die() {
+    printf 'check:platform:macos: %s\n' "$1" >&2
+    exit 2
+}
+
+(($# == 1)) || die 'usage: macos target-triple'
+target="$1"
+case "$target" in
+    x86_64-apple-darwin|aarch64-apple-darwin) ;;
+    *) die "unsupported macOS target: $target" ;;
+esac
+
+runner_temp="${RUNNER_TEMP:-}"
+[[ -n "$runner_temp" ]] || die 'RUNNER_TEMP is required'
+[[ -d "$runner_temp" && ! -L "$runner_temp" ]] || die 'RUNNER_TEMP must be a physical directory'
+runner_temp="$(cd -- "$runner_temp" && pwd -P)"
+current_owner_group="$(id -u):$(id -g)"
+runner_owner_group="$(stat -f '%u:%g' "$runner_temp")"
+[[ "$runner_owner_group" == "$current_owner_group" ]] || {
+    die 'RUNNER_TEMP is not owned by the current user/group'
+}
+
+tmpdir="$(mktemp -d "${runner_temp}/omakure-tmp.XXXXXX")"
+cleanup() {
+    status=$?
+    trap - EXIT
+    if [[ -d "$tmpdir" && ! -L "$tmpdir" ]]; then
+        rm -rf -- "$tmpdir"
+    fi
+    exit "$status"
+}
+trap cleanup EXIT
+
+physical_tmpdir="$(cd -- "$tmpdir" && pwd -P)"
+[[ "$physical_tmpdir" == "$tmpdir" ]] || die 'mktemp created a non-physical directory'
+chmod 700 "$physical_tmpdir"
+tmpdir_owner_group="$(stat -f '%u:%g' "$physical_tmpdir")"
+[[ "$tmpdir_owner_group" == "$current_owner_group" ]] || {
+    die 'macOS temporary directory is not owned by the current user/group'
+}
+export TMPDIR="$physical_tmpdir"
+
+printf 'check:platform:macos: native tests (%s)\n' "$target"
+CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
+printf 'check:platform:macos: release build (%s)\n' "$target"
+"$root/scripts/tasks/atomic/build-release" --target-triple "$target"
+printf 'check:platform:macos: binary smoke (%s)\n' "$target"
+"$root/scripts/tasks/atomic/binary-smoke" "$target"
+printf 'check:platform:macos: PASS\n'

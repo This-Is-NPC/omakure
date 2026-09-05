@@ -85,6 +85,24 @@ fn run_tracked_loop(lifecycle: Arc<LoopLifecycle>, run_loop: impl FnOnce()) {
     let _guard = lifecycle.enter();
     run_loop();
 }
+fn start_discovery_service(
+    settings: crate::domain::DiscoverySettings,
+    context: crate::node::NodeContext,
+    direct_port: Option<u16>,
+    secret: Option<String>,
+) -> Result<Option<crate::discovery::DiscoveryService>, crate::discovery::DiscoveryError> {
+    if !settings.enabled {
+        return Ok(None);
+    }
+    match crate::discovery::DiscoveryService::start(settings.clone(), context, direct_port, secret)
+    {
+        Ok(service) => Ok(Some(service)),
+        Err(crate::discovery::DiscoveryError::UnsupportedPlatform) => Ok(Some(
+            crate::discovery::DiscoveryService::disabled(settings, false),
+        )),
+        Err(error) => Err(error),
+    }
+}
 
 pub fn run(
     scripts_dir: PathBuf,
@@ -94,12 +112,12 @@ pub fn run(
     if let Some(path) = &args.bootstrap_token_file {
         std::env::set_var("OMAKURE_BOOTSTRAP_TOKEN_FILE", path);
     }
-    let state_was_present = context.validate_existing_state_directory()?;
-    let _lifecycle = context.acquire_lifecycle_lock()?;
+    let lifecycle = context.acquire_lifecycle_lock()?;
+    context.validate_existing_state_directory()?;
     let initialized = crate::operations::node::initialize_node_locked(
         &context,
         &crate::domain::NodeConfig::default(),
-        state_was_present,
+        lifecycle.state_was_present(),
     )?;
     crate::operations::node::recover_local_bootstrap_token_tombstones(&context)?;
     let configured = initialized
@@ -181,8 +199,8 @@ pub fn run(
         None
     };
 
-    let mut discovery_service = if node_config.discovery.enabled {
-        let secret = if node_config.organization.discovery_secret_ref.is_empty() {
+    let discovery_secret = if node_config.discovery.enabled {
+        if node_config.organization.discovery_secret_ref.is_empty() {
             None
         } else {
             Some(
@@ -193,16 +211,16 @@ pub fn run(
                 )
                 .map_err(|_| "discovery_secret_invalid")?,
             )
-        };
-        Some(crate::discovery::DiscoveryService::start(
-            node_config.discovery.clone(),
-            context.clone(),
-            direct_bind.map(|bind| bind.port()),
-            secret,
-        )?)
+        }
     } else {
         None
     };
+    let mut discovery_service = start_discovery_service(
+        node_config.discovery.clone(),
+        context.clone(),
+        direct_bind.map(|bind| bind.port()),
+        discovery_secret,
+    )?;
 
     let readiness_requires_worker =
         args.readiness_requires_worker || boot.deploy.node.readiness_requires_worker;
@@ -312,6 +330,19 @@ pub fn run(
     );
     let _endpoint_guard = ServiceEndpointFile(endpoint_path);
 
+    let health_registry = Arc::new(crate::operations::health::open_observational_registry(
+        &context,
+    )?);
+    let body_limit = boot.deploy.http.body_limit_bytes.max(1);
+    let auth_verification_gate = api::auth_verification_gate(&boot.deploy);
+    let health_plane = api::health_plane_router(
+        Arc::clone(&health_registry),
+        boot.auth.clone(),
+        boot.api_policy.clone(),
+        boot.deploy.clone(),
+        Arc::clone(&auth_verification_gate),
+        body_limit,
+    );
     let runtime = tokio::runtime::Runtime::new()?;
     let cancel_for_http = Arc::clone(&cancel_flag);
     let readiness_for_http = Arc::clone(&readiness);
@@ -327,6 +358,8 @@ pub fn run(
             discovery_status,
             cue_dispatcher,
             baseline_dispatcher,
+            health_plane,
+            auth_verification_gate,
             cancel_for_http,
             None,
         )

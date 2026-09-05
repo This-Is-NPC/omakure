@@ -1,0 +1,17 @@
+{
+  "exceptions": [
+    {
+      "candidate": "big-code-analysis",
+      "reason": "native tree-sitter function-space identities differ for anonymous closures; compare by source path and line"
+    },
+    {
+      "candidate": "cccc",
+      "reason": "native syn does not expand macro invocations; macro behavior is classified and never merged into scores"
+    },
+    {
+      "candidate": "all",
+      "reason": "rename continuity is not inferred; qualified identities are derived per source row"
+    }
+  ],
+  "schema_version": 2
+}

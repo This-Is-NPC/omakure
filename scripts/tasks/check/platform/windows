@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
+cd "$root"
+export MISE_PROJECT_ROOT="$root"
+
+die() {
+    printf 'check:platform:windows: %s\n' "$1" >&2
+    exit 2
+}
+
+(($# == 1)) || die 'usage: windows target-triple'
+target="$1"
+case "$target" in
+    x86_64-pc-windows-msvc|aarch64-pc-windows-msvc) ;;
+    *) die "unsupported Windows target: $target" ;;
+esac
+
+printf 'check:platform:windows: native tests (%s)\n' "$target"
+CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
+printf 'check:platform:windows: all-target check (%s)\n' "$target"
+CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/atomic/check-all-targets"
+if [[ "${RUSTFLAGS:-}" != *'+crt-static'* ]]; then
+    export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=+crt-static"
+fi
+printf 'check:platform:windows: static CRT release build (%s)\n' "$target"
+"$root/scripts/tasks/atomic/build-release" --target-triple "$target"
+printf 'check:platform:windows: executable smoke (%s)\n' "$target"
+"$root/scripts/tasks/atomic/binary-smoke" "$target"
+printf 'check:platform:windows: PASS\n'

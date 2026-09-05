@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$bounded" ]] || { printf 'atomic/complexity-contract: bounded runner is missing\n' >&2; exit 1; }
+for script in complexity-setup-test complexity-gate-test complexity-soak-audit-test; do
+  path="$root/scripts/tasks/$script"
+  [[ -x "$path" ]] || { printf 'atomic/complexity-contract: missing executable %s\n' "$path" >&2; exit 1; }
+  "$bounded" 5m "$path"
+done

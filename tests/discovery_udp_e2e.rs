@@ -18,7 +18,7 @@ mod unix {
     fn receiver_rejects_adversarial_datagrams_without_unbounded_state() {
         let temp = TempDir::new().expect("temporary discovery state");
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),
@@ -37,7 +37,7 @@ mod unix {
             NodeIdentity::load_or_initialize(&context).expect("initialize identity");
         let peer_temp = TempDir::new().expect("temporary peer state");
         let peer_context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(peer_temp.path().join("state")),
                 Some(peer_temp.path().join("node.toml")),

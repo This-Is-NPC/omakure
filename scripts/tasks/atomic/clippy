@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+command -v cargo >/dev/null 2>&1 || { printf 'atomic/clippy: cargo is required\n' >&2; exit 1; }
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$bounded" ]] || { printf 'atomic/clippy: bounded runner is missing\n' >&2; exit 1; }
+exec "$bounded" 15m cargo clippy --all-targets --locked -- -D warnings "$@"

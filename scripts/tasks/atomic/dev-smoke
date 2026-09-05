@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+canonical="$root/scripts/tasks/dev/smoke"
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$canonical" && -x "$bounded" ]] || { printf 'atomic/dev-smoke: required scripts are missing\n' >&2; exit 1; }
+exec "$bounded" 15m "$canonical" "$@"

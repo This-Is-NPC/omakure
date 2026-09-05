@@ -779,14 +779,6 @@ echo "hello"
     }
 
     #[test]
-    fn test_should_not_skip_omaken_envs_as_special_case() {
-        let tmp = TempDir::new().unwrap();
-        let envs = tmp.path().join(".omaken").join("envs");
-        fs::create_dir_all(&envs).unwrap();
-        assert!(!should_skip_dir(&envs));
-    }
-
-    #[test]
     fn test_should_skip_dir_regular_envs_not_skipped() {
         let tmp = TempDir::new().unwrap();
         let envs = tmp.path().join("envs");

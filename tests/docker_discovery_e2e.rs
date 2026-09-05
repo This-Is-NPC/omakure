@@ -6,7 +6,6 @@
 use rusqlite::Connection;
 use serde_json::Value;
 use std::fs;
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::OnceLock;
@@ -99,7 +98,12 @@ impl ComposeGuard {
                     "enrollment-target",
                 ],
             );
-            assert!(partial.status.success(), "partial Compose setup failed");
+            assert!(
+                partial.status.success(),
+                "partial Compose setup failed: {}\n{}",
+                output_text(&partial),
+                compose_diagnostics(&self.root)
+            );
             let failed = compose(
                 &self.root,
                 &[
@@ -114,9 +118,14 @@ impl ComposeGuard {
             );
             assert!(
                 !failed.status.success(),
-                "induced Compose failure unexpectedly passed"
+                "induced Compose failure unexpectedly passed: {}\n{}",
+                output_text(&failed),
+                compose_diagnostics(&self.root)
             );
-            panic!("induced partial-up failure");
+            panic!(
+                "induced partial-up failure\n{}",
+                compose_diagnostics(&self.root)
+            );
         }
         let output = compose(
             &self.root,
@@ -132,8 +141,9 @@ impl ComposeGuard {
         );
         assert!(
             output.status.success(),
-            "docker compose up failed: {}",
-            output_text(&output)
+            "docker compose up failed: {}\n{}",
+            output_text(&output),
+            compose_diagnostics(&self.root)
         );
     }
 
@@ -189,6 +199,10 @@ fn generate_auth(directory: &Path, id: &str) -> (PathBuf, PathBuf) {
 impl Drop for ComposeGuard {
     fn drop(&mut self) {
         if !self.finalized {
+            eprintln!(
+                "discovery Docker failure diagnostics:\n{}",
+                compose_diagnostics(&self.root)
+            );
             if let Err(error) = cleanup(&self.root) {
                 eprintln!("discovery Docker cleanup after panic failed: {error}");
             }
@@ -295,6 +309,27 @@ fn compose(root: &Path, args: &[&str]) -> Output {
         .output()
         .expect("run docker compose")
 }
+fn compose_diagnostics(root: &Path) -> String {
+    let ps = compose(root, &["-p", compose_project(), "ps", "-a"]);
+    let logs = compose(
+        root,
+        &[
+            "-p",
+            compose_project(),
+            "logs",
+            "--no-color",
+            "--tail",
+            "200",
+            "enrollment-target",
+            "enrollment-candidate",
+        ],
+    );
+    format!(
+        "compose ps:\n{}\ncompose logs:\n{}",
+        output_text(&ps),
+        output_text(&logs)
+    )
+}
 
 fn exec(service: &str, args: &[&str]) -> Output {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -350,38 +385,69 @@ fn container_ip(service: &str) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-fn wait_for_health() {
-    let deadline = Instant::now() + Duration::from_secs(30);
+fn compose_service_healthy(service: &str) -> bool {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let id = compose(&root, &["-p", compose_project(), "ps", "-q", service]);
+    if !id.status.success() {
+        return false;
+    }
+    let id = String::from_utf8_lossy(&id.stdout).trim().to_string();
+    if id.is_empty() {
+        return false;
+    }
+    let health = bounded_command("docker")
+        .args([
+            "inspect",
+            "-f",
+            "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}",
+            &id,
+        ])
+        .output();
+    health
+        .ok()
+        .filter(|output| output.status.success())
+        .is_some_and(|output| String::from_utf8_lossy(&output.stdout).trim() == "healthy")
+}
+
+fn readiness_http_ready(port: u16) -> bool {
+    let url = format!("http://127.0.0.1:{port}/v1/ready");
+    request_json("GET", &url, false, None)
+        .is_ok_and(|value| value["ok"] == true && value["data"]["status"] == "ready")
+}
+
+fn authenticated_node_status_ready(port: u16) -> bool {
+    let url = format!("http://127.0.0.1:{port}/v1/node/status");
+    request_json("GET", &url, true, None).is_ok_and(|value| {
+        value["ok"] == true
+            && value["data"]["identity"]["node_id"].is_string()
+            && value["data"]["trust"]["active_peer_count"].is_number()
+    })
+}
+
+fn service_http_ready(service: &str, port: u16) -> bool {
+    compose_service_healthy(service)
+        && readiness_http_ready(port)
+        && authenticated_node_status_ready(port)
+}
+
+fn wait_for_service_ready(service: &str, port: u16) {
+    let deadline = Instant::now() + Duration::from_secs(60);
     while Instant::now() < deadline {
-        if TcpStream::connect(("127.0.0.1", 17878)).is_ok()
-            && TcpStream::connect(("127.0.0.1", 17879)).is_ok()
-            && transport_ready("enrollment-target")
-            && transport_ready("enrollment-candidate")
-        {
+        if service_http_ready(service, port) {
             return;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let logs = compose(
-        &root,
-        &[
-            "-p",
-            compose_project(),
-            "logs",
-            "--no-color",
-            "enrollment-target",
-            "enrollment-candidate",
-        ],
-    );
     panic!(
-        "Docker discovery services did not become ready: {}",
-        output_text(&logs)
+        "Docker service {service} did not become semantically ready:\n{}",
+        compose_diagnostics(&root)
     );
 }
 
-fn health_port(port: u16) -> bool {
-    TcpStream::connect(("127.0.0.1", port)).is_ok()
+fn wait_for_health() {
+    wait_for_service_ready("enrollment-target", 17878);
+    wait_for_service_ready("enrollment-candidate", 17879);
 }
 
 fn wait_for_stopped(service: &str) {
@@ -405,43 +471,38 @@ fn wait_for_stopped(service: &str) {
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    panic!("Docker service did not stop: {service}");
-}
-
-fn transport_ready(service: &str) -> bool {
-    exec(
-        service,
-        &[
-            "test",
-            "-s",
-            "/var/lib/omakure/transport.key",
-            "-a",
-            "-s",
-            "/var/lib/omakure/transport.cert",
-        ],
-    )
-    .status
-    .success()
+    panic!(
+        "Docker service did not stop: {service}\n{}",
+        compose_diagnostics(&root)
+    );
 }
 
 fn curl(method: &str, url: &str, include_addresses: bool) -> Value {
     curl_json(method, url, include_addresses, None)
 }
 
-fn curl_json(method: &str, url: &str, include_addresses: bool, body: Option<&str>) -> Value {
-    let client_file = if url.contains(":17879/") {
-        std::env::var_os("OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE").expect("candidate client file")
+fn request_json(
+    method: &str,
+    url: &str,
+    authenticated: bool,
+    body: Option<&str>,
+) -> Result<Value, String> {
+    let header_file = if authenticated {
+        let client_file = if url.contains(":17879/") {
+            std::env::var_os("OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE")
+                .ok_or_else(|| "candidate client file is unset".to_string())?
+        } else {
+            std::env::var_os("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE")
+                .ok_or_else(|| "target client file is unset".to_string())?
+        };
+        let token = fs::read_to_string(client_file).map_err(|error| error.to_string())?;
+        let file = tempfile::NamedTempFile::new().map_err(|error| error.to_string())?;
+        fs::write(file.path(), format!("Authorization: Bearer {token}\n"))
+            .map_err(|error| error.to_string())?;
+        Some(file)
     } else {
-        std::env::var_os("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE").expect("target client file")
+        None
     };
-    let token = fs::read_to_string(client_file).expect("read protected client token");
-    let header_file = tempfile::NamedTempFile::new().expect("create curl header file");
-    fs::write(
-        header_file.path(),
-        format!("Authorization: Bearer {token}\n"),
-    )
-    .expect("write curl header file");
-    let header_arg = format!("@{}", header_file.path().display());
     let mut command = bounded_command("curl");
     command.args([
         "--fail",
@@ -454,19 +515,25 @@ fn curl_json(method: &str, url: &str, include_addresses: bool, body: Option<&str
         "-X",
         method,
         url,
-        "-H",
-        &header_arg,
     ]);
+    if let Some(header_file) = &header_file {
+        let header_arg = format!("@{}", header_file.path().display());
+        command.args(["-H", &header_arg]);
+    }
     if let Some(body) = body {
         command.args(["-H", "Content-Type: application/json", "--data", body]);
     }
-    let output = command.output().expect("run curl");
-    assert!(
-        output.status.success(),
-        "curl failed: {}",
-        output_text(&output)
-    );
-    let value: Value = serde_json::from_slice(&output.stdout).expect("curl JSON");
+    let output = command.output().map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(output_text(&output));
+    }
+    serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("invalid JSON ({error}): {}", output_text(&output)))
+}
+
+fn curl_json(method: &str, url: &str, include_addresses: bool, body: Option<&str>) -> Value {
+    let value = request_json(method, url, true, body)
+        .unwrap_or_else(|error| panic!("curl failed: {error}"));
     if include_addresses {
         assert!(value["data"]["candidates"]
             .as_array()
@@ -747,11 +814,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     )
     .status
     .success());
-    let target_deadline = Instant::now() + Duration::from_secs(30);
-    while !health_port(17878) {
-        assert!(Instant::now() < target_deadline, "target did not restart");
-        std::thread::sleep(Duration::from_millis(250));
-    }
+    wait_for_service_ready("enrollment-target", 17878);
     let empty_after_restart = curl("GET", &format!("{TARGET_API}/v1/node/discovery"), false);
     assert!(
         empty_after_restart["data"]["candidates"]

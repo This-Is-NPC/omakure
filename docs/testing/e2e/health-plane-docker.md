@@ -4,8 +4,8 @@
 
 ## Source
 
-- `.scripts/health-plane-certification.sh`
-- `compose.health-plane-certification.e2e.yaml`
+- `scripts/tasks/cert/health`
+- `ci/compose/compose.health-plane-certification.e2e.yaml`
 - `tests/docker_health_plane_adversary.rs`
 - `tests/docker_health_plane_exhaustion.rs`
 - `Dockerfile` (`harness` target for `hp-harness`)
@@ -13,8 +13,8 @@
 ## Run
 
 ```bash
-./.scripts/health-plane-certification.sh
-./.scripts/health-plane-certification-cleanup-test.sh
+scripts/tasks/cert/health
+scripts/tasks/cert/health-cleanup
 ```
 
 The CI job bounds the gate at 45 minutes, the cleanup test at 60 minutes, and

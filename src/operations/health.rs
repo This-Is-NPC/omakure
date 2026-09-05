@@ -112,70 +112,63 @@ pub struct PresenceCounts {
     pub total: usize,
 }
 
-/// The Conductor-local fleet-status projection.
-///
-/// The operation is read-only and derives presence through the Wave 2 shared
-/// operations; it never reads a Health Plane table directly and never
-/// re-implements authorization.
-pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport> {
-    let registry = open_registry(context)?;
-    let plane = HealthPlane::new(&registry);
-    let enabled = plane.enabled().map_err(map_registry_error)?;
-    let observed_at = plane.now();
-    let mut nodes = if enabled {
-        plane.fleet_status().map_err(map_registry_error)?
-    } else {
-        Vec::new()
-    };
-    if enabled {
-        // The fleet is the set of *actively trusted* peers. A peer whose trust
-        // was revoked, suspended, or replaced is no longer part of it, so its
-        // retained Health Plane row must not keep reporting a presence: that
-        // is what makes a revocation change the operator's view immediately.
-        // The decision uses the `trust_state` the Wave 2 projection already
-        // computed from the local registry; nothing is re-derived here.
-        nodes.retain(|node| node.trust_state == "active");
+fn collect_active_fleet_nodes(
+    plane: &HealthPlane<'_>,
+    registry: &NodeRegistry,
+    observed_at: i64,
+    mut nodes: Vec<FleetNode>,
+) -> OperationResult<Vec<FleetNode>> {
+    // The fleet is the set of *actively trusted* peers. A peer whose trust
+    // was revoked, suspended, or replaced is no longer part of it, so its
+    // retained Health Plane row must not keep reporting a presence: that
+    // is what makes a revocation change the operator's view immediately.
+    // The decision uses the `trust_state` the Wave 2 projection already
+    // computed from the local registry; nothing is re-derived here.
+    nodes.retain(|node| node.trust_state == "active");
 
-        // A peer that has never reported has no Health Plane row at all, so the
-        // shared projection cannot see it. Enumerate the trusted peers and fill
-        // in the never-seen ones, deciding trust *only* through the Wave 2
-        // read-only authorization projection and deriving presence *only*
-        // through the Wave 2 presence rule.
-        let seen: HashSet<String> = nodes.iter().map(|node| node.node_id.clone()).collect();
-        let candidates = registry
-            .peers_limited(MAX_PERFORMERS_PER_CONDUCTOR as usize)
-            .map_err(map_registry_error)?;
-        for candidate in candidates {
-            if seen.contains(&candidate.node_id) {
-                continue;
-            }
-            let Some(authorization) = plane
-                .authorization(&candidate.node_id)
-                .map_err(map_registry_error)?
-            else {
-                continue;
-            };
-            if authorization.state != PeerState::Active {
-                continue;
-            }
-            nodes.push(FleetNode {
-                node_id: authorization.node_id,
-                role: role_name(authorization.role).to_string(),
-                capabilities: authorization.capabilities,
-                trust_state: "active".to_string(),
-                presence: Presence::derive(None, observed_at),
-                last_pulse_at: None,
-                baseline_status: BaselineStatus::Unknown,
-                profile: None,
-                pulse: None,
-                signal_cursor: 0,
-                stored_signals: 0,
-                held_signals: 0,
-                version_incompatible: false,
-            });
+    // A peer that has never reported has no Health Plane row at all, so the
+    // shared projection cannot see it. Enumerate the trusted peers and fill
+    // in the never-seen ones, deciding trust *only* through the Wave 2
+    // read-only authorization projection and deriving presence *only*
+    // through the Wave 2 presence rule.
+    let seen: HashSet<String> = nodes.iter().map(|node| node.node_id.clone()).collect();
+    let candidates = registry
+        .peers_limited(MAX_PERFORMERS_PER_CONDUCTOR as usize)
+        .map_err(map_registry_error)?;
+    for candidate in candidates {
+        if seen.contains(&candidate.node_id) {
+            continue;
         }
-        nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));
+        let Some(authorization) = plane
+            .authorization(&candidate.node_id)
+            .map_err(map_registry_error)?
+        else {
+            continue;
+        };
+        if authorization.state != PeerState::Active {
+            continue;
+        }
+        nodes.push(FleetNode {
+            node_id: authorization.node_id,
+            role: role_name(authorization.role).to_string(),
+            capabilities: authorization.capabilities,
+            trust_state: "active".to_string(),
+            presence: Presence::derive(None, observed_at),
+            last_pulse_at: None,
+            baseline_status: BaselineStatus::Unknown,
+            profile: None,
+            pulse: None,
+            signal_cursor: 0,
+            stored_signals: 0,
+            held_signals: 0,
+            version_incompatible: false,
+        });
     }
+    nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));
+    Ok(nodes)
+}
+
+fn tally_fleet_counts(nodes: &[FleetNode]) -> (PresenceCounts, BaselineCounts) {
     let mut presence = PresenceCounts {
         total: nodes.len(),
         ..PresenceCounts::default()
@@ -184,7 +177,7 @@ pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport>
         total: nodes.len(),
         ..BaselineCounts::default()
     };
-    for node in &nodes {
+    for node in nodes {
         match node.presence {
             Presence::Online => presence.online += 1,
             Presence::Stale => presence.stale += 1,
@@ -198,6 +191,25 @@ pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport>
             BaselineStatus::Unknown => baselines.unknown += 1,
         }
     }
+    (presence, baselines)
+}
+
+/// The Conductor-local fleet-status projection.
+///
+/// The operation is read-only and derives presence through the Wave 2 shared
+/// operations; it never reads a Health Plane table directly and never
+/// re-implements authorization.
+pub fn fleet_status(registry: &NodeRegistry) -> OperationResult<FleetStatusReport> {
+    let plane = HealthPlane::new(registry);
+    let enabled = plane.enabled().map_err(map_registry_error)?;
+    let observed_at = plane.now();
+    let nodes = if enabled {
+        let nodes = plane.fleet_status().map_err(map_registry_error)?;
+        collect_active_fleet_nodes(&plane, registry, observed_at, nodes)?
+    } else {
+        Vec::new()
+    };
+    let (presence, baselines) = tally_fleet_counts(&nodes);
     Ok(FleetStatusReport {
         enabled,
         local_node_id: registry.local_node_id().to_string(),
@@ -273,9 +285,8 @@ pub struct SignalFeedReport {
 /// `revoked` Signals are projected from the append-only trust audit, so they
 /// survive the revocation cleanup that deletes every Health Plane row for a
 /// peer that is no longer actively trusted.
-pub fn signal_feed(context: &NodeContext) -> OperationResult<SignalFeedReport> {
-    let registry = open_registry(context)?;
-    let plane = HealthPlane::new(&registry);
+pub fn signal_feed(registry: &NodeRegistry) -> OperationResult<SignalFeedReport> {
+    let plane = HealthPlane::new(registry);
     let enabled = plane.enabled().map_err(map_registry_error)?;
     let limit = SIGNAL_INBOX_CAPACITY as usize;
     let mut observed_at = plane.now();
@@ -369,7 +380,11 @@ fn role_name(role: PeerRole) -> &'static str {
     }
 }
 
-fn open_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
+/// Open the observational registry for one-shot CLI reads.
+///
+/// Long-lived HTTP surfaces must reuse the process-owned registry instead of
+/// calling this on every request.
+pub(crate) fn open_observational_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
     let state_present = context
         .validate_existing_state_contents()
         .map_err(crate::operations::node::map_node_error)?;
@@ -377,7 +392,8 @@ fn open_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
         return Err(registry_error("node state is not initialized"));
     }
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
-    NodeRegistry::open_existing(context, identity.public_status()).map_err(map_registry_error)
+    NodeRegistry::open_health_observational(context, identity.public_status())
+        .map_err(map_registry_error)
 }
 
 /// The live local facts a Performer reports.
@@ -811,6 +827,7 @@ fn version_token(banner: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::health_plane::model::SignalKind;
 
     /// A wedged interpreter must not hold the Profile open.
     ///
@@ -973,6 +990,44 @@ mod tests {
         assert_ne!(
             drifted.baseline_observed_id, record.baseline_id,
             "editing a script does change what this node is holding"
+        );
+    }
+
+    #[test]
+    fn equal_signal_timestamps_use_the_signal_id_tiebreak() {
+        let mut entries = vec![
+            SignalEntry {
+                source: "peer".to_string(),
+                signal: SignalRecord {
+                    kind: SignalKind::RunCompleted,
+                    occurred_at: 1_700_000_000,
+                    run: None,
+                    sequence: 1,
+                    signal_id: "a".to_string(),
+                    subject: None,
+                },
+            },
+            SignalEntry {
+                source: "peer".to_string(),
+                signal: SignalRecord {
+                    kind: SignalKind::RunCompleted,
+                    occurred_at: 1_700_000_000,
+                    run: None,
+                    sequence: 2,
+                    signal_id: "b".to_string(),
+                    subject: None,
+                },
+            },
+        ];
+
+        reduce_to_newest(&mut entries, 2);
+
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.signal.signal_id.as_str())
+                .collect::<Vec<_>>(),
+            ["b", "a"]
         );
     }
 

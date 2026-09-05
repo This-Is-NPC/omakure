@@ -1,0 +1,237 @@
+services:
+  signed-authority-config-init:
+    image: omakure-node:signed-bundle-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/node.toml /config/node.toml && chown root:10001 /config/node.toml && chmod 0640 /config/node.toml
+    volumes:
+      - signed-authority-config:/config
+      - "${OMAKURE_SIGNED_AUTHORITY_CONFIG:?set OMAKURE_SIGNED_AUTHORITY_CONFIG}:/input/node.toml:ro"
+
+  signed-target-a-config-init:
+    image: omakure-node:signed-bundle-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/node.toml /config/node.toml && chown root:10001 /config/node.toml && chmod 0640 /config/node.toml
+    volumes:
+      - signed-target-a-config:/config
+      - "${OMAKURE_SIGNED_TARGET_A_CONFIG:?set OMAKURE_SIGNED_TARGET_A_CONFIG}:/input/node.toml:ro"
+
+  signed-target-b-config-init:
+    image: omakure-node:signed-bundle-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/node.toml /config/node.toml && chown root:10001 /config/node.toml && chmod 0640 /config/node.toml
+    volumes:
+      - signed-target-b-config:/config
+      - "${OMAKURE_SIGNED_TARGET_B_CONFIG:?set OMAKURE_SIGNED_TARGET_B_CONFIG}:/input/node.toml:ro"
+
+  signed-authority-token-init:
+    image: omakure-node:signed-bundle-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/token /token/bootstrap.token && chown 10001:10001 /token /token/bootstrap.token && chmod 0700 /token && chmod 0600 /token/bootstrap.token
+    volumes:
+      - signed-authority-token:/token
+      - "${OMAKURE_SIGNED_AUTHORITY_TOKEN:?set OMAKURE_SIGNED_AUTHORITY_TOKEN}:/input/token:ro"
+
+  signed-target-a-token-init:
+    image: omakure-node:signed-bundle-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/token /token/bootstrap.token && chown 10001:10001 /token /token/bootstrap.token && chmod 0700 /token && chmod 0600 /token/bootstrap.token
+    volumes:
+      - signed-target-a-token:/token
+      - "${OMAKURE_SIGNED_TARGET_A_TOKEN:?set OMAKURE_SIGNED_TARGET_A_TOKEN}:/input/token:ro"
+
+  signed-target-b-token-init:
+    image: omakure-node:signed-bundle-e2e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/token /token/bootstrap.token && chown 10001:10001 /token /token/bootstrap.token && chmod 0700 /token && chmod 0600 /token/bootstrap.token
+    volumes:
+      - signed-target-b-token:/token
+      - "${OMAKURE_SIGNED_TARGET_B_TOKEN:?set OMAKURE_SIGNED_TARGET_B_TOKEN}:/input/token:ro"
+
+  signed-authority:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: omakure-node:signed-bundle-e2e
+    hostname: signed-authority
+    depends_on:
+      signed-authority-config-init:
+        condition: service_completed_successfully
+      signed-authority-token-init:
+        condition: service_completed_successfully
+    environment:
+      OMAKURE_TOKENS_FILE: /run/secrets/management-tokens.toml
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --direct-bind
+      - 0.0.0.0:7988
+      - --allow-non-loopback-direct
+      - --tokens-file
+      - /run/secrets/management-tokens.toml
+      - --bootstrap-token-file
+      - /run/secrets/bootstrap-token/bootstrap.token
+    volumes:
+      - signed-authority-state:/var/lib/omakure
+      - signed-authority-config:/etc/omakure
+      - "${OMAKURE_SIGNED_AUTHORITY_TOKENS:?set OMAKURE_SIGNED_AUTHORITY_TOKENS}:/run/secrets/management-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_AUTHORITY_CURL:?set OMAKURE_SIGNED_AUTHORITY_CURL}:/run/secrets/curl.conf:ro"
+      - signed-authority-token:/run/secrets/bootstrap-token
+      - "${OMAKURE_SIGNED_AUTHORITY_A_BUNDLE:?set OMAKURE_SIGNED_AUTHORITY_A_BUNDLE}:/run/secrets/target-a.bundle:ro"
+      # So the authority can reach the autojoin target's management API. The
+      # operator provisioned both machines, so it holds both tokens.
+      - "${OMAKURE_SIGNED_AUTOJOIN_CURL:?set OMAKURE_SIGNED_AUTOJOIN_CURL}:/run/secrets/autojoin-curl.conf:ro"
+
+  signed-target-a:
+    image: omakure-node:signed-bundle-e2e
+    hostname: signed-target-a
+    depends_on:
+      signed-authority:
+        condition: service_started
+      signed-target-a-config-init:
+        condition: service_completed_successfully
+      signed-target-a-token-init:
+        condition: service_completed_successfully
+    environment:
+      OMAKURE_TOKENS_FILE: /run/secrets/management-tokens.toml
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --direct-bind
+      - 0.0.0.0:7988
+      - --allow-non-loopback-direct
+      - --tokens-file
+      - /run/secrets/management-tokens.toml
+      - --bootstrap-token-file
+      - /run/secrets/bootstrap-token/bootstrap.token
+    volumes:
+      - signed-target-a-state:/var/lib/omakure
+      - signed-target-a-config:/etc/omakure
+      - "${OMAKURE_SIGNED_TARGET_A_TOKENS:?set OMAKURE_SIGNED_TARGET_A_TOKENS}:/run/secrets/management-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_TARGET_A_CURL:?set OMAKURE_SIGNED_TARGET_A_CURL}:/run/secrets/curl.conf:ro"
+      - signed-target-a-token:/run/secrets/bootstrap-token
+      - "${OMAKURE_SIGNED_TARGET_A_BUNDLE:?set OMAKURE_SIGNED_TARGET_A_BUNDLE}:/run/secrets/target-a.bundle:ro"
+
+  signed-target-b:
+    image: omakure-node:signed-bundle-e2e
+    hostname: signed-target-b
+    depends_on:
+      signed-authority:
+        condition: service_started
+      signed-target-b-config-init:
+        condition: service_completed_successfully
+      signed-target-b-token-init:
+        condition: service_completed_successfully
+    environment:
+      OMAKURE_TOKENS_FILE: /run/secrets/management-tokens.toml
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --direct-bind
+      - 0.0.0.0:7988
+      - --allow-non-loopback-direct
+      - --tokens-file
+      - /run/secrets/management-tokens.toml
+      - --bootstrap-token-file
+      - /run/secrets/bootstrap-token/bootstrap.token
+    volumes:
+      - signed-target-b-state:/var/lib/omakure
+      - signed-target-b-config:/etc/omakure
+      - "${OMAKURE_SIGNED_TARGET_B_TOKENS:?set OMAKURE_SIGNED_TARGET_B_TOKENS}:/run/secrets/management-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_TARGET_B_CURL:?set OMAKURE_SIGNED_TARGET_B_CURL}:/run/secrets/curl.conf:ro"
+      - signed-target-b-token:/run/secrets/bootstrap-token
+      - "${OMAKURE_SIGNED_TARGET_B_BUNDLE:?set OMAKURE_SIGNED_TARGET_B_BUNDLE}:/run/secrets/target-b.bundle:ro"
+
+  # The autojoin target. Held behind a profile because its `node.toml` names an
+  # authority key that does not exist until the product creates one at runtime
+  # -- which is the whole point: nothing can pre-place a bundle for a machine
+  # whose identity has not been generated yet.
+  signed-autojoin-config-init:
+    image: omakure-node:signed-bundle-e2e
+    profiles: ["autojoin"]
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/node.toml /config/node.toml && chown root:10001 /config/node.toml && chmod 0640 /config/node.toml
+    volumes:
+      - signed-autojoin-config:/config
+      - "${OMAKURE_SIGNED_AUTOJOIN_CONFIG:?set OMAKURE_SIGNED_AUTOJOIN_CONFIG}:/input/node.toml:ro"
+
+  signed-autojoin-token-init:
+    image: omakure-node:signed-bundle-e2e
+    profiles: ["autojoin"]
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - cp /input/token /token/bootstrap.token && chown 10001:10001 /token /token/bootstrap.token && chmod 0700 /token && chmod 0600 /token/bootstrap.token
+    volumes:
+      - signed-autojoin-token:/token
+      - "${OMAKURE_SIGNED_AUTOJOIN_TOKEN:?set OMAKURE_SIGNED_AUTOJOIN_TOKEN}:/input/token:ro"
+
+  signed-autojoin:
+    image: omakure-node:signed-bundle-e2e
+    profiles: ["autojoin"]
+    hostname: signed-autojoin
+    depends_on:
+      signed-autojoin-config-init:
+        condition: service_completed_successfully
+      signed-autojoin-token-init:
+        condition: service_completed_successfully
+    environment:
+      OMAKURE_TOKENS_FILE: /run/secrets/management-tokens.toml
+    # Deliberately no bundle mount. Nothing is handed to this node at rest
+    # beyond what an installer could place before the machine existed: its
+    # public config, the authority's public key, and the bootstrap token.
+    command:
+      - node
+      - serve
+      - --bind
+      - 0.0.0.0:7878
+      - --allow-non-loopback
+      - --direct-bind
+      - 0.0.0.0:7988
+      - --allow-non-loopback-direct
+      - --tokens-file
+      - /run/secrets/management-tokens.toml
+      - --bootstrap-token-file
+      - /run/secrets/bootstrap-token/bootstrap.token
+    volumes:
+      - signed-autojoin-state:/var/lib/omakure
+      - signed-autojoin-config:/etc/omakure
+      - "${OMAKURE_SIGNED_AUTOJOIN_TOKENS:?set OMAKURE_SIGNED_AUTOJOIN_TOKENS}:/run/secrets/management-tokens.toml:ro"
+      - "${OMAKURE_SIGNED_AUTOJOIN_CURL:?set OMAKURE_SIGNED_AUTOJOIN_CURL}:/run/secrets/curl.conf:ro"
+      - signed-autojoin-token:/run/secrets/bootstrap-token
+
+volumes:
+  signed-authority-state:
+  signed-authority-config:
+  signed-target-a-state:
+  signed-target-a-config:
+  signed-target-b-state:
+  signed-target-b-config:
+  signed-authority-token:
+  signed-target-a-token:
+  signed-target-b-token:
+  signed-autojoin-state:
+  signed-autojoin-config:
+  signed-autojoin-token:

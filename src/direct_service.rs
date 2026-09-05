@@ -1595,11 +1595,18 @@ fn connect_and_hold(
     let trusted = registry
         .transport_peer(remote.node_id(), &hex(remote.identity_key()))
         .map_err(|_| TransportError::Internal)?;
-    authorize_peer(
+    if let Err(error) = authorize_peer(
         &remote,
         trusted.as_ref().map(peer_authorization),
         unix_seconds(),
-    )?;
+    ) {
+        // The remote is authenticated, but this node's local authorization
+        // refuses it before a TransportSession or probe exists. Record the
+        // single redacted initiator-side refusal before returning; the
+        // responder will never receive a probe to audit as a duplicate.
+        audit_error(&registry, remote.node_id(), None, &error)?;
+        return Err(error.into());
+    }
     state
         .admission
         .migrate_node(&mut reservation, remote.node_id())?;
@@ -1733,7 +1740,6 @@ fn hold_session(
         .set_read_timeout(Some(crate::direct_health::TICK))
         .map_err(|_| TransportError::Internal)?;
     let mut last_activity = Instant::now();
-    let mut last_trust_check = Instant::now();
     let mut outbound_cue: Option<OutboundCue> = None;
     let mut outbound_baseline: Option<OutboundBaseline> = None;
     // Anything still queued when this session ends must not wait out its
@@ -1743,33 +1749,6 @@ fn hold_session(
         peer_node_id,
     };
     while !state.stop.load(Ordering::SeqCst) {
-        // Revocation is immediate or it is not revocation.
-        //
-        // A session is authorized once, when it opens, and nothing re-read that
-        // decision afterwards. So an operator who revoked a peer went on being
-        // told it was `connected` -- for as long as the link stayed up, which
-        // on an idle link is five minutes and on a busy one is unbounded --
-        // and `connected` is the evidence `docs/recovery.md` sends them to
-        // read when it says to confirm the revoked peer cannot establish a
-        // useful direct session. Nothing they could see said otherwise.
-        //
-        // Only a positive reading ends the session. A registry that will not
-        // answer leaves the link alone and asks again next tick: `not_enrolled`
-        // is fatal to a dialer, so treating a transient read failure as an
-        // answer would retire a healthy link permanently over a locked
-        // database. The sender-side gate already refuses to *use* a session it
-        // cannot prove is trusted, so nothing rides on this being pessimistic.
-        if last_trust_check.elapsed() >= crate::direct_health::TICK {
-            last_trust_check = Instant::now();
-            if let Ok(Some(authorization)) = registry.health_authorization(peer_node_id) {
-                if authorization.state != PeerState::Active {
-                    return Err(match authorization.state {
-                        PeerState::Revoked => DirectServiceError::Protocol(TransportError::Revoked),
-                        _ => DirectServiceError::Protocol(TransportError::NotEnrolled),
-                    });
-                }
-            }
-        }
         // One Cue in flight per session, which is the bound the contract
         // already freezes at `concurrent_cue_runs_per_peer = 1`.
         if outbound_cue.is_none() {
@@ -1786,11 +1765,6 @@ fn hold_session(
                     // dropped; the caller is waiting on the channel.
                     Err(_) => pending.answer(false, false, CueCode::InvalidMessage.code(), false),
                 }
-            }
-        }
-        if let Some(in_flight) = outbound_cue.as_mut() {
-            if in_flight.resolve(registry, peer_node_id) {
-                outbound_cue = None;
             }
         }
         // One baseline in flight per session. A second would put megabytes on
@@ -1816,6 +1790,11 @@ fn hold_session(
                 }
             }
         }
+        if let Some(in_flight) = outbound_cue.as_mut() {
+            if in_flight.resolve(registry, peer_node_id) {
+                outbound_cue = None;
+            }
+        }
         if let Some(in_flight) = outbound_baseline.as_mut() {
             in_flight.expire_if_due();
         }
@@ -1828,6 +1807,12 @@ fn hold_session(
         match wait_readable(stream, crate::direct_health::TICK) {
             Readiness::Readable => {}
             Readiness::Idle => {
+                // An idle session still closes as soon as local authorization
+                // is withdrawn; no inbound frame is available to hand to
+                // HealthSession first.
+                if let Some(error) = health_authorization_error(registry, peer_node_id) {
+                    return Err(error);
+                }
                 if last_activity.elapsed() >= IDLE_TIMEOUT {
                     return Ok(());
                 }
@@ -1857,6 +1842,14 @@ fn hold_session(
         last_activity = Instant::now();
         if message.kind != ENVELOPE_KIND {
             continue;
+        }
+        // Readable frames get one and only one Health Plane ingest attempt
+        // before the proactive authorization close. In particular, a revoked
+        // peer's queued Health message records durable 1107 while the shared
+        // operations leave all Health state untouched.
+        let health_outcome = health.handle_envelope(&message.body);
+        if let Some(error) = health_authorization_error(registry, peer_node_id) {
+            return Err(error);
         }
         if let Some(in_flight) = outbound_cue.as_mut() {
             match in_flight.absorb_ack(
@@ -1907,7 +1900,7 @@ fn hold_session(
                 }
             }
         }
-        match health.handle_envelope(&message.body) {
+        match health_outcome {
             // A non-health envelope used to be discarded here without a trace.
             // Cue traffic is decided and audited instead; anything else keeps
             // the original silence, so the dispatcher never becomes an oracle
@@ -1982,6 +1975,7 @@ impl CueDispatcher {
         script: &str,
         reason: &str,
         wait: Duration,
+        cue_id: Option<&str>,
     ) -> Result<CueDispatchOutcome, DirectServiceError> {
         if !crate::remote_cue::is_well_formed_script_name(script) {
             return Err(TransportError::InvalidFrame.into());
@@ -1989,12 +1983,10 @@ impl CueDispatcher {
         if reason.is_empty() || reason.len() > crate::remote_cue::MAX_REASON_BYTES {
             return Err(TransportError::InvalidFrame.into());
         }
-        // Before a cue id is minted, so a refused instruction leaves no id an
+        // Before a cue id is resolved, so a refused instruction leaves no id an
         // operator could mistake for one that was sent.
         self.state.require_active_peer(peer_node_id)?;
-        let mut cue_id_bytes = [0u8; 16];
-        OsRng.fill_bytes(&mut cue_id_bytes);
-        let cue_id = hex(&cue_id_bytes);
+        let cue_id = resolve_cue_id(cue_id)?;
         let expected_run_id =
             crate::health_plane::report::opaque_run_id(&crate::remote_cue::derive_run_id(&cue_id));
         let (reply, answers) = std::sync::mpsc::sync_channel(1);
@@ -2714,6 +2706,7 @@ pub fn dispatch_cue(
     reason: &str,
     wait_seconds: u32,
     context: &NodeContext,
+    cue_id: Option<&str>,
 ) -> Result<CueDispatchOutcome, DirectServiceError> {
     if !crate::remote_cue::is_well_formed_script_name(script) {
         return Err(TransportError::InvalidFrame.into());
@@ -2781,9 +2774,7 @@ pub fn dispatch_cue(
         &probe_nonce,
     )?;
 
-    let mut cue_id_bytes = [0u8; 16];
-    OsRng.fill_bytes(&mut cue_id_bytes);
-    let cue_id = hex(&cue_id_bytes);
+    let cue_id = resolve_cue_id(cue_id)?;
     let now = unix_seconds();
     let mut nonce = [0u8; 16];
     OsRng.fill_bytes(&mut nonce);
@@ -3151,6 +3142,7 @@ fn serve_connection(
     let registry = NodeRegistry::open_existing(context, identity.public_status())?;
     let mut handshake = local.handshake(HandshakeRole::Responder)?;
     let mut remote_node_id = None;
+    let mut rejection_audit_recorded = false;
     let result = (|| {
         let frame = read_frame(&mut stream, deadline)?;
         handshake.read_next(&frame, unix_seconds())?;
@@ -3184,6 +3176,20 @@ fn serve_connection(
             .as_ref()
             .is_some_and(|peer| peer.state == PeerState::Revoked)
         {
+            // This peer authenticated successfully, so persist the specific
+            // revoked refusal before telling it to stop. The outer rejection
+            // audit below handles failures before authentication; recording
+            // here avoids turning one revoked handshake into two rows.
+            registry.record_transport_audit(
+                "probe_rejected",
+                remote.node_id(),
+                None,
+                Some(1),
+                0,
+                "rejected",
+                Some(TransportError::Revoked.code() as u16),
+            )?;
+            rejection_audit_recorded = true;
             let mut session = handshake.into_session()?;
             if let Ok(frame) =
                 session.write_error(crate::direct_transport::ProtocolErrorCode::Revoked)
@@ -3308,19 +3314,23 @@ fn serve_connection(
     let rejection_audit = if let Err(error) = &result {
         let node_id = remote_node_id.as_deref().unwrap_or(UNKNOWN_NODE_ID);
         state.record_direct_error(node_id, error);
-        let protocol = match error {
-            DirectServiceError::Protocol(error) => Some(error.code() as u16),
-            _ => None,
-        };
-        Some(registry.record_transport_audit(
-            "probe_rejected",
-            node_id,
-            None,
-            Some(1),
-            0,
-            "rejected",
-            protocol,
-        ))
+        if rejection_audit_recorded {
+            None
+        } else {
+            let protocol = match error {
+                DirectServiceError::Protocol(error) => Some(error.code() as u16),
+                _ => None,
+            };
+            Some(registry.record_transport_audit(
+                "probe_rejected",
+                node_id,
+                None,
+                Some(1),
+                0,
+                "rejected",
+                protocol,
+            ))
+        }
     } else {
         None
     };
@@ -3428,6 +3438,22 @@ fn peer_authorization(
     )
 }
 
+fn health_authorization_error(
+    registry: &NodeRegistry,
+    peer_node_id: &str,
+) -> Option<DirectServiceError> {
+    let Ok(Some(authorization)) = registry.health_authorization(peer_node_id) else {
+        return None;
+    };
+    if authorization.state == PeerState::Active {
+        return None;
+    }
+    Some(match authorization.state {
+        PeerState::Revoked => DirectServiceError::Protocol(TransportError::Revoked),
+        _ => DirectServiceError::Protocol(TransportError::NotEnrolled),
+    })
+}
+
 fn audit_error(
     registry: &NodeRegistry,
     node_id: &str,
@@ -3503,6 +3529,22 @@ fn write_bytes(
     Ok(())
 }
 
+/// Resolve a Cue id from an optional caller-supplied idempotency key.
+///
+/// A supplied id is the caller's idempotency key; omitting mints a new one.
+/// Malformed ids are refused before any mint or dial.
+fn resolve_cue_id(cue_id: Option<&str>) -> Result<String, DirectServiceError> {
+    match cue_id {
+        Some(id) if crate::remote_cue::is_well_formed_cue_id(id) => Ok(id.to_string()),
+        Some(_) => Err(TransportError::InvalidFrame.into()),
+        None => {
+            let mut cue_id_bytes = [0u8; 16];
+            OsRng.fill_bytes(&mut cue_id_bytes);
+            Ok(hex(&cue_id_bytes))
+        }
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -3515,6 +3557,16 @@ fn hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn resolve_cue_id_honors_a_supplied_idempotency_key() {
+        let known = "0123456789abcdef0123456789abcdef";
+        assert_eq!(resolve_cue_id(Some(known)).expect("well-formed id"), known);
+        assert!(resolve_cue_id(Some("not-hex")).is_err());
+        let minted = resolve_cue_id(None).expect("mint");
+        assert_eq!(minted.len(), 32);
+        assert!(crate::remote_cue::is_well_formed_cue_id(&minted));
+    }
+
     use super::*;
 
     static RESOLVER_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -3528,7 +3580,7 @@ mod tests {
     fn node_context_under(root: &std::path::Path) -> NodeContext {
         use crate::node::{NodePathOverrides, NodePlatform};
         NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(Some(root.join("state")), Some(root.join("node.toml"))),
             true,
             None,
@@ -3963,7 +4015,7 @@ mod tests {
 
         fn context_for(temp: &TempDir) -> NodeContext {
             NodeContext::resolve_for(
-                NodePlatform::Linux,
+                NodePlatform::current(),
                 NodePathOverrides::new(
                     Some(temp.path().join("state")),
                     Some(temp.path().join("node.toml")),
@@ -4492,7 +4544,7 @@ mod tests {
 
         let temp = TempDir::new().unwrap();
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),
@@ -4638,7 +4690,13 @@ mod tests {
         );
 
         let error = dispatcher
-            .dispatch(&peer_node_id, "cue-ok.sh", "why", Duration::from_millis(50))
+            .dispatch(
+                &peer_node_id,
+                "cue-ok.sh",
+                "why",
+                Duration::from_millis(50),
+                None,
+            )
             .expect_err("a Cue to a revoked peer must be refused");
         match &error {
             DirectServiceError::PeerNotActive {
@@ -4723,7 +4781,13 @@ mod tests {
             .clone();
         let dispatcher = CueDispatcher { state };
         let error = dispatcher
-            .dispatch(&stranger, "cue-ok.sh", "why", Duration::from_millis(50))
+            .dispatch(
+                &stranger,
+                "cue-ok.sh",
+                "why",
+                Duration::from_millis(50),
+                None,
+            )
             .expect_err("a Cue to an unknown peer must be refused");
         match &error {
             DirectServiceError::PeerNotActive {
@@ -4739,6 +4803,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn static_peer_dial_ownership_is_deterministic_for_both_node_id_orderings() {
+        fn state_for(local_node_id: &str) -> (tempfile::TempDir, ConnectionState) {
+            let temp = tempfile::TempDir::new().expect("node root");
+            let state = ConnectionState {
+                local_node_id: local_node_id.to_string(),
+                context: test_node_context(&temp),
+                identity_status: test_identity_status(local_node_id),
+                expected: HashSet::new(),
+                stop: Arc::new(AtomicBool::new(false)),
+                active: Mutex::new(HashMap::new()),
+                outbox: Mutex::new(HashMap::new()),
+                baseline_outbox: Mutex::new(HashMap::new()),
+                status: Arc::new(Mutex::new(TransportStatus::default())),
+                admission: Arc::new(AdmissionController {
+                    state: Mutex::new(AdmissionState::default()),
+                }),
+                reporter: None,
+                workspace_root: None,
+            };
+            (temp, state)
+        }
+
+        let (_lower_root, lower) = state_for("omk1_a");
+        let (_higher_root, higher) = state_for("omk1_b");
+        assert!(
+            lower.should_initiate("omk1_b"),
+            "the lexicographically lower node ID must own the dial"
+        );
+        assert!(
+            !higher.should_initiate("omk1_a"),
+            "the lexicographically higher node ID must remain listener-only"
+        );
+    }
+
     fn blackhole_resolver_config() -> ResolverConfig {
         use hickory_resolver::config::NameServerConfig;
         use hickory_resolver::proto::xfer::Protocol;
@@ -4750,5 +4849,63 @@ mod tests {
                 Protocol::Udp,
             )],
         )
+    }
+    #[test]
+    fn pending_outboxes_are_fifo_and_empty_after_drain() {
+        let temp = tempfile::tempdir().expect("temporary node root");
+        let context = test_node_context(&temp);
+        let (cue_reply, _cue_answers) = std::sync::mpsc::sync_channel(1);
+        let (baseline_reply, _baseline_answers) = std::sync::mpsc::sync_channel(1);
+        let state = ConnectionState {
+            local_node_id: "local-peer".to_string(),
+            context,
+            identity_status: test_identity_status("local-peer"),
+            expected: HashSet::new(),
+            stop: Arc::new(AtomicBool::new(false)),
+            active: Mutex::new(HashMap::new()),
+            outbox: Mutex::new(HashMap::new()),
+            baseline_outbox: Mutex::new(HashMap::new()),
+            status: Arc::new(Mutex::new(TransportStatus::default())),
+            admission: Arc::new(AdmissionController {
+                state: Mutex::new(AdmissionState::default()),
+            }),
+            reporter: None,
+            workspace_root: None,
+        };
+        let pending = PendingCue {
+            cue_id: "cue".to_string(),
+            script: "declared.sh".to_string(),
+            reason: "unit test".to_string(),
+            expected_run_id: "run".to_string(),
+            deadline: Instant::now() + Duration::from_secs(60),
+            reply: cue_reply,
+        };
+        let baseline = PendingBaseline {
+            manifest: Vec::new(),
+            bodies: Vec::new(),
+            baseline_id: "baseline".to_string(),
+            deadline: Instant::now() + Duration::from_secs(60),
+            reply: baseline_reply,
+        };
+
+        state
+            .outbox
+            .lock()
+            .unwrap()
+            .entry("peer".to_string())
+            .or_default()
+            .push(pending);
+        state
+            .baseline_outbox
+            .lock()
+            .unwrap()
+            .entry("peer".to_string())
+            .or_default()
+            .push(baseline);
+
+        assert!(state.take_pending_cue("peer").is_some());
+        assert!(state.take_pending_cue("peer").is_none());
+        assert!(state.take_pending_baseline("peer").is_some());
+        assert!(state.take_pending_baseline("peer").is_none());
     }
 }

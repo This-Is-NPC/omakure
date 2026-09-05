@@ -978,12 +978,24 @@ fn batteries_family_routes() {
         .iter()
         .any(|entry| entry["id"] == "local.echo"));
 
-    let install = server.post_json(
-        "/v1/batteries/fixture/scripts/local.echo/install",
-        &json!({ "force": true }),
-    );
-    assert_eq!(install.status, 200, "body: {}", install.safe_body());
-    assert!(workspace.path().join("scripts/echo.sh").exists());
+    #[cfg(unix)]
+    {
+        let install = server.post_json(
+            "/v1/batteries/fixture/scripts/local.echo/install",
+            &json!({ "force": true }),
+        );
+        assert_eq!(install.status, 200, "body: {}", install.safe_body());
+        assert!(workspace.path().join("scripts/echo.sh").exists());
+    }
+    #[cfg(not(unix))]
+    {
+        let install = server.post_json(
+            "/v1/batteries/fixture/scripts/local.echo/install",
+            &json!({ "force": true }),
+        );
+        assert_eq!(install.status, 409, "body: {}", install.safe_body());
+        assert_error_code(&install.json(), "conflict");
+    }
 
     // Sync route: nearest safe boundary is https-only validation without
     // contacting a remote host (local git URL is rejected).
@@ -1092,13 +1104,21 @@ fn node_management_routes_cover_missing_scopes_individually() {
         &[],
         Duration::from_secs(10),
     );
-    for path in [
-        "/v1/node/status",
-        "/v1/node/peers",
-        "/v1/node/health",
-        "/v1/node/signals",
-    ] {
+    for path in ["/v1/node/status", "/v1/node/peers"] {
         let denied = node_write_only.request("GET", path, None);
+        assert_eq!(denied.status, 403, "GET {path}: {}", denied.safe_body());
+        assert_error_code(&denied.json(), "forbidden");
+    }
+
+    let node_write_only_service = support::HttpServer::start_node_service(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "node:write"],
+        &[],
+        Duration::from_secs(10),
+    );
+    for path in ["/v1/node/health", "/v1/node/signals"] {
+        let denied = node_write_only_service.request("GET", path, None);
         assert_eq!(denied.status, 403, "GET {path}: {}", denied.safe_body());
         assert_error_code(&denied.json(), "forbidden");
     }
@@ -1136,6 +1156,7 @@ fn node_management_routes_cover_missing_scopes_individually() {
 
     drop(node_read_only);
     drop(node_write_only);
+    drop(node_write_only_service);
     drop(full);
 }
 
@@ -1275,11 +1296,31 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
         1
     );
 
+    // Health Plane reads are served by `omakure node serve`, not `omakure api`.
+    let health_server = support::HttpServer::start_node_service(
+        workspace.path(),
+        API_TOKEN,
+        &[
+            "--capability",
+            "node:read",
+            "--capability",
+            "node:write",
+            "--capability",
+            "trust:write",
+            "--capability",
+            "enrollment:read",
+            "--capability",
+            "enrollment:write",
+        ],
+        &envs,
+        Duration::from_secs(10),
+    );
+
     // The Health Plane projection lists an actively trusted peer that has
     // never reported, with the frozen `unknown` presence and no Profile or
     // Pulse. Nothing a management client can send changes that: no route
     // writes health state, and the only writer is the node-to-node exchange.
-    let health = server.get("/v1/node/health");
+    let health = health_server.get("/v1/node/health");
     assert_eq!(health.status, 200, "body: {}", health.safe_body());
     let body = health.json();
     assert_eq!(body["data"]["enabled"], true);
@@ -1309,7 +1350,7 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     // The closed Signal feed is the second half of the same read surface.
     // Importing trust was an authoritative local transition, so it is visible
     // as exactly one `enrolled` Signal, bounded and newest first.
-    let signals = server.get("/v1/node/signals");
+    let signals = health_server.get("/v1/node/signals");
     assert_eq!(signals.status, 200, "body: {}", signals.safe_body());
     let feed = signals.json();
     assert_eq!(feed["data"]["enabled"], true);
@@ -1360,7 +1401,7 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
 
     // Revocation is immediate in the projection: a revoked peer is no longer
     // an actively trusted node and therefore no longer a fleet row.
-    let after_revoke = server.get("/v1/node/health");
+    let after_revoke = health_server.get("/v1/node/health");
     assert_eq!(
         after_revoke.status,
         200,
@@ -1376,7 +1417,7 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
 
     // The local revocation Signal survives the revocation it records, which is
     // exactly what a Health Plane row keyed to the revoked peer could not do.
-    let after_signals = server.get("/v1/node/signals");
+    let after_signals = health_server.get("/v1/node/signals");
     assert_eq!(after_signals.status, 200);
     let feed = after_signals.json();
     let kinds: Vec<&str> = feed["data"]["signals"]
@@ -1931,6 +1972,26 @@ fn node_cue_route_requires_node_write_and_a_transport() {
         400,
         "with no direct transport there is no session to carry a cue: {}",
         without_transport.safe_body()
+    );
+
+    let malformed_cue_id = serde_json::json!({
+        "peer_node_id": "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+        "script": "deploy.sh",
+        "reason": "scope check",
+        "wait_seconds": 1,
+        "cue_id": "not-hex",
+    });
+    let malformed = writer.post_json("/v1/node/cues", &malformed_cue_id);
+    assert_eq!(
+        malformed.status,
+        400,
+        "a malformed cue_id must be refused before transport checks: {}",
+        malformed.safe_body()
+    );
+    assert!(
+        malformed.json()["error"]["code"] == "invalid_input",
+        "malformed cue_id must be invalid_input: {}",
+        malformed.safe_body()
     );
 }
 

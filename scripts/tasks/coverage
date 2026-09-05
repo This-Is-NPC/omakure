@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "${MISE_PROJECT_ROOT:-$(git rev-parse --show-toplevel)}" && pwd)"
+rust_toolchain="1.97.1"
+llvm_cov_version="0.9.0"
+cache_root="${COVERAGE_TOOL_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/omakure/coverage-tools/cargo-llvm-cov-${llvm_cov_version}}"
+tool_bin="$cache_root/bin"
+report_root="${COVERAGE_REPORT_DIR:-$root/target/coverage-report}"
+target_root="${COVERAGE_TARGET_DIR:-$root/target/coverage-target}"
+baseline="$root/scripts/coverage/baseline.json"
+checker="$root/scripts/tasks/coverage-check"
+if [[ ! -x "$checker" ]]; then
+  echo "coverage checker is missing or not executable: $checker" >&2
+  exit 1
+fi
+export RUSTUP_TOOLCHAIN="1.97.1"
+
+case "$(rustc --version)" in
+  "rustc ${rust_toolchain} "*) ;;
+  *) echo "coverage requires rustc ${rust_toolchain}" >&2; exit 1 ;;
+esac
+
+sysroot="$(rustup run "$rust_toolchain" rustc --print sysroot)"
+host="$(rustup run "$rust_toolchain" rustc -vV | sed -n 's/^host: //p')"
+llvm_bin="$sysroot/lib/rustlib/$host/bin"
+if [[ ! -x "$llvm_bin/llvm-profdata" || ! -x "$llvm_bin/llvm-cov" ]]; then
+  rustup component add llvm-tools-preview --toolchain "$rust_toolchain"
+fi
+[[ -x "$llvm_bin/llvm-profdata" && -x "$llvm_bin/llvm-cov" ]] || {
+  echo "llvm-tools-preview is not installed for Rust ${rust_toolchain}" >&2
+  exit 1
+}
+
+if [[ ! -x "$tool_bin/cargo-llvm-cov" ]]; then
+  mkdir -p "$cache_root"
+  cargo install --locked --version "$llvm_cov_version" --root "$cache_root" cargo-llvm-cov
+fi
+export PATH="$tool_bin:$PATH"
+case "$(cargo llvm-cov --version)" in
+  *"${llvm_cov_version}"*) ;;
+  *) echo "coverage requires cargo-llvm-cov ${llvm_cov_version}" >&2; exit 1 ;;
+esac
+
+rm -rf "$report_root" "$target_root"
+mkdir -p "$report_root" "$target_root/profiles"
+export CARGO_INCREMENTAL=0
+export CARGO_TARGET_DIR="$target_root"
+# Keep test scheduling and profile names stable. One test thread per process
+# avoids order-dependent harness coverage while cargo-llvm-cov's supported
+# profile filename override keeps raw profiles at its merge-discovery root.
+export RUST_TEST_THREADS=1
+export LLVM_PROFILE_FILE_NAME="omakure-%m.profraw"
+
+# One instrumented test run feeds every report format. No doctests or nightly
+# branch coverage are included; all normal workspace targets are included.
+cargo llvm-cov --workspace --all-targets --locked --remap-path-prefix --no-report
+cargo llvm-cov report --json --output-path "$report_root/llvm-cov.json"
+cargo llvm-cov report --lcov --output-path "$report_root/lcov.info"
+cargo llvm-cov report --cobertura --output-path "$report_root/cobertura.xml"
+cargo llvm-cov report --html --output-dir "$report_root"
+
+"$checker" \
+  --report "$report_root/llvm-cov.json" \
+  --baseline "$baseline" \
+  --source-root "$root" \
+  --inventory-out "$report_root/inventory.json"
+cat <<EOF
+coverage reports written to $report_root
+  HTML:      $report_root/html/index.html
+  LCOV:      $report_root/lcov.info
+  Cobertura: $report_root/cobertura.xml
+  inventory: $report_root/inventory.json
+EOF

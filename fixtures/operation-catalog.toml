@@ -1,0 +1,1370 @@
+schema_version = 1
+catalog_version = "1.0.0"
+
+[[operations]]
+operation_id = "op.doctor"
+entry_id = "doctor"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["doctor"]
+http = ["GET /v1/doctor"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.scripts"
+entry_id = "scripts"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["scripts"]
+http = ["GET /v1/scripts"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.describe"
+entry_id = "describe"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["describe"]
+http = ["GET /v1/scripts/:script_id"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.history-list"
+entry_id = "history-list"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["history list"]
+http = ["GET /v1/runs"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.history-show"
+entry_id = "history-show"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["history show"]
+http = ["GET /v1/runs/:run_id"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.history-traces"
+entry_id = "history-traces"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["history traces"]
+http = ["GET /v1/runs/:run_id/traces"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.history-stats"
+entry_id = "history-stats"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["history stats", "queue stats"]
+http = ["GET /v1/queue/stats"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.queue-add"
+entry_id = "queue-add"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["queue add"]
+http = ["POST /v1/runs"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.queue-cancel"
+entry_id = "queue-cancel"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["queue cancel"]
+http = ["POST /v1/runs/:run_id/cancel"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.queue-dead-letter"
+entry_id = "queue-dead-letter"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["queue dead-letter"]
+http = ["POST /v1/runs/:run_id/dead-letter"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-list"
+entry_id = "env-list"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["env list"]
+http = ["GET /v1/envs"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-create"
+entry_id = "env-create"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["env create"]
+http = ["POST /v1/envs"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-show"
+entry_id = "env-show"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["env show"]
+http = ["GET /v1/envs/:name"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-replace"
+entry_id = "env-replace"
+plane = "domain"
+remote_eligibility = "control-converge"
+effect = "mutate"
+mutability = "idempotent"
+cli = ["env replace"]
+http = ["PUT /v1/envs/:name"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-set"
+entry_id = "env-set"
+plane = "domain"
+remote_eligibility = "control-converge"
+effect = "mutate"
+mutability = "idempotent"
+cli = ["env set"]
+http = ["PATCH /v1/envs/:name", "PUT /v1/envs/:name/params/:key"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-remove"
+entry_id = "env-remove"
+plane = "domain"
+remote_eligibility = "control-converge"
+effect = "mutate"
+mutability = "idempotent"
+cli = ["env remove"]
+http = ["DELETE /v1/envs/:name/params/:key"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-activate"
+entry_id = "env-activate"
+plane = "domain"
+remote_eligibility = "control-converge"
+effect = "mutate"
+mutability = "idempotent"
+cli = ["env activate"]
+http = ["POST /v1/envs/:name/activate"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-deactivate"
+entry_id = "env-deactivate"
+plane = "domain"
+remote_eligibility = "control-converge"
+effect = "mutate"
+mutability = "idempotent"
+cli = ["env deactivate"]
+http = ["DELETE /v1/envs/active"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.env-delete"
+entry_id = "env-delete"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["env delete"]
+http = ["DELETE /v1/envs/:name"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.battery-list"
+entry_id = "battery-list"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["battery list"]
+http = ["GET /v1/batteries"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.battery-inspect"
+entry_id = "battery-inspect"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["battery inspect"]
+http = ["GET /v1/batteries/:battery_id"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.battery-scripts"
+entry_id = "battery-scripts"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["battery scripts"]
+http = ["GET /v1/batteries/:battery_id/scripts"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.battery-remove"
+entry_id = "battery-remove"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["battery remove"]
+http = ["DELETE /v1/batteries/:battery_id"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-init"
+entry_id = "node-init"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["node init"]
+http = ["POST /v1/node/init"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-status"
+entry_id = "node-status"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["node status"]
+http = ["GET /v1/node/status"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-peers"
+entry_id = "node-peers"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["node peers"]
+http = ["GET /v1/node/peers"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-trust"
+entry_id = "node-trust"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node trust"]
+http = ["POST /v1/node/peers"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-capabilities"
+entry_id = "node-capabilities"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node capabilities"]
+http = ["PATCH /v1/node/peers/:node_id/capabilities"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-revoke"
+entry_id = "node-revoke"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node revoke"]
+http = ["POST /v1/node/peers/:node_id/revoke"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-health"
+entry_id = "node-health"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["node health"]
+http = ["GET /v1/node/health"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-signals"
+entry_id = "node-signals"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["node signals"]
+http = ["GET /v1/node/signals"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-baseline-push"
+entry_id = "node-baseline-push"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node baseline push"]
+http = ["POST /v1/node/baselines"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-baseline-rollback"
+entry_id = "node-baseline-rollback"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node baseline rollback"]
+http = ["POST /v1/node/baseline/rollback"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-enroll-approve"
+entry_id = "node-enroll-approve"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node enroll approve"]
+http = ["POST /v1/node/enrollments/:node_id/approve"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-enroll-reject"
+entry_id = "node-enroll-reject"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node enroll reject"]
+http = ["POST /v1/node/enrollments/:node_id/reject"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.config"
+entry_id = "config"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["config"]
+http = ["GET /v1/config"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.search"
+entry_id = "search"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "read"
+mutability = "immutable"
+cli = ["search"]
+http = ["GET /v1/search"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.battery-add"
+entry_id = "battery-add"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["battery add"]
+http = ["POST /v1/batteries"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.battery-sync"
+entry_id = "battery-sync"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["battery sync"]
+http = ["POST /v1/batteries/:battery_id/sync"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.battery-install"
+entry_id = "battery-install"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["battery install"]
+http = ["POST /v1/batteries/:battery_id/scripts/:script_id/install"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = false
+reason = "Battery repository installation and cache operations are Unix-only."
+
+[[operations]]
+operation_id = "op.node-discovery"
+entry_id = "node-discovery"
+plane = "domain"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = ["node discovery"]
+http = ["GET /v1/node/discovery"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = false
+reason = "Discovery is unsupported on Windows; the bounded scanner has no Windows implementation."
+
+[[operations]]
+operation_id = "op.node-cue"
+entry_id = "node-cue"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["node cue"]
+http = ["POST /v1/node/cues"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-enroll-request"
+entry_id = "node-enroll-request"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node enroll request"]
+http = ["POST /v1/node/enrollments"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-node-enrollments"
+entry_id = "http-node-enrollments"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/node/enrollments"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.node-enroll-apply"
+entry_id = "node-enroll-apply"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "mutate"
+mutability = "non-idempotent"
+cli = ["node enroll apply"]
+http = ["POST /v1/node/enrollment/bundle"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-health"
+entry_id = "http-health"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/health"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-ready"
+entry_id = "http-ready"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/ready"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-admin-status"
+entry_id = "http-admin-status"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/admin/status"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-workspace"
+entry_id = "http-workspace"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/workspace"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-tree-root"
+entry_id = "http-tree-root"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/tree"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-tree-path"
+entry_id = "http-tree-path"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/tree/:path"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.http-secrets"
+entry_id = "http-secrets"
+plane = "service-observation"
+remote_eligibility = "control-observe"
+effect = "observe"
+mutability = "immutable"
+cli = []
+http = ["GET /v1/secrets"]
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-api"
+entry_id = "cli-api"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["api"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-completion"
+entry_id = "cli-completion"
+plane = "domain"
+remote_eligibility = "local-only"
+effect = "read"
+mutability = "immutable"
+cli = ["completion"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-help-ai"
+entry_id = "cli-help-ai"
+plane = "domain"
+remote_eligibility = "local-only"
+effect = "read"
+mutability = "immutable"
+cli = ["help-ai"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-history-tail"
+entry_id = "cli-history-tail"
+plane = "domain"
+remote_eligibility = "local-only"
+effect = "read"
+mutability = "immutable"
+cli = ["history tail"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-init"
+entry_id = "cli-init"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["init"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-authority-create"
+entry_id = "cli-node-authority-create"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["node authority create"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-authority-issue"
+entry_id = "cli-node-authority-issue"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["node authority issue"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-authority-show"
+entry_id = "cli-node-authority-show"
+plane = "domain"
+remote_eligibility = "local-only"
+effect = "read"
+mutability = "immutable"
+cli = ["node authority show"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-baseline-create-key"
+entry_id = "cli-node-baseline-create-key"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["node baseline create-key"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-baseline-publish"
+entry_id = "cli-node-baseline-publish"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["node baseline publish"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-direct-probe"
+entry_id = "cli-node-direct-probe"
+plane = "domain"
+remote_eligibility = "local-only"
+effect = "read"
+mutability = "immutable"
+cli = ["node direct-probe"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-reset"
+entry_id = "cli-node-reset"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["node reset"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-node-serve"
+entry_id = "cli-node-serve"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["node serve"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-queue-worker"
+entry_id = "cli-queue-worker"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["queue worker"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-run"
+entry_id = "cli-run"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["run"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-serve"
+entry_id = "cli-serve"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["serve"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-token-generate"
+entry_id = "cli-token-generate"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["token generate"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-trace"
+entry_id = "cli-trace"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["trace"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-uninstall"
+entry_id = "cli-uninstall"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["uninstall"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+
+[[operations]]
+operation_id = "op.cli-update"
+entry_id = "cli-update"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "non-idempotent"
+cli = ["update"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."
+[operations.platforms.macos]
+supported = true
+reason = "Supported by the headless Rust runtime; platform-specific integration remains static."
+[operations.platforms.windows]
+supported = true
+reason = "Supported by the headless Rust runtime and adapter contract."

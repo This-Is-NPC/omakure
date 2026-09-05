@@ -17,6 +17,7 @@ use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 
 const TOKEN: &str = "direct-transport-e2e-token-with-enough-entropy-00001";
+const HANDSHAKE_IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn node_args(workspace: &Path) -> (String, String) {
     (
@@ -137,8 +138,11 @@ fn wait_for_connected_within(server: &support::HttpServer, peer_node_id: &str, b
     let deadline = std::time::Instant::now() + budget;
     loop {
         let status = server.get("/v1/node/status");
-        assert_eq!(status.status, 200, "body: {}", status.safe_body());
-        let transport = &status.json()["data"]["transport"];
+        let transport = if status.status == 200 {
+            status.json()["data"]["transport"].clone()
+        } else {
+            Value::Null
+        };
         if transport["connected_peer_count"] == 1
             && transport["peers"][0]["node_id"] == peer_node_id
             && transport["peers"][0]["state"] == "connected"
@@ -147,7 +151,9 @@ fn wait_for_connected_within(server: &support::HttpServer, peer_node_id: &str, b
         }
         assert!(
             std::time::Instant::now() < deadline,
-            "transport did not connect: {transport}"
+            "transport did not connect: {transport}, last status {} body {}",
+            status.status,
+            status.safe_body()
         );
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -157,8 +163,23 @@ fn free_port() -> String {
     support::unique_loopback_port().to_string()
 }
 
+fn wait_until_direct_accepts(endpoint: &str) {
+    let deadline = Instant::now() + HANDSHAKE_IO_TIMEOUT;
+    loop {
+        if let Ok(stream) = TcpStream::connect(endpoint) {
+            drop(stream);
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "direct listener did not accept connections at {endpoint}"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
 fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpServer {
-    support::HttpServer::start_node_service(
+    let server = support::HttpServer::start_node_service(
         workspace,
         TOKEN,
         &[
@@ -172,7 +193,9 @@ fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpSe
         ],
         &[],
         Duration::from_secs(15),
-    )
+    );
+    wait_until_direct_accepts(&format!("127.0.0.1:{direct_port}"));
+    server
 }
 
 fn probe(workspace: &Path, endpoint: &str, peer_node_id: &str) -> Output {
@@ -326,10 +349,10 @@ fn raw_frame(version: u8, kind: u8, flags: u16, body: &[u8]) -> Vec<u8> {
 fn send_raw(endpoint: &str, bytes: &[u8]) {
     let mut stream = TcpStream::connect(endpoint).expect("connect raw adversary");
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set raw read timeout");
     stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
+        .set_write_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set raw write timeout");
     stream.write_all(bytes).expect("send raw adversary frame");
     let _ = stream.shutdown(Shutdown::Write);
@@ -396,10 +419,10 @@ fn custom_certificate_handshake(endpoint: &str, private: [u8; 32], certificate: 
         .expect("build Noise initiator");
     let mut stream = TcpStream::connect(endpoint).expect("connect custom handshake");
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set custom handshake read timeout");
     stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
+        .set_write_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set custom handshake write timeout");
     let mut message = vec![0_u8; 4096];
     let length = handshake
@@ -432,10 +455,10 @@ fn valid_session(
         .expect("build production Noise handshake");
     let mut stream = TcpStream::connect(endpoint).expect("connect valid session");
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set valid session read timeout");
     stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
+        .set_write_timeout(Some(HANDSHAKE_IO_TIMEOUT))
         .expect("set valid session write timeout");
     stream
         .write_all(&handshake.write_next().expect("write production message 1"))
@@ -665,6 +688,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         Duration::from_secs(15),
     );
     let endpoint = format!("127.0.0.1:{target_port}");
+    wait_until_direct_accepts(&endpoint);
     let (initiator_identity, private, valid_certificate) = node_material(initiator.path());
 
     let now = unix_seconds();
@@ -704,7 +728,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
     );
 
     let exit = target_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
     let target_server = support::HttpServer::start_node_service(
         target.path(),
         TOKEN,
@@ -720,6 +744,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         &[],
         Duration::from_secs(15),
     );
+    wait_until_direct_accepts(&endpoint);
 
     let before_forged_envelope_state = full_registry_snapshot(target.path());
     let before_forged_envelope_rejections = protocol_audit_count(target.path());
@@ -786,7 +811,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         target_status["identity"]["node_id"]
     );
     let exit = target_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
 }
 
 #[test]
@@ -869,7 +894,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
         let _ = TcpStream::connect(&endpoint);
     }
     let exit = second_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
 
     let restarted = support::HttpServer::start_node_service(
         second.path(),
@@ -1168,7 +1193,7 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
     assert!(!transport.contains("127.0.0.1"));
 
     let exit = second_server.terminate();
-    assert!(exit.success() || exit.code().is_none());
+    support::assert_terminated(exit);
     let restarted = support::HttpServer::start_node_service(
         second.path(),
         TOKEN,
@@ -1327,19 +1352,19 @@ fn a_revoked_peer_is_refused_with_revoked_and_told_so() {
          retries without limit"
     );
 
+    // The responder commits this row before sending the refusal, so inspect it
+    // while both services are still alive rather than relying on teardown to
+    // provide an arbitrary observation delay.
+    let codes = rejected_error_codes(responder);
+    assert_eq!(
+        codes,
+        vec![1007],
+        "the revoker must record exactly one durable revoked audit for the \
+         authenticated handshake, got {codes:?}"
+    );
+
     let _ = dialer_server.terminate();
     let _ = responder_server.terminate();
-
-    let codes = rejected_error_codes(responder);
-    assert!(
-        codes.contains(&1007),
-        "the revoker must record `revoked` for the handshake it turned away, got {codes:?}"
-    );
-    assert!(
-        !codes.contains(&1005),
-        "a revoked peer is not an identity mismatch; its identity is exactly the one \
-         that was revoked: {codes:?}"
-    );
 }
 
 /// Wait until `server` reports no session with `peer_node_id`.

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+(( $# >= 2 )) || { printf 'atomic/run-bounded: duration and command are required\n' >&2; exit 2; }
+duration="$1"
+shift
+case "$(uname -s)" in
+  Linux)
+    timeout_bin="$(command -v timeout || true)"
+    [[ -n "$timeout_bin" ]] || { printf 'atomic/run-bounded: GNU timeout is required on Linux\n' >&2; exit 1; }
+    timeout_version="$($timeout_bin --version 2>&1 || true)"
+    [[ "$timeout_version" == *"GNU coreutils"* ]] || { printf 'atomic/run-bounded: GNU timeout is required on Linux\n' >&2; exit 1; }
+    exec "$timeout_bin" --foreground --kill-after=10s "$duration" "$@"
+    ;;
+  *)
+    if command -v gtimeout >/dev/null 2>&1; then
+      exec gtimeout --foreground --kill-after=10s "$duration" "$@"
+    fi
+    printf 'atomic/run-bounded: GNU timeout unavailable; operation-level timeout is unavailable and caller/platform CI 60-minute bound applies\n' >&2
+    exec "$@"
+    ;;
+esac

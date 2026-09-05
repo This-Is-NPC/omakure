@@ -4,26 +4,25 @@
 
 ## Source
 
-- `.scripts/fedora-vm-privilege-certification.sh`
-- `.scripts/fedora-vm-privilege-certification-static-test.sh`
-- `.scripts/fedora-vm-privilege-certification-cleanup-test.sh`
-- `.scripts/fixtures/fedora-vm-privilege/`
+- `scripts/tasks/cert/vm`
+- `scripts/tasks/cert/vm-static`
+- `scripts/tasks/cert/vm-cleanup`
+- `scripts/fixtures/fedora-vm-privilege/`
 
 ## Run
 
 ```bash
-./.scripts/fedora-vm-privilege-certification-static-test.sh
-timeout --foreground --kill-after=30s 30m ./.scripts/fedora-vm-privilege-certification.sh
-timeout --foreground --kill-after=30s 25m ./.scripts/fedora-vm-privilege-certification-cleanup-test.sh
+scripts/tasks/cert/vm-static
+timeout --foreground --kill-after=30s 30m scripts/tasks/cert/vm
+timeout --foreground --kill-after=30s 25m scripts/tasks/cert/vm-cleanup
 ```
 
-`mise run vm-privilege-certification` runs the static checks before the bounded
-30-minute live certification.
+`mise run cert:vm` runs the static checks before the bounded 30-minute live
+certification.
 
 ## Proves
 
-- The Fedora guest provisioning fixture, Polkit/service policy, Unix Battery fixture, and privilege boundaries contain the expected fixed operations.
-- A real KVM/libvirt Fedora guest can exercise the privileged Battery operation through the intended service boundary.
+- The Fedora guest provisioning fixture, Polkit/service policy, synthetic external Battery input, and privilege boundaries contain the expected fixed operations.
 - The live path verifies the node/service identity and reports safe operation results.
 - Cleanup handles partial startup and induced failure without deleting resources it cannot positively identify.
 

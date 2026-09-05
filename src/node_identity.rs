@@ -529,7 +529,7 @@ mod tests {
     #[cfg(debug_assertions)]
     fn test_context(root: &Path) -> NodeContext {
         NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(Some(root.join("state")), Some(root.join("node.toml"))),
             true,
             None,

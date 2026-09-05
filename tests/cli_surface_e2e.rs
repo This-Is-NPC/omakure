@@ -537,19 +537,35 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
 
     // Host-safe boundary: status probe must not mutate systemd units.
     let serve_status = omakure(workspace.path(), &["serve", "--status"]);
-    assert_eq!(
-        serve_status.status.code(),
-        Some(0),
-        "serve --status must exit 0 (stdout_len={}, stderr_len={})",
-        serve_status.stdout.len(),
-        serve_status.stderr.len()
-    );
-    let status_out = String::from_utf8_lossy(&serve_status.stdout);
-    assert!(
-        status_out.contains("unit:") && status_out.contains("installed:"),
-        "serve --status missing expected markers (stdout_len={})",
-        serve_status.stdout.len()
-    );
+    #[cfg(target_os = "linux")]
+    {
+        assert_eq!(
+            serve_status.status.code(),
+            Some(0),
+            "serve --status must exit 0 (stdout_len={}, stderr_len={})",
+            serve_status.stdout.len(),
+            serve_status.stderr.len()
+        );
+        let status_out = String::from_utf8_lossy(&serve_status.stdout);
+        assert!(
+            status_out.contains("unit:") && status_out.contains("installed:"),
+            "serve --status missing expected markers (stdout_len={})",
+            serve_status.stdout.len()
+        );
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        assert_eq!(
+            serve_status.status.code(),
+            Some(1),
+            "serve --status must report unsupported on this platform"
+        );
+        let status_err = String::from_utf8_lossy(&serve_status.stderr);
+        assert!(
+            status_err.contains("unsupported") && status_err.contains("Linux"),
+            "serve --status must explain its Linux-only contract: {status_err}"
+        );
+    }
 
     let config_json = omakure(workspace.path(), &["--json", "config"]);
     assert_success(&config_json);
@@ -997,6 +1013,37 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
         body_text.len()
     );
 
+    let mut body_stdin_alone = support::omakure_command();
+    body_stdin_alone
+        .arg("--scripts-dir")
+        .arg(workspace.path())
+        .args(["--json", "init", "tools/ignored-stdin.sh", "--body-stdin"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut alone_child = body_stdin_alone
+        .spawn()
+        .expect("spawn init body-stdin alone");
+    {
+        use std::io::Write;
+        let stdin = alone_child.stdin.as_mut().expect("stdin");
+        stdin
+            .write_all(b"stdin-must-be-ignored-marker\n")
+            .expect("write ignored body");
+    }
+    let alone_out = alone_child
+        .wait_with_output()
+        .expect("wait init body-stdin alone");
+    assert_success(&alone_out);
+    let alone_path = workspace.path().join("tools/ignored-stdin.sh");
+    let alone_text = fs::read_to_string(&alone_path).expect("read ignored-stdin script");
+    assert!(
+        alone_text.contains("Describe what this script does.")
+            && !alone_text.contains("stdin-must-be-ignored-marker"),
+        "body-stdin without schema-json must ignore stdin and write the default template (len={})",
+        alone_text.len()
+    );
+
     let scripts = omakure(
         workspace.path(),
         &["--json", "scripts", "--tag", "alpha", "--tag", "beta"],
@@ -1267,6 +1314,7 @@ echo traced"##,
     assert_success(&delete);
 }
 
+#[cfg(unix)]
 #[test]
 fn battery_lifecycle_subcommands_work_against_local_repo() {
     let workspace = support::TestWorkspace::new("cli_surface_battery");

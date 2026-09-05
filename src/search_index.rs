@@ -21,6 +21,7 @@ pub struct SearchResult {
     pub display_name: String,
     pub description: Option<String>,
     pub tags: Vec<String>,
+    pub field_count: usize,
     pub schema_error: Option<String>,
 }
 
@@ -100,7 +101,8 @@ impl SearchIndex {
 
         let tokens = split_query(query);
         let mut sql = String::from(
-            "SELECT script_path, display_name, description, tags, schema_error \
+            "SELECT script_path, display_name, description, tags, schema_error, \
+             (SELECT COUNT(*) FROM script_fields sf WHERE sf.script_path = script_index.script_path) \
              FROM script_index",
         );
         if !tokens.is_empty() {
@@ -129,11 +131,13 @@ impl SearchIndex {
                 let description: Option<String> = row.get(2)?;
                 let tags_raw: Option<String> = row.get(3)?;
                 let schema_error: Option<String> = row.get(4)?;
+                let field_count: i64 = row.get(5)?;
                 Ok(SearchResult {
                     script_path: PathBuf::from(script_path),
                     display_name,
                     description,
                     tags: parse_tags(tags_raw),
+                    field_count: usize::try_from(field_count).unwrap_or(0),
                     schema_error,
                 })
             })
@@ -210,7 +214,10 @@ impl SearchIndex {
 }
 
 pub(crate) fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String> {
-    let repo = FsWorkspaceRepository::new(root.to_path_buf());
+    let root = root
+        .canonicalize()
+        .map_err(|error| format!("Canonicalize search root failed: {error}"))?;
+    let repo = FsWorkspaceRepository::new(root.clone());
     let scripts = repo
         .list_scripts_recursive()
         .map_err(|err| format!("List scripts failed: {}", err))?;
@@ -229,8 +236,7 @@ pub(crate) fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String
         .map_err(|err| format!("Clear scripts failed: {}", err))?;
 
     for script in &scripts {
-        let relative = script.strip_prefix(root).unwrap_or(script);
-        let relative_str = relative.to_string_lossy().to_string();
+        let relative_str = logical_relative_path(script, &root);
         let file_name = script
             .file_name()
             .and_then(|name| name.to_str())
@@ -315,6 +321,20 @@ pub(crate) fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String
     tx.commit()
         .map_err(|err| format!("Commit search index failed: {}", err))?;
     Ok(scripts.len())
+}
+
+fn logical_relative_path(path: &Path, root: &Path) -> String {
+    let path_text = path.to_string_lossy().replace('\\', "/");
+    let root_text = root
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    path_text
+        .strip_prefix(&root_text)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(&path_text)
+        .to_string()
 }
 
 fn open_connection(db_path: &Path) -> Result<Connection, String> {
@@ -443,6 +463,14 @@ mod tests {
     }
 
     #[test]
+    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
+        let root = Path::new(r"C:\workspace\scripts");
+        let path = Path::new(r"C:\workspace\scripts\tools\deploy.sh");
+
+        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
+    }
+
+    #[test]
     fn test_build_search_blob_no_description() {
         let result = build_search_blob("s.sh", "S", None, &[], &[]);
         assert_eq!(result, "s.sh s");
@@ -560,6 +588,9 @@ echo deploying
         // Query all
         let all = index.query("").unwrap();
         assert_eq!(all.len(), 2);
+        assert!(all
+            .iter()
+            .any(|result| result.script_path == Path::new("deploy.sh")));
     }
 
     #[test]

@@ -14,6 +14,7 @@ use crate::adapters::script_runner::MultiScriptRunner;
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::ports::ScriptRepository;
 use crate::runs::{self, RunCompletion, RunRow, RunState, RunTrigger};
+use crate::runtime::bash_safe_path;
 use crate::workspace::Workspace;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -199,14 +200,7 @@ pub fn execute_with_heartbeat_guarded(
             file.path.to_string_lossy().to_string(),
         ));
     }
-    env.push(("OMAKURE_RUN_ID".to_string(), row.run_id.clone()));
-    // Pin the workspace so nested `omakure trace` invocations write to
-    // the same `runs.sqlite` even when the worker was launched against
-    // a non-default scripts dir (or a temp dir under `--scripts-dir`).
-    env.push((
-        "OMAKURE_SCRIPTS_DIR".to_string(),
-        workspace.root().to_string_lossy().to_string(),
-    ));
+    push_reserved_run_env(&mut env, workspace, &row.run_id);
 
     let mut command = match MultiScriptRunner::build_command(&script_path, &args, &env) {
         Ok(cmd) => cmd,
@@ -602,6 +596,22 @@ fn check_required_fields(
     Ok(())
 }
 
+/// Path to the running omakure binary, normalized for bash scripts on Windows.
+fn push_reserved_run_env(env: &mut Vec<(String, String)>, workspace: &Workspace, run_id: &str) {
+    env.push(("OMAKURE_RUN_ID".to_string(), run_id.to_string()));
+    env.push((
+        "OMAKURE_SCRIPTS_DIR".to_string(),
+        bash_safe_path(workspace.root()),
+    ));
+    if let Some(bin) = bash_safe_current_exe() {
+        env.push(("OMAKURE_BIN".to_string(), bin));
+    }
+}
+
+fn bash_safe_current_exe() -> Option<String> {
+    std::env::current_exe().ok().map(|exe| bash_safe_path(&exe))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,17 +633,22 @@ mod tests {
         ws
     }
 
-    fn write_bash_stub(workspace: &Workspace, name: &str, body: &str) -> PathBuf {
-        let p = workspace.root().join(name);
-        fs::write(&p, format!("#!/usr/bin/env bash\n{}\n", body)).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&p).unwrap().permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&p, perms).unwrap();
-        }
-        p
+    #[cfg(unix)]
+    fn write_bash_script(workspace: &Workspace, name: &str, body: &str) -> PathBuf {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let path = workspace.root().join(name);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o755)
+            .open(&path)
+            .unwrap();
+        write!(file, "#!/usr/bin/env bash\n{body}\n").unwrap();
+        path
     }
 
     /// A Cue authorized one script; a baseline may legitimately replace it
@@ -643,7 +658,7 @@ mod tests {
     #[cfg(unix)]
     fn a_cue_run_refuses_a_script_that_changed_after_it_was_authorized() {
         let ws = make_workspace("cue_swapped_script");
-        let script = write_bash_stub(&ws, "deploy.sh", "echo authorized");
+        let script = write_bash_script(&ws, "deploy.sh", "echo authorized");
         let authorized = crate::remote_cue::content_hash(&script).unwrap();
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -668,7 +683,7 @@ mod tests {
         assert_eq!(unchanged.terminal, ExecutionTerminal::Completed);
         assert!(unchanged.completion.stdout.contains("authorized"));
 
-        write_bash_stub(&ws, "deploy.sh", "echo substituted");
+        write_bash_script(&ws, "deploy.sh", "echo substituted");
         let swapped = execute_with_heartbeat(&ws, &row, vec![], None);
 
         assert_eq!(swapped.terminal, ExecutionTerminal::Failed);
@@ -693,7 +708,7 @@ mod tests {
     #[cfg(unix)]
     fn a_cue_run_with_no_recorded_hash_does_not_execute() {
         let ws = make_workspace("cue_missing_hash");
-        let script = write_bash_stub(&ws, "deploy.sh", "echo unconstrained");
+        let script = write_bash_script(&ws, "deploy.sh", "echo unconstrained");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -728,7 +743,7 @@ mod tests {
     #[cfg(unix)]
     fn a_manual_run_is_unaffected_by_the_authorized_content_check() {
         let ws = make_workspace("manual_unaffected");
-        let script = write_bash_stub(&ws, "local.sh", "echo local");
+        let script = write_bash_script(&ws, "local.sh", "echo local");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -746,7 +761,7 @@ mod tests {
         .unwrap();
         drop(conn);
 
-        write_bash_stub(&ws, "local.sh", "echo edited");
+        write_bash_script(&ws, "local.sh", "echo edited");
         let result = execute_with_heartbeat(&ws, &row, vec![], None);
 
         assert_eq!(result.terminal, ExecutionTerminal::Completed);
@@ -758,7 +773,7 @@ mod tests {
     #[cfg(unix)]
     fn execute_completes_simple_script() {
         let ws = make_workspace("complete_simple");
-        let script = write_bash_stub(&ws, "ok.sh", "echo hello");
+        let script = write_bash_script(&ws, "ok.sh", "echo hello");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -784,7 +799,7 @@ mod tests {
     #[cfg(unix)]
     fn execute_injects_omakure_scripts_dir_env_var() {
         let ws = make_workspace("scripts_dir_env");
-        let script = write_bash_stub(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
+        let script = write_bash_script(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -815,9 +830,41 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
+    fn execute_injects_omakure_bin_env_var() {
+        let ws = make_workspace("omakure_bin_env");
+        let script = write_bash_script(&ws, "echobin.sh", "echo $OMAKURE_BIN");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "inline:test",
+            EnqueueOptions {
+                actor: "human".into(),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        drop(conn);
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Completed);
+        let expected = bash_safe_current_exe().expect("current_exe");
+        assert!(!expected.is_empty());
+        assert!(Path::new(&expected).is_absolute());
+        assert_eq!(
+            result.completion.stdout.trim(),
+            expected,
+            "expected OMAKURE_BIN to match bash-safe current_exe"
+        );
+        let _ = fs::remove_dir_all(ws.root());
+    }
+
+    #[test]
+    #[cfg(unix)]
     fn execute_uses_redaction_file_instead_of_plaintext_secret_env() {
         let ws = make_workspace("redaction_file_env");
-        let script = write_bash_stub(
+        let script = write_bash_script(
             &ws,
             "redact-env.sh",
             r#"# OMAKURE_SCHEMA_START
@@ -866,7 +913,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[cfg(unix)]
     fn execute_injects_omakure_run_id_env_var() {
         let ws = make_workspace("env_var");
-        let script = write_bash_stub(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
+        let script = write_bash_script(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -899,7 +946,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
         // extra_env, so a user attempt to override OMAKURE_RUN_ID via the
         // injected env must lose (non-overridable).
         let ws = make_workspace("reserved_wins");
-        let script = write_bash_stub(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
+        let script = write_bash_script(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -938,7 +985,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
         // like OMAKURE_RUN_ID and must be the final value observed by the
         // child, even if extra_env tries to hijack it.
         let ws = make_workspace("reserved_scripts_dir_wins");
-        let script = write_bash_stub(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
+        let script = write_bash_script(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -977,7 +1024,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
         fs::create_dir_all(envs).unwrap();
         fs::write(envs.join("dev.conf"), "PLAIN=$OMAKURE_RUN_ID\n").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
-        let script = write_bash_stub(&ws, "echoenv.sh", "echo \"${PLAIN}|${OMAKURE_RUN_ID}\"");
+        let script = write_bash_script(&ws, "echoenv.sh", "echo \"${PLAIN}|${OMAKURE_RUN_ID}\"");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -1005,7 +1052,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[cfg(unix)]
     fn execute_failed_script_marked_failed() {
         let ws = make_workspace("failed");
-        let script = write_bash_stub(&ws, "bad.sh", "exit 7");
+        let script = write_bash_script(&ws, "bad.sh", "exit 7");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -1029,7 +1076,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[cfg(unix)]
     fn execute_timeout_kills_long_script() {
         let ws = make_workspace("timeout");
-        let script = write_bash_stub(&ws, "sleep.sh", "sleep 5");
+        let script = write_bash_script(&ws, "sleep.sh", "sleep 5");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -1110,7 +1157,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[cfg(unix)]
     fn execute_fails_when_required_field_missing() {
         let ws = make_workspace("missing_required");
-        let script = write_bash_stub(
+        let script = write_bash_script(
             &ws,
             "needs.sh",
             r#"# placeholder
@@ -1179,7 +1226,7 @@ echo done"#,
             "TOKEN=from_file_provider\n",
         )
         .unwrap();
-        let script = write_bash_stub(&ws, "secret_ref.sh", "");
+        let script = write_bash_script(&ws, "secret_ref.sh", "");
         let body = r#"#!/usr/bin/env bash
 # OMAKURE_SCHEMA_START
 # {"Name":"SecretRef","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}
@@ -1220,7 +1267,7 @@ if [ "$1" = "--token=from_file_provider" ]; then echo "matched from_file_provide
     #[cfg(unix)]
     fn execute_external_cancel_kills_running_script() {
         let ws = make_workspace("cancel");
-        let script = write_bash_stub(&ws, "sleep.sh", "sleep 10");
+        let script = write_bash_script(&ws, "sleep.sh", "sleep 10");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,

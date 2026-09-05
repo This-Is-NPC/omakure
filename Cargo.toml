@@ -13,9 +13,27 @@ path = "src/main.rs"
 name = "omakure-installer"
 path = "src/installer.rs"
 
+[[bin]]
+name = "usage-kdl"
+path = "src/bin/usage-kdl.rs"
+required-features = ["usage-generator"]
+
+[[bin]]
+name = "usage-docs"
+path = "src/bin/usage-docs.rs"
+required-features = ["usage-generator"]
+
+[features]
+usage-generator = ["dep:clap_usage", "dep:usage_docs"]
+
 [dependencies]
+# Build-only compatibility artifact; kept out of default/runtime targets.
+clap_usage = { version = "=5.0.0", git = "https://github.com/jdx/usage", rev = "9732c63", optional = true }
+# The official renderers live in usage-lib and are only needed by the docs generator.
+usage_docs = { package = "usage-lib", version = "=6.6.0", git = "https://github.com/jdx/usage", rev = "9732c63", default-features = false, features = ["docs"], optional = true }
+
 # Embedded Lua host. `vendored` builds the interpreter from source so a node
-# needs no system Lua, which is what roadmap item 5 means by "first-class".
+# needs no system Lua; this keeps the shipped script runtime self-contained.
 mlua = { version = "0.10", features = ["lua54", "vendored"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -43,6 +61,7 @@ snow = { version = "0.10.0", default-features = false, features = ["use-curve255
 hickory-resolver = { version = "0.25.2", default-features = false, features = ["system-config", "tokio"] }
 curve25519-dalek = { version = "4.1.3", default-features = false, features = ["alloc"] }
 serde_jcs = "0.2.0"
+tempfile = "3.10"
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5"
@@ -52,6 +71,7 @@ libc = "0.2"
 rstest = "0.23"
 pretty_assertions = "1.4"
 tempfile = "3.10"
+syn = { version = "2.0", features = ["full", "visit"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

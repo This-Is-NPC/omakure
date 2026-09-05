@@ -11,7 +11,7 @@
 
 ```bash
 cargo test --test node_service_e2e --test policy_e2e --locked
-mise run dev
+mise run dev:smoke
 ```
 
 ## Proves

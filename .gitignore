@@ -1,9 +1,12 @@
 /target
 /dist
+# complexity-tool downloads from scripts/tasks/complexity-setup.
+/.cache/
 *.log
 *.tmp
-tarpaulin-report.html
-cobertura.xml
+*.profraw
+/target/coverage-report/
+/target/coverage-target/
 .DS_Store
 .env
 .env.*
@@ -15,12 +18,14 @@ cobertura.xml
 .aider*/
 .continue/
 .windsurf/
-.omaken/
-scripts/.history/search-index.sqlite*
-scripts/.history/*
-!scripts/.history/.gitkeep
-scripts/.omakure/envs/*
-!scripts/.omakure/envs/env_template.conf
+scripts/workspace/.history/search-index.sqlite*
+scripts/workspace/.history/*
+!scripts/workspace/.history/.gitkeep
+scripts/workspace/.omakure/envs/*
+!scripts/workspace/.omakure/envs/env_template.conf
+# local debug-node identity, sqlite, and transport certs from dev:smoke.
+scripts/workspace/.omakure/dev-node.toml
+scripts/workspace/.omakure/dev-node-state/
 .temp/
 
 # Planning notes, kept out of the product record.

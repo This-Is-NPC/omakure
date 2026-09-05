@@ -1,0 +1,21 @@
+schema_version = 1
+catalog_version = "1.0.0"
+
+[[operations]]
+operation_id = "op.cli-init"
+entry_id = "cli-init"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "lifecycle"
+mutability = "idempotent"
+cli = ["init"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "fixture"
+[operations.platforms.macos]
+supported = true
+reason = "fixture"
+[operations.platforms.windows]
+supported = true
+reason = "fixture"

@@ -10,7 +10,7 @@ The first applicable entry wins:
 2. `OMAKURE_SCRIPTS_DIR`.
 3. `OVERTURE_SCRIPTS_DIR` (legacy).
 4. `CLOUD_MGMT_SCRIPTS_DIR` (legacy).
-5. Repository `scripts/` in debug builds, when present.
+5. Repository `scripts/workspace/` in debug builds, when present.
 6. `~/Documents/omakure-scripts` or the Windows Documents equivalent.
 7. Legacy `overture-scripts` or `cloud-mgmt-scripts` directories, when present.
 8. The default Omakure directory as a first-launch fallback.
@@ -19,6 +19,15 @@ There is no positional path mode. `omakure PATH` is not a supported alias for
 `--scripts-dir` and should be treated as a command-line error. This keeps
 scripts, metadata, history, environments, and the search index under one
 explicit root.
+
+## Repository automation
+
+The top-level `scripts/` hierarchy is reserved for repository automation:
+`scripts/tasks/` contains mise file tasks and `scripts/fixtures/` contains
+certification support. It is not a subject-script collection. Subject scripts
+come from external Battery repositories and are explicitly installed into the
+selected workspace.
+
 
 ## Examples
 

@@ -6,8 +6,8 @@ signed baseline onto a node, keeping one version behind it, and putting a
 machine back. It is the delivery half; the signing half is `src/baseline.rs`
 and `src/baseline_publisher.rs`.
 
-Every number here is normative. A later task needing a limit not written here
-must amend this document first.
+Every number here is normative. A limit not written here requires an amendment
+to this document before it can be used.
 
 ## What is different about this plane
 
@@ -100,10 +100,11 @@ Three answers were considered:
 1. **Raise the frame limit.** Refused. The 1 MiB bound is frozen, is load-
    bearing for the queue and per-source byte budgets, and would have to grow by
    more than two orders of magnitude to make the worst case fit.
-2. **Chunked reassembly.** Refused for this wave. It needs a multi-frame state
-   machine, a receive buffer sized to the largest baseline, abort and resume
-   states, and a new way for a peer to make a node hold megabytes — every one of
-   which is new attack surface on the one plane that carries code.
+2. **Chunked reassembly.** It is not part of this contract. It needs a
+   multi-frame state machine, a receive buffer sized to the largest baseline,
+   abort and resume states, and a new way for a peer to make a node hold
+   megabytes — every one of which is new attack surface on the one plane that
+   carries code.
 3. **A smaller delivery bound.** Taken.
 
 `MAX_PUSH_SCRIPT_BYTES` = **262,144** raw bytes of script content per push.
@@ -197,14 +198,14 @@ that battery would silently have made it remotely runnable.
 
 ## Refusing a baseline is not refusing to serve
 
-`docs/usage.md` froze this rule for enrollment and it applies unchanged. Every
+`docs/fleet-operations.md` freezes this rule for enrollment and it applies unchanged. Every
 refusal above is a decision about one message. The session stays up, the Health
 Plane keeps reporting, and the next baseline on the same session is decided
 normally.
 
 ## Carriage
 
-Delivery uses the outbox on `ConnectionState` that item 6 built for Cues,
+Delivery uses the existing outbox on `ConnectionState`, which also carries Cues,
 because a node holds one session per peer and a separate process cannot dial a
 peer the running service is already connected to. `POST /v1/node/baselines`
 exposes it under the existing `node:write` scope; no new `ApiCapability` was
@@ -229,7 +230,7 @@ and fail-closed. `hash_reverified_at_exec = true`.
 
 ## Retention and Rollback
 
-Wave 2. Two message kinds still, and no third: **rollback is local.**
+The plane has two message kinds and no third: **rollback is local.**
 
 ### What "previous" means
 
@@ -255,8 +256,8 @@ arriving set becomes current. **Rolling back is therefore a swap, not a step
 down a stack** — the version rolled away from becomes the retained previous, so
 a mistaken rollback can itself be undone and a second rollback returns the
 machine to where it started. Deeper history was refused: it needs an operator
-vocabulary for *which* version — a name, an index, a listing — that item 8 does
-not ask for and that grows with every push.
+vocabulary for *which* version — a name, an index, a listing — that the contract
+does not provide and that grows with every push.
 
 A node with nothing in the previous slot refuses with `not_found`. It does not
 reinstall what it is already running and report success.
@@ -277,16 +278,16 @@ A rollback to an unsigned or no-longer-verifiable state would launder code past
 the publisher check, which is the check this whole plane exists for. A publisher
 revoked since the original install makes the rollback fail.
 
-### The one question answered as of then
+### Validity window at acceptance
 
 **The validity window is evaluated at the instant this node accepted the
-baseline, not today.** The window bounds how long a published artefact may be
-*delivered* — it stops a captured push being replayed onto a machine months
-later. Nothing is delivered by a rollback: the bytes never leave the disk they
-are already on, and this node already accepted them once, inside that window.
-Re-asking it as of today would make rollback useless in exactly the situation it
-exists for — a bad push discovered after the previous manifest's 30-day lifetime
-ran out, with the publisher offline.
+baseline, not at rollback time.** The window bounds how long a published
+artefact may be *delivered* — it stops a captured push being replayed onto a
+machine months later. Nothing is delivered by a rollback: the bytes never leave
+the disk they are already on, and this node already accepted them once, inside
+that window. Re-evaluating it at rollback time would make rollback useless in
+exactly the situation it exists for — a bad push discovered after the previous
+manifest's 30-day lifetime ran out, with the publisher offline.
 
 The recorded instant is clamped to now, so a retained record cannot reach
 forward into a window that has not opened.

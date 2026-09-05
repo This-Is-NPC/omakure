@@ -2,28 +2,31 @@
 
 How to run Omakure's HTTP management surface on a single host: API-only,
 API plus a separate worker, or the combined `omakure node serve` process —
-including the official container image.
+including the repository's container image build.
 
 This guide is for **trusted internal** deployments (loopback or private
 network). It is not a public-internet threat model.
 
-## Auth status (read this first)
+## Ownership
 
-**Preferred:** multi-token file via `--tokens-file` / `OMAKURE_TOKENS_FILE`
-(Argon2id hashes, per-token scopes, `omakure token generate`, SIGHUP reload).
-See `docs/http-api.md` → Authentication Contract.
+This guide owns deployment procedures: bind and topology choices, deploy
+policy and load order, worker and scheduler lifecycle, startup/readiness,
+containers, volumes, SQLite placement, certification, and smoke operation.
+The [HTTP API contract](http-api.md) is the canonical source for routes,
+authentication and scopes, JSON envelopes and errors, request limits,
+CLI/HTTP adapter semantics, and request audit behavior.
 
-**Legacy:** `OMAKURE_API_TOKEN` still works when no tokens file is set
-(internal id `legacy`, scopes `*`, gated by process-wide `--capability`),
-unless deploy policy sets `auth.legacy_env_token = false`.
+## Auth boundary
 
-**Tokens-file format note:** tokens generated before the `token_selector`
-optimization (bare `omk_live_<64 hex>`, no embedded id) still authenticate —
-the verifier falls back to checking every enabled token's hash for that
-shape. New tokens from `omakure token generate` embed the id
-(`omk_live_<hex id>_<64 hex>`) and only cost one Argon2id verify. Regenerate
-and redistribute old-format tokens when convenient to get the faster path;
-there is no forced cutover.
+Use the [HTTP API Authentication Contract](http-api.md#authentication-contract)
+for the preferred multi-token file (`--tokens-file` /
+`OMAKURE_TOKENS_FILE`), Argon2id hashes, per-token scopes,
+`omakure token generate`, and SIGHUP reload semantics.
+
+The legacy `OMAKURE_API_TOKEN` still works when no tokens file is set (internal
+id `legacy`, scopes `*`, gated by process-wide `--capability`), unless deploy
+policy sets `auth.legacy_env_token = false`. The policy and deployment
+constraints for that mode are defined below.
 
 ## Deploy policy (`policy.toml`)
 
@@ -79,6 +82,9 @@ battery_install = false
 run_enqueue = true
 run_cancel = true
 run_dead_letter = false
+node = true
+trust = true
+enrollment = true
 config = true
 doctor = true
 envs = true
@@ -201,6 +207,63 @@ omakure api --policy /etc/omakure/policy.toml --tokens-file /run/secrets/tokens.
 
 ## Topology choices
 
+### API invocation forms
+
+```bash
+# Preferred: multi-token file (per-token scopes; --capability ignored)
+omakure api --bind 127.0.0.1:7878 --tokens-file /run/secrets/omakure_tokens.toml
+
+# Legacy single-token mode (set the required token before either alternative)
+export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
+
+# Loopback alternative
+omakure api --bind 127.0.0.1:7878 \
+  --capability config:read \
+  --capability scripts:read \
+  --capability runs:read \
+  --capability runs:write \
+  --capability env:read
+
+# Non-loopback alternative
+omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
+  --capability config:read \
+  --capability scripts:read \
+  --capability runs:read \
+  --capability env:read \
+  --capability env:write
+```
+
+See the [HTTP API contract's scope and legacy capability matrix](http-api.md#scope-matching-and-legacy-capabilities)
+for accepted capability names, scope matching, and secret-ref requirements.
+
+### Node service lifecycle
+
+`omakure node serve` runs the same HTTP surface as `omakure api`, plus
+optional in-process queue workers and the existing schedule scanner, with
+coordinated SIGTERM shutdown: stop HTTP acceptance, stop scheduling and
+claiming, then drain workers.
+
+Built-in defaults are one worker and the scheduler enabled. `--workers 0`
+selects API-only operation; `--scheduler` / `--no-scheduler` explicitly
+enables or disables the scanner. The readiness flags are opt-in:
+
+- `--readiness-requires-worker` makes `/v1/ready` fail if configured workers
+  are not alive.
+- `--readiness-requires-scheduler` makes `/v1/ready` fail if the scheduler is
+  enabled but not alive.
+- `--readiness-requires-transport` makes `/v1/ready` fail while any configured
+  static peer is disconnected. The equivalent deploy-policy setting is
+  `node.readiness_requires_transport`; when either is enabled, every
+  configured static peer must be connected.
+
+The default HTTP bind is `127.0.0.1:7878`, and loopback needs no extra flag.
+Non-loopback binds, including `0.0.0.0` and `::`, require
+`--allow-non-loopback` **or** deploy policy `[http] allow_non_loopback = true`;
+the service must reject the configuration before it listens when neither
+guard is satisfied. `--tokens-file` / `OMAKURE_TOKENS_FILE` selects the
+multi-token authentication mode described in the
+[HTTP API contract](http-api.md#authentication-contract).
+
 ### API-only
 
 HTTP management only — no in-process queue claiming or schedule scanner.
@@ -248,11 +311,8 @@ All processes must share the **same workspace directory on one host** (same
 local `.history/runs.sqlite`). Do not point them at different mounts, network
 filesystems, or another host: the queue is not distributed.
 
-### Node service (recommended single-process deploy)
+### Node service (recommended single-process topology)
 
-`omakure node serve` composes HTTP + optional embedded workers + the existing
-schedule scanner, with coordinated SIGTERM shutdown (HTTP stop → stop
-scheduling/claiming → drain workers).
 
 ```bash
 export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
@@ -273,12 +333,12 @@ omakure node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
 Two rules cost a real debugging session on a provisioned machine; both are
 enforced, neither is guessable from the config file alone.
 
-**`api.bind` in `node.toml` must stay loopback.** A non-loopback address in
-the config is refused outright — the node will not start, and says so. The
-only way to bind wider is the pair of CLI flags above: `--bind` *and*
-`--allow-non-loopback`. Widening the listener is therefore always an explicit
-act at the command line, never a quiet edit to a file that some other tool
-might have written.
+**`api.bind` in `node.toml` must stay loopback.** `NodeConfig` rejects a
+non-loopback configured value before API boot. To bind `node serve` wider, pass
+an explicit non-loopback `--bind` and authorize it with
+`--allow-non-loopback` or deploy policy `[http] allow_non_loopback = true`;
+the service refuses the bind before listening when neither authorization is
+present.
 
 **Enrolment is time-bound, so fix the clock first.** A signed bundle carries a
 validity window. A machine whose clock is off by an hour will refuse a
@@ -286,14 +346,8 @@ perfectly good bundle with `enrollment_expired`, which reads like a stale
 bundle and is not. Confirm `timedatectl` reports a synchronised clock on the
 joining machine before issuing anything.
 
-Unauthenticated probes:
-
-| Path | Auth | Purpose |
-|------|------|---------|
-| `GET /v1/health` | none | liveness |
-| `GET /v1/ready` | none | readiness (optional worker/scheduler gates) |
-
-Everything else requires Bearer auth. See `http-api.md`.
+For unauthenticated health/readiness behavior and all other route
+authentication requirements, see the [HTTP API endpoint contract](http-api.md#endpoint-contract).
 
 ## Container image
 
@@ -304,11 +358,18 @@ Artifacts in the repo root:
 | `Dockerfile` | Multi-stage build → `omakure` binary; `ENTRYPOINT`/`CMD` run `node serve` on `0.0.0.0:7878` with `--allow-non-loopback` |
 | `.dockerignore` | Keeps build context lean |
 | `compose.yaml` | Example: workspace and tokens-file volumes, host bind `127.0.0.1:7878`, fixed uid/gid `10001` |
-| `compose.transport-certification.e2e.yaml` | Isolated four-service Linux certification topology; not a production fleet deployment |
-| `.scripts/transport-certification.sh` | Bounded canonical certification runner used locally and in Linux CI |
-| `compose.health-plane-certification.e2e.yaml` | Isolated four-node Health Plane certification topology; not a production fleet deployment |
-| `.scripts/health-plane-certification.sh` | Bounded canonical Health Plane gate used locally and in Linux CI |
-| `.scripts/health-plane-certification-cleanup-test.sh` | Verifies Health Plane certification cleanup after induced failure and after interrupt |
+| `ci/compose/compose.transport-certification.e2e.yaml` | Isolated four-service Linux certification topology; not a production fleet deployment |
+| `scripts/tasks/cert/transport` | Bounded canonical certification runner used locally and in Linux CI |
+| `ci/compose/compose.health-plane-certification.e2e.yaml` | Isolated four-node Health Plane certification topology; not a production fleet deployment |
+| `scripts/tasks/cert/health` | Bounded canonical Health Plane gate used locally and in Linux CI |
+| `scripts/tasks/cert/health-cleanup` | Verifies Health Plane certification cleanup after induced failure and after interrupt |
+
+The `enrollment-target` and `enrollment-candidate` services in `compose.yaml`
+are the Docker discovery E2E fixture, not a production topology. Each service
+healthcheck validates the semantic `GET /v1/ready` response, and
+`enrollment-candidate` is ordered after a healthy target. Both services pass
+`--readiness-requires-worker`, so a process with a dead in-process worker never
+reports ready to Compose.
 
 ### Base image runtimes
 
@@ -364,7 +425,7 @@ other bit is ever accepted there.
 The canonical Linux gate is deliberately separate from the example deployment:
 
 ```bash
-mise run transport-certification
+mise run cert:transport
 ```
 
 It builds the current image and starts `cert-a`, `cert-b`, `cert-c`, and an
@@ -389,7 +450,7 @@ The Health Plane has its own bounded Linux gate, separate again from both the
 example deployment and the transport gate:
 
 ```bash
-mise run health-plane-certification
+mise run cert:health
 ```
 
 It builds the current image and starts `hp-node-1` through `hp-node-4` on one
@@ -466,9 +527,16 @@ Omakure's run queue and history are **SQLite files under `.history/`**.
       container port publish).
 - [ ] Container runs as non-root; volume ownership matches.
 - [ ] Single replica / single host for the SQLite workspace.
-- [ ] On Unix, plan for `SIGHUP` token reload after rotation.
-
-Optional later: GHCR publish automation, audit-log isolation.
+- [ ] Use `SIGHUP` token reload after rotation on Unix.
+- [ ] Keep `OMAKURE_API_TOKEN` out of scripts and script environment files;
+      rotate management tokens like any other secret.
+- [ ] Keep request bodies at the 1 MiB v1 limit and leave browser CORS
+      disabled.
+- [ ] Treat Battery cache content as untrusted: HTTP may list, sync, inspect,
+      and install through Battery operations, but must not execute scripts
+      directly from `.omakure/batteries/cache/`.
+- [ ] Register HTTP Batteries only from `https://` sources; use the local CLI
+      for local development repositories.
 
 ## Smoke checklist
 

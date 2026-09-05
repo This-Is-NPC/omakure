@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+target_dir="${CARGO_TARGET_DIR:-target}"
+if [[ "$target_dir" != /* && ! "$target_dir" =~ ^[A-Za-z]: ]]; then
+  target_dir="$root/$target_dir"
+fi
+(( $# <= 1 )) || { printf 'atomic/binary-smoke: accepts at most one target triple\n' >&2; exit 2; }
+if (( $# == 1 )); then
+  target="$1"
+  [[ "$target" =~ ^[A-Za-z0-9_]+-[A-Za-z0-9_]+-[A-Za-z0-9_]+([.-][A-Za-z0-9_]+)*$ ]] || {
+    printf 'atomic/binary-smoke: invalid target triple: %s\n' "$target" >&2
+    exit 2
+  }
+  binary="$target_dir/$target/release/omakure"
+  [[ "$target" == *windows* ]] && binary+='.exe'
+else
+  binary="$target_dir/release/omakure"
+  [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]] && binary+='.exe'
+fi
+[[ -x "$binary" ]] || { printf 'atomic/binary-smoke: release binary is missing or not executable: %s\n' "$binary" >&2; exit 1; }
+exec "$binary" --version

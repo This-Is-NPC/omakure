@@ -12,6 +12,15 @@ HTTP is an adapter. It must not own business logic. Each route translates an
 HTTP request into a shared operation request, calls `src/operations/*`, then
 serializes the operation result.
 
+## Ownership
+
+This document owns the HTTP route inventory, authentication and scope
+semantics, JSON envelopes and errors, request limits, CLI/HTTP adapter parity,
+and request audit behavior. For bind addresses, process topology, deploy
+policy, workers and scheduler lifecycle, containers, volumes, readiness
+operation, and certification/smoke procedures, see the canonical
+[deployment guide](deployment.md).
+
 ## Node management
 
 Node routes use the shared machine-state operations and never access
@@ -35,6 +44,9 @@ the enrollment group. Deploy route gates are evaluated before token scopes.
 Trust mutation bodies must include `confirmed: true`, a non-empty `actor`, and a
 non-empty `reason`.
 
+`POST /v1/node/cues` accepts an optional `cue_id` (32 lowercase hex) as the
+caller-supplied idempotency key; omitting it mints a new id on dispatch.
+
 Routes are `GET /v1/node/status`, `GET /v1/node/discovery`, `POST
 /v1/node/init`, `GET /v1/node/health`, `GET /v1/node/signals`, `POST
 /v1/node/cues`, `POST /v1/node/baselines`, `POST
@@ -52,6 +64,12 @@ command instead starts a temporary bounded listener, waits for its requested
 scan interval, and returns a fresh scan snapshot; neither path creates trust or
 a session.
 
+`GET /v1/node/status` is observational: it reports the node's current identity,
+trust, and transport snapshot without running a full `PRAGMA integrity_check` on
+every request. The same registry opener backs this route and the CLI
+`omakure node status --json` command, matching the observational posture of
+`GET /v1/node/health` and `GET /v1/node/signals`.
+
 `GET /v1/node/health` returns the Health Plane fleet-status projection: one row
 per actively trusted peer with its presence (`unknown`, `online`, `stale`,
 `offline`), its `baseline_status` (`unknown`, `none`, `in_sync`, `drifted`), its
@@ -59,9 +77,9 @@ latest Profile, and its latest Pulse, plus fleet totals for both. It is current 
 only - there is no history, no series, and no alert surface - and it renders
 exactly the same protocol-neutral operation as `omakure node health --json`. It
 is read-only: no HTTP route writes Health Plane state, and the only writer is
-the authenticated node-to-node exchange over the direct transport. See
-`docs/internal/health-plane-contract.md` for the frozen presence windows, bounds, and
-privacy classes.
+the authenticated node-to-node exchange over the direct transport. See the
+[Health Plane contract](internal/health-plane-contract.md) for the frozen
+presence windows, bounds, and privacy classes.
 
 `POST /v1/node/baseline/rollback` puts *this* node back on the one baseline it
 retained before the one it is running. It takes `{"confirmed": true}` under
@@ -69,8 +87,8 @@ retained before the one it is running. It takes `{"confirmed": true}` under
 publishers this node names today: a publisher revoked since the original install
 makes it fail with `forbidden`, and a node with nothing retained answers
 `not_found` rather than reporting a rollback that changed nothing. There is no
-node-to-node message kind that asks a Performer to change version; see
-`docs/internal/baseline-delivery.md`.
+node-to-node message kind that asks a Performer to change version; see the
+[Baseline delivery contract](internal/baseline-delivery.md).
 
 `GET /v1/node/signals` returns the closed lifecycle Signal feed: at most 64
 entries, newest first, retained for seven days, across exactly three kinds
@@ -94,85 +112,12 @@ subscriptions, webhooks, alert routes, or user-defined Signal kinds.
 - Direct execution of Battery scripts from Git cache.
 - A second product surface with behavior that differs from CLI operations.
 
-## Command Contract
+## Serving and deployment
 
-```bash
-# Preferred: multi-token file (per-token scopes; --capability ignored)
-omakure api --bind 127.0.0.1:7878 --tokens-file /run/secrets/omakure_tokens.toml
-
-# Legacy single-token mode
-omakure api --bind 127.0.0.1:7878 \
-  --capability config:read \
-  --capability scripts:read \
-  --capability runs:read \
-  --capability runs:write \
-  --capability env:read
-omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
-  --capability config:read \
-  --capability scripts:read \
-  --capability runs:read \
-  --capability env:read \
-  --capability env:write
-```
-
-### Node service (single-process deploy)
-
-`omakure node serve` runs the same HTTP surface as `omakure api`, plus optional
-in-process queue workers and the existing schedule scanner, with coordinated
-SIGTERM shutdown. Auth is identical (`--tokens-file` / `OMAKURE_TOKENS_FILE`,
-or legacy `OMAKURE_API_TOKEN` + `--capability` / `--secret-ref`).
-
-```bash
-# API-only (≈ omakure api)
-omakure node serve --workers 0 --no-scheduler --tokens-file /run/secrets/tokens.toml
-
-# HTTP + one worker + scheduler (defaults: --workers 1, scheduler on)
-omakure node serve --workers 1 --scheduler --tokens-file /run/secrets/tokens.toml
-
-# Fail ready until configured loops are alive
-omakure node serve --workers 2 \
-  --readiness-requires-worker \
-  --readiness-requires-scheduler
-```
-
-| Flag | Default | Meaning |
-|---|---:|---|
-| `--workers <n>` | `1` | Embedded queue workers; `0` = API only |
-| `--scheduler` / `--no-scheduler` | on | Enable/disable `scheduler_tick` in-process |
-| `--readiness-requires-worker` | off | `/v1/ready` fails if workers configured but not alive |
-| `--readiness-requires-scheduler` | off | `/v1/ready` fails if scheduler enabled but not alive |
-| `--tokens-file` | none | Multi-token Argon2id TOML (`OMAKURE_TOKENS_FILE`) |
-
-Defaults and guards:
-
-- Default bind: `127.0.0.1:7878`.
-- Loopback bind is allowed without extra flags.
-- Non-loopback bind requires `--allow-non-loopback`.
-- `0.0.0.0` and `::` count as non-loopback.
-- Binding must fail before listening when the guard is not satisfied.
-- **Tokens-file mode:** scopes come from each token entry; process-wide
-  `--capability` is ignored. Prefer plan scopes (`runs:enqueue`,
-  `envs:read`, …). Legacy capability names (`env:read`, `runs:write`) are
-  accepted as aliases.
-- Scope matching is coarse-to-fine only: `runs:write` covers
-  `runs:enqueue`, `runs:cancel`, and `runs:dead-letter`; `batteries:write`
-  covers its action scopes; `config:read` covers `doctor:read` and
-  `workspace:read`; and `scripts:read` covers `search:read`. A fine-grained
-  scope never satisfies its coarser parent. `*` is the explicit wildcard.
-- **Legacy mode** (no tokens file): capabilities are denied by default.
-  Grant them with repeated `--capability` flags: `config:read`,
-  `scripts:read`, `env:read`/`envs:read`, `env:write`/`envs:write`,
-  `env:activate`/`envs:activate`, `env:use`/`envs:use`, `secrets:use`,
-  `secrets:read-metadata`, `credentials:use`, `runs:read`,
-  `runs:write`/`runs:enqueue`, `batteries:read`, `batteries:write`, or `all`.
-- Read endpoints are gated: config/workspace/doctor require `config:read`
-  (or `doctor:read` / `workspace:read` in tokens-file mode),
-  script/search/tree require `scripts:read` (or `search:read`), runs require
-  `runs:read`, Battery read requires `batteries:read`, secrets metadata
-  requires `secrets:read-metadata`.
-- Secret provider refs are denied by default in legacy mode. Grant exact refs
-  or provider wildcards with repeated `--secret-ref`. Private HTTPS Battery
-  `token_ref` also needs `credentials:use`.
+The HTTP surface is served by `omakure api` or `omakure node serve`.
+Invocation, bind guards, topology, workers, scheduler lifecycle, and readiness
+are canonical in the [deployment guide](deployment.md#topology-choices);
+authentication and scope matching are defined in this contract below.
 
 ## Authentication Contract
 
@@ -216,6 +161,15 @@ Rules:
 - Generate with `omakure token generate` (prefix `omk_live_`). Optional
   `--append PATH --confirmed` appends the TOML entry.
 
+Tokens generated before the `token_selector` optimization (bare
+`omk_live_<64 hex>`, with no embedded id) still authenticate: verification
+falls back to checking every enabled token hash for that shape. New tokens
+from `omakure token generate` embed the id
+(`omk_live_<hex id>_<64 hex>`) and require only one Argon2id verification.
+Regenerate and redistribute old-format tokens when convenient for the faster
+path; there is no forced cutover.
+
+
 ### Legacy single token
 
 Token source: `OMAKURE_API_TOKEN` when no tokens file is configured.
@@ -224,6 +178,55 @@ Token source: `OMAKURE_API_TOKEN` when no tokens file is configured.
   process-wide `--capability`.
 - Reject empty, short (< 32 bytes), or known-default tokens.
 - Constant-time compare of the presented legacy token.
+
+### Scope matching and legacy capabilities
+
+Multi-token bearer scopes use these matching rules:
+
+- `*` satisfies every required scope.
+- `env:read`/`envs:read`, `env:write`/`envs:write`,
+  `env:activate`/`envs:activate`, and `env:use`/`envs:use` are aliases.
+- Coarse write grants cover finer actions, but never the reverse:
+  `runs:write` covers `runs:enqueue`, `runs:cancel`, and
+  `runs:dead-letter`; `batteries:write` covers `batteries:add`,
+  `batteries:sync`, `batteries:install`, and `batteries:remove`.
+- `config:read` covers `doctor:read` and `workspace:read`; `scripts:read`
+  covers `search:read`.
+
+Legacy `--capability` values are normalized into broad route-capability
+classes before checks. Thus `env:read`/`envs:read`, `env:write`/`envs:write`,
+`env:activate`/`envs:activate`, and `env:use`/`envs:use` are aliases;
+`doctor:read` and `workspace:read` (the `config:read` class), and
+`search:read` (the `scripts:read` class), and run/Battery action spellings
+map to the same classes as their canonical capabilities. Unlike file scopes,
+these legacy action spellings
+`runs:enqueue`, `runs:cancel`, `runs:dead-letter`, `batteries:add`,
+`batteries:sync`, `batteries:install`, and `batteries:remove` therefore grant
+their entire `runs:write` or `batteries:write` class. `--capability` is ignored
+when `--tokens-file` is set.
+
+Legacy `--capability` is repeatable and accepts:
+`config:read`, `scripts:read`, `env:read`, `envs:read`, `env:write`,
+`envs:write`, `env:activate`, `envs:activate`, `env:use`, `envs:use`,
+`secrets:use`, `secrets:read-metadata`, `credentials:use`, `runs:read`,
+`runs:write`, `runs:enqueue`, `runs:cancel`, `runs:dead-letter`,
+`batteries:read`, `batteries:write`, `batteries:add`, `batteries:sync`,
+`batteries:install`, `batteries:remove`, `admin:status`, `node:read`,
+`node:write`, `trust:write`, `enrollment:read`, `enrollment:write`,
+`discovery:read`, `doctor:read`, `workspace:read`, `search:read`, and
+`all`.
+
+Legacy secret access is a separate allow-list. Repeat `--secret-ref` with
+`secret://provider/key` or `secret://provider/*`; an empty list denies
+provider refs. `--capability all` grants route capabilities but does not
+bypass this list, so unrestricted file/provider refs require
+`--secret-ref '*'`. That wildcard does not grant process-environment refs:
+enumerate each exact `secret://env/NAME` (the `secret://env:*` spelling
+normalizes to that provider form, while `--secret-ref 'secret://env/*'` is
+ignored).
+Secret-backed run fields/arguments require `secrets:use` and a matching ref;
+private HTTPS Battery `token_ref` additionally requires `credentials:use` and
+its matching ref.
 
 Shared rules:
 
@@ -300,10 +303,21 @@ GET /v1/health
 GET /v1/ready
 ```
 
-`GET /v1/ready` returns only a minimal `{ "status": "ready" | "not_ready" }`
-payload (HTTP 200 or 503). It must not expose token IDs, paths, or secrets.
-Optional `--readiness-requires-worker` / `--readiness-requires-scheduler` on
-`omakure node serve` gates readiness on those loops.
+`GET /v1/ready` uses the standard JSON envelope; `data` contains only
+`{ "status": "ready" | "not_ready" }` (HTTP 200 or 503). It must not
+expose token IDs, paths, or secrets.
+
+```json
+{
+  "ok": true,
+  "data": { "status": "ready" },
+  "error": null,
+  "schema_version": "1"
+}
+```
+
+Optional readiness gates are configured by `omakure node serve`; their
+deployment semantics are defined in the [deployment guide](deployment.md).
 
 Authenticated operator status (scope `admin:status`, or legacy `*`):
 
@@ -315,250 +329,6 @@ Returns readiness details (worker/scheduler gates and liveness) plus auth-file
 load/reload state (`mode`, `token_count`, `last_reload_ok`,
 `last_reload_error`, `last_reload_at_ms`). It never returns token IDs, hashes,
 plaintext secrets, or the tokens-file path.
-
-Read endpoints require auth:
-
-```http
-GET /v1/config
-GET /v1/doctor
-GET /v1/workspace
-GET /v1/search
-GET /v1/tree
-GET /v1/tree/{path}
-GET /v1/scripts
-GET /v1/scripts/{script_id}
-GET /v1/scripts/{script_id}/schema
-GET /v1/scripts/{script_id}/content
-GET /v1/runs
-GET /v1/runs/{run_id}
-GET /v1/runs/{run_id}/traces
-GET /v1/queue/stats
-GET /v1/envs
-GET /v1/envs/{name}
-GET /v1/batteries
-GET /v1/batteries/{battery_id}
-GET /v1/batteries/{battery_id}/scripts
-GET /v1/secrets
-GET /v1/node/status
-GET /v1/node/discovery
-GET /v1/node/health
-GET /v1/node/signals
-GET /v1/node/peers
-GET /v1/node/enrollments
-```
-
-`GET /v1/secrets` returns **metadata only** (`id`, `source`, `delivery`,
-`allowed_targets`) for refs allowed by the token ACL. It never returns secret
-values. Requires scope `secrets:read-metadata` and deploy policy
-`secrets.metadata_endpoint = true` (otherwise `404`).
-
-Write endpoints require auth:
-
-```http
-POST /v1/runs
-POST /v1/runs/{run_id}/cancel
-POST /v1/runs/{run_id}/dead-letter
-POST /v1/envs
-PUT /v1/envs/{name}
-PATCH /v1/envs/{name}
-DELETE /v1/envs/{name}
-POST /v1/envs/{name}/activate
-DELETE /v1/envs/active
-PUT /v1/envs/{name}/params/{key}
-DELETE /v1/envs/{name}/params/{key}
-POST /v1/batteries
-POST /v1/batteries/{battery_id}/sync
-POST /v1/batteries/{battery_id}/scripts/{script_id}/install
-DELETE /v1/batteries/{battery_id}
-POST /v1/node/init
-POST /v1/node/cues
-POST /v1/node/baselines
-POST /v1/node/baseline/rollback
-POST /v1/node/peers
-POST /v1/node/enrollments
-POST /v1/node/enrollments/{node_id}/approve
-POST /v1/node/enrollments/{node_id}/reject
-POST /v1/node/enrollment/bundle
-PATCH /v1/node/peers/{node_id}/capabilities
-POST /v1/node/peers/{node_id}/revoke
-```
-
-`POST /v1/runs` enqueues by default. It does not block on inline execution.
-
-Write request bodies:
-
-```json
-POST /v1/runs
-{
-  "script": "tools/job",
-  "args": ["--flag"],
-  "env": "prod",
-  "secret_fields": { "TOKEN": "secret://prod/token" },
-  "run_id": "optional-caller-id",
-  "actor": "agent",
-  "reason": "why this was queued",
-  "priority": 10,
-  "timeout_ms": 60000,
-  "parent_run_id": null,
-  "cron_schedule_id": null
-}
-```
-
-Defaults: `args=[]`, `secret_fields={}`, `actor="human"`, `priority=0`.
-`env` names a managed environment file under `.omakure/envs/` and overlays it
-for the queued run when the worker drains it. `secret_fields` supplies
-reconstructable `secret://...` references for schema fields whose `Type` is
-`secret`; queued HTTP runs reject plaintext `secret_fields` because the worker
-cannot reconstruct them without persisting plaintext. Forwarded `args` for
-secret schema fields must also use `secret://...` refs. Responses and stored run
-args redact plaintext secret values as `<redacted>` and retain provider refs.
-
-```json
-POST /v1/runs/{run_id}/cancel
-{ "reason": "optional" }
-
-POST /v1/runs/{run_id}/dead-letter
-{ "reason": "optional" }
-
-POST /v1/envs
-{
-  "name": "prod",
-  "params": [
-    { "key": "HOST", "value": "prod.example.com" },
-    { "key": "API_KEY", "value": "secret://prod/api_key" }
-  ]
-}
-
-PUT /v1/envs/prod
-{
-  "params": [
-    { "key": "HOST", "value": "prod.example.com" }
-  ]
-}
-
-PATCH /v1/envs/prod
-{
-  "params": [
-    { "key": "REGION", "value": "eastus" }
-  ]
-}
-
-PUT /v1/envs/prod/params/API_KEY
-{ "value": "secret://prod/api_key" }
-
-POST /v1/batteries
-{
-  "name": "azure",
-  "git_url": "https://example.invalid/azure.git",
-  "requested_ref": "main",
-  "token_ref": "secret://creds/git_token"
-}
-
-POST /v1/batteries/{battery_id}/scripts/{script_id}/install
-{ "force": false }
-```
-
-Battery defaults: `requested_ref="main"`, `force=false`, and
-`DELETE /v1/batteries/{battery_id}` defaults to keeping the cache. Add
-`?remove_cache=true` to delete the cached clone while unregistering.
-
-HTTP Battery registration accepts `https://` Git URLs only. Local paths,
-`file://`, and plaintext `http://` sources remain outside the HTTP API trust
-boundary; use the local CLI for local development sources.
-
-Optional `token_ref` enables private HTTPS clone/fetch via `GIT_ASKPASS`. The
-registry stores `auth.method` + `auth.token_ref` only — never plaintext.
-Private HTTPS add/sync require `credentials:use` plus
-`sources.allow_private_https_batteries` in deploy policy. Embedded URL
-credentials are rejected.
-
-Read query parameters and safety policy:
-
-- `GET /v1/config` returns the full config shape, but HTTP masks every active
-  environment value. Plaintext env diagnostics are CLI-only.
-- `GET /v1/envs` lists managed `.omakure/envs/*.conf` files and marks the
-  active one. `GET /v1/envs/{name}` returns parsed entries with sensitive values
-  masked as `****`.
-- Env writes validate managed environment names and keys, reject path escapes,
-  write single-line values atomically, and never operate outside
-  `.omakure/envs/`.
-- Bearer auth is required for every env endpoint. Internal capability policy
-  checks apply `EnvRead`, `EnvWrite`, `EnvActivate`, `EnvUse`, and
-  `SecretProviderUse`; a token without the required capability receives
-  `403 forbidden`.
-- `POST /v1/runs` requires `EnvUse` when the body includes `env`. It requires
-  `SecretProviderUse` when the body includes `secret_fields` or any forwarded
-  arg value beginning with `secret://`; provider refs are also checked against
-  the token's allowed ref ACL before enqueue and the allowed ref set is sealed
-  with the queued run for worker-time resolution.
-- `GET /v1/search?q=<query>&tag=<tag>` searches scripts using the existing
-  SQLite index. HTTP does not rebuild the index per request. `query` is accepted
-  as an alias for `q`; repeated `tag` parameters are AND-filtered. Empty queries
-  are rejected. Query length is capped at 256 bytes; tags are capped at 16 total
-  and 64 bytes each.
-- `GET /v1/tree/{path}` lists directories/scripts under the scripts root. It
-  honors nested `.omakureignore` files through the shared workspace repository.
-  Listings are capped at 1000 entries.
-- `GET /v1/scripts/{script_id}/content` returns UTF-8 script content only.
-  Content is capped at 1 MiB, must be a supported script type, and cannot escape
-  the scripts root through `..`, absolute paths, or symlinks.
-- Tree/content routes reject `.omakure`, `.history`, and `.git` metadata paths.
-
-## CLI / HTTP parity
-
-Recorded in `cli-http-parity.md`, which is the single copy: it carries the
-status and the notes as well as the mapping, and a second hand-maintained
-table here had already drifted from it.
-
-## Shared Operations
-
-HTTP routes call shared operations for these core resources:
-
-- `config_summary`
-- `doctor_report`
-- `workspace_summary`
-- `search_scripts`
-- `list_tree`
-- `read_script_content`
-- `list_scripts`
-- `describe_script`
-- `script_schema` via the `describe_script` operation output
-- `list_runs`
-- `show_run`
-- `list_traces`
-- `queue_stats`
-- `enqueue_run`
-- `cancel_run`
-- `dead_letter_run`
-- `list_envs`
-- `create_env`
-- `show_env`
-- `replace_env`
-- `set_param`
-- `remove_param`
-- `activate_env`
-- `deactivate_env`
-- `delete_env`
-- `list_batteries`
-- `add_battery`
-- `sync_battery`
-- `inspect_battery`
-- `list_battery_scripts`
-- `install_battery_script`
-- `remove_battery`
-
-These operations own validation and stable errors. HTTP route handlers do not
-call CLI modules and do not open SQLite directly.
-
-The current HTTP API does not expose these CLI surfaces:
-
-- `omakure update`: mutates binary/scripts from a remote release.
-- `omakure uninstall`: destructive local operation.
-- `omakure serve`: daemon lifecycle management.
-- `omakure queue worker`: long-running process lifecycle.
-- inline `omakure run`: synchronous execution surface; use `POST /v1/runs` to
-  enqueue instead.
-- HTTP trace ingestion.
 
 ## Write Audit Expectations
 
@@ -573,49 +343,12 @@ Authenticated HTTP requests also emit structured request audit lines on stderr
 Operators correlate enqueue/cancel/dead-letter with `token_id` via these
 request logs (no runs.sqlite schema change in this increment).
 
-## Deployment Model
+## Deployment and operations
 
-Loopback mode:
-
-```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure api
-# or single-process:
-omakure node serve --workers 1
-```
-
-Internal container network mode:
-
-```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure api --bind 0.0.0.0:7878 --allow-non-loopback
-# or:
-omakure node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 2
-```
-
-Publishing the API to a host port is a deployment choice outside v1's safety
-guarantees. Do not document this as public-internet safe.
-
-Container/internal-network guidance:
-
-- Prefer loopback for local tools and sidecars on the same host.
-- Use `--allow-non-loopback` only when another trusted process cannot reach
-  loopback, such as a private container network.
-- Put network policy, firewall rules, or reverse-proxy ACLs in front of any
-  non-loopback bind.
-- Do not enable permissive browser CORS in v1.
-- Do not expose this API directly to the public internet; v1 has no OAuth,
-  RBAC, sessions, or browser threat model.
-
-Operational safety notes:
-
-- Keep `OMAKURE_API_TOKEN` out of scripts and environment files used by scripts.
-- Rotate the token like any other management secret.
-- Request bodies are limited to 1 MiB.
-- Battery cache content is still untrusted. HTTP can list, sync, inspect, and
-  install through Battery operations, but cannot execute scripts directly from
-  `.omakure/batteries/cache/`.
-- HTTP Battery registration is restricted to `https://` sources, so non-loopback
-  token holders cannot ask the server to import arbitrary local repositories.
-- Queue/run writes use the existing SQLite run state machine; invalid state
-  transitions return `conflict` instead of bypassing the workflow.
+Deployment procedures and topology are canonical in the
+[deployment guide](deployment.md). It covers loopback and trusted internal
+network binds, policy load order and hard gates, workers and scheduler
+lifecycle, startup/readiness, containers, volumes, SQLite placement,
+certification, and smoke operation. This API contract retains the route,
+authentication, scope, envelope, limit, adapter, and audit semantics that
+apply in every deployment.

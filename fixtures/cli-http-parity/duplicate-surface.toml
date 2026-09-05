@@ -1,0 +1,23 @@
+schema_version = 1
+
+[[entries]]
+entry_id = "one"
+class = "cli-only"
+operation_family = "fixture"
+docs_anchor = "one"
+cli_ids = ["run"]
+rationale = "fixture"
+[entries.adapter_only]
+auth = "fixture"
+lifecycle = "fixture"
+
+[[entries]]
+entry_id = "two"
+class = "cli-only"
+operation_family = "fixture"
+docs_anchor = "two"
+cli_ids = ["run"]
+rationale = "fixture"
+[entries.adapter_only]
+auth = "fixture"
+lifecycle = "fixture"

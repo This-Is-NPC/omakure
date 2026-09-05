@@ -15,12 +15,9 @@
 - Use lowercase kebab-case. Keep names short and descriptive.
 
 ### Default base branch
-
-- **Branch new work off `test`**, not `master`. `test` is the integration
-  branch and is always ahead of `master`. `master` is only updated when
-  `test` is merged for a release.
-- PRs targeting `master` are wrong by default — open them against `test`
-  unless the change is explicitly a release-branch fix.
+- **Branch new work off `master`**. `master` is the integration and release
+  branch.
+- Open pull requests directly against `master`.
 
 ## Task & Plan Management
 
@@ -96,7 +93,110 @@ gh project item-list 6 --owner This-Is-NPC --format json \
 
 ## Code Standards
 
-- `mise run lint` must exit 0 before opening a PR. It runs
-  `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`.
+- `mise run lint` must exit 0 before opening a PR. It routes to the canonical
+  formatting and Clippy atomics.
 - Any new `#[allow(clippy::…)]` requires a one-line comment justifying the
   suppression (pointing at the bug, audit note, or rationale).
+
+## Local checks and hooks
+
+Install the tracked hooks once from the repository root:
+
+```bash
+mise run hooks:install
+```
+
+The installer writes only this repository's local `core.hooksPath` setting; it
+does not modify global Git configuration. Hooks are exact, thin routes:
+`pre-commit` executes `scripts/tasks/check/fast`, and `pre-push` executes
+`scripts/tasks/check/full`. The checks stop at the first failure and preserve
+trap-backed cleanup owned by certification scripts.
+
+The automation layers have deliberately different responsibilities:
+
+- An **atomic** under `scripts/tasks/atomic/` performs one logical operation
+  (formatting, one test group, a build, a package check, or a contract).
+- A **suite** under `scripts/tasks/suite/` aggregates atomics or retained
+  certification scripts. `native-tests` covers the local library, bins,
+  examples, docs, and every `tests/*.rs` target once through
+  `native-integration`.
+- `check/fast` and `check/full` are the only aggregate local gates. Fast is
+  the cheap pre-commit gate. Full is the complete locally executable Linux
+  gate and does not invoke fast a second time.
+- `check/platform/` has four matrix-facing suites:
+  `linux-gnu`, `linux-musl`, `macos`, and `windows`. They validate the runner
+  and target, then route to native tests, release/build, static-link checks
+  where applicable, and binary smoke.
+
+The same call graph is used locally and in hosted CI:
+
+```text
+hook -> check/{fast,full} -> atomic/suite
+mise task -> one canonical atomic, suite, check, installer, or retained script
+CI/release matrix -> check/platform/${platform} ${target}
+```
+
+Both checks require the pinned Rust toolchain, Python with PyYAML, and GNU
+`timeout`; GNU `timeout` is also required by the fast check. Full additionally
+requires Linux, Docker Engine and Compose, `jq`, and SQLite. macOS runners
+need an owned physical `RUNNER_TEMP`; Windows runners need the supported
+MSVC target and static CRT setup; musl runners need `musl-tools` and
+`musl-gcc`. A local Linux host is the only platform on which the complete full
+scope is available.
+
+Full includes usage/catalog validation, deterministic coverage, complexity
+calibration/ratchet/audit, release packaging, Docker smoke, transport and
+Health certification, and cleanup verification. Destructive Fedora VM/KVM
+certification is intentionally excluded from automatic pre-push. Run it only
+on a prepared host with libvirt and its VM prerequisites:
+
+```bash
+mise run cert:vm
+```
+
+The static VM policy check remains part of `check:full`; `cert:vm` is the
+separate destructive certification entry point.
+
+## Repository layout
+
+This is a headless Rust/HTTP product. Product documentation belongs under
+`docs/`; the conventional root exceptions are `README.md`, `AGENTS.md`,
+`CONTRIBUTING.md`, `LICENSE`, Cargo/Docker/mise manifests, and the canonical
+`compose.yaml`.
+
+All repository automation lives below `scripts/`: canonical user-facing routes
+are atomics under `scripts/tasks/atomic/`, suites under `scripts/tasks/suite/`,
+and platform gates under `scripts/tasks/check/`. Retained certification and
+developer implementations live under `scripts/tasks/cert/` and
+`scripts/tasks/dev/`; installers are under `scripts/install/`, release tooling
+under `scripts/release/`, non-subject fixtures under `scripts/fixtures/`, and
+the isolated debug workspace under `scripts/workspace/`. Do not add a root
+script or a repository-owned Battery subject collection. External Battery
+repositories own subject scripts; use explicit Battery registration, sync, and
+install operations to materialize them into a workspace.
+
+## Mise task policy
+
+Every Mise `run` entry is a direct invocation of one existing executable
+repository script. Keep composition in the canonical shell suites rather than
+embedding command chains or dependencies in `mise.toml`. File tasks must resolve
+the project through `MISE_PROJECT_ROOT` with a direct-invocation fallback.
+Declare `sources` and `outputs` only for deterministic local tasks. Builds and
+cleanup should be repeat-safe; tests and linters rerun on every invocation.
+Install, release, node-service, and live Docker/libvirt certification tasks are
+stateful operations: document their preconditions and ensure bounded,
+trap-backed cleanup rather than claiming strict idempotence.
+
+## Focused validation
+
+Before submitting, run the narrow checks for changed surfaces first:
+
+```bash
+bash -n scripts/tasks/atomic/shell-syntax
+scripts/tasks/atomic/shell-syntax
+mise run check:fast
+mise run test:integration
+```
+
+Then run `mise run lint` and the relevant test or certification suite. Do not
+hide generated state or Battery-installed scripts with broad ignore patterns.

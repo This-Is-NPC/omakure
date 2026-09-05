@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "${MISE_PROJECT_ROOT:-$(git rev-parse --show-toplevel)}" && pwd)"
+checker="$root/scripts/tasks/coverage-check"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/omakure-coverage-test.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/src"
+printf '// source inventory fixture\n' >"$tmp/src/fixture.rs"
+printf '// seeded uncovered production line\n' >"$tmp/src/seeded.rs"
+
+cat >"$tmp/baseline.json" <<'JSON'
+{
+  "schema_version": 1,
+  "source_revision": "fixture",
+  "toolchain": {"rust": "1.97.1", "llvm_tools": "llvm-tools-preview", "cargo_llvm_cov": "0.9.0"},
+  "scope": {"command": "cargo llvm-cov --workspace --all-targets --locked", "features": [], "doctests": false},
+  "line_threshold_basis_points": 8437,
+  "source_inventory": [
+    {"path": "src/fixture.rs", "covered_lines": 8437, "coverable_lines": 10000}
+  ],
+  "summary": {"lines": {"covered": 8437, "coverable": 10000}, "regions": {"covered": 0, "coverable": 0}, "functions": {"covered": 0, "coverable": 0}},
+  "exclusions": []
+}
+JSON
+
+write_report() {
+  local covered="$1" count="$2" path="$3"
+  cat >"$tmp/report.json" <<JSON
+{"data":[{"files":[{"filename":"$tmp/src/fixture.rs","summary":{"lines":{"count":$count,"covered":$covered},"regions":{"count":2,"covered":1},"functions":{"count":1,"covered":1}}}]}]}
+JSON
+}
+
+write_report 8437 10000 exact
+output="$("$checker" --report "$tmp/report.json" --baseline "$tmp/baseline.json" --source-root "$tmp" --inventory-out "$tmp/inventory-a.json")"
+case "$output" in *"coverage gate PASS"*) ;; *) echo "$output" >&2; exit 1 ;; esac
+"$checker" --report "$tmp/report.json" --baseline "$tmp/baseline.json" --source-root "$tmp" --inventory-out "$tmp/inventory-b.json" >/dev/null
+cmp -s "$tmp/inventory-a.json" "$tmp/inventory-b.json"
+
+write_report 8436 10000 below
+if "$checker" --report "$tmp/report.json" --baseline "$tmp/baseline.json" --source-root "$tmp" >/dev/null; then
+  echo 'one basis point below threshold unexpectedly passed' >&2
+  exit 1
+fi
+
+write_report 8437 10001 seeded
+if "$checker" --report "$tmp/report.json" --baseline "$tmp/baseline.json" --source-root "$tmp" >/dev/null; then
+  echo 'seeded uncovered line unexpectedly passed' >&2
+  exit 1
+fi
+
+write_report 8437 10000 reverted
+"$checker" --report "$tmp/report.json" --baseline "$tmp/baseline.json" --source-root "$tmp" >/dev/null
+
+# An omitted current source file is retained as a zero-coverable inventory row;
+# this proves inventory completeness without making handwritten src exclusions.
+"$checker" --report "$tmp/report.json" --baseline "$tmp/baseline.json" --source-root "$tmp" --inventory-out "$tmp/inventory.json" >/dev/null
+python3 - "$tmp/inventory.json" <<'PY'
+import json
+import sys
+payload = json.load(open(sys.argv[1]))
+rows = {row["path"]: row for row in payload["source_inventory"]}
+assert rows["src/seeded.rs"]["coverable_lines"] == 0
+assert payload["exclusions"] == []
+assert payload["inventory_diff"]["added"] == ["src/seeded.rs"]
+PY
+
+# External paths are classified before their machine-specific prefixes are
+# hidden. All fixtures intentionally share a basename to prove collision
+# resistance in the normalized exclusion paths.
+cat >"$tmp/external-report.json" <<JSON
+{"data":[{"files":[
+{"filename":"$tmp/src/fixture.rs","summary":{"lines":{"count":10000,"covered":8437},"regions":{"count":2,"covered":1},"functions":{"count":1,"covered":1}}},
+{"filename":"/home/runner/.cargo/registry/src/one/shared.rs","summary":{"lines":{"count":1,"covered":1}}},
+{"filename":"/opt/cache/.cargo/registry/src/two/shared.rs","summary":{"lines":{"count":1,"covered":1}}},
+{"filename":"/workspace/target/debug/shared.rs","summary":{"lines":{"count":1,"covered":1}}},
+{"filename":"/workspace/tests/shared.rs","summary":{"lines":{"count":1,"covered":1}}},
+{"filename":"/workspace/generated/shared.rs","summary":{"lines":{"count":1,"covered":1}}}
+]}]}
+JSON
+"$checker" --report "$tmp/external-report.json" --baseline "$tmp/baseline.json" \
+  --source-root "$tmp" --inventory-out "$tmp/external-inventory.json" >/dev/null
+python3 - "$tmp/external-inventory.json" <<'PY'
+import json
+import sys
+payload = json.load(open(sys.argv[1]))
+exclusions = payload["exclusions"]
+assert len(exclusions) == 5
+assert len({row["path"] for row in exclusions}) == 5
+assert all(row["path"].startswith("external/") for row in exclusions)
+assert sorted(row["reason"] for row in exclusions) == [
+    "build-artifact", "dependency", "dependency", "generated", "test-harness"
+]
+PY
+
+# An external path with no recognized ownership is an explicit fixture failure,
+# rather than silently becoming an exclusion.
+cat >"$tmp/unclassified-report.json" <<JSON
+{"data":[{"files":[
+{"filename":"$tmp/src/fixture.rs","summary":{"lines":{"count":10000,"covered":8437}}},
+{"filename":"/opt/custom/shared.rs","summary":{"lines":{"count":1,"covered":1}}}
+]}]}
+JSON
+if "$checker" --report "$tmp/unclassified-report.json" --baseline "$tmp/baseline.json" \
+  --source-root "$tmp" >/dev/null 2>"$tmp/unclassified-error"; then
+  echo 'unclassified external path unexpectedly passed' >&2
+  exit 1
+fi
+python3 - "$tmp/unclassified-error" <<'PY'
+import sys
+assert "unclassified coverage path" in open(sys.argv[1]).read()
+PY
+
+# Runner preflight must validate its checker and use the cargo subcommand
+# interface before any tool install or instrumented work.
+python3 - "$root/scripts/tasks/coverage" <<'PY'
+from pathlib import Path
+import sys
+text = Path(sys.argv[1]).read_text()
+checker = text.index("checker=")
+validation = text.index('[[ ! -x "$checker" ]]')
+rust_version = text.index('rustc --version')
+component_install = text.index("rustup component add")
+tool_install = text.index("cargo install")
+version_probe = text.index("cargo llvm-cov --version")
+assert checker < validation < rust_version < component_install < tool_install < version_probe
+assert '"$tool_bin/cargo-llvm-cov" --version' not in text
+# cargo-llvm-cov overwrites LLVM_PROFILE_FILE, so use its supported filename
+# override. Keep raw profiles at the merge-discovery root and serialize test
+# threads to make coverage reflect one stable execution.
+assert 'export RUST_TEST_THREADS=1' in text
+assert 'export LLVM_PROFILE_FILE_NAME="omakure-%m.profraw"' in text
+assert 'cargo llvm-cov --workspace --all-targets --locked' in text
+assert '--jobs 1' not in text
+assert 'cargo llvm-cov report --html --output-dir "$report_root"' in text
+assert 'cargo llvm-cov report --html --output-dir "$report_root/html"' not in text
+PY
+
+# Exercise the preflight itself with an isolated project root. It must stop on
+# the missing checker before probing Rust or installing any tools.
+mkdir -p "$tmp/preflight-root"
+if MISE_PROJECT_ROOT="$tmp/preflight-root" "$root/scripts/tasks/coverage" \
+  >/dev/null 2>"$tmp/preflight-error"; then
+  echo 'missing checker preflight unexpectedly passed' >&2
+  exit 1
+fi
+python3 - "$tmp/preflight-error" <<'PY'
+import sys
+assert "coverage checker is missing or not executable" in open(sys.argv[1]).read()
+PY
+printf 'coverage fixtures: PASS (threshold, seeded regression, inventory, normalization)\n'

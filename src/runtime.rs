@@ -91,41 +91,175 @@ pub fn command_for_script_with_env(
     env: &[(String, String)],
 ) -> Result<Command, ScriptError> {
     let kind = script_kind(script).ok_or(ScriptError::UnsupportedType)?;
-
-    // Lua is embedded, so there is no interpreter to look up. Returning before
-    // `resolve_interpreter` keeps the Bash/PowerShell/Python construction
-    // byte-identical, which is what makes the regression surface here zero.
-    if kind == ScriptKind::Lua {
-        let mut command = Command::new(lua_host_binary()?);
-        command.arg(LUA_HOST_ARG).arg(script);
-        return Ok(command);
+    match kind {
+        ScriptKind::Bash => bash_script_command(script, env),
+        ScriptKind::PowerShell => powershell_script_command(script, env),
+        ScriptKind::Python => python_script_command(script, env),
+        ScriptKind::Lua => lua_script_command(script),
     }
+}
 
-    let program: &str = match kind {
-        ScriptKind::Bash => "bash",
-        ScriptKind::PowerShell => powershell_program(),
-        ScriptKind::Python => python_program(),
-        ScriptKind::Lua => unreachable!("Lua returns before interpreter resolution"),
-    };
+/// Path normalized for Git Bash on Windows (MSYS `/c/...` paths).
+///
+/// Git Bash cannot open Windows extended-length paths (`\\?\`); strip them at
+/// the spawn boundary only. Canonical paths elsewhere may keep the verbatim
+/// prefix.
+pub(crate) fn bash_safe_path(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        let native = path.to_string_lossy().replace('\\', "/");
+        let stripped = strip_verbatim_prefix(native);
+        bash_safe_drive_path(&stripped)
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string_lossy().into_owned()
+    }
+}
 
-    // Resolve to an absolute path only when an injected PATH is present and
-    // actually contains the interpreter; otherwise keep name-based behavior.
-    let mut command = match resolve_interpreter(program, env) {
+#[cfg(windows)]
+fn strip_verbatim_prefix(mut path: String) -> String {
+    let lower = path.to_ascii_lowercase();
+    const UNC_PREFIX: &str = "//?/unc/";
+    const VERBATIM_PREFIX: &str = "//?/";
+    if lower.starts_with(UNC_PREFIX) {
+        let rest = path[UNC_PREFIX.len()..].to_string();
+        path = format!("//{rest}");
+    } else if lower.starts_with(VERBATIM_PREFIX) {
+        path = path[VERBATIM_PREFIX.len()..].to_string();
+    }
+    path
+}
+
+#[cfg(windows)]
+fn bash_safe_drive_path(path: &str) -> String {
+    if let Some((drive, rest)) = path.split_once(':') {
+        if drive.len() == 1 && drive.chars().all(|c| c.is_ascii_alphabetic()) {
+            let rest = rest.strip_prefix('/').unwrap_or(rest);
+            return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
+        }
+    }
+    path.to_string()
+}
+
+fn bash_script_command(script: &Path, env: &[(String, String)]) -> Result<Command, ScriptError> {
+    let mut command = bash_command_with_env(env)?;
+    command.arg(bash_safe_path(script));
+    Ok(command)
+}
+
+fn powershell_script_command(
+    script: &Path,
+    env: &[(String, String)],
+) -> Result<Command, ScriptError> {
+    let mut command = command_for_interpreter(powershell_program(), env);
+    command.args(["-NoProfile", "-File"]).arg(script);
+    Ok(command)
+}
+
+fn python_script_command(script: &Path, env: &[(String, String)]) -> Result<Command, ScriptError> {
+    let mut command = command_for_interpreter(python_program(), env);
+    command.arg(script);
+    Ok(command)
+}
+
+fn lua_script_command(script: &Path) -> Result<Command, ScriptError> {
+    let mut command = Command::new(lua_host_binary()?);
+    command.arg(LUA_HOST_ARG).arg(script);
+    Ok(command)
+}
+
+fn command_for_interpreter(program: &str, env: &[(String, String)]) -> Command {
+    match resolve_interpreter(program, env) {
         Some(abs_path) => Command::new(abs_path),
         None => Command::new(program),
-    };
-
-    match kind {
-        ScriptKind::Bash | ScriptKind::Python => {
-            command.arg(script);
-        }
-        ScriptKind::PowerShell => {
-            command.arg("-NoProfile").arg("-File").arg(script);
-        }
-        ScriptKind::Lua => unreachable!("handled before interpreter resolution"),
     }
+}
 
-    Ok(command)
+/// The hint used when a Windows installation has no native Git Bash.
+#[cfg(windows)]
+pub(crate) const BASH_MISSING_HINT: &str =
+    "Install Git for Windows (Git Bash) and ensure bash.exe is in PATH";
+
+pub(crate) fn path_value(env: &[(String, String)]) -> Option<&str> {
+    let exact_path = env
+        .iter()
+        .rev()
+        .find(|(k, _)| k == "PATH")
+        .map(|(_, v)| v.as_str());
+    exact_path.or_else(|| {
+        env.iter()
+            .rev()
+            .find(|(k, _)| k.eq_ignore_ascii_case("PATH"))
+            .map(|(_, v)| v.as_str())
+    })
+}
+
+/// Resolve the native Bash executable used for Windows script execution.
+///
+/// Windows commonly exposes `C:\Windows\System32\bash.exe`, but that binary
+/// is the WSL launcher rather than Git Bash. It is deliberately skipped so
+/// dependency checks and script execution cannot disagree about the runtime.
+pub(crate) fn resolve_bash_program(env: &[(String, String)]) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        let path = path_value(env)
+            .map(str::to_owned)
+            .or_else(|| std::env::var("PATH").ok())?;
+        return resolve_bash_in_path(&path);
+    }
+    #[cfg(not(windows))]
+    {
+        resolve_interpreter("bash", env)
+    }
+}
+
+#[cfg(windows)]
+fn is_wsl_launcher(path: &Path) -> bool {
+    let normalized = path
+        .to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase();
+    normalized.ends_with("\\windows\\system32\\bash.exe")
+        || normalized.ends_with("\\windows\\sysnative\\bash.exe")
+}
+/// Walk `path_var` left-to-right for the first executable `bash`, skipping WSL
+/// launchers so Git Bash later on PATH wins.
+#[cfg(windows)]
+fn resolve_bash_in_path(path_var: &str) -> Option<PathBuf> {
+    for dir in std::env::split_paths(path_var) {
+        if !dir.is_absolute() {
+            continue;
+        }
+        for candidate_name in executable_candidate_names("bash") {
+            let candidate = dir.join(candidate_name);
+            if is_executable_file(&candidate) {
+                if is_wsl_launcher(&candidate) {
+                    continue;
+                }
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn bash_command_with_env(env: &[(String, String)]) -> Result<Command, ScriptError> {
+    #[cfg(windows)]
+    {
+        let path = resolve_bash_program(env).ok_or_else(|| ScriptError::DependencyMissing {
+            name: "bash".to_string(),
+            hint: BASH_MISSING_HINT.to_string(),
+        })?;
+        Ok(Command::new(path))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(match resolve_bash_program(env) {
+            Some(path) => Command::new(path),
+            None => Command::new("bash"),
+        })
+    }
 }
 
 /// Return the injected `PATH` value from `env`, then resolve `program` against
@@ -134,17 +268,11 @@ pub fn command_for_script_with_env(
 /// `Path` remains useful. Within each key class, last write wins, matching
 /// `cmd.env` semantics.
 pub(crate) fn resolve_interpreter(program: &str, env: &[(String, String)]) -> Option<PathBuf> {
-    let exact_path = env
-        .iter()
-        .rev()
-        .find(|(k, _)| k == "PATH")
-        .map(|(_, v)| v.as_str());
-    let injected_path = exact_path.or_else(|| {
-        env.iter()
-            .rev()
-            .find(|(k, _)| k.eq_ignore_ascii_case("PATH"))
-            .map(|(_, v)| v.as_str())
-    })?;
+    let injected_path = path_value(env)?;
+    #[cfg(windows)]
+    if program.eq_ignore_ascii_case("bash") {
+        return resolve_bash_in_path(injected_path);
+    }
     resolve_program_in_path(program, injected_path)
 }
 
@@ -238,6 +366,13 @@ mod tests {
     use rstest::rstest;
     use std::path::Path;
 
+    #[cfg(windows)]
+    fn normalized_windows_path(path: &Path) -> String {
+        path.to_string_lossy()
+            .replace('/', "\\")
+            .to_ascii_lowercase()
+    }
+
     #[rstest]
     #[case::sh_extension("script.sh", Some(ScriptKind::Bash))]
     #[case::bash_extension("script.bash", Some(ScriptKind::Bash))]
@@ -304,31 +439,84 @@ mod tests {
     fn test_python_program_is_python3_on_unix() {
         assert_eq!(python_program(), "python3");
     }
+    #[cfg(windows)]
+    #[test]
+    fn resolve_bash_program_skips_wsl_launchers_and_uses_git_bash() {
+        let root = tempfile::tempdir().unwrap();
+        let system32_dir = root.path().join("Windows").join("System32");
+        let sysnative_dir = root.path().join("Windows").join("Sysnative");
+        let git_dir = root.path().join("Git").join("bin");
+        for dir in [&system32_dir, &sysnative_dir, &git_dir] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let system32_bash = system32_dir.join("bash.exe");
+        let sysnative_bash = sysnative_dir.join("bash.exe");
+        let git = git_dir.join("bash.exe");
+        std::fs::write(&system32_bash, "wsl launcher").unwrap();
+        std::fs::write(&sysnative_bash, "wsl launcher").unwrap();
+        std::fs::write(&git, "git bash").unwrap();
+
+        // Exercise case-insensitive launcher classification without relying on
+        // case-mutated filesystem paths.
+        assert!(is_wsl_launcher(Path::new(r"C:\WINDOWS\SYSTEM32\BASH.EXE")));
+        assert!(is_wsl_launcher(Path::new(r"C:\Windows\SYSNATIVE\BASH.EXE")));
+
+        let env = vec![(
+            "PATH".to_string(),
+            format!(
+                "{};{};{}",
+                system32_dir.display(),
+                sysnative_dir.display(),
+                git_dir.display()
+            ),
+        )];
+
+        let resolved = resolve_bash_program(&env).expect("Git Bash should be accepted");
+        assert_eq!(
+            normalized_windows_path(&resolved),
+            normalized_windows_path(&git)
+        );
+    }
+
+    #[cfg(windows)]
+    #[rstest]
+    #[case(r"\\?\C:\Git\omakure.exe", "/c/Git/omakure.exe")]
+    #[case(r"\\?\C:/Git/omakure.exe", "/c/Git/omakure.exe")]
+    #[case(r"C:\Git\bash.exe", "/c/Git/bash.exe")]
+    #[case(
+        r"\\?\UNC\server\share\bin\omakure.exe",
+        "//server/share/bin/omakure.exe"
+    )]
+    fn bash_safe_path_normalizes_windows_paths(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(bash_safe_path(Path::new(input)), expected);
+    }
+
+    #[test]
+    fn bash_safe_path_unix_unchanged() {
+        let path = "/home/user/script.sh";
+        assert_eq!(bash_safe_path(Path::new(path)), path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_bash_program_returns_none_when_only_wsl_launcher_is_available() {
+        let root = tempfile::tempdir().unwrap();
+        let wsl_dir = root.path().join("Windows").join("System32");
+        std::fs::create_dir_all(&wsl_dir).unwrap();
+        std::fs::write(wsl_dir.join("bash.exe"), "wsl launcher").unwrap();
+
+        let env = vec![("PATH".to_string(), wsl_dir.display().to_string())];
+        assert_eq!(resolve_bash_program(&env), None);
+    }
 
     // --- Task 1755: absolute-path interpreter resolution against injected PATH ---
 
     #[cfg(unix)]
-    const SHIM_MARKER: &str = "OMAKURE_RUNTIME_SHIM_MARKER";
-
-    /// Write an executable shim named `name` into `dir` that prints
-    /// [`SHIM_MARKER`] and ignores its arguments, so the marker in stdout is
-    /// unambiguous proof the shim (not the system interpreter) executed.
-    #[cfg(unix)]
-    fn write_shim(dir: &Path, name: &str) -> std::path::PathBuf {
-        use std::os::unix::fs::PermissionsExt;
-        let shim = dir.join(name);
-        std::fs::write(&shim, format!("#!/bin/sh\necho {SHIM_MARKER}\n")).unwrap();
-        let mut perms = std::fs::metadata(&shim).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&shim, perms).unwrap();
-        shim
-    }
-
-    #[cfg(unix)]
     #[test]
     fn resolve_program_in_path_finds_first_executable() {
-        let dir = tempfile::tempdir().unwrap();
-        let shim = write_shim(dir.path(), "python3");
+        let dir = crate::util::generated_executable_tempdir().unwrap();
+        crate::adapters::system_checks::write_test_executable_shim(dir.path(), "python3");
+        let shim = dir.path().join("python3");
         let path_var = format!("{}:/nonexistent-dir-xyz", dir.path().display());
 
         let resolved = resolve_program_in_path("python3", &path_var).expect("shim must be found");
@@ -346,15 +534,26 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn resolve_program_in_path_finds_windows_exe_suffix() {
+    fn resolve_program_in_path_finds_windows_exe_suffix_case_insensitively() {
         let dir = tempfile::tempdir().unwrap();
-        let exe = dir.path().join("python.exe");
+        let exe = dir.path().join("python.EXE");
         std::fs::write(&exe, "shim").unwrap();
         let path_var = dir.path().display().to_string();
 
-        let resolved = resolve_program_in_path("python", &path_var).expect("python.exe found");
+        let resolved = resolve_program_in_path("python", &path_var).expect("python.EXE found");
 
-        assert_eq!(resolved, exe);
+        assert_eq!(
+            normalized_windows_path(&resolved),
+            normalized_windows_path(&exe)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn executable_candidate_names_keep_explicit_exe_suffix_deterministic() {
+        let candidates = executable_candidate_names("python.EXE");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].to_ascii_uppercase(), "PYTHON.EXE");
     }
 
     #[cfg(windows)]
@@ -368,7 +567,10 @@ mod tests {
         let resolved =
             resolve_program_in_path("powershell", &path_var).expect("powershell.exe found");
 
-        assert_eq!(resolved, exe);
+        assert_eq!(
+            normalized_windows_path(&resolved),
+            normalized_windows_path(&exe)
+        );
     }
 
     #[cfg(unix)]
@@ -383,12 +585,13 @@ mod tests {
 
     /// Headline proof: with an injected PATH prepending a shim `python3`, the
     /// built command targets the ABSOLUTE shim path and executing it actually
-    /// runs the shim (marker in stdout) — not the system interpreter.
+    /// runs the shim — not the system interpreter.
     #[cfg(unix)]
     #[test]
     fn command_for_script_with_env_resolves_and_runs_injected_shim() {
-        let shim_dir = tempfile::tempdir().unwrap();
-        let shim = write_shim(shim_dir.path(), "python3");
+        let shim_dir = crate::util::generated_executable_tempdir().unwrap();
+        crate::adapters::system_checks::write_test_executable_shim(shim_dir.path(), "python3");
+        let shim = shim_dir.path().join("python3");
 
         let script_dir = tempfile::tempdir().unwrap();
         let script = script_dir.path().join("job.py");
@@ -406,10 +609,11 @@ mod tests {
         );
 
         let out = cmd.output().expect("spawn resolved shim");
+        assert!(out.status.success(), "shim must exit successfully");
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(
-            stdout.contains(SHIM_MARKER),
-            "the shim (not system python) must run, got {stdout:?}"
+            !stdout.contains("would-be-system-python"),
+            "system python must not run, got {stdout:?}"
         );
     }
 
@@ -444,10 +648,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_interpreter_prefers_exact_path_over_case_variant() {
-        let exact_dir = tempfile::tempdir().unwrap();
-        let exact_shim = write_shim(exact_dir.path(), "python3");
-        let variant_dir = tempfile::tempdir().unwrap();
-        let _variant_shim = write_shim(variant_dir.path(), "python3");
+        let exact_dir = crate::util::generated_executable_tempdir().unwrap();
+        crate::adapters::system_checks::write_test_executable_shim(exact_dir.path(), "python3");
+        let exact_shim = exact_dir.path().join("python3");
+        let variant_dir = crate::util::generated_executable_tempdir().unwrap();
+        crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
         let env = vec![
             ("Path".to_string(), variant_dir.path().display().to_string()),
             ("PATH".to_string(), exact_dir.path().display().to_string()),
@@ -460,8 +665,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_interpreter_falls_back_to_case_insensitive_path() {
-        let variant_dir = tempfile::tempdir().unwrap();
-        let variant_shim = write_shim(variant_dir.path(), "python3");
+        let variant_dir = crate::util::generated_executable_tempdir().unwrap();
+        crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
+        let variant_shim = variant_dir.path().join("python3");
         let env = vec![("Path".to_string(), variant_dir.path().display().to_string())];
 
         let resolved = resolve_interpreter("python3", &env).expect("Path shim found");

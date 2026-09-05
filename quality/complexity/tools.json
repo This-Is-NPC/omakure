@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source_evidence": "GitHub Releases API responses fetched 2026-08-30; each digest is the release asset's publisher-supplied sha256.",
+  "tools": {
+    "big-code-analysis": {
+      "version": "2.2.0",
+      "source": "https://github.com/dekobon/big-code-analysis/releases/tag/v2.2.0",
+      "source_build": {
+        "url": "https://github.com/dekobon/big-code-analysis/archive/09fb2301528e12916b9b4514c01db814de8f0a74.tar.gz",
+        "sha256": "4ff3a5cb152f67ddcc2ed058949ec0218df1f63a85f33aa2892f10cbd8723a18",
+        "package": "big-code-analysis-cli",
+        "binary": "bca",
+        "locked_dependencies": true
+      },
+      "license_evidence": "https://github.com/dekobon/big-code-analysis/blob/v2.2.0/LICENSE",
+      "parser": "tree-sitter-rust",
+      "metrics": ["cyclomatic", "cognitive", "loc"],
+      "archives": {
+        "linux-x86_64": {"file": "big-code-analysis-2.2.0-x86_64-unknown-linux-gnu.tar.gz", "sha256": "870a0c43b9c13f4ecac40d4a88ba7be011a0b72150d76bcc6f4906948f2adae5"},
+        "linux-aarch64": {"file": "big-code-analysis-2.2.0-aarch64-unknown-linux-gnu.tar.gz", "sha256": "db98aac2c841534696d5f75a5f1cd76030be98b91f91c225f80490703d162592"},
+        "macos-aarch64": {"file": "big-code-analysis-2.2.0-aarch64-apple-darwin.tar.gz", "sha256": "37229568ffc06041990836727e98727dc5c334ef0c54f8f92b94a48e6160de80"},
+        "windows-x86_64": {"file": "big-code-analysis-2.2.0-x86_64-pc-windows-msvc.zip", "sha256": "8dce21f94bfe5412bbce0a22db69249be1519351e4bf97090517b34ef7ad7b4e"}
+      }
+    },
+    "cccc": {
+      "version": "1.6.0",
+      "source": "https://github.com/moznion/cccc/releases/tag/v1.6.0",
+      "license": "MIT",
+      "license_evidence": "https://github.com/moznion/cccc/blob/v1.6.0/LICENSE",
+      "parser": "syn",
+      "metrics": ["cyclomatic", "cognitive"],
+      "machine_output": "json",
+      "archives": {
+        "linux-x86_64": {"file": "cccc-v1.6.0-x86_64-unknown-linux-musl.tar.gz", "sha256": "8a4492a877d566edb75aa8b8501f28a21fdb43789d125e6ac99dfc67a00a919b"},
+        "linux-aarch64": {"file": "cccc-v1.6.0-aarch64-unknown-linux-musl.tar.gz", "sha256": "cfaaa99aa9c731005984702d9ed5f7efda8f169b39030be9c01cdd557b260799"},
+        "macos-x86_64": {"file": "cccc-v1.6.0-x86_64-apple-darwin.tar.gz", "sha256": "64d38f2d5e5380afaa93896a254a2aede66e8e30e00d3e814a957b30d50307d3"},
+        "macos-aarch64": {"file": "cccc-v1.6.0-aarch64-apple-darwin.tar.gz", "sha256": "7caec629e4b7f2f8453f7b025af1b4613dd9bfc3bfb089cbbd2e736d14d6c80f"},
+        "windows-x86_64": {"file": "cccc-v1.6.0-x86_64-pc-windows-msvc.zip", "sha256": "ffde9896051c2172b37e364dd80127700744df1a4de4a83de506d2e2f1ef6889"}
+      }
+    }
+  }
+}

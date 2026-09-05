@@ -1,19 +1,31 @@
 # Script Runtime
 
-**Status:** CI for shipped runtime coverage; optional interpreters remain platform-dependent.
+**Status:** CI for shipped runtime coverage; optional interpreters remain
+platform-dependent.
 
 ## Source
 
 - `tests/lua_script_kind_e2e.rs`
 - Shell/runtime tests in the normal Rust test targets
 - Runtime construction: `src/runtime.rs`
+- Canonical execution layers: `scripts/tasks/atomic/` and
+  `scripts/tasks/suite/`
 
 ## Run
 
+Use the canonical suite routes rather than embedding direct test commands:
+
 ```bash
-cargo test --test lua_script_kind_e2e --locked
-cargo test --all-targets --locked
+mise run test:integration
+mise run test:e2e
+mise run test:node-service
 ```
+
+For the complete local Linux gate, use `mise run check:full`. The platform
+matrix uses `scripts/tasks/check/platform/{linux-gnu,linux-musl,macos,windows}`;
+the selected suite owns native tests, target builds, static-link checks where
+applicable, and binary smoke. A local Linux host is the only host with the
+complete full scope.
 
 ## Proves
 
@@ -28,11 +40,16 @@ cargo test --all-targets --locked
 
 - Optional PowerShell/Python interpreters are not installed or exercised on every platform.
 - It does not certify arbitrary scripts, shell quoting, or external commands beyond the fixtures.
+- Hosted macOS and Windows jobs do not claim the Linux Docker certification.
 
 ## Environment and Cleanup
 
 Lua tests use temporary script directories and bounded child execution. The
 packaged-image no-system-Lua proof is in [Docker image smoke](docker-image-smoke.md).
+Linux musl runners require `musl-tools` and `musl-gcc`; macOS runners require
+an owned physical `RUNNER_TEMP`; Windows runners require the supported MSVC
+target and static CRT setup. Manual Fedora VM/KVM execution is excluded from
+these routes and must be requested explicitly with `mise run cert:vm`.
 
 ## Troubleshooting
 

@@ -30,7 +30,7 @@ key survives*.
 | 1 | Parent shell env (inherited by the omakure process) | lowest | yes |
 | 2 | Managed active env — `.omakure/envs/<name>.conf`, selected via the `active` pointer (`.omakure/envs/active`) | low | yes |
 | 3 | CLI `--env-file <path>` | high | yes |
-| 4 | Omakure-reserved vars — `OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR` | highest | **no — non-overridable** |
+| 4 | Omakure-reserved vars — `OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR`, `OMAKURE_BIN` | highest | **no — non-overridable** |
 
 ### Rules
 
@@ -40,7 +40,7 @@ key survives*.
   present only in an earlier source is preserved (it is not cleared by a
   later source that lacks it).
 - **Layer 4 is applied after everything else and is non-overridable.**
-  The reserved keys `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` are
+  The reserved keys `OMAKURE_RUN_ID`, `OMAKURE_SCRIPTS_DIR`, and `OMAKURE_BIN` are
   injected *last*, so a user variable of the same name from layers 1–3
   **cannot** clobber them. If a user defines `OMAKURE_RUN_ID` in their
   shell or `.conf` or `--env-file`, the omakure value still wins. The
@@ -49,6 +49,8 @@ key survives*.
   - `OMAKURE_RUN_ID` = the run's `run_id`.
   - `OMAKURE_SCRIPTS_DIR` = the workspace root (so nested `omakure trace`
     calls resolve the same `runs.sqlite`).
+  - `OMAKURE_BIN` = path of this omakure executable (forward slashes on
+    Windows).
 - This mirrors the existing injection in `src/run_executor.rs`
   (`execute_with_heartbeat`), where the reserved pair is pushed onto the
   `env` vec **after** the caller-supplied `extra_env`. Layers 2 and 3 feed
@@ -81,8 +83,8 @@ resolves them with the following grammar.
   reference like `$PATH` resolves to the inherited parent value, so a
   self-referencing value such as `PATH=/x/bin:$PATH` prepends to the
   existing PATH rather than referencing the file's own raw value.
-- **Reserved vars are not expansion sources.** `OMAKURE_RUN_ID` and
-  `OMAKURE_SCRIPTS_DIR` are injected last by `execute_with_heartbeat` after
+- **Reserved vars are not expansion sources.** `OMAKURE_RUN_ID`,
+  `OMAKURE_SCRIPTS_DIR`, and `OMAKURE_BIN` are injected last by `execute_with_heartbeat` after
   layer-2/layer-3 expansion has already completed. A `.conf` or
   `--env-file` value such as `id=$OMAKURE_RUN_ID` therefore expands the
   reference as undefined (`id=`). The reserved key itself is still injected

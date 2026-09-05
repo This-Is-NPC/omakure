@@ -43,20 +43,37 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
     } else {
         root.join(&result.script_path)
     };
-    let absolute_path = std::fs::canonicalize(&joined)
+    let canonical_path = std::fs::canonicalize(&joined);
+    let relative_path = logical_relative_path(&joined, root);
+    let absolute_path = canonical_path
         .unwrap_or(joined)
         .to_string_lossy()
         .to_string();
-    let relative_path = result.script_path.to_string_lossy().to_string();
     ScriptSummary {
         absolute_path,
         relative_path,
         name: Some(result.display_name),
         description: result.description,
         tags: result.tags,
-        field_count: 0,
+        field_count: result.field_count,
         schema_error: result.schema_error,
     }
+}
+
+fn logical_relative_path(path: &std::path::Path, root: &std::path::Path) -> String {
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
+    let root_text = canonical_root
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    path_text
+        .strip_prefix(&root_text)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(&path_text)
+        .to_string()
 }
 
 fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
@@ -105,6 +122,48 @@ mod tests {
     }
 
     #[test]
+    fn root_relative_index_paths_are_resolved_against_scripts_root() {
+        let cwd_relative = std::path::Path::new("Cargo.toml");
+        assert!(
+            cwd_relative.is_file(),
+            "regression requires a matching CWD-relative file"
+        );
+
+        let scripts_root = TempDir::new().unwrap();
+        let indexed_script = scripts_root.path().join(cwd_relative);
+        std::fs::write(&indexed_script, "scripts-root fixture").unwrap();
+
+        let summary = to_summary(
+            SearchResult {
+                script_path: cwd_relative.to_path_buf(),
+                display_name: "manifest".into(),
+                description: None,
+                tags: Vec::new(),
+                field_count: 0,
+                schema_error: None,
+            },
+            scripts_root.path(),
+        );
+
+        assert_eq!(summary.relative_path, "Cargo.toml");
+        assert_eq!(
+            summary.absolute_path,
+            indexed_script
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+        );
+    }
+    #[test]
+    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
+        let root = std::path::Path::new(r"C:\workspace\scripts");
+        let path = std::path::Path::new(r"C:\workspace\scripts\tools\deploy.sh");
+
+        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
+    }
+
+    #[test]
     fn search_scripts_refreshes_index_and_filters_tags() {
         let dir = TempDir::new().unwrap();
         let workspace = Workspace::new(dir.path().to_path_buf());
@@ -123,6 +182,34 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].relative_path, "deploy.sh");
+    }
+
+    #[test]
+    fn search_scripts_field_count_matches_indexed_schema_fields() {
+        let dir = TempDir::new().unwrap();
+        let workspace = Workspace::new(dir.path().to_path_buf());
+        std::fs::write(
+            workspace.scripts_root().join("form.sh"),
+            r#"#!/usr/bin/env bash
+# OMAKURE_SCHEMA_START
+# {"Name":"Form","Description":"Ship","Fields":[{"Name":"alpha","Type":"string","Order":0,"Required":true},{"Name":"beta","Type":"string","Order":1}]}
+# OMAKURE_SCHEMA_END
+"#,
+        )
+        .unwrap();
+
+        let results = search_scripts(
+            &workspace,
+            SearchScriptsRequest {
+                query: "form".into(),
+                tags: Vec::new(),
+                refresh: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].field_count, 2);
     }
 
     #[test]

@@ -11,6 +11,8 @@ pub mod baseline_publisher;
 /// when the answer is yes.
 pub mod baseline_push;
 pub mod cli;
+/// The versioned, generated contract describing CLI and HTTP parity.
+pub mod cli_http_parity;
 pub mod direct_health;
 pub mod direct_service;
 pub mod direct_transport;
@@ -24,6 +26,8 @@ pub mod node;
 pub mod node_identity;
 pub mod node_registry;
 pub mod node_transport;
+/// The canonical versioned operation metadata catalog.
+pub mod operation_catalog;
 pub mod operations;
 mod policy;
 mod ports;
@@ -50,4 +54,6 @@ mod search_index;
 pub mod secrets;
 mod use_cases;
 mod util;
+#[doc(hidden)]
+pub use util::{generated_executable_tempdir, write_generated_executable};
 mod workspace;

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "${MISE_PROJECT_ROOT:-$(dirname "$0")/../..}" && pwd)"
+report="$root/scripts/tasks/complexity-report"
+fixtures="$root/quality/complexity/fixtures"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/omakure-complexity.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+inputs=(
+  --input "$fixtures/corpus.rs"
+  --input "$fixtures/generated.rs"
+  --input "$fixtures/rename_before.rs"
+  --input "$fixtures/rename_after.rs"
+)
+"$report" --source-root "$fixtures" "${inputs[@]}" --output "$tmp/one.json" >/dev/null
+"$report" --source-root "$fixtures" "${inputs[@]}" --output "$tmp/two.json" >/dev/null
+cmp -s "$tmp/one.json" "$tmp/two.json"
+relative_inputs=(
+  --input corpus.rs
+  --input generated.rs
+  --input rename_before.rs
+  --input rename_after.rs
+)
+"$report" --source-root "$fixtures" "${relative_inputs[@]}" --output "$tmp/relative.json" >/dev/null
+cmp -s "$tmp/one.json" "$tmp/relative.json"
+python3 - "$tmp/one.json" <<'PY'
+import json
+import sys
+p = json.load(open(sys.argv[1], encoding="utf-8"))
+assert p["mode"] == "offline-native"
+assert p["source_accounting"] == {"files": 4, "functions": 7, "generated": 1, "handwritten": 3, "parse_failures": 0}
+assert p["candidates"]["cccc"]["executed"] is True
+assert p["candidates"]["cccc"]["execution"] == "native-binary"
+assert p["candidates"]["cccc"]["metrics"] == ["cyclomatic", "cognitive"]
+assert p["candidates"]["big-code-analysis"]["metrics"] == ["cyclomatic", "cognitive", "loc"]
+rows = {row["identity"]: row for row in p["canonical"]["functions"]}
+assert rows["crate::corpus::async_pipeline"]["cyclomatic"] == 3
+assert rows["crate::corpus::async_pipeline"]["cognitive"] == 1
+assert rows["crate::corpus::async_pipeline::transform"]["kind"] == "closure"
+assert rows["crate::corpus::async_pipeline::transform"]["cyclomatic"] == 2
+assert rows["crate::corpus::async_pipeline::transform"]["cognitive"] == 2
+assert rows["crate::corpus::nested_tables"]["cyclomatic"] == 5
+assert rows["crate::corpus::nested_tables"]["cognitive"] == 6
+assert rows["crate::rename_before::old_symbol"]["identity"]
+assert rows["crate::rename_after::new_symbol"]["identity"]
+assert not any("old_symbol" in x and "new_symbol" in x for x in rows)
+assert any(row["macro"]["declarations"] for row in p["canonical"]["files"])
+assert "loc" not in rows["crate::corpus::async_pipeline"]
+assert p["comparison"]["cccc"]["metric_discrepancies"] == []
+PY
+
+for invalid in parse_failure.rs malformed_balanced.rs; do
+  if "$report" --source-root "$fixtures" --input "$fixtures/$invalid" --output "$tmp/invalid.json" >/dev/null 2>"$tmp/error"; then
+    echo "$invalid unexpectedly accepted" >&2
+    exit 1
+  fi
+  grep -q "native cccc parse failure" "$tmp/error"
+done
+
+if "$report" --source-root "$fixtures" --input "$fixtures/corpus.txt" >/dev/null 2>"$tmp/unsupported"; then
+  echo "unsupported extension unexpectedly accepted" >&2
+  exit 1
+fi
+grep -q "unsupported input" "$tmp/unsupported"
+printf 'complexity fixtures: PASS (native closure/else/match/logical/? scores, repeatability, macro/generated, rename, parse/schema guards)\n'
+./scripts/tasks/complexity-soak-audit-test
+

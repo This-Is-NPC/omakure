@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+
+fail() {
+    printf 'atomic/generated-exec-contract: %s\n' "$1" >&2
+    exit 1
+}
+
+TEMPDIR_PAT='tempfile::tempdir\(|TempDir::new\(|tempfile::Builder'
+CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode|\.set_mode\('
+
+# Whole-file scan of src/**/*.rs and tests/**/*.rs for the toxic tempdir+chmod pair.
+# Allowlisted with reasons:
+#   src/auth.rs                       TempDir::new + fs::set_permissions in test fixtures only
+#   src/baseline_publisher.rs         tempfile::tempdir + set_mode/set_permissions in test fixtures only
+#   src/baseline_push.rs              tempfile::tempdir + set_permissions in test fixtures only
+#   src/enrollment_authority.rs       tempfile::tempdir + set_mode/set_permissions in test fixtures only
+#   src/node.rs                       TempDir::new + fs::set_permissions in test fixtures only
+#   src/node_identity.rs              TempDir::new + fs::set_permissions in test fixtures only
+#   src/node_registry.rs              TempDir::new + fs::set_permissions in test fixtures only
+#   src/operations/node.rs            TempDir::new + fs::set_permissions in test fixtures only
+#   src/util.rs                       canonical generated_executable_tempdir + set_executable_permissions
+#   src/cli/init.rs                   init chmods the created script; TempDir tokens are test fixtures
+#   src/cli/update.rs                 update chmods the installed binary; TempDir tokens are test install roots
+#   tests/support/mod.rs              shared test helper chmod
+#   tests/docker_signed_bundle_e2e.rs e2e bootstrap token mode
+#   tests/enrollment_authority_e2e.rs e2e bootstrap token permissions
+#   tests/remote_cue_e2e.rs           e2e effect script chmod in helper
+
+is_allowlisted_tempdir_permissions() {
+    case "$1" in
+        src/auth.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/baseline_publisher.rs)
+            # tempfile::tempdir + set_mode/set_permissions in test fixtures only
+            return 0
+            ;;
+        src/baseline_push.rs)
+            # tempfile::tempdir + set_permissions in test fixtures only
+            return 0
+            ;;
+        src/enrollment_authority.rs)
+            # tempfile::tempdir + set_mode/set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node_identity.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node_registry.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/operations/node.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/util.rs)
+            # canonical generated_executable_tempdir + set_executable_permissions
+            return 0
+            ;;
+        src/cli/init.rs)
+            # init chmods the created script; TempDir tokens are test fixtures
+            return 0
+            ;;
+        src/cli/update.rs)
+            # update chmods the installed binary; TempDir tokens are test install roots
+            return 0
+            ;;
+        tests/support/mod.rs)
+            # shared test helper chmod
+            return 0
+            ;;
+        tests/docker_signed_bundle_e2e.rs)
+            # e2e bootstrap token mode
+            return 0
+            ;;
+        tests/enrollment_authority_e2e.rs)
+            # e2e bootstrap token permissions
+            return 0
+            ;;
+        tests/remote_cue_e2e.rs)
+            # e2e effect script chmod in helper
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+is_allowlisted_set_executable_permissions() {
+    case "$1" in
+        src/util.rs | src/cli/init.rs)
+            return 0
+            ;;
+        src/cli/update.rs)
+            # chmod-after-write on the installed binary is the same class as generated-exec; out of this cut.
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+content_has_tempdir_token() {
+    grep -qE "$TEMPDIR_PAT" <<<"$1"
+}
+
+content_has_chmod_token() {
+    grep -qE "$CHMOD_PAT" <<<"$1"
+}
+
+scan_paths=()
+while IFS= read -r -d '' path; do
+    scan_paths+=("$path")
+done < <(find src tests -name '*.rs' -print0 2>/dev/null)
+
+for path in "${scan_paths[@]}"; do
+    content="$(<"$path")"
+
+    if ! content_has_tempdir_token "$content"; then
+        continue
+    fi
+    if ! content_has_chmod_token "$content"; then
+        continue
+    fi
+
+    if ! is_allowlisted_tempdir_permissions "$path"; then
+        fail "${path}: toxic tempdir and chmod tokens; generated executables use generated_executable_tempdir() + write_generated_executable()."
+    fi
+done
+
+for path in "${scan_paths[@]}"; do
+    [[ "$path" == src/* ]] || continue
+    if grep -q 'set_executable_permissions(' "$path"; then
+        if ! is_allowlisted_set_executable_permissions "$path"; then
+            fail "${path}: set_executable_permissions( outside allowlist; generated executables use generated_executable_tempdir() + write_generated_executable()."
+        fi
+    fi
+done
+
+min_write_generated_executable_count=14
+write_generated_executable_count="$(
+    grep -R --include='*.rs' -c 'write_generated_executable' src tests \
+        | awk -F: '{sum += $2} END {print sum + 0}'
+)"
+if (( write_generated_executable_count < min_write_generated_executable_count )); then
+    fail "expected at least ${min_write_generated_executable_count} write_generated_executable occurrences, found ${write_generated_executable_count}"
+fi
+
+printf 'atomic/generated-exec-contract: ok (write_generated_executable occurrences=%s)\n' "$write_generated_executable_count"

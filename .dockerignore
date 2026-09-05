@@ -17,7 +17,6 @@ docs/
 .claude/
 .cursor/
 .opencode/
-.omaken/
 release-notes/
 scripts/
 *.log

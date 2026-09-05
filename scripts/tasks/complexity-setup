@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "${MISE_PROJECT_ROOT:-$(dirname "$0")/../..}" && pwd)"
+manifest="$root/quality/complexity/tools.json"
+dest="${COMPLEXITY_TOOL_ROOT:-$root/.cache/complexity-tools}"
+mkdir -p "$dest"
+
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64) platform=linux-x86_64 ;;
+  Linux:aarch64|Linux:arm64) platform=linux-aarch64 ;;
+  Darwin:x86_64) platform=macos-x86_64 ;;
+  Darwin:arm64) platform=macos-aarch64 ;;
+  MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64) platform=windows-x86_64 ;;
+  *) echo "complexity-setup: unsupported host $(uname -s)/$(uname -m)" >&2; exit 2 ;;
+esac
+verify_sha256() {
+  local expected="$1" file="$2" actual
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s  %s\n' "$expected" "$file" | sha256sum -c -
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$file" | cut -d' ' -f1)"
+    [[ "$actual" == "$expected" ]] || {
+      echo "complexity-setup: SHA-256 mismatch for $file" >&2
+      return 1
+    }
+  else
+    echo "complexity-setup: sha256sum or shasum is required" >&2
+    return 2
+  fi
+}
+build_big_code_analysis_macos_x86_64() {
+  local url sha package binary version archive source_root extract_root extracted
+  read -r url sha package binary version <<EOF
+$(python3 - "$manifest" <<'PY'
+import json
+import sys
+entry = json.load(open(sys.argv[1], encoding="utf-8"))["tools"]["big-code-analysis"]
+source = entry.get("source_build")
+if not isinstance(source, dict) or source.get("locked_dependencies") is not True:
+    raise SystemExit("big-code-analysis/macos-x86_64 requires a locked source-build manifest entry")
+for key in ("url", "sha256", "package", "binary"):
+    if not isinstance(source.get(key), str) or not source[key]:
+        raise SystemExit(f"source-build entry missing {key}")
+print(source["url"], source["sha256"], source["package"], source["binary"], entry["version"])
+PY
+)
+EOF
+  command -v curl >/dev/null || { echo "complexity-setup: curl is required" >&2; exit 2; }
+  command -v cargo >/dev/null || { echo "complexity-setup: cargo is required for the Intel macOS source build" >&2; exit 2; }
+  command -v tar >/dev/null || { echo "complexity-setup: tar is required" >&2; exit 2; }
+  archive="$dest/big-code-analysis-${version}-source.tar.gz"
+  if [[ ! -f "$archive" ]]; then
+    curl --fail --location --proto '=https' --tlsv1.2 --output "$archive.tmp" "$url"
+    verify_sha256 "$sha" "$archive.tmp"
+    mv "$archive.tmp" "$archive"
+  else
+    verify_sha256 "$sha" "$archive"
+  fi
+  source_root="$dest/.big-code-analysis-source-${version}"
+  if [[ ! -f "$source_root/Cargo.toml" ]]; then
+    extract_root="$dest/.big-code-analysis-source-extract"
+    rm -rf "$extract_root"
+    mkdir -p "$extract_root"
+    tar -xzf "$archive" -C "$extract_root"
+    for candidate in "$extract_root"/*; do
+      if [[ -d "$candidate" ]]; then extracted="$candidate"; break; fi
+    done
+    [[ -n "$extracted" ]] || { echo "complexity-setup: source archive has no root directory" >&2; exit 1; }
+    mv "$extracted" "$source_root"
+    rmdir "$extract_root"
+  fi
+  cargo build --locked --release --manifest-path "$source_root/Cargo.toml" --package "$package" --bin "$binary"
+  mkdir -p "$dest/big-code-analysis-${version}"
+  install -m 0755 "$source_root/target/release/$binary" "$dest/big-code-analysis-${version}/$binary"
+}
+
+
+for tool in big-code-analysis cccc; do
+  if [[ "$platform" == "macos-x86_64" && "$tool" == "big-code-analysis" ]]; then
+    build_big_code_analysis_macos_x86_64
+  else
+  read -r file sha <<EOF
+$(python3 - "$manifest" "$tool" "$platform" <<'PY'
+import json, sys
+manifest, tool, platform = sys.argv[1:]
+entry = json.load(open(manifest, encoding="utf-8"))["tools"][tool]["archives"].get(platform)
+if not entry:
+    raise SystemExit(f"no pinned archive for {tool}/{platform}")
+print(entry["file"], entry["sha256"])
+PY
+)
+EOF
+  url="https://github.com/$( [[ "$tool" == big-code-analysis ]] && echo dekobon/big-code-analysis || echo moznion/cccc )/releases/download/v$(python3 - "$manifest" "$tool" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1]))["tools"][sys.argv[2]]["version"])
+PY
+)/$file"
+  archive="$dest/$file"
+  if [[ ! -f "$archive" ]]; then
+    command -v curl >/dev/null || { echo "complexity-setup: curl is required" >&2; exit 2; }
+    curl --fail --location --proto '=https' --tlsv1.2 --output "$archive.tmp" "$url"
+    verify_sha256 "$sha" "$archive.tmp"
+    mv "$archive.tmp" "$archive"
+  else
+    verify_sha256 "$sha" "$archive"
+  fi
+  case "$archive" in
+    *.zip) unzip -oq "$archive" -d "$dest/$tool" ;;
+    *) mkdir -p "$dest/$tool"; tar -xzf "$archive" -C "$dest/$tool" ;;
+  esac
+  fi
+  if [[ "$tool" == cccc ]]; then
+    binary="$dest/cccc/cccc"
+    [[ -x "$binary" ]] || binary="$dest/cccc/cccc.exe"
+  else
+    binary=
+    for candidate in "$dest"/big-code-analysis-*/bca "$dest"/big-code-analysis/*/bca "$dest"/big-code-analysis-*/bca.exe "$dest"/big-code-analysis/*/bca.exe; do
+      if [[ -x "$candidate" ]]; then binary="$candidate"; break; fi
+    done
+  fi
+  [[ -x "$binary" ]] || {
+    echo "complexity-setup: extracted $tool binary is missing or not executable: $binary" >&2
+    exit 1
+  }
+  expected_version="$(python3 - "$manifest" "$tool" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["tools"][sys.argv[2]]["version"])
+PY
+)"
+  actual_version="$("$binary" --version)"
+  expected_output="$([[ "$tool" == cccc ]] && echo cccc || echo bca) $expected_version"
+  [[ "$actual_version" == "$expected_output" ]] || {
+    echo "complexity-setup: $tool version mismatch: expected '$expected_output', got '$actual_version'" >&2
+    exit 1
+  }
+done
+printf 'complexity tools ready: %s (%s)\n' "$dest" "$platform"

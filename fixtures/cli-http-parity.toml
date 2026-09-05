@@ -1,0 +1,1060 @@
+schema_version = 1
+
+[[schemas]]
+operation_family = "doctor"
+required_fields = ["ok", "data.dependencies"]
+success_cases = ["exact.doctor"]
+error_cases = ["exact.doctor"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.doctor"
+required_fields = ["ok", "data.dependencies", "data.workspace_paths", "data.schemas", "state.required_dependencies_ready", "state.workspace_paths_present", "state.schemas_parseable", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized", "auth.actors.unauthenticated", "auth.actors.forbidden", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+invariant_fields = ["state.required_dependencies_ready", "state.workspace_paths_present", "state.schemas_parseable", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+
+[[schemas]]
+operation_family = "scripts"
+required_fields = ["ok", "result.paths"]
+success_cases = ["exact.scripts"]
+error_cases = ["exact.scripts"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.scripts"
+required_fields = ["ok", "result.paths", "ordering.sorted_by_relative_path", "state.script_count", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized", "auth.actors.unauthenticated", "auth.actors.forbidden", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+invariant_fields = ["ordering.sorted_by_relative_path", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+
+[[schemas]]
+operation_family = "describe"
+required_fields = ["ok", "result.identity.relative_path"]
+success_cases = ["exact.describe"]
+error_cases = ["exact.describe"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.describe"
+required_fields = ["ok", "result.identity.relative_path", "result.identity.name", "result.schema.fields", "errors.missing_script", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized", "auth.actors.unauthenticated", "auth.actors.forbidden", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+invariant_fields = ["errors.missing_script", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+
+[[schemas]]
+operation_family = "history"
+required_fields = ["ok", "data.rows"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["exact.history-list"]
+error_cases = ["exact.history-show"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.history-list"
+required_fields = ["ok", "data.rows", "data.ordering.multiple_rows", "data.ordering.limit_respected", "data.ordering.ordered_desc", "data.time.present", "data.time.monotonic", "data.time.duration_nonnegative", "data.identity.expected_ids", "data.identity.cli_all_ids", "data.identity.http_all_ids", "data.identity.all_ids_match", "data.identity.order_matches", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.ordering.multiple_rows", "data.ordering.limit_respected", "data.ordering.ordered_desc", "data.time.present", "data.time.monotonic", "data.time.duration_nonnegative", "data.identity.all_ids_match", "data.identity.order_matches", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.history-show"
+required_fields = ["ok", "data.row.run_id", "data.row.run_id_matches_expected", "data.row.time_present", "data.row.time_monotonic", "data.row.duration_nonnegative", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.row.run_id_matches_expected", "data.row.time_present", "data.row.time_monotonic", "data.row.duration_nonnegative", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.history-traces"
+required_fields = ["ok", "data.traces", "data.time.time_present", "data.time.monotonic", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.time.time_present", "data.time.monotonic", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.history-stats"
+required_fields = ["ok", "data.stats", "data.seeded.total", "data.seeded.queued", "data.seeded.actor_count", "data.seeded.actor", "data.seeded.seed_matches", "data.alias_matches", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.seeded.seed_matches", "data.alias_matches", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas]]
+operation_family = "queue"
+required_fields = ["ok", "data.row"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["exact.queue-add"]
+error_cases = ["exact.queue-cancel"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.queue-add"
+required_fields = ["ok", "data.row.run_id", "data.row.run_id_matches_expected", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.row.run_id_matches_expected", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.queue-cancel"
+required_fields = ["ok", "data.row.run_id", "data.row.run_id_matches_expected", "data.state.cancelled", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.row.run_id_matches_expected", "data.state.cancelled", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.queue-dead-letter"
+required_fields = ["ok", "data.row.run_id", "data.row.run_id_matches_expected", "data.state.dead_letter", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.row.run_id_matches_expected", "data.state.dead_letter", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas]]
+operation_family = "env"
+required_fields = ["ok", "data.envs"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["exact.env-list"]
+error_cases = ["exact.env-create"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-list"
+required_fields = ["ok", "data.envs", "data.state.success", "data.state.names_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.state.success", "data.state.names_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-create"
+required_fields = ["ok", "data.params", "data.postcondition.target_identity", "data.postcondition.params_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.postcondition.target_identity", "data.postcondition.params_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-show"
+required_fields = ["ok", "data.params", "data.postcondition.target_identity", "data.postcondition.params_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.postcondition.target_identity", "data.postcondition.params_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-replace"
+required_fields = ["ok", "data.params", "data.postcondition.target_identity", "data.postcondition.params_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.postcondition.target_identity", "data.postcondition.params_match", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-set"
+required_fields = ["ok", "data.params", "data.route.patch_exercised", "data.route.put_exercised", "data.postcondition.target_identity", "data.postcondition.params_match", "data.postcondition.patch_applied", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.auth.put_unauthenticated_rejected", "data.auth.put_forbidden_rejected"]
+invariant_fields = ["data.route.patch_exercised", "data.route.put_exercised", "data.postcondition.target_identity", "data.postcondition.params_match", "data.postcondition.patch_applied", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.auth.put_unauthenticated_rejected", "data.auth.put_forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-remove"
+required_fields = ["ok", "data.params", "data.postcondition.target_identity", "data.postcondition.params_match", "data.postcondition.removed", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.postcondition.target_identity", "data.postcondition.params_match", "data.postcondition.removed", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-activate"
+required_fields = ["ok", "data.state.target_identity", "data.state.target_active", "data.state.other_inactive", "data.postcondition.target_identity", "data.postcondition.active", "data.postcondition.other_inactive", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.state.target_active", "data.state.other_inactive", "data.postcondition.target_identity", "data.postcondition.active", "data.postcondition.other_inactive", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-deactivate"
+required_fields = ["ok", "data.state.active_count", "data.state.deactivated", "data.postcondition.target_identity", "data.postcondition.all_inactive", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.state.deactivated", "data.postcondition.target_identity", "data.postcondition.all_inactive", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.env-delete"
+required_fields = ["ok", "data.deleted", "data.postcondition.target_identity", "data.postcondition.deleted", "data.postcondition.other_preserved", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+invariant_fields = ["data.deleted", "data.postcondition.target_identity", "data.postcondition.deleted", "data.postcondition.other_preserved", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected"]
+
+[[schemas]]
+operation_family = "battery"
+required_fields = ["ok", "data.identity.name"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["exact.battery-list"]
+error_cases = ["mismatch.battery-add"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.battery-list"
+required_fields = ["ok", "data.batteries", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.registered", "data.state.count"]
+invariant_fields = ["data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.registered"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.battery-inspect"
+required_fields = ["ok", "data.identity.name", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.synced"]
+invariant_fields = ["data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.synced"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.battery-scripts"
+required_fields = ["ok", "data.identity.name", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.synced", "data.state.script_count"]
+invariant_fields = ["data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.synced"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.battery-remove"
+required_fields = ["ok", "data.identity.name", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.removed", "data.state.cache_removed"]
+invariant_fields = ["data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.removed", "data.state.cache_removed"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.battery-add"
+required_fields = ["ok", "data.identity.name", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.source_exercised", "data.state.registry_absent", "data.state.list_absent", "mismatch.https_only_rejected"]
+invariant_fields = ["data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.source_exercised", "data.state.registry_absent", "data.state.list_absent", "mismatch.https_only_rejected"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.battery-sync"
+required_fields = ["ok", "data.identity.name", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.source_exercised", "data.state.synced", "data.state.cache_git_head_verified", "data.state.registry_sync_state_verified"]
+invariant_fields = ["data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.source_exercised", "data.state.synced", "data.state.cache_git_head_verified", "data.state.registry_sync_state_verified"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.battery-install"
+required_fields = ["ok", "data.identity.name", "data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.source_exercised", "data.state.installed", "data.state.cache_git_head_verified", "data.state.registry_sync_state_verified", "data.state.script_content_verified"]
+invariant_fields = ["data.auth.unauthenticated_rejected", "data.auth.forbidden_rejected", "data.state.source_exercised", "data.state.installed", "data.state.cache_git_head_verified", "data.state.registry_sync_state_verified", "data.state.script_content_verified"]
+[[schemas]]
+operation_family = "node"
+required_fields = ["ok", "data.initialized"]
+allowed_normalizations = ["envelope", "generated-id", "map-key-order"]
+success_cases = ["exact.node-init"]
+error_cases = ["mismatch.node-discovery"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-init"
+required_fields = ["ok", "result_kind", "data.initialized", "data.identity_present"]
+invariant_fields = ["data.initialized", "data.identity_present"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-status"
+required_fields = ["ok", "data.initialized", "data.identity_present", "data.trust"]
+invariant_fields = ["ok"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-peers"
+required_fields = ["ok", "payload_present"]
+invariant_fields = ["ok", "payload_present"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-trust"
+required_fields = ["ok", "data.state", "data.role", "data.capabilities", "data.source"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-capabilities"
+required_fields = ["ok", "data.state", "data.capabilities"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-revoke"
+required_fields = ["ok", "data.state", "data.cleanup_pending"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-health"
+required_fields = ["ok", "payload_present", "data.local_node_id"]
+invariant_fields = ["ok", "payload_present"]
+generated_id_fields = ["data.local_node_id"]
+[[schemas.case_requirements]]
+behavior_case = "exact.node-signals"
+required_fields = ["ok", "payload_present", "data.local_node_id"]
+invariant_fields = ["ok", "payload_present"]
+generated_id_fields = ["data.local_node_id"]
+[[schemas.case_requirements]]
+behavior_case = "mismatch.node-discovery"
+required_fields = ["ok", "data.enabled", "data.listening", "data.candidate_count", "data.accepted_datagrams", "http_status"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.node-cue"
+required_fields = ["ok", "error.code", "http_status"]
+
+[[schemas]]
+operation_family = "node baseline"
+required_fields = ["ok", "data.accepted"]
+allowed_normalizations = ["envelope", "generated-id", "map-key-order"]
+success_cases = ["exact.node-baseline-push"]
+error_cases = ["exact.node-baseline-rollback"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-baseline-push"
+required_fields = ["ok", "data.accepted", "data.baseline_id", "data.peer_state"]
+generated_id_fields = ["data.baseline_id"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-baseline-rollback"
+required_fields = ["ok", "result_kind", "data.baseline_id", "data.accepted", "data.content_match", "data.files_restored"]
+invariant_fields = ["data.accepted", "data.content_match", "data.files_restored"]
+
+[[schemas]]
+operation_family = "node enroll"
+required_fields = ["ok", "data.state"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["exact.node-enroll-approve"]
+error_cases = ["exact.node-enroll-reject"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-enroll-approve"
+required_fields = ["ok", "data.state", "data.role", "data.source"]
+
+[[schemas.case_requirements]]
+behavior_case = "exact.node-enroll-reject"
+required_fields = ["ok", "data.state", "data.role", "data.source"]
+
+[[schemas]]
+operation_family = "node enroll request"
+required_fields = ["ok", "data.state"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["mismatch.node-enroll-request"]
+error_cases = ["mismatch.node-enroll-request"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.node-enroll-request"
+required_fields = ["ok", "data.state", "data.source", "data.node_id", "http_status"]
+
+[[schemas]]
+operation_family = "node enroll apply"
+required_fields = ["ok", "data.state"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["mismatch.node-enroll-apply"]
+error_cases = ["mismatch.node-enroll-apply"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.node-enroll-apply"
+required_fields = ["ok", "data.state", "data.role", "data.source", "data.target_binding_verified", "http_status"]
+invariant_fields = ["data.target_binding_verified"]
+
+[[schemas]]
+operation_family = "config"
+required_fields = ["ok", "result.active_env"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["mismatch.config"]
+error_cases = ["mismatch.config"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.config"
+required_fields = ["ok", "result.active_env", "result.active_env_keys", "redaction.cli_secret_visible", "redaction.http_secret_masked", "redaction.http_secret_not_leaked", "state.requested_environment_active", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized", "auth.actors.unauthenticated", "auth.actors.forbidden", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+invariant_fields = ["redaction.cli_secret_visible", "redaction.http_secret_masked", "redaction.http_secret_not_leaked", "state.requested_environment_active", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+
+[[schemas]]
+operation_family = "search"
+required_fields = ["ok", "result.matches"]
+allowed_normalizations = ["envelope", "map-key-order"]
+success_cases = ["mismatch.search"]
+error_cases = ["mismatch.search"]
+actors = ["authorized", "unauthenticated", "forbidden"]
+
+[[schemas.case_requirements]]
+behavior_case = "mismatch.search"
+required_fields = ["ok", "result.matches", "state.cli_refreshed", "state.http_stale", "ordering.cli_sorted", "pagination.query_cli_accepted", "pagination.query_http_rejected", "pagination.tags_cli_accepted", "pagination.tags_http_rejected", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized", "auth.actors.unauthenticated", "auth.actors.forbidden", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+invariant_fields = ["state.cli_refreshed", "state.http_stale", "ordering.cli_sorted", "pagination.query_cli_accepted", "pagination.query_http_rejected", "pagination.tags_cli_accepted", "pagination.tags_http_rejected", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+[[entries]]
+entry_id = "doctor"
+class = "exact"
+operation_family = "doctor"
+behavior_case = "exact.doctor"
+docs_anchor = "doctor"
+cli_ids = ["doctor"]
+http_ids = ["GET /v1/doctor"]
+
+[[entries]]
+entry_id = "scripts"
+class = "exact"
+operation_family = "scripts"
+behavior_case = "exact.scripts"
+docs_anchor = "scripts"
+cli_ids = ["scripts"]
+http_ids = ["GET /v1/scripts"]
+
+[[entries]]
+entry_id = "describe"
+class = "exact"
+operation_family = "describe"
+behavior_case = "exact.describe"
+docs_anchor = "describe"
+cli_ids = ["describe"]
+http_ids = ["GET /v1/scripts/:script_id"]
+
+[[entries]]
+entry_id = "history-list"
+class = "exact"
+operation_family = "history"
+behavior_case = "exact.history-list"
+docs_anchor = "history-list"
+cli_ids = ["history list"]
+http_ids = ["GET /v1/runs"]
+
+[[entries]]
+entry_id = "history-show"
+class = "exact"
+operation_family = "history"
+behavior_case = "exact.history-show"
+docs_anchor = "history-show"
+cli_ids = ["history show"]
+http_ids = ["GET /v1/runs/:run_id"]
+
+[[entries]]
+entry_id = "history-traces"
+class = "exact"
+operation_family = "history"
+behavior_case = "exact.history-traces"
+docs_anchor = "history-traces"
+cli_ids = ["history traces"]
+http_ids = ["GET /v1/runs/:run_id/traces"]
+
+[[entries]]
+entry_id = "history-stats"
+class = "exact"
+operation_family = "history"
+behavior_case = "exact.history-stats"
+docs_anchor = "history-stats"
+cli_ids = ["history stats", "queue stats"]
+http_ids = ["GET /v1/queue/stats"]
+
+
+[[entries]]
+entry_id = "queue-add"
+class = "exact"
+operation_family = "queue"
+behavior_case = "exact.queue-add"
+docs_anchor = "queue-add"
+cli_ids = ["queue add"]
+http_ids = ["POST /v1/runs"]
+
+[[entries]]
+entry_id = "queue-cancel"
+class = "exact"
+operation_family = "queue"
+behavior_case = "exact.queue-cancel"
+docs_anchor = "queue-cancel"
+cli_ids = ["queue cancel"]
+http_ids = ["POST /v1/runs/:run_id/cancel"]
+
+[[entries]]
+entry_id = "queue-dead-letter"
+class = "exact"
+operation_family = "queue"
+behavior_case = "exact.queue-dead-letter"
+docs_anchor = "queue-dead-letter"
+cli_ids = ["queue dead-letter"]
+http_ids = ["POST /v1/runs/:run_id/dead-letter"]
+
+[[entries]]
+entry_id = "env-list"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-list"
+docs_anchor = "env-list"
+cli_ids = ["env list"]
+http_ids = ["GET /v1/envs"]
+
+[[entries]]
+entry_id = "env-create"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-create"
+docs_anchor = "env-create"
+cli_ids = ["env create"]
+http_ids = ["POST /v1/envs"]
+
+[[entries]]
+entry_id = "env-show"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-show"
+docs_anchor = "env-show"
+cli_ids = ["env show"]
+http_ids = ["GET /v1/envs/:name"]
+
+[[entries]]
+entry_id = "env-replace"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-replace"
+docs_anchor = "env-replace"
+cli_ids = ["env replace"]
+http_ids = ["PUT /v1/envs/:name"]
+
+[[entries]]
+entry_id = "env-set"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-set"
+docs_anchor = "env-set"
+cli_ids = ["env set"]
+http_ids = ["PATCH /v1/envs/:name", "PUT /v1/envs/:name/params/:key"]
+
+[[entries]]
+entry_id = "env-remove"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-remove"
+docs_anchor = "env-remove"
+cli_ids = ["env remove"]
+http_ids = ["DELETE /v1/envs/:name/params/:key"]
+
+[[entries]]
+entry_id = "env-activate"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-activate"
+docs_anchor = "env-activate"
+cli_ids = ["env activate"]
+http_ids = ["POST /v1/envs/:name/activate"]
+
+[[entries]]
+entry_id = "env-deactivate"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-deactivate"
+docs_anchor = "env-deactivate"
+cli_ids = ["env deactivate"]
+http_ids = ["DELETE /v1/envs/active"]
+
+[[entries]]
+entry_id = "env-delete"
+class = "exact"
+operation_family = "env"
+behavior_case = "exact.env-delete"
+docs_anchor = "env-delete"
+cli_ids = ["env delete"]
+http_ids = ["DELETE /v1/envs/:name"]
+
+[[entries]]
+entry_id = "battery-list"
+class = "exact"
+operation_family = "battery"
+behavior_case = "exact.battery-list"
+docs_anchor = "battery-list"
+cli_ids = ["battery list"]
+http_ids = ["GET /v1/batteries"]
+
+[[entries]]
+entry_id = "battery-inspect"
+class = "exact"
+operation_family = "battery"
+behavior_case = "exact.battery-inspect"
+docs_anchor = "battery-inspect"
+cli_ids = ["battery inspect"]
+http_ids = ["GET /v1/batteries/:battery_id"]
+
+[[entries]]
+entry_id = "battery-scripts"
+class = "exact"
+operation_family = "battery"
+behavior_case = "exact.battery-scripts"
+docs_anchor = "battery-scripts"
+cli_ids = ["battery scripts"]
+http_ids = ["GET /v1/batteries/:battery_id/scripts"]
+
+[[entries]]
+entry_id = "battery-remove"
+class = "exact"
+operation_family = "battery"
+behavior_case = "exact.battery-remove"
+docs_anchor = "battery-remove"
+cli_ids = ["battery remove"]
+http_ids = ["DELETE /v1/batteries/:battery_id"]
+
+[[entries]]
+entry_id = "node-init"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-init"
+docs_anchor = "node-init"
+cli_ids = ["node init"]
+http_ids = ["POST /v1/node/init"]
+
+[[entries]]
+entry_id = "node-status"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-status"
+docs_anchor = "node-status"
+cli_ids = ["node status"]
+http_ids = ["GET /v1/node/status"]
+
+[[entries]]
+entry_id = "node-peers"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-peers"
+docs_anchor = "node-peers"
+cli_ids = ["node peers"]
+http_ids = ["GET /v1/node/peers"]
+
+[[entries]]
+entry_id = "node-trust"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-trust"
+docs_anchor = "node-trust"
+cli_ids = ["node trust"]
+http_ids = ["POST /v1/node/peers"]
+
+[[entries]]
+entry_id = "node-capabilities"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-capabilities"
+docs_anchor = "node-capabilities"
+cli_ids = ["node capabilities"]
+http_ids = ["PATCH /v1/node/peers/:node_id/capabilities"]
+
+[[entries]]
+entry_id = "node-revoke"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-revoke"
+docs_anchor = "node-revoke"
+cli_ids = ["node revoke"]
+http_ids = ["POST /v1/node/peers/:node_id/revoke"]
+
+[[entries]]
+entry_id = "node-health"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-health"
+docs_anchor = "node-health"
+cli_ids = ["node health"]
+http_ids = ["GET /v1/node/health"]
+
+[[entries]]
+entry_id = "node-signals"
+class = "exact"
+operation_family = "node"
+behavior_case = "exact.node-signals"
+docs_anchor = "node-signals"
+cli_ids = ["node signals"]
+http_ids = ["GET /v1/node/signals"]
+
+[[entries]]
+entry_id = "node-baseline-push"
+class = "exact"
+operation_family = "node baseline"
+behavior_case = "exact.node-baseline-push"
+docs_anchor = "node-baseline-push"
+cli_ids = ["node baseline push"]
+http_ids = ["POST /v1/node/baselines"]
+
+[[entries]]
+entry_id = "node-baseline-rollback"
+class = "exact"
+operation_family = "node baseline"
+behavior_case = "exact.node-baseline-rollback"
+docs_anchor = "node-baseline-rollback"
+cli_ids = ["node baseline rollback"]
+http_ids = ["POST /v1/node/baseline/rollback"]
+
+[[entries]]
+entry_id = "node-enroll-approve"
+class = "exact"
+operation_family = "node enroll"
+behavior_case = "exact.node-enroll-approve"
+docs_anchor = "node-enroll-approve"
+cli_ids = ["node enroll approve"]
+http_ids = ["POST /v1/node/enrollments/:node_id/approve"]
+
+[[entries]]
+entry_id = "node-enroll-reject"
+class = "exact"
+operation_family = "node enroll"
+behavior_case = "exact.node-enroll-reject"
+docs_anchor = "node-enroll-reject"
+cli_ids = ["node enroll reject"]
+http_ids = ["POST /v1/node/enrollments/:node_id/reject"]
+
+[[entries]]
+entry_id = "config"
+class = "semantic-mismatch"
+operation_family = "config"
+behavior_case = "mismatch.config"
+docs_anchor = "config"
+cli_ids = ["config"]
+http_ids = ["GET /v1/config"]
+[entries.semantic_difference]
+kind = "config-redaction"
+cli_behavior = "CLI returns active environment values; HTTP redacts values"
+http_behavior = "HTTP returns redacted values."
+
+[[entries]]
+entry_id = "search"
+class = "semantic-mismatch"
+operation_family = "search"
+behavior_case = "mismatch.search"
+docs_anchor = "search"
+cli_ids = ["search"]
+http_ids = ["GET /v1/search"]
+[entries.semantic_difference]
+kind = "search-refresh-limits"
+cli_behavior = "CLI refreshes its local index; HTTP uses the existing index and bounds query/tag input"
+http_behavior = "HTTP does not refresh and applies stricter limits."
+
+[[entries]]
+entry_id = "battery-add"
+class = "semantic-mismatch"
+operation_family = "battery"
+behavior_case = "mismatch.battery-add"
+docs_anchor = "battery-add"
+cli_ids = ["battery add"]
+http_ids = ["POST /v1/batteries"]
+[entries.semantic_difference]
+kind = "battery-https-policy"
+cli_behavior = "CLI accepts local/SSH sources; HTTP permits HTTPS sources only"
+http_behavior = "HTTP rejects non-HTTPS sources."
+
+[[entries]]
+entry_id = "battery-sync"
+class = "semantic-mismatch"
+operation_family = "battery"
+behavior_case = "mismatch.battery-sync"
+docs_anchor = "battery-sync"
+cli_ids = ["battery sync"]
+http_ids = ["POST /v1/batteries/:battery_id/sync"]
+[entries.semantic_difference]
+kind = "battery-https-policy"
+cli_behavior = "CLI can use configured source transports; HTTP sync is HTTPS-only"
+http_behavior = "HTTP enforces HTTPS transport policy."
+
+[[entries]]
+entry_id = "battery-install"
+class = "semantic-mismatch"
+operation_family = "battery"
+behavior_case = "mismatch.battery-install"
+docs_anchor = "battery-install"
+cli_ids = ["battery install"]
+http_ids = ["POST /v1/batteries/:battery_id/scripts/:script_id/install"]
+[entries.semantic_difference]
+kind = "battery-https-policy"
+cli_behavior = "CLI install is local and Unix-capable; HTTP is authenticated operator initiation"
+http_behavior = "HTTP adds route authentication and lifecycle limits."
+
+[[entries]]
+entry_id = "node-discovery"
+class = "semantic-mismatch"
+operation_family = "node"
+behavior_case = "mismatch.node-discovery"
+docs_anchor = "node-discovery"
+cli_ids = ["node discovery"]
+http_ids = ["GET /v1/node/discovery"]
+[entries.semantic_difference]
+kind = "discovery-snapshot"
+cli_behavior = "CLI performs a fresh bounded LAN scan"
+http_behavior = "HTTP returns the service live in-memory snapshot."
+
+[[entries]]
+entry_id = "node-cue"
+class = "semantic-mismatch"
+operation_family = "node"
+behavior_case = "mismatch.node-cue"
+docs_anchor = "node-cue"
+cli_ids = ["node cue"]
+http_ids = ["POST /v1/node/cues"]
+[entries.semantic_difference]
+kind = "cue-session"
+cli_behavior = "CLI may dial directly or use the running service session"
+http_behavior = "HTTP dispatches only over the held service session."
+
+[[entries]]
+entry_id = "node-enroll-request"
+class = "semantic-mismatch"
+operation_family = "node enroll request"
+behavior_case = "mismatch.node-enroll-request"
+docs_anchor = "node-enroll-request"
+cli_ids = ["node enroll request"]
+http_ids = ["POST /v1/node/enrollments"]
+[entries.semantic_difference]
+kind = "enroll-stage-dial"
+cli_behavior = "CLI creates and dials a request directly"
+http_behavior = "HTTP stages the request for the service transport."
+
+[[entries]]
+entry_id = "http-node-enrollments"
+class = "http-only"
+operation_family = "node enrollments"
+docs_anchor = "http-node-enrollments"
+http_ids = ["GET /v1/node/enrollments"]
+rationale = "HTTP-only pending enrollment listing."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route lists service-managed pending enrollments, not a CLI leaf."
+[[entries]]
+entry_id = "node-enroll-apply"
+class = "semantic-mismatch"
+operation_family = "node enroll apply"
+behavior_case = "mismatch.node-enroll-apply"
+docs_anchor = "node-enroll-apply"
+cli_ids = ["node enroll apply"]
+http_ids = ["POST /v1/node/enrollment/bundle"]
+[entries.semantic_difference]
+kind = "enroll-token-source"
+cli_behavior = "CLI reads a local bootstrap token file"
+http_behavior = "HTTP receives the one-time token through the authenticated request flow."
+
+[[entries]]
+entry_id = "http-health"
+class = "http-only"
+operation_family = "health"
+docs_anchor = "http-health"
+http_ids = ["GET /v1/health"]
+rationale = "HTTP-only liveness."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route describes or controls running service state, not a CLI leaf."
+
+[[entries]]
+entry_id = "http-ready"
+class = "http-only"
+operation_family = "ready"
+docs_anchor = "http-ready"
+http_ids = ["GET /v1/ready"]
+rationale = "HTTP-only readiness."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route describes or controls running service state, not a CLI leaf."
+
+[[entries]]
+entry_id = "http-admin-status"
+class = "http-only"
+operation_family = "admin-status"
+docs_anchor = "http-admin-status"
+http_ids = ["GET /v1/admin/status"]
+rationale = "HTTP-only admin process status."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route describes or controls running service state, not a CLI leaf."
+
+[[entries]]
+entry_id = "http-workspace"
+class = "http-only"
+operation_family = "workspace"
+docs_anchor = "http-workspace"
+http_ids = ["GET /v1/workspace"]
+rationale = "HTTP-only service workspace metadata."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route describes or controls running service state, not a CLI leaf."
+
+[[entries]]
+entry_id = "http-tree-root"
+class = "http-only"
+operation_family = "tree-root"
+docs_anchor = "http-tree-root"
+http_ids = ["GET /v1/tree"]
+rationale = "HTTP-only safe script tree browsing."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route describes or controls running service state, not a CLI leaf."
+
+[[entries]]
+entry_id = "http-tree-path"
+class = "http-only"
+operation_family = "tree-path"
+docs_anchor = "http-tree-path"
+http_ids = ["GET /v1/tree/:path"]
+rationale = "HTTP-only safe script tree browsing."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route describes or controls running service state, not a CLI leaf."
+
+[[entries]]
+entry_id = "http-secrets"
+class = "http-only"
+operation_family = "secrets"
+docs_anchor = "http-secrets"
+http_ids = ["GET /v1/secrets"]
+rationale = "HTTP-only secret metadata only."
+[entries.adapter_only]
+auth = "Route authentication and capability policy are owned by the service."
+lifecycle = "The route describes or controls running service state, not a CLI leaf."
+
+[[entries]]
+entry_id = "cli-api"
+class = "cli-only"
+operation_family = "api"
+docs_anchor = "cli-api"
+cli_ids = ["api"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-completion"
+class = "cli-only"
+operation_family = "completion"
+docs_anchor = "cli-completion"
+cli_ids = ["completion"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-help-ai"
+class = "cli-only"
+operation_family = "help-ai"
+docs_anchor = "cli-help-ai"
+cli_ids = ["help-ai"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-history-tail"
+class = "cli-only"
+operation_family = "history.tail"
+docs_anchor = "cli-history-tail"
+cli_ids = ["history tail"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-init"
+class = "cli-only"
+operation_family = "init"
+docs_anchor = "cli-init"
+cli_ids = ["init"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-authority-create"
+class = "cli-only"
+operation_family = "node.authority.create"
+docs_anchor = "cli-node-authority-create"
+cli_ids = ["node authority create"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-authority-issue"
+class = "cli-only"
+operation_family = "node.authority.issue"
+docs_anchor = "cli-node-authority-issue"
+cli_ids = ["node authority issue"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-authority-show"
+class = "cli-only"
+operation_family = "node.authority.show"
+docs_anchor = "cli-node-authority-show"
+cli_ids = ["node authority show"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-baseline-create-key"
+class = "cli-only"
+operation_family = "node.baseline.create-key"
+docs_anchor = "cli-node-baseline-create-key"
+cli_ids = ["node baseline create-key"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-baseline-publish"
+class = "cli-only"
+operation_family = "node.baseline.publish"
+docs_anchor = "cli-node-baseline-publish"
+cli_ids = ["node baseline publish"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-direct-probe"
+class = "cli-only"
+operation_family = "node.direct-probe"
+docs_anchor = "cli-node-direct-probe"
+cli_ids = ["node direct-probe"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-reset"
+class = "cli-only"
+operation_family = "node.reset"
+docs_anchor = "cli-node-reset"
+cli_ids = ["node reset"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-node-serve"
+class = "cli-only"
+operation_family = "node.serve"
+docs_anchor = "cli-node-serve"
+cli_ids = ["node serve"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-queue-worker"
+class = "cli-only"
+operation_family = "queue.worker"
+docs_anchor = "cli-queue-worker"
+cli_ids = ["queue worker"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-run"
+class = "cli-only"
+operation_family = "run"
+docs_anchor = "cli-run"
+cli_ids = ["run"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-serve"
+class = "cli-only"
+operation_family = "serve"
+docs_anchor = "cli-serve"
+cli_ids = ["serve"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-token-generate"
+class = "cli-only"
+operation_family = "token.generate"
+docs_anchor = "cli-token-generate"
+cli_ids = ["token generate"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-trace"
+class = "cli-only"
+operation_family = "trace"
+docs_anchor = "cli-trace"
+cli_ids = ["trace"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-uninstall"
+class = "cli-only"
+operation_family = "uninstall"
+docs_anchor = "cli-uninstall"
+cli_ids = ["uninstall"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."
+
+[[entries]]
+entry_id = "cli-update"
+class = "cli-only"
+operation_family = "update"
+docs_anchor = "cli-update"
+cli_ids = ["update"]
+rationale = "CLI-only local lifecycle or trust operation."
+[entries.adapter_only]
+auth = "No HTTP route exposes this local operator capability."
+lifecycle = "The operation runs in the invoking CLI process or controls its host lifecycle."

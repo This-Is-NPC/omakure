@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+runner="$root/scripts/tasks/atomic/test-target"
+for target in node_service_e2e http_api_e2e cli_surface_e2e policy_e2e; do
+  "$runner" "$target" "$@"
+done

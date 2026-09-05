@@ -1,68 +1,157 @@
 [tools]
-# PowerShell is deliberately not pinned. It is optional in the product --
-# `.ps1` is one of four script kinds and the node reports it unavailable
-# when absent -- and pinning "latest" resolved to a preview build that
-# aborts on every invocation, which the runtime probe then spawned once
-# per node process. Add a specific working version here if you need to
-# run `.ps1` scripts locally.
 rust = "1.97.1"
-
-[tasks.dev]
-description = "Build and run the bounded node-service smoke check"
-run = "./.scripts/dev-daemon.sh"
+## The coverage task performs its own explicitly pinned, cached Cargo install
+## only when `mise run coverage` is requested; offline tasks do not resolve it.
+[task_config]
+# Only repository automation is task-discoverable; fixtures, installers, and
+# the debug workspace remain outside mise's task search path.
+includes = ["scripts/tasks"]
 
 [tasks.node]
 description = "Run the authenticated machine node service in the foreground"
-run = "OMAKURE_API_TOKEN=\"$(openssl rand -hex 32)\" cargo run --bin omakure -- node serve --workers 1 --capability all"
+run = "scripts/tasks/atomic/node-serve"
+raw = true
 
-[tasks.node-service-check]
+[tasks.dev]
+description = "Run the bounded node-service smoke check"
+run = "scripts/tasks/atomic/dev-smoke"
+
+[tasks."test:node-service"]
 description = "Run node-service, CLI, HTTP, and policy integration checks"
-run = "cargo test --test node_service_e2e --test http_api_e2e --test cli_surface_e2e --test policy_e2e"
+run = "scripts/tasks/suite/test-node-service"
 
-[tasks.transport-certification]
-description = "Run the complete bounded Linux transport certification and cleanup matrix"
-run = "./.scripts/transport-certification.sh"
+[tasks."test:unit"]
+description = "Run library and unit tests"
+run = "scripts/tasks/suite/test-unit"
 
-[tasks.transport-certification-cleanup-test]
-description = "Verify certification cleanup after an induced failure"
-run = "./.scripts/transport-certification-cleanup-test.sh"
+[tasks."test:integration"]
+description = "Run integration tests excluding live certification gates"
+run = "scripts/tasks/suite/test-integration"
 
-[tasks.health-plane-certification]
-description = "Run the complete bounded Linux Health Plane certification"
-run = "./.scripts/health-plane-certification.sh"
+[tasks."test:e2e"]
+description = "Run the end-to-end test suites"
+run = "scripts/tasks/suite/test-e2e"
 
-[tasks.health-plane-certification-cleanup-test]
-description = "Verify Health Plane certification cleanup after induced failure and interrupt"
-run = "./.scripts/health-plane-certification-cleanup-test.sh"
+[tasks.test]
+description = "Run the unit, integration, and end-to-end test groups"
+run = "scripts/tasks/suite/native-tests"
+
+[tasks."test:overlay-fs"]
+description = "re-run install-then-exec lib tests with TMPDIR on overlayfs (GHA runner FS)"
+run = "scripts/tasks/atomic/overlay-fs-lib"
+
+[tasks."lint:fmt"]
+description = "Check Rust formatting"
+run = "scripts/tasks/atomic/fmt"
+
+[tasks."lint:clippy"]
+description = "Run Clippy with warnings denied"
+run = "scripts/tasks/atomic/clippy"
+
+[tasks.lint]
+description = "Run formatting and Clippy checks"
+run = "scripts/tasks/suite/lint"
 
 [tasks.build]
 description = "Build the project in debug mode"
-run = "cargo build"
+run = "scripts/tasks/atomic/build-debug"
+sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
+outputs = ["target/debug/omakure"]
 
-[tasks.test]
-description = "Run all tests"
-run = "cargo test"
+[tasks."build:release"]
+description = "Build the release binary"
+run = "scripts/tasks/atomic/build-release"
+sources = ["Cargo.toml", "Cargo.lock", "src/**/*.rs", "build.rs"]
+outputs = ["target/release/omakure"]
 
-[tasks.lint]
-description = "Run clippy and check formatting"
-run = ["cargo clippy --all-targets -- -D warnings", "cargo fmt --check"]
+[tasks."usage:kdl"]
+description = "Generate or check the pinned Clap-to-Usage KDL compatibility artifacts"
+run = "scripts/tasks/atomic/usage-kdl"
+
+[tasks."usage:docs"]
+description = "Generate or check deterministic Markdown and roff Usage documentation"
+run = "scripts/tasks/atomic/usage-docs"
+
+[tasks."operation:catalog"]
+description = "Generate or check the operation catalog artifacts"
+run = "scripts/tasks/atomic/operation-catalog"
 
 [tasks.install]
-description = "Install omakure locally"
-run = "cargo install --path ."
+description = "Install omakure locally (mutates the user installation prefix)"
+run = "scripts/install/install-from-source.sh"
 
 [tasks.coverage]
-description = "Run tests with tarpaulin and generate HTML coverage report"
-run = "cargo tarpaulin --out Html --exclude-files 'src/installer.rs' 'src/app_meta.rs' 'src/main.rs' 'src/cli/trace.rs' 'src/cli/doctor.rs' 'src/cli/uninstall.rs' 'src/cli/update.rs' --skip-clean"
+description = "Generate deterministic LLVM HTML, LCOV, and Cobertura reports and enforce the baseline"
+run = "scripts/tasks/atomic/coverage"
 
-[tasks.vm-privilege-certification-static]
-description = "Validate the Fedora VM privilege certification harness and fixed policy fixtures"
-run = "./.scripts/fedora-vm-privilege-certification-static-test.sh"
+[tasks."coverage:test"]
+description = "Run offline coverage threshold and inventory fixtures"
+run = "scripts/tasks/atomic/coverage-contract"
 
-[tasks.vm-privilege-certification]
-description = "Run the manual KVM/libvirt Fedora privilege certification and clean up all run resources"
-run = "./.scripts/fedora-vm-privilege-certification-static-test.sh && timeout --foreground --kill-after=30s 30m ./.scripts/fedora-vm-privilege-certification.sh"
+[tasks."quality:complexity-setup"]
+description = "Explicitly acquire pinned complexity analyzers and verify SHA-256 digests"
+run = "scripts/tasks/complexity-setup"
 
-[tasks.vm-privilege-certification-cleanup]
-description = "Induce a Fedora VM certification failure and prove complete libvirt cleanup"
-run = "timeout --foreground --kill-after=30s 25m ./.scripts/fedora-vm-privilege-certification-cleanup-test.sh"
+[tasks."quality:complexity-report"]
+description = "Run the offline informational Rust complexity report"
+run = "scripts/tasks/atomic/complexity-report"
+
+[tasks."quality:complexity-gate"]
+description = "Enforce changed/new handwritten-function complexity and exception validity"
+run = "scripts/tasks/atomic/complexity-gate"
+
+[tasks."quality:complexity-gate-test"]
+description = "Validate changed-function boundaries, ratchet, and exception lifecycle"
+run = "scripts/tasks/complexity-gate-test"
+
+[tasks."quality:complexity-test"]
+description = "Validate complexity corpus repeatability and fail-closed guards"
+run = "scripts/tasks/complexity-test"
+
+[tasks."quality:complexity-setup-test"]
+description = "Validate native complexity setup mappings across supported hosts"
+run = "scripts/tasks/complexity-setup-test"
+
+[tasks."quality:complexity-soak-audit"]
+description = "Audit persisted native complexity evidence for the ten-run temporal gate"
+run = "scripts/tasks/atomic/complexity-soak-audit"
+
+[tasks."package:release"]
+description = "Package a built release binary into an archive"
+run = "scripts/tasks/suite/package-release"
+
+[tasks."cert:vm-static"]
+description = "Validate Fedora VM certification scripts and fixed policy fixtures"
+run = "scripts/tasks/atomic/vm-static"
+
+[tasks."cert:transport-cleanup"]
+description = "Verify transport certification cleanup after induced failure"
+run = "scripts/tasks/cert/transport-cleanup"
+
+[tasks."cert:health-cleanup"]
+description = "Verify Health Plane cleanup after failure and interrupt"
+run = "scripts/tasks/cert/health-cleanup"
+
+[tasks."cert:vm-cleanup"]
+description = "Verify Fedora VM certification cleanup after induced failures"
+run = "scripts/tasks/cert/vm-cleanup"
+
+[tasks."cert:vm"]
+description = "Run the Fedora VM privilege certification after static checks"
+run = "scripts/tasks/suite/cert-vm"
+
+[tasks.cert]
+description = "Run transport, Health Plane, and Fedora VM certification gates"
+run = "scripts/tasks/suite/cert"
+
+[tasks."check:fast"]
+description = "Run cheap formatting, static, contract, and library checks"
+run = "scripts/tasks/check/fast"
+
+[tasks."check:full"]
+description = "Run the complete locally executable Linux suite"
+run = "scripts/tasks/check/full"
+
+[tasks."hooks:install"]
+description = "Configure the repository's tracked Git hooks locally"
+run = "scripts/install/install-hooks.sh"

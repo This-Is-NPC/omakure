@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+export MISE_PROJECT_ROOT="$root"
+
+if [[ "$(uname -s)" != Linux ]]; then
+    printf 'atomic/overlay-fs-lib: skipped (not Linux)\n'
+    exit 0
+fi
+
+bounded="$root/scripts/tasks/atomic/run-bounded"
+[[ -x "$bounded" ]] || {
+    printf 'atomic/overlay-fs-lib: bounded runner is missing\n' >&2
+    exit 2
+}
+command -v cargo >/dev/null 2>&1 || {
+    printf 'atomic/overlay-fs-lib: cargo is required\n' >&2
+    exit 2
+}
+if ! command -v unshare >/dev/null 2>&1 || ! unshare --user --map-root-user true 2>/dev/null; then
+    printf 'atomic/overlay-fs-lib: skipped — overlay stress not run (user namespace unavailable via unshare --user --map-root-user; e.g. GitHub Actions ARM runner)\n'
+    exit 0
+fi
+
+overlay_base="$(mktemp -d)"
+trap 'rm -rf -- "$overlay_base"' EXIT
+
+lower="$overlay_base/lower"
+upper="$overlay_base/upper"
+work="$overlay_base/work"
+merged="$overlay_base/merged"
+mkdir -p "$lower" "$upper" "$work" "$merged"
+
+printf 'atomic/overlay-fs-lib: mounting overlay (TMPDIR=%s)\n' "$merged"
+# Generated executables (askpass scripts, test shims) stage on the first
+# executable tmpfs (XDG_RUNTIME_DIR, /dev/shm, TMPDIR), not on the overlay mount;
+# overlay TMPDIR remains the alarm for tempfile::tempdir()+exec leftovers.
+
+export OVL_LOWER="$lower" OVL_UPPER="$upper" OVL_WORK="$work" OVL_MERGED="$merged"
+export OVL_ROOT="$root" OVL_BOUNDED="$bounded"
+
+set +e
+unshare --user --map-root-user --mount bash -c '
+    set -euo pipefail
+    if ! mount -t overlay overlay \
+        -o "lowerdir=${OVL_LOWER}",upperdir="${OVL_UPPER}",workdir="${OVL_WORK}" \
+        "${OVL_MERGED}"; then
+        printf "atomic/overlay-fs-lib: overlay mount failed\n" >&2
+        exit 2
+    fi
+    export TMPDIR="${OVL_MERGED}"
+    cd "${OVL_ROOT}"
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked test_dependency_checks -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked git_askpass -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked test_build_command_resolves -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked test_spawn_of_file_open_for_write_is_etxtbsy -- --test-threads=32
+'
+status=$?
+set -e
+
+if ((status == 2)); then
+    printf 'atomic/overlay-fs-lib: overlay mount failed\n' >&2
+    exit 2
+fi
+if ((status != 0)); then
+    exit "$status"
+fi
+
+printf 'atomic/overlay-fs-lib: PASS\n'

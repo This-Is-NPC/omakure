@@ -169,7 +169,6 @@ mod tests {
         assert!(dir.join(".history").exists());
         assert!(dir.join("omakure.toml").exists());
         assert!(dir.join(".omakure").join("envs").exists());
-        assert!(!dir.join(".omaken").exists());
 
         let _ = fs::remove_dir_all(&dir);
     }

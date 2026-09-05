@@ -1,0 +1,21 @@
+schema_version = 1
+catalog_version = "1.0.0"
+
+[[operations]]
+operation_id = "op.queue-add"
+entry_id = "queue-add"
+plane = "domain"
+remote_eligibility = "control-execute"
+effect = "execute"
+mutability = "immutable"
+cli = ["queue add"]
+http = ["POST /v1/runs"]
+[operations.platforms.linux]
+supported = true
+reason = "fixture"
+[operations.platforms.macos]
+supported = true
+reason = "fixture"
+[operations.platforms.windows]
+supported = true
+reason = "fixture"

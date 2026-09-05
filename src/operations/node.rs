@@ -181,11 +181,11 @@ pub fn initialize_node(
     context: &NodeContext,
     config: &NodeConfig,
 ) -> OperationResult<NodeInitializationResult> {
-    let state_was_present = context
+    let lifecycle = context.acquire_lifecycle_lock().map_err(map_node_error)?;
+    context
         .validate_existing_state_directory()
         .map_err(map_node_error)?;
-    let _lifecycle = context.acquire_lifecycle_lock().map_err(map_node_error)?;
-    initialize_node_locked(context, config, state_was_present)
+    initialize_node_locked(context, config, lifecycle.state_was_present())
 }
 
 /// Initialize through an exposed control surface without waiting behind the
@@ -195,13 +195,13 @@ pub fn initialize_node_nonblocking(
     context: &NodeContext,
     config: &NodeConfig,
 ) -> OperationResult<NodeInitializationResult> {
-    let state_was_present = context
-        .validate_existing_state_directory()
-        .map_err(map_node_error)?;
-    let _lifecycle = context
+    let lifecycle = context
         .try_acquire_lifecycle_lock()
         .map_err(map_node_error)?;
-    initialize_node_locked(context, config, state_was_present)
+    context
+        .validate_existing_state_directory()
+        .map_err(map_node_error)?;
+    initialize_node_locked(context, config, lifecycle.state_was_present())
 }
 
 pub(crate) fn initialize_node_locked(
@@ -307,7 +307,7 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
     }
 
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
-    let registry = NodeRegistry::open_existing(context, identity.public_status())
+    let registry = NodeRegistry::open_health_observational(context, identity.public_status())
         .map_err(map_registry_error)?;
     let counts = registry.peer_counts().map_err(map_registry_error)?;
     Ok(NodeStatus {
@@ -331,6 +331,21 @@ pub fn reset_node(context: &NodeContext, confirmed: bool) -> OperationResult<Nod
             "explicit confirmation is required for node factory reset",
         ));
     }
+    let state_exists = match std::fs::symlink_metadata(context.state_dir()) {
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(map_node_error(error.into())),
+    };
+    if !state_exists {
+        return Ok(NodeResetResult {
+            state_removed: false,
+            trust_removed: false,
+            identity_removed: false,
+        });
+    }
+    let _lifecycle = context
+        .try_acquire_lifecycle_lock()
+        .map_err(map_node_error)?;
     if !context
         .validate_existing_state_directory()
         .map_err(map_node_error)?
@@ -341,9 +356,6 @@ pub fn reset_node(context: &NodeContext, confirmed: bool) -> OperationResult<Nod
             identity_removed: false,
         });
     }
-    let _lifecycle = context
-        .try_acquire_lifecycle_lock()
-        .map_err(map_node_error)?;
     let had_identity = path_is_present(&context.identity_path(), "identity.key")?;
     let had_registry = path_is_present(&context.database_path(), "node.sqlite")?;
     let removed = NodeIdentity::execute_factory_reset(context).map_err(map_identity_error)?;
@@ -1852,7 +1864,7 @@ mod tests {
 
     fn context(temp: &TempDir) -> NodeContext {
         NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),
@@ -2223,7 +2235,7 @@ mod tests {
     fn status_treats_missing_config_parent_as_uninitialized() {
         let temp = TempDir::new().unwrap();
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("missing/node.toml")),
@@ -2657,7 +2669,7 @@ mod tests {
         std::fs::write(&real_config, NodeConfig::default().to_toml().unwrap()).unwrap();
         symlink(&real_parent, &link_parent).unwrap();
         let linked_context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(context.state_dir().to_path_buf()),
                 Some(link_parent.join("node.toml")),

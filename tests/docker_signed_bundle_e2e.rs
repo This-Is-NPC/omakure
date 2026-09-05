@@ -45,7 +45,7 @@ fn compose_timeout(args: &[&str]) -> &'static str {
         COMPOSE_OPERATION_TIMEOUT
     }
 }
-const COMPOSE_FILE: &str = "compose.signed-bundle.e2e.yaml";
+const COMPOSE_FILE: &str = "ci/compose/compose.signed-bundle.e2e.yaml";
 
 fn compose_project() -> &'static str {
     static PROJECT: OnceLock<String> = OnceLock::new();

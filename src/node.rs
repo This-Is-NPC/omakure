@@ -236,10 +236,11 @@ impl PrivateTokenLease {
         {
             cleanup_required = true;
         }
-        #[cfg(all(test, not(windows)))]
+        #[cfg(test)]
         let delete_failed = private_token_fault(PrivateTokenFault::Delete);
-        #[cfg(not(all(test, not(windows))))]
+        #[cfg(not(test))]
         let delete_failed = false;
+        drop(self.file);
         let deleted = !delete_failed && fs::remove_file(&self.tombstone_path).is_ok();
         let directory_sync_failed = deleted
             && self
@@ -423,13 +424,13 @@ impl NodeContext {
             })?;
         let shared_config = config_parent == self.state_dir();
         if !shared_config {
-            ensure_safe_parent(config_parent)?;
+            ensure_safe_parent(config_parent, self.test_mode)?;
         }
 
         let state_dir_created = self.ensure_state_directory()?;
 
         if shared_config {
-            ensure_safe_parent(config_parent)?;
+            ensure_safe_parent(config_parent, self.test_mode)?;
         }
         let config_preexisting = !matches!(
             fs::symlink_metadata(self.config_path()),
@@ -514,7 +515,7 @@ impl NodeContext {
 
     /// Ensure the machine-owned state directory exists and is secure.
     pub(crate) fn ensure_state_directory(&self) -> Result<bool, NodeError> {
-        ensure_safe_parent(self.state_dir())?;
+        ensure_safe_parent(self.state_dir(), self.test_mode)?;
         let created = match fs::symlink_metadata(self.state_dir()) {
             Ok(metadata) => {
                 if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() {
@@ -587,7 +588,10 @@ impl NodeContext {
         }
         for entry in fs::read_dir(self.state_dir())? {
             let entry = entry?;
-            let metadata = fs::symlink_metadata(entry.path())?;
+            let metadata = match symlink_metadata_if_present(&entry.path())? {
+                Some(metadata) => metadata,
+                None => continue,
+            };
             let name = entry.file_name();
             let name = name.to_string_lossy();
             if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
@@ -700,7 +704,7 @@ impl NodeContext {
         path: &Path,
     ) -> Result<PrivateTokenLock, NodeError> {
         validate_absolute_path(self.platform, "private file", path, true)?;
-        ensure_safe_parent(path)?;
+        ensure_safe_parent(path, self.test_mode)?;
         let parent = path
             .parent()
             .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
@@ -736,7 +740,7 @@ impl NodeContext {
         max_bytes: usize,
     ) -> Result<Vec<PrivateTokenLease>, NodeError> {
         validate_absolute_path(self.platform, "private file", path, true)?;
-        ensure_safe_parent(path)?;
+        ensure_safe_parent(path, self.test_mode)?;
         let parent = path
             .parent()
             .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
@@ -771,7 +775,7 @@ impl NodeContext {
         max_bytes: usize,
     ) -> Result<OpenedPrivateFile, NodeError> {
         validate_absolute_path(self.platform, "private file", path, true)?;
-        ensure_safe_parent(path)?;
+        ensure_safe_parent(path, self.test_mode)?;
         let mut options = fs::OpenOptions::new();
         options.read(true);
         #[cfg(not(windows))]
@@ -822,7 +826,7 @@ impl NodeContext {
     /// reparse point, then validate the opened file's security metadata.
     pub(crate) fn open_public_file(&self) -> Result<Option<fs::File>, NodeError> {
         let path = self.config_path();
-        if !ensure_safe_parent_if_present(path)? {
+        if !ensure_safe_parent_if_present(path, self.test_mode)? {
             return Ok(None);
         }
         let mut options = fs::OpenOptions::new();
@@ -861,7 +865,7 @@ impl NodeContext {
             self.test_mode,
             0o640,
         )?;
-        if !ensure_safe_parent_if_present(path)? {
+        if !ensure_safe_parent_if_present(path, self.test_mode)? {
             return Err(NodeError::InsecurePath(format!(
                 "{} changed while it was being opened",
                 path.display()
@@ -884,62 +888,99 @@ impl NodeContext {
 /// or race a new service between deletion and cleanup.
 pub(crate) struct NodeLifecycleLock {
     file: fs::File,
+    state_was_present: bool,
 }
 
 impl NodeLifecycleLock {
     fn acquire(context: &NodeContext, nonblocking: bool) -> Result<Self, NodeError> {
-        context.ensure_state_directory()?;
+        let state_was_present = prepare_lifecycle_state(context)?;
         let path = context.state_dir().join(".node.lifecycle.lock");
-        let mut options = fs::OpenOptions::new();
-        options.read(true).write(true).create(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-        }
-        let file = match options.open(&path) {
-            Ok(file) => file,
-            Err(error)
-                if nonblocking
-                    && matches!(
-                        error.kind(),
-                        io::ErrorKind::WouldBlock | io::ErrorKind::PermissionDenied
-                    ) =>
-            {
-                return Err(NodeError::LifecycleBusy);
-            }
-            Err(error) => return Err(error.into()),
-        };
-        if fs::symlink_metadata(&path)?.file_type().is_symlink() {
-            return Err(NodeError::InsecurePath(
-                "node lifecycle lock is a symlink".to_string(),
-            ));
-        }
-        context.validate_private_file(&path)?;
-        let result = if nonblocking {
-            file.try_lock_exclusive()
-        } else {
-            file.lock_exclusive()
-        };
-        match result {
-            Ok(()) => Ok(Self { file }),
-            Err(error)
-                if nonblocking
-                    && matches!(
-                        error.kind(),
-                        io::ErrorKind::WouldBlock | io::ErrorKind::PermissionDenied
-                    ) =>
-            {
-                Err(NodeError::LifecycleBusy)
-            }
-            Err(error) => Err(error.into()),
-        }
+        let file = open_lifecycle_lock(context, &path, nonblocking)?;
+        let file = lock_lifecycle_file(file, nonblocking)?;
+        Ok(Self {
+            file,
+            state_was_present,
+        })
+    }
+
+    pub(crate) fn state_was_present(&self) -> bool {
+        self.state_was_present
+    }
+}
+
+fn prepare_lifecycle_state(context: &NodeContext) -> Result<bool, NodeError> {
+    let state_was_present = match fs::symlink_metadata(context.state_dir()) {
+        Ok(_) => true,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.into()),
+    };
+    context.ensure_state_directory()?;
+    Ok(state_was_present)
+}
+
+fn open_lifecycle_lock(
+    context: &NodeContext,
+    path: &Path,
+    nonblocking: bool,
+) -> Result<fs::File, NodeError> {
+    let mut options = fs::OpenOptions::new();
+    options.read(true).write(true).create(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| classify_lifecycle_lock_error(error, nonblocking))?;
+    if fs::symlink_metadata(path)?.file_type().is_symlink() {
+        return Err(NodeError::InsecurePath(
+            "node lifecycle lock is a symlink".to_string(),
+        ));
+    }
+    context.validate_private_file(path)?;
+    Ok(file)
+}
+
+fn lock_lifecycle_file(file: fs::File, nonblocking: bool) -> Result<fs::File, NodeError> {
+    let result = if nonblocking {
+        file.try_lock_exclusive()
+    } else {
+        file.lock_exclusive()
+    };
+    result
+        .map(|()| file)
+        .map_err(|error| classify_lifecycle_lock_error(error, nonblocking))
+}
+
+fn classify_lifecycle_lock_error(error: io::Error, nonblocking: bool) -> NodeError {
+    if nonblocking && is_lifecycle_lock_contention(&error) {
+        NodeError::LifecycleBusy
+    } else {
+        error.into()
+    }
+}
+
+fn is_lifecycle_lock_contention(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::WouldBlock || error.kind() == io::ErrorKind::PermissionDenied
+    {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        // Windows reports sharing and lock violations as raw Win32 errors
+        // instead of mapping them to WouldBlock.
+        matches!(error.raw_os_error(), Some(32 | 33))
+    }
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
@@ -993,6 +1034,9 @@ fn validate_absolute_path(
     }
     if path.components().any(|component| match component {
         Component::ParentDir | Component::CurDir => true,
+        #[cfg(windows)]
+        Component::Prefix(_) => false,
+        #[cfg(not(windows))]
         Component::Prefix(_) => platform != NodePlatform::Windows,
         _ => false,
     }) {
@@ -1044,8 +1088,8 @@ fn cleanup_partial_initialization(
     Ok(())
 }
 
-fn ensure_safe_parent(path: &Path) -> Result<(), NodeError> {
-    if !ensure_safe_parent_if_present(path)? {
+fn ensure_safe_parent(path: &Path, test_mode: bool) -> Result<(), NodeError> {
+    if !ensure_safe_parent_if_present(path, test_mode)? {
         return Err(NodeError::UnsafePath(format!(
             "parent does not exist: {}",
             path.parent()
@@ -1056,10 +1100,12 @@ fn ensure_safe_parent(path: &Path) -> Result<(), NodeError> {
     Ok(())
 }
 
-fn ensure_safe_parent_if_present(path: &Path) -> Result<bool, NodeError> {
+fn ensure_safe_parent_if_present(path: &Path, test_mode: bool) -> Result<bool, NodeError> {
     let parent = path
         .parent()
         .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
+    #[cfg(not(windows))]
+    let _ = test_mode;
     let mut current = PathBuf::new();
     for component in parent.components() {
         current.push(component.as_os_str());
@@ -1072,7 +1118,7 @@ fn ensure_safe_parent_if_present(path: &Path) -> Result<bool, NodeError> {
             return Err(NodeError::UnsafePath(current.display().to_string()));
         }
         #[cfg(windows)]
-        if windows_has_reparse_point(&current)? {
+        if !test_mode && windows_has_reparse_point(&current)? {
             return Err(NodeError::UnsafePath(current.display().to_string()));
         }
         if !metadata.file_type().is_dir() {
@@ -1321,7 +1367,10 @@ fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError> {
 }
 
 #[cfg(unix)]
-fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, NodeError> {
+fn lookup_unix_principal(
+    user_name: &std::ffi::CStr,
+    group_name: &std::ffi::CStr,
+) -> Result<UnixOwner, NodeError> {
     use std::ptr;
 
     let uid = {
@@ -1331,7 +1380,7 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
         loop {
             let status = unsafe {
                 libc::getpwnam_r(
-                    service_name.as_ptr(),
+                    user_name.as_ptr(),
                     &mut entry,
                     buffer.as_mut_ptr().cast(),
                     buffer.len(),
@@ -1344,13 +1393,13 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
             }
             if status != 0 {
                 return Err(NodeError::InsecurePath(format!(
-                    "failed to resolve configured node service principal: {}",
+                    "failed to resolve configured node service user: {}",
                     io::Error::from_raw_os_error(status)
                 )));
             }
             if result.is_null() {
                 return Err(NodeError::InsecurePath(
-                    "configured node service principal does not exist".to_string(),
+                    "configured node service user does not exist".to_string(),
                 ));
             }
             break entry.pw_uid;
@@ -1364,7 +1413,7 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
         loop {
             let status = unsafe {
                 libc::getgrnam_r(
-                    service_name.as_ptr(),
+                    group_name.as_ptr(),
                     &mut entry,
                     buffer.as_mut_ptr().cast(),
                     buffer.len(),
@@ -1377,13 +1426,13 @@ fn lookup_unix_principal(service_name: &std::ffi::CStr) -> Result<UnixOwner, Nod
             }
             if status != 0 {
                 return Err(NodeError::InsecurePath(format!(
-                    "failed to resolve configured node service principal: {}",
+                    "failed to resolve configured node service group: {}",
                     io::Error::from_raw_os_error(status)
                 )));
             }
             if result.is_null() {
                 return Err(NodeError::InsecurePath(
-                    "configured node service principal does not exist".to_string(),
+                    "configured node service group does not exist".to_string(),
                 ));
             }
             break entry.gr_gid;
@@ -1412,8 +1461,9 @@ fn owner_policy(
         NodePlatform::MacOs => "_omakure",
         NodePlatform::Windows => return Ok(UnixOwner { uid: 0, gid: 0 }),
     };
-    let service_name = CString::new(service_name).expect("static principal has no NUL");
-    let service_owner = lookup_unix_principal(&service_name)?;
+    let user_name = CString::new(service_name).expect("static principal has no NUL");
+    let group_name = CString::new(service_name).expect("static principal has no NUL");
+    let service_owner = lookup_unix_principal(&user_name, &group_name)?;
     if state {
         Ok(service_owner)
     } else {
@@ -1436,7 +1486,7 @@ fn owner_policy(
 fn validate_directory_security(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
 ) -> Result<(), NodeError> {
     #[cfg(unix)]
@@ -1458,14 +1508,28 @@ fn validate_directory_security(
     }
     #[cfg(windows)]
     validate_windows_security(path, true, _test_mode)?;
+    #[cfg(not(unix))]
+    let _ = owner;
     let _ = path;
     Ok(())
+}
+
+fn symlink_metadata_if_present(path: &Path) -> Result<Option<fs::Metadata>, NodeError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(Some(metadata)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub(crate) fn is_not_found(error: &NodeError) -> bool {
+    matches!(error, NodeError::Io(io) if io.kind() == io::ErrorKind::NotFound)
 }
 
 fn validate_file_security(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
 ) -> Result<(), NodeError> {
     let metadata = fs::symlink_metadata(path)?;
@@ -1478,7 +1542,7 @@ fn validate_file_security(
 fn validate_file_security_mode(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
     _expected_mode: u32,
 ) -> Result<(), NodeError> {
@@ -1510,7 +1574,7 @@ fn validate_file_security_metadata(
     path: &Path,
     metadata: &fs::Metadata,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] _owner: (),
+    #[cfg(not(unix))] owner: (),
     _test_mode: bool,
     expected_mode: u32,
 ) -> Result<(), NodeError> {
@@ -1544,6 +1608,8 @@ fn validate_file_security_metadata(
         }
     }
     let _ = (path, metadata, _test_mode, expected_mode);
+    #[cfg(not(unix))]
+    let _ = owner;
     Ok(())
 }
 
@@ -1557,7 +1623,11 @@ fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError> {
     wide.push(0);
     let attributes = unsafe { GetFileAttributesW(wide.as_ptr()) };
     if attributes == INVALID_FILE_ATTRIBUTES {
-        return Err(NodeError::Io(io::Error::last_os_error()));
+        let err = io::Error::last_os_error();
+        return Err(NodeError::Io(io::Error::new(
+            err.kind(),
+            format!("{}: {err}", path.display()),
+        )));
     }
     Ok(attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0)
 }
@@ -1826,11 +1896,12 @@ fn windows_security_access_allowed(
 ) -> bool {
     const FILE_GENERIC_READ: u32 = 0x0012_0089;
     const FILE_GENERIC_WRITE: u32 = 0x0012_0116;
+    const FILE_WRITABLE_SPECIFIC: u32 = 0x0000_0116;
     if is_system == is_service || mask & FILE_GENERIC_READ != FILE_GENERIC_READ {
         return false;
     }
     (is_system && mask & FILE_GENERIC_WRITE == FILE_GENERIC_WRITE)
-        || (is_service && (directory || mask & FILE_GENERIC_WRITE == 0))
+        || (is_service && (directory || mask & FILE_WRITABLE_SPECIFIC == 0))
 }
 
 #[cfg(windows)]
@@ -2016,26 +2087,11 @@ mod tests {
 
     #[test]
     fn platform_defaults_match_the_frozen_contract() {
-        let linux = NodeContext::resolve_for(
-            NodePlatform::Linux,
-            NodePathOverrides::default(),
-            false,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let linux = default_layout(NodePlatform::Linux, None).unwrap();
         assert_eq!(linux.config_path(), Path::new("/etc/omakure/node.toml"));
         assert_eq!(linux.state_dir(), Path::new("/var/lib/omakure"));
-        let mac = NodeContext::resolve_for(
-            NodePlatform::MacOs,
-            NodePathOverrides::default(),
-            false,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+
+        let mac = default_layout(NodePlatform::MacOs, None).unwrap();
         assert_eq!(
             mac.config_path(),
             Path::new("/Library/Application Support/Omakure/node.toml")
@@ -2044,15 +2100,9 @@ mod tests {
             mac.state_dir(),
             Path::new("/Library/Application Support/Omakure")
         );
-        let windows = NodeContext::resolve_for(
-            NodePlatform::Windows,
-            NodePathOverrides::default(),
-            false,
-            None,
-            None,
-            Some(PathBuf::from("/tmp/ProgramData")),
-        )
-        .unwrap();
+
+        let windows =
+            default_layout(NodePlatform::Windows, Some(Path::new("/tmp/ProgramData"))).unwrap();
         assert_eq!(
             windows.config_path(),
             Path::new("/tmp/ProgramData/Omakure/node.toml")
@@ -2063,21 +2113,76 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_principal_lookup_is_safe_under_concurrency() {
-        use std::ffi::CString;
+        use std::ffi::CStr;
+        use std::ptr;
         use std::sync::{Arc, Barrier};
 
         const THREADS: usize = 16;
+        let euid = unsafe { libc::geteuid() };
+        let egid = unsafe { libc::getegid() };
+        let (user_name, expected_uid) = {
+            let mut entry = unsafe { std::mem::zeroed::<libc::passwd>() };
+            let mut result = ptr::null_mut();
+            let mut buffer = vec![0_u8; 16 * 1024];
+            loop {
+                let status = unsafe {
+                    libc::getpwuid_r(
+                        euid,
+                        &mut entry,
+                        buffer.as_mut_ptr().cast(),
+                        buffer.len(),
+                        &mut result,
+                    )
+                };
+                if status == libc::ERANGE {
+                    grow_principal_lookup_buffer(&mut buffer).unwrap();
+                    continue;
+                }
+                assert_eq!(status, 0, "resolve current euid");
+                assert!(!result.is_null(), "current euid has a passwd entry");
+                let name = unsafe { CStr::from_ptr(entry.pw_name) }.to_owned();
+                break (name, entry.pw_uid as u32);
+            }
+        };
+        let (group_name, expected_gid) = {
+            let mut entry = unsafe { std::mem::zeroed::<libc::group>() };
+            let mut result = ptr::null_mut();
+            let mut buffer = vec![0_u8; 16 * 1024];
+            loop {
+                let status = unsafe {
+                    libc::getgrgid_r(
+                        egid,
+                        &mut entry,
+                        buffer.as_mut_ptr().cast(),
+                        buffer.len(),
+                        &mut result,
+                    )
+                };
+                if status == libc::ERANGE {
+                    grow_principal_lookup_buffer(&mut buffer).unwrap();
+                    continue;
+                }
+                assert_eq!(status, 0, "resolve current egid");
+                assert!(!result.is_null(), "current egid has a group entry");
+                let name = unsafe { CStr::from_ptr(entry.gr_name) }.to_owned();
+                break (name, entry.gr_gid as u32);
+            }
+        };
+        assert_eq!(expected_uid, euid as u32);
+        assert_eq!(expected_gid, egid as u32);
+
         let barrier = Arc::new(Barrier::new(THREADS));
         let handles = (0..THREADS)
             .map(|_| {
                 let barrier = Arc::clone(&barrier);
+                let user_name = user_name.clone();
+                let group_name = group_name.clone();
                 std::thread::spawn(move || {
-                    let root = CString::new("root").unwrap();
                     barrier.wait();
                     for _ in 0..256 {
-                        let owner = lookup_unix_principal(&root).unwrap();
-                        assert_eq!(owner.uid, 0);
-                        assert_eq!(owner.gid, 0);
+                        let owner = lookup_unix_principal(&user_name, &group_name).unwrap();
+                        assert_eq!(owner.uid, expected_uid);
+                        assert_eq!(owner.gid, expected_gid);
                     }
                 })
             })
@@ -2123,36 +2228,37 @@ mod tests {
     #[cfg(debug_assertions)]
     #[test]
     fn cli_overrides_env_and_env_overrides_defaults() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cli_state = tmp.path().join("cli-state");
+        let cli_config = tmp.path().join("cli.toml");
+        let env_state = tmp.path().join("env-state");
+        let env_config = tmp.path().join("env.toml");
+
         let layout = NodeContext::resolve_for(
             NodePlatform::Linux,
-            NodePathOverrides::new(
-                Some(PathBuf::from("/tmp/cli-state")),
-                Some(PathBuf::from("/tmp/cli.toml")),
-            ),
+            NodePathOverrides::new(Some(cli_state.clone()), Some(cli_config.clone())),
             true,
-            Some(PathBuf::from("/tmp/env-state")),
-            Some(PathBuf::from("/tmp/env.toml")),
+            Some(env_state.clone()),
+            Some(env_config.clone()),
             None,
         )
         .unwrap();
-        assert_eq!(layout.state_dir(), Path::new("/tmp/cli-state"));
-        assert_eq!(layout.config_path(), Path::new("/tmp/cli.toml"));
+        assert_eq!(layout.state_dir(), cli_state.as_path());
+        assert_eq!(layout.config_path(), cli_config.as_path());
+
         let env_only = NodeContext::resolve_for(
             NodePlatform::Linux,
             NodePathOverrides::default(),
             true,
-            Some(PathBuf::from("/tmp/env-state")),
-            Some(PathBuf::from("/tmp/env.toml")),
+            Some(env_state.clone()),
+            Some(env_config),
             None,
         )
         .unwrap();
-        assert_eq!(env_only.state_dir(), Path::new("/tmp/env-state"));
+        assert_eq!(env_only.state_dir(), env_state.as_path());
         assert!(NodeContext::resolve_for(
             NodePlatform::Linux,
-            NodePathOverrides::new(
-                Some(PathBuf::from("/tmp/cli-state")),
-                Some(PathBuf::from("/tmp/cli.toml")),
-            ),
+            NodePathOverrides::new(Some(cli_state), Some(cli_config)),
             false,
             None,
             None,
@@ -2397,11 +2503,47 @@ mod tests {
         assert!(unsafe_path.is_err());
     }
 
+    #[cfg(all(windows, debug_assertions))]
+    #[test]
+    fn windows_native_prefix_is_accepted_for_simulated_unix_layouts() {
+        for platform in [NodePlatform::Linux, NodePlatform::MacOs] {
+            let result = NodeContext::resolve_for(
+                platform,
+                NodePathOverrides::new(
+                    Some(PathBuf::from(r"C:\Temp\Omakure")),
+                    Some(PathBuf::from(r"C:\Temp\Omakure\node.toml")),
+                ),
+                true,
+                None,
+                None,
+                None,
+            );
+            assert!(result.is_ok(), "simulated {platform:?} layout");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_lifecycle_lock_sharing_errors_are_contention() {
+        for code in [32, 33] {
+            assert!(is_lifecycle_lock_contention(&io::Error::from_raw_os_error(
+                code
+            )));
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_service_acl_policy_allows_only_required_principals_and_access() {
         const READ: u32 = 0x0012_0089;
         const WRITE: u32 = 0x0012_0116;
+        const WRITE_DAC: u32 = 0x0004_0000;
+        assert!(windows_security_access_allowed(
+            false,
+            false,
+            true,
+            READ | WRITE_DAC
+        ));
         assert!(windows_security_access_allowed(
             false,
             true,
@@ -2619,5 +2761,26 @@ mod tests {
             mode_reason, parse_reason,
             "a permissions failure and a malformed config must not read the same"
         );
+    }
+    #[cfg(debug_assertions)]
+    #[test]
+    fn symlink_metadata_if_present_treats_missing_paths_as_absent() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let missing = tmp.path().join("node.sqlite-wal");
+        assert!(symlink_metadata_if_present(&missing).unwrap().is_none());
+
+        let present = tmp.path().join("present.txt");
+        fs::write(&present, b"x").unwrap();
+        assert!(symlink_metadata_if_present(&present).unwrap().is_some());
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn is_not_found_matches_io_not_found_only() {
+        let not_found = NodeError::Io(io::Error::new(io::ErrorKind::NotFound, "gone"));
+        assert!(is_not_found(&not_found));
+        let permission = NodeError::Io(io::Error::new(io::ErrorKind::PermissionDenied, "nope"));
+        assert!(!is_not_found(&permission));
+        assert!(!is_not_found(&NodeError::InsecurePath("bad".into())));
     }
 }

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
+cd "$root"
+export MISE_PROJECT_ROOT="$root"
+
+die() {
+    printf 'check:platform:linux-gnu: %s\n' "$1" >&2
+    exit 2
+}
+
+if (($# == 0)); then
+    printf 'check:platform:linux-gnu: native tests (host)\n'
+    "$root/scripts/tasks/suite/native-tests"
+    printf 'check:platform:linux-gnu: overlay lib tests (host)\n'
+    "$root/scripts/tasks/atomic/overlay-fs-lib"
+    printf 'check:platform:linux-gnu: release build (host)\n'
+    "$root/scripts/tasks/atomic/build-release"
+    printf 'check:platform:linux-gnu: binary smoke (host)\n'
+    "$root/scripts/tasks/atomic/binary-smoke"
+else
+    (($# == 1)) || die 'usage: linux-gnu [target-triple]'
+    target="$1"
+    case "$target" in
+        x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;;
+        *) die "unsupported Linux GNU target: $target" ;;
+    esac
+    printf 'check:platform:linux-gnu: native tests (%s)\n' "$target"
+    CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
+    printf 'check:platform:linux-gnu: overlay lib tests (%s)\n' "$target"
+    "$root/scripts/tasks/atomic/overlay-fs-lib"
+    printf 'check:platform:linux-gnu: release build (%s)\n' "$target"
+    "$root/scripts/tasks/atomic/build-release" --target-triple "$target"
+    printf 'check:platform:linux-gnu: binary smoke (%s)\n' "$target"
+    "$root/scripts/tasks/atomic/binary-smoke" "$target"
+fi
+printf 'check:platform:linux-gnu: PASS\n'

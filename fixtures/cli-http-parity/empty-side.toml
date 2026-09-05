@@ -1,0 +1,9 @@
+schema_version = 1
+
+[[entries]]
+entry_id = "empty"
+class = "exact"
+operation_family = "fixture"
+behavior_case = "fixture.case"
+docs_anchor = "empty"
+http_ids = ["GET /v1/health"]

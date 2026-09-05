@@ -270,6 +270,12 @@ handling, so a Cue cannot be used to enumerate a workspace.
 
 ## Idempotency and Correlation
 
+The conductor may supply `cue_id` on `omakure node cue --cue-id` and
+`POST /v1/node/cues` as `{ "cue_id": ... }`. Omitting it mints a new id on
+dispatch. The same id retries the same instruction and is answered as duplicate
+(`1208`) from the existing run; a new id is a new run. This is not a durable
+outbox and does not amend [Explicitly Out of Scope](#explicitly-out-of-scope).
+
 The local run id is a deterministic function of the `cue_id` under the
 run-id derivation domain. `runs.run_id` is a `TEXT PRIMARY KEY`
 (`src/runs.rs:493`), so the database is the durable at-most-once key: a duplicate

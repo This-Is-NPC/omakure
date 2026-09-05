@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "${MISE_PROJECT_ROOT:-$(dirname "$0")/../..}" && pwd)"
+manifest="$root/quality/complexity/tools.json"
+fixture="$root/quality/complexity/setup-fixtures.json"
+python3 - "$manifest" "$fixture" "$root/scripts/tasks/complexity-setup" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+manifest_path, fixture_path, setup_path = sys.argv[1:]
+manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+fixture = json.loads(Path(fixture_path).read_text(encoding="utf-8"))
+assert fixture["schema_version"] == 1
+assert len(fixture["hosts"]) == 5
+for host in fixture["hosts"]:
+    platform = host["platform"]
+    for tool in ("big-code-analysis", "cccc"):
+        mode = host[tool]
+        entry = manifest["tools"][tool]
+        if mode == "archive":
+            assert platform in entry["archives"], f"missing archive for {tool}/{platform}"
+            archive = entry["archives"][platform]
+            assert re.fullmatch(r"[0-9a-f]{64}", archive["sha256"]), f"invalid archive checksum for {tool}/{platform}"
+        elif mode == "source_build":
+            source = entry.get("source_build")
+            assert isinstance(source, dict), f"missing source build for {tool}/{platform}"
+            assert source.get("locked_dependencies") is True
+            assert re.fullmatch(r"[0-9a-f]{64}", source.get("sha256", "")), f"invalid source checksum for {tool}/{platform}"
+            assert source.get("url", "").endswith(".tar.gz")
+        else:
+            raise AssertionError(f"unknown setup mode {mode!r}")
+
+setup = Path(setup_path).read_text(encoding="utf-8")
+assert "cargo build --locked --release" in setup
+assert "verify_sha256 \"$sha\" \"$archive.tmp\"" in setup
+assert "Darwin:x86_64) platform=macos-x86_64" in setup
+print("complexity setup fixtures: PASS (Linux, ARM64, Intel/ARM macOS, and Windows mappings are manifest-backed)")
+PY

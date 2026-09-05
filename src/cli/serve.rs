@@ -21,7 +21,7 @@ use crate::cli::json::{self, codes};
 use crate::cli::serve_windows::{self, OpenEventError, ProcessProbe, StopEvent};
 use crate::domain::{next_fire_after, parse_cron};
 use crate::ports::ScriptRepository;
-use crate::runs::{self, EnqueueOptions, RunState, RunTrigger};
+use crate::runs::{self, EnqueueOptions, RunTrigger};
 use crate::secrets;
 use crate::workspace::Workspace;
 use chrono::Utc;
@@ -103,7 +103,7 @@ fn acquire_lock(workspace: &Workspace) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct WindowsPidFile {
     pid: u32,
     stop_event: String,
@@ -593,7 +593,14 @@ pub(crate) fn scheduler_tick(
     for script in scripts {
         let schema = match repo.read_schema(&script) {
             Ok(s) => s,
-            Err(_) => continue,
+            Err(err) => {
+                log_line(
+                    &log_path,
+                    "ERROR",
+                    &format!("{}: unreadable schema: {err}", script.display()),
+                );
+                continue;
+            }
         };
         let Some(schedule) = schema.schedule.as_ref() else {
             continue;
@@ -601,6 +608,7 @@ pub(crate) fn scheduler_tick(
         if !schedule.enabled {
             continue;
         }
+
         let cron_expr = &schedule.cron;
         let cron = match parse_cron(cron_expr) {
             Ok(c) => c,
@@ -618,7 +626,17 @@ pub(crate) fn scheduler_tick(
         let canonical_str = canonical.to_string_lossy().to_string();
         let schedule_id = format!("{}@{}", canonical_str, cron_expr);
 
-        let last_fire = last_fire_ms(&conn, &schedule_id).unwrap_or(None);
+        let last_fire = match runs::last_scheduled_fire_ms(&conn, &schedule_id) {
+            Ok(last_fire) => last_fire,
+            Err(err) => {
+                log_line(
+                    &log_path,
+                    "ERROR",
+                    &format!("{schedule_id}: schedule state unreadable: {err}; skipping fire"),
+                );
+                continue;
+            }
+        };
         // First-ever fire: look back ~2 minutes so crons that fire at
         // least once a minute (and sub-minute 6-field crons like
         // `*/10 * * * * *`) are recognised as due on the first tick
@@ -630,15 +648,6 @@ pub(crate) fn scheduler_tick(
             .unwrap_or(now - chrono::Duration::minutes(2));
 
         if !is_due(&cron, reference, now) {
-            continue;
-        }
-
-        if has_live_run(&conn, &schedule_id).unwrap_or(false) {
-            log_line(
-                &log_path,
-                "WARN",
-                &format!("{schedule_id}: previous run still in flight, skipping fire"),
-            );
             continue;
         }
 
@@ -685,8 +694,8 @@ pub(crate) fn scheduler_tick(
             allowed_secret_refs: Some(resolved.provider_refs),
             ..Default::default()
         };
-        match runs::enqueue(&conn, &canonical_str, &resolved.persisted_args, opts) {
-            Ok(row) => {
+        match runs::enqueue_scheduled(&conn, &canonical_str, &resolved.persisted_args, opts) {
+            Ok(Some(row)) => {
                 fired += 1;
                 log_line(
                     &log_path,
@@ -697,6 +706,11 @@ pub(crate) fn scheduler_tick(
                     ),
                 );
             }
+            Ok(None) => log_line(
+                &log_path,
+                "WARN",
+                &format!("{schedule_id}: previous run still in flight, skipping fire"),
+            ),
             Err(err) => log_line(
                 &log_path,
                 "ERROR",
@@ -716,30 +730,6 @@ fn is_due(
         Some(next) => next <= now,
         None => false,
     }
-}
-
-fn last_fire_ms(conn: &rusqlite::Connection, schedule_id: &str) -> Result<Option<i64>, String> {
-    conn.query_row(
-        "SELECT MAX(enqueued_at) FROM runs WHERE cron_schedule_id = ?",
-        [schedule_id],
-        |row| row.get::<_, Option<i64>>(0),
-    )
-    .map_err(|e| format!("last_fire query: {e}"))
-}
-
-fn has_live_run(conn: &rusqlite::Connection, schedule_id: &str) -> Result<bool, String> {
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM runs WHERE cron_schedule_id = ? AND state IN (?, ?)",
-            rusqlite::params![
-                schedule_id,
-                RunState::Queued.as_str(),
-                RunState::Running.as_str()
-            ],
-            |row| row.get(0),
-        )
-        .map_err(|e| format!("live_run query: {e}"))?;
-    Ok(count > 0)
 }
 
 fn build_args_from_defaults(schema: &crate::domain::Schema) -> Vec<String> {
@@ -893,6 +883,64 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_ticks_enqueue_one_scheduled_run() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        write_script(tmp.path(), "concurrent.sh", Some("* * * * *"));
+        let now = Utc::now();
+        let barrier = Arc::new(std::sync::Barrier::new(3));
+        let first_ws = ws.clone_for_executor();
+        let second_ws = ws.clone_for_executor();
+        let first_barrier = Arc::clone(&barrier);
+        let second_barrier = Arc::clone(&barrier);
+        let first = thread::spawn(move || {
+            first_barrier.wait();
+            scheduler_tick(&first_ws, now)
+        });
+        let second = thread::spawn(move || {
+            second_barrier.wait();
+            scheduler_tick(&second_ws, now)
+        });
+        barrier.wait();
+        let first_fired = first.join().unwrap().unwrap();
+        let second_fired = second.join().unwrap().unwrap();
+        assert_eq!(
+            first_fired + second_fired,
+            1,
+            "concurrent scheduler ticks must claim one fire"
+        );
+
+        let conn = runs::open(&ws).unwrap();
+        let rows = runs::query_runs(
+            &conn,
+            &runs::RunFilters {
+                states: runs::RunStateSet::All.to_states(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+    #[test]
+    fn tick_logs_malformed_schema_and_continues() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        fs::write(
+            tmp.path().join("broken.sh"),
+            "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {not-json}\n# OMAKURE_SCHEMA_END\n",
+        )
+        .unwrap();
+        write_script(tmp.path(), "healthy.sh", Some("* * * * *"));
+
+        let fired = scheduler_tick(&ws, Utc::now()).unwrap();
+        assert_eq!(fired, 1, "a malformed script must not stop other schedules");
+        let log = fs::read_to_string(log_file(&ws)).unwrap();
+        assert!(log.contains("broken.sh"));
+        assert!(log.contains("unreadable schema"));
+    }
+    #[test]
     fn tick_skips_when_previous_run_still_in_flight() {
         let tmp = TempDir::new().unwrap();
         let ws = Workspace::new(tmp.path().to_path_buf());
@@ -1014,7 +1062,7 @@ mod tests {
         .unwrap();
 
         let event = acquire_lock(&ws).expect("dead PID should be reclaimed");
-        release_lock(&ws);
+        release_lock(&ws, &event.identity);
         drop(event);
     }
 

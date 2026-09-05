@@ -170,7 +170,7 @@ mod tests {
 
     fn context(temp: &TempDir) -> NodeContext {
         NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),

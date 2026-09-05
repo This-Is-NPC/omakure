@@ -1524,7 +1524,7 @@ mod tests {
 
     fn identity(temp: &TempDir) -> NodeIdentity {
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),

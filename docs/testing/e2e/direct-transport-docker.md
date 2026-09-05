@@ -4,15 +4,15 @@
 
 ## Source
 
-- `.scripts/direct-transport-docker-e2e.sh`
-- `compose.direct-transport.e2e.yaml`
+- `scripts/tasks/cert/direct-transport`
+- `ci/compose/compose.direct-transport.e2e.yaml`
 - Docker-side support in `tests/direct_transport_e2e.rs`
 
 ## Run
 
 ```bash
 docker build --tag omakure-direct-transport-e2e:local .
-./.scripts/direct-transport-docker-e2e.sh
+scripts/tasks/cert/direct-transport
 ```
 
 The script itself uses a project-specific Compose name and 120-second Docker

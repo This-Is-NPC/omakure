@@ -141,12 +141,13 @@ pub fn list_scripts(
     workspace: &Workspace,
     request: ListScriptsRequest,
 ) -> OperationResult<Vec<ScriptSummary>> {
-    let repo = FsWorkspaceRepository::new(workspace.scripts_root().to_path_buf());
+    let root = canonical_scripts_root(workspace.scripts_root())?;
+    let repo = FsWorkspaceRepository::new(root.clone());
     let mut scripts = repo.list_scripts_recursive().map_err(io_error)?;
     scripts.sort();
     Ok(scripts
         .into_iter()
-        .map(|script| build_script_summary(&repo, workspace.scripts_root(), script))
+        .map(|script| build_script_summary(&repo, &root, script))
         .filter(|entry| matches_all_tags(entry, &request.tags))
         .collect())
 }
@@ -155,8 +156,9 @@ pub fn describe_script(
     workspace: &Workspace,
     request: DescribeScriptRequest,
 ) -> OperationResult<ScriptDescription> {
-    let path = resolve_script_path(&request.script, workspace.scripts_root())?;
-    let repo = FsWorkspaceRepository::new(workspace.scripts_root().to_path_buf());
+    let root = canonical_scripts_root(workspace.scripts_root())?;
+    let path = resolve_script_path(&request.script, &root)?;
+    let repo = FsWorkspaceRepository::new(root.clone());
     let schema = repo
         .read_schema(&path)
         .map_err(|err| OperationError::new(OperationErrorCode::InvalidInput, err.to_string()))?;
@@ -164,16 +166,37 @@ pub fn describe_script(
         .unwrap_or_else(|_| path.clone())
         .to_string_lossy()
         .to_string();
-    let relative_path = path
-        .strip_prefix(workspace.scripts_root())
-        .unwrap_or(&path)
-        .to_string_lossy()
-        .to_string();
+    let relative_path = logical_relative_path(&path, &root);
     Ok(ScriptDescription {
         absolute_path,
         relative_path,
         schema: script_schema_from_domain(schema),
     })
+}
+
+fn canonical_scripts_root(scripts_root: &Path) -> OperationResult<PathBuf> {
+    scripts_root.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })
+}
+
+fn logical_relative_path(path: &Path, root: &Path) -> String {
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
+    let root_text = canonical_root
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    path_text
+        .strip_prefix(&root_text)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(&path_text)
+        .to_string()
 }
 
 fn script_schema_from_domain(schema: crate::domain::Schema) -> ScriptSchema {
@@ -423,11 +446,7 @@ fn build_script_summary(
     root: &Path,
     script: PathBuf,
 ) -> ScriptSummary {
-    let relative_path = script
-        .strip_prefix(root)
-        .unwrap_or(&script)
-        .to_string_lossy()
-        .to_string();
+    let relative_path = logical_relative_path(&script, root);
     let absolute_path = std::fs::canonicalize(&script)
         .unwrap_or_else(|_| script.clone())
         .to_string_lossy()
@@ -474,23 +493,24 @@ fn resolve_script_path(script: &str, scripts_root: &Path) -> OperationResult<Pat
             format!("failed to canonicalize scripts root: {err}"),
         )
     })?;
-    let has_separator = script.contains('/') || script.contains('\\');
-    let path = PathBuf::from(script);
-    if path
-        .components()
-        .any(|component| matches!(component, Component::ParentDir))
+    let normalized_script = script.replace('\\', "/");
+    let has_separator = normalized_script.contains('/');
+    let path = PathBuf::from(&normalized_script);
+    if (!path.is_absolute() && has_windows_prefix(&normalized_script))
+        || path
+            .components()
+            .any(|component| matches!(component, Component::ParentDir))
     {
         return Err(OperationError::new(
             OperationErrorCode::UnsafePath,
             format!("script path escapes scripts root: {script}"),
         ));
     }
-    if path.is_absolute() && !path.starts_with(&root) {
-        return Err(OperationError::new(
-            OperationErrorCode::UnsafePath,
-            format!("script path escapes scripts root: {script}"),
-        ));
-    }
+    // Absolute paths are validated after resolution.  Do not compare their
+    // spelling with the canonical root here: Windows may present the same
+    // path through an 8.3 or verbatim alias (and may normalize its case).
+    // `canonical_script_path` performs the containment check on canonical
+    // paths once the candidate exists.
     let candidate = if path.is_absolute() {
         path
     } else if has_separator {
@@ -501,7 +521,14 @@ fn resolve_script_path(script: &str, scripts_root: &Path) -> OperationResult<Pat
     resolve_with_extensions(candidate, &root)
 }
 
+fn has_windows_prefix(path: &str) -> bool {
+    path.starts_with("\\\\")
+        || (path.as_bytes().get(1).is_some_and(|colon| *colon == b':')
+            && path.as_bytes()[0].is_ascii_alphabetic())
+}
+
 fn resolve_with_extensions(path: PathBuf, scripts_root: &Path) -> OperationResult<PathBuf> {
+    reject_absolute_path_outside_root(&path, scripts_root)?;
     if path.exists() {
         if path.is_file() {
             return canonical_script_path(&path, scripts_root);
@@ -530,6 +557,42 @@ fn resolve_with_extensions(path: PathBuf, scripts_root: &Path) -> OperationResul
     ))
 }
 
+fn reject_absolute_path_outside_root(path: &Path, scripts_root: &Path) -> OperationResult<()> {
+    if !path.is_absolute() {
+        return Ok(());
+    }
+    let canonical_root = scripts_root.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    let mut probe = path;
+    loop {
+        match probe.canonicalize() {
+            Ok(canonical) => {
+                if canonical.starts_with(&canonical_root) {
+                    return Ok(());
+                }
+                return Err(OperationError::new(
+                    OperationErrorCode::UnsafePath,
+                    format!("script path escapes scripts root: {}", path.display()),
+                ));
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                let Some(parent) = probe.parent() else {
+                    return Err(io_error(err));
+                };
+                if parent == probe {
+                    return Err(io_error(err));
+                }
+                probe = parent;
+            }
+            Err(err) => return Err(io_error(err)),
+        }
+    }
+}
+
 fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<PathBuf> {
     let canonical = path.canonicalize().map_err(|err| {
         OperationError::new(
@@ -537,7 +600,13 @@ fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<Pa
             format!("failed to canonicalize script path: {err}"),
         )
     })?;
-    if canonical.starts_with(scripts_root) {
+    let canonical_root = scripts_root.canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    if canonical.starts_with(&canonical_root) {
         Ok(canonical)
     } else {
         Err(OperationError::new(
@@ -809,6 +878,118 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[test]
+    fn script_resolution_rejects_missing_absolute_paths_outside_workspace() {
+        let dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+
+        let err = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: outside
+                    .path()
+                    .join("missing.sh")
+                    .to_string_lossy()
+                    .into_owned(),
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+    #[test]
+    fn script_resolution_accepts_confined_absolute_paths() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.scripts_root(), "deploy.sh", &[]);
+
+        let path = ws.scripts_root().join("deploy.sh");
+        let description = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: path.to_string_lossy().into_owned(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(description.relative_path, "deploy.sh");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn script_resolution_accepts_absolute_paths_through_workspace_alias() {
+        use std::os::unix::fs::symlink;
+
+        let real = TempDir::new().unwrap();
+        let alias_parent = TempDir::new().unwrap();
+        let alias = alias_parent.path().join("workspace");
+        symlink(real.path(), &alias).unwrap();
+        // Keep the workspace's configured root as the symlink alias. The
+        // absolute request therefore has a different spelling from the
+        // canonical root, just as an 8.3/verbatim Windows path can.
+        let ws = Workspace::new(alias);
+        ws.ensure_layout().unwrap();
+        write_script(ws.scripts_root(), "deploy.sh", &[]);
+
+        let description = describe_script(
+            &ws,
+            DescribeScriptRequest {
+                script: ws
+                    .scripts_root()
+                    .join("deploy.sh")
+                    .to_string_lossy()
+                    .into_owned(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(description.relative_path, "deploy.sh");
+    }
+
+    #[test]
+    fn logical_relative_paths_handle_windows_alias_fixtures() {
+        let verbatim_root = Path::new(r"\\?\C:\workspace\scripts");
+        let verbatim_path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
+        let short_root = Path::new(r"C:\PROGRA~1\OMAKURE\scripts");
+        let short_path = Path::new(r"C:\PROGRA~1\OMAKURE\scripts\tools\deploy.cmd");
+
+        assert_eq!(
+            logical_relative_path(verbatim_path, verbatim_root),
+            "tools/deploy.cmd"
+        );
+        assert_eq!(
+            logical_relative_path(short_path, short_root),
+            "tools/deploy.cmd"
+        );
+    }
+
+    #[test]
+    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
+        let root = Path::new(r"C:\workspace\scripts");
+        let path = Path::new(r"C:\workspace\scripts\tools\deploy.sh");
+
+        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn list_scripts_matches_a_symlinked_workspace_root() {
+        use std::os::unix::fs::symlink;
+
+        let real = TempDir::new().unwrap();
+        let alias_parent = TempDir::new().unwrap();
+        let alias = alias_parent.path().join("workspace");
+        symlink(real.path(), &alias).unwrap();
+        let ws = Workspace::new(alias);
+        ws.ensure_layout().unwrap();
+        write_script(ws.scripts_root(), "tools/deploy.sh", &[]);
+
+        let entries = list_scripts(&ws, ListScriptsRequest::default()).unwrap();
+
+        assert_eq!(entries[0].relative_path, "tools/deploy.sh");
     }
 
     #[test]

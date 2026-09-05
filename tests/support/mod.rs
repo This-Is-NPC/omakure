@@ -128,24 +128,43 @@ pub fn assert_no_secret_leak(haystack: &[u8], secret: &[u8]) {
 pub fn command_with_timeout(command: &mut Command, timeout: Duration) -> Output {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = spawn_guard(command);
+    let stdout = child.child_mut().stdout.take().expect("child stdout pipe");
+    let stderr = child.child_mut().stderr.take().expect("child stderr pipe");
+    // Drain both pipes while the child runs. Waiting for the child before
+    // reading either pipe deadlocks when successful output exceeds pipe
+    // capacity (for example, `help-ai`).
+    let stdout_reader = thread::spawn(move || read_child_pipe(stdout));
+    let stderr_reader = thread::spawn(move || read_child_pipe(stderr));
     let deadline = Instant::now() + timeout;
 
-    loop {
-        if child
-            .child_mut()
-            .try_wait()
-            .expect("poll child process")
-            .is_some()
-        {
-            return child.wait_with_output();
+    let status = loop {
+        if let Some(status) = child.child_mut().try_wait().expect("poll child process") {
+            break status;
         }
 
         if Instant::now() >= deadline {
-            return child.kill_and_wait();
+            let process = child.child_mut();
+            let _ = process.kill();
+            break process.wait().expect("wait for killed child");
         }
 
         thread::sleep(Duration::from_millis(25));
+    };
+    // The process has been reaped; remove it from the guard so Drop does not
+    // attempt to kill it again.
+    let _ = child.take_child();
+
+    Output {
+        status,
+        stdout: stdout_reader.join().expect("read child stdout"),
+        stderr: stderr_reader.join().expect("read child stderr"),
     }
+}
+
+fn read_child_pipe(mut pipe: impl Read) -> Vec<u8> {
+    let mut output = Vec::new();
+    pipe.read_to_end(&mut output).expect("read child output");
+    output
 }
 
 pub fn spawn_guard(command: &mut Command) -> ChildGuard {
@@ -265,9 +284,9 @@ impl HttpServer {
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        // `--bind` must own the socket, so we cannot hold the probe listener
-        // across spawn. Retry on the bind→drop→spawn TOCTOU window (EADDRINUSE /
-        // readiness miss) instead of claiming the port is held until bind.
+        // Reserve a process-wide unique port before spawning. Unlike probing with
+        // a temporary listener here, this keeps sibling test servers from choosing
+        // the same port during their bind→spawn window.
         let attempt_timeout = timeout / 4;
         let attempt_timeout = if attempt_timeout.is_zero() {
             Duration::from_secs(2)
@@ -277,9 +296,7 @@ impl HttpServer {
         let deadline = Instant::now() + timeout;
         let mut last_addr = None;
         while Instant::now() < deadline {
-            let listener =
-                TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral localhost port");
-            let addr = listener.local_addr().expect("read local addr");
+            let addr = SocketAddr::from(([127, 0, 0, 1], unique_loopback_port()));
             last_addr = Some(addr);
             let mut command = omakure_command();
             command
@@ -301,14 +318,20 @@ impl HttpServer {
                 command.env(key, value);
             }
 
-            drop(listener);
             let child = spawn_guard(&mut command);
             let mut server = Self {
                 addr,
                 child,
                 token: token.to_string(),
             };
-            if server.try_wait_until_ready(attempt_timeout) {
+            if server.try_wait_until_ready(
+                attempt_timeout,
+                if command_name == "node" {
+                    "/v1/ready"
+                } else {
+                    "/v1/health"
+                },
+            ) {
                 return server;
             }
             let _ = server.child.child_mut().kill();
@@ -386,14 +409,12 @@ impl HttpServer {
         self.request_with_auth("GET", path, None, AuthMode::Bearer(token))
     }
 
-    /// Poll `/v1/ready` until the service reports ready.
+    /// Poll `/v1/ready` until the service reports semantic readiness.
     ///
-    /// Startup is gated on `/v1/health`, which answers as soon as the listener
-    /// binds. A service started with `--readiness-requires-worker` or
-    /// `--readiness-requires-scheduler` is not ready until those loops mark
-    /// themselves alive, and that happens *after* the listener is up — so
-    /// asking once, immediately, races them. Under parallel-suite load the
-    /// window is wide enough to lose.
+    /// Node-service startup performs identity, registry/schema, and transport
+    /// setup before this endpoint is allowed to return 200. Worker, scheduler,
+    /// and transport requirements are then reflected by the same gate, so a
+    /// successful probe is safe for callers to use immediately.
     ///
     /// A service that never becomes ready still fails the test: once the
     /// deadline passes the last response is returned as-is, so the caller's
@@ -454,14 +475,26 @@ impl HttpServer {
         HttpResponse::parse(raw)
     }
 
-    fn try_wait_until_ready(&self, timeout: Duration) -> bool {
+    fn try_wait_until_ready(&mut self, timeout: Duration, path: &str) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
+            // A successful probe is only ours if the process that was spawned
+            // for this address is still alive. This rejects a 200 from a
+            // different responder after our child lost the bind race.
+            if self
+                .child
+                .child_mut()
+                .try_wait()
+                .expect("poll HTTP child")
+                .is_some()
+            {
+                return false;
+            }
             if let Ok(mut stream) =
                 TcpStream::connect_timeout(&self.addr, Duration::from_millis(200))
             {
                 let request = format!(
-                    "GET /v1/health HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
+                    "GET {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
                     self.addr
                 );
                 let _ = stream.set_read_timeout(Some(Duration::from_millis(200)));
@@ -469,7 +502,12 @@ impl HttpServer {
                 if stream.write_all(request.as_bytes()).is_ok() {
                     let mut raw = String::new();
                     if stream.read_to_string(&mut raw).is_ok() && raw.contains(" 200 ") {
-                        return true;
+                        return self
+                            .child
+                            .child_mut()
+                            .try_wait()
+                            .expect("poll HTTP child after health probe")
+                            .is_none();
                     }
                 }
             }
@@ -483,6 +521,23 @@ impl Drop for HttpServer {
     fn drop(&mut self) {
         // ChildGuard::drop kills if still present; no-op when wait_exit took it.
     }
+}
+
+/// Exit status after an intentional test-harness kill.
+/// Unix SIGKILL reports no exit code; Windows TerminateProcess uses code 1.
+pub fn terminated_exit_is_expected(status: std::process::ExitStatus) -> bool {
+    terminated_exit_is_expected_for_parts(status.success(), status.code())
+}
+
+pub fn terminated_exit_is_expected_for_parts(success: bool, code: Option<i32>) -> bool {
+    success || code.is_none() || (cfg!(windows) && code == Some(1))
+}
+
+pub fn assert_terminated(status: std::process::ExitStatus) {
+    assert!(
+        terminated_exit_is_expected(status),
+        "expected graceful exit or test-harness kill, got {status:?}"
+    );
 }
 
 /// Overall budget for one HTTP exchange made through [`HttpServer`].
@@ -582,6 +637,18 @@ fn parse_http_url(url: &str) -> (SocketAddr, String, String) {
 pub enum AuthMode<'a> {
     None,
     Bearer(&'a str),
+}
+
+/// Git `-c` flags that keep battery cache checkouts byte-identical across platforms.
+pub fn battery_cache_git_config_args() -> &'static [&'static str] {
+    #[cfg(windows)]
+    {
+        &["-c", "core.autocrlf=false", "-c", "core.filemode=false"]
+    }
+    #[cfg(not(windows))]
+    {
+        &["-c", "core.autocrlf=false"]
+    }
 }
 
 /// Write a local git battery fixture under `root` and return after the initial commit.

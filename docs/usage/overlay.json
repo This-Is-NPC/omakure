@@ -1,0 +1,454 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "entry_id": "battery-add",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery add"
+      ]
+    },
+    {
+      "entry_id": "battery-inspect",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery inspect"
+      ]
+    },
+    {
+      "entry_id": "battery-install",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery install"
+      ]
+    },
+    {
+      "entry_id": "battery-list",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery list"
+      ]
+    },
+    {
+      "entry_id": "battery-remove",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery remove"
+      ]
+    },
+    {
+      "entry_id": "battery-scripts",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery scripts"
+      ]
+    },
+    {
+      "entry_id": "battery-sync",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery sync"
+      ]
+    },
+    {
+      "entry_id": "cli-api",
+      "operation_family": "api",
+      "cli_ids": [
+        "api"
+      ]
+    },
+    {
+      "entry_id": "cli-completion",
+      "operation_family": "completion",
+      "cli_ids": [
+        "completion"
+      ]
+    },
+    {
+      "entry_id": "cli-help-ai",
+      "operation_family": "help-ai",
+      "cli_ids": [
+        "help-ai"
+      ]
+    },
+    {
+      "entry_id": "cli-history-tail",
+      "operation_family": "history.tail",
+      "cli_ids": [
+        "history tail"
+      ]
+    },
+    {
+      "entry_id": "cli-init",
+      "operation_family": "init",
+      "cli_ids": [
+        "init"
+      ]
+    },
+    {
+      "entry_id": "cli-node-authority-create",
+      "operation_family": "node.authority.create",
+      "cli_ids": [
+        "node authority create"
+      ]
+    },
+    {
+      "entry_id": "cli-node-authority-issue",
+      "operation_family": "node.authority.issue",
+      "cli_ids": [
+        "node authority issue"
+      ]
+    },
+    {
+      "entry_id": "cli-node-authority-show",
+      "operation_family": "node.authority.show",
+      "cli_ids": [
+        "node authority show"
+      ]
+    },
+    {
+      "entry_id": "cli-node-baseline-create-key",
+      "operation_family": "node.baseline.create-key",
+      "cli_ids": [
+        "node baseline create-key"
+      ]
+    },
+    {
+      "entry_id": "cli-node-baseline-publish",
+      "operation_family": "node.baseline.publish",
+      "cli_ids": [
+        "node baseline publish"
+      ]
+    },
+    {
+      "entry_id": "cli-node-direct-probe",
+      "operation_family": "node.direct-probe",
+      "cli_ids": [
+        "node direct-probe"
+      ]
+    },
+    {
+      "entry_id": "cli-node-reset",
+      "operation_family": "node.reset",
+      "cli_ids": [
+        "node reset"
+      ]
+    },
+    {
+      "entry_id": "cli-node-serve",
+      "operation_family": "node.serve",
+      "cli_ids": [
+        "node serve"
+      ]
+    },
+    {
+      "entry_id": "cli-queue-worker",
+      "operation_family": "queue.worker",
+      "cli_ids": [
+        "queue worker"
+      ]
+    },
+    {
+      "entry_id": "cli-run",
+      "operation_family": "run",
+      "cli_ids": [
+        "run"
+      ]
+    },
+    {
+      "entry_id": "cli-serve",
+      "operation_family": "serve",
+      "cli_ids": [
+        "serve"
+      ]
+    },
+    {
+      "entry_id": "cli-token-generate",
+      "operation_family": "token.generate",
+      "cli_ids": [
+        "token generate"
+      ]
+    },
+    {
+      "entry_id": "cli-trace",
+      "operation_family": "trace",
+      "cli_ids": [
+        "trace"
+      ]
+    },
+    {
+      "entry_id": "cli-uninstall",
+      "operation_family": "uninstall",
+      "cli_ids": [
+        "uninstall"
+      ]
+    },
+    {
+      "entry_id": "cli-update",
+      "operation_family": "update",
+      "cli_ids": [
+        "update"
+      ]
+    },
+    {
+      "entry_id": "config",
+      "operation_family": "config",
+      "cli_ids": [
+        "config"
+      ]
+    },
+    {
+      "entry_id": "describe",
+      "operation_family": "describe",
+      "cli_ids": [
+        "describe"
+      ]
+    },
+    {
+      "entry_id": "doctor",
+      "operation_family": "doctor",
+      "cli_ids": [
+        "doctor"
+      ]
+    },
+    {
+      "entry_id": "env-activate",
+      "operation_family": "env",
+      "cli_ids": [
+        "env activate"
+      ]
+    },
+    {
+      "entry_id": "env-create",
+      "operation_family": "env",
+      "cli_ids": [
+        "env create"
+      ]
+    },
+    {
+      "entry_id": "env-deactivate",
+      "operation_family": "env",
+      "cli_ids": [
+        "env deactivate"
+      ]
+    },
+    {
+      "entry_id": "env-delete",
+      "operation_family": "env",
+      "cli_ids": [
+        "env delete"
+      ]
+    },
+    {
+      "entry_id": "env-list",
+      "operation_family": "env",
+      "cli_ids": [
+        "env list"
+      ]
+    },
+    {
+      "entry_id": "env-remove",
+      "operation_family": "env",
+      "cli_ids": [
+        "env remove"
+      ]
+    },
+    {
+      "entry_id": "env-replace",
+      "operation_family": "env",
+      "cli_ids": [
+        "env replace"
+      ]
+    },
+    {
+      "entry_id": "env-set",
+      "operation_family": "env",
+      "cli_ids": [
+        "env set"
+      ]
+    },
+    {
+      "entry_id": "env-show",
+      "operation_family": "env",
+      "cli_ids": [
+        "env show"
+      ]
+    },
+    {
+      "entry_id": "history-list",
+      "operation_family": "history",
+      "cli_ids": [
+        "history list"
+      ]
+    },
+    {
+      "entry_id": "history-show",
+      "operation_family": "history",
+      "cli_ids": [
+        "history show"
+      ]
+    },
+    {
+      "entry_id": "history-stats",
+      "operation_family": "history",
+      "cli_ids": [
+        "history stats",
+        "queue stats"
+      ]
+    },
+    {
+      "entry_id": "history-traces",
+      "operation_family": "history",
+      "cli_ids": [
+        "history traces"
+      ]
+    },
+    {
+      "entry_id": "node-baseline-push",
+      "operation_family": "node baseline",
+      "cli_ids": [
+        "node baseline push"
+      ]
+    },
+    {
+      "entry_id": "node-baseline-rollback",
+      "operation_family": "node baseline",
+      "cli_ids": [
+        "node baseline rollback"
+      ]
+    },
+    {
+      "entry_id": "node-capabilities",
+      "operation_family": "node",
+      "cli_ids": [
+        "node capabilities"
+      ]
+    },
+    {
+      "entry_id": "node-cue",
+      "operation_family": "node",
+      "cli_ids": [
+        "node cue"
+      ]
+    },
+    {
+      "entry_id": "node-discovery",
+      "operation_family": "node",
+      "cli_ids": [
+        "node discovery"
+      ]
+    },
+    {
+      "entry_id": "node-enroll-apply",
+      "operation_family": "node enroll apply",
+      "cli_ids": [
+        "node enroll apply"
+      ]
+    },
+    {
+      "entry_id": "node-enroll-approve",
+      "operation_family": "node enroll",
+      "cli_ids": [
+        "node enroll approve"
+      ]
+    },
+    {
+      "entry_id": "node-enroll-reject",
+      "operation_family": "node enroll",
+      "cli_ids": [
+        "node enroll reject"
+      ]
+    },
+    {
+      "entry_id": "node-enroll-request",
+      "operation_family": "node enroll request",
+      "cli_ids": [
+        "node enroll request"
+      ]
+    },
+    {
+      "entry_id": "node-health",
+      "operation_family": "node",
+      "cli_ids": [
+        "node health"
+      ]
+    },
+    {
+      "entry_id": "node-init",
+      "operation_family": "node",
+      "cli_ids": [
+        "node init"
+      ]
+    },
+    {
+      "entry_id": "node-peers",
+      "operation_family": "node",
+      "cli_ids": [
+        "node peers"
+      ]
+    },
+    {
+      "entry_id": "node-revoke",
+      "operation_family": "node",
+      "cli_ids": [
+        "node revoke"
+      ]
+    },
+    {
+      "entry_id": "node-signals",
+      "operation_family": "node",
+      "cli_ids": [
+        "node signals"
+      ]
+    },
+    {
+      "entry_id": "node-status",
+      "operation_family": "node",
+      "cli_ids": [
+        "node status"
+      ]
+    },
+    {
+      "entry_id": "node-trust",
+      "operation_family": "node",
+      "cli_ids": [
+        "node trust"
+      ]
+    },
+    {
+      "entry_id": "queue-add",
+      "operation_family": "queue",
+      "cli_ids": [
+        "queue add"
+      ]
+    },
+    {
+      "entry_id": "queue-cancel",
+      "operation_family": "queue",
+      "cli_ids": [
+        "queue cancel"
+      ]
+    },
+    {
+      "entry_id": "queue-dead-letter",
+      "operation_family": "queue",
+      "cli_ids": [
+        "queue dead-letter"
+      ]
+    },
+    {
+      "entry_id": "scripts",
+      "operation_family": "scripts",
+      "cli_ids": [
+        "scripts"
+      ]
+    },
+    {
+      "entry_id": "search",
+      "operation_family": "search",
+      "cli_ids": [
+        "search"
+      ]
+    }
+  ]
+}

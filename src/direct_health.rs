@@ -876,6 +876,10 @@ mod tests {
     struct Fixture {
         _temp: TempDir,
         identity: NodeIdentity,
+        /// The deterministic signing identity corresponding to `conductor`.
+        /// Keeping its private key in the fixture lets carriage tests send a
+        /// valid inbound message after revocation, exactly as a live peer can.
+        conductor_identity: NodeIdentity,
         registry: NodeRegistry,
         conductor: String,
         conductor_key: [u8; 32],
@@ -909,7 +913,7 @@ mod tests {
     fn fixture() -> Fixture {
         let temp = TempDir::new().unwrap();
         let context = NodeContext::resolve_for(
-            NodePlatform::Linux,
+            NodePlatform::current(),
             NodePathOverrides::new(
                 Some(temp.path().join("state")),
                 Some(temp.path().join("node.toml")),
@@ -922,6 +926,21 @@ mod tests {
         .unwrap();
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        let conductor_root = temp.path().join("conductor");
+        std::fs::create_dir_all(&conductor_root).unwrap();
+        let conductor_context = NodeContext::resolve_for(
+            NodePlatform::current(),
+            NodePathOverrides::new(
+                Some(conductor_root.join("state")),
+                Some(conductor_root.join("node.toml")),
+            ),
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let conductor_identity = NodeIdentity::import(&conductor_context, &scalar(11)).unwrap();
         let trust = |seed: u32, role: PeerRole, capabilities: &[&str]| {
             let (node_id, public_key, xonly) = peer_identity(seed);
             registry
@@ -942,6 +961,7 @@ mod tests {
         Fixture {
             _temp: temp,
             identity,
+            conductor_identity,
             registry,
             conductor,
             conductor_key,
@@ -1172,6 +1192,78 @@ mod tests {
             session.authorization().0 == LocalRole::None,
             "a revoked peer must project no local role at all"
         );
+    }
+
+    #[test]
+    fn a_readable_health_message_after_revocation_is_audited_without_state_mutation() {
+        let fixture = fixture();
+        let mut session = fixture.session(&fixture.conductor, fixture.conductor_key);
+        fixture
+            .registry
+            .revoke_peer(
+                &fixture.conductor,
+                "direct-health-tests",
+                "revoked before queued message",
+            )
+            .expect("revoke the conductor");
+        let before = fixture
+            .registry
+            .health_peer_states()
+            .expect("read Health Plane state before ingest");
+        let payload = serde_json::json!({
+            "health_version": 1,
+            "message_id": format!("{:032x}", 77_u64),
+            "pulse": {
+                "emitted_at": BASE_NOW,
+                "last_run": null,
+                "profile_revision": 1,
+                "runner": {
+                    "queue_depth": 0,
+                    "scheduler": "running",
+                    "state": "idle",
+                    "workers_busy": 0,
+                    "workers_configured": 1
+                },
+                "sequence": 1,
+                "uptime_seconds": 1
+            },
+            "target": fixture.identity.public_status().node_id,
+        });
+        let encoded = crate::direct_transport::sign_health_envelope(
+            &fixture.conductor_identity,
+            "health_pulse",
+            &SESSION_ID,
+            [0x4d; 16],
+            payload,
+            BASE_NOW as u64,
+        )
+        .expect("sign the queued health message")
+        .encoded();
+
+        assert_eq!(
+            session.handle_envelope(&encoded),
+            HealthOutcome::Handled,
+            "revoked Health traffic is dropped without a reply"
+        );
+        assert_eq!(
+            fixture
+                .registry
+                .health_peer_states()
+                .expect("read Health Plane state after ingest"),
+            before,
+            "a revoked message must not mutate durable Health Plane state"
+        );
+        let audit = fixture.registry.health_audit_events(10).unwrap();
+        assert_eq!(
+            audit.len(),
+            1,
+            "one readable message must create one audit row"
+        );
+        assert_eq!(audit[0].event_code, "health_pulse");
+        assert_eq!(audit[0].node_id, fixture.conductor);
+        assert_eq!(audit[0].message_kind, "health_pulse");
+        assert_eq!(audit[0].outcome, "rejected");
+        assert_eq!(audit[0].error_code, Some(HealthCode::Revoked.code()));
     }
 
     #[test]

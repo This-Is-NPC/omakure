@@ -561,24 +561,31 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn write_bash_stub(workspace: &Workspace, name: &str, body: &str) -> PathBuf {
-        let p = workspace.root().join(name);
-        fs::write(&p, format!("#!/usr/bin/env bash\n{}\n", body)).unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&p).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&p, perms).unwrap();
-        p
+    fn write_bash_script(workspace: &Workspace, name: &str, body: &str) -> PathBuf {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let path = workspace.root().join(name);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o755)
+            .open(&path)
+            .unwrap();
+        write!(file, "#!/usr/bin/env bash\n{body}\n").unwrap();
+        path
     }
 
     #[cfg(unix)]
-    fn write_schema_bash_stub(
+    fn write_schema_bash_script(
         workspace: &Workspace,
         name: &str,
         schema_json: &str,
         body: &str,
     ) -> PathBuf {
-        write_bash_stub(
+        write_bash_script(
             workspace,
             name,
             &format!(
@@ -604,7 +611,7 @@ mod tests {
     #[cfg(unix)]
     fn add_success_enqueues_row_with_timeout() {
         let (ws, _dir) = make_workspace("add_success");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
 
         add(
             &ws,
@@ -686,7 +693,7 @@ mod tests {
     #[cfg(unix)]
     fn cancel_terminal_row_returns_invalid_argument() {
         let (ws, _dir) = make_workspace("cancel_terminal");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -721,7 +728,7 @@ mod tests {
     #[cfg(unix)]
     fn dead_letter_failed_row_promotes_state() {
         let (ws, _dir) = make_workspace("dead_letter_failed");
-        let script = write_bash_stub(&ws, "boom.sh", "exit 1");
+        let script = write_bash_script(&ws, "boom.sh", "exit 1");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -774,7 +781,7 @@ mod tests {
     #[cfg(unix)]
     fn dead_letter_completed_row_returns_invalid_argument() {
         let (ws, _dir) = make_workspace("dead_letter_completed");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
             &conn,
@@ -809,7 +816,7 @@ mod tests {
     #[cfg(unix)]
     fn worker_actor_filter_claims_only_matching_jobs() {
         let (ws, _dir) = make_workspace("actor_filter");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let ai = enqueue(
             &conn,
@@ -856,7 +863,7 @@ mod tests {
     #[cfg(unix)]
     fn worker_drains_one_queued_job_then_exits_with_once() {
         let (ws, _dir) = make_workspace("once_drain");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,
@@ -899,7 +906,7 @@ mod tests {
         fs::write(envs.join("dev.conf"), "INJECTED_VAR=queue_injected_9").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
 
-        let script = write_bash_stub(&ws, "echo.sh", "echo \"$INJECTED_VAR\"");
+        let script = write_bash_script(&ws, "echo.sh", "echo \"$INJECTED_VAR\"");
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,
@@ -940,7 +947,7 @@ mod tests {
     fn worker_fails_queued_run_when_stored_env_disappears_before_execution() {
         let (ws, _dir) = make_workspace("queued_env_missing");
         let marker = ws.root().join("should_not_exist");
-        let script = write_bash_stub(
+        let script = write_bash_script(
             &ws,
             "must_not_run.sh",
             &format!("touch {}\necho should-not-run", marker.display()),
@@ -991,7 +998,7 @@ mod tests {
         fs::write(envs.join("dev.conf"), "TOKEN=worker_secret_value").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
 
-        let script = write_schema_bash_stub(
+        let script = write_schema_bash_script(
             &ws,
             "secret.sh",
             r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
@@ -1038,7 +1045,7 @@ mod tests {
         fs::write(envs.join("dev.conf"), "TOKEN=dev_secret_value").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
 
-        let script = write_schema_bash_stub(
+        let script = write_schema_bash_script(
             &ws,
             "secret_env.sh",
             r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
@@ -1085,7 +1092,7 @@ mod tests {
         fs::write(envs.join("prod.conf"), "TOKEN=initial_plaintext").unwrap();
         fs::write(envs.join("evil.conf"), "token=evil_secret").unwrap();
 
-        write_schema_bash_stub(
+        write_schema_bash_script(
             &ws,
             "secret_env.sh",
             r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
@@ -1134,7 +1141,7 @@ mod tests {
         let envs = ws.envs_dir();
         fs::write(envs.join("prod.conf"), "TOKEN=policy_secret").unwrap();
         let marker = ws.root().join("policy_missing_marker");
-        let script = write_schema_bash_stub(
+        let script = write_schema_bash_script(
             &ws,
             "secret_arg.sh",
             r#"{"Name":"Secret","Fields":[{"Name":"TOKEN","Type":"secret","Required":true,"Arg":"--token"}]}"#,
@@ -1185,7 +1192,7 @@ mod tests {
     #[cfg(unix)]
     fn worker_timeout_marks_row_timed_out() {
         let (ws, _dir) = make_workspace("once_timeout");
-        let script = write_bash_stub(&ws, "sleep.sh", "sleep 5");
+        let script = write_bash_script(&ws, "sleep.sh", "sleep 5");
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,
@@ -1237,7 +1244,7 @@ mod tests {
             bin.display(),
             bin.display()
         );
-        let script = write_bash_stub(&ws, "trace_script.sh", &script_body);
+        let script = write_bash_script(&ws, "trace_script.sh", &script_body);
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,
@@ -1292,7 +1299,7 @@ mod tests {
     #[cfg(unix)]
     fn worker_concurrency_two_drains_two_jobs_in_parallel() {
         let (ws, _dir) = make_workspace("once_two");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let r1 = enqueue(
             &conn,
@@ -1353,7 +1360,7 @@ mod tests {
     #[cfg(unix)]
     fn cancel_queued_run_prints_cancelled_line() {
         let (ws, _dir) = make_workspace("cancel_queued");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = runs::enqueue(
             &conn,
@@ -1424,7 +1431,7 @@ mod tests {
     #[cfg(unix)]
     fn worker_with_concurrency_and_once_drains_queue() {
         let (ws, _dir) = make_workspace("worker_dispatch");
-        let script = write_bash_stub(&ws, "ok.sh", "echo done");
+        let script = write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         for _ in 0..2 {
             runs::enqueue(

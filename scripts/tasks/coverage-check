@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""Check deterministic LLVM line coverage against the reviewed baseline.
+
+The checker intentionally has no network or tool-install side effects. It consumes
+an llvm-cov JSON export and writes a normalized, repository-relative inventory.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import sys
+from typing import Any
+
+SCHEMA_VERSION = 1
+THOUSANDTHS = 10_000
+
+
+def parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--report", type=Path, required=True, help="llvm-cov JSON export")
+    p.add_argument("--baseline", type=Path, required=True)
+    p.add_argument("--source-root", type=Path, default=Path("."))
+    p.add_argument("--inventory-out", type=Path)
+    return p
+
+
+def normalized_path(filename: str, root: Path) -> str:
+    path = Path(filename)
+    if path.is_absolute():
+        path = path.resolve()
+        try:
+            path = path.relative_to(root.resolve())
+        except ValueError:
+            # llvm-cov can report dependency paths. Keep those deterministic but
+            # visibly outside the source tree rather than leaking a workstation
+            # path. Hashing the complete path prevents duplicate basenames from
+            # collapsing into one exclusion.
+            digest = hashlib.sha256(path.as_posix().encode("utf-8")).hexdigest()[:16]
+            path = Path("external") / f"{digest}-{path.name or 'unknown'}"
+    return path.as_posix().lstrip("./")
+
+
+def metric(summary: dict[str, Any], key: str) -> dict[str, int]:
+    value = summary.get(key) or {}
+    return {"covered": int(value.get("covered", 0)), "coverable": int(value.get("count", 0))}
+
+
+def report_files(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    files: list[dict[str, Any]] = []
+    for datum in payload.get("data", []):
+        files.extend(datum.get("files", []))
+    # Older llvm-cov exports may put files at the top level.
+    if not files:
+        files.extend(payload.get("files", []))
+    return files
+
+
+def source_files(root: Path) -> list[str]:
+    return sorted(
+        path.relative_to(root).as_posix()
+        for path in root.glob("src/**/*.rs")
+        if path.is_file()
+    )
+
+
+def exclusion_reason(path: str) -> str:
+    parts = {part.lower() for part in Path(path).parts if part not in ("/", "\\")}
+    if path.startswith("src/"):
+        raise ValueError(f"production source cannot be excluded: {path}")
+    if ".cargo" in parts or "registry" in parts:
+        return "dependency"
+    if "target" in parts:
+        return "build-artifact"
+    if "tests" in parts:
+        return "test-harness"
+    if "generated" in parts:
+        return "generated"
+    raise ValueError(f"unclassified coverage path; add an explicit reason: {path}")
+
+
+def normalize(payload: dict[str, Any], root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    by_path: dict[str, dict[str, int]] = {}
+    exclusions: dict[str, str] = {}
+    for file in report_files(payload):
+        filename = str(file.get("filename", ""))
+        path = normalized_path(filename, root)
+        if not path:
+            continue
+        summary = file.get("summary") or {}
+        lines = metric(summary, "lines")
+        regions = metric(summary, "regions")
+        functions = metric(summary, "functions")
+        if path.startswith("src/"):
+            by_path[path] = {
+                "covered": lines["covered"],
+                "coverable": lines["coverable"],
+                "regions_covered": regions["covered"],
+                "regions_coverable": regions["coverable"],
+                "functions_covered": functions["covered"],
+                "functions_coverable": functions["coverable"],
+            }
+        else:
+            # Classify the original path before normalization. External paths
+            # intentionally hide machine-specific prefixes, so classifying the
+            # normalized `external/<digest>-...` name would lose this signal.
+            exclusions[path] = exclusion_reason(filename)
+
+    inventory = []
+    for path in source_files(root):
+        values = by_path.get(path, {})
+        inventory.append(
+            {
+                "path": path,
+                "covered_lines": values.get("covered", 0),
+                "coverable_lines": values.get("coverable", 0),
+                "covered_regions": values.get("regions_covered", 0),
+                "coverable_regions": values.get("regions_coverable", 0),
+                "covered_functions": values.get("functions_covered", 0),
+                "coverable_functions": values.get("functions_coverable", 0),
+            }
+        )
+    return inventory, [{"path": path, "reason": exclusions[path]} for path in sorted(exclusions)]
+
+
+def total(inventory: list[dict[str, Any]], covered: str, coverable: str) -> tuple[int, int]:
+    return sum(int(row[covered]) for row in inventory), sum(int(row[coverable]) for row in inventory)
+
+
+def main() -> int:
+    args = parser().parse_args()
+    root = args.source_root.resolve()
+    baseline = json.loads(args.baseline.read_text())
+    if baseline.get("schema_version") != SCHEMA_VERSION:
+        raise SystemExit("unsupported coverage baseline schema")
+    payload = json.loads(args.report.read_text())
+    inventory, exclusions = normalize(payload, root)
+
+    # normalize() rejects any attempt to classify handwritten src/** as excluded.
+
+    covered, coverable = total(inventory, "covered_lines", "coverable_lines")
+    threshold = int(baseline["line_threshold_basis_points"])
+    if not 0 <= threshold <= THOUSANDTHS:
+        raise SystemExit("line_threshold_basis_points must be between 0 and 10000")
+    baseline_inventory = {row["path"] for row in baseline.get("source_inventory", [])}
+    current_inventory = {row["path"] for row in inventory}
+    added = sorted(current_inventory - baseline_inventory)
+    removed = sorted(baseline_inventory - current_inventory)
+
+    normalized = {
+        "schema_version": SCHEMA_VERSION,
+        "source_inventory": inventory,
+        "exclusions": exclusions,
+        "summary": {
+            "lines": {"covered": covered, "coverable": coverable},
+            "regions": {"covered": total(inventory, "covered_regions", "coverable_regions")[0], "coverable": total(inventory, "covered_regions", "coverable_regions")[1]},
+            "functions": {"covered": total(inventory, "covered_functions", "coverable_functions")[0], "coverable": total(inventory, "covered_functions", "coverable_functions")[1]},
+        },
+        "inventory_diff": {"added": added, "removed": removed},
+    }
+    if args.inventory_out:
+        args.inventory_out.parent.mkdir(parents=True, exist_ok=True)
+        args.inventory_out.write_text(json.dumps(normalized, indent=2, sort_keys=True) + "\n")
+
+    # Cross multiplication is deliberate: floating point percentages are not
+    # allowed to decide whether a boundary fixture passes.
+    passes = coverable > 0 and covered * THOUSANDTHS >= coverable * threshold
+    status = "PASS" if passes else "FAIL"
+    print(f"coverage gate {status}: {covered}/{coverable} lines; threshold {threshold} basis points")
+    if added or removed:
+        print(f"source inventory changed: +{len(added)} -{len(removed)}")
+        for path in added:
+            print(f"  added: {path}")
+        for path in removed:
+            print(f"  removed: {path}")
+    if not passes:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        print(f"coverage gate error: {error}", file=sys.stderr)
+        raise SystemExit(2)

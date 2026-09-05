@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+if [[ "${NATIVE_TESTS_BOUNDED:-}" != 1 ]]; then
+  bounded="$root/scripts/tasks/atomic/run-bounded"
+  [[ -x "$bounded" ]] || { printf 'suite/native-tests: bounded runner is missing\n' >&2; exit 1; }
+  exec env NATIVE_TESTS_BOUNDED=1 "$bounded" 30m "$0" "$@"
+fi
+for script in test-lib test-bins test-examples test-doc; do
+  path="$root/scripts/tasks/atomic/$script"
+  [[ -x "$path" ]] || { printf 'suite/native-tests: missing executable %s\n' "$path" >&2; exit 1; }
+done
+integration="$root/scripts/tasks/suite/native-integration"
+[[ -x "$integration" ]] || { printf 'suite/native-tests: missing executable %s\n' "$integration" >&2; exit 1; }
+"$root/scripts/tasks/atomic/test-lib" "$@"
+"$root/scripts/tasks/atomic/test-bins" "$@"
+"$root/scripts/tasks/atomic/test-examples" "$@"
+"$root/scripts/tasks/atomic/test-doc" "$@"
+exec "$integration" "$@"

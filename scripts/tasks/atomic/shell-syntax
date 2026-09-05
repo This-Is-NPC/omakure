@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+command -v bash >/dev/null 2>&1 || { printf 'atomic/shell-syntax: bash is required\n' >&2; exit 1; }
+shopt -s nullglob
+
+shell_scripts=()
+append_glob() {
+  local pattern="$1"
+  local -a matches=( $pattern )
+  ((${#matches[@]} > 0)) || {
+    printf 'atomic/shell-syntax: expected glob is empty: %s\n' "$pattern" >&2
+    exit 1
+  }
+  shell_scripts+=( "${matches[@]}" )
+}
+append_path() {
+  local path="$1"
+  [[ -f "$path" ]] || {
+    printf 'atomic/shell-syntax: expected script is absent: %s\n' "$path" >&2
+    exit 1
+  }
+  shell_scripts+=( "$path" )
+}
+
+for pattern in \
+  scripts/tasks/atomic/* \
+  scripts/tasks/suite/* \
+  scripts/tasks/check/platform/* \
+  scripts/tasks/cert/* \
+  scripts/tasks/dev/* \
+  .githooks/* \
+  scripts/install/*.sh \
+  scripts/release/*.sh
+do
+  append_glob "$pattern"
+done
+for path in scripts/tasks/check/fast scripts/tasks/check/full; do
+  append_path "$path"
+done
+
+for script in "${shell_scripts[@]}"; do
+  [[ -f "$script" && -x "$script" ]] || {
+    printf 'atomic/shell-syntax: expected executable script: %s\n' "$script" >&2
+    exit 1
+  }
+  bash -n "$script"
+done
+printf 'atomic/shell-syntax: PASS (%s scripts)\n' "${#shell_scripts[@]}"

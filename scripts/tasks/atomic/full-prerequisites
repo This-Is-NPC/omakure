@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+cd "$root"
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || {
+    printf 'atomic/full-prerequisites: required command is missing: %s\n' "$1" >&2
+    exit 1
+  }
+}
+[[ "$(uname -s)" == Linux ]] || {
+  printf 'atomic/full-prerequisites: the complete local suite requires Linux\n' >&2
+  exit 1
+}
+for command in cargo docker jq python3 sqlite3 timeout; do
+  require_command "$command"
+done
+timeout_version="$(timeout --version 2>&1 || true)"
+[[ "$timeout_version" == *"GNU coreutils"* ]] || {
+  printf 'atomic/full-prerequisites: GNU timeout is required for bounded checks\n' >&2
+  exit 1
+}
+docker compose version >/dev/null 2>&1 || {
+  printf 'atomic/full-prerequisites: Docker Compose is required\n' >&2
+  exit 1
+}
+timeout --foreground --kill-after=10s 30s docker info >/dev/null 2>&1 || {
+  printf 'atomic/full-prerequisites: Docker daemon is unavailable\n' >&2
+  exit 1
+}
+python3 -c 'import yaml' >/dev/null 2>&1 || {
+  printf 'atomic/full-prerequisites: PyYAML is required for YAML validation\n' >&2
+  exit 1
+}
+printf 'atomic/full-prerequisites: PASS\n'

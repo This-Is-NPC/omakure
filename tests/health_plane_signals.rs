@@ -1,11 +1,11 @@
-//! Integration coverage for the closed Health Plane Signal lifecycle
-//! (task #2779, wave 4 of plan `health-plane-foundation`).
+//! Integration coverage for the closed Health Plane Signal lifecycle.
 //!
 //! The suite drives a real node: state, identity, and trust are created through
 //! the shipped CLI, and every assertion is made against the production registry
 //! and the production shared operations reopened over that same `node.sqlite`.
 //! Nothing here reimplements storage, authorization, ordering, or retention;
-//! those belong to wave 2 and are exercised, not duplicated.
+//! those behaviors are covered by the state integration suite and exercised,
+//! not duplicated.
 //!
 //! Time is injected. No test sleeps, and every window - freshness, the reorder
 //! buffer, the rate windows, and the 7-day retention - is exercised at its

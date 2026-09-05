@@ -66,7 +66,8 @@ omakure history list --state failed
 
 with the error `the worker holding this remote run stopped; it was not re-run
 because a remote instruction must execute at most once`. Re-dispatch it
-deliberately if it should happen again; nothing will do so on its own.
+deliberately if it should happen again; nothing will do so on its own. Use
+`--cue-id` to retry the same instruction; a new id is a new run.
 
 ## A machine that did not join
 
@@ -176,7 +177,7 @@ replacement explicitly; the old identity must not be silently reused.
 The bounded Linux recovery path is exercised by:
 
 ```bash
-mise run transport-certification
+mise run cert:transport
 ```
 
 That gate verifies partition/reconnect, revocation, reset/replacement, durable
@@ -186,7 +187,7 @@ Nostr, campaigns, or MDM behavior.
 Health Plane recovery has its own bounded Linux gate:
 
 ```bash
-mise run health-plane-certification
+mise run cert:health
 ```
 
 That gate verifies the recovery paths an operator actually depends on: a

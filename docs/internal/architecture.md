@@ -51,6 +51,38 @@ flowchart LR
     executor --> history[History · traces · redacted output]
 ```
 
+### Repository automation graph
+
+Repository automation is layered so orchestration cannot be copied into every
+caller:
+- `scripts/tasks/atomic/` contains one-operation scripts (checks, one test
+  group, builds, packaging, smoke, and contract fixtures).
+- `scripts/tasks/suite/` aggregates atomics and retained certification scripts.
+  `native-integration` owns the explicit one-entry-per-`tests/*.rs` manifest.
+- `scripts/tasks/check/fast` and `scripts/tasks/check/full` are the local
+  aggregate gates. `scripts/tasks/check/platform/` exposes exactly four target
+  suites: `linux-gnu`, `linux-musl`, `macos`, and `windows`.
+- `.githooks/pre-commit` and `.githooks/pre-push` route exactly to fast and
+  full. Every Mise `run` entry points to one existing executable script;
+  composition is kept in these shell layers, not inline in `mise.toml`.
+- CI and release matrix jobs invoke
+  `scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"`.
+  Packaging remains an archive assertion around the same platform build; it
+  does not reproduce test/build/static-link/smoke commands in workflow YAML.
+
+```text
+hook ──> check/{fast,full} ──> atomic/suite
+mise ──> one canonical atomic/suite/check/installer/retained script
+CI + release matrix ──> check/platform/${platform} ${target}
+```
+
+Full is the complete locally executable Linux scope: native tests, development
+smoke, Usage/catalog checks, deterministic coverage, complexity calibration
+and ratchet/audit, release packaging, VM policy inspection, Docker smoke,
+transport and Health certification, and cleanup verification. It intentionally
+does not include destructive Fedora VM/KVM execution. Run that separately with
+`mise run cert:vm` on a prepared host.
+
 ### Fleet planes
 
 One authenticated direct session carries three separate application planes.
@@ -175,6 +207,13 @@ src/
   other routes require bearer auth and policy scopes.
 - Schedules are declared in script schemas. `serve` scans every five seconds,
   prevents overlapping fires, and records scheduler provenance in SQLite.
+- Scheduler run-table reads are exposed by the tested `runs.rs` APIs
+  `last_scheduled_fire_ms` and `has_live_scheduled_run`; `src/cli/serve.rs`
+  only discovers schedules and enqueues due work.
+- `tests/architecture_contract.rs` parses handwritten Rust with the pinned
+  `syn` development dependency and checks HTTP, domain, run-table SQL, and
+  executor-convergence boundaries. Its fixtures assert stable path/symbol
+  diagnostics for violations while allowing storage aliases and macros.
 - A workspace is one filesystem root. `--scripts-dir` selects it; positional
   paths are not a command mode. Metadata is created only below that root.
 - `.lua` is executed by a Lua runtime embedded in the binary, so a node runs
@@ -196,7 +235,7 @@ src/
 - The portable node foundation includes direct Noise transport, trust-neutral LAN
   discovery, manual enrollment, signed-bundle enrollment, static-peer lifecycle,
   revocation, replay protection, and bounded transport audit events. Nostr,
-  campaigns and MDM remain future features.
+  campaigns, and MDM are outside the current product boundary.
 - Remote Cues ship behind five fail-closed gates, every input read from the
   receiving node's own registry and config. A Cue names a script the Performer
   already declared in `trust.remote_cue_scripts` or `trust.remote_cue_batteries`
@@ -233,15 +272,25 @@ src/
 
 ## Release and tests
 
-CI runs all targets, the native protocol/build/lifecycle matrix, the native
-Health Plane protocol/migration/lifecycle matrix, the bounded Linux multi-node
-transport certification, the bounded Linux four-node Health Plane certification,
-clippy with warnings denied, formatting, packaging checks, and release-readiness
-validation. The two multi-container gates run on hosted Linux only; macOS and
-Windows keep native coverage and never claim a container result. Release archives contain
-only the matching `omakure` executable (or `omakure.exe` on Windows). See
+CI runs the matrix-selected platform suites, native protocol/build/lifecycle
+coverage, Health Plane coverage, bounded Linux transport/Health certification,
+formatting, Clippy, packaging checks, and release-readiness validation. The two
+multi-container gates run on hosted Linux only; macOS and Windows keep native
+coverage and never claim a container result. Release archives contain only the
+matching `omakure` executable (or `omakure.exe` on Windows). See
 `release-artifacts.md`.
 
-Use `cargo test` for unit and integration coverage, `cargo clippy --all-targets
--- -D warnings` for lint, and `cargo tree --edges normal` to audit the retained
-dependency graph.
+For local work, use the canonical routes:
+
+```bash
+mise run test
+mise run lint
+mise run check:fast
+mise run check:full
+mise run cert:vm
+```
+
+The platform runner requirements are explicit: Linux musl needs `musl-tools`
+and `musl-gcc`, macOS needs an owned physical `RUNNER_TEMP`, and Windows needs
+the supported MSVC target and static CRT setup. A manual VM is never implied by
+the hosted matrix or the full local gate.

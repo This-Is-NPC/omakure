@@ -4,42 +4,147 @@ Omakure is built and exercised as a headless CLI/HTTP application. Do not use
 bare `omakure` as an application launch command: no-argument invocation only
 prints help and returns; development entry points must name a command.
 
-## Fast path
+## Checks and hooks
+
+Install the tracked repository hooks from the repository root:
 
 ```bash
-cargo build
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
-mise run dev
+mise run hooks:install
 ```
 
-`mise run dev` builds the debug binary, starts a node service on a disposable local
-port, verifies `/v1/health` and `/v1/ready`, then terminates it. It does not
-leave a daemon running or require a terminal UI. Set `OMAKURE_DEV_WORKSPACE`
-and `OMAKURE_DEV_PORT` to override its fixtures.
+This sets local Git `core.hooksPath` to `.githooks` and leaves unrelated global
+Git configuration untouched. The hooks are exact thin wrappers:
+
+| Hook | Canonical script | Scope |
+|---|---|---|
+| pre-commit | `scripts/tasks/check/fast` | Shared static/fixture checks, formatting, Clippy, and the library test atomic |
+| pre-push | `scripts/tasks/check/full` | The shared checks once, then the complete locally executable Linux gate |
+
+Run the gates directly or through their direct Mise routes:
+
+```bash
+scripts/tasks/check/fast
+scripts/tasks/check/full
+mise run check:fast
+mise run check:full
+```
+
+An atomic under `scripts/tasks/atomic/` performs one operation. A suite under
+`scripts/tasks/suite/` aggregates atomics or retained certification scripts.
+The four platform suites under `scripts/tasks/check/platform/` are
+`linux-gnu`, `linux-musl`, `macos`, and `windows`; each validates its target
+runner and delegates tests/builds/smoke to the canonical atomics and suites.
+Neither check gate duplicates the other.
+
+Fast is intentionally limited to shell/YAML/static contract fixtures,
+formatting, Clippy, and the library tests. Full adds all-target native tests,
+development smoke, Usage and operation-catalog checks, deterministic
+coverage, complexity calibration/ratchet/audit, release packaging, VM policy
+inspection, Docker smoke, transport and Health certification, and cleanup
+verification. Full requires Linux, Docker Engine and Compose, `jq`, SQLite,
+Python with PyYAML, GNU `timeout`, and the pinned Rust toolchain. A local Linux
+host is the only host with the complete full scope.
+
+Hosted CI and release reuse the same call graph:
+
+```text
+hook -> check/{fast,full} -> atomic/suite
+mise task -> one canonical atomic, suite, check, installer, or retained script
+CI/release matrix -> scripts/tasks/check/platform/${platform} "${target}"
+```
+
+The release workflow's package step creates each matrix artifact; it is
+distinct from the local `mise run package:release` suite, which forwards its
+arguments to the release build atomic and then invokes the package-artifact
+atomic without arguments. Atomics forward remaining arguments. The
+`scripts/tasks/atomic/run-bounded` atomic requires GNU `timeout` on Linux and
+enforces per-operation bounds with a kill-after margin. On macOS and Windows
+it uses `gtimeout` when available; otherwise it explicitly relies on the
+platform job's 60-minute bound rather than claiming silent per-operation
+enforcement.
+
+The native platform runners have explicit prerequisites. Linux musl runners
+need `musl-tools` and `musl-gcc`; macOS needs an owned physical `RUNNER_TEMP`;
+Windows needs the supported MSVC target and static CRT setup. macOS and
+Windows do not claim Linux Docker certification.
+
+Destructive Fedora VM/KVM certification is intentionally excluded from
+automatic pre-push. The static policy inspection remains in `check:full`; run
+the destructive entry point only on a prepared host:
+
+```bash
+mise run cert:vm
+```
 
 ## Mise tasks
 
+Mise routes each task to one existing executable script; aggregation remains in
+the shell suites rather than inline task commands or dependencies.
+
 | Task | Purpose |
 |---|---|
-| `mise run build` | `cargo build` |
-| `mise run test` | `cargo test` |
-| `mise run lint` | clippy with warnings denied and `cargo fmt --check` |
-| `mise run dev` | bounded node-service health/readiness smoke check |
-| `mise run node` | run the node service in the foreground |
-| `mise run node-service-check` | focused CLI/HTTP/node-service integration tests |
-| `mise run transport-certification` | one bounded Linux command covering canonical Compose, production tests, retained Docker suites, direct Docker transport, and induced-failure cleanup |
-| `mise run transport-certification-cleanup-test` | internal/diagnostic induced-failure cleanup verification |
-| `mise run health-plane-certification` | one bounded Linux command covering the four-node Health Plane gate: Profile/Pulse, all three Signals, presence transitions, restart persistence, revocation, identity replacement, the adversarial matrix over production Noise, and verified teardown |
-| `mise run health-plane-certification-cleanup-test` | internal/diagnostic cleanup verification for induced partial startup, failure, and interrupt |
-| `mise run coverage` | tarpaulin coverage report |
-| `mise run install` | `cargo install --path .` |
+| `mise run build` | debug build atomic |
+| `mise run build:release` | release build atomic |
+| `mise run test` | unit, integration, and e2e suite aggregate |
+| `mise run test:unit` | library and unit-test atomic |
+| `mise run test:integration` | every native `tests/*.rs` target once |
+| `mise run test:e2e` | selected end-to-end suite |
+| `mise run lint` | formatting and Clippy suite |
+| `mise run dev` | bounded node-service smoke atomic |
+| `mise run node` | authenticated node service atomic |
+| `mise run cert` | transport, Health, and VM certification suite |
+| `mise run cert:vm` | destructive Fedora VM certification |
+| `mise run coverage` | deterministic coverage atomic |
+| `mise run coverage:test` | offline coverage contract fixtures |
+| `mise run usage:kdl` / `mise run usage:docs` | Usage artifact atomics |
+| `mise run operation:catalog` | operation catalog atomic |
+| `mise run package:release` | release packaging atomic |
+| `mise run check:fast` / `mise run check:full` | canonical local gates |
+| `mise run hooks:install` | configure local tracked Git hooks |
 
-The repository `scripts/` directory is a fixture workspace for debug builds.
-The global `--scripts-dir` flag and `OMAKURE_SCRIPTS_DIR` override it. Repo
-helpers live in `.scripts/`; they must use explicit CLI commands and bounded
-process cleanup.
+## Usage compatibility artifacts
+
+Clap remains the sole source of truth for parsing, help, and shell
+completions. The feature-gated `usage-kdl` binary uses the exact `clap_usage`
+version, git URL, requested revision, and lock-resolved commit from
+`Cargo.toml` and `Cargo.lock` to generate the presentation-only Usage artifact
+under `docs/usage/`. It is not linked into the default `omakure` binary or its
+completion generators.
+
+The feature-gated `usage-docs` binary parses the checked
+`docs/usage/omakure.kdl` and delegates Markdown and roff rendering to the
+pinned official Usage renderers. It writes `docs/usage/omakure.md` and
+`docs/usage/omakure.1`; these are deterministic checked-in artifacts covering
+all 65 canonical CLI leaves. The renderer is never used at runtime and does
+not make the shipped binary depend on a host path, timestamp, or external
+runtime.
+
+Run `mise run usage:kdl -- --review` when a Clap change may alter fidelity. It
+prints added and removed losses plus a complete candidate allowlist; inspect
+that report, update `docs/usage/fidelity-allowlist.json` manually only when
+the change is reviewed, then run `mise run usage:kdl -- --write` followed by
+`mise run usage:kdl -- --check`. Write and check are fail-closed: neither
+auto-approves a changed loss nor overwrites a stale allowlist, residual
+semantics record, or generated artifact. The checked residual for
+`init script` is also exercised through actual Clap parser outcomes.
+
+After KDL changes, run `mise run usage:docs -- --write` and then
+`mise run usage:docs -- --check`. The check command fails if either generated
+document is stale or missing. Both Usage checks and the operation catalog check
+are required in CI.
+
+The overlay is keyed by parity `entry_id` and `operation_family`, never by
+Usage's rename-sensitive `full_cmd`.
+
+Repository automation is under `scripts/tasks/atomic/`, `scripts/tasks/suite/`,
+and `scripts/tasks/check/`. The latter exposes the four platform suites;
+retained certification and developer implementations stay under
+`scripts/tasks/cert/` and `scripts/tasks/dev/`. Installers are under
+`scripts/install/`, release tooling under `scripts/release/`, and fixtures
+under `scripts/fixtures/`. Installers never copy repository automation into a
+workspace. Every resource-owning task is bounded and trap-cleaned, while
+stateful install, node, release, and live certification tasks are repeat-safe
+only under their documented preconditions.
 
 ## Architecture guide
 
@@ -60,17 +165,22 @@ SQLite from route handlers or duplicate CLI logic in HTTP handlers.
 
 ## Focused tests
 
+Use the canonical suites so local runs match hook and CI routing:
+
 ```bash
-cargo test --test cli_surface_e2e
-cargo test --test node_service_e2e
-cargo test --test http_api_e2e
-cargo test --test policy_e2e
-cargo test --test packaging_smoke
-cargo test --test direct_transport_contract
-cargo test --test direct_transport_e2e
-mise run transport-certification
-mise run health-plane-certification
+mise run test:unit
+mise run test:integration
+mise run test:e2e
+mise run test:node-service
+scripts/tasks/cert/transport
+scripts/tasks/cert/health
+mise run check:fast
 ```
+
+`test:integration` is manifest-driven and runs each current `tests/*.rs`
+basename exactly once. Platform matrix jobs use
+`scripts/tasks/check/platform/{linux-gnu,linux-musl,macos,windows}` instead of
+embedding test or build commands in workflow YAML.
 
 ## Certification toolchain
 
@@ -112,8 +222,10 @@ operations, state transitions, redaction, and runtime resolution.
 
 ## Release checks
 
-CI runs `cargo test --all-targets --locked`, release builds for Linux/macOS/
-Windows, clippy, formatting, packaging assertions, and release-note/version
-validation. Before changing a command contract, run `omakure help-ai` from the
-built binary and update `docs/ai-interface.md`, `docs/cli-http-parity.md`,
-and the relevant tests.
+CI and release jobs invoke the matrix-selected platform suite, which owns
+native tests, target builds, static-link verification, and binary smoke. The
+workflow files retain packaging/archive assertions but do not duplicate those
+commands. Release archives are produced once per target and reuse the same
+platform routing as CI. Before changing a command contract, run `omakure
+help-ai` from the built binary and update `docs/ai-interface.md`,
+`docs/cli-http-parity.md`, and the relevant tests.

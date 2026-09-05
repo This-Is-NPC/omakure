@@ -1,5 +1,6 @@
-//! Wave 3 certification: Profile and Pulse over the production direct
-//! transport, and the bounded fleet-status projection both adapters render.
+//! Production transport integration coverage: Profile and Pulse over the
+//! direct transport, plus the bounded fleet-status projection both adapters
+//! render.
 //!
 //! Nothing here simulates the transport. Two independently stateful `node
 //! serve` processes complete the shipped Noise handshake against each other,
@@ -820,6 +821,13 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     );
 
     let conductor_server = serve(conductor.path());
+    let first_health = conductor_server.get("/v1/node/health");
+    assert_eq!(
+        first_health.status,
+        200,
+        "first node health must be available after semantic readiness: {}",
+        first_health.safe_body()
+    );
 
     // Before the Performer ever runs, both trusted peers are visible with the
     // frozen `unknown` presence and no Profile or Pulse.
@@ -837,7 +845,8 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
 
     let mut performer_server = Some(serve(performer.path()));
 
-    // 1. SMART: the Performer reaches `online` inside the Wave 1 window.
+    // 1. SMART: the Performer reaches `online` inside the frozen presence
+    //    window.
     let started = Instant::now();
     let online = wait_for_presence(&conductor_server, &performer_id, "online");
     let reached = started.elapsed();
@@ -851,7 +860,7 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     assert_eq!(row["trust_state"], "active");
     assert_eq!(row["capabilities"], json!([CAPABILITY_PROFILE_PULSE]));
     assert_eq!(row["profile"]["role"], "performer");
-    assert_eq!(row["profile"]["platform"], "linux");
+    assert_eq!(row["profile"]["platform"], std::env::consts::OS);
     assert!(row["profile"]["profile_revision"].as_u64().unwrap() >= 1);
     assert_eq!(row["pulse"]["runner"]["scheduler"], "disabled");
     assert_eq!(row["pulse"]["runner"]["workers_configured"], 1);
@@ -1316,7 +1325,7 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
 }
 
 // ---------------------------------------------------------------------------
-// Wave 4 SMART gate: three real nodes, one real run, one redacted Signal.
+// Signal SMART gate: three real nodes, one real run, one redacted Signal.
 // ---------------------------------------------------------------------------
 
 /// The frozen capability that authorizes the closed Signal feed.

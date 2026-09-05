@@ -1,0 +1,412 @@
+#!/usr/bin/env python3
+"""Enforce the changed/new handwritten-function complexity ratchet.
+
+The report and baseline are produced by ``complexity-report``.  This checker
+never computes a complexity score itself: it compares the native canonical
+rows, validates provenance, and fails closed when any evidence is incomplete.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+REPORT_SCHEMA = 2
+EVIDENCE_SCHEMA = 1
+MAX_EXCEPTION_DAYS = 90
+TRIGGER_CC = 10
+TRIGGER_COGNITIVE = 15
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def fail(message: str) -> "NoReturn":
+    print(f"complexity-gate: {message}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def canonical_json(value: Any) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+
+
+def read_json(path: Path, label: str) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        fail(f"{label} cannot be read as JSON: {exc}")
+
+
+def required_object(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        fail(f"{name} must be an object")
+    return value
+
+
+def normalized_path(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value or "\\" in value:
+        fail(f"{label} must be a normalized relative path")
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts or value != path.as_posix():
+        fail(f"{label} must be a normalized relative path")
+    return value
+
+
+def identity(row: dict[str, Any], label: str) -> str:
+    path = normalized_path(row.get("path"), f"{label}.path")
+    signature = row.get("signature")
+    if not isinstance(signature, str) or not signature.strip():
+        fail(f"{label}.signature is missing")
+    # The native report's crate-qualified identity is useful evidence, but the
+    # ratchet key deliberately includes the path so a rename is delete+add.
+    return f"{path}::{re.sub(r'\s+', ' ', signature.strip())}"
+
+
+def metrics(row: dict[str, Any], label: str) -> tuple[int, int]:
+    cc, cognitive = row.get("cyclomatic"), row.get("cognitive")
+    if isinstance(cc, bool) or not isinstance(cc, int) or cc < 0:
+        fail(f"{label}.cyclomatic must be a non-negative integer")
+    if isinstance(cognitive, bool) or not isinstance(cognitive, int) or cognitive < 0:
+        fail(f"{label}.cognitive must be a non-negative integer")
+    return cc, cognitive
+
+
+def validate_rows(rows: Any, label: str) -> dict[str, dict[str, Any]]:
+    if not isinstance(rows, list):
+        fail(f"{label} must be an array")
+    result: dict[str, dict[str, Any]] = {}
+    for index, raw in enumerate(rows):
+        row = required_object(raw, f"{label}[{index}]")
+        source_class = row.get("source_class")
+        if source_class not in ("handwritten", "generated", "dependency"):
+            fail(f"{label}[{index}] has unclassified source")
+        path = normalized_path(row.get("path"), f"{label}[{index}].path")
+        signature = row.get("signature")
+        if not isinstance(signature, str) or not signature.strip():
+            fail(f"{label}[{index}].signature is missing")
+        occurrence_identity = row.get("identity")
+        if not isinstance(occurrence_identity, str) or not occurrence_identity.strip():
+            fail(f"{label}[{index}].identity is missing")
+        line = row.get("line")
+        if isinstance(line, bool) or not isinstance(line, int) or line < 1:
+            fail(f"{label}[{index}].line must be a positive integer")
+        kind = row.get("kind")
+        name = row.get("name")
+        if not isinstance(kind, str) or not kind.strip() or not isinstance(name, str) or not name.strip():
+            fail(f"{label}[{index}] native identity fields are missing")
+        occurrence_base = occurrence_identity.strip().split("@", 1)[0]
+        if not occurrence_base.endswith(f"::{name}"):
+            fail(f"{label}[{index}].identity does not match native function name")
+        cc, cognitive = metrics(row, f"{label}[{index}]")
+        native = required_object(row.get("native"), f"{label}[{index}].native")
+        if native.get("analyzer") != "cccc":
+            fail(f"{label}[{index}].native.analyzer must be cccc")
+        for field, expected in (
+            ("name", name), ("kind", kind), ("line", line),
+            ("cyclomatic", cc), ("cognitive", cognitive),
+        ):
+            if native.get(field) != expected:
+                fail(f"{label}[{index}].native.{field} does not match canonical row")
+        derived = required_object(row.get("derived"), f"{label}[{index}].derived")
+        for field, expected in (
+            ("identity", occurrence_identity), ("signature", signature),
+            ("path", path), ("source_class", source_class),
+        ):
+            if derived.get(field) != expected:
+                fail(f"{label}[{index}].derived.{field} does not match canonical row")
+        key = identity(row, f"{label}[{index}]")
+        if key in result:
+            # Native reports can expose two closures with the same source
+            # snippet. Their canonical occurrence identity is the only stable
+            # disambiguator; do not collapse them or silently choose one.
+            key = f"{key}::{occurrence_identity.strip()}"
+        if key in result:
+            fail(f"duplicate normalized function identity: {key}")
+        result[key] = row
+    return result
+
+
+def validate_file_inventory(files: Any, label: str, rows: dict[str, dict[str, Any]]) -> dict[str, str]:
+    if not isinstance(files, list):
+        fail(f"{label} must be an array")
+    inventory: dict[str, str] = {}
+    for index, raw in enumerate(files):
+        item = required_object(raw, f"{label}[{index}]")
+        path = normalized_path(item.get("path"), f"{label}[{index}].path")
+        source_class = item.get("source_class")
+        if source_class not in ("handwritten", "generated", "dependency"):
+            fail(f"{label}[{index}] has unclassified source")
+        if path in inventory:
+            fail(f"{label} contains duplicate path: {path}")
+        if not isinstance(item.get("native"), dict) or not isinstance(item.get("macro"), dict):
+            fail(f"{label}[{index}] native and macro inventory are required")
+        inventory[path] = source_class
+    for row in rows.values():
+        path = row["path"]
+        if path not in inventory:
+            fail(f"{label} is missing function path: {path}")
+        if inventory[path] != row["source_class"]:
+            fail(f"{label} source classification disagrees with function row: {path}")
+    return inventory
+
+
+def compare_file_inventories(current: dict[str, str], previous: dict[str, str]) -> None:
+    """Reject source reclassification before matching any function identity.
+
+    Inventory paths are the stable evidence boundary for source classification.
+    A function rename within a path must not turn a handwritten file into an
+    excluded source (or vice versa) before the row-level ratchet sees it.
+    """
+    for path in sorted(set(current) & set(previous)):
+        current_class = current[path]
+        previous_class = previous[path]
+        if current_class != previous_class:
+            fail(
+                f"source classification drifted for file {path}: "
+                f"baseline={previous_class}, current={current_class}"
+            )
+
+
+def validate_report(report: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, str]]:
+    if report.get("schema_version") != REPORT_SCHEMA:
+        fail("unsupported complexity report schema")
+    if report.get("mode") != "offline-native":
+        fail("complexity report is not an offline native report")
+    canonical = required_object(report.get("canonical"), "report.canonical")
+    rows = validate_rows(canonical.get("functions"), "report.canonical.functions")
+    inventory = validate_file_inventory(canonical.get("files"), "report.canonical.files", rows)
+    expected_hash = hashlib.sha256(canonical_json(canonical)).hexdigest()
+    if report.get("canonical_sha256") != expected_hash:
+        fail("complexity report canonical hash mismatch")
+    accounting = required_object(report.get("source_accounting"), "report.source_accounting")
+    if accounting.get("parse_failures") != 0:
+        fail("complexity report contains parse failures")
+    audit = required_object(report.get("audit"), "report.audit")
+    if audit.get("schema_drift") is not False or audit.get("nondeterministic_output") is not False:
+        fail("complexity report audit is not clean")
+    candidates = required_object(report.get("candidates"), "report.candidates")
+    candidate = required_object(candidates.get("cccc"), "report.candidates.cccc")
+    if candidate.get("executed") is not True or candidate.get("execution") != "native-binary":
+        fail("cccc native execution evidence is missing")
+    if not isinstance(candidate.get("version"), str) or not candidate["version"].strip() or not HEX64.fullmatch(str(candidate.get("binary_sha256", ""))):
+        fail("cccc tool identity is missing or malformed")
+    config = candidate.get("config_identity")
+    if not isinstance(config, str) or not config:
+        fail("cccc config identity is missing")
+    schema = required_object(candidate.get("schema"), "report.candidates.cccc.schema")
+    if not HEX64.fullmatch(str(schema.get("sha256", ""))) or not isinstance(schema.get("paths"), list) or not schema["paths"] or any(not isinstance(path, str) or not path for path in schema["paths"]):
+        fail("cccc native schema identity is missing or malformed")
+    candidate["config_identity"] = config
+    return rows, candidate, inventory
+
+
+
+
+def validate_baseline(baseline: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, str]]:
+    if baseline.get("schema_version") != REPORT_SCHEMA:
+        fail("unsupported complexity baseline schema")
+    version = baseline.get("tool_version", baseline.get("version"))
+    binary = baseline.get("binary_sha256")
+    config = baseline.get("config_identity")
+    if not isinstance(version, str) or not version:
+        fail("complexity baseline tool version is missing")
+    declared_version = baseline.get("version")
+    if declared_version is not None and (not isinstance(declared_version, str) or declared_version != version):
+        fail("complexity baseline version identity drifted")
+    if not HEX64.fullmatch(str(binary or "")):
+        fail("complexity baseline binary identity is missing or malformed")
+    if not isinstance(config, str) or not config:
+        fail("complexity baseline config identity is missing")
+    canonical = baseline.get("canonical")
+    # #2884's reviewed baseline stores canonical rows at the top level. Keep
+    # accepting that native shape while normalizing it for hash/comparison.
+    if canonical is None and isinstance(baseline.get("functions"), list) and isinstance(baseline.get("files"), list):
+        canonical = {"functions": baseline["functions"], "files": baseline["files"]}
+    if not isinstance(canonical, dict):
+        fail("complexity baseline canonical data is missing")
+    rows = validate_rows(canonical.get("functions"), "baseline.canonical.functions")
+    inventory = validate_file_inventory(canonical.get("files"), "baseline.canonical.files", rows)
+    expected_hash = hashlib.sha256(canonical_json(canonical)).hexdigest()
+    if baseline.get("canonical_sha256") != expected_hash:
+        fail("complexity baseline canonical hash mismatch")
+    return rows, {"version": version, "binary_sha256": binary, "config_identity": config}, inventory
+
+
+def parse_utc(value: Any, label: str) -> dt.datetime:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        fail(f"{label} must be an ISO-8601 UTC timestamp")
+    try:
+        parsed = dt.datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        fail(f"{label} is invalid: {exc}")
+    if parsed.tzinfo is None or parsed.utcoffset() != dt.timedelta(0):
+        fail(f"{label} must be UTC")
+    return parsed
+
+
+def load_focus(path: Path | None, report: dict[str, Any]) -> dict[str, str]:
+    payload: Any = report.get("focused_tests", {})
+    if path is not None:
+        payload = read_json(path, "focused test evidence")
+    if isinstance(payload, dict) and isinstance(payload.get("tests"), list):
+        payload = payload["tests"]
+    if isinstance(payload, dict):
+        return {str(key): str(value).lower() for key, value in payload.items()}
+    if isinstance(payload, list):
+        result: dict[str, str] = {}
+        for index, item in enumerate(payload):
+            if isinstance(item, str):
+                result[item] = "passed"
+            elif isinstance(item, dict) and isinstance(item.get("id"), str) and isinstance(item.get("status"), str):
+                result[item["id"]] = item["status"].lower()
+            else:
+                fail(f"focused_tests[{index}] is malformed")
+        return result
+    fail("focused test evidence must be an object or array")
+
+
+def validate_exceptions(payload: Any, current: dict[str, dict[str, Any]], candidate: dict[str, Any], as_of: dt.datetime, focus: dict[str, str]) -> dict[str, dict[str, Any]]:
+    root = required_object(payload, "exceptions")
+    unknown_root = set(root) - {"schema_version", "exceptions"}
+    if unknown_root:
+        fail(f"exceptions has unknown fields: {sorted(unknown_root)}")
+    if root.get("schema_version") != 1:
+        fail("unsupported exception schema")
+    entries = root.get("exceptions")
+    if not isinstance(entries, list):
+        fail("exceptions.exceptions must be an array")
+    result: dict[str, dict[str, Any]] = {}
+    allowed = {"owner", "created_at", "reviewed_at", "expires_at", "analyzer", "tool_version", "config_identity", "path", "symbol", "ceiling", "rationale", "focused_test_ids"}
+    for index, raw in enumerate(entries):
+        item = required_object(raw, f"exceptions.exceptions[{index}]")
+        unknown = set(item) - allowed
+        if unknown:
+            fail(f"exception {index} has unknown fields: {sorted(unknown)}")
+        for field in ("owner", "created_at", "reviewed_at", "expires_at", "analyzer", "tool_version", "config_identity", "path", "symbol", "rationale"):
+            if not isinstance(item.get(field), str) or not item[field].strip():
+                fail(f"exception {index} missing nonempty {field}")
+        created = parse_utc(item["created_at"], f"exception {index}.created_at")
+        reviewed = parse_utc(item["reviewed_at"], f"exception {index}.reviewed_at")
+        expires = parse_utc(item["expires_at"], f"exception {index}.expires_at")
+        if not (created <= reviewed <= expires):
+            fail(f"exception {index} dates are out of order")
+        if created > as_of or reviewed > as_of:
+            fail(f"exception {index} is not effective as of gate timestamp")
+        if expires - created > dt.timedelta(days=MAX_EXCEPTION_DAYS) or reviewed - created > dt.timedelta(days=MAX_EXCEPTION_DAYS):
+            fail(f"exception {index} lifetime exceeds 90 days")
+        if expires <= as_of:
+            fail(f"exception {index} is expired")
+        if item["analyzer"] != "cccc" or item["tool_version"] != candidate["version"] or item["config_identity"] != candidate["config_identity"]:
+            fail(f"exception {index} tool/config identity drifted")
+        ceiling = item.get("ceiling")
+        if not isinstance(ceiling, dict) or set(ceiling) != {"cyclomatic", "cognitive"}:
+            fail(f"exception {index}.ceiling must contain cyclomatic and cognitive only")
+        metrics(ceiling, f"exception {index}.ceiling")
+        tests = item.get("focused_test_ids")
+        if not isinstance(tests, list) or not tests or any(not isinstance(test, str) or not test.strip() for test in tests):
+            fail(f"exception {index}.focused_test_ids must be nonempty")
+        for test in tests:
+            if focus.get(test) not in ("pass", "passed", "success", "ok", "green"):
+                fail(f"exception {index} focused test is missing or failing: {test}")
+        key = f"{normalized_path(item['path'], f'exception {index}.path')}::{re.sub(r'\s+', ' ', item['symbol'].strip())}"
+        if key in result:
+            fail(f"duplicate exception identity: {key}")
+        row = current.get(key)
+        if row is None:
+            fail(f"exception {index} symbol drifted: {key}")
+        if row.get("source_class") != "handwritten":
+            fail(f"exception {index} targets non-handwritten source")
+        cc, cognitive = metrics(row, f"exception {index} target")
+        if cc <= TRIGGER_CC and cognitive <= TRIGGER_COGNITIVE:
+            fail(f"exception {index} is stale for a non-triggering function")
+        if cc > ceiling["cyclomatic"] or cognitive > ceiling["cognitive"]:
+            fail(f"exception {index} score exceeds its recorded ceiling")
+        result[key] = item
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--baseline", type=Path, required=True)
+    parser.add_argument("--exceptions", type=Path, required=True)
+    parser.add_argument("--focused-tests", type=Path)
+    parser.add_argument("--repeat-report", type=Path, help="independent report used to prove determinism")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--as-of", help="UTC timestamp for deterministic fixture validation")
+    args = parser.parse_args()
+    report = required_object(read_json(args.report, "complexity report"), "complexity report")
+    baseline = required_object(read_json(args.baseline, "complexity baseline"), "complexity baseline")
+    current, candidate, current_inventory = validate_report(report)
+    previous, baseline_tool, previous_inventory = validate_baseline(baseline)
+    if candidate["version"] != baseline_tool["version"] or candidate["binary_sha256"] != baseline_tool["binary_sha256"] or candidate["config_identity"] != baseline_tool["config_identity"]:
+        fail("native tool/config identity drifted from baseline")
+    if args.repeat_report:
+        repeat = required_object(read_json(args.repeat_report, "repeat complexity report"), "repeat complexity report")
+        _, repeat_candidate, _ = validate_report(repeat)
+        if repeat.get("schema_version") != report.get("schema_version") or repeat.get("canonical_sha256") != report.get("canonical_sha256"):
+            fail("complexity reports are nondeterministic")
+        identity_fields = ("version", "binary_sha256", "config_identity")
+        if any(repeat_candidate[field] != candidate[field] for field in identity_fields) or repeat_candidate["schema"] != candidate["schema"]:
+            fail("repeat complexity report native identity drifted")
+    compare_file_inventories(current_inventory, previous_inventory)
+    as_of = parse_utc(args.as_of, "--as-of") if args.as_of else dt.datetime.now(dt.timezone.utc)
+    focus = load_focus(args.focused_tests, report)
+    exceptions = validate_exceptions(read_json(args.exceptions, "complexity exceptions"), current, candidate, as_of, focus)
+
+    evidence_rows: list[dict[str, Any]] = []
+    failures: list[str] = []
+    for key in sorted(set(current) | set(previous)):
+        row, old = current.get(key), previous.get(key)
+        if row is None:
+            continue
+        if row.get("source_class") != "handwritten":
+            continue
+        cc, cognitive = metrics(row, f"current {key}")
+        old_metrics = None
+        if old is not None:
+            old_metrics = metrics(old, f"baseline {key}")
+        added = old is None
+        regressed = old_metrics is not None and (cc > old_metrics[0] or cognitive > old_metrics[1])
+        trigger = (added or regressed) and (cc > TRIGGER_CC or cognitive > TRIGGER_COGNITIVE)
+        status = "new" if added else "regressed" if regressed else "unchanged"
+        row_evidence = {
+            "identity": key,
+            "path": row["path"],
+            "symbol": row["signature"],
+            "status": status,
+            "trigger": trigger,
+            "current": {"cyclomatic": cc, "cognitive": cognitive},
+            "baseline": {"cyclomatic": old_metrics[0], "cognitive": old_metrics[1]} if old_metrics else None,
+            "delta": {"cyclomatic": cc - old_metrics[0], "cognitive": cognitive - old_metrics[1]} if old_metrics else None,
+            "size": row.get("size", row.get("sloc")),
+            "nesting": row.get("nesting"),
+            "coverage": row.get("coverage"),
+            "exception": key in exceptions,
+        }
+        evidence_rows.append(row_evidence)
+        if trigger and key not in exceptions:
+            failures.append(f"{status} function exceeds review threshold: {key}")
+    if failures:
+        fail("; ".join(failures))
+    evidence = {
+        "schema_version": EVIDENCE_SCHEMA,
+        "status": "pass",
+        "thresholds": {"cyclomatic_review_gt": TRIGGER_CC, "cognitive_review_gt": TRIGGER_COGNITIVE},
+        "tool": {"analyzer": "cccc", "version": candidate["version"], "binary_sha256": candidate["binary_sha256"], "config_identity": candidate["config_identity"]},
+        "baseline": {"canonical_sha256": baseline["canonical_sha256"]},
+        "summary": {"functions": len(evidence_rows), "new": sum(row["status"] == "new" for row in evidence_rows), "regressed": sum(row["status"] == "regressed" for row in evidence_rows), "informational_legacy": sum(row["status"] == "unchanged" and (row["current"]["cyclomatic"] > TRIGGER_CC or row["current"]["cognitive"] > TRIGGER_COGNITIVE) for row in evidence_rows), "exceptions": len(exceptions)},
+        "functions": evidence_rows,
+        "trends": [{"identity": row["identity"], "baseline": row["baseline"], "current": row["current"], "status": row["status"]} for row in evidence_rows],
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(evidence, sort_keys=True, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    print(f"complexity gate PASS: {len(evidence_rows)} handwritten functions, {evidence['summary']['new']} new, {evidence['summary']['regressed']} regressed")
+    return 0
+
+
+if __name__ == "__main__":
+    main()

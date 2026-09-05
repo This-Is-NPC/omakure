@@ -5,9 +5,8 @@
 //! init scripts by hand. Each workspace gets its own unit, uniquely
 //! named by a stable hash of the canonical workspace path.
 //!
-//! Linux-only. Other platforms return `not_implemented`; we avoid
-//! half-working stubs (e.g. a macOS launchd plist that silently
-//! leaks on uninstall) until there is a real need.
+//! Linux-only. Other platforms return `not_implemented`; platform-specific
+//! service-manager integration is unsupported.
 
 use crate::cli::json::{self, codes};
 use crate::workspace::Workspace;
@@ -63,7 +62,8 @@ fn unsupported(json_output: bool) -> Result<(), Box<dyn Error>> {
         json_output,
         codes::NOT_IMPLEMENTED,
         "serve --install is only supported on Linux (systemd user units). \
-         On macOS/Windows, wire the daemon up with your platform's service manager.",
+         Platform-specific service-manager integration is unsupported on \
+         macOS and Windows.",
     )
 }
 

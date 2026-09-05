@@ -1,0 +1,531 @@
+#!/usr/bin/env python3
+"""Validate and advance the persistent native complexity soak chain.
+
+The chain is deliberately boring JSON so it can be inspected offline. A
+record's digest links it to its predecessor; the dedicated master-only soak
+workflow stores each updated chain under an immutable cache key. Pull-request
+CI never restores or saves this state.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+STATE_VERSION = 1
+MAX_RECORDS = 10
+WORKFLOW_NAME = "Complexity Soak"
+REQUIRED_PROVENANCE = ("repository", "workflow", "event", "ref", "sha", "run_attempt")
+STREAM_PROVENANCE = ("repository", "workflow", "ref")
+TRUSTED_EVENTS = ("push", "schedule")
+MAIN_REF = "refs/heads/master"
+COMMIT_SHA = re.compile(r"[0-9a-f]{40}\Z")
+HASH_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+def fail(message: str) -> int:
+    print(f"complexity-soak-audit: {message}", file=sys.stderr)
+    return 2
+
+
+def canonical_json(value: Any) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+
+
+def parse_timestamp(value: object) -> dt.datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def record_digest(record: dict[str, Any]) -> str:
+    unsigned = {key: value for key, value in record.items() if key != "record_sha256"}
+    return hashlib.sha256(canonical_json(unsigned)).hexdigest()
+def provenance_error(value: object, expected_repository: str | None = None) -> str | None:
+    if not isinstance(value, dict):
+        return "every evidence record needs provenance"
+    for key in REQUIRED_PROVENANCE:
+        if key not in value:
+            return f"provenance needs {key}"
+    for key in ("repository", "workflow", "event", "ref"):
+        if not isinstance(value[key], str) or not value[key]:
+            return f"provenance {key} must be a non-empty string"
+    if value["workflow"] != WORKFLOW_NAME:
+        return f"evidence provenance workflow must be {WORKFLOW_NAME!r}"
+    if not isinstance(value["sha"], str) or not COMMIT_SHA.fullmatch(value["sha"]):
+        return "evidence provenance sha must be a 40-character lowercase commit SHA"
+    attempt = value["run_attempt"]
+    if isinstance(attempt, bool) or not isinstance(attempt, int) or attempt < 1:
+        return "evidence provenance run_attempt must be a positive integer"
+    if value["event"] not in TRUSTED_EVENTS or value["ref"] != MAIN_REF:
+        return "evidence provenance must be a trusted push or schedule on refs/heads/master"
+    if expected_repository and value["repository"] != expected_repository:
+        return "evidence provenance repository does not match this workflow"
+
+def validate_record(record: object, expected_repository: str | None = None) -> tuple[str | None, dt.datetime | None]:
+    if not isinstance(record, dict):
+        return "every evidence record must be an object", None
+    if record.get("status") != "success":
+        return "all evidence records must report status=success", None
+    run_id = record.get("run_id")
+    sequence = record.get("sequence")
+    if not isinstance(run_id, str) or not run_id:
+        return "run_id values must be non-empty strings", None
+    if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
+        return "every evidence record needs a positive integer sequence", None
+    timestamp = parse_timestamp(record.get("timestamp"))
+    if timestamp is None:
+        return "every evidence record needs an RFC3339 timestamp", None
+    schema = record.get("schema_version")
+    if isinstance(schema, bool) or not isinstance(schema, int):
+        return "every evidence record needs an integer schema_version", None
+    canonical_hash = record.get("canonical_sha256")
+    if not isinstance(canonical_hash, str) or not HASH_SHA256.fullmatch(canonical_hash):
+        return "every evidence record needs a lowercase hexadecimal canonical_sha256", None
+    provenance = provenance_error(record.get("provenance"), expected_repository)
+    if provenance:
+        return provenance, None
+    previous = record.get("previous_record_sha256")
+    if previous is not None and (not isinstance(previous, str) or not HASH_SHA256.fullmatch(previous)):
+        return "previous_record_sha256 must be a lowercase hexadecimal SHA-256 string or null", None
+    digest = record.get("record_sha256")
+    if not isinstance(digest, str) or not HASH_SHA256.fullmatch(digest):
+        return "every evidence record needs a lowercase hexadecimal record_sha256", None
+    if digest != record_digest(record):
+        return "record_sha256 does not match the canonical evidence record", None
+    return None, timestamp
+
+
+def validate_chain(records: object, expected_repository: str | None = None) -> tuple[str | None, list[dt.datetime]]:
+    if not isinstance(records, list):
+        return "chain records must be an array", []
+    if len(records) > MAX_RECORDS:
+        return f"chain may retain at most {MAX_RECORDS} records", []
+    timestamps: list[dt.datetime] = []
+    prior_digest: str | None = None
+    prior_sequence: int | None = None
+    run_ids: set[str] = set()
+    schema: int | None = None
+    canonical_hash: str | None = None
+    stream: tuple[str, str, str, str] | None = None
+    for record in records:
+        reason, timestamp = validate_record(record, expected_repository)
+        if reason:
+            return reason, []
+        assert isinstance(record, dict) and timestamp is not None
+        if record["run_id"] in run_ids:
+            return "run_id values must be unique", []
+        run_ids.add(record["run_id"])
+        if prior_sequence is not None and record["sequence"] != prior_sequence + 1:
+            return "evidence records must use consecutive CI sequences; a missing run is a gap", []
+        previous = record.get("previous_record_sha256")
+        if prior_digest is None:
+            if previous is not None:
+                return "first evidence record must link from previous_record_sha256=null", []
+        elif prior_digest != previous:
+            return "evidence record hash chain is broken", []
+        if schema is None:
+            schema = record["schema_version"]
+            canonical_hash = record["canonical_sha256"]
+        elif record["schema_version"] != schema:
+            return "schema_version drifted across evidence records", []
+        elif record["canonical_sha256"] != canonical_hash:
+            return "canonical_sha256 changed across evidence records", []
+        current_stream = tuple(record["provenance"][key] for key in STREAM_PROVENANCE)
+        if stream is None:
+            stream = current_stream
+        elif current_stream != stream:
+            return "evidence repository, workflow, or ref changed across records", []
+        if timestamps and timestamp <= timestamps[-1]:
+            return "evidence timestamps must increase with CI sequence", []
+        timestamps.append(timestamp)
+        prior_sequence = record["sequence"]
+        prior_digest = record["record_sha256"]
+    return None, timestamps
+
+
+def load_state_document(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"state_version": STATE_VERSION, "records": []}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid chain state {path}: {exc}") from exc
+    if not isinstance(value, dict) or value.get("state_version") != STATE_VERSION:
+        raise ValueError(f"chain state {path} has unsupported state_version")
+    records = value.get("records")
+    if not isinstance(records, list):
+        raise ValueError(f"chain state {path} records must be an array")
+    status = value.get("status", "pending")
+    if status not in ("pending", "pass"):
+        raise ValueError(f"chain state {path} has invalid status")
+    reset = value.get("reset")
+    if reset is not None and not isinstance(reset, dict):
+        raise ValueError(f"chain state {path} reset provenance must be an object")
+    return value
+
+
+def load_state(path: Path) -> list[dict[str, Any]]:
+    return load_state_document(path)["records"]
+
+
+def write_state(
+    path: Path,
+    records: list[dict[str, Any]],
+    *,
+    status: str = "pending",
+    reset: dict[str, Any] | None = None,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, Any] = {"state_version": STATE_VERSION, "status": status, "records": records}
+    if reset is not None:
+        payload["reset"] = reset
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, sort_keys=True, indent=2)
+            stream.write("\n")
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def streak_status(records: list[dict[str, Any]], expected_repository: str | None) -> str:
+    reason, timestamps = validate_chain(records, expected_repository)
+    if reason is None and len(records) == MAX_RECORDS and (timestamps[-1].date() - timestamps[0].date()).days >= 7:
+        return "pass"
+    return "pending"
+
+
+def load_directory(directory: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    if not directory.is_dir():
+        return records
+    for path in sorted(directory.glob("*.json")):
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid evidence {path}: {exc}") from exc
+        if isinstance(value, dict) and isinstance(value.get("records"), list):
+            records.extend(value["records"])
+        elif isinstance(value, dict):
+            records.append(value)
+        else:
+            raise ValueError(f"evidence {path} is not an object")
+    return records
+
+
+def report(reason: str | None, strict: bool) -> int:
+    if reason is None:
+        print("complexity soak: PASS (exactly 10 consecutive successful records spanning at least 7 calendar days)")
+        return 0
+    if strict:
+        return fail(reason)
+    print(f"complexity soak: pending ({reason})")
+    return 0
+
+
+def audit(records: list[dict[str, Any]], strict: bool, expected_repository: str | None = None) -> int:
+    reason, timestamps = validate_chain(records, expected_repository)
+    if reason is None:
+        if len(records) != MAX_RECORDS:
+            reason = f"requires exactly {MAX_RECORDS} evidence records, found {len(records)}"
+        elif (timestamps[-1].date() - timestamps[0].date()).days < 7:
+            reason = "records must span at least seven full calendar days"
+    return report(reason, strict)
+
+
+def rerun_projection(record: dict[str, Any]) -> dict[str, Any]:
+    """Return fields that must remain stable across attempts of one run."""
+    projected = dict(record)
+    projected.pop("record_sha256", None)
+    projected.pop("previous_record_sha256", None)
+    projected.pop("timestamp", None)
+    provenance = dict(projected["provenance"])
+    provenance.pop("run_attempt", None)
+    projected["provenance"] = provenance
+    return projected
+
+
+def append_current(state_path: Path, current_path: Path, expected_repository: str | None) -> list[dict[str, Any]]:
+    state_document = load_state_document(state_path)
+    records = state_document["records"]
+    reason, _ = validate_chain(records, expected_repository)
+    if reason:
+        raise ValueError(f"restored chain is invalid: {reason}")
+    try:
+        current = json.loads(current_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid current evidence {current_path}: {exc}") from exc
+    if not isinstance(current, dict):
+        raise ValueError("current evidence must be an object")
+    current = dict(current)
+
+    # A run ID remains the idempotency key even after its first attempt has
+    # been pruned from the ten-record window. Revalidate the rerun, but never
+    # let a changed report or provenance silently replace persisted evidence.
+    existing = next((record for record in records if record["run_id"] == current.get("run_id")), None)
+    if existing is not None:
+        if current.get("sequence") != existing["sequence"]:
+            raise ValueError("rerun evidence changed sequence for an existing run_id")
+        current["previous_record_sha256"] = existing.get("previous_record_sha256")
+        current["record_sha256"] = record_digest(current)
+        reason, _ = validate_record(current, expected_repository)
+        if reason:
+            raise ValueError(f"rerun evidence is invalid: {reason}")
+        if rerun_projection(current) != rerun_projection(existing):
+            raise ValueError("rerun evidence changed persisted run data")
+        return records
+
+    # Validate the incoming evidence before using its sequence to classify it.
+    # A stale rerun has no predecessor in the retained window, so its
+    # synthetic digest is intentionally rooted at null and is never persisted.
+    current["previous_record_sha256"] = None
+    current["record_sha256"] = record_digest(current)
+    reason, _ = validate_record(current, expected_repository)
+    if reason:
+        raise ValueError(f"current evidence is invalid: {reason}")
+
+    previous_sequence = records[-1]["sequence"] if records else None
+    if records and current["sequence"] <= previous_sequence:
+        if current["provenance"]["run_attempt"] > 1:
+            # An old rerun restored the newest cache. It is valid evidence, but
+            # must not reset or overwrite the newer chain.
+            return records
+        raise ValueError("current evidence conflicts with the retained sequence; first attempts cannot be stale")
+
+    current["previous_record_sha256"] = records[-1]["record_sha256"] if records else None
+    current["record_sha256"] = record_digest(current)
+    reason, _ = validate_record(current, expected_repository)
+    if reason:
+        raise ValueError(f"current evidence is invalid: {reason}")
+    sequence_gap = records and current["sequence"] != previous_sequence + 1
+    if sequence_gap:
+        # A failed or missing trusted execution leaves a sequence hole. Start
+        # a new streak rather than wedging it behind that hole.
+        reset = {
+            "reason": "sequence_gap",
+            "previous_sequence": previous_sequence,
+            "current_sequence": current["sequence"],
+            "run_id": current["run_id"],
+            "timestamp": current["timestamp"],
+            "provenance": current["provenance"],
+        }
+        current["previous_record_sha256"] = None
+        current["record_sha256"] = record_digest(current)
+        reason, _ = validate_record(current, expected_repository)
+        if reason:
+            raise ValueError(f"current evidence is invalid: {reason}")
+        records = [current]
+        write_state(state_path, records, status="pending", reset=reset)
+        return records
+    records = (records[-(MAX_RECORDS - 1):] if len(records) >= MAX_RECORDS else records) + [current]
+    reason, _ = validate_chain(records, expected_repository)
+    if reason:
+        raise ValueError(f"updated chain is invalid: {reason}")
+    write_state(
+        state_path,
+        records,
+        status=streak_status(records, expected_repository),
+        reset=state_document.get("reset"),
+    )
+    return records
+
+
+def simulation() -> int:
+    """Exercise trusted-stream recovery and integrity guards without CI."""
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        state = root / "chain.json"
+        repository = "example/omakure"
+        base = dt.datetime(2026, 8, 1, tzinfo=dt.timezone.utc)
+
+        def evidence(
+            sequence: int,
+            *,
+            event: str = "push",
+            run_id: str | None = None,
+            day: int | None = None,
+            attempt: int = 1,
+            sha: str = "1" * 40,
+        ) -> Path:
+            current = root / f"run-{run_id or sequence}-{event}.json"
+            value = {
+                "status": "success",
+                "run_id": run_id or f"run-{sequence}",
+                "sequence": sequence,
+                "timestamp": (base + dt.timedelta(days=day if day is not None else sequence - 1)).isoformat(),
+                "schema_version": 2,
+                "canonical_sha256": "a" * 64,
+                "provenance": {
+                    "repository": repository,
+                    "workflow": WORKFLOW_NAME,
+                    "event": event,
+                    "ref": MAIN_REF,
+                    "sha": sha,
+                    "run_attempt": attempt,
+                },
+            }
+            current.write_text(json.dumps(value), encoding="utf-8")
+            return current
+
+        def recompute(record: dict[str, Any]) -> dict[str, Any]:
+            record["record_sha256"] = record_digest(record)
+            return record
+
+        # A PR run is not a trusted record and cannot mutate the trusted chain.
+        for sequence in range(1, 4):
+            append_current(state, evidence(sequence), repository)
+        before_pr = load_state_document(state)
+        # The chain root is explicit, and every digest link is lowercase hex.
+        rooted = load_state(state)
+        rooted[0]["previous_record_sha256"] = "0" * 64
+        recompute(rooted[0])
+        if validate_chain(rooted, repository)[0] is None:
+            return fail("simulation accepted a non-null first previous_record_sha256")
+        uppercase = load_state(state)
+        uppercase[-1]["canonical_sha256"] = "A" * 64
+        recompute(uppercase[-1])
+        if validate_chain(uppercase, repository)[0] is None:
+            return fail("simulation accepted uppercase canonical hash link")
+        pull_request = evidence(99, event="pull_request")
+        try:
+            append_current(state, pull_request, repository)
+        except ValueError as exc:
+            if "current evidence is invalid" not in str(exc):
+                return fail("simulation rejected PR evidence for the wrong reason")
+        else:
+            return fail("simulation allowed PR evidence into the trusted chain")
+        if load_state_document(state) != before_pr:
+            return fail("simulation let a PR run mutate trusted state")
+
+        # Sequence four represents a failed trusted run: no evidence is
+        # appended. The next trusted execution must atomically reset the
+        # streak instead of wedging it behind the missing sequence.
+        append_current(state, evidence(5, event="schedule", day=4), repository)
+        reset_document = load_state_document(state)
+        if len(reset_document["records"]) != 1 or reset_document.get("status") != "pending":
+            return fail("simulation did not reset a trusted sequence gap to pending")
+        reset = reset_document.get("reset")
+        if not isinstance(reset, dict) or reset.get("reason") != "sequence_gap" or reset.get("previous_sequence") != 3:
+            return fail("simulation omitted explicit sequence-gap reset provenance")
+
+        # Rerunning an already persisted workflow run must not count it twice,
+        # even though GitHub increments run_attempt and timestamp.
+        before_rerun = state.read_bytes()
+        append_current(state, evidence(5, event="schedule", run_id="run-5", day=5, attempt=2), repository)
+        if state.read_bytes() != before_rerun or len(load_state(state)) != 1:
+            return fail("simulation changed state for a same-run rerun")
+
+        # Ten trusted executions on a daily cadence span nine full calendar
+        # days. Push and schedule events share one dedicated stream.
+        for sequence in range(6, 15):
+            append_current(state, evidence(sequence, event="push" if sequence % 2 else "schedule", day=sequence - 1), repository)
+        if audit(load_state(state), True, repository) != 0:
+            return fail("simulation expected ten post-reset daily runs to pass")
+        if load_state_document(state).get("status") != "pass":
+            return fail("simulation did not persist pass status after the cadence elapsed")
+
+        # A pruned old run can be restored from the broad cache prefix during
+        # a rerun. Its positive attempt makes it a validated no-op, preserving
+        # the newest chain and its pass status.
+        before_stale = state.read_bytes()
+        append_current(state, evidence(1, run_id="run-1", attempt=2, day=20), repository)
+        if state.read_bytes() != before_stale or load_state(state)[-1]["sequence"] != 14:
+            return fail("simulation let a pruned stale rerun erase the newest chain")
+
+        # Unknown IDs at an older or equal sequence cannot masquerade as
+        # reruns on their first attempt.
+        for sequence, run_id in ((1, "old-first"), (14, "equal-first")):
+            try:
+                append_current(state, evidence(sequence, run_id=run_id, attempt=1, day=20), repository)
+            except ValueError:
+                pass
+            else:
+                return fail("simulation accepted a conflicting first attempt")
+
+        # Recompute the record digest after each mutation: these checks prove
+        # provenance validation, rather than merely detecting a stale digest.
+        provenance_checks = (
+            ("missing sha", lambda provenance: provenance.pop("sha")),
+            ("tampered sha", lambda provenance: provenance.__setitem__("sha", "not-a-commit")),
+            ("missing attempt", lambda provenance: provenance.pop("run_attempt")),
+            ("tampered attempt", lambda provenance: provenance.__setitem__("run_attempt", 0)),
+            ("missing workflow", lambda provenance: provenance.pop("workflow")),
+            ("tampered workflow", lambda provenance: provenance.__setitem__("workflow", "Untrusted Workflow")),
+        )
+        for label, mutate in provenance_checks:
+            tampered = load_state(state)
+            provenance = dict(tampered[-1]["provenance"])
+            mutate(provenance)
+            tampered[-1]["provenance"] = provenance
+            recompute(tampered[-1])
+            if validate_chain(tampered, repository)[0] is None:
+                return fail(f"simulation accepted recomputed {label} provenance")
+
+        checks = (("sequence", 16), ("status", "failure"), ("schema_version", 3), ("timestamp", "2026-07-01T00:00:00+00:00"))
+        for key, value in checks:
+            tampered = load_state(state)
+            tampered[-1][key] = value
+            recompute(tampered[-1])
+            if validate_chain(tampered, repository)[0] is None:
+                return fail(f"simulation accepted tampered {key}")
+        tampered = load_state(state)
+        tampered[-1]["provenance"] = dict(tampered[-1]["provenance"], ref="refs/pull/1/merge")
+        recompute(tampered[-1])
+        if validate_chain(tampered, repository)[0] is None:
+            return fail("simulation accepted tampered provenance")
+        tampered = load_state(state)
+        tampered[-1]["canonical_sha256"] = "b" * 64
+        if validate_chain(tampered, repository)[0] is None:
+            return fail("simulation accepted tampered canonical hash")
+    print("complexity soak simulation: PASS (PR independence, sequence-gap reset, rerun idempotence, stale no-op, ten-day cadence, and provenance/integrity guards)")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--directory", type=Path, help="directory containing evidence JSON")
+    parser.add_argument("--state", type=Path, help="persistent chain state JSON")
+    parser.add_argument("--current", type=Path, help="current run evidence JSON; requires --state --update")
+    parser.add_argument("--update", action="store_true", help="append --current and atomically persist --state")
+    parser.add_argument("--strict", action="store_true", help="fail instead of reporting pending")
+    parser.add_argument("--simulate", action="store_true", help="run the offline chain simulation")
+    args = parser.parse_args()
+    if args.simulate:
+        return simulation()
+    expected_repository = os.environ.get("GITHUB_REPOSITORY")
+    try:
+        if args.update:
+            if not args.state or not args.current:
+                return fail("--update requires --state and --current")
+            before_state = args.state.read_bytes() if args.state.exists() else None
+            records = append_current(args.state, args.current, expected_repository)
+            if args.state.read_bytes() == before_state:
+                print("complexity soak update: no-op (state unchanged)")
+            return audit(records, args.strict, expected_repository)
+        if args.state:
+            records = load_state(args.state)
+        elif args.directory:
+            records = load_directory(args.directory)
+        else:
+            return fail("one of --directory or --state is required")
+    except ValueError as exc:
+        return fail(str(exc))
+    return audit(records, args.strict, expected_repository)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

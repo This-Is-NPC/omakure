@@ -3000,41 +3000,16 @@ fn require_scope_parts(
     let allowed = if auth.is_file_mode() {
         auth_ctx.has_scope(scope)
     } else {
-        // Legacy mode: map plan scopes back to process-wide capabilities.
-        // `admin:status` requires an explicit `--capability admin:status` (or `all`).
-        let capability = match scope {
-            "config:read" | "doctor:read" | "workspace:read" => ApiCapability::ConfigRead,
-            "scripts:read" | "search:read" => ApiCapability::ScriptsRead,
-            "envs:read" | "env:read" => ApiCapability::EnvRead,
-            "envs:write" | "env:write" => ApiCapability::EnvWrite,
-            "envs:activate" | "env:activate" => ApiCapability::EnvActivate,
-            "envs:use" | "env:use" => ApiCapability::EnvUse,
-            "secrets:use" => ApiCapability::SecretProviderUse,
-            "secrets:read-metadata" => ApiCapability::SecretsReadMetadata,
-            "credentials:use" => ApiCapability::CredentialsUse,
-            "runs:read" => ApiCapability::RunRead,
-            "runs:write" | "runs:enqueue" | "runs:cancel" | "runs:dead-letter" => {
-                ApiCapability::RunWrite
-            }
-            "batteries:read" => ApiCapability::BatteryRead,
-            "batteries:write" | "batteries:add" | "batteries:sync" | "batteries:install"
-            | "batteries:remove" => ApiCapability::BatteryWrite,
-            "admin:status" => ApiCapability::AdminStatus,
-            "node:read" => ApiCapability::NodeRead,
-            "node:write" => ApiCapability::NodeWrite,
-            "trust:write" => ApiCapability::TrustWrite,
-            "enrollment:read" => ApiCapability::EnrollmentRead,
-            "enrollment:write" => ApiCapability::EnrollmentWrite,
-            "discovery:read" => ApiCapability::DiscoveryRead,
-            _ => {
+        match ApiCapability::from_config_value(scope) {
+            Ok(capability) => policy.permits(capability),
+            Err(_) => {
                 return Some(error_response(
                     StatusCode::FORBIDDEN,
                     "forbidden",
                     "token is not permitted for this operation",
                 ))
             }
-        };
-        policy.permits(capability)
+        }
     };
     (!allowed).then(|| {
         error_response(

@@ -116,16 +116,15 @@ legacy_env_token = false
 "#,
     );
 
-    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-    let addr = listener.local_addr().unwrap();
-    drop(listener);
+    let port = support::unique_loopback_port();
+    let addr = format!("127.0.0.1:{port}");
 
     let mut child = support::omakure_command()
         .arg("--scripts-dir")
         .arg(workspace.path())
         .arg("api")
         .arg("--bind")
-        .arg(addr.to_string())
+        .arg(&addr)
         .arg("--policy")
         .arg(&policy_path)
         .env("OMAKURE_API_TOKEN", API_TOKEN)
@@ -148,7 +147,7 @@ legacy_env_token = false
     assert!(!status.success(), "expected non-zero exit");
 
     // Port must still be free (never bound).
-    let probe = std::net::TcpListener::bind(addr);
+    let probe = std::net::TcpListener::bind(("127.0.0.1", port));
     assert!(
         probe.is_ok(),
         "bind should still be free after policy failure"
@@ -161,9 +160,8 @@ fn policy_parse_error_fails_before_bind() {
     let policy_path = workspace.path().join("policy.toml");
     write_policy(&policy_path, "version = 1\nbroken = [");
 
-    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-    let addr = listener.local_addr().unwrap();
-    drop(listener);
+    let port = support::unique_loopback_port();
+    let addr = format!("127.0.0.1:{port}");
 
     let output = support::command_with_timeout(
         support::omakure_command()
@@ -171,7 +169,7 @@ fn policy_parse_error_fails_before_bind() {
             .arg(workspace.path())
             .arg("api")
             .arg("--bind")
-            .arg(addr.to_string())
+            .arg(&addr)
             .arg("--policy")
             .arg(&policy_path)
             .env("OMAKURE_API_TOKEN", API_TOKEN),
@@ -187,7 +185,7 @@ fn policy_parse_error_fails_before_bind() {
         err.contains("policy") || err.contains("parse"),
         "stderr/stdout: {err}"
     );
-    assert!(std::net::TcpListener::bind(addr).is_ok());
+    assert!(std::net::TcpListener::bind(("127.0.0.1", port)).is_ok());
 }
 
 #[test]
@@ -209,10 +207,8 @@ legacy_env_token = false
 
     // Without policy allow_non_loopback, this would fail before bind.
     let mut command = support::omakure_command();
-    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-    // Use a non-loopback address that still works in CI: 0.0.0.0 with ephemeral port.
-    let port = listener.local_addr().unwrap().port();
-    drop(listener);
+    // Use a non-loopback address that still works in CI: 0.0.0.0 with reserved port.
+    let port = support::unique_loopback_port();
     let bind = format!("0.0.0.0:{port}");
 
     command

@@ -39,14 +39,16 @@ transitions. GitHub tracking is separate; see `CONTRIBUTING.md`.
 
 ```bash
 cargo build
-cargo test
 cargo run -- --help
+
+# Validation gates (required before declaring work done)
+mise run check:fast         # pre-commit: fmt, clippy, library tests, static fixtures
+mise run check:full         # pre-push / Linux GNU CI: complete locally executable suite
 
 # Named headless development workflows
 mise run dev:smoke          # bounded node-service health/readiness smoke check
 mise run node               # foreground node service
 mise run test:node-service  # focused CLI/HTTP/node-service integration tests
-mise run lint               # clippy and fmt checks
 ```
 
 Never use bare `omakure` as an interactive app. No-argument invocation prints
@@ -147,20 +149,33 @@ other routes require bearer auth. Prefer scoped Argon2id tokens from a
 
 ## Testing
 
+Declare work done only after `mise run check:fast` passes.
+
+Before claiming Linux GNU CI will pass, run `mise run check:full`. At minimum,
+run `./scripts/tasks/atomic/overlay-fs-lib` and
+`cargo test --lib --locked test_dependency_checks` (overlay install and
+PATH/shim invariants). `cargo test` alone does not match Linux GNU CI because
+it skips overlay-backed install checks and other platform invariants.
+
+Changes that touch PATH resolution, overlay installs, symlinks, or similar
+environment invariants must land the matching overlay or dependency tests in
+the same change.
+
+Targeted slices (not validation gates):
+
 ```bash
-cargo test
 cargo test --test cli_surface_e2e
 cargo test --test node_service_e2e
 cargo test --test http_api_e2e
 cargo test --test packaging_smoke
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
+cargo test --lib --locked test_dependency_checks
 ```
 
 Unit tests are inline. Integration tests launch the compiled binary and use
 temporary workspaces. Keep secrets out of test output. Packaging tests verify
 that removed UI/theme/widget assets and dependencies are absent and that
-release archives contain only the binary.
+release archives contain only the binary. See `docs/internal/development.md`
+for hook routing and platform suite layout.
 
 ## Release
 

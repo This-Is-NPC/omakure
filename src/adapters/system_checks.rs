@@ -266,61 +266,9 @@ pub(crate) fn ensure_python_installed_with_env(
 
 #[cfg(all(test, unix))]
 pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
-    use std::fs::{File, OpenOptions};
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    use std::thread;
-    use std::time::{Duration, Instant};
-
-    const ETXTBSY: i32 = 26;
-    const PROBE_CAP: Duration = Duration::from_secs(2);
-    const PROBE_RETRY_DELAY: Duration = Duration::from_millis(50);
-
-    let final_path = dir.join(program);
-    let sibling = dir.join(format!(".{program}.install"));
-
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o755)
-        .open(&sibling)
-        .unwrap_or_else(|error| panic!("open {program} fixture sibling: {error}"));
-    file.write_all(b"#!/bin/sh\nexit 0\n")
+    let path = dir.join(program);
+    crate::util::write_generated_executable(&path, b"#!/bin/sh\nexit 0\n")
         .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
-    file.sync_all()
-        .unwrap_or_else(|error| panic!("sync {program} fixture: {error}"));
-    drop(file);
-    if let Ok(dir_file) = File::open(dir) {
-        let _ = dir_file.sync_all();
-    }
-
-    std::fs::rename(&sibling, &final_path).unwrap_or_else(|error| {
-        let _ = std::fs::remove_file(&sibling);
-        panic!("rename {} fixture install: {error}", final_path.display());
-    });
-
-    let deadline = Instant::now() + PROBE_CAP;
-    loop {
-        match Command::new(&final_path).status() {
-            Ok(status) if status.success() => return,
-            Ok(status) => panic!(
-                "probe exec {} fixture: exited with {status}",
-                final_path.display()
-            ),
-            Err(err) if err.raw_os_error() == Some(ETXTBSY) => {
-                if Instant::now() >= deadline {
-                    panic!(
-                        "probe exec {} fixture still ETXTBSY after {:?}: {err}",
-                        final_path.display(),
-                        PROBE_CAP
-                    );
-                }
-                thread::sleep(PROBE_RETRY_DELAY);
-            }
-            Err(err) => panic!("probe exec {} fixture: {err}", final_path.display()),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -430,7 +378,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_dependency_checks_use_injected_path_for_every_runtime() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = crate::util::generated_executable_tempdir().unwrap();
         let programs = ["git", "jq", "bash", python_program(), powershell_program()];
         for program in programs {
             write_test_executable_shim(dir.path(), program);
@@ -467,7 +415,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_dependency_checks_succeed_with_huge_injected_path() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = crate::util::generated_executable_tempdir().unwrap();
         write_test_executable_shim(dir.path(), "git");
         write_test_executable_shim(dir.path(), "jq");
 
@@ -560,7 +508,7 @@ mod tests {
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
 
-        let dir = tempfile::tempdir().unwrap();
+        let dir = crate::util::generated_executable_tempdir().unwrap();
         let path = dir.path().join("not-executable");
         {
             let mut file = OpenOptions::new()

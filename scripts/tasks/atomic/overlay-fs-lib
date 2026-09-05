@@ -34,6 +34,9 @@ merged="$overlay_base/merged"
 mkdir -p "$lower" "$upper" "$work" "$merged"
 
 printf 'atomic/overlay-fs-lib: mounting overlay (TMPDIR=%s)\n' "$merged"
+# Generated executables (askpass scripts, test shims) stage on the first
+# executable tmpfs (XDG_RUNTIME_DIR, /dev/shm, TMPDIR), not on the overlay mount;
+# overlay TMPDIR remains the alarm for tempfile::tempdir()+exec leftovers.
 
 export OVL_LOWER="$lower" OVL_UPPER="$upper" OVL_WORK="$work" OVL_MERGED="$merged"
 export OVL_ROOT="$root" OVL_BOUNDED="$bounded"

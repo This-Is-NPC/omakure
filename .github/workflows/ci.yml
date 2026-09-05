@@ -115,6 +115,7 @@ jobs:
               print("ok", path)
           PY
           ./scripts/tasks/complexity-setup-test
+          ./scripts/tasks/atomic/generated-exec-contract
 
   usage-artifacts:
     name: Usage documentation and KDL artifact contract

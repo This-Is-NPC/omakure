@@ -54,4 +54,6 @@ mod search_index;
 pub mod secrets;
 mod use_cases;
 mod util;
+#[doc(hidden)]
+pub use util::{generated_executable_tempdir, write_generated_executable};
 mod workspace;

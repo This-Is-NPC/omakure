@@ -42,18 +42,19 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use omakure::{generated_executable_tempdir, write_generated_executable};
+
 const MARKER: &str = "SPIKE_SHIM_MARKER";
 
 /// Write an executable shim named `python3` into `dir` that prints [`MARKER`]
 /// and ignores its arguments, so a marker in stdout unambiguously means the
 /// shim (not the system interpreter) ran.
 fn write_python3_shim(dir: &Path) -> PathBuf {
-    let shim = dir.join("python3");
-    fs::write(&shim, format!("#!/bin/sh\necho {MARKER}\n")).unwrap();
-    let mut perms = fs::metadata(&shim).unwrap().permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(&shim, perms).unwrap();
-    shim
+    let final_path = dir.join("python3");
+    let body = format!("#!/bin/sh\necho {MARKER}\n");
+    write_generated_executable(&final_path, body.as_bytes())
+        .unwrap_or_else(|error| panic!("write python3 fixture: {error}"));
+    final_path
 }
 
 /// Minimal which-style lookup: return the first executable file named `program`
@@ -84,7 +85,7 @@ fn which_in_path(program: &str, path: &str) -> Option<PathBuf> {
 ///     **parent** `PATH` is NOT consulted as a fallback.
 #[test]
 fn env_path_redirects_program_name_resolution() {
-    let shim_dir = tempfile::tempdir().unwrap();
+    let shim_dir = generated_executable_tempdir().unwrap();
     write_python3_shim(shim_dir.path());
 
     // (1) shim dir on the child PATH -> the shim executes.
@@ -120,7 +121,7 @@ fn env_path_redirects_program_name_resolution() {
 /// behavior of `Command`.
 #[test]
 fn absolute_path_resolution_is_deterministic() {
-    let shim_dir = tempfile::tempdir().unwrap();
+    let shim_dir = generated_executable_tempdir().unwrap();
     let shim = write_python3_shim(shim_dir.path());
 
     // Simulate the injected/merged PATH the way task 1755 will: venv/shim dir

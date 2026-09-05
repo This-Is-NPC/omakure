@@ -514,7 +514,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_program_in_path_finds_first_executable() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = crate::util::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(dir.path(), "python3");
         let shim = dir.path().join("python3");
         let path_var = format!("{}:/nonexistent-dir-xyz", dir.path().display());
@@ -589,7 +589,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn command_for_script_with_env_resolves_and_runs_injected_shim() {
-        let shim_dir = tempfile::tempdir().unwrap();
+        let shim_dir = crate::util::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(shim_dir.path(), "python3");
         let shim = shim_dir.path().join("python3");
 
@@ -648,10 +648,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_interpreter_prefers_exact_path_over_case_variant() {
-        let exact_dir = tempfile::tempdir().unwrap();
+        let exact_dir = crate::util::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(exact_dir.path(), "python3");
         let exact_shim = exact_dir.path().join("python3");
-        let variant_dir = tempfile::tempdir().unwrap();
+        let variant_dir = crate::util::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
         let env = vec![
             ("Path".to_string(), variant_dir.path().display().to_string()),
@@ -665,7 +665,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_interpreter_falls_back_to_case_insensitive_path() {
-        let variant_dir = tempfile::tempdir().unwrap();
+        let variant_dir = crate::util::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
         let variant_shim = variant_dir.path().join("python3");
         let env = vec![("Path".to_string(), variant_dir.path().display().to_string())];

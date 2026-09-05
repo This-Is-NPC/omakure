@@ -430,18 +430,9 @@ fn sync_battery_with_access(
 }
 
 struct GitAskpassGuard {
-    dir: PathBuf,
+    _temp: tempfile::TempDir,
     script_path: PathBuf,
     token: String,
-}
-
-impl Drop for GitAskpassGuard {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.script_path);
-        let token_path = self.dir.join("token");
-        let _ = fs::remove_file(&token_path);
-        let _ = fs::remove_dir(&self.dir);
-    }
 }
 
 struct GitExecContext<'a> {
@@ -517,75 +508,14 @@ fn prepare_git_askpass(
             "battery token_ref resolved to an empty secret",
         ));
     }
-    // Unique per-sync directory so concurrent Battery ops never share token files.
-    let tmp_root = workspace.omakure_dir().join("tmp");
-    fs::create_dir_all(&tmp_root).map_err(|err| {
+    // Unique per-sync directory on tmpfs (/dev/shm on Linux), never on workspace overlay.
+    let temp = crate::util::generated_executable_tempdir().map_err(|err| {
         OperationError::new(
             OperationErrorCode::IoFailed,
-            format!("failed to create askpass temp root: {err}"),
+            format!("failed to create askpass temp directory: {err}"),
         )
     })?;
-    let dir = {
-        use rand::RngCore;
-        let mut last_err = None;
-        let mut created = None;
-        for _ in 0..8 {
-            let mut bytes = [0u8; 8];
-            rand::thread_rng().fill_bytes(&mut bytes);
-            let candidate = tmp_root.join(format!(
-                "git-askpass-{}-{:?}-{}",
-                std::process::id(),
-                std::thread::current().id(),
-                u64::from_le_bytes(bytes)
-            ));
-            match fs::create_dir(&candidate) {
-                Ok(()) => {
-                    created = Some(candidate);
-                    break;
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                    last_err = Some(err);
-                    continue;
-                }
-                Err(err) => {
-                    return Err(OperationError::new(
-                        OperationErrorCode::IoFailed,
-                        format!("failed to create askpass directory: {err}"),
-                    ));
-                }
-            }
-        }
-        created.ok_or_else(|| {
-            OperationError::new(
-                OperationErrorCode::IoFailed,
-                format!(
-                    "failed to allocate unique askpass directory: {}",
-                    last_err
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "exhausted retries".into())
-                ),
-            )
-        })?
-    };
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&dir)
-            .map_err(|err| {
-                OperationError::new(
-                    OperationErrorCode::IoFailed,
-                    format!("failed to read askpass directory metadata: {err}"),
-                )
-            })?
-            .permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&dir, perms).map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::IoFailed,
-                format!("failed to set askpass directory permissions: {err}"),
-            )
-        })?;
-    }
+    let dir = temp.path().to_path_buf();
     let token_path = dir.join("token");
     write_secret_file(&token_path, token.as_bytes(), 0o600)?;
     let script_path = dir.join("askpass.sh");
@@ -606,7 +536,7 @@ fn prepare_git_askpass(
         let _ = parent.sync_all();
     }
     Ok(Some(GitAskpassGuard {
-        dir,
+        _temp: temp,
         script_path,
         token,
     }))
@@ -4484,7 +4414,7 @@ tags = ["azure"]
                 .mode()
                 & 0o777;
             assert_eq!(mode, 0o700);
-            let token_mode = fs::metadata(guard.dir.join("token"))
+            let token_mode = fs::metadata(guard.script_path.parent().unwrap().join("token"))
                 .unwrap()
                 .permissions()
                 .mode()
@@ -4500,9 +4430,15 @@ tags = ["azure"]
         let script = fs::read_to_string(&guard.script_path).unwrap();
         assert!(script.contains("\"$DIR/token\""));
         assert!(!script.contains(plaintext));
-        assert!(!script.contains(guard.dir.to_string_lossy().as_ref()));
+        assert!(!script.contains(
+            guard
+                .script_path
+                .parent()
+                .unwrap()
+                .to_string_lossy()
+                .as_ref()
+        ));
         drop(guard);
-        std::env::remove_var("OMAKURE_ASKPASS_TOKEN");
     }
 
     #[test]
@@ -4520,11 +4456,9 @@ tags = ["azure"]
         let b = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
             .unwrap()
             .unwrap();
-        assert_ne!(a.dir, b.dir);
-        assert!(a.dir.exists());
-        assert!(b.dir.exists());
-        drop(a);
-        drop(b);
+        assert_ne!(a.script_path.parent(), b.script_path.parent());
+        assert!(a.script_path.parent().unwrap().exists());
+        assert!(b.script_path.parent().unwrap().exists());
         std::env::remove_var("OMAKURE_ASKPASS_DISTINCT");
     }
 

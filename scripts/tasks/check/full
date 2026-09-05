@@ -18,6 +18,7 @@ for script in \
     scripts/tasks/atomic/yaml-syntax \
     scripts/tasks/atomic/complexity-contract \
     scripts/tasks/atomic/coverage-contract \
+    scripts/tasks/atomic/generated-exec-contract \
     scripts/tasks/atomic/fmt \
     scripts/tasks/atomic/clippy \
     scripts/tasks/check/platform/linux-gnu \
@@ -46,6 +47,8 @@ printf 'check:full: complexity contract fixtures\n'
 "$root/scripts/tasks/atomic/complexity-contract"
 printf 'check:full: coverage contract fixtures\n'
 "$root/scripts/tasks/atomic/coverage-contract"
+printf 'check:full: generated executable contract\n'
+"$root/scripts/tasks/atomic/generated-exec-contract"
 printf 'check:full: formatting\n'
 "$root/scripts/tasks/atomic/fmt"
 printf 'check:full: Clippy\n'

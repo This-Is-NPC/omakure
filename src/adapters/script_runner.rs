@@ -144,7 +144,7 @@ mod tests {
         // Shim `python3` on an injected PATH must become the command program
         // as an absolute path, proving build_command threads env into
         // interpreter resolution (task 1755 wiring).
-        let shim_dir = TempDir::new().unwrap();
+        let shim_dir = crate::util::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(shim_dir.path(), "python3");
 
         let script_dir = TempDir::new().unwrap();
@@ -183,7 +183,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_build_command_resolves_bash_against_injected_path() {
-        let bin_dir = TempDir::new().unwrap();
+        let bin_dir = crate::util::generated_executable_tempdir().unwrap();
         for program in ["bash", "git", "jq"] {
             crate::adapters::system_checks::write_test_executable_shim(bin_dir.path(), program);
         }
@@ -203,7 +203,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_build_command_resolves_powershell_against_injected_path() {
-        let bin_dir = TempDir::new().unwrap();
+        let bin_dir = crate::util::generated_executable_tempdir().unwrap();
         let program = crate::runtime::powershell_program();
         crate::adapters::system_checks::write_test_executable_shim(bin_dir.path(), program);
 

@@ -105,13 +105,22 @@ assert_single_test_ran() {
     fail "$what reported success without running its test"
 }
 
+compose_down() {
+    if "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1; then
+        return 0
+    fi
+    # The EXIT trap can run before every required interpolation env var is
+    # exported. Teardown by project label must not re-parse the compose file.
+    "${docker_cmd[@]}" compose -p "$project" down --volumes --remove-orphans >/dev/null 2>&1
+}
+
 cleanup() {
     local exit_status=$?
     trap - EXIT INT TERM
     if (( exit_status != 0 )); then
         "${compose[@]}" logs --no-log-prefix hp-node-1 hp-node-2 hp-node-3 hp-node-4 >&2 || true
     fi
-    if ! "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1; then
+    if ! compose_down; then
         printf 'health-plane certification: Compose teardown failed for %s\n' "$project" >&2
         exit_status=1
     fi

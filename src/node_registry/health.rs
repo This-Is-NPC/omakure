@@ -167,7 +167,7 @@ impl NodeRegistry {
     /// Clear the "migration already failed" marker so an operator can retry the
     /// Health Plane migration explicitly. Retry is never automatic.
     pub fn clear_health_plane_migration_block(&self) -> Result<bool, RegistryError> {
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let removed = connection.execute(
                 "DELETE FROM metadata WHERE key = 'health_plane' AND value = 'disabled'",
                 [],
@@ -202,7 +202,7 @@ impl NodeRegistry {
                 return Ok(HealthDecision::Rejected(HealthCode::MessageTooLarge));
             }
         }
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let decision = evaluate(&transaction, &request)?;
@@ -235,7 +235,7 @@ impl NodeRegistry {
         now: i64,
     ) -> Result<(), RegistryError> {
         validate_node_id(node_id)?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             record_health_audit_tx(
@@ -260,7 +260,7 @@ impl NodeRegistry {
         now: i64,
     ) -> Result<(), RegistryError> {
         validate_node_id(node_id)?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             transaction.execute(
@@ -363,7 +363,7 @@ impl NodeRegistry {
         // concurrent writer cannot make the observational transaction fail to
         // upgrade, while cleanup is still durable and never silently skipped.
         if !corrupt.is_empty() {
-            self.with_connection(|connection| {
+            self.with_mutating_connection(|connection| {
                 let transaction =
                     connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
                 cleanup_corrupt_signal_rows(&transaction, &corrupt, now)?;
@@ -389,7 +389,7 @@ impl NodeRegistry {
         now: i64,
     ) -> Result<Option<HealthPeerSnapshot>, RegistryError> {
         validate_node_id(node_id)?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let state = load_peer_state(&transaction, node_id)?;
@@ -418,7 +418,7 @@ impl NodeRegistry {
     ) -> Result<Vec<SignalRecord>, RegistryError> {
         validate_node_id(node_id)?;
         let limit = limit.min(SIGNAL_INBOX_CAPACITY as usize);
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let mut corrupt = Vec::new();
@@ -475,7 +475,7 @@ impl NodeRegistry {
     /// trusted. Health Plane state is derived and disposable; trust rows,
     /// revocations, and identities are never touched.
     pub fn health_purge_revoked(&self, now: i64) -> Result<Vec<String>, RegistryError> {
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let stale: Vec<String> = {
@@ -511,7 +511,7 @@ impl NodeRegistry {
 
     /// Enforce every retention and capacity bound in one pass.
     pub fn health_prune(&self, now: i64) -> Result<HealthPruneReport, RegistryError> {
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let report = prune_tx(&transaction, now)?;
@@ -606,7 +606,7 @@ impl NodeRegistry {
             .map(serde_json::to_string)
             .transpose()
             .map_err(|_| RegistryError::InvalidInput("health run is not encodable".to_string()))?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let existing: Option<i64> = transaction
@@ -759,7 +759,7 @@ impl NodeRegistry {
     ) -> Result<bool, RegistryError> {
         let raw_signal_id = decode_opaque_id(signal_id)?;
         let raw_message_id = decode_opaque_id(message_id)?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let updated = transaction.execute(
@@ -790,7 +790,7 @@ impl NodeRegistry {
         now: i64,
     ) -> Result<u64, RegistryError> {
         validate_node_id(target_node_id)?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let reset = transaction.execute(
@@ -2055,7 +2055,7 @@ fn cleanup_corrupt_health_rows(
     if corrupt.is_empty() {
         return Ok(());
     }
-    registry.with_connection(|connection| {
+    registry.with_mutating_connection(|connection| {
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         for row in corrupt {
             quarantine_row_if_observed(&transaction, row, now)?;
@@ -3535,5 +3535,90 @@ mod tests {
                 .error_code,
             Some(HealthCode::Replay.code())
         );
+    }
+
+    #[test]
+    fn observational_fleet_snapshot_quarantines_corrupt_profile_without_error() {
+        let fixture = fixture();
+        let identity = NodeIdentity::load_existing(&fixture.context).unwrap();
+        let observational =
+            NodeRegistry::open_health_observational(&fixture.context, identity.public_status())
+                .unwrap();
+        let node_id = performer(&fixture.registry);
+        let local = fixture.registry.local_node_id().to_string();
+
+        apply(
+            &fixture.registry,
+            &node_id,
+            &profile(&local, 1, 1),
+            BASE_NOW,
+        );
+        let connection = Connection::open(fixture.registry.path()).unwrap();
+        connection
+            .execute("UPDATE health_profiles SET runtimes = 'not-json'", [])
+            .unwrap();
+
+        let fleet = observational
+            .health_fleet_snapshot(BASE_NOW + 10)
+            .expect("corrupt cleanup must not fail on the observational connection");
+        let peer = fleet
+            .iter()
+            .find(|peer| peer.snapshot.state.node_id == node_id)
+            .expect("fleet peer");
+        assert!(
+            peer.snapshot.profile.is_none(),
+            "the corrupt row is quarantined"
+        );
+
+        let rows: i64 = connection
+            .query_row("SELECT COUNT(*) FROM health_profiles", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
+        let audit = fixture.registry.health_audit_events(10).unwrap();
+        assert!(audit.iter().any(|event| {
+            event.event_code == "corrupt_row"
+                && event.error_code == Some(HealthCode::CorruptState.code())
+        }));
+    }
+
+    #[test]
+    fn transport_audit_survives_main_file_copy_while_observational_connection_is_open() {
+        let fixture = fixture();
+        let identity = NodeIdentity::load_existing(&fixture.context).unwrap();
+        let observational =
+            NodeRegistry::open_health_observational(&fixture.context, identity.public_status())
+                .unwrap();
+        observational
+            .health_fleet_snapshot(BASE_NOW)
+            .expect("observational connection must be query-only before writer audit");
+        let writer =
+            NodeRegistry::open_existing(&fixture.context, identity.public_status()).unwrap();
+        let local = writer.local_node_id().to_string();
+        writer
+            .record_transport_audit(
+                "unsupported_downgrade",
+                &local,
+                None,
+                None,
+                0,
+                "rejected",
+                Some(1001),
+            )
+            .unwrap();
+        let snapshot = fixture._temp.path().join("node.sqlite.snapshot");
+        std::fs::copy(fixture.registry.path(), &snapshot).unwrap();
+
+        let connection = Connection::open(&snapshot).unwrap();
+        let rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM transport_audit WHERE error_code = 1001",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(rows, 1);
+        observational
+            .health_fleet_snapshot(BASE_NOW)
+            .expect("observational connection must stay open after main-file copy");
     }
 }

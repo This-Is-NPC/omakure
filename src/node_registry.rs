@@ -376,7 +376,7 @@ impl NodeRegistry {
             schema_mutation_allowed: true,
             read_connection: None,
         };
-        registry.with_connection(|connection| {
+        registry.with_mutating_connection(|connection| {
             if !database_existed {
                 set_new_database_mode(&registry.path)?;
             }
@@ -615,7 +615,7 @@ impl NodeRegistry {
         cleanup: &PendingBootstrapCleanup,
         bundle_digest: Option<&[u8; 32]>,
     ) -> Result<(), RegistryError> {
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let updated = transaction.execute(
@@ -672,7 +672,7 @@ impl NodeRegistry {
     ) -> Result<PeerRecord, RegistryError> {
         validate_registration(&registration, &self.local_node_id, &self.local_public_key)?;
         let now = now_timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             reject_retained_revocation(
                 &transaction,
@@ -791,7 +791,7 @@ impl NodeRegistry {
         let request_digest = digest(&request_bytes);
         let certificate_digest = digest(certificate.as_bytes());
         let capabilities = capabilities_json(&registration.capabilities)?.into_bytes();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             cleanup_enrollment_replays(&transaction, now)?;
@@ -1027,7 +1027,7 @@ impl NodeRegistry {
             .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
         let replay_expiry = i64::try_from(bundle.replay_expiry())
             .map_err(|_| RegistryError::InvalidInput("enrollment expiry is too large".into()))?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             cleanup_enrollment_replays(&transaction, now)?;
@@ -1168,7 +1168,7 @@ impl NodeRegistry {
         let now_timestamp = now_timestamp();
         let now_seconds = i64::try_from(now)
             .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let current = load_peer(&transaction, &registration.node_id)?
@@ -1239,7 +1239,7 @@ impl NodeRegistry {
     ) -> Result<PeerRecord, RegistryError> {
         validate_actor_reason(actor, reason)?;
         let now = now_timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let current = load_peer(&transaction, node_id)?
@@ -1320,7 +1320,7 @@ impl NodeRegistry {
     ) -> Result<PeerRecord, RegistryError> {
         validate_registration(&registration, &self.local_node_id, &self.local_public_key)?;
         let now = now_timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             reject_retained_revocation(
@@ -1411,7 +1411,7 @@ impl NodeRegistry {
         validate_node_id(node_id)?;
         validate_actor_reason(actor, reason)?;
         let now = now_timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let current = load_peer(&transaction, node_id)?
@@ -1467,7 +1467,7 @@ impl NodeRegistry {
         validate_capabilities(&capabilities)?;
         validate_actor_reason(actor, reason)?;
         let now = now_timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let current = load_peer(&transaction, node_id)?
@@ -1522,7 +1522,7 @@ impl NodeRegistry {
         validate_node_id(old_node_id)?;
         validate_registration(&replacement, &self.local_node_id, &self.local_public_key)?;
         let now = now_timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let old = load_peer(&transaction, old_node_id)?
                 .ok_or_else(|| RegistryError::NotFound(old_node_id.to_string()))?;
@@ -1810,7 +1810,7 @@ impl NodeRegistry {
             ));
         }
         let now = chrono::Utc::now().timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let audit_count: i64 = transaction.query_row(
@@ -1896,7 +1896,7 @@ impl NodeRegistry {
             ));
         }
         let now = chrono::Utc::now().timestamp();
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             ensure_transport_audit_cue_columns(connection)?;
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -1942,7 +1942,7 @@ impl NodeRegistry {
                 "Cue rate timestamp must be positive".to_string(),
             ));
         }
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             ensure_transport_audit_cue_columns(connection)?;
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -1992,7 +1992,7 @@ impl NodeRegistry {
         validate_node_id(node_id)?;
         validate_bounded_text("enrollment outcome", outcome, 32)?;
         validate_bounded_text("enrollment detail", detail, 256)?;
-        self.with_connection(|connection| {
+        self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             record_enrollment_audit_tx(
@@ -2027,6 +2027,27 @@ impl NodeRegistry {
         }
         operation(&mut connection)
     }
+
+    fn with_mutating_connection<T>(
+        &self,
+        operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
+    ) -> Result<T, RegistryError> {
+        let mut connection = Connection::open(&self.path)?;
+        if self.schema_mutation_allowed {
+            configure_connection(&mut connection)?;
+        } else {
+            configure_connection_read_only(&mut connection)?;
+        }
+        let result = operation(&mut connection)?;
+        checkpoint_wal(&connection)?;
+        Ok(result)
+    }
+}
+
+fn checkpoint_wal(connection: &Connection) -> Result<(), RegistryError> {
+    connection.busy_timeout(BUSY_TIMEOUT)?;
+    connection.execute_batch("PRAGMA wal_checkpoint(PASSIVE);")?;
+    Ok(())
 }
 
 fn record_enrollment_audit_tx(

@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 #[cfg(test)]
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -323,6 +324,9 @@ pub struct NodeRegistry {
     local_public_key: String,
     /// Observational opens must not migrate the schema or change journal mode.
     schema_mutation_allowed: bool,
+    /// Reused for observational reads so HTTP health surfaces do not open SQLite
+    /// per request (Windows lock races against the ingest writer).
+    read_connection: Option<Arc<Mutex<Connection>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -370,6 +374,7 @@ impl NodeRegistry {
             local_node_id: node_id,
             local_public_key: public_key,
             schema_mutation_allowed: true,
+            read_connection: None,
         };
         registry.with_connection(|connection| {
             if !database_existed {
@@ -395,7 +400,7 @@ impl NodeRegistry {
         context: &NodeContext,
         identity: &NodeIdentityStatus,
     ) -> Result<Self, RegistryError> {
-        Self::open_existing_with_integrity(context, identity, true)
+        Self::open_existing_with_integrity(context, identity, true, false)
     }
 
     /// Open an existing registry for observational read surfaces shared by
@@ -407,13 +412,14 @@ impl NodeRegistry {
         context: &NodeContext,
         identity: &NodeIdentityStatus,
     ) -> Result<Self, RegistryError> {
-        Self::open_existing_with_integrity(context, identity, false)
+        Self::open_existing_with_integrity(context, identity, false, true)
     }
 
     fn open_existing_with_integrity(
         context: &NodeContext,
         identity: &NodeIdentityStatus,
         run_integrity_check: bool,
+        reuse_read_connection: bool,
     ) -> Result<Self, RegistryError> {
         if !context.validate_existing_state_directory()? {
             return Err(RegistryError::NotFound(
@@ -445,6 +451,7 @@ impl NodeRegistry {
             local_node_id: node_id,
             local_public_key: public_key,
             schema_mutation_allowed: false,
+            read_connection: None,
         };
         let mut connection =
             Connection::open_with_flags(&registry.path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
@@ -456,7 +463,15 @@ impl NodeRegistry {
         }
         validate_existing_database(&transaction, &registry)?;
         transaction.commit()?;
-        Ok(registry)
+        let read_connection = if reuse_read_connection {
+            Some(Arc::new(Mutex::new(connection)))
+        } else {
+            None
+        };
+        Ok(Self {
+            read_connection,
+            ..registry
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -1998,6 +2013,12 @@ impl NodeRegistry {
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
     ) -> Result<T, RegistryError> {
+        if let Some(connection) = &self.read_connection {
+            let mut guard = connection
+                .lock()
+                .expect("observational registry connection lock");
+            return operation(&mut guard);
+        }
         let mut connection = Connection::open(&self.path)?;
         if self.schema_mutation_allowed {
             configure_connection(&mut connection)?;

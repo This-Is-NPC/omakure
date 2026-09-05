@@ -2,6 +2,7 @@ use crate::auth::{self, AuthContext, Authenticator};
 use crate::cli::args::ApiArgs;
 use crate::cli::json;
 use crate::direct_service::TransportStatusHandle;
+use crate::node_registry::NodeRegistry;
 use crate::operations::battery as battery_ops;
 use crate::operations::config as config_ops;
 use crate::operations::core;
@@ -681,6 +682,7 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
         auth::install_sighup_reload(boot.auth.clone());
     }
 
+    let auth_verification_gate = auth_verification_gate(&boot.deploy);
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async move {
         serve_http(
@@ -696,6 +698,8 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
             // Cue or a baseline could travel on.
             None,
             None,
+            Router::new(),
+            auth_verification_gate,
             cancel_flag,
             None,
         )
@@ -749,6 +753,58 @@ pub(crate) fn prepare_api_boot(args: &ApiArgs) -> Result<ApiBoot, ApiConfigError
     })
 }
 
+pub(crate) fn auth_verification_gate(deploy: &DeployPolicy) -> Arc<tokio::sync::Semaphore> {
+    Arc::new(tokio::sync::Semaphore::new(
+        deploy
+            .auth
+            .max_concurrent_verifications
+            .clamp(1, policy::MAX_CONCURRENT_AUTH_VERIFICATIONS),
+    ))
+}
+
+/// Auth + policy bundle for Health Plane HTTP routes (`State` is `Arc<NodeRegistry>`).
+#[derive(Clone)]
+struct HealthPlaneAuthState {
+    auth: Authenticator,
+    policy: ApiPolicy,
+    deploy: DeployPolicy,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
+}
+
+/// Health Plane read routes mounted under `/v1/node` by `serve_http`.
+///
+/// Handlers use `State<Arc<NodeRegistry>>`; the registry is opened once by
+/// `omakure node serve`, not by `omakure api`.
+pub(crate) fn health_plane_router(
+    registry: Arc<NodeRegistry>,
+    auth: Authenticator,
+    policy: ApiPolicy,
+    deploy: DeployPolicy,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
+    body_limit: usize,
+) -> Router {
+    let auth_state = HealthPlaneAuthState {
+        auth,
+        policy,
+        deploy,
+        auth_verification_gate,
+    };
+    Router::new()
+        .route("/health", get(node_health_handler))
+        .route("/signals", get(node_signals_handler))
+        .layer(axum::extract::DefaultBodyLimit::max(body_limit))
+        .layer(middleware::from_fn(
+            move |request: Request<Body>, next: Next| {
+                let auth_state = auth_state.clone();
+                async move {
+                    let headers = request.headers().clone();
+                    health_plane_require_bearer(auth_state, headers, request, next).await
+                }
+            },
+        ))
+        .with_state(registry)
+}
+
 /// Serve the HTTP management API until `cancel_flag` is set, then shut down
 /// gracefully. Used by `omakure api` and `omakure node serve`.
 // Audit note: keeping the independently configured security and lifecycle
@@ -765,6 +821,8 @@ pub(crate) async fn serve_http(
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     cues: Option<crate::direct_service::CueDispatcher>,
     baselines: Option<crate::direct_service::BaselineDispatcher>,
+    health_plane: Router,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
     cancel_flag: Arc<AtomicBool>,
     on_listening: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -774,9 +832,19 @@ pub(crate) async fn serve_http(
     }
     let body_limit = deploy.http.body_limit_bytes.max(1);
     let app = router_with_transport(
-        auth, workspace, policy, deploy, readiness, transport, discovery, cues, baselines,
+        auth,
+        workspace,
+        policy,
+        deploy,
+        readiness,
+        transport,
+        discovery,
+        cues,
+        baselines,
+        auth_verification_gate,
         body_limit,
     );
+    let app = app.nest("/v1/node", health_plane);
     axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_cancel(cancel_flag))
         .await?;
@@ -903,8 +971,9 @@ fn router_with_policy(
     readiness: Option<Arc<ReadinessGate>>,
     body_limit: usize,
 ) -> Router {
+    let auth_gate = auth_verification_gate(&deploy);
     router_with_transport(
-        auth, workspace, policy, deploy, readiness, None, None, None, None, body_limit,
+        auth, workspace, policy, deploy, readiness, None, None, None, None, auth_gate, body_limit,
     )
 }
 
@@ -921,14 +990,9 @@ fn router_with_transport(
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     cues: Option<crate::direct_service::CueDispatcher>,
     baselines: Option<crate::direct_service::BaselineDispatcher>,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
     body_limit: usize,
 ) -> Router {
-    let auth_verification_gate = Arc::new(tokio::sync::Semaphore::new(
-        deploy
-            .auth
-            .max_concurrent_verifications
-            .clamp(1, policy::MAX_CONCURRENT_AUTH_VERIFICATIONS),
-    ));
     let state = ApiState {
         auth,
         workspace,
@@ -998,8 +1062,6 @@ fn router_with_transport(
         .route("/v1/node/status", get(node_status_handler))
         .route("/v1/node/discovery", get(node_discovery_handler))
         .route("/v1/node/init", post(node_initialize_handler))
-        .route("/v1/node/health", get(node_health_handler))
-        .route("/v1/node/signals", get(node_signals_handler))
         .route("/v1/node/cues", post(node_cue_handler))
         .route("/v1/node/baselines", post(node_baseline_handler))
         .route(
@@ -1200,15 +1262,19 @@ async fn node_initialize_handler(
 /// this projection; it can never write it, because the only writer is the
 /// authenticated node-to-node Health Plane exchange.
 async fn node_health_handler(
-    State(state): State<ApiState>,
+    State(registry): State<Arc<NodeRegistry>>,
     Extension(auth_ctx): Extension<AuthContext>,
+    Extension(auth_state): Extension<HealthPlaneAuthState>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+    if let Some(response) = require_capability_parts(
+        &auth_state.auth,
+        &auth_state.policy,
+        &auth_ctx,
+        ApiCapability::NodeRead,
+    ) {
         return response;
     }
-    operation_response(
-        node_context().and_then(|context| crate::operations::health::fleet_status(&context)),
-    )
+    operation_response(crate::operations::health::fleet_status(&registry))
 }
 
 /// Thin adapter over the protocol-neutral Signal feed operation.
@@ -1219,15 +1285,19 @@ async fn node_health_handler(
 /// Signals is the authenticated node-to-node Health Plane exchange plus this
 /// node's own append-only trust log.
 async fn node_signals_handler(
-    State(state): State<ApiState>,
+    State(registry): State<Arc<NodeRegistry>>,
     Extension(auth_ctx): Extension<AuthContext>,
+    Extension(auth_state): Extension<HealthPlaneAuthState>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+    if let Some(response) = require_capability_parts(
+        &auth_state.auth,
+        &auth_state.policy,
+        &auth_ctx,
+        ApiCapability::NodeRead,
+    ) {
         return response;
     }
-    operation_response(
-        node_context().and_then(|context| crate::operations::health::signal_feed(&context)),
-    )
+    operation_response(crate::operations::health::signal_feed(&registry))
 }
 
 async fn node_peers_handler(
@@ -2693,34 +2763,41 @@ async fn authenticate_off_runtime(
     }
 }
 
-async fn require_bearer(
-    State(state): State<ApiState>,
-    headers: HeaderMap,
-    mut request: Request<Body>,
-    next: Next,
-) -> Response {
-    let path = request.uri().path().to_string();
-    let method = request.method().as_str().to_string();
-    if path == "/v1/health" || path == "/v1/ready" {
-        return next.run(request).await;
+fn health_plane_public_path(stripped_path: &str) -> String {
+    match stripped_path {
+        "/health" => "/v1/node/health".to_string(),
+        "/signals" => "/v1/node/signals".to_string(),
+        other => other.to_string(),
     }
+}
 
+async fn bearer_auth_attempt(
+    auth: &Authenticator,
+    auth_verification_gate: &Arc<tokio::sync::Semaphore>,
+    headers: &HeaderMap,
+) -> AuthAttempt {
     let presented = headers
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "));
-
-    let authenticated = match presented {
-        Some(token) => {
-            authenticate_off_runtime(&state.auth, &state.auth_verification_gate, token).await
-        }
+    match presented {
+        Some(token) => authenticate_off_runtime(auth, auth_verification_gate, token).await,
         None => AuthAttempt::Rejected,
-    };
+    }
+}
 
+async fn finish_bearer_auth(
+    authenticated: AuthAttempt,
+    deploy: &DeployPolicy,
+    method: String,
+    path: String,
+    mut request: Request<Body>,
+    next: Next,
+    on_accepted: impl FnOnce(&mut Request<Body>),
+) -> Response {
     match authenticated {
         AuthAttempt::Accepted(ctx) => {
-            // Deploy policy gates route groups before token scopes.
-            if let Some(message) = state.deploy.deny_reason(&method, &path) {
+            if let Some(message) = deploy.deny_reason(&method, &path) {
                 emit_http_audit(HttpAuditEvent {
                     token_id: Some(ctx.token_id),
                     run_id: mutation_path_run_id(&method, &path),
@@ -2733,6 +2810,7 @@ async fn require_bearer(
             }
             let token_id = ctx.token_id.clone();
             request.extensions_mut().insert(ctx);
+            on_accepted(&mut request);
             let response = next.run(request).await;
             let status = response.status().as_u16();
             let run_id = response
@@ -2792,6 +2870,60 @@ async fn require_bearer(
     }
 }
 
+async fn health_plane_require_bearer(
+    auth_state: HealthPlaneAuthState,
+    headers: HeaderMap,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let path = health_plane_public_path(request.uri().path());
+    let method = request.method().as_str().to_string();
+    let authenticated = bearer_auth_attempt(
+        &auth_state.auth,
+        &auth_state.auth_verification_gate,
+        &headers,
+    )
+    .await;
+    finish_bearer_auth(
+        authenticated,
+        &auth_state.deploy,
+        method,
+        path,
+        request,
+        next,
+        |request| {
+            request.extensions_mut().insert(auth_state.clone());
+        },
+    )
+    .await
+}
+
+async fn require_bearer(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path().to_string();
+    let method = request.method().as_str().to_string();
+    if path == "/v1/health" || path == "/v1/ready" {
+        return next.run(request).await;
+    }
+
+    let authenticated =
+        bearer_auth_attempt(&state.auth, &state.auth_verification_gate, &headers).await;
+    finish_bearer_auth(
+        authenticated,
+        &state.deploy,
+        method,
+        path,
+        request,
+        next,
+        |_| {},
+    )
+    .await
+}
+
 fn safe_audit_run_id(run_id: &str) -> Option<String> {
     (!run_id.is_empty()
         && run_id.len() <= 128
@@ -2842,17 +2974,31 @@ fn error_response(status: StatusCode, code: &str, message: &str) -> Response {
     (status, Json(json::err_envelope(code, message))).into_response()
 }
 
+fn require_capability_parts(
+    auth: &Authenticator,
+    policy: &ApiPolicy,
+    auth_ctx: &AuthContext,
+    capability: ApiCapability,
+) -> Option<Response> {
+    require_scope_parts(auth, policy, auth_ctx, capability.as_scope())
+}
+
 fn require_capability(
     state: &ApiState,
     auth: &AuthContext,
     capability: ApiCapability,
 ) -> Option<Response> {
-    require_scope(state, auth, capability.as_scope())
+    require_capability_parts(&state.auth, &state.policy, auth, capability)
 }
 
-fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Response> {
-    let allowed = if state.auth.is_file_mode() {
-        auth.has_scope(scope)
+fn require_scope_parts(
+    auth: &Authenticator,
+    policy: &ApiPolicy,
+    auth_ctx: &AuthContext,
+    scope: &str,
+) -> Option<Response> {
+    let allowed = if auth.is_file_mode() {
+        auth_ctx.has_scope(scope)
     } else {
         // Legacy mode: map plan scopes back to process-wide capabilities.
         // `admin:status` requires an explicit `--capability admin:status` (or `all`).
@@ -2888,7 +3034,7 @@ fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Re
                 ))
             }
         };
-        state.policy.permits(capability)
+        policy.permits(capability)
     };
     (!allowed).then(|| {
         error_response(
@@ -2897,6 +3043,10 @@ fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Re
             "token is not permitted for this operation",
         )
     })
+}
+
+fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Response> {
+    require_scope_parts(&state.auth, &state.policy, auth, scope)
 }
 
 fn operation_response<T: Serialize>(result: OperationResult<T>) -> Response {
@@ -3100,6 +3250,61 @@ pub(crate) fn validate_bind(
     }
 
     Err(ApiConfigError::NonLoopbackBind(addr))
+}
+
+#[cfg(test)]
+fn shared_test_health_registry() -> Arc<NodeRegistry> {
+    use crate::domain::NodeConfig;
+    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+    use std::sync::OnceLock;
+
+    static REGISTRY: OnceLock<Arc<NodeRegistry>> = OnceLock::new();
+    REGISTRY
+        .get_or_init(|| {
+            let temp = Box::leak(Box::new(tempfile::TempDir::new().expect("tempdir")));
+            let context = NodeContext::resolve_for(
+                NodePlatform::current(),
+                NodePathOverrides::new(
+                    Some(temp.path().join("state")),
+                    Some(temp.path().join("node.toml")),
+                ),
+                true,
+                None,
+                None,
+                None,
+            )
+            .expect("node context");
+            node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
+                .expect("initialize node");
+            Arc::new(
+                crate::operations::health::open_observational_registry(&context)
+                    .expect("open observational registry"),
+            )
+        })
+        .clone()
+}
+
+#[cfg(test)]
+fn router_with_health_plane(
+    auth: Authenticator,
+    workspace: Workspace,
+    policy: ApiPolicy,
+    deploy: DeployPolicy,
+    readiness: Option<Arc<ReadinessGate>>,
+    registry: Arc<NodeRegistry>,
+    body_limit: usize,
+) -> Router {
+    let api = router_with_policy(
+        auth.clone(),
+        workspace,
+        policy.clone(),
+        deploy.clone(),
+        readiness,
+        body_limit,
+    );
+    let auth_gate = auth_verification_gate(&deploy);
+    let health = health_plane_router(registry, auth, policy, deploy, auth_gate, body_limit);
+    api.nest("/v1/node", health)
 }
 
 #[cfg(test)]
@@ -3332,11 +3537,15 @@ echo ok
     #[test]
     fn http_route_inventory_matches_router_with_policy_registrations() {
         let source = include_str!("api.rs");
-        let from_router = parse_router_route_registrations(source);
-        let inventory: Vec<_> = HTTP_ROUTE_INVENTORY.to_vec();
+        let mut from_router = parse_router_route_registrations(source);
+        // Health-plane routes register on `health_plane_router` and nest under `/v1/node`.
+        from_router.extend([("GET", "/v1/node/health"), ("GET", "/v1/node/signals")]);
+        from_router.sort();
+        let mut inventory: Vec<_> = HTTP_ROUTE_INVENTORY.to_vec();
+        inventory.sort();
         assert_eq!(
             from_router, inventory,
-            "router_with_policy `.route(...)` registrations must equal HTTP_ROUTE_INVENTORY"
+            "management API route registrations must equal HTTP_ROUTE_INVENTORY"
         );
     }
 
@@ -4069,6 +4278,41 @@ enabled = true
         let body = response_json(allowed).await;
         assert_eq!(body["data"]["candidate_count"], 0);
         assert_eq!(body["data"]["candidates"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn health_plane_router_gates_reads_on_node_read_capability() {
+        let registry = shared_test_health_registry();
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let deploy = DeployPolicy::default();
+        let denied = router_with_health_plane(
+            Authenticator::legacy(TOKEN),
+            workspace.clone_for_executor(),
+            ApiPolicy::allow([ApiCapability::NodeWrite]),
+            deploy.clone(),
+            None,
+            registry,
+            BODY_LIMIT_BYTES,
+        )
+        .oneshot(authed_request("/v1/node/health"))
+        .await
+        .unwrap();
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+        let allowed = router_with_health_plane(
+            Authenticator::legacy(TOKEN),
+            workspace,
+            ApiPolicy::allow([ApiCapability::NodeRead]),
+            deploy,
+            None,
+            shared_test_health_registry(),
+            BODY_LIMIT_BYTES,
+        )
+        .oneshot(authed_request("/v1/node/health"))
+        .await
+        .unwrap();
+        assert_eq!(allowed.status(), StatusCode::OK);
     }
 
     #[tokio::test]

@@ -330,6 +330,19 @@ pub fn run(
     );
     let _endpoint_guard = ServiceEndpointFile(endpoint_path);
 
+    let health_registry = Arc::new(crate::operations::health::open_observational_registry(
+        &context,
+    )?);
+    let body_limit = boot.deploy.http.body_limit_bytes.max(1);
+    let auth_verification_gate = api::auth_verification_gate(&boot.deploy);
+    let health_plane = api::health_plane_router(
+        Arc::clone(&health_registry),
+        boot.auth.clone(),
+        boot.api_policy.clone(),
+        boot.deploy.clone(),
+        Arc::clone(&auth_verification_gate),
+        body_limit,
+    );
     let runtime = tokio::runtime::Runtime::new()?;
     let cancel_for_http = Arc::clone(&cancel_flag);
     let readiness_for_http = Arc::clone(&readiness);
@@ -345,6 +358,8 @@ pub fn run(
             discovery_status,
             cue_dispatcher,
             baseline_dispatcher,
+            health_plane,
+            auth_verification_gate,
             cancel_for_http,
             None,
         )

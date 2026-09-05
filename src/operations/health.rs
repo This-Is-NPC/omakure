@@ -117,9 +117,8 @@ pub struct PresenceCounts {
 /// The operation is read-only and derives presence through the Wave 2 shared
 /// operations; it never reads a Health Plane table directly and never
 /// re-implements authorization.
-pub fn fleet_status(context: &NodeContext) -> OperationResult<FleetStatusReport> {
-    let registry = open_registry(context)?;
-    let plane = HealthPlane::new(&registry);
+pub fn fleet_status(registry: &NodeRegistry) -> OperationResult<FleetStatusReport> {
+    let plane = HealthPlane::new(registry);
     let enabled = plane.enabled().map_err(map_registry_error)?;
     let observed_at = plane.now();
     let mut nodes = if enabled {
@@ -273,9 +272,8 @@ pub struct SignalFeedReport {
 /// `revoked` Signals are projected from the append-only trust audit, so they
 /// survive the revocation cleanup that deletes every Health Plane row for a
 /// peer that is no longer actively trusted.
-pub fn signal_feed(context: &NodeContext) -> OperationResult<SignalFeedReport> {
-    let registry = open_registry(context)?;
-    let plane = HealthPlane::new(&registry);
+pub fn signal_feed(registry: &NodeRegistry) -> OperationResult<SignalFeedReport> {
+    let plane = HealthPlane::new(registry);
     let enabled = plane.enabled().map_err(map_registry_error)?;
     let limit = SIGNAL_INBOX_CAPACITY as usize;
     let mut observed_at = plane.now();
@@ -369,7 +367,11 @@ fn role_name(role: PeerRole) -> &'static str {
     }
 }
 
-fn open_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
+/// Open the observational registry for one-shot CLI reads.
+///
+/// Long-lived HTTP surfaces must reuse the process-owned registry instead of
+/// calling this on every request.
+pub(crate) fn open_observational_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
     let state_present = context
         .validate_existing_state_contents()
         .map_err(crate::operations::node::map_node_error)?;

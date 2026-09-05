@@ -427,12 +427,14 @@ pub fn run(
             .map(|result| serde_json::to_value(result).expect("peer list serializes")),
         // Thin adapter: the protocol-neutral operation decides everything and
         // this arm only renders it. The identical value backs `GET /v1/node/health`.
-        NodeCommand::Health => crate::operations::health::fleet_status(&context)
+        NodeCommand::Health => crate::operations::health::open_observational_registry(&context)
+            .and_then(|registry| crate::operations::health::fleet_status(&registry))
             .map(|result| serde_json::to_value(result).expect("fleet status serializes")),
         // Thin adapter, same shape: the bounded Signal feed is decided by the
         // protocol-neutral operation and only rendered here. The identical
         // value backs `GET /v1/node/signals`.
-        NodeCommand::Signals => crate::operations::health::signal_feed(&context)
+        NodeCommand::Signals => crate::operations::health::open_observational_registry(&context)
+            .and_then(|registry| crate::operations::health::signal_feed(&registry))
             .map(|result| serde_json::to_value(result).expect("signal feed serializes")),
         NodeCommand::Discovery(args) => node_ops::scan_discovery(
             &context,

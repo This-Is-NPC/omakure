@@ -269,6 +269,28 @@ pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
     let path = dir.join(program);
     crate::util::write_generated_executable(&path, b"#!/bin/sh\nexit 0\n")
         .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
+    // The write above is already atomic, but atomicity is not the hazard here:
+    // a sibling test thread that forks while our descriptor is still open
+    // inherits it, and the kernel refuses to exec an image any process holds
+    // open for writing. That descriptor dies with the child's own exec, so the
+    // shim is unrunnable only briefly — long enough, though, that the check
+    // under test gets its one attempt inside the window and reports a missing
+    // dependency. Hold the fixture here until the shim actually runs, so the
+    // race is absorbed where retrying is a test detail and production keeps
+    // taking its dependency checks at face value.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        match Command::new(&path).status() {
+            Ok(_) => return,
+            Err(error)
+                if error.kind() == io::ErrorKind::ExecutableFileBusy
+                    && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(error) => panic!("exec {program} fixture: {error}"),
+        }
+    }
 }
 
 #[cfg(test)]

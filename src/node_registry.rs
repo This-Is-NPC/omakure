@@ -17,8 +17,9 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 #[cfg(test)]
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -26,6 +27,17 @@ pub mod health;
 
 pub const SCHEMA_VERSION: i64 = 8;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
+/// One writer per database per process.
+///
+/// Every mutation opens its own connection and begins `IMMEDIATE`, so writers
+/// in one process meet on SQLite's file lock and wait under `BUSY_TIMEOUT`.
+/// That budget is for another process holding the database; spent on threads
+/// of this one it turns a queue into a deadline, and a slow disk hands the
+/// last writer in line `SQLITE_BUSY` for work it would have finished a moment
+/// later. In-process writers queue here, where waiting has no timeout, and
+/// the busy handler keeps the cross-process case it was written for.
+static WRITE_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 const MAX_ACTOR_BYTES: usize = 256;
 const MAX_REASON_BYTES: usize = 1024;
 const MAX_CAPABILITIES: usize = 32;
@@ -2032,6 +2044,10 @@ impl NodeRegistry {
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>,
     ) -> Result<T, RegistryError> {
+        let lock = write_lock_for(&self.path);
+        // A writer that panicked mid-transaction rolled back when its
+        // connection dropped; the poisoned flag says nothing about the file.
+        let _writer = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut connection = Connection::open(&self.path)?;
         if self.schema_mutation_allowed {
             configure_connection(&mut connection)?;
@@ -2042,6 +2058,13 @@ impl NodeRegistry {
         checkpoint_wal(&connection)?;
         Ok(result)
     }
+}
+
+fn write_lock_for(path: &Path) -> Arc<Mutex<()>> {
+    let mut locks = WRITE_LOCKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Arc::clone(locks.entry(path.to_path_buf()).or_default())
 }
 
 fn checkpoint_wal(connection: &Connection) -> Result<(), RegistryError> {

@@ -1110,12 +1110,17 @@ fn node_management_routes_cover_missing_scopes_individually() {
         assert_error_code(&denied.json(), "forbidden");
     }
 
+    // The service is the subject only for its two routes below. Provision the
+    // node first so the serve that answers them starts warm: this case runs
+    // alongside every other one in the suite, and a cold start on a loaded
+    // Windows runner has missed a budget this short.
+    support::node_init(workspace.path());
     let node_write_only_service = support::HttpServer::start_node_service(
         workspace.path(),
         API_TOKEN,
         &["--capability", "node:write"],
         &[],
-        Duration::from_secs(10),
+        Duration::from_secs(15),
     );
     for path in ["/v1/node/health", "/v1/node/signals"] {
         let denied = node_write_only_service.request("GET", path, None);

@@ -9,38 +9,13 @@ use std::time::Duration;
 
 const API_TOKEN: &str = "node-service-e2e-token-with-enough-entropy-00001";
 
-/// Drive the node's own state machine without opening a port.
-///
 /// Whether an identity survives is a fact about `.node-state`, and a test that
 /// reaches it through `node serve` pays for a listener it never asserts on:
 /// several of these cases start concurrently, and a cold bind on a loaded
 /// runner is slow enough to lose the race and fail on readiness rather than on
 /// the property. The CLI answers from the same operation the route does.
-fn node_cli(workspace: &Path, args: &[&str]) -> std::process::Output {
-    support::command_with_timeout(
-        support::omakure_command()
-            .args(["--scripts-dir", workspace.to_str().expect("workspace path")])
-            .args(["--json", "node"])
-            .args(args)
-            .env("OMAKURE_NODE_TEST_MODE", "1")
-            .env("OMAKURE_NODE_STATE_DIR", workspace.join(".node-state"))
-            .env("OMAKURE_NODE_CONFIG", workspace.join("node.toml")),
-        Duration::from_secs(30),
-    )
-}
-
-fn node_init(workspace: &Path) {
-    let output = node_cli(workspace, &["init"]);
-    assert!(
-        output.status.success(),
-        "node init failed: {:?} {}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout)
-    );
-}
-
 fn node_status(workspace: &Path) -> serde_json::Value {
-    let output = node_cli(workspace, &["status"]);
+    let output = support::node_cli(workspace, &["status"]);
     assert!(
         output.status.success(),
         "node status failed: {:?} {}",
@@ -305,7 +280,7 @@ fn node_service_can_be_terminated_and_restarted_portably() {
 #[test]
 fn first_start_creates_one_stable_identity_and_empty_node_registry() {
     let workspace = support::TestWorkspace::new("node_service_identity");
-    node_init(workspace.path());
+    support::node_init(workspace.path());
     let first_identity = node_status(workspace.path())["data"]["identity"]["node_id"]
         .as_str()
         .expect("node id")
@@ -314,7 +289,7 @@ fn first_start_creates_one_stable_identity_and_empty_node_registry() {
     // Initialize a second time over the state the first one left. This is the
     // moment the identity could be re-minted, and the run that would orphan a
     // node's enrollment across the fleet if it ever were.
-    node_init(workspace.path());
+    support::node_init(workspace.path());
     let second_status = node_status(workspace.path());
     assert_eq!(
         second_status["data"]["identity"]["node_id"], first_identity,
@@ -503,7 +478,7 @@ fn missing_node_registry_blocks_start_without_replacing_identity() {
     let workspace = support::TestWorkspace::new("node_service_missing_registry");
     // Only to lay down the state the case then damages: the refusal below is
     // what is under test, and it is already read from the CLI.
-    node_init(workspace.path());
+    support::node_init(workspace.path());
 
     let identity_path = workspace.path().join(".node-state/identity.key");
     let database_path = workspace.path().join(".node-state/node.sqlite");

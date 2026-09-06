@@ -287,13 +287,17 @@ impl HttpServer {
         // Reserve a process-wide unique port before spawning. Unlike probing with
         // a temporary listener here, this keeps sibling test servers from choosing
         // the same port during their bind→spawn window.
-        let attempt_timeout = timeout / 4;
-        let attempt_timeout = if attempt_timeout.is_zero() {
-            Duration::from_secs(2)
-        } else {
-            attempt_timeout.max(Duration::from_millis(500))
-        };
         let deadline = Instant::now() + timeout;
+        // A node killed between writing `identity.key`/`node.sqlite` and writing
+        // the transport pair leaves a half-written machine, and the next start
+        // refuses to repair it rather than minting a second identity over the
+        // first — the product contract, not a bug. So a retry has to hand the
+        // next attempt the workspace it would have found, or it just replays
+        // against wreckage this loop made. Only state this loop created is
+        // removed: callers that provisioned a node up front keep theirs.
+        let restore_missing_state = (command_name == "node")
+            .then(|| workspace.join(".node-state"))
+            .filter(|dir| !dir.exists());
         let mut last_addr = None;
         while Instant::now() < deadline {
             let addr = SocketAddr::from(([127, 0, 0, 1], unique_loopback_port()));
@@ -324,8 +328,14 @@ impl HttpServer {
                 child,
                 token: token.to_string(),
             };
+            // The whole remaining budget, not a slice of it. Retrying exists for
+            // the bind race, and a child that lost that race is already dead —
+            // `try_wait_until_ready` returns the moment it reaps one, so fast
+            // failures still retry fast. Capping a *live* child instead only
+            // kills a slow starter mid-provisioning, which is the one way this
+            // loop can make the workspace unusable for its own next attempt.
             if server.try_wait_until_ready(
-                attempt_timeout,
+                deadline.saturating_duration_since(Instant::now()),
                 if command_name == "node" {
                     "/v1/ready"
                 } else {
@@ -336,6 +346,9 @@ impl HttpServer {
             }
             let _ = server.child.child_mut().kill();
             let _ = server.child.child_mut().wait();
+            if let Some(dir) = restore_missing_state.as_ref() {
+                let _ = fs::remove_dir_all(dir);
+            }
             thread::sleep(Duration::from_millis(25));
         }
         panic!(

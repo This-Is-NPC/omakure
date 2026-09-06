@@ -1,6 +1,6 @@
 [package]
 name = "omakure"
-version = "0.3.0"
+version = "0.4.0"
 repository = "https://github.com/This-Is-NPC/omakure"
 license = "MIT"
 edition = "2021"

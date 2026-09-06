@@ -693,12 +693,28 @@ pub fn install_battery_script(
                 format!("failed to rewind battery script: {err}"),
             )
         })?;
+        let source_mode = {
+            use std::os::unix::fs::PermissionsExt;
+            source_file
+                .metadata()
+                .map_err(|err| {
+                    OperationError::new(
+                        OperationErrorCode::IoFailed,
+                        format!("failed to read battery script mode: {err}"),
+                    )
+                })?
+                .permissions()
+                .mode()
+        };
         let mut install_state = materialize_install(
             &scripts_root,
             &script.path,
             &installed_path,
             &operation_path,
-            &mut source_file,
+            InstallSource {
+                reader: &mut source_file,
+                mode: source_mode,
+            },
             request.force,
             target_existed,
         )?;
@@ -2110,10 +2126,20 @@ pub fn reject_unsafe_relative_path(path: &Path) -> OperationResult<()> {
 /// Returns the state needed to commit or undo. The caller must call
 /// [`InstallState::cleanup`] or [`InstallState::rollback`]; dropping it leaves
 /// a backup file behind.
+/// What an installed script may carry of its source's mode.
+///
+/// Read and execute bits are the source's to give: a script that was
+/// executable where it came from stays executable in the workspace, which is
+/// what lets it run outside Omakure at all. Write stays with the owner; the
+/// workspace is trusted content, and a cache checkout made under a loose
+/// umask is not a reason to let the group or the world edit it.
+pub(crate) const INSTALLED_MODE_MASK: u32 = 0o755;
+
 pub(crate) fn install_verified_script(
     workspace: &Workspace,
     relative: &Path,
     bytes: &[u8],
+    mode: u32,
 ) -> OperationResult<InstallState> {
     reject_unsafe_relative_path(relative)?;
     reject_reserved_install_path(relative)?;
@@ -2144,7 +2170,10 @@ pub(crate) fn install_verified_script(
         relative,
         &installed_path,
         &operation_path,
-        &mut source,
+        InstallSource {
+            reader: &mut source,
+            mode,
+        },
         true,
         target_existed,
     )
@@ -2325,16 +2354,29 @@ impl InstallState {
     }
 }
 
+/// The bytes to install and the mode they arrive with.
+///
+/// A battery script is an open file in the cache and brings its own mode; a
+/// baseline script is verified bytes with no file behind them and is given
+/// one. The install path does not care which, only that the two travel
+/// together.
+struct InstallSource<'a> {
+    reader: &'a mut dyn Read,
+    mode: u32,
+}
+
 #[cfg(unix)]
 fn materialize_install(
     scripts_root: &Path,
     relative: &Path,
     installed_path: &Path,
     operation_path: &Path,
-    source: &mut dyn Read,
+    source: InstallSource<'_>,
     force: bool,
     target_existed: bool,
 ) -> OperationResult<InstallState> {
+    use std::os::unix::fs::PermissionsExt;
+
     ensure_install_target_safe(scripts_root, relative, installed_path)?;
     let parent_path = operation_path.parent().ok_or_else(|| {
         OperationError::new(
@@ -2353,7 +2395,20 @@ fn materialize_install(
     })?;
     let parent = open_dir_no_follow(parent_path)?;
     let (tmp_name, tmp_file) = create_new_file_at(&parent, target_name, "tmp")?;
-    copy_reader_to_file(source, tmp_file)?;
+    // On the open descriptor, before the link: a `set_permissions` on the path
+    // after close would race ETXTBSY once the target is exec'd, and could land
+    // on whatever the name points at by then.
+    tmp_file
+        .set_permissions(fs::Permissions::from_mode(
+            source.mode & INSTALLED_MODE_MASK,
+        ))
+        .map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to set install mode: {err}"),
+            )
+        })?;
+    copy_reader_to_file(source.reader, tmp_file)?;
     let backup_name = if force && target_existed {
         let (backup_name, backup_file) = create_new_file_at(&parent, target_name, "backup")?;
         let mut input = open_existing_file_at_no_follow(&parent, target_name)?;
@@ -2390,12 +2445,12 @@ fn materialize_install(
     relative: &Path,
     installed_path: &Path,
     operation_path: &Path,
-    source: &mut dyn Read,
+    source: InstallSource<'_>,
     force: bool,
     target_existed: bool,
 ) -> OperationResult<InstallState> {
     let (tmp_path, tmp_file) = unique_install_tmp_file(operation_path)?;
-    copy_reader_to_file(source, tmp_file)?;
+    copy_reader_to_file(source.reader, tmp_file)?;
     ensure_install_target_safe(scripts_root, relative, installed_path)?;
     let backup_path = if force && target_existed {
         Some(backup_existing_target(operation_path)?)
@@ -4909,6 +4964,47 @@ tags = ["azure"]
         assert!(response.installed_path.exists());
         assert!(response.provenance_path.exists());
         assert_eq!(conflict.code, OperationErrorCode::Conflict);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn install_keeps_the_source_execute_bits_and_owner_only_write() {
+        use std::os::unix::fs::PermissionsExt;
+
+        for (source_mode, installed_mode) in [(0o775, 0o755), (0o644, 0o644), (0o700, 0o700)] {
+            let dir = TempDir::new().unwrap();
+            let ws = workspace_in(&dir);
+            let paths = BatteryPaths::for_workspace(&ws);
+            let cache = paths.cache_path_for("azure");
+            write_manifest_and_script(&cache);
+            fs::set_permissions(
+                cache.join("scripts/list.sh"),
+                fs::Permissions::from_mode(source_mode),
+            )
+            .unwrap();
+            let commit = init_cache_git(&cache);
+            write_registry(&paths.registry_path, &synced_registry_with_commit(commit)).unwrap();
+
+            let response = install_battery_script(
+                &ws,
+                InstallBatteryScriptRequest {
+                    battery_name: "azure".into(),
+                    script_id: "azure.list".into(),
+                    force: false,
+                },
+            )
+            .unwrap();
+
+            let mode = fs::metadata(&response.installed_path)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(
+                mode, installed_mode,
+                "a {source_mode:o} source must install as {installed_mode:o}"
+            );
+        }
     }
 
     #[test]

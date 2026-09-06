@@ -9,6 +9,22 @@ use std::time::Duration;
 
 const API_TOKEN: &str = "node-service-e2e-token-with-enough-entropy-00001";
 
+/// Whether an identity survives is a fact about `.node-state`, and a test that
+/// reaches it through `node serve` pays for a listener it never asserts on:
+/// several of these cases start concurrently, and a cold bind on a loaded
+/// runner is slow enough to lose the race and fail on readiness rather than on
+/// the property. The CLI answers from the same operation the route does.
+fn node_status(workspace: &Path) -> serde_json::Value {
+    let output = support::node_cli(workspace, &["status"]);
+    assert!(
+        output.status.success(),
+        "node status failed: {:?} {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    serde_json::from_slice(&output.stdout).expect("parse node status")
+}
+
 fn write_echo_script(root: &Path, name: &str) {
     let path = root.join(name);
     if let Some(parent) = path.parent() {
@@ -264,60 +280,24 @@ fn node_service_can_be_terminated_and_restarted_portably() {
 #[test]
 fn first_start_creates_one_stable_identity_and_empty_node_registry() {
     let workspace = support::TestWorkspace::new("node_service_identity");
-    let args = [
-        "--workers",
-        "0",
-        "--no-scheduler",
-        "--capability",
-        "node:read",
-    ];
-    let first = support::HttpServer::start_node_service(
-        workspace.path(),
-        API_TOKEN,
-        &args,
-        &[],
-        Duration::from_secs(15),
-    );
-    let first_status = first.get("/v1/node/status");
-    assert_eq!(
-        first_status.status,
-        200,
-        "body: {}",
-        first_status.safe_body()
-    );
-    let first_identity = first_status.json()["data"]["identity"]["node_id"]
+    support::node_init(workspace.path());
+    let first_identity = node_status(workspace.path())["data"]["identity"]["node_id"]
         .as_str()
-        .unwrap()
+        .expect("node id")
         .to_string();
-    drop(first);
 
-    let second = support::HttpServer::start_node_service(
-        workspace.path(),
-        API_TOKEN,
-        &args,
-        &[],
-        Duration::from_secs(15),
-    );
-    let second_status = second.get("/v1/node/status");
+    // Initialize a second time over the state the first one left. This is the
+    // moment the identity could be re-minted, and the run that would orphan a
+    // node's enrollment across the fleet if it ever were.
+    support::node_init(workspace.path());
+    let second_status = node_status(workspace.path());
     assert_eq!(
-        second_status.status,
-        200,
-        "body: {}",
-        second_status.safe_body()
+        second_status["data"]["identity"]["node_id"], first_identity,
+        "a second initialization must load the identity, never mint a new one"
     );
-    assert_eq!(
-        second_status.json()["data"]["identity"]["node_id"],
-        first_identity
-    );
-    assert_eq!(second_status.json()["data"]["trust"]["peer_count"], 0);
-    assert_eq!(
-        second_status.json()["data"]["config"]["enrollment"],
-        "disabled"
-    );
-    assert_eq!(
-        second_status.json()["data"]["trust"]["active_peer_count"],
-        0
-    );
+    assert_eq!(second_status["data"]["trust"]["peer_count"], 0);
+    assert_eq!(second_status["data"]["config"]["enrollment"], "disabled");
+    assert_eq!(second_status["data"]["trust"]["active_peer_count"], 0);
 
     let state = workspace.path().join(".node-state");
     let names = fs::read_dir(state)
@@ -496,14 +476,9 @@ discovery_secret_ref = ""
 #[test]
 fn missing_node_registry_blocks_start_without_replacing_identity() {
     let workspace = support::TestWorkspace::new("node_service_missing_registry");
-    let server = support::HttpServer::start_node_service(
-        workspace.path(),
-        API_TOKEN,
-        &["--workers", "0", "--no-scheduler"],
-        &[],
-        Duration::from_secs(15),
-    );
-    drop(server);
+    // Only to lay down the state the case then damages: the refusal below is
+    // what is under test, and it is already read from the CLI.
+    support::node_init(workspace.path());
 
     let identity_path = workspace.path().join(".node-state/identity.key");
     let database_path = workspace.path().join(".node-state/node.sqlite");

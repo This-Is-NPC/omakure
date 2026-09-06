@@ -29,6 +29,10 @@ use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// A baseline script arrives as verified bytes, with no file whose mode could
+/// be kept. It is installed to be run, so it is installed executable.
+pub const BASELINE_SCRIPT_MODE: u32 = 0o755;
+
 /// What a node records about the baseline it currently holds.
 ///
 /// One record for the set, because the set is what was signed. A per-script
@@ -248,7 +252,7 @@ pub fn install_baseline(
     let mut staged: Vec<InstallState> = Vec::with_capacity(baseline.scripts().len());
 
     for (path, body) in baseline.scripts() {
-        match install_verified_script(workspace, Path::new(path), body) {
+        match install_verified_script(workspace, Path::new(path), body, BASELINE_SCRIPT_MODE) {
             Ok(state) => staged.push(state),
             Err(error) => return Err(unwind(staged, error)),
         }
@@ -665,6 +669,19 @@ mod tests {
                 *body,
                 "{path} must be on disk with the published bytes"
             );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(workspace.scripts_root().join(path))
+                    .expect("stat installed")
+                    .permissions()
+                    .mode()
+                    & 0o777;
+                assert_eq!(
+                    mode, BASELINE_SCRIPT_MODE,
+                    "{path} must be installed executable"
+                );
+            }
         }
         assert_eq!(
             record.baseline_id,
@@ -999,13 +1016,23 @@ mod tests {
         let workspace = workspace(&dir);
 
         assert!(
-            install_verified_script(&workspace, Path::new("../escaped.sh"), b"echo escaped\n")
-                .is_err(),
+            install_verified_script(
+                &workspace,
+                Path::new("../escaped.sh"),
+                b"echo escaped\n",
+                BASELINE_SCRIPT_MODE,
+            )
+            .is_err(),
             "an install must not write outside the scripts root"
         );
         assert!(
-            install_verified_script(&workspace, Path::new(".omakure/x.sh"), b"echo meta\n")
-                .is_err(),
+            install_verified_script(
+                &workspace,
+                Path::new(".omakure/x.sh"),
+                b"echo meta\n",
+                BASELINE_SCRIPT_MODE,
+            )
+            .is_err(),
             "an install must not write into workspace metadata"
         );
         assert!(!dir.path().parent().unwrap().join("escaped.sh").exists());

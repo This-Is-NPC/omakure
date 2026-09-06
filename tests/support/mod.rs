@@ -125,6 +125,37 @@ pub fn assert_no_secret_leak(haystack: &[u8], secret: &[u8]) {
     );
 }
 
+/// Drive the node's own state machine without opening a port.
+///
+/// The CLI answers from the same operation the route does, against the same
+/// `.node-state` a later `start_node_service` on this workspace will find.
+/// A fact about that directory is cheaper to read here than through a
+/// listener, and a `node serve` that follows an `init` starts warm: it loads
+/// an identity instead of minting one, which is the slow half of a cold
+/// start on a loaded runner.
+pub fn node_cli(workspace: &Path, args: &[&str]) -> Output {
+    command_with_timeout(
+        omakure_command()
+            .args(["--scripts-dir", workspace.to_str().expect("workspace path")])
+            .args(["--json", "node"])
+            .args(args)
+            .env("OMAKURE_NODE_TEST_MODE", "1")
+            .env("OMAKURE_NODE_STATE_DIR", workspace.join(".node-state"))
+            .env("OMAKURE_NODE_CONFIG", workspace.join("node.toml")),
+        Duration::from_secs(30),
+    )
+}
+
+pub fn node_init(workspace: &Path) {
+    let output = node_cli(workspace, &["init"]);
+    assert!(
+        output.status.success(),
+        "node init failed: {:?} {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
 pub fn command_with_timeout(command: &mut Command, timeout: Duration) -> Output {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = spawn_guard(command);

@@ -31,6 +31,10 @@ Battery v1 supports these commands:
 
 All commands support the global `--json` flag.
 
+`battery add` only records the registry entry and does not contact the
+repository; `git` must be on `PATH` from `battery sync` onward, which is the
+first command that fetches it.
+
 ## Non-Goals
 
 - No legacy compatibility layer, migration, alias, or fallback behavior.
@@ -174,6 +178,10 @@ Rules:
 - Existing files are never overwritten unless `--force` is set.
 - Parent directories are created as needed.
 - The copied script preserves its schema block.
+- The installed file keeps the source script's read and execute bits, so a
+  script that was executable in the Battery is executable in the workspace and
+  can be run there directly; write permission stays with the owner. Baseline
+  scripts, which arrive as verified bytes, are installed `0755`.
 - Installation records provenance where practical in a sidecar file under
   `.omakure/batteries/installed/`, keyed by Battery name and script id.
 - A failed install must not leave a partial target file when the target did not

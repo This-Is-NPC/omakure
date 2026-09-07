@@ -807,6 +807,42 @@ fn envs_family_routes() {
 }
 
 #[test]
+fn enqueue_capability_cannot_execute_uninstalled_battery_cache() {
+    let workspace = support::TestWorkspace::new("http_reserved_scripts");
+    fs::create_dir_all(workspace.path().join(".omakure/batteries/cache")).unwrap();
+    fs::create_dir_all(workspace.path().join("installed")).unwrap();
+    workspace.write_schema_script(".omakure/batteries/cache/job.sh", "uninstalled", "exit 0");
+    workspace.write_schema_script("installed/job.sh", "installed", "exit 0");
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "runs:enqueue"],
+        &[],
+        Duration::from_secs(10),
+    );
+    let denied = [
+        ".omakure/batteries/cache/job.sh",
+        #[cfg(unix)]
+        "alias.sh",
+    ];
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(
+            workspace.path().join(".omakure/batteries/cache/job.sh"),
+            workspace.path().join("alias.sh"),
+        )
+        .unwrap();
+    }
+    for script in denied {
+        let response = server.post_json("/v1/runs", &json!({ "script": script }));
+        assert_eq!(response.status, 400, "{}", response.safe_body());
+        assert_eq!(response.json()["error"]["code"], "unsafe_path");
+    }
+    let response = server.post_json("/v1/runs", &json!({ "script": "installed/job.sh" }));
+    assert_eq!(response.status, 200, "{}", response.safe_body());
+}
+
+#[test]
 fn runs_queue_family_routes() {
     let workspace = support::TestWorkspace::new("http_runs_family");
     let script = workspace.write_schema_script("job.sh", "job", "exit 0");

@@ -1449,6 +1449,40 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     assert_eq!(json(&remove)["ok"], true);
 }
 
+#[test]
+fn direct_and_queue_runs_reject_reserved_workspace_scripts() {
+    let workspace = support::TestWorkspace::new("cli_reserved_scripts");
+    fs::create_dir_all(workspace.path().join(".omakure/batteries/cache")).unwrap();
+    workspace.write_schema_script(".omakure/batteries/cache/job.sh", "uninstalled", "exit 0");
+    let denied = [
+        ".omakure/batteries/cache/job.sh",
+        #[cfg(unix)]
+        "alias.sh",
+    ];
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(
+            workspace.path().join(".omakure/batteries/cache/job.sh"),
+            workspace.path().join("alias.sh"),
+        )
+        .unwrap();
+    }
+    for script in denied {
+        for (args, code) in [
+            (vec!["--json", "run", script], "unsafe_path"),
+            (vec!["--json", "queue", "add", script], "invalid_argument"),
+        ] {
+            let output = omakure(workspace.path(), &args);
+            assert!(!output.status.success());
+            assert_eq!(json(&output)["error"]["code"], code);
+            assert!(json(&output)["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("reserved workspace metadata"));
+        }
+    }
+}
+
 fn omakure(workspace: &Path, args: &[&str]) -> Output {
     omakure_with_env(workspace, args, &[])
 }

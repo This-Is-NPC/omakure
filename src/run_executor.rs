@@ -81,32 +81,10 @@ pub fn execute_with_heartbeat_guarded(
     // file does not exist (e.g. it was deleted between enqueue and
     // claim), record an Errored result so the worker marks the row
     // failed instead of crashing the daemon.
-    let script_path = PathBuf::from(&row.script_path);
-    if !script_path.exists() {
-        return ExecutionResult {
-            terminal: ExecutionTerminal::Errored,
-            completion: RunCompletion {
-                stdout: String::new(),
-                stderr: String::new(),
-                exit_code: None,
-                success: false,
-                error: Some(format!("script not found: {}", row.script_path)),
-            },
-        };
-    }
-
-    if let Err(error) = check_cue_script_unchanged(workspace, row, &script_path) {
-        return ExecutionResult {
-            terminal: ExecutionTerminal::Failed,
-            completion: RunCompletion {
-                stdout: String::new(),
-                stderr: String::new(),
-                exit_code: None,
-                success: false,
-                error: Some(error),
-            },
-        };
-    }
+    let script_path = match execution_script_path(workspace, row) {
+        Ok(path) => path,
+        Err(result) => return result,
+    };
 
     // Validate the schema's required fields are satisfied (mirrors the
     // pre-PR-#8 `--no-prompt` behavior). The worker is always non-
@@ -396,6 +374,36 @@ pub fn execute_with_heartbeat_guarded(
     }
 }
 
+/// Enqueue-time validation cannot authorize a path forever: a queued or
+/// scheduled script may have been replaced with a link into Battery cache.
+fn execution_script_path(workspace: &Workspace, row: &RunRow) -> Result<PathBuf, ExecutionResult> {
+    let path = Path::new(&row.script_path);
+    if !path.exists() {
+        return Err(script_admission_failure(
+            ExecutionTerminal::Errored,
+            format!("script not found: {}", row.script_path),
+        ));
+    }
+    let path = crate::operations::core::canonical_script_path(path, workspace.scripts_root())
+        .map_err(|error| script_admission_failure(ExecutionTerminal::Errored, error.to_string()))?;
+    check_cue_script_unchanged(workspace, row, &path)
+        .map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error))?;
+    Ok(path)
+}
+
+fn script_admission_failure(terminal: ExecutionTerminal, error: String) -> ExecutionResult {
+    ExecutionResult {
+        terminal,
+        completion: RunCompletion {
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: None,
+            success: false,
+            error: Some(error),
+        },
+    }
+}
+
 /// Refuse a Cue-origin run whose script is no longer the script it was
 /// authorized against.
 ///
@@ -649,6 +657,41 @@ mod tests {
             .unwrap();
         write!(file, "#!/usr/bin/env bash\n{body}\n").unwrap();
         path
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn queued_subject_replaced_with_metadata_symlink_is_not_executed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let ws = Workspace::new(dir.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let script = write_bash_script(&ws, "job.sh", "echo installed");
+        let conn = runs::open(&ws).unwrap();
+        let row = runs::start_inline(
+            &conn,
+            script.to_str().unwrap(),
+            &[],
+            "test",
+            EnqueueOptions::default(),
+        )
+        .unwrap();
+        fs::create_dir_all(ws.root().join(".omakure/batteries/cache")).unwrap();
+        let cached = write_bash_script(
+            &ws,
+            ".omakure/batteries/cache/job.sh",
+            "echo unauthorized-execution",
+        );
+        fs::remove_file(&script).unwrap();
+        std::os::unix::fs::symlink(cached, script).unwrap();
+
+        let result = execute_with_heartbeat(&ws, &row, vec![], None);
+        assert_eq!(result.terminal, ExecutionTerminal::Errored);
+        assert!(result
+            .completion
+            .error
+            .unwrap()
+            .contains("reserved workspace metadata"));
+        assert!(result.completion.stdout.is_empty());
     }
 
     /// A Cue authorized one script; a baseline may legitimately replace it

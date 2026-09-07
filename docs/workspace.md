@@ -41,6 +41,22 @@ The run database uses a 2-second SQLite busy timeout. The separate
 `search-index.sqlite` database uses a 500-millisecond busy timeout. Both are
 workspace-local files and are not supported as shared network storage.
 
+## Executable subject boundary
+
+Direct runs and queued runs accept only files inside the selected workspace.
+Components named `.omakure`, `.history`, or `.git` are reserved (case-insensitive),
+including when nested below a subject folder. Both the requested path and its
+canonical destination are checked, so a symlink alias cannot turn Battery cache
+into an installed subject. Syncing a Battery alone does not authorize running
+its cached scripts; install the desired subject first.
+
+The shared executor repeats this check before resolving secrets or launching
+any direct, queued, or scheduled run. Rows queued before this rule, or whose
+script was replaced with a metadata symlink, fail without launching a child.
+Regular subject symlinks within the workspace remain supported. This is not a
+sandbox against a local user who can concurrently rewrite workspace files;
+restrict filesystem write access to trusted users.
+
 ## Ignore rules
 
 `.omakureignore` files can be placed at the workspace root or below it. Rules

@@ -11,7 +11,8 @@ use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{
-    params, Connection, OpenFlags, OptionalExtension, Row, Transaction, TransactionBehavior,
+    params, Connection, ErrorCode, OpenFlags, OptionalExtension, Row, Transaction,
+    TransactionBehavior,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -27,6 +28,22 @@ pub mod health;
 
 pub const SCHEMA_VERSION: i64 = 8;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
+/// Bounded waits for a lock met while a connection is being opened.
+///
+/// `BUSY_TIMEOUT` covers a statement that finds the database busy. Opening is
+/// different: the journal-mode handshake a fresh connection performs can
+/// report `SQLITE_BUSY` or `SQLITE_LOCKED` outright while another process is
+/// opening or closing the same file, and the busy handler is not consulted
+/// for it. `runs.rs` met the same transition and waits it out the same way.
+/// Every operation here opens its own connection, so a Conductor whose
+/// operator just ran a registry command in another process meets it too.
+const OPEN_RETRY_DELAYS: [Duration; 5] = [
+    Duration::from_millis(10),
+    Duration::from_millis(25),
+    Duration::from_millis(50),
+    Duration::from_millis(100),
+    Duration::from_millis(200),
+];
 /// One writer per database per process.
 ///
 /// Every mutation opens its own connection and begins `IMMEDIATE`, so writers
@@ -2031,13 +2048,33 @@ impl NodeRegistry {
                 .expect("observational registry connection lock");
             return operation(&mut guard);
         }
-        let mut connection = Connection::open(&self.path)?;
-        if self.schema_mutation_allowed {
-            configure_connection(&mut connection)?;
-        } else {
-            configure_connection_read_only(&mut connection)?;
-        }
+        let mut connection = self.open_configured()?;
         operation(&mut connection)
+    }
+
+    /// Open and configure a connection, waiting out a transient lock.
+    fn open_configured(&self) -> Result<Connection, RegistryError> {
+        let mut attempt = 0;
+        loop {
+            let opened = Connection::open(&self.path)
+                .map_err(RegistryError::from)
+                .and_then(|mut connection| {
+                    if self.schema_mutation_allowed {
+                        configure_connection(&mut connection)?;
+                    } else {
+                        configure_connection_read_only(&mut connection)?;
+                    }
+                    Ok(connection)
+                });
+            match opened {
+                Ok(connection) => return Ok(connection),
+                Err(error) if is_transient_lock(&error) && attempt < OPEN_RETRY_DELAYS.len() => {
+                    std::thread::sleep(OPEN_RETRY_DELAYS[attempt]);
+                    attempt += 1;
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     fn with_mutating_connection<T>(
@@ -2048,16 +2085,23 @@ impl NodeRegistry {
         // A writer that panicked mid-transaction rolled back when its
         // connection dropped; the poisoned flag says nothing about the file.
         let _writer = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let mut connection = Connection::open(&self.path)?;
-        if self.schema_mutation_allowed {
-            configure_connection(&mut connection)?;
-        } else {
-            configure_connection_read_only(&mut connection)?;
-        }
+        let mut connection = self.open_configured()?;
         let result = operation(&mut connection)?;
         checkpoint_wal(&connection)?;
         Ok(result)
     }
+}
+
+/// A lock another connection holds right now, as opposed to any other error.
+fn is_transient_lock(error: &RegistryError) -> bool {
+    matches!(
+        error,
+        RegistryError::Sqlite(inner)
+            if matches!(
+                inner.sqlite_error_code(),
+                Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
+            )
+    )
 }
 
 fn write_lock_for(path: &Path) -> Arc<Mutex<()>> {
@@ -5775,6 +5819,52 @@ mod tests {
             .is_ok());
 
         writer_transaction.rollback().unwrap();
+    }
+
+    #[test]
+    fn only_a_held_lock_counts_as_transient_when_opening() {
+        let busy = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+            Some("database is locked".to_string()),
+        );
+        let locked = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_LOCKED),
+            None,
+        );
+        let not_a_database = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
+            None,
+        );
+        assert!(is_transient_lock(&RegistryError::Sqlite(busy)));
+        assert!(is_transient_lock(&RegistryError::Sqlite(locked)));
+        assert!(!is_transient_lock(&RegistryError::Sqlite(not_a_database)));
+        assert!(!is_transient_lock(&RegistryError::Corrupt("x".into())));
+    }
+
+    #[test]
+    fn a_connection_opens_through_a_briefly_held_exclusive_lock() {
+        let temp = TempDir::new().unwrap();
+        let context = context(&temp);
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
+        let path = context.database_path();
+        let holder = thread::spawn(move || {
+            let mut connection = Connection::open(path).unwrap();
+            connection
+                .execute_batch("PRAGMA locking_mode = EXCLUSIVE")
+                .unwrap();
+            let transaction = connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .unwrap();
+            thread::sleep(Duration::from_millis(150));
+            transaction.rollback().unwrap();
+        });
+        thread::sleep(Duration::from_millis(20));
+        assert!(
+            registry.peers().is_ok(),
+            "a read must wait out another process's lock rather than fail"
+        );
+        holder.join().unwrap();
     }
 
     #[test]

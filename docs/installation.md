@@ -50,7 +50,19 @@ omakure update --version vX.Y.Z --repo This-Is-NPC/omakure
 ```
 
 Linux/macOS update needs `curl` or `wget` and `tar`; Windows uses PowerShell.
-Existing workspace scripts are not overwritten by the update flow.
+Update replaces only the binary. Workspace scripts and metadata are unchanged;
+repository automation is never copied into a workspace. Manage subject scripts
+through explicit Battery installation instead.
+
+Downloads use unique private staging directories. A release archive must contain
+exactly one regular binary, with no links or extra paths. Installation stages the
+replacement on the destination filesystem and uses atomic rename on Unix or
+Windows file replacement after the updater exits; it never truncates the live
+binary as a fallback. If Windows replacement fails, staging and any backup are
+preserved for recovery at the path printed by the child updater. The install
+directory and temporary-directory configuration must remain trusted (not
+controlled by other users). Release authenticity still relies on HTTPS and the selected GitHub
+repository; archive validation is not a cryptographic signature check.
 
 ## Uninstall
 

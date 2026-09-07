@@ -56,6 +56,11 @@ unshare --user --map-root-user --mount bash -c '
     "${OVL_BOUNDED}" 5m cargo test --lib --locked git_askpass -- --test-threads=32
     "${OVL_BOUNDED}" 5m cargo test --lib --locked test_build_command_resolves -- --test-threads=32
     "${OVL_BOUNDED}" 5m cargo test --lib --locked test_spawn_of_file_open_for_write_is_etxtbsy -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked security_update -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked reserved_metadata_is_not_an_executable_subject -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked metadata_aliases_are_rejected_but_subject_aliases_are_allowed -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked queued_subject_replaced_with_metadata_symlink_is_not_executed -- --test-threads=32
+    "${OVL_BOUNDED}" 5m cargo test --lib --locked scheduler_rejects_reserved_metadata_aliases -- --test-threads=32
 '
 status=$?
 set -e

@@ -43,12 +43,19 @@ jobs:
             --output target/quality/complexity-report-b.json
           cmp --silent target/quality/complexity-report-a.json \
             target/quality/complexity-report-b.json
+          # The fixed corpus is the input the soak holds constant: the same
+          # bytes every run, so a changed hash can only mean the analyzer moved.
+          ./scripts/tasks/complexity-report \
+            --source-root quality/complexity/fixtures --input corpus.rs \
+            --output target/quality/complexity-corpus.json
           python3 - <<'PY'
           import datetime
           import json
           import os
           from pathlib import Path
           report = json.loads(Path("target/quality/complexity-report-a.json").read_text())
+          corpus = json.loads(Path("target/quality/complexity-corpus.json").read_text())
+          analyzer = report["candidates"][report["selection"]["primary"]]
           evidence = {
               "status": "success",
               "run_id": os.environ["GITHUB_RUN_ID"],
@@ -56,6 +63,14 @@ jobs:
               "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "schema_version": report["schema_version"],
               "canonical_sha256": report["canonical_sha256"],
+              "corpus_sha256": corpus["canonical_sha256"],
+              "tool": {
+                  "analyzer": report["selection"]["primary"],
+                  "version": analyzer["version"],
+                  "binary_sha256": analyzer["binary_sha256"],
+                  "config_identity": analyzer["config_identity"],
+                  "schema_sha256": analyzer["schema"]["sha256"],
+              },
               "candidates": report["candidates"],
               "source_accounting": report["source_accounting"],
               "audit": report["audit"],

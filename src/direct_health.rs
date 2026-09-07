@@ -140,6 +140,13 @@ pub enum HealthOutcome {
     Handled,
     /// The message was handled; write this signed envelope back.
     Reply(Vec<u8>),
+    /// The registry could neither decide nor record the message.
+    ///
+    /// This is not a drop. A drop is a decision the contract audits durably;
+    /// this is the audit itself failing, and the message is lost with it. The
+    /// silence the contract prescribes is toward the sender, so the caller
+    /// still writes nothing back, but it owes the operator the failure.
+    Failed { kind: String, error: String },
 }
 
 impl<'a> HealthSession<'a> {
@@ -222,17 +229,15 @@ impl<'a> HealthSession<'a> {
         // dropped and audited without a reply, because the sender is not yet
         // proven authorized and target-bound.
         if let Err(error) = self.verify(encoded, &kind_text) {
-            self.audit_transport_failure(&kind_text, encoded.len(), error, now);
-            return HealthOutcome::Handled;
+            return self.audit_transport_failure(&kind_text, encoded.len(), error, now);
         }
         let Ok(view) = envelope_view(encoded) else {
-            self.audit_transport_failure(
+            return self.audit_transport_failure(
                 &kind_text,
                 encoded.len(),
                 TransportError::InvalidFrame,
                 now,
             );
-            return HealthOutcome::Handled;
         };
 
         // Steps 2 through 15 belong to the Wave 2 shared operations, in full.
@@ -243,8 +248,14 @@ impl<'a> HealthSession<'a> {
             canonical_len,
             payload: &view.payload,
         });
-        let Ok(ingest) = ingest else {
-            return HealthOutcome::Handled;
+        let ingest = match ingest {
+            Ok(ingest) => ingest,
+            Err(error) => {
+                return HealthOutcome::Failed {
+                    kind: kind_text,
+                    error: error.to_string(),
+                }
+            }
         };
 
         // A reply that acknowledges our own Profile or Pulse resolves the
@@ -662,26 +673,33 @@ impl<'a> HealthSession<'a> {
     ///
     /// The row carries only the stable code, the peer node ID, the message
     /// kind, and the byte count, exactly as the frozen contract requires.
+    /// Drop the envelope and audit the drop; the audit failing is the outcome.
     fn audit_transport_failure(
         &self,
         kind: &str,
         byte_count: usize,
         error: TransportError,
         now: i64,
-    ) {
+    ) -> HealthOutcome {
         let code = transport_failure_code(error);
-        let kind = HealthKind::parse(kind)
+        let wire = HealthKind::parse(kind)
             .map(HealthKind::wire)
             .unwrap_or("unknown");
-        let _ = self.registry.record_health_audit(
-            kind,
+        match self.registry.record_health_audit(
+            wire,
             &self.remote_node_id,
-            kind,
+            wire,
             byte_count as i64,
             "dropped",
             Some(code.code()),
             now,
-        );
+        ) {
+            Ok(()) => HealthOutcome::Handled,
+            Err(error) => HealthOutcome::Failed {
+                kind: kind.to_string(),
+                error: error.to_string(),
+            },
+        }
     }
 }
 
@@ -1192,6 +1210,56 @@ mod tests {
             session.authorization().0 == LocalRole::None,
             "a revoked peer must project no local role at all"
         );
+    }
+
+    #[test]
+    fn a_registry_failure_is_reported_rather_than_passed_off_as_a_drop() {
+        let fixture = fixture();
+        let mut session = fixture.session(&fixture.conductor, fixture.conductor_key);
+        let payload = serde_json::json!({
+            "health_version": 1,
+            "message_id": format!("{:032x}", 78_u64),
+            "pulse": {
+                "emitted_at": BASE_NOW,
+                "last_run": null,
+                "profile_revision": 1,
+                "runner": {
+                    "queue_depth": 0,
+                    "scheduler": "running",
+                    "state": "idle",
+                    "workers_busy": 0,
+                    "workers_configured": 1
+                },
+                "sequence": 1,
+                "uptime_seconds": 1
+            },
+            "target": fixture.identity.public_status().node_id,
+        });
+        let encoded = crate::direct_transport::sign_health_envelope(
+            &fixture.conductor_identity,
+            "health_pulse",
+            &SESSION_ID,
+            [0x4e; 16],
+            payload,
+            BASE_NOW as u64,
+        )
+        .expect("sign the health message")
+        .encoded();
+        // Every operation opens the registry afresh, so a database that stops
+        // being one mid-session is the shape of a registry error the ingest
+        // path can meet: not a decision, a failure to reach one.
+        std::fs::write(fixture.registry.path(), b"not a database").unwrap();
+
+        match session.handle_envelope(&encoded) {
+            HealthOutcome::Failed { kind, error } => {
+                assert_eq!(kind, "health_pulse");
+                assert!(
+                    error.contains("SQLite"),
+                    "the failure must carry the registry error, got {error:?}"
+                );
+            }
+            other => panic!("a registry failure must not read as {other:?}"),
+        }
     }
 
     #[test]

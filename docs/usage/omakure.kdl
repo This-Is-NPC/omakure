@@ -3,7 +3,7 @@
 
 name omakure
 bin omakure
-version "0.4.3"
+version "0.4.4"
 about "Omakure - CLI for running and scheduling automation scripts"
 long_about #"""
 Omakure - CLI for running and scheduling automation scripts.

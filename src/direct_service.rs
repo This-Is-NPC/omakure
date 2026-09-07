@@ -1947,6 +1947,20 @@ fn hold_session(
                 write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
                     .map_err(error_to_transport)?;
             }
+            // Nothing goes back to the peer, as for any drop; the session
+            // goes on, because the failure was the registry's moment, not the
+            // peer's. What must not happen is what happened before: the
+            // message vanishing with no reply, no audit row, and no line.
+            HealthOutcome::Failed { kind, error } => {
+                eprintln!(
+                    "omakure.health_ingest_failure {}",
+                    serde_json::json!({
+                        "peer": peer_node_id,
+                        "kind": kind,
+                        "error": error,
+                    })
+                );
+            }
         }
     }
     Ok(())

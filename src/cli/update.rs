@@ -327,6 +327,20 @@ fn download_to_path(url: &str, dest: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn zip_powershell_command(body: &str) -> Command {
+    // Windows PowerShell 5.1 does not preload these assemblies with -NoProfile.
+    // ZipFile and ZipArchiveMode belong to different assemblies; load both
+    // before evaluating the body, including when constructing test archives.
+    let script = format!(
+        "$ErrorActionPreference = 'Stop'; \
+         Add-Type -AssemblyName System.IO.Compression; \
+         Add-Type -AssemblyName System.IO.Compression.FileSystem; {body}"
+    );
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    command
+}
+
 fn extract_release_binary(
     archive: &Path,
     staging: &Path,
@@ -335,9 +349,7 @@ fn extract_release_binary(
     let destination = staging.join(bin_name);
     if cfg!(windows) {
         let script = format!(
-            "$ErrorActionPreference = 'Stop'; \
-             Add-Type -AssemblyName System.IO.Compression.FileSystem; \
-             $zip = [IO.Compression.ZipFile]::OpenRead({archive}); \
+            "$zip = [IO.Compression.ZipFile]::OpenRead({archive}); \
              try {{ \
                if ($zip.Entries.Count -ne 1) {{ throw 'Expected one release binary' }}; \
                $entry = $zip.Entries[0]; \
@@ -356,11 +368,7 @@ fn extract_release_binary(
             name = ps_quote(bin_name),
             destination = ps_quote(&destination.display().to_string()),
         );
-        if !Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()?
-            .success()
-        {
+        if !zip_powershell_command(&script).status()?.success() {
             return Err("Failed to extract release binary".into());
         }
     } else {
@@ -788,44 +796,72 @@ mod tests {
     }
 
     // Native Windows checks run in the platform test suite.
+    #[test]
+    fn security_update_zip_command_loads_both_assemblies_without_profile() {
+        let command = zip_powershell_command("BODY");
+        let args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_str().unwrap())
+            .collect();
+        assert_eq!(&args[..3], &["-NoProfile", "-NonInteractive", "-Command"]);
+        assert_eq!(
+            args[3],
+            "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression; \
+             Add-Type -AssemblyName System.IO.Compression.FileSystem; BODY"
+        );
+    }
+
     #[cfg(windows)]
     #[test]
     fn security_update_windows_extracts_only_single_release_binary() {
         let root = TempDir::new().unwrap();
         let archive = root.path().join("payload.zip");
-        let script = format!(
-            "$ErrorActionPreference = 'Stop'; \
-             Add-Type -AssemblyName System.IO.Compression.FileSystem; \
-             $zip = [IO.Compression.ZipFile]::Open({}, [IO.Compression.ZipArchiveMode]::Create); \
-             try {{ $entry = $zip.CreateEntry('omakure.exe'); $writer = [IO.StreamWriter]::new($entry.Open()); \
-               try {{ $writer.Write('release payload') }} finally {{ $writer.Dispose() }} \
-             }} finally {{ $zip.Dispose() }}",
-            ps_quote(&archive.display().to_string()),
-        );
-        assert!(Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
+        create_windows_test_zip(&archive, &["omakure.exe"]);
         let staging = update_staging_in(root.path()).unwrap();
         let extracted = extract_release_binary(&archive, staging.path(), "omakure.exe").unwrap();
         assert_eq!(fs::read_to_string(extracted).unwrap(), "release payload");
+    }
+
+    #[cfg(windows)]
+    #[rstest::rstest]
+    #[case::multiple(vec!["omakure.exe", "extra.txt"])]
+    #[case::traversal(vec!["../escape"])]
+    #[case::backslash_traversal(vec!["..\\escape"])]
+    #[case::absolute(vec!["/escape"])]
+    #[case::nested(vec!["nested/omakure.exe"])]
+    #[case::directory(vec!["omakure.exe/"])]
+    #[case::empty(vec![])]
+    fn security_update_windows_rejects_invalid_zip_entries(#[case] entries: Vec<&str>) {
+        let root = TempDir::new().unwrap();
+        let archive = root.path().join("payload.zip");
+        create_windows_test_zip(&archive, &entries);
+        let staging = update_staging_in(root.path()).unwrap();
+        assert!(extract_release_binary(&archive, staging.path(), "omakure.exe").is_err());
+        assert!(!root.path().join("escape").exists());
+        assert_eq!(fs::read_dir(staging.path()).unwrap().count(), 0);
+    }
+
+    #[cfg(windows)]
+    fn create_windows_test_zip(archive: &Path, entries: &[&str]) {
+        let entries = entries
+            .iter()
+            .map(|entry| ps_quote(entry))
+            .collect::<Vec<_>>()
+            .join(",");
         let script = format!(
-            "$ErrorActionPreference = 'Stop'; \
-             Add-Type -AssemblyName System.IO.Compression.FileSystem; \
-             $zip = [IO.Compression.ZipFile]::Open({}, [IO.Compression.ZipArchiveMode]::Update); \
-             try {{ $null = $zip.CreateEntry('../escape') }} finally {{ $zip.Dispose() }}",
+            "$zip = [IO.Compression.ZipFile]::Open({}, [IO.Compression.ZipArchiveMode]::Create); \
+             try {{ foreach ($name in @({entries})) {{ \
+               $entry = $zip.CreateEntry($name); $writer = [IO.StreamWriter]::new($entry.Open()); \
+               try {{ $writer.Write('release payload') }} finally {{ $writer.Dispose() }} \
+             }} }} finally {{ $zip.Dispose() }}",
             ps_quote(&archive.display().to_string()),
         );
-        assert!(Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
-        let rejected = update_staging_in(root.path()).unwrap();
-        assert!(extract_release_binary(&archive, rejected.path(), "omakure.exe").is_err());
-        assert!(!root.path().join("escape").exists());
-        assert!(!rejected.path().join("omakure.exe").exists());
+        let output = zip_powershell_command(&script).output().unwrap();
+        assert!(
+            output.status.success(),
+            "ZIP fixture creation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[cfg(windows)]

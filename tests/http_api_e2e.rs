@@ -1175,7 +1175,7 @@ fn node_management_routes_cover_missing_scopes_individually() {
         API_TOKEN,
         &["--capability", "node:write"],
         &[],
-        Duration::from_secs(15),
+        support::NODE_STARTUP_TIMEOUT,
     );
     for path in ["/v1/node/health", "/v1/node/signals"] {
         let denied = node_write_only_service.request("GET", path, None);
@@ -1260,7 +1260,7 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
             "enrollment:write",
         ],
         &envs,
-        Duration::from_secs(10),
+        support::NODE_STARTUP_TIMEOUT,
     );
     let before = server.get("/v1/node/status");
     assert_eq!(before.status, 200, "body: {}", before.safe_body());
@@ -1994,7 +1994,7 @@ fn node_cue_route_requires_node_write_and_a_transport() {
             "node:read",
         ],
         &[],
-        Duration::from_secs(20),
+        support::NODE_STARTUP_TIMEOUT,
     );
     let body = serde_json::json!({
         "peer_node_id": "omk1_0000000000000000000000000000000000000000000000000000000000000000",
@@ -2024,7 +2024,7 @@ fn node_cue_route_requires_node_write_and_a_transport() {
             "node:write",
         ],
         &[],
-        Duration::from_secs(20),
+        support::NODE_STARTUP_TIMEOUT,
     );
     let without_transport = writer.post_json("/v1/node/cues", &body);
     assert_eq!(
@@ -2075,7 +2075,7 @@ fn node_baseline_route_requires_node_write_and_a_transport() {
             "node:read",
         ],
         &[],
-        Duration::from_secs(20),
+        support::NODE_STARTUP_TIMEOUT,
     );
     let body = serde_json::json!({
         "peer_node_id": "omk1_0000000000000000000000000000000000000000000000000000000000000000",
@@ -2105,7 +2105,7 @@ fn node_baseline_route_requires_node_write_and_a_transport() {
             "node:write",
         ],
         &[],
-        Duration::from_secs(20),
+        support::NODE_STARTUP_TIMEOUT,
     );
     let without_transport = writer.post_json("/v1/node/baselines", &body);
     assert_eq!(

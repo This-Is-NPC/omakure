@@ -67,3 +67,16 @@ and maintains the temporal informational soak. The soak audit records trusted
 successful runs and reports whether the chain has ten consecutive records
 spanning at least seven calendar days. This evidence is informational and does
 not weaken local changed-function enforcement.
+
+The soak proves that the pinned analyzer keeps producing the same output for
+the same input across days and runners. Each record therefore carries the
+analyzer's identity (version, binary digest, configuration, output schema digest) and the
+canonical hash of the fixed fixture corpus, and a streak continues only while
+both stay constant. The canonical hash of the live source tree is recorded as
+evidence of that run and is allowed to change between records, because merged
+code changes it. A deliberate change to the analyzer, the corpus, or the state
+format restarts the streak with the reason recorded in the persisted state,
+the same way a missing trusted run does. The state retains at most ten
+records; when the window lets its oldest record go, the digest of that record
+is kept as `pruned_record_sha256`, so the first retained record still links to
+a known predecessor and pruning never loosens the chain.

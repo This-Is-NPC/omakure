@@ -1,5 +1,5 @@
 # `omakure`
-- **Version:** 0.4.2
+- **Version:** 0.4.3
 
 Omakure - CLI for running and scheduling automation scripts.
 

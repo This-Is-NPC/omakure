@@ -5,6 +5,17 @@ The chain is deliberately boring JSON so it can be inspected offline. A
 record's digest links it to its predecessor; the dedicated master-only soak
 workflow stores each updated chain under an immutable cache key. Pull-request
 CI never restores or saves this state.
+
+What the chain holds constant is what the soak exists to prove: that the
+pinned analyzer keeps producing the same output for the same input across
+days and runners. So every record carries the analyzer's identity and the
+canonical hash of the fixed fixture corpus, and those must not change from
+one record to the next. The canonical hash of the live source tree is
+recorded as evidence of that run, not as a chain invariant: a repository
+that ships code changes its functions, and a soak that could only complete
+during a week without a merge would never complete at all. A deliberate
+change to the analyzer or the corpus restarts the streak with its reason
+recorded, exactly as a missing trusted run does.
 """
 from __future__ import annotations
 
@@ -19,11 +30,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-STATE_VERSION = 1
+STATE_VERSION = 2
 MAX_RECORDS = 10
 WORKFLOW_NAME = "Complexity Soak"
 REQUIRED_PROVENANCE = ("repository", "workflow", "event", "ref", "sha", "run_attempt")
 STREAM_PROVENANCE = ("repository", "workflow", "ref")
+TOOL_IDENTITY = ("analyzer", "version", "binary_sha256", "config_identity", "schema_sha256")
 TRUSTED_EVENTS = ("push", "schedule")
 MAIN_REF = "refs/heads/master"
 COMMIT_SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -93,6 +105,19 @@ def validate_record(record: object, expected_repository: str | None = None) -> t
     canonical_hash = record.get("canonical_sha256")
     if not isinstance(canonical_hash, str) or not HASH_SHA256.fullmatch(canonical_hash):
         return "every evidence record needs a lowercase hexadecimal canonical_sha256", None
+    corpus_hash = record.get("corpus_sha256")
+    if not isinstance(corpus_hash, str) or not HASH_SHA256.fullmatch(corpus_hash):
+        return "every evidence record needs a lowercase hexadecimal corpus_sha256", None
+    tool = record.get("tool")
+    if not isinstance(tool, dict):
+        return "every evidence record needs a tool identity object", None
+    for key in TOOL_IDENTITY:
+        value = tool.get(key)
+        if not isinstance(value, str) or not value:
+            return f"tool identity needs a non-empty {key}", None
+    for key in ("binary_sha256", "schema_sha256"):
+        if not HASH_SHA256.fullmatch(tool[key]):
+            return f"tool identity {key} must be a lowercase hexadecimal SHA-256 string", None
     provenance = provenance_error(record.get("provenance"), expected_repository)
     if provenance:
         return provenance, None
@@ -107,7 +132,19 @@ def validate_record(record: object, expected_repository: str | None = None) -> t
     return None, timestamp
 
 
-def validate_chain(records: object, expected_repository: str | None = None) -> tuple[str | None, list[dt.datetime]]:
+def validate_chain(
+    records: object,
+    expected_repository: str | None = None,
+    pruned_digest: str | None = None,
+) -> tuple[str | None, list[dt.datetime]]:
+    """Validate the retained window.
+
+    `pruned_digest` is the digest of the last record the window let go. The
+    first retained record must link from exactly that, or from null when
+    nothing has been pruned, so pruning never loosens the chain: the link
+    to the predecessor is kept in the state even after the record itself is
+    gone.
+    """
     if not isinstance(records, list):
         return "chain records must be an array", []
     if len(records) > MAX_RECORDS:
@@ -117,7 +154,7 @@ def validate_chain(records: object, expected_repository: str | None = None) -> t
     prior_sequence: int | None = None
     run_ids: set[str] = set()
     schema: int | None = None
-    canonical_hash: str | None = None
+    invariants: tuple[tuple[Any, ...], str] | None = None
     stream: tuple[str, str, str, str] | None = None
     for record in records:
         reason, timestamp = validate_record(record, expected_repository)
@@ -131,17 +168,19 @@ def validate_chain(records: object, expected_repository: str | None = None) -> t
             return "evidence records must use consecutive CI sequences; a missing run is a gap", []
         previous = record.get("previous_record_sha256")
         if prior_digest is None:
-            if previous is not None:
-                return "first evidence record must link from previous_record_sha256=null", []
+            if previous != pruned_digest:
+                if pruned_digest is None:
+                    return "first evidence record must link from previous_record_sha256=null", []
+                return "first retained record must link from the pruned predecessor", []
         elif prior_digest != previous:
             return "evidence record hash chain is broken", []
         if schema is None:
             schema = record["schema_version"]
-            canonical_hash = record["canonical_sha256"]
+            invariants = chain_invariants(record)
         elif record["schema_version"] != schema:
             return "schema_version drifted across evidence records", []
-        elif record["canonical_sha256"] != canonical_hash:
-            return "canonical_sha256 changed across evidence records", []
+        elif chain_invariants(record) != invariants:
+            return "tool identity or corpus_sha256 changed across evidence records", []
         current_stream = tuple(record["provenance"][key] for key in STREAM_PROVENANCE)
         if stream is None:
             stream = current_stream
@@ -155,6 +194,26 @@ def validate_chain(records: object, expected_repository: str | None = None) -> t
     return None, timestamps
 
 
+def tool_identity(record: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(record["tool"][key] for key in TOOL_IDENTITY)
+
+
+def chain_invariants(record: dict[str, Any]) -> tuple[tuple[Any, ...], str]:
+    """What must hold from one record to the next for the streak to continue."""
+    return tool_identity(record), record["corpus_sha256"]
+
+
+def invariant_change(previous: dict[str, Any], current: dict[str, Any]) -> str | None:
+    """Name the invariant that moved, or None when the streak may continue."""
+    if tool_identity(current) != tool_identity(previous):
+        return "tool_identity_change"
+    if current["corpus_sha256"] != previous["corpus_sha256"]:
+        return "corpus_change"
+    if current["schema_version"] != previous["schema_version"]:
+        return "schema_version_change"
+    return None
+
+
 def load_state_document(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"state_version": STATE_VERSION, "records": []}
@@ -162,7 +221,19 @@ def load_state_document(path: Path) -> dict[str, Any]:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"invalid chain state {path}: {exc}") from exc
-    if not isinstance(value, dict) or value.get("state_version") != STATE_VERSION:
+    if not isinstance(value, dict):
+        raise ValueError(f"chain state {path} must be an object")
+    version = value.get("state_version")
+    if version != STATE_VERSION:
+        # A chain written before the record shape changed cannot be validated
+        # against the new invariants. It restarts, and the state says why.
+        if isinstance(version, int) and not isinstance(version, bool) and 0 < version < STATE_VERSION:
+            return {
+                "state_version": STATE_VERSION,
+                "status": "pending",
+                "records": [],
+                "reset": {"reason": "state_version_change", "previous_state_version": version},
+            }
         raise ValueError(f"chain state {path} has unsupported state_version")
     records = value.get("records")
     if not isinstance(records, list):
@@ -173,6 +244,9 @@ def load_state_document(path: Path) -> dict[str, Any]:
     reset = value.get("reset")
     if reset is not None and not isinstance(reset, dict):
         raise ValueError(f"chain state {path} reset provenance must be an object")
+    pruned = value.get("pruned_record_sha256")
+    if pruned is not None and (not isinstance(pruned, str) or not HASH_SHA256.fullmatch(pruned)):
+        raise ValueError(f"chain state {path} pruned_record_sha256 must be a lowercase hexadecimal SHA-256 string")
     return value
 
 
@@ -186,11 +260,14 @@ def write_state(
     *,
     status: str = "pending",
     reset: dict[str, Any] | None = None,
+    pruned_digest: str | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {"state_version": STATE_VERSION, "status": status, "records": records}
     if reset is not None:
         payload["reset"] = reset
+    if pruned_digest is not None:
+        payload["pruned_record_sha256"] = pruned_digest
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -202,8 +279,12 @@ def write_state(
             os.unlink(temporary)
 
 
-def streak_status(records: list[dict[str, Any]], expected_repository: str | None) -> str:
-    reason, timestamps = validate_chain(records, expected_repository)
+def streak_status(
+    records: list[dict[str, Any]],
+    expected_repository: str | None,
+    pruned_digest: str | None = None,
+) -> str:
+    reason, timestamps = validate_chain(records, expected_repository, pruned_digest)
     if reason is None and len(records) == MAX_RECORDS and (timestamps[-1].date() - timestamps[0].date()).days >= 7:
         return "pass"
     return "pending"
@@ -237,8 +318,13 @@ def report(reason: str | None, strict: bool) -> int:
     return 0
 
 
-def audit(records: list[dict[str, Any]], strict: bool, expected_repository: str | None = None) -> int:
-    reason, timestamps = validate_chain(records, expected_repository)
+def audit(
+    records: list[dict[str, Any]],
+    strict: bool,
+    expected_repository: str | None = None,
+    pruned_digest: str | None = None,
+) -> int:
+    reason, timestamps = validate_chain(records, expected_repository, pruned_digest)
     if reason is None:
         if len(records) != MAX_RECORDS:
             reason = f"requires exactly {MAX_RECORDS} evidence records, found {len(records)}"
@@ -262,7 +348,8 @@ def rerun_projection(record: dict[str, Any]) -> dict[str, Any]:
 def append_current(state_path: Path, current_path: Path, expected_repository: str | None) -> list[dict[str, Any]]:
     state_document = load_state_document(state_path)
     records = state_document["records"]
-    reason, _ = validate_chain(records, expected_repository)
+    pruned_digest = state_document.get("pruned_record_sha256")
+    reason, _ = validate_chain(records, expected_repository, pruned_digest)
     if reason:
         raise ValueError(f"restored chain is invalid: {reason}")
     try:
@@ -312,17 +399,23 @@ def append_current(state_path: Path, current_path: Path, expected_repository: st
     if reason:
         raise ValueError(f"current evidence is invalid: {reason}")
     sequence_gap = records and current["sequence"] != previous_sequence + 1
-    if sequence_gap:
-        # A failed or missing trusted execution leaves a sequence hole. Start
-        # a new streak rather than wedging it behind that hole.
+    moved = invariant_change(records[-1], current) if records else None
+    if sequence_gap or moved:
+        # A failed or missing trusted execution leaves a sequence hole, and a
+        # deliberate change to the analyzer or the corpus leaves nothing for
+        # the next record to be compared against. Either way, start a new
+        # streak with its reason on record rather than wedging it.
         reset = {
-            "reason": "sequence_gap",
+            "reason": "sequence_gap" if sequence_gap else moved,
             "previous_sequence": previous_sequence,
             "current_sequence": current["sequence"],
             "run_id": current["run_id"],
             "timestamp": current["timestamp"],
             "provenance": current["provenance"],
         }
+        if moved:
+            reset["previous_tool"] = records[-1]["tool"]
+            reset["previous_corpus_sha256"] = records[-1]["corpus_sha256"]
         current["previous_record_sha256"] = None
         current["record_sha256"] = record_digest(current)
         reason, _ = validate_record(current, expected_repository)
@@ -331,15 +424,20 @@ def append_current(state_path: Path, current_path: Path, expected_repository: st
         records = [current]
         write_state(state_path, records, status="pending", reset=reset)
         return records
-    records = (records[-(MAX_RECORDS - 1):] if len(records) >= MAX_RECORDS else records) + [current]
-    reason, _ = validate_chain(records, expected_repository)
+    if len(records) >= MAX_RECORDS:
+        # The window lets its oldest record go, but not the link to it.
+        pruned_digest = records[-MAX_RECORDS]["record_sha256"]
+        records = records[-(MAX_RECORDS - 1):]
+    records = records + [current]
+    reason, _ = validate_chain(records, expected_repository, pruned_digest)
     if reason:
         raise ValueError(f"updated chain is invalid: {reason}")
     write_state(
         state_path,
         records,
-        status=streak_status(records, expected_repository),
+        status=streak_status(records, expected_repository, pruned_digest),
         reset=state_document.get("reset"),
+        pruned_digest=pruned_digest,
     )
     return records
 
@@ -360,6 +458,9 @@ def simulation() -> int:
             day: int | None = None,
             attempt: int = 1,
             sha: str = "1" * 40,
+            canonical: str = "a" * 64,
+            corpus: str = "c" * 64,
+            tool_version: str = "1.0.0",
         ) -> Path:
             current = root / f"run-{run_id or sequence}-{event}.json"
             value = {
@@ -368,7 +469,15 @@ def simulation() -> int:
                 "sequence": sequence,
                 "timestamp": (base + dt.timedelta(days=day if day is not None else sequence - 1)).isoformat(),
                 "schema_version": 2,
-                "canonical_sha256": "a" * 64,
+                "canonical_sha256": canonical,
+                "corpus_sha256": corpus,
+                "tool": {
+                    "analyzer": "cccc",
+                    "version": tool_version,
+                    "binary_sha256": "b" * 64,
+                    "config_identity": "default",
+                    "schema_sha256": "5" * 64,
+                },
                 "provenance": {
                     "repository": repository,
                     "workflow": WORKFLOW_NAME,
@@ -491,7 +600,80 @@ def simulation() -> int:
         tampered[-1]["canonical_sha256"] = "b" * 64
         if validate_chain(tampered, repository)[0] is None:
             return fail("simulation accepted tampered canonical hash")
-    print("complexity soak simulation: PASS (PR independence, sequence-gap reset, rerun idempotence, stale no-op, ten-day cadence, and provenance/integrity guards)")
+
+        # The live tree changes whenever code merges. A new canonical hash is
+        # evidence of that run, not a break in the streak.
+        pruned = load_state(state)[0]
+        append_current(state, evidence(15, day=15, canonical="d" * 64), repository)
+        moved_document = load_state_document(state)
+        if len(moved_document["records"]) != MAX_RECORDS or moved_document["records"][-1]["sequence"] != 15:
+            return fail("simulation broke the streak on a changed live-tree canonical hash")
+        # The window let sequence 5 go; the chain still links from it.
+        if moved_document.get("pruned_record_sha256") != pruned["record_sha256"]:
+            return fail("simulation lost the link to the pruned record")
+        if moved_document["records"][0]["previous_record_sha256"] != pruned["record_sha256"]:
+            return fail("simulation rewrote the first retained record's predecessor")
+        if audit(moved_document["records"], True, repository, moved_document["pruned_record_sha256"]) != 0:
+            return fail("simulation expected a pruned window to audit as passing")
+        if validate_chain(moved_document["records"], repository, None)[0] is None:
+            return fail("simulation validated a pruned window without its root")
+        if moved_document["records"][-1]["canonical_sha256"] != "d" * 64:
+            return fail("simulation did not record the new canonical hash")
+        if moved_document.get("status") != "pass":
+            return fail("simulation lost pass status on a changed live-tree canonical hash")
+
+        # The analyzer changing is what the streak measures against, so it
+        # restarts, and says so.
+        append_current(state, evidence(16, day=16, tool_version="1.0.1"), repository)
+        tool_document = load_state_document(state)
+        tool_reset = tool_document.get("reset")
+        if len(tool_document["records"]) != 1 or tool_document.get("status") != "pending":
+            return fail("simulation did not restart the streak on a tool identity change")
+        if "pruned_record_sha256" in tool_document:
+            return fail("simulation carried a pruned root across a restart")
+        if not isinstance(tool_reset, dict) or tool_reset.get("reason") != "tool_identity_change" or tool_reset.get("previous_sequence") != 15:
+            return fail("simulation omitted tool identity reset provenance")
+        if tool_reset.get("previous_tool", {}).get("version") != "1.0.0":
+            return fail("simulation did not record the tool identity it left")
+
+        # So is the fixed corpus.
+        append_current(state, evidence(17, day=17, tool_version="1.0.1", corpus="e" * 64), repository)
+        corpus_reset = load_state_document(state).get("reset")
+        if not isinstance(corpus_reset, dict) or corpus_reset.get("reason") != "corpus_change" or corpus_reset.get("previous_corpus_sha256") != "c" * 64:
+            return fail("simulation omitted corpus reset provenance")
+
+        # Within a streak, a tampered corpus hash or tool identity is a broken
+        # chain even with the record digest recomputed.
+        append_current(state, evidence(18, day=18, tool_version="1.0.1", corpus="e" * 64), repository)
+        for label, mutate in (
+            ("corpus hash", lambda record: record.__setitem__("corpus_sha256", "f" * 64)),
+            ("tool version", lambda record: record["tool"].__setitem__("version", "9.9.9")),
+        ):
+            tampered = load_state(state)
+            tampered[-1]["tool"] = dict(tampered[-1]["tool"])
+            mutate(tampered[-1])
+            recompute(tampered[-1])
+            if validate_chain(tampered, repository)[0] is None:
+                return fail(f"simulation accepted a recomputed {label} change inside a streak")
+        for missing in ("corpus_sha256", "tool"):
+            incomplete = load_state(state)
+            incomplete[-1].pop(missing)
+            recompute(incomplete[-1])
+            if validate_chain(incomplete, repository)[0] is None:
+                return fail(f"simulation accepted a record without {missing}")
+
+        # A chain persisted under the previous state shape restarts with its
+        # reason recorded instead of failing the trusted run that found it.
+        legacy = root / "legacy.json"
+        legacy.write_text(json.dumps({"state_version": 1, "status": "pass", "records": [{"sequence": 1}]}), encoding="utf-8")
+        append_current(legacy, evidence(19, day=19, tool_version="1.0.1", corpus="e" * 64), repository)
+        legacy_document = load_state_document(legacy)
+        legacy_reset = legacy_document.get("reset")
+        if legacy_document.get("state_version") != STATE_VERSION or len(legacy_document["records"]) != 1:
+            return fail("simulation did not restart a legacy state document")
+        if not isinstance(legacy_reset, dict) or legacy_reset.get("reason") != "state_version_change" or legacy_reset.get("previous_state_version") != 1:
+            return fail("simulation omitted state version reset provenance")
+    print("complexity soak simulation: PASS (PR independence, sequence-gap reset, rerun idempotence, stale no-op, ten-day cadence, pruned-window root, live-tree drift tolerated, tool/corpus/state-version resets, and provenance/integrity guards)")
     return 0
 
 
@@ -515,16 +697,20 @@ def main() -> int:
             records = append_current(args.state, args.current, expected_repository)
             if args.state.read_bytes() == before_state:
                 print("complexity soak update: no-op (state unchanged)")
-            return audit(records, args.strict, expected_repository)
+            pruned_digest = load_state_document(args.state).get("pruned_record_sha256")
+            return audit(records, args.strict, expected_repository, pruned_digest)
+        pruned_digest = None
         if args.state:
-            records = load_state(args.state)
+            document = load_state_document(args.state)
+            records = document["records"]
+            pruned_digest = document.get("pruned_record_sha256")
         elif args.directory:
             records = load_directory(args.directory)
         else:
             return fail("one of --directory or --state is required")
     except ValueError as exc:
         return fail(str(exc))
-    return audit(records, args.strict, expected_repository)
+    return audit(records, args.strict, expected_repository, pruned_digest)
 
 
 if __name__ == "__main__":

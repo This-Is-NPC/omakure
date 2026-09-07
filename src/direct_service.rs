@@ -702,6 +702,7 @@ struct QueuedConnection {
     stream: TcpStream,
     peer_addr: SocketAddr,
     reservation: AdmissionReservation,
+    deadline: Instant,
 }
 
 #[derive(Debug)]
@@ -1375,6 +1376,7 @@ impl DirectListener {
                             stream,
                             peer_addr,
                             reservation,
+                            deadline: Instant::now() + HANDSHAKE_TIMEOUT,
                         };
                         match sender_for_thread.try_send(connection) {
                             Ok(()) => {}
@@ -2520,7 +2522,7 @@ fn sign_pending_cue(
     .encoded())
 }
 
-/// The pre-Health-Plane steady-state loop, unchanged.
+/// The pre-Health-Plane steady-state loop.
 fn hold_session_idle(
     stream: &mut TcpStream,
     session: &mut TransportSession,
@@ -2531,6 +2533,12 @@ fn hold_session_idle(
         .map_err(|_| TransportError::Internal)?;
     while !state.stop.load(Ordering::SeqCst) {
         let deadline = Instant::now() + IDLE_TIMEOUT;
+        // Idle time is distinct from the deadline for a partial frame header.
+        match wait_readable(stream, IDLE_TIMEOUT) {
+            Readiness::Readable => {}
+            Readiness::Idle | Readiness::Closed => return Ok(()),
+            Readiness::Failed(error) => return Err(error),
+        }
         match read_frame(stream, deadline) {
             Ok(encoded) => {
                 let frame = Frame::parse(&encoded)?;
@@ -3148,8 +3156,8 @@ fn serve_connection(
         mut stream,
         peer_addr: _peer_addr,
         mut reservation,
+        deadline,
     } = connection;
-    let deadline = Instant::now() + HANDSHAKE_TIMEOUT;
     set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;
     let identity = NodeIdentity::load_existing(context)?;
     let local = LocalTransport::load_existing(context, &identity)?;
@@ -3508,11 +3516,12 @@ fn set_stream_timeouts(stream: &TcpStream, deadline: Instant) -> Result<(), Tran
 }
 
 fn read_frame(stream: &mut TcpStream, deadline: Instant) -> Result<Vec<u8>, DirectServiceError> {
-    stream.set_read_timeout(Some(
-        deadline_timeout(deadline).map_err(DirectServiceError::Protocol)?,
-    ))?;
     let mut prefix = [0u8; 4];
-    stream.read_exact(&mut prefix)?;
+    read_bytes_until(
+        stream,
+        &mut prefix,
+        deadline.min(Instant::now() + HEADER_TIMEOUT),
+    )?;
     let length = u32::from_be_bytes(prefix) as usize;
     if !(4..=crate::direct_transport::MAX_FRAME_LENGTH).contains(&length) {
         return Err(TransportError::MessageTooLarge.into());
@@ -3523,9 +3532,12 @@ fn read_frame(stream: &mut TcpStream, deadline: Instant) -> Result<Vec<u8>, Dire
     let started_kib = length.saturating_add(65_535) / 65_536;
     let body_timeout = Duration::from_secs(1)
         .saturating_add(Duration::from_secs(started_kib as u64))
-        .min(deadline_timeout(deadline).map_err(DirectServiceError::Protocol)?);
-    stream.set_read_timeout(Some(body_timeout))?;
-    stream.read_exact(&mut frame[4..])?;
+        .min(HANDSHAKE_TIMEOUT);
+    read_bytes_until(
+        stream,
+        &mut frame[4..],
+        deadline.min(Instant::now() + body_timeout),
+    )?;
     Frame::parse(&frame)?;
     Ok(frame)
 }
@@ -3535,11 +3547,48 @@ fn write_bytes(
     bytes: &[u8],
     deadline: Instant,
 ) -> Result<(), DirectServiceError> {
-    stream.set_write_timeout(Some(
-        deadline_timeout(deadline).map_err(DirectServiceError::Protocol)?,
-    ))?;
-    stream.write_all(bytes)?;
-    stream.flush()?;
+    transfer_until(bytes.len(), deadline, |offset, timeout| {
+        stream.set_write_timeout(Some(timeout))?;
+        match stream.write(&bytes[offset..])? {
+            0 => Err(io::ErrorKind::WriteZero.into()),
+            written => Ok(written),
+        }
+    })?;
+    Ok(())
+}
+
+fn read_bytes_until(stream: &mut TcpStream, bytes: &mut [u8], deadline: Instant) -> io::Result<()> {
+    transfer_until(bytes.len(), deadline, |offset, timeout| {
+        stream.set_read_timeout(Some(timeout))?;
+        match stream.read(&mut bytes[offset..])? {
+            0 => Err(io::ErrorKind::UnexpectedEof.into()),
+            read => Ok(read),
+        }
+    })
+}
+
+/// Socket timeouts bound one syscall, not a sequence of partial reads/writes.
+/// Keep the same absolute budget across progress and interrupted syscalls.
+fn transfer_until(
+    length: usize,
+    deadline: Instant,
+    mut transfer: impl FnMut(usize, Duration) -> io::Result<usize>,
+) -> io::Result<()> {
+    let mut offset = 0;
+    while offset < length {
+        let timeout = deadline
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or(io::ErrorKind::TimedOut)?;
+        match transfer(offset, timeout) {
+            Ok(count) => offset += count,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    if Instant::now() >= deadline {
+        return Err(io::ErrorKind::TimedOut.into());
+    }
     Ok(())
 }
 
@@ -3582,6 +3631,113 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn partial_transfers_and_interrupts_share_one_deadline() {
+        let mut calls = 0;
+        let mut timeouts = Vec::new();
+        transfer_until(
+            3,
+            Instant::now() + Duration::from_secs(1),
+            |offset, timeout| {
+                calls += 1;
+                timeouts.push(timeout);
+                if calls == 2 {
+                    assert_eq!(offset, 1);
+                    Err(io::ErrorKind::Interrupted.into())
+                } else {
+                    Ok(1)
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(calls, 4);
+        assert!(timeouts.windows(2).all(|pair| pair[1] <= pair[0]));
+        let error =
+            transfer_until(1, Instant::now(), |_, _| panic!("expired I/O ran")).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn partial_transfer_cannot_return_success_after_deadline() {
+        let error = transfer_until(1, Instant::now() + Duration::from_millis(10), |_, _| {
+            thread::sleep(Duration::from_millis(20));
+            Ok(1)
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    }
+
+    fn trickle_frame_expires(prefix_only: bool) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        let frame = Frame::handshake(1, &[7; 32]).unwrap().encode().unwrap();
+        let writer = thread::spawn(move || {
+            let bytes = if prefix_only {
+                &frame[..4]
+            } else {
+                client.write_all(&frame[..4]).unwrap();
+                &frame[4..]
+            };
+            for byte in bytes {
+                if client.write_all(&[*byte]).is_err() {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(80));
+            }
+        });
+        let started = Instant::now();
+        let error = read_frame(&mut server, started + Duration::from_millis(180)).unwrap_err();
+        assert!(matches!(error, DirectServiceError::Io(ref error)
+            if matches!(error.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)));
+        assert!(started.elapsed() < Duration::from_millis(700));
+        drop(server);
+        writer.join().unwrap();
+        // Capacity is immediately reusable for a complete legitimate frame.
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        let valid = Frame::handshake(1, &[9; 32]).unwrap().encode().unwrap();
+        client.write_all(&valid).unwrap();
+        assert_eq!(
+            read_frame(&mut server, Instant::now() + Duration::from_secs(1)).unwrap(),
+            valid
+        );
+    }
+
+    #[test]
+    fn trickled_frame_prefix_expires_without_renewing_deadline() {
+        trickle_frame_expires(true);
+    }
+
+    #[test]
+    fn trickled_frame_body_expires_without_renewing_deadline() {
+        trickle_frame_expires(false);
+    }
+
+    #[test]
+    fn truncated_frames_fail_and_fragmented_valid_frames_succeed() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        let valid = Frame::handshake(1, &[3; 32]).unwrap().encode().unwrap();
+        let expected = valid.clone();
+        let writer = thread::spawn(move || {
+            for chunk in valid.chunks(3) {
+                client.write_all(chunk).unwrap();
+            }
+            client.write_all(&[0, 0]).unwrap();
+        });
+        assert_eq!(
+            read_frame(&mut server, Instant::now() + Duration::from_secs(2)).unwrap(),
+            expected
+        );
+        let error = read_frame(&mut server, Instant::now() + Duration::from_secs(2)).unwrap_err();
+        assert!(
+            matches!(error, DirectServiceError::Io(error) if error.kind() == io::ErrorKind::UnexpectedEof)
+        );
+        writer.join().unwrap();
+    }
 
     static RESOLVER_TEST_LOCK: Mutex<()> = Mutex::new(());
 

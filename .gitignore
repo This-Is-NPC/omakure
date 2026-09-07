@@ -5,8 +5,6 @@
 *.log
 *.tmp
 *.profraw
-/target/coverage-report/
-/target/coverage-target/
 .DS_Store
 .env
 .env.*
@@ -18,7 +16,6 @@
 .aider*/
 .continue/
 .windsurf/
-scripts/workspace/.history/search-index.sqlite*
 scripts/workspace/.history/*
 !scripts/workspace/.history/.gitkeep
 scripts/workspace/.omakure/envs/*
@@ -28,5 +25,15 @@ scripts/workspace/.omakure/dev-node.toml
 scripts/workspace/.omakure/dev-node-state/
 .temp/
 
-# Planning notes, kept out of the product record.
-rebuild-omakure.md
+# Root-only scratch databases and SQLite sidecars; fixtures stay visible.
+/*.db
+/*.db-*
+/*.sqlite
+/*.sqlite-*
+/*.sqlite3
+/*.sqlite3-*
+
+# One-off root planning/CI notes; maintained documentation stays visible.
+/rebuild-omakure.md
+/PLANO-CORRECAO.md
+/CI-ERROS.md

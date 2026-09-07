@@ -13,7 +13,7 @@ must be updated in the same change.
 | FR-003 | Recursive script listing supports `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`, nested `.omakureignore`, and repeatable AND tag filters. | `src/adapters/workspace_repository.rs`, `src/runtime.rs`, `src/cli/list.rs` |
 | FR-004 | Embedded PascalCase schemas parse and validate fields, outputs, queue declarations, secret fields, and schedules. | `src/domain/schema.rs`, `src/domain/parsing.rs` |
 | FR-005 | `describe` returns a complete parsed schema and resolved path; malformed schemas and missing scripts have stable errors. | `src/cli/describe.rs`, `src/operations/core.rs` |
-| FR-006 | SQLite full-text search supports CLI queries and repeatable tag filters without rebuilding per request. | `src/search_index.rs`, `src/cli/search.rs`, `src/operations/search.rs` |
+| FR-006 | SQLite full-text search refreshes and queries one transaction per CLI or HTTP request, supports repeatable tag filters, and reports refresh or commit failures instead of serving stale results. | `src/search_index.rs`, `src/cli/search.rs`, `src/cli/api.rs`, `src/operations/search.rs` |
 | FR-007 | `init` creates schema-bearing Bash, PowerShell, Python, or Lua templates, validates supplied schema JSON, reads optional body stdin, and protects existing files unless forced. | `src/cli/init.rs` |
 | FR-008 | Direct runs support actors, reasons, caller IDs, parent IDs, forwarded args, per-run env files, no-prompt mode, timeouts, and secret inputs. | `src/cli/run.rs`, `src/run_executor.rs` |
 | FR-009 | Bash, PowerShell, and Python commands resolve interpreters and preserve injected `PATH` semantics; `.lua` resolves no interpreter at all and re-executes the binary as an embedded Lua host. | `src/runtime.rs`, `src/adapters/script_runner.rs` |

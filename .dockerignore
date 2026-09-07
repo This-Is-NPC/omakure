@@ -21,6 +21,13 @@ release-notes/
 scripts/
 *.log
 *.tmp
+# Root-only scratch databases and SQLite sidecars are not build inputs.
+/*.db
+/*.db-*
+/*.sqlite
+/*.sqlite-*
+/*.sqlite3
+/*.sqlite3-*
 tarpaulin-report.html
 cobertura.xml
 .env

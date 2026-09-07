@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+# This fixture must also be safe when invoked directly from an older hook.
+git_local_env="$(git rev-parse --local-env-vars)"
+while IFS= read -r git_env_name; do
+    unset "$git_env_name"
+done <<< "$git_local_env"
+
+fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/omakure-git-hook-contract.XXXXXX")"
+trap 'rm -rf -- "$fixture_root"' EXIT
+main_repo="$fixture_root/main"
+linked_repo="$fixture_root/linked"
+git init -q -b main "$main_repo"
+git -C "$main_repo" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    -c core.hooksPath=/dev/null commit -qm initial --allow-empty
+git -C "$main_repo" worktree add -qb linked "$linked_repo"
+mkdir -p "$linked_repo/.githooks" "$linked_repo/scripts/tasks/check"
+cp "$root/.githooks/pre-commit" "$root/.githooks/pre-push" "$linked_repo/.githooks/"
+
+# Exercise real nested init/add/commit and init --bare without running builds.
+cat > "$linked_repo/scripts/tasks/check/fast" <<'GATE'
+#!/usr/bin/env bash
+set -euo pipefail
+for name in $(git rev-parse --local-env-vars); do
+    if printenv "$name" >/dev/null; then
+        printf 'hook leaked repository environment: %s\n' "$name" >&2
+        exit 1
+    fi
+done
+[[ "${GIT_SSH_COMMAND:-}" == 'ssh -o BatchMode=yes' ]]
+fixture="$(mktemp -d "$HOOK_CONTRACT_ROOT/nested.XXXXXX")"
+git init -qb main "$fixture/repo"
+printf 'fixture only\n' > "$fixture/repo/payload"
+git -C "$fixture/repo" add payload
+git -C "$fixture/repo" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    -c core.hooksPath=/dev/null commit -qm fixture
+git init -q --bare "$fixture/bare"
+[[ "$(git -C "$fixture/repo" show HEAD:payload)" == 'fixture only' ]]
+GATE
+cp "$linked_repo/scripts/tasks/check/fast" "$linked_repo/scripts/tasks/check/full"
+chmod +x "$linked_repo/scripts/tasks/check/fast" "$linked_repo/scripts/tasks/check/full"
+git -C "$linked_repo" config core.hooksPath .githooks
+printf 'pending change\n' > "$linked_repo/pending"
+git -C "$linked_repo" add pending
+git_dir="$(git -C "$linked_repo" rev-parse --absolute-git-dir)"
+cp "$git_dir/index" "$fixture_root/index.before"
+cp "$main_repo/.git/config" "$fixture_root/config.before"
+git -C "$main_repo" show-ref > "$fixture_root/refs.before"
+
+for hook in pre-commit pre-push; do
+    (
+        cd "$linked_repo"
+        GIT_DIR="$git_dir" GIT_WORK_TREE="$linked_repo" \
+        GIT_INDEX_FILE="$git_dir/index" GIT_COMMON_DIR="$main_repo/.git" \
+        GIT_SSH_COMMAND='ssh -o BatchMode=yes' HOOK_CONTRACT_ROOT="$fixture_root" \
+            ".githooks/$hook"
+    )
+    cmp "$git_dir/index" "$fixture_root/index.before"
+    cmp "$main_repo/.git/config" "$fixture_root/config.before"
+    git -C "$main_repo" show-ref > "$fixture_root/refs.after"
+    cmp "$fixture_root/refs.before" "$fixture_root/refs.after"
+done
+
+# Also exercise Git's actual linked-worktree pre-commit environment.
+GIT_SSH_COMMAND='ssh -o BatchMode=yes' HOOK_CONTRACT_ROOT="$fixture_root" \
+    git -C "$linked_repo" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    commit -qm 'commit pending change'
+[[ "$(git -C "$linked_repo" show HEAD:pending)" == 'pending change' ]]
+[[ "$(git -C "$main_repo" log -1 --format=%s)" == initial ]]
+cmp "$main_repo/.git/config" "$fixture_root/config.before"
+printf 'atomic/git-hook-contract: PASS (linked worktree refs, index, config, and SSH environment)\n'

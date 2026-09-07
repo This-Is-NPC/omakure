@@ -1,9 +1,7 @@
 use crate::operations::core::ScriptSummary;
-use crate::search_index::{SearchIndex, SearchResult, SearchStatus};
+use crate::search_index::{SearchIndex, SearchResult};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
-use std::thread;
-use std::time::Duration;
 
 use super::{OperationError, OperationErrorCode, OperationResult};
 
@@ -11,7 +9,6 @@ use super::{OperationError, OperationErrorCode, OperationResult};
 pub struct SearchScriptsRequest {
     pub query: String,
     pub tags: Vec<String>,
-    pub refresh: bool,
 }
 
 pub fn search_scripts(
@@ -21,13 +18,8 @@ pub fn search_scripts(
     workspace.ensure_layout().map_err(io_error)?;
 
     let index = SearchIndex::new(workspace.search_db_path());
-    if request.refresh {
-        index.start_background_rebuild(workspace.scripts_root().to_path_buf());
-        block_until_ready(&index);
-    }
-
     let results = index
-        .query(&request.query)
+        .search(workspace.scripts_root(), &request.query)
         .map_err(|err| OperationError::new(OperationErrorCode::IoFailed, err))?;
 
     Ok(results
@@ -80,15 +72,6 @@ fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
     required
         .iter()
         .all(|tag| entry.tags.iter().any(|entry_tag| entry_tag == tag))
-}
-
-fn block_until_ready(index: &SearchIndex) {
-    for _ in 0..50 {
-        match index.status() {
-            SearchStatus::Ready { .. } | SearchStatus::Error(_) => return,
-            _ => thread::sleep(Duration::from_millis(100)),
-        }
-    }
 }
 
 fn io_error(err: impl std::error::Error) -> OperationError {
@@ -175,7 +158,6 @@ mod tests {
             SearchScriptsRequest {
                 query: "deploy".into(),
                 tags: vec!["ops".into()],
-                refresh: true,
             },
         )
         .unwrap();
@@ -203,7 +185,6 @@ mod tests {
             SearchScriptsRequest {
                 query: "form".into(),
                 tags: Vec::new(),
-                refresh: true,
             },
         )
         .unwrap();
@@ -223,7 +204,6 @@ mod tests {
             SearchScriptsRequest {
                 query: String::new(),
                 tags: Vec::new(),
-                refresh: true,
             },
         )
         .unwrap();

@@ -21,6 +21,21 @@ policy, workers and scheduler lifecycle, containers, volumes, readiness
 operation, and certification/smoke procedures, see the canonical
 [deployment guide](deployment.md).
 
+## Script search
+
+`GET /v1/search?q=...` refreshes the workspace search index on every request,
+as does `omakure search`. It works without first running the CLI and reflects
+script additions, edits, and removals on the next search. Refresh and query
+share one transaction; a refresh or commit failure returns HTTP 500 with
+`ok: false` and `io_failed`, rather than serving an older index. Concurrent
+writers wait up to the SQLite busy timeout (500 ms); an exhausted wait is an
+explicit error. Schema parsing errors remain attached to individual results
+as `schema_error`.
+
+The HTTP adapter runs the operation on a blocking worker after checking
+authorization and query limits. The response envelope and `scripts:read`
+capability are unchanged.
+
 ## Node management
 
 Node routes use the shared machine-state operations and never access

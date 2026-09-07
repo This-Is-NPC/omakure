@@ -285,8 +285,7 @@ fn mismatch_config(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
 }
 
 fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
-    // Build an older indexed snapshot before starting the HTTP service.  The
-    // service deliberately reads this snapshot without refreshing it.
+    // Both adapters must refresh an older indexed snapshot.
     let workspace =
         super::support::TestWorkspace::new(&format!("parity_search_{}", ctx.authorized_actor()));
     let older = workspace.write_schema_script("older.sh", "Another Needle", "echo older");
@@ -316,10 +315,10 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
         std::time::Duration::from_secs(10),
     );
 
-    let stale_http = server.get("/v1/search?q=needle");
-    let (stale_status, stale_json) = ctx.http_json(stale_http);
-    if stale_status != 200 || stale_json["ok"] != true {
-        return Err(format!("search HTTP status {stale_status}"));
+    let refreshed_http = server.get("/v1/search?q=needle");
+    let (http_status, http_json) = ctx.http_json(refreshed_http);
+    if http_status != 200 || http_json["ok"] != true {
+        return Err(format!("search HTTP status {http_status}"));
     }
     let refreshed_cli = workspace_cli_json(
         workspace.path(),
@@ -327,18 +326,16 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
         &authorized_token,
     )?;
     let cli_matches = refreshed_cli["data"].as_array().map_or(0, Vec::len);
-    let http_matches = stale_json["data"].as_array().map_or(0, Vec::len);
+    let http_matches = http_json["data"].as_array().map_or(0, Vec::len);
     let cli_paths = relative_paths(&refreshed_cli["data"]);
-    let http_paths = relative_paths(&stale_json["data"]);
+    let http_paths = relative_paths(&http_json["data"]);
     let cli_refreshed = cli_matches == 2
         && cli_paths.iter().any(|path| path == "fresh.sh")
         && cli_paths.iter().any(|path| path == "older.sh");
-    let http_stale = http_matches == 1
-        && http_paths == ["older.sh".to_string()]
-        && !http_paths.iter().any(|path| path == "fresh.sh");
+    let http_refreshed = http_matches == 2 && http_paths == cli_paths;
     let cli_sorted = search_ordering_valid(&refreshed_cli["data"]);
     if !cli_refreshed
-        || !http_stale
+        || !http_refreshed
         || !cli_sorted
         || cli_paths != ["older.sh".to_string(), "fresh.sh".to_string()]
     {
@@ -416,7 +413,7 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
         "tags_cli_accepted": tags_cli_accepted,
         "tags_http_rejected": tags_http_rejected,
     });
-    let state = json!({"cli_refreshed": cli_refreshed, "http_stale": http_stale});
+    let state = json!({"cli_refreshed": cli_refreshed, "http_refreshed": http_refreshed});
     let ordering = json!({"cli_sorted": cli_sorted});
     let cli_projection = json!({
         "ok": refreshed_cli["ok"],
@@ -427,8 +424,8 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
         "auth": auth.clone(),
     });
     let http_projection = json!({
-        "ok": stale_json["ok"],
-        "result": {"matches": stale_json["data"]},
+        "ok": http_json["ok"],
+        "result": {"matches": http_json["data"]},
         "state": state,
         "ordering": ordering,
         "pagination": pagination,
@@ -437,7 +434,7 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
     Ok(ProbeEvidence {
         cli: cli_projection,
         http: http_projection,
-        semantic_difference: Some("search-refresh-limits".into()),
+        semantic_difference: Some("search-input-limits".into()),
     })
 }
 

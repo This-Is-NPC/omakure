@@ -573,6 +573,31 @@ fn health_and_config_family_routes() {
 }
 
 #[test]
+fn search_refresh_failure_returns_http_error() {
+    let workspace = support::TestWorkspace::new("http_search_failure");
+    workspace.write_schema_script("job.sh", "job", "echo ok");
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "scripts:read"],
+        &[],
+        Duration::from_secs(10),
+    );
+    let initial = server.get("/v1/search?q=job");
+    assert_eq!(initial.status, 200, "{}", initial.safe_body());
+    assert_eq!(initial.json()["data"][0]["relative_path"], "job.sh");
+    let conn =
+        rusqlite::Connection::open(workspace.path().join(".history/search-index.sqlite")).unwrap();
+    conn.execute_batch("CREATE TRIGGER reject_insert BEFORE INSERT ON script_index BEGIN SELECT RAISE(ABORT, 'injected refresh failure'); END;").unwrap();
+    let failed = server.get("/v1/search?q=job");
+    assert_eq!(failed.status, 500, "{}", failed.safe_body());
+    assert_eq!(failed.json()["ok"], false);
+    assert_eq!(failed.json()["error"]["code"], "io_failed");
+    conn.execute_batch("DROP TRIGGER reject_insert").unwrap();
+    assert_eq!(server.get("/v1/search?q=job").status, 200);
+}
+
+#[test]
 fn scripts_search_tree_family_routes() {
     let workspace = support::TestWorkspace::new("http_scripts_family");
     fs::create_dir_all(workspace.path().join("tools")).expect("tools dir");
@@ -627,12 +652,6 @@ fn scripts_search_tree_family_routes() {
         .as_str()
         .unwrap_or("")
         .contains("OMAKURE_SCHEMA_START"));
-
-    // The HTTP search endpoint reads the FTS index without refreshing it
-    // (refresh: false), so populate the index first via the CLI — the same
-    // precondition a user hits after running `omakure search` once.
-    let refresh = omakure(workspace.path(), &["search", "job"]);
-    assert_success(&refresh);
 
     let search = server.get("/v1/search?q=job");
     assert_eq!(search.status, 200, "body: {}", search.safe_body());

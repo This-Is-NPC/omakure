@@ -317,8 +317,8 @@ actors = ["authorized", "unauthenticated", "forbidden"]
 
 [[schemas.case_requirements]]
 behavior_case = "mismatch.search"
-required_fields = ["ok", "result.matches", "state.cli_refreshed", "state.http_stale", "ordering.cli_sorted", "pagination.query_cli_accepted", "pagination.query_http_rejected", "pagination.tags_cli_accepted", "pagination.tags_http_rejected", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized", "auth.actors.unauthenticated", "auth.actors.forbidden", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
-invariant_fields = ["state.cli_refreshed", "state.http_stale", "ordering.cli_sorted", "pagination.query_cli_accepted", "pagination.query_http_rejected", "pagination.tags_cli_accepted", "pagination.tags_http_rejected", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+required_fields = ["ok", "result.matches", "state.cli_refreshed", "state.http_refreshed", "ordering.cli_sorted", "pagination.query_cli_accepted", "pagination.query_http_rejected", "pagination.tags_cli_accepted", "pagination.tags_http_rejected", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized", "auth.actors.unauthenticated", "auth.actors.forbidden", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
+invariant_fields = ["state.cli_refreshed", "state.http_refreshed", "ordering.cli_sorted", "pagination.query_cli_accepted", "pagination.query_http_rejected", "pagination.tags_cli_accepted", "pagination.tags_http_rejected", "auth.unauthenticated_rejected", "auth.forbidden_rejected", "auth.actors.authorized_configured", "auth.actors.unauthenticated_configured", "auth.actors.forbidden_configured"]
 [[entries]]
 entry_id = "doctor"
 class = "exact"
@@ -657,9 +657,9 @@ docs_anchor = "search"
 cli_ids = ["search"]
 http_ids = ["GET /v1/search"]
 [entries.semantic_difference]
-kind = "search-refresh-limits"
-cli_behavior = "CLI refreshes its local index; HTTP uses the existing index and bounds query/tag input"
-http_behavior = "HTTP does not refresh and applies stricter limits."
+kind = "search-input-limits"
+cli_behavior = "CLI refreshes the index and accepts unrestricted query/tag input"
+http_behavior = "HTTP refreshes the index and applies stricter query/tag limits."
 
 [[entries]]
 entry_id = "battery-add"

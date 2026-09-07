@@ -1573,7 +1573,7 @@ mod tests {
         assert_eq!(kinds.len(), 7);
         for kind in [
             "config-redaction",
-            "search-refresh-limits",
+            "search-input-limits",
             "battery-https-policy",
             "discovery-snapshot",
             "cue-session",

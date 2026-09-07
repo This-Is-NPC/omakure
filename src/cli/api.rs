@@ -1801,15 +1801,22 @@ async fn search_handler(
                 "tag query parameters exceed limits",
             ));
         }
-        Ok(search_ops::SearchScriptsRequest {
-            query,
-            tags,
-            refresh: false,
-        })
+        Ok(search_ops::SearchScriptsRequest { query, tags })
     });
-    operation_response(
-        request.and_then(|request| search_ops::search_scripts(&state.workspace, request)),
-    )
+    let request = match request {
+        Ok(request) => request,
+        Err(err) => return operation_error_response(err),
+    };
+    let result =
+        tokio::task::spawn_blocking(move || search_ops::search_scripts(&state.workspace, request))
+            .await
+            .unwrap_or_else(|err| {
+                Err(OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    format!("Search task failed: {err}"),
+                ))
+            });
+    operation_response(result)
 }
 
 async fn list_scripts_handler(
@@ -4420,16 +4427,6 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "deploy.sh");
-        search_ops::search_scripts(
-            &workspace,
-            search_ops::SearchScriptsRequest {
-                query: "deploy".into(),
-                tags: vec!["ops".into()],
-                refresh: true,
-            },
-        )
-        .unwrap();
-
         let response = router(TOKEN.to_string(), workspace)
             .oneshot(authed_request("/v1/search?q=deploy&tag=ops"))
             .await
@@ -4439,6 +4436,56 @@ enabled = true
         let body = response_json(response).await;
         assert_eq!(body["ok"], true);
         assert_eq!(body["data"][0]["relative_path"], "deploy.sh");
+    }
+
+    #[tokio::test]
+    async fn search_endpoint_refreshes_changes() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let root = workspace.scripts_root().to_path_buf();
+        let app = router(TOKEN.to_string(), workspace);
+        let empty = app
+            .clone()
+            .oneshot(authed_request("/v1/search?q=job"))
+            .await
+            .unwrap();
+        assert_eq!(empty.status(), StatusCode::OK);
+        assert_eq!(response_json(empty).await["data"], serde_json::json!([]));
+        std::fs::create_dir(root.join("tools")).unwrap();
+        write_script(&root.join("tools"), "job.sh");
+        let added = app
+            .clone()
+            .oneshot(authed_request("/v1/search?q=job"))
+            .await
+            .unwrap();
+        assert_eq!(added.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(added).await["data"][0]["relative_path"],
+            "tools/job.sh"
+        );
+        let path = root.join("tools/job.sh");
+        let content = std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("job.sh", "updated.sh");
+        std::fs::write(&path, content).unwrap();
+        let changed = app
+            .clone()
+            .oneshot(authed_request("/v1/search?q=updated"))
+            .await
+            .unwrap();
+        assert_eq!(changed.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(changed).await["data"][0]["name"],
+            "updated.sh"
+        );
+
+        std::fs::remove_file(path).unwrap();
+        let removed = app
+            .oneshot(authed_request("/v1/search?q=updated"))
+            .await
+            .unwrap();
+        assert_eq!(removed.status(), StatusCode::OK);
+        assert_eq!(response_json(removed).await["data"], serde_json::json!([]));
     }
 
     #[tokio::test]

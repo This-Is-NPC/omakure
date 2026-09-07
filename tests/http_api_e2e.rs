@@ -573,6 +573,31 @@ fn health_and_config_family_routes() {
 }
 
 #[test]
+fn search_refresh_failure_returns_http_error() {
+    let workspace = support::TestWorkspace::new("http_search_failure");
+    workspace.write_schema_script("job.sh", "job", "echo ok");
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "scripts:read"],
+        &[],
+        Duration::from_secs(10),
+    );
+    let initial = server.get("/v1/search?q=job");
+    assert_eq!(initial.status, 200, "{}", initial.safe_body());
+    assert_eq!(initial.json()["data"][0]["relative_path"], "job.sh");
+    let conn =
+        rusqlite::Connection::open(workspace.path().join(".history/search-index.sqlite")).unwrap();
+    conn.execute_batch("CREATE TRIGGER reject_insert BEFORE INSERT ON script_index BEGIN SELECT RAISE(ABORT, 'injected refresh failure'); END;").unwrap();
+    let failed = server.get("/v1/search?q=job");
+    assert_eq!(failed.status, 500, "{}", failed.safe_body());
+    assert_eq!(failed.json()["ok"], false);
+    assert_eq!(failed.json()["error"]["code"], "io_failed");
+    conn.execute_batch("DROP TRIGGER reject_insert").unwrap();
+    assert_eq!(server.get("/v1/search?q=job").status, 200);
+}
+
+#[test]
 fn scripts_search_tree_family_routes() {
     let workspace = support::TestWorkspace::new("http_scripts_family");
     fs::create_dir_all(workspace.path().join("tools")).expect("tools dir");
@@ -627,12 +652,6 @@ fn scripts_search_tree_family_routes() {
         .as_str()
         .unwrap_or("")
         .contains("OMAKURE_SCHEMA_START"));
-
-    // The HTTP search endpoint reads the FTS index without refreshing it
-    // (refresh: false), so populate the index first via the CLI — the same
-    // precondition a user hits after running `omakure search` once.
-    let refresh = omakure(workspace.path(), &["search", "job"]);
-    assert_success(&refresh);
 
     let search = server.get("/v1/search?q=job");
     assert_eq!(search.status, 200, "body: {}", search.safe_body());
@@ -785,6 +804,42 @@ fn envs_family_routes() {
 
     let delete = server.delete("/v1/envs/prod");
     assert_eq!(delete.status, 200, "body: {}", delete.safe_body());
+}
+
+#[test]
+fn enqueue_capability_cannot_execute_uninstalled_battery_cache() {
+    let workspace = support::TestWorkspace::new("http_reserved_scripts");
+    fs::create_dir_all(workspace.path().join(".omakure/batteries/cache")).unwrap();
+    fs::create_dir_all(workspace.path().join("installed")).unwrap();
+    workspace.write_schema_script(".omakure/batteries/cache/job.sh", "uninstalled", "exit 0");
+    workspace.write_schema_script("installed/job.sh", "installed", "exit 0");
+    let server = support::HttpServer::start_with_args(
+        workspace.path(),
+        API_TOKEN,
+        &["--capability", "runs:enqueue"],
+        &[],
+        Duration::from_secs(10),
+    );
+    let denied = [
+        ".omakure/batteries/cache/job.sh",
+        #[cfg(unix)]
+        "alias.sh",
+    ];
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(
+            workspace.path().join(".omakure/batteries/cache/job.sh"),
+            workspace.path().join("alias.sh"),
+        )
+        .unwrap();
+    }
+    for script in denied {
+        let response = server.post_json("/v1/runs", &json!({ "script": script }));
+        assert_eq!(response.status, 400, "{}", response.safe_body());
+        assert_eq!(response.json()["error"]["code"], "unsafe_path");
+    }
+    let response = server.post_json("/v1/runs", &json!({ "script": "installed/job.sh" }));
+    assert_eq!(response.status, 200, "{}", response.safe_body());
 }
 
 #[test]

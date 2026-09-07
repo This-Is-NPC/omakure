@@ -577,6 +577,26 @@ fn run_scheduler(
     Ok(())
 }
 
+/// Discovery visibility is not execution authority: file symlinks can point
+/// into uninstalled Battery cache even when hidden directories are not listed.
+fn scheduled_subjects(
+    workspace: &Workspace,
+    repo: &FsWorkspaceRepository,
+) -> Result<Vec<PathBuf>, String> {
+    let scripts = repo
+        .list_scripts_recursive()
+        .map_err(|e| format!("list scripts: {e}"))?;
+    let log_path = log_file(workspace);
+    let mut subjects = Vec::new();
+    for script in scripts {
+        match crate::operations::core::canonical_script_path(&script, workspace.scripts_root()) {
+            Ok(script) => subjects.push(script),
+            Err(error) => log_line(&log_path, "ERROR", &format!("{error}; skipping schedule")),
+        }
+    }
+    Ok(subjects)
+}
+
 /// Enumerate scripts, find due schedules, enqueue runs.
 /// Returns the number of rows enqueued.
 pub(crate) fn scheduler_tick(
@@ -584,9 +604,7 @@ pub(crate) fn scheduler_tick(
     now: chrono::DateTime<Utc>,
 ) -> Result<usize, String> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
-    let scripts = repo
-        .list_scripts_recursive()
-        .map_err(|e| format!("list scripts: {e}"))?;
+    let scripts = scheduled_subjects(workspace, &repo)?;
     let conn = runs::open(workspace).map_err(|e| format!("open runs.sqlite: {e}"))?;
     let mut fired = 0usize;
     let log_path = log_file(workspace);
@@ -622,7 +640,7 @@ pub(crate) fn scheduler_tick(
             }
         };
 
-        let canonical = fs::canonicalize(&script).unwrap_or_else(|_| script.clone());
+        let canonical = script;
         let canonical_str = canonical.to_string_lossy().to_string();
         let schedule_id = format!("{}@{}", canonical_str, cron_expr);
 
@@ -862,6 +880,21 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains("@* * * * *"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn scheduler_rejects_reserved_metadata_aliases() {
+        let tmp = TempDir::new().unwrap();
+        let ws = Workspace::new(tmp.path().to_path_buf());
+        ws.ensure_layout().unwrap();
+        let cache = ws.root().join(".omakure/batteries/cache");
+        fs::create_dir_all(&cache).unwrap();
+        let cached = write_script(&cache, "cached.sh", Some("* * * * *"));
+        std::os::unix::fs::symlink(cached, ws.root().join("alias.sh")).unwrap();
+        assert_eq!(scheduler_tick(&ws, Utc::now()).unwrap(), 0);
+        write_script(ws.root(), "installed.sh", Some("* * * * *"));
+        assert_eq!(scheduler_tick(&ws, Utc::now()).unwrap(), 1);
     }
 
     #[test]

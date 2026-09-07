@@ -2,4 +2,10 @@
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# Keep nested fixture Git commands independent of the repository being pushed.
+# SSH commands and user/global configuration are deliberately not cleared.
+git_local_env="$(git rev-parse --local-env-vars)"
+while IFS= read -r git_env_name; do
+    unset "$git_env_name"
+done <<< "$git_local_env"
 exec "$root/scripts/tasks/check/full" "$@"

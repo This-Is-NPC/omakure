@@ -55,6 +55,7 @@ pub struct TokenRecord {
     pub hash: String,
     pub scopes: Vec<String>,
     pub enabled: bool,
+    pub legacy_compatible: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +74,7 @@ enum AuthBackend {
 pub struct Authenticator {
     inner: Arc<RwLock<AuthBackend>>,
     reload_status: Arc<RwLock<AuthReloadStatus>>,
+    legacy_verification_gate: Arc<tokio::sync::Semaphore>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -101,6 +103,7 @@ impl Authenticator {
                 plaintext: plaintext.into(),
             })),
             reload_status: Arc::new(RwLock::new(AuthReloadStatus::default())),
+            legacy_verification_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         }
     }
 
@@ -110,6 +113,7 @@ impl Authenticator {
         Ok(Self {
             inner: Arc::new(RwLock::new(AuthBackend::File { path, tokens })),
             reload_status: Arc::new(RwLock::new(AuthReloadStatus::default())),
+            legacy_verification_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         })
     }
 
@@ -118,6 +122,20 @@ impl Authenticator {
             *self.inner.read().expect("auth lock"),
             AuthBackend::File { .. }
         )
+    }
+
+    /// Admit at most one selectorless file-token scan before consuming the
+    /// shared HTTP hashing budget. Clones and reloads retain the same gate.
+    pub fn admit_legacy_verification(
+        &self,
+        presented: &str,
+    ) -> Result<Option<tokio::sync::OwnedSemaphorePermit>, tokio::sync::TryAcquireError> {
+        if !is_legacy_token_shape(presented) || !self.is_file_mode() {
+            return Ok(None);
+        }
+        Arc::clone(&self.legacy_verification_gate)
+            .try_acquire_owned()
+            .map(Some)
     }
 
     /// Authenticate a presented bearer token. Returns `None` for unknown/disabled.
@@ -259,6 +277,8 @@ impl AuthError {
 struct TokensFileToml {
     #[serde(default = "default_version")]
     version: u32,
+    #[serde(default = "default_enabled")]
+    allow_legacy_tokens: bool,
     #[serde(default)]
     tokens: Vec<TokenToml>,
 }
@@ -276,6 +296,10 @@ struct TokenToml {
     scopes: Vec<String>,
     #[serde(default = "default_enabled")]
     enabled: bool,
+    // A PHC hash cannot reveal its plaintext format. Preserve unmarked old
+    // records; newly generated selector records explicitly opt out.
+    #[serde(default = "default_enabled")]
+    legacy_compatible: bool,
 }
 
 fn default_enabled() -> bool {
@@ -322,6 +346,7 @@ pub fn parse_tokens_toml(text: &str) -> Result<Vec<TokenRecord>, AuthError> {
             hash: normalize_phc(&entry.hash),
             scopes: entry.scopes,
             enabled: entry.enabled,
+            legacy_compatible: parsed.allow_legacy_tokens && entry.legacy_compatible,
         });
     }
     Ok(out)
@@ -394,11 +419,11 @@ fn authenticate_against_file(tokens: &[TokenRecord], presented: &str) -> Option<
     }
     // Tokens generated before the token_selector upgrade carry no embedded id
     // (`omk_live_<64 hex>`, not `omk_live_<hex id>_<64 hex>`), so there is no
-    // id to look up by. Fall back to checking every enabled token's hash, with
-    // no early exit, matching the pre-upgrade behavior these tokens were
-    // issued under (avoids leaking a token's position via timing).
+    // id to look up by. Check only explicitly compatible (or unmarked old)
+    // records, bounded by MAX_TOKENS_PER_FILE, without early exit (avoids
+    // leaking a compatible token's position via timing).
     let mut matched: Option<AuthContext> = None;
-    for token in tokens.iter().filter(|t| t.enabled) {
+    for token in tokens.iter().filter(|t| t.enabled && t.legacy_compatible) {
         if verify_argon2(&token.hash, presented) {
             matched = Some(auth_context(token));
         }
@@ -634,6 +659,7 @@ pub fn format_toml_entry(id: &str, hash: &str, scopes: &[String]) -> String {
     }
     out.push_str("]\n");
     out.push_str("enabled = true\n");
+    out.push_str("legacy_compatible = false\n");
     out
 }
 
@@ -1100,6 +1126,7 @@ enabled = true
                 hash: generated.hash.clone(),
                 scopes: vec!["runs:read".into()],
                 enabled: true,
+                legacy_compatible: false,
             })
             .collect::<Vec<_>>();
         tokens.push(TokenRecord {
@@ -1107,6 +1134,7 @@ enabled = true
             hash: generated.hash.clone(),
             scopes: generated.scopes.clone(),
             enabled: true,
+            legacy_compatible: false,
         });
 
         ARGON2_VERIFY_COUNT.with(|count| count.set(0));
@@ -1117,6 +1145,10 @@ enabled = true
         let unknown = selector_token_plaintext("missing");
         ARGON2_VERIFY_COUNT.with(|count| count.set(0));
         assert!(authenticate_against_file(&tokens, &unknown).is_none());
+        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
+
+        let legacy_guess = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
+        assert!(authenticate_against_file(&tokens, &legacy_guess).is_none());
         ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
     }
 
@@ -1130,6 +1162,7 @@ enabled = true
                 hash: hash.clone(),
                 scopes: vec!["runs:read".into()],
                 enabled: true,
+                legacy_compatible: true,
             })
             .collect::<Vec<_>>();
 
@@ -1158,6 +1191,7 @@ enabled = true
                 hash: other_hash.clone(),
                 scopes: vec!["runs:read".into()],
                 enabled: true,
+                legacy_compatible: false,
             })
             .collect::<Vec<_>>();
         tokens.push(TokenRecord {
@@ -1165,14 +1199,97 @@ enabled = true
             hash,
             scopes: vec!["runs:read".into()],
             enabled: true,
+            legacy_compatible: true,
         });
 
+        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
         let ctx = authenticate_against_file(&tokens, &legacy_plaintext).unwrap();
         assert_eq!(ctx.token_id, "legacy-holder");
+        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 1));
 
         // A legacy-shaped guess that matches no hash is rejected, not panicked.
         let wrong = format!("{TOKEN_PREFIX}{}", "cd".repeat(PLAINTEXT_BYTES));
         assert!(authenticate_against_file(&tokens, &wrong).is_none());
+    }
+
+    #[test]
+    fn legacy_compatibility_metadata_bounds_hashing_and_preserves_old_files() {
+        let generated = generate_token("modern", &["runs:read".into()]).unwrap();
+        let guess = format!("{TOKEN_PREFIX}{}", "ff".repeat(PLAINTEXT_BYTES));
+        let records = parse_tokens_toml(&generated.tokens_file_entry).unwrap();
+        assert!(!records[0].legacy_compatible);
+        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
+        assert!(authenticate_against_file(&records, &guess).is_none());
+        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
+        assert!(authenticate_against_file(&records, &generated.token).is_some());
+
+        let old = format!(
+            "[[tokens]]\nid = \"old\"\nhash = {:?}\nscopes = [\"runs:read\"]\n",
+            generated.hash
+        );
+        let mixed = format!("{}{old}", generated.tokens_file_entry);
+        let records = parse_tokens_toml(&mixed).unwrap();
+        assert!(records[1].legacy_compatible);
+        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
+        assert!(authenticate_against_file(&records, &guess).is_none());
+        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 1));
+
+        for disabled in [
+            format!("allow_legacy_tokens = false\n{mixed}"),
+            format!("{mixed}legacy_compatible = false\n"),
+            format!("{mixed}enabled = false\n"),
+        ] {
+            let records = parse_tokens_toml(&disabled).unwrap();
+            ARGON2_VERIFY_COUNT.with(|count| count.set(0));
+            assert!(authenticate_against_file(&records, &guess).is_none());
+            ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
+        }
+        assert!(parse_tokens_toml(&format!("allow_legacy_tokens = \"no\"\n{old}")).is_err());
+        assert!(parse_tokens_toml(&format!("{old}legacy_compatible = 1\n")).is_err());
+    }
+
+    #[test]
+    fn legacy_admission_is_shared_across_clones_and_reload() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        fs::write(&path, "version = 1\n").unwrap();
+        let auth = Authenticator::from_tokens_file(path).unwrap();
+        let guess = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
+        let permit = auth.admit_legacy_verification(&guess).unwrap().unwrap();
+        let clone = auth.clone();
+        auth.reload().unwrap();
+        assert!(clone.admit_legacy_verification(&guess).is_err());
+        assert!(clone
+            .admit_legacy_verification(&test_token_plaintext("modern"))
+            .unwrap()
+            .is_none());
+        drop(permit);
+        assert!(clone.admit_legacy_verification(&guess).is_ok());
+        assert!(Authenticator::legacy(&guess)
+            .admit_legacy_verification(&guess)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn old_credentials_survive_upgrade_until_explicit_reload_opt_out() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("tokens.toml");
+        let plaintext = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
+        let hash = hash_token(&plaintext).unwrap();
+        let old = format!("[[tokens]]\nid = \"old\"\nhash = {hash:?}\nscopes = [\"runs:read\"]\n");
+        fs::write(&path, &old).unwrap();
+        let auth = Authenticator::from_tokens_file(&path).unwrap();
+        assert_eq!(auth.authenticate(&plaintext).unwrap().token_id, "old");
+        fs::write(&path, format!("allow_legacy_tokens = false\n{old}")).unwrap();
+        auth.reload().unwrap();
+        assert!(auth.authenticate(&plaintext).is_none());
+        fs::write(&path, format!("{old}legacy_compatible = true\n")).unwrap();
+        auth.reload().unwrap();
+        assert!(auth.authenticate(&plaintext).is_some());
+        fs::write(&path, format!("{old}legacy_compatible = \"invalid\"\n")).unwrap();
+        assert!(auth.reload().is_err());
+        assert!(auth.authenticate(&plaintext).is_some());
     }
 
     #[test]

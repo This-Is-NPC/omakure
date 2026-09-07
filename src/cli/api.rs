@@ -1801,15 +1801,22 @@ async fn search_handler(
                 "tag query parameters exceed limits",
             ));
         }
-        Ok(search_ops::SearchScriptsRequest {
-            query,
-            tags,
-            refresh: false,
-        })
+        Ok(search_ops::SearchScriptsRequest { query, tags })
     });
-    operation_response(
-        request.and_then(|request| search_ops::search_scripts(&state.workspace, request)),
-    )
+    let request = match request {
+        Ok(request) => request,
+        Err(err) => return operation_error_response(err),
+    };
+    let result =
+        tokio::task::spawn_blocking(move || search_ops::search_scripts(&state.workspace, request))
+            .await
+            .unwrap_or_else(|err| {
+                Err(OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    format!("Search task failed: {err}"),
+                ))
+            });
+    operation_response(result)
 }
 
 async fn list_scripts_handler(
@@ -2741,6 +2748,11 @@ async fn authenticate_off_runtime(
     gate: &Arc<tokio::sync::Semaphore>,
     presented: &str,
 ) -> AuthAttempt {
+    // Reject excess selectorless scans BEFORE they take a shared hashing slot.
+    // Keep both permits in the blocking task, even if its caller is cancelled.
+    let Ok(legacy_permit) = auth.admit_legacy_verification(presented) else {
+        return AuthAttempt::Busy;
+    };
     // Hold the permit for the LIFETIME OF THE HASH, not of the request future.
     // `spawn_blocking` is detached: if the client cancels mid-verify the request
     // future is dropped, but the Argon2 task keeps running. Moving an *owned*
@@ -2754,6 +2766,7 @@ async fn authenticate_off_runtime(
     let token = presented.to_string();
     match tokio::task::spawn_blocking(move || {
         let _permit = permit;
+        let _legacy_permit = legacy_permit;
         auth.authenticate(&token)
     })
     .await
@@ -4420,16 +4433,6 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "deploy.sh");
-        search_ops::search_scripts(
-            &workspace,
-            search_ops::SearchScriptsRequest {
-                query: "deploy".into(),
-                tags: vec!["ops".into()],
-                refresh: true,
-            },
-        )
-        .unwrap();
-
         let response = router(TOKEN.to_string(), workspace)
             .oneshot(authed_request("/v1/search?q=deploy&tag=ops"))
             .await
@@ -4439,6 +4442,56 @@ enabled = true
         let body = response_json(response).await;
         assert_eq!(body["ok"], true);
         assert_eq!(body["data"][0]["relative_path"], "deploy.sh");
+    }
+
+    #[tokio::test]
+    async fn search_endpoint_refreshes_changes() {
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let root = workspace.scripts_root().to_path_buf();
+        let app = router(TOKEN.to_string(), workspace);
+        let empty = app
+            .clone()
+            .oneshot(authed_request("/v1/search?q=job"))
+            .await
+            .unwrap();
+        assert_eq!(empty.status(), StatusCode::OK);
+        assert_eq!(response_json(empty).await["data"], serde_json::json!([]));
+        std::fs::create_dir(root.join("tools")).unwrap();
+        write_script(&root.join("tools"), "job.sh");
+        let added = app
+            .clone()
+            .oneshot(authed_request("/v1/search?q=job"))
+            .await
+            .unwrap();
+        assert_eq!(added.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(added).await["data"][0]["relative_path"],
+            "tools/job.sh"
+        );
+        let path = root.join("tools/job.sh");
+        let content = std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("job.sh", "updated.sh");
+        std::fs::write(&path, content).unwrap();
+        let changed = app
+            .clone()
+            .oneshot(authed_request("/v1/search?q=updated"))
+            .await
+            .unwrap();
+        assert_eq!(changed.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(changed).await["data"][0]["name"],
+            "updated.sh"
+        );
+
+        std::fs::remove_file(path).unwrap();
+        let removed = app
+            .oneshot(authed_request("/v1/search?q=updated"))
+            .await
+            .unwrap();
+        assert_eq!(removed.status(), StatusCode::OK);
+        assert_eq!(response_json(removed).await["data"], serde_json::json!([]));
     }
 
     #[tokio::test]
@@ -5385,6 +5438,45 @@ echo ok
             assert_eq!(response.status(), StatusCode::FORBIDDEN);
             let body = response_json(response).await;
             assert_eq!(body["error"]["code"], "forbidden");
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_scan_admission_preserves_modern_capacity() {
+        let dir = TempDir::new().unwrap();
+        let generated = crate::auth::generate_token("modern", &["runs:read".into()]).unwrap();
+        let path = dir.path().join("tokens.toml");
+        std::fs::write(&path, generated.tokens_file_entry).unwrap();
+        let auth = Authenticator::from_tokens_file(path).unwrap();
+        let guess = format!("omk_live_{}", "ab".repeat(32));
+        for capacity in [1, 2] {
+            let gate = Arc::new(tokio::sync::Semaphore::new(capacity));
+            // Deterministically model one admitted legacy blocking task.
+            let legacy = auth.admit_legacy_verification(&guess).unwrap().unwrap();
+            let hashing = Arc::clone(&gate).try_acquire_owned().unwrap();
+            assert!(matches!(
+                authenticate_off_runtime(&auth, &gate, &guess).await,
+                AuthAttempt::Busy
+            ));
+            assert_eq!(gate.available_permits(), capacity - 1);
+            let modern = authenticate_off_runtime(&auth, &gate, &generated.token).await;
+            if capacity == 2 {
+                assert!(matches!(modern, AuthAttempt::Accepted(_)));
+            } else {
+                // A one-slot policy deliberately serializes ALL hashing.
+                assert!(matches!(modern, AuthAttempt::Busy));
+            }
+            drop(hashing);
+            drop(legacy);
+            assert!(matches!(
+                authenticate_off_runtime(&auth, &gate, &generated.token).await,
+                AuthAttempt::Accepted(_)
+            ));
+            assert!(matches!(
+                authenticate_off_runtime(&auth, &gate, &guess).await,
+                AuthAttempt::Rejected
+            ));
+            assert_eq!(gate.available_permits(), capacity);
         }
     }
 

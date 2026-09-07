@@ -457,7 +457,14 @@ node sharing an address with its peers would spend their inbound allowance on
 its own outgoing links.
 The four-byte header has a 2-second read deadline. The body deadline is
 1 second plus 1 second per started 64 KiB, capped at 10 seconds; the handshake
-wall clock remains 10 seconds. Each malformed input consumes one of four
+wall clock remains 10 seconds, starting at listener acceptance (queue time
+counts). These are monotonic absolute deadlines, not inactivity timeouts:
+every partial read/write and interrupted syscall uses only the remaining
+budget. A frame that finishes after its deadline is rejected. Idle sessions
+wait separately before starting a frame-header deadline. Inbound admission
+remains bounded and rate-limited; the four synchronous connection workers
+are shared with established sessions, so this is not a guarantee of service
+under sustained overload. Each malformed input consumes one of four
 parser/work units per connection; the fifth closes the connection. Cleanup
 runs every 30 seconds, closes partial handshakes past deadline, expires idle
 sessions, releases all queue-byte reservations, and deletes only replay rows

@@ -13,7 +13,6 @@ use crate::cli::json::{self, codes};
 use crate::ports::ScriptRepository;
 use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
 use crate::runs::{self, EnqueueOptions};
-use crate::runtime::script_extensions;
 use crate::workspace::Workspace;
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -28,7 +27,7 @@ pub fn run(
 
     let script_path = match resolve_script_path(&options.script, workspace.root()) {
         Ok(path) => path,
-        Err(err) => return emit_error(json_output, codes::NOT_FOUND, err.to_string()),
+        Err(err) => return emit_error(json_output, err.code.as_str(), err.to_string()),
     };
 
     // Layers 2 + 3 of the env-injection precedence table
@@ -228,44 +227,13 @@ fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<
 pub(crate) fn resolve_script_path(
     script: &str,
     scripts_dir: &Path,
-) -> Result<PathBuf, Box<dyn Error>> {
-    let has_separator = script.contains('/') || script.contains('\\');
-    let path = PathBuf::from(script);
-
-    if path.is_absolute() {
-        return resolve_with_extensions(path);
-    }
-
-    if has_separator {
-        return resolve_with_extensions(scripts_dir.join(path));
-    }
-
-    resolve_with_extensions(scripts_dir.join(script))
+) -> crate::operations::OperationResult<PathBuf> {
+    crate::operations::core::resolve_script_path(script, scripts_dir)
 }
 
 pub(crate) fn cli_args_contain_flag(args: &[String], flag: &str) -> bool {
     args.iter()
         .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
-}
-
-fn resolve_with_extensions(path: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
-    if path.exists() {
-        if path.is_file() {
-            return Ok(path);
-        }
-        return Err(format!("Script is not a file: {}", path.display()).into());
-    }
-    if path.extension().is_some() {
-        return Err(format!("Script not found: {}", path.display()).into());
-    }
-    for ext in script_extensions() {
-        let mut candidate = path.clone();
-        candidate.set_extension(ext);
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-    }
-    Err(format!("Script not found: {}", path.display()).into())
 }
 
 #[cfg(test)]
@@ -360,7 +328,7 @@ mod tests {
         fs::write(&script, "#!/bin/bash").unwrap();
 
         let result = resolve_script_path("deploy.sh", tmp.path()).unwrap();
-        assert_eq!(result, script);
+        assert_eq!(result, script.canonicalize().unwrap());
     }
 
     #[test]
@@ -370,7 +338,7 @@ mod tests {
         fs::write(&script, "#!/bin/bash").unwrap();
 
         let result = resolve_script_path("deploy", tmp.path()).unwrap();
-        assert_eq!(result, script);
+        assert_eq!(result, script.canonicalize().unwrap());
     }
 
     #[test]
@@ -387,7 +355,7 @@ mod tests {
         fs::write(&script, "#!/bin/bash").unwrap();
 
         let result = resolve_script_path(&script.to_string_lossy(), tmp.path()).unwrap();
-        assert_eq!(result, script);
+        assert_eq!(result, script.canonicalize().unwrap());
     }
 
     #[test]
@@ -399,7 +367,7 @@ mod tests {
         fs::write(&script, "#!/bin/bash").unwrap();
 
         let result = resolve_script_path("infra/deploy.sh", tmp.path()).unwrap();
-        assert_eq!(result, script);
+        assert_eq!(result, script.canonicalize().unwrap());
     }
 
     #[test]

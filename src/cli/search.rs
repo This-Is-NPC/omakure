@@ -20,7 +20,6 @@ pub fn run(
         SearchScriptsRequest {
             query: options.query,
             tags: options.tag,
-            refresh: true,
         },
     ) {
         Ok(entries) => entries,

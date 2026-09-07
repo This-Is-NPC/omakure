@@ -2,4 +2,10 @@
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# Git exports absolute repository paths in linked-worktree hooks. Test fixtures
+# must discover their own repositories, not mutate the committing worktree.
+git_local_env="$(git rev-parse --local-env-vars)"
+while IFS= read -r git_env_name; do
+    unset "$git_env_name"
+done <<< "$git_local_env"
 exec "$root/scripts/tasks/check/fast" "$@"

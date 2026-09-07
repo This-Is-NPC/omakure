@@ -1,7 +1,9 @@
 use std::error::Error;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
 use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::sync::OnceLock;
@@ -178,23 +180,6 @@ pub fn read_file_if_exists(path: &Path) -> io::Result<Option<String>> {
     }
 }
 
-/// RAII guard that removes a temporary directory when dropped.
-pub struct TempDirGuard {
-    path: PathBuf,
-}
-
-impl TempDirGuard {
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
-    }
-}
-
-impl Drop for TempDirGuard {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,24 +211,6 @@ mod tests {
 
         let mode = fs::metadata(&file).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o755);
-    }
-
-    #[test]
-    fn test_temp_dir_guard_removes_dir_on_drop() {
-        let base = std::env::temp_dir().join(format!(
-            "omakure_temp_guard_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&base).unwrap();
-        assert!(base.exists());
-        {
-            let _guard = TempDirGuard::new(base.clone());
-        }
-        assert!(!base.exists());
     }
 
     #[cfg(target_os = "linux")]

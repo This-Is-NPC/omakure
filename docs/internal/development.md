@@ -13,7 +13,13 @@ mise run hooks:install
 ```
 
 This sets local Git `core.hooksPath` to `.githooks` and leaves unrelated global
-Git configuration untouched. The hooks are exact thin wrappers:
+Git configuration untouched. Before dispatching their gate, hooks clear only
+the repository-local environment names reported by `git rev-parse
+--local-env-vars`. This prevents nested fixture commands from changing the
+parent repository's refs, index, or config, especially in linked worktrees.
+SSH configuration and authentication environment remain untouched. The
+`atomic:git-hook-contract` Mise task checks this isolation in both gates.
+The hooks otherwise remain thin wrappers:
 
 | Hook | Canonical script | Scope |
 |---|---|---|

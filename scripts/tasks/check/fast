@@ -17,6 +17,7 @@ for script in \
     scripts/tasks/atomic/complexity-contract \
     scripts/tasks/atomic/coverage-contract \
     scripts/tasks/atomic/generated-exec-contract \
+    scripts/tasks/atomic/git-hook-contract \
     scripts/tasks/atomic/fmt \
     scripts/tasks/atomic/clippy \
     scripts/tasks/atomic/test-lib
@@ -34,6 +35,8 @@ printf 'check:fast: coverage contract fixtures\n'
 "$root/scripts/tasks/atomic/coverage-contract"
 printf 'check:fast: generated executable contract\n'
 "$root/scripts/tasks/atomic/generated-exec-contract"
+printf 'check:fast: Git hook isolation contract\n'
+"$root/scripts/tasks/atomic/git-hook-contract"
 printf 'check:fast: formatting\n'
 "$root/scripts/tasks/atomic/fmt"
 printf 'check:fast: Clippy\n'

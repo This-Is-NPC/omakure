@@ -166,7 +166,7 @@ Manifest schema version: **1**.
 | <a id="scripts"></a>`scripts` | exact | `scripts` | scripts | GET /v1/scripts | exact.scripts |
 | <a id="search"></a>`search` | semantic-mismatch | `search` | search | GET /v1/search | mismatch.search |
 
-> `search-refresh-limits`: CLI — CLI refreshes its local index; HTTP uses the existing index and bounds query/tag input; HTTP — HTTP does not refresh and applies stricter limits..
+> `search-input-limits`: CLI — CLI refreshes the index and accepts unrestricted query/tag input; HTTP — HTTP refreshes the index and applies stricter query/tag limits..
 
 
 <!-- END GENERATED PARITY -->

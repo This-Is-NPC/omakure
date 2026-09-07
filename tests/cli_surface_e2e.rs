@@ -465,6 +465,45 @@ fn clap_nested_commands(parents: &[&str]) -> Vec<String> {
 }
 
 #[test]
+fn search_refreshes_changes_and_reports_failed_refresh() {
+    let workspace = support::TestWorkspace::new("search_refresh");
+    let init = omakure(workspace.path(), &["--json", "init", "tools/info.sh"]);
+    assert_success(&init);
+    let search = omakure(workspace.path(), &["--json", "search", "info"]);
+    assert_success(&search);
+    assert_eq!(json(&search)["data"][0]["relative_path"], "tools/info.sh");
+
+    let script = workspace.path().join("tools/info.sh");
+    let contents = fs::read_to_string(&script)
+        .unwrap()
+        .replace("info", "updated");
+    fs::write(&script, contents).unwrap();
+    let updated = omakure(workspace.path(), &["--json", "search", "updated"]);
+    assert_success(&updated);
+    assert_eq!(json(&updated)["data"][0]["name"], "updated");
+
+    let conn =
+        rusqlite::Connection::open(workspace.path().join(".history/search-index.sqlite")).unwrap();
+    conn.execute_batch("CREATE TRIGGER reject_insert BEFORE INSERT ON script_index BEGIN SELECT RAISE(ABORT, 'injected refresh failure'); END;").unwrap();
+    let failed = omakure(workspace.path(), &["--json", "search", "updated"]);
+    assert!(!failed.status.success());
+    let error = json(&failed);
+    assert_eq!(error["ok"], false);
+    assert!(
+        error["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("injected refresh failure"),
+        "{error}"
+    );
+    conn.execute_batch("DROP TRIGGER reject_insert").unwrap();
+    fs::remove_file(script).unwrap();
+    let removed = omakure(workspace.path(), &["--json", "search", "updated"]);
+    assert_success(&removed);
+    assert_eq!(json(&removed)["data"], serde_json::json!([]));
+}
+
+#[test]
 fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_serve() {
     let workspace = support::TestWorkspace::new("cli_surface_info");
 
@@ -478,11 +517,15 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
 
     let search = omakure(workspace.path(), &["--json", "search", "info"]);
     assert_success(&search);
-    assert!(json(&search)["data"]
-        .as_array()
-        .expect("search data")
-        .iter()
-        .any(|entry| { entry["relative_path"] == "tools/info.sh" }));
+    assert!(
+        json(&search)["data"]
+            .as_array()
+            .expect("search data")
+            .iter()
+            .any(|entry| { entry["relative_path"] == "tools/info.sh" }),
+        "search must return tools/info.sh, got: {}",
+        json(&search)
+    );
 
     let doctor = omakure(workspace.path(), &["--json", "doctor"]);
     assert_success(&doctor);
@@ -1404,6 +1447,40 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     );
     assert_success(&remove);
     assert_eq!(json(&remove)["ok"], true);
+}
+
+#[test]
+fn direct_and_queue_runs_reject_reserved_workspace_scripts() {
+    let workspace = support::TestWorkspace::new("cli_reserved_scripts");
+    fs::create_dir_all(workspace.path().join(".omakure/batteries/cache")).unwrap();
+    workspace.write_schema_script(".omakure/batteries/cache/job.sh", "uninstalled", "exit 0");
+    let denied = [
+        ".omakure/batteries/cache/job.sh",
+        #[cfg(unix)]
+        "alias.sh",
+    ];
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(
+            workspace.path().join(".omakure/batteries/cache/job.sh"),
+            workspace.path().join("alias.sh"),
+        )
+        .unwrap();
+    }
+    for script in denied {
+        for (args, code) in [
+            (vec!["--json", "run", script], "unsafe_path"),
+            (vec!["--json", "queue", "add", script], "invalid_argument"),
+        ] {
+            let output = omakure(workspace.path(), &args);
+            assert!(!output.status.success());
+            assert_eq!(json(&output)["error"]["code"], code);
+            assert!(json(&output)["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("reserved workspace metadata"));
+        }
+    }
 }
 
 fn omakure(workspace: &Path, args: &[&str]) -> Output {

@@ -21,6 +21,21 @@ policy, workers and scheduler lifecycle, containers, volumes, readiness
 operation, and certification/smoke procedures, see the canonical
 [deployment guide](deployment.md).
 
+## Script search
+
+`GET /v1/search?q=...` refreshes the workspace search index on every request,
+as does `omakure search`. It works without first running the CLI and reflects
+script additions, edits, and removals on the next search. Refresh and query
+share one transaction; a refresh or commit failure returns HTTP 500 with
+`ok: false` and `io_failed`, rather than serving an older index. Concurrent
+writers wait up to the SQLite busy timeout (500 ms); an exhausted wait is an
+explicit error. Schema parsing errors remain attached to individual results
+as `schema_error`.
+
+The HTTP adapter runs the operation on a blocking worker after checking
+authorization and query limits. The response envelope and `scripts:read`
+capability are unchanged.
+
 ## Node management
 
 Node routes use the shared machine-state operations and never access
@@ -147,6 +162,7 @@ id = "ci-deployer"
 hash = "$argon2id$v=19$m=65536,t=3,p=1$..."
 scopes = ["runs:enqueue", "runs:read", "scripts:read"]
 enabled = true
+legacy_compatible = false
 ```
 
 Rules:
@@ -163,11 +179,29 @@ Rules:
 
 Tokens generated before the `token_selector` optimization (bare
 `omk_live_<64 hex>`, with no embedded id) still authenticate: verification
-falls back to checking every enabled token hash for that shape. New tokens
+falls back to checking only enabled, legacy-compatible hashes for that shape. New tokens
 from `omakure token generate` embed the id
 (`omk_live_<hex id>_<64 hex>`) and require only one Argon2id verification.
 Regenerate and redistribute old-format tokens when convenient for the faster
-path; there is no forced cutover.
+path; there is no forced cutover. Newly generated entries set
+`legacy_compatible = false` and never participate in selectorless scans.
+Unmarked existing entries default to `true`: hashes cannot reveal whether
+their plaintext carries a selector, so changing this default would silently
+invalidate pre-upgrade credentials. For existing selector tokens, add
+`legacy_compatible = false` to their records. Set top-level
+`allow_legacy_tokens = false` (before any `[[tokens]]`) once no old-format
+credentials remain; this disables all selectorless verification without
+changing selector authentication. Reload these changes with `SIGHUP`.
+
+Only one selectorless file-token scan may run at a time, bounded by the
+64-record file limit and sharing the existing total hashing budget. Excess
+scans receive `503` before consuming a shared verification slot. The default
+two-slot budget leaves one slot available for selector tokens; configuring
+`auth.max_concurrent_verifications = 1` deliberately serializes both formats,
+so modern requests can receive `503` while a legacy scan runs. Modern-token
+floods can still exhaust the shared budget: use an upstream rate limiter for
+untrusted networks. Argon2 costs are unchanged. Legacy environment-token mode
+uses its existing constant-time comparison and is not subject to this scan gate.
 
 
 ### Legacy single token

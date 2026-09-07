@@ -1,61 +1,197 @@
 use crate::cli::args::UpdateArgs;
-use crate::util::{ps_quote, set_executable_permissions, TempDirGuard};
+use crate::util::ps_quote;
 use serde_json::Value;
 use std::env;
 use std::error::Error;
-use std::ffi::OsStr;
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+#[cfg(not(windows))]
+use tempfile::TempDir;
 
 const DEFAULT_REPO: &str = "This-Is-NPC/omakure";
 
-pub fn run(scripts_dir: PathBuf, args: UpdateArgs) -> Result<(), Box<dyn Error>> {
+pub fn run(_scripts_dir: PathBuf, args: UpdateArgs) -> Result<(), Box<dyn Error>> {
     let repo = resolve_repo(args.repo);
+    validate_repo(&repo)?;
     let version = match resolve_version(args.version) {
         Some(version) => normalize_version_tag(&version),
         None => fetch_latest_version(&repo)?,
     };
 
-    fs::create_dir_all(&scripts_dir)?;
-
-    let temp_dir = env::temp_dir().join(format!("omakure-update-{}", std::process::id()));
-    fs::create_dir_all(&temp_dir)?;
-    let _temp_guard = TempDirGuard::new(temp_dir.clone());
+    validate_version(&version)?;
 
     let current_version = env!("CARGO_PKG_VERSION");
     let target_version = version.trim_start_matches('v');
     let should_update = target_version != current_version;
 
     if should_update {
+        let staging = update_staging_in(&env::temp_dir())?;
         let asset = release_asset(&version)?;
         let url = format!(
             "https://github.com/{}/releases/download/{}/{}",
             repo, version, asset
         );
-        let archive_path = temp_dir.join(&asset);
+        // Never derive a local path from a remote tag or archive entry.
+        let archive_path = staging.path().join(if cfg!(windows) {
+            "payload.zip"
+        } else {
+            "payload.tar.gz"
+        });
         download_to_path(&url, &archive_path)?;
-
-        let extract_dir = temp_dir.join("release");
-        fs::create_dir_all(&extract_dir)?;
-        extract_archive(&archive_path, &extract_dir)?;
 
         let bin_name = if cfg!(windows) {
             "omakure.exe"
         } else {
             "omakure"
         };
-        let new_bin = find_file(&extract_dir, bin_name)?;
+        let new_bin = extract_release_binary(&archive_path, staging.path(), bin_name)?;
         install_binary(&new_bin)?;
         println!("Updated omakure to {}", version);
     } else {
         println!("omakure already on {}", version);
     }
 
-    if let Err(err) = sync_repo_scripts(&repo, &version, &scripts_dir, &temp_dir) {
-        eprintln!("Warning: failed to sync scripts: {}", err);
-    }
+    Ok(())
+}
 
+#[cfg(not(windows))]
+type UpdateStaging = TempDir;
+
+#[cfg(windows)]
+struct UpdateStaging {
+    path: PathBuf,
+    keep: bool,
+}
+
+#[cfg(windows)]
+impl UpdateStaging {
+    fn path(&self) -> &Path {
+        &self.path
+    }
+    fn keep(mut self) -> PathBuf {
+        self.keep = true;
+        self.path.clone()
+    }
+}
+
+#[cfg(windows)]
+impl Drop for UpdateStaging {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
+#[cfg(windows)]
+fn update_staging_in(parent: &Path) -> io::Result<UpdateStaging> {
+    use rand::RngCore;
+    for _ in 0..16 {
+        let mut bytes = [0u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut bytes);
+        let suffix = bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let path = parent.join(format!(".omakure-update-{suffix}"));
+        match create_private_windows_directory(&path) {
+            Ok(()) => return Ok(UpdateStaging { path, keep: false }),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "Unable to allocate update staging",
+    ))
+}
+
+#[cfg(windows)]
+fn create_private_windows_directory(path: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+    };
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+    use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
+
+    // Protected DACL: owner, SYSTEM and administrators only, inherited by files.
+    // Apply at creation, not after exposing a directory with inherited access.
+    let sddl = "D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
+        .encode_utf16()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let name = path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let mut descriptor = std::ptr::null_mut();
+    // SAFETY: strings are NUL-terminated; Windows allocates the descriptor,
+    // which remains live until CreateDirectoryW completes.
+    unsafe {
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut descriptor,
+            std::ptr::null_mut(),
+        ) == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        let attributes = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: descriptor,
+            bInheritHandle: 0,
+        };
+        let result = CreateDirectoryW(name.as_ptr(), &attributes);
+        let error = (result == 0).then(io::Error::last_os_error);
+        LocalFree(descriptor);
+        error.map_or(Ok(()), Err)
+    }
+}
+
+#[cfg(not(windows))]
+fn update_staging_in(parent: &Path) -> io::Result<UpdateStaging> {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(".omakure-update-");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(fs::Permissions::from_mode(0o700));
+    }
+    builder.tempdir_in(parent)
+}
+
+fn validate_repo(repo: &str) -> Result<(), Box<dyn Error>> {
+    let parts: Vec<_> = repo.split('/').collect();
+    if parts.len() != 2
+        || parts.iter().any(|part| {
+            part.is_empty()
+                || matches!(*part, "." | "..")
+                || !part
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+        })
+    {
+        return Err("Update repository must be an owner/name pair".into());
+    }
+    Ok(())
+}
+
+fn validate_version(version: &str) -> Result<(), Box<dyn Error>> {
+    if version.len() < 2
+        || version.len() > 128
+        || !version.starts_with('v')
+        || !version
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"._-+".contains(&c))
+    {
+        return Err("Update version must be a simple version tag".into());
+    }
     Ok(())
 }
 
@@ -191,37 +327,154 @@ fn download_to_path(url: &str, dest: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn extract_archive(archive: &Path, dest: &Path) -> Result<(), Box<dyn Error>> {
+fn zip_powershell_command(body: &str) -> Command {
+    // Windows PowerShell 5.1 does not preload these assemblies with -NoProfile.
+    // ZipFile and ZipArchiveMode belong to different assemblies; load both
+    // before evaluating the body, including when constructing test archives.
+    let script = format!(
+        "$ErrorActionPreference = 'Stop'; \
+         Add-Type -AssemblyName System.IO.Compression; \
+         Add-Type -AssemblyName System.IO.Compression.FileSystem; {body}"
+    );
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    command
+}
+
+fn extract_release_binary(
+    archive: &Path,
+    staging: &Path,
+    bin_name: &str,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let destination = staging.join(bin_name);
     if cfg!(windows) {
         let script = format!(
-            "Expand-Archive -Path {} -DestinationPath {} -Force",
-            ps_quote(&archive.display().to_string()),
-            ps_quote(&dest.display().to_string())
+            "$zip = [IO.Compression.ZipFile]::OpenRead({archive}); \
+             try {{ \
+               if ($zip.Entries.Count -ne 1) {{ throw 'Expected one release binary' }}; \
+               $entry = $zip.Entries[0]; \
+               $kind = ($entry.ExternalAttributes -shr 16) -band 61440; \
+               if ($entry.FullName -cne {name} -or ($kind -ne 0 -and $kind -ne 32768) \
+                   -or ($entry.ExternalAttributes -band 1024) -ne 0) \
+                 {{ throw 'Invalid release entry' }}; \
+               $inputStream = $entry.Open(); \
+               try {{ \
+                 $outputStream = [IO.File]::Open({destination}, [IO.FileMode]::CreateNew); \
+                 try {{ $inputStream.CopyTo($outputStream); $outputStream.Flush($true) }} \
+                 finally {{ $outputStream.Dispose() }} \
+               }} finally {{ $inputStream.Dispose() }} \
+             }} finally {{ $zip.Dispose() }}",
+            archive = ps_quote(&archive.display().to_string()),
+            name = ps_quote(bin_name),
+            destination = ps_quote(&destination.display().to_string()),
         );
-        let status = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()?;
-        if !status.success() {
-            return Err("Failed to extract update archive".into());
+        if !zip_powershell_command(&script).status()?.success() {
+            return Err("Failed to extract release binary".into());
         }
     } else {
-        if !command_exists("tar") {
-            return Err("Missing tar for update".into());
+        // Inspect before streaming a single member into our own file descriptor.
+        // tar never receives a destination directory or writes archive paths.
+        let names = Command::new("tar").arg("-tzf").arg(archive).output()?;
+        let types = Command::new("tar").arg("-tvzf").arg(archive).output()?;
+        if !names.status.success() || !types.status.success() {
+            return Err("Failed to inspect release archive".into());
         }
+        validate_tar_listing(&names.stdout, &types.stdout, bin_name)?;
+        let output = create_binary_file(&destination)?;
         let status = Command::new("tar")
-            .args([
-                "-xzf",
-                &archive.display().to_string(),
-                "-C",
-                &dest.display().to_string(),
-            ])
+            .arg("-xOzf")
+            .arg(archive)
+            .args(["--", bin_name])
+            .stdout(Stdio::from(output.try_clone()?))
             .status()?;
         if !status.success() {
-            return Err("Failed to extract update archive".into());
+            return Err("Failed to extract release binary".into());
+        }
+        output.sync_all()?;
+    }
+    if regular_file_metadata(&destination)?.len() == 0 {
+        return Err("Release binary is empty".into());
+    }
+    Ok(destination)
+}
+
+fn validate_tar_listing(names: &[u8], types: &[u8], expected: &str) -> Result<(), Box<dyn Error>> {
+    let names = std::str::from_utf8(names)?;
+    let types = std::str::from_utf8(types)?;
+    let mut entries = names.lines();
+    let mut details = types.lines();
+    if entries.next() != Some(expected)
+        || entries.next().is_some()
+        || !details.next().is_some_and(|line| line.starts_with('-'))
+        || details.next().is_some()
+    {
+        return Err("Release archive must contain only the regular release binary".into());
+    }
+    Ok(())
+}
+
+fn regular_file_metadata(path: &Path) -> io::Result<fs::Metadata> {
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Expected a regular binary file",
+        ));
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Reparse points are not binaries",
+            ));
         }
     }
+    Ok(metadata)
+}
 
-    Ok(())
+fn create_binary_file(path: &Path) -> io::Result<fs::File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o755);
+    }
+    options.open(path)
+}
+
+fn stage_install_binary(
+    new_bin: &Path,
+    target: &Path,
+) -> Result<(UpdateStaging, PathBuf), Box<dyn Error>> {
+    regular_file_metadata(target)?;
+    regular_file_metadata(new_bin)?;
+    let mut source_options = fs::OpenOptions::new();
+    source_options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        source_options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut source = source_options.open(new_bin)?;
+    if !source.metadata()?.is_file() || source.metadata()?.len() == 0 {
+        return Err("Expected a nonempty regular release binary".into());
+    }
+    let staging = update_staging_in(
+        target
+            .parent()
+            .ok_or("Unable to determine install directory")?,
+    )?;
+    let staged = staging.path().join("replacement");
+    let mut destination = create_binary_file(&staged)?;
+    io::copy(&mut source, &mut destination)?;
+    destination.flush()?;
+    destination.sync_all()?;
+    // Close all writable descriptors before rename/exec (also on overlayfs).
+    drop(destination);
+    Ok((staging, staged))
 }
 
 fn install_binary(new_bin: &Path) -> Result<(), Box<dyn Error>> {
@@ -235,176 +488,40 @@ fn install_binary(new_bin: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn install_binary_unix(new_bin: &Path, target: &Path) -> Result<(), Box<dyn Error>> {
-    let target_dir = target
-        .parent()
-        .ok_or("Unable to determine install directory")?;
-    let file_name = target
-        .file_name()
-        .ok_or("Unable to determine binary name")?
-        .to_string_lossy()
-        .to_string();
-    let temp_target = target_dir.join(format!("{}.new", file_name));
+    let (_staging, staged) = stage_install_binary(new_bin, target)?;
+    // Same-filesystem atomic replacement. Never fall back to truncating the
+    // live executable; on failure the old binary must remain usable.
+    fs::rename(staged, target)?;
+    Ok(())
+}
 
-    fs::copy(new_bin, &temp_target)?;
-    set_executable_permissions(&temp_target)?;
-
-    match fs::rename(&temp_target, target) {
-        Ok(()) => Ok(()),
-        Err(_) => {
-            fs::copy(&temp_target, target)?;
-            set_executable_permissions(target)?;
-            let _ = fs::remove_file(&temp_target);
-            Ok(())
-        }
-    }
+fn windows_replace_script(staging: &Path, staged: &Path, target: &Path, pid: u32) -> String {
+    format!(
+        "$ErrorActionPreference = 'Stop'; \
+         $processId = {pid}; \
+         $p = Get-Process -Id $processId -ErrorAction SilentlyContinue; \
+         if ($p) {{ $p.WaitForExit() }}; \
+         try {{ [IO.File]::Replace({staged}, {target}, {backup}) }} \
+         catch {{ Write-Error ('Update failed; recovery files preserved in ' + {staging}); exit 1 }}; \
+         Remove-Item -LiteralPath {staging} -Recurse -Force",
+        staged = ps_quote(&staged.display().to_string()),
+        target = ps_quote(&target.display().to_string()),
+        backup = ps_quote(&staging.join("backup").display().to_string()),
+        staging = ps_quote(&staging.display().to_string()),
+    )
 }
 
 fn install_binary_windows(new_bin: &Path, target: &Path) -> Result<(), Box<dyn Error>> {
-    let target_dir = target
-        .parent()
-        .ok_or("Unable to determine install directory")?;
-    let stem = target
-        .file_stem()
-        .and_then(OsStr::to_str)
-        .ok_or("Unable to determine binary name")?;
-    let ext = target.extension().and_then(OsStr::to_str).unwrap_or("exe");
-    let new_path = target_dir.join(format!("{}.new.{}", stem, ext));
-    let backup_path = target_dir.join(format!("{}.old.{}", stem, ext));
-
-    if new_path.exists() {
-        let _ = fs::remove_file(&new_path);
-    }
-    fs::copy(new_bin, &new_path)?;
-
-    let script = format!(
-        "$processId = {pid}; \
-         try {{ $p = Get-Process -Id $processId -ErrorAction SilentlyContinue; if ($p) {{ $p.WaitForExit(); }} }} catch {{}}; \
-         if (Test-Path {target}) {{ Move-Item -Force {target} {backup}; }} \
-         Move-Item -Force {new_path} {target}; \
-         if (Test-Path {backup}) {{ Remove-Item -Force {backup}; }}",
-        pid = std::process::id(),
-        target = ps_quote(&target.display().to_string()),
-        new_path = ps_quote(&new_path.display().to_string()),
-        backup = ps_quote(&backup_path.display().to_string())
-    );
-
+    let (staging, staged) = stage_install_binary(new_bin, target)?;
+    let script = windows_replace_script(staging.path(), &staged, target, std::process::id());
     Command::new("powershell")
         .args(["-NoProfile", "-Command", &script])
         .spawn()?;
-
+    // Ownership transfers only after successful spawn. The child waits for
+    // this process to exit before replacing the executable and cleaning up.
+    let _ = staging.keep();
     println!("Update will finish after this process exits.");
     Ok(())
-}
-
-fn sync_repo_scripts(
-    repo: &str,
-    version: &str,
-    scripts_dir: &Path,
-    work_dir: &Path,
-) -> Result<(), Box<dyn Error>> {
-    let source_url = if cfg!(windows) {
-        format!(
-            "https://github.com/{}/archive/refs/tags/{}.zip",
-            repo, version
-        )
-    } else {
-        format!(
-            "https://github.com/{}/archive/refs/tags/{}.tar.gz",
-            repo, version
-        )
-    };
-
-    let source_archive = if cfg!(windows) {
-        work_dir.join("omakure-source.zip")
-    } else {
-        work_dir.join("omakure-source.tar.gz")
-    };
-
-    download_to_path(&source_url, &source_archive)?;
-
-    let source_root = work_dir.join("source");
-    fs::create_dir_all(&source_root)?;
-    extract_archive(&source_archive, &source_root)?;
-
-    let scripts_src = find_dir_named(&source_root, "scripts")
-        .ok_or("scripts folder not found in source archive")?;
-    let (copied, skipped) = copy_missing_files(&scripts_src, scripts_dir)?;
-
-    if copied > 0 {
-        println!("Copied {} script(s) to {}", copied, scripts_dir.display());
-    } else if skipped > 0 {
-        println!("Scripts already up to date in {}", scripts_dir.display());
-    }
-
-    Ok(())
-}
-
-fn copy_missing_files(src_dir: &Path, dest_dir: &Path) -> Result<(usize, usize), Box<dyn Error>> {
-    let mut stack = vec![src_dir.to_path_buf()];
-    let mut copied = 0;
-    let mut skipped = 0;
-
-    while let Some(dir) = stack.pop() {
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            let rel = path
-                .strip_prefix(src_dir)
-                .map_err(|_| "Failed to compute script path")?;
-            let target = dest_dir.join(rel);
-            if target.exists() {
-                skipped += 1;
-                continue;
-            }
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::copy(&path, &target)?;
-            copied += 1;
-        }
-    }
-
-    Ok((copied, skipped))
-}
-
-fn find_file(root: &Path, name: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if path.file_name() == Some(OsStr::new(name)) {
-                return Ok(path);
-            }
-        }
-    }
-    Err(format!("{} not found in archive", name).into())
-}
-
-fn find_dir_named(root: &Path, name: &str) -> Option<PathBuf> {
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let entries = fs::read_dir(&dir).ok()?;
-        for entry in entries {
-            let entry = entry.ok()?;
-            let path = entry.path();
-            if path.is_dir() {
-                if path.file_name() == Some(OsStr::new(name)) {
-                    return Some(path);
-                }
-                stack.push(path);
-            }
-        }
-    }
-    None
 }
 
 fn command_exists(cmd: &str) -> bool {
@@ -501,53 +618,335 @@ mod tests {
     }
 
     #[test]
-    fn test_find_file_recursive() {
-        let tmp = TempDir::new().unwrap();
-        let sub = tmp.path().join("sub");
-        fs::create_dir_all(&sub).unwrap();
-        fs::write(sub.join("target.txt"), "found").unwrap();
-
-        let result = find_file(tmp.path(), "target.txt").unwrap();
-        assert_eq!(result, sub.join("target.txt"));
+    fn security_update_validates_remote_identifiers() {
+        assert!(validate_repo("This-Is-NPC/omakure").is_ok());
+        for repo in ["../omakure", "/omakure", "a/b/c", "a/b?x", "a/b\n"] {
+            assert!(validate_repo(repo).is_err(), "{repo:?}");
+        }
+        assert!(validate_version("v0.4.4-rc.1+build").is_ok());
+        for version in ["v", "v../../escape", "v1?x", "v1\n", "1.0"] {
+            assert!(validate_version(version).is_err(), "{version:?}");
+        }
     }
 
     #[test]
-    fn test_find_file_not_found() {
-        let tmp = TempDir::new().unwrap();
-        let result = find_file(tmp.path(), "nonexistent");
-        assert!(result.is_err());
+    fn security_update_same_version_never_creates_or_syncs_workspace() {
+        let root = TempDir::new().unwrap();
+        let workspace = root.path().join("not-created");
+        run(
+            workspace.clone(),
+            UpdateArgs {
+                repo: Some(DEFAULT_REPO.into()),
+                version: Some(env!("CARGO_PKG_VERSION").into()),
+            },
+        )
+        .unwrap();
+        assert!(!workspace.exists());
     }
 
     #[test]
-    fn test_find_dir_named() {
-        let tmp = TempDir::new().unwrap();
-        let scripts = tmp.path().join("archive/scripts");
-        fs::create_dir_all(&scripts).unwrap();
-
-        let result = find_dir_named(tmp.path(), "scripts");
-        assert_eq!(result, Some(scripts));
-    }
-
-    #[test]
-    fn test_copy_missing_files() {
-        let src = TempDir::new().unwrap();
-        let dest = TempDir::new().unwrap();
-
-        fs::write(src.path().join("a.sh"), "script a").unwrap();
-        fs::write(src.path().join("b.sh"), "script b").unwrap();
-        fs::write(dest.path().join("a.sh"), "existing").unwrap();
-
-        let (copied, skipped) = copy_missing_files(src.path(), dest.path()).unwrap();
-        assert_eq!(copied, 1);
-        assert_eq!(skipped, 1);
-        // existing file not overwritten
+    fn security_update_private_staging_ignores_predictable_directory() {
+        let parent = TempDir::new().unwrap();
+        let planted = parent
+            .path()
+            .join(format!("omakure-update-{}", std::process::id()));
+        fs::create_dir(&planted).unwrap();
+        fs::write(planted.join("marker"), "untouched").unwrap();
+        let first = update_staging_in(parent.path()).unwrap();
+        let second = update_staging_in(parent.path()).unwrap();
+        assert_ne!(first.path(), second.path());
+        assert_ne!(first.path(), planted);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(first.path()).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+        }
+        let owned = first.path().to_owned();
+        drop(first);
+        assert!(!owned.exists());
         assert_eq!(
-            fs::read_to_string(dest.path().join("a.sh")).unwrap(),
-            "existing"
+            fs::read_to_string(planted.join("marker")).unwrap(),
+            "untouched"
         );
+    }
+
+    #[test]
+    fn security_update_tar_requires_exactly_one_regular_binary() {
+        assert!(
+            validate_tar_listing(b"omakure\n", b"-rwxr-xr-x owner 4 omakure\n", "omakure").is_ok()
+        );
+        for names in [
+            &b"../omakure\n"[..],
+            &b"nested/omakure\n"[..],
+            &b"/omakure\n"[..],
+            &b"omakure\nextra\n"[..],
+            &b"omakure\nomakure\n"[..],
+            &b""[..],
+        ] {
+            assert!(validate_tar_listing(names, b"-rwxr-xr-x\n", "omakure").is_err());
+        }
+        for kind in *b"lhdbcp" {
+            assert!(validate_tar_listing(b"omakure\n", &[kind, b'\n'], "omakure").is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_extracts_only_regular_release_member() {
+        use std::os::unix::fs::symlink;
+        let root = TempDir::new().unwrap();
+        let source = root.path().join("source");
+        fs::create_dir(&source).unwrap();
+        let binary = source.join("omakure");
+        fs::write(&binary, b"release payload").unwrap();
+        let archive = root.path().join("payload.tar.gz");
+        let pack = || {
+            assert!(Command::new("tar")
+                .arg("-czf")
+                .arg(&archive)
+                .arg("-C")
+                .arg(&source)
+                .arg("omakure")
+                .status()
+                .unwrap()
+                .success());
+        };
+        pack();
+        let staging = update_staging_in(root.path()).unwrap();
+        let extracted = extract_release_binary(&archive, staging.path(), "omakure").unwrap();
+        assert_eq!(fs::read(extracted).unwrap(), b"release payload");
+        fs::remove_file(&binary).unwrap();
+        symlink("../outside", &binary).unwrap();
+        pack();
+        let staging = update_staging_in(root.path()).unwrap();
+        assert!(extract_release_binary(&archive, staging.path(), "omakure").is_err());
+        assert!(!staging.path().join("omakure").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_install_ignores_fixed_new_symlink_and_executes() {
+        use std::os::unix::fs::symlink;
+        let root = TempDir::new().unwrap();
+        let target = root.path().join("omakure");
+        let source = root.path().join("release");
+        let victim = root.path().join("victim");
+        fs::write(&target, "old binary").unwrap();
+        fs::write(&source, "#!/bin/sh\nexit 0\n").unwrap();
+        fs::write(&victim, "untouched").unwrap();
+        symlink(&victim, root.path().join("omakure.new")).unwrap();
+        install_binary_unix(&source, &target).unwrap();
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "untouched");
+        assert!(fs::symlink_metadata(root.path().join("omakure.new"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_updated_binary_executes(&target);
+        assert!(!fs::read_dir(root.path()).unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".omakure-update-")));
+    }
+
+    #[cfg(unix)]
+    fn assert_updated_binary_executes(target: &Path) {
+        // Parallel tests may fork while the staging descriptor is open and
+        // temporarily inherit it until their exec. As in dependency fixtures,
+        // tolerate only that bounded kernel ETXTBSY window, never other errors.
+        // A descriptor leaked by installation still fails at the deadline.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            match Command::new(target).status() {
+                Ok(status) => {
+                    assert!(status.success());
+                    return;
+                }
+                Err(error)
+                    if error.kind() == io::ErrorKind::ExecutableFileBusy
+                        && std::time::Instant::now() < deadline =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(error) => panic!("updated binary cannot execute: {error}"),
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_rejects_symlink_sources_and_targets_without_mutation() {
+        use std::os::unix::fs::symlink;
+        let root = TempDir::new().unwrap();
+        let source = root.path().join("source");
+        let target = root.path().join("target");
+        let link = root.path().join("link");
+        fs::write(&source, "new").unwrap();
+        fs::write(&target, "old").unwrap();
+        symlink(&target, &link).unwrap();
+        assert!(install_binary_unix(&source, &link).is_err());
+        assert!(install_binary_unix(&link, &target).is_err());
+        fs::write(&source, "").unwrap();
+        assert!(install_binary_unix(&source, &target).is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "old");
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 3);
+    }
+
+    // Native Windows checks run in the platform test suite.
+    #[test]
+    fn security_update_zip_command_loads_both_assemblies_without_profile() {
+        let command = zip_powershell_command("BODY");
+        let args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_str().unwrap())
+            .collect();
+        assert_eq!(&args[..3], &["-NoProfile", "-NonInteractive", "-Command"]);
         assert_eq!(
-            fs::read_to_string(dest.path().join("b.sh")).unwrap(),
-            "script b"
+            args[3],
+            "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression; \
+             Add-Type -AssemblyName System.IO.Compression.FileSystem; BODY"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn security_update_windows_extracts_only_single_release_binary() {
+        let root = TempDir::new().unwrap();
+        let archive = root.path().join("payload.zip");
+        create_windows_test_zip(&archive, &["omakure.exe"]);
+        let staging = update_staging_in(root.path()).unwrap();
+        let extracted = extract_release_binary(&archive, staging.path(), "omakure.exe").unwrap();
+        assert_eq!(fs::read_to_string(extracted).unwrap(), "release payload");
+    }
+
+    #[cfg(windows)]
+    #[rstest::rstest]
+    #[case::multiple(vec!["omakure.exe", "extra.txt"])]
+    #[case::traversal(vec!["../escape"])]
+    #[case::backslash_traversal(vec!["..\\escape"])]
+    #[case::absolute(vec!["/escape"])]
+    #[case::nested(vec!["nested/omakure.exe"])]
+    #[case::directory(vec!["omakure.exe/"])]
+    #[case::empty(vec![])]
+    fn security_update_windows_rejects_invalid_zip_entries(#[case] entries: Vec<&str>) {
+        let root = TempDir::new().unwrap();
+        let archive = root.path().join("payload.zip");
+        create_windows_test_zip(&archive, &entries);
+        let staging = update_staging_in(root.path()).unwrap();
+        assert!(extract_release_binary(&archive, staging.path(), "omakure.exe").is_err());
+        assert!(!root.path().join("escape").exists());
+        assert_eq!(fs::read_dir(staging.path()).unwrap().count(), 0);
+    }
+
+    #[cfg(windows)]
+    fn create_windows_test_zip(archive: &Path, entries: &[&str]) {
+        let entries = entries
+            .iter()
+            .map(|entry| ps_quote(entry))
+            .collect::<Vec<_>>()
+            .join(",");
+        let script = format!(
+            "$zip = [IO.Compression.ZipFile]::Open({}, [IO.Compression.ZipArchiveMode]::Create); \
+             try {{ foreach ($name in @({entries})) {{ \
+               $entry = $zip.CreateEntry($name); $writer = [IO.StreamWriter]::new($entry.Open()); \
+               try {{ $writer.Write('release payload') }} finally {{ $writer.Dispose() }} \
+             }} }} finally {{ $zip.Dispose() }}",
+            ps_quote(&archive.display().to_string()),
+        );
+        let output = zip_powershell_command(&script).output().unwrap();
+        assert!(
+            output.status.success(),
+            "ZIP fixture creation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn security_update_windows_native_replace_retains_recovery_on_failure() {
+        let root = TempDir::new().unwrap();
+        let staging = update_staging_in(root.path()).unwrap();
+        let target = root.path().join("omakure.exe");
+        let staged = staging.path().join("replacement");
+        let backup = staging.path().join("backup");
+        fs::write(&staged, "new").unwrap();
+        fs::write(&backup, "recovery marker").unwrap();
+        // Missing target forces a real File.Replace failure. Use a PID outside
+        // the normal process range without overflowing PowerShell's Int32.
+        let script = windows_replace_script(staging.path(), &staged, &target, i32::MAX as u32);
+        assert!(!Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .status()
+            .unwrap()
+            .success());
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "recovery marker");
+        assert_eq!(fs::read_to_string(&staged).unwrap(), "new");
+        fs::remove_file(&backup).unwrap();
+        fs::write(&target, "old").unwrap();
+        assert!(Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .status()
+            .unwrap()
+            .success());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "new");
+        assert!(!staging.path().exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn security_update_windows_staging_acl_is_protected_and_collision_safe() {
+        let root = TempDir::new().unwrap();
+        let staging = update_staging_in(root.path()).unwrap();
+        fs::write(staging.path().join("marker"), "owned").unwrap();
+        assert_eq!(
+            create_private_windows_directory(staging.path())
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        let script = format!(
+            "$ErrorActionPreference = 'Stop'; $acl = Get-Acl -LiteralPath {}; \
+             if (-not $acl.AreAccessRulesProtected) {{ exit 1 }}; \
+             foreach ($rule in $acl.Access) {{ \
+               $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value; \
+               if ($sid -notin @('S-1-3-4', 'S-1-5-18', 'S-1-5-32-544')) {{ exit 2 }} \
+             }}",
+            ps_quote(&staging.path().display().to_string()),
+        );
+        assert!(Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .status()
+            .unwrap()
+            .success());
+        assert_eq!(
+            fs::read_to_string(staging.path().join("marker")).unwrap(),
+            "owned"
+        );
+    }
+
+    #[test]
+    fn security_update_windows_replacement_uses_private_backup_and_literal_cleanup() {
+        let script = windows_replace_script(
+            Path::new("C:/owned's staging"),
+            Path::new("C:/owned's staging/replacement"),
+            Path::new("C:/bin/omakure.exe"),
+            123,
+        );
+        assert!(script.contains("[IO.File]::Replace("));
+        assert!(script.contains("'C:/owned''s staging/replacement'"));
+        assert!(script.contains(&ps_quote(
+            &Path::new("C:/owned's staging")
+                .join("backup")
+                .display()
+                .to_string()
+        )));
+        assert!(script.contains("Remove-Item -LiteralPath 'C:/owned''s staging'"));
+        assert!(!script.contains("Move-Item"));
+        assert!(!script.contains("finally"));
+        assert!(script.contains("recovery files preserved"));
+        assert!(script.find("WaitForExit").unwrap() < script.find("[IO.File]::Replace").unwrap());
     }
 }

@@ -1,19 +1,9 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::ports::ScriptRepository;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension, TransactionBehavior};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SearchStatus {
-    Idle,
-    Indexing,
-    Ready { script_count: usize },
-    Error(String),
-}
 
 #[derive(Debug, Clone)]
 pub struct SearchResult {
@@ -46,59 +36,37 @@ pub struct SearchDetails {
 #[derive(Clone)]
 pub struct SearchIndex {
     db_path: PathBuf,
-    status: Arc<Mutex<SearchStatus>>,
 }
 
 impl SearchIndex {
     pub fn new(db_path: PathBuf) -> Self {
-        Self {
-            db_path,
-            status: Arc::new(Mutex::new(SearchStatus::Idle)),
-        }
+        Self { db_path }
+    }
+
+    /// Refresh and read one committed snapshot. A failed refresh never serves stale data.
+    pub fn search(&self, root: &Path, query: &str) -> Result<Vec<SearchResult>, String> {
+        let mut conn = open_connection(&self.db_path)?;
+        conn.execute("PRAGMA foreign_keys = ON", [])
+            .map_err(|err| format!("Enable foreign keys failed: {err}"))?;
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|err| format!("Begin search transaction failed: {err}"))?;
+        init_db(&tx)?;
+        rebuild_index(&tx, root)?;
+        let results = Self::query_connection(&tx, query)?;
+        tx.commit()
+            .map_err(|err| format!("Commit search index failed: {err}"))?;
+        Ok(results)
     }
 
     #[cfg(test)]
-    pub fn new_in_memory() -> Self {
-        Self {
-            db_path: PathBuf::from(":memory:"),
-            status: Arc::new(Mutex::new(SearchStatus::Idle)),
-        }
-    }
-
-    pub fn status(&self) -> SearchStatus {
-        self.status
-            .lock()
-            .map(|status| status.clone())
-            .unwrap_or(SearchStatus::Error(
-                "Search status lock poisoned".to_string(),
-            ))
-    }
-
-    pub fn start_background_rebuild(&self, root: PathBuf) {
-        let status = self.status.clone();
-        let db_path = self.db_path.clone();
-        thread::spawn(move || {
-            let _ = update_status(&status, SearchStatus::Indexing);
-            match rebuild_index(&db_path, &root) {
-                Ok(count) => {
-                    let _ = update_status(
-                        &status,
-                        SearchStatus::Ready {
-                            script_count: count,
-                        },
-                    );
-                }
-                Err(err) => {
-                    let _ = update_status(&status, SearchStatus::Error(err));
-                }
-            }
-        });
-    }
-
     pub fn query(&self, query: &str) -> Result<Vec<SearchResult>, String> {
         let conn = open_connection(&self.db_path)?;
         init_db(&conn)?;
+        Self::query_connection(&conn, query)
+    }
 
+    fn query_connection(conn: &Connection, query: &str) -> Result<Vec<SearchResult>, String> {
         let tokens = split_query(query);
         let mut sql = String::from(
             "SELECT script_path, display_name, description, tags, schema_error, \
@@ -213,7 +181,7 @@ impl SearchIndex {
     }
 }
 
-pub(crate) fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String> {
+fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
     let root = root
         .canonicalize()
         .map_err(|error| format!("Canonicalize search root failed: {error}"))?;
@@ -222,14 +190,6 @@ pub(crate) fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String
         .list_scripts_recursive()
         .map_err(|err| format!("List scripts failed: {}", err))?;
 
-    let mut conn = open_connection(db_path)?;
-    init_db(&conn)?;
-    conn.execute("PRAGMA foreign_keys = ON", [])
-        .map_err(|err| format!("Enable foreign keys failed: {}", err))?;
-
-    let tx = conn
-        .transaction()
-        .map_err(|err| format!("Begin transaction failed: {}", err))?;
     tx.execute("DELETE FROM script_fields", [])
         .map_err(|err| format!("Clear fields failed: {}", err))?;
     tx.execute("DELETE FROM script_index", [])
@@ -318,9 +278,7 @@ pub(crate) fn rebuild_index(db_path: &Path, root: &Path) -> Result<usize, String
         }
     }
 
-    tx.commit()
-        .map_err(|err| format!("Commit search index failed: {}", err))?;
-    Ok(scripts.len())
+    Ok(())
 }
 
 fn logical_relative_path(path: &Path, root: &Path) -> String {
@@ -431,15 +389,6 @@ pub(crate) fn parse_tags(tags_raw: Option<String>) -> Vec<String> {
         .collect()
 }
 
-fn update_status(status: &Arc<Mutex<SearchStatus>>, next: SearchStatus) -> Result<(), ()> {
-    if let Ok(mut guard) = status.lock() {
-        *guard = next;
-        Ok(())
-    } else {
-        Err(())
-    }
-}
-
 fn timestamp_ms() -> i64 {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -546,6 +495,129 @@ mod tests {
     // --- SQLite integration tests ---
 
     #[test]
+    fn failed_refresh_rolls_back_and_does_not_return_stale_results() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("scripts");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("old.sh"), "no schema").unwrap();
+        let db = tmp.path().join("search.sqlite");
+        let index = SearchIndex::new(db.clone());
+        assert_eq!(index.search(&root, "old").unwrap().len(), 1);
+        let conn = open_connection(&db).unwrap();
+        conn.execute_batch(
+            "CREATE TRIGGER reject_insert BEFORE INSERT ON script_index
+             BEGIN SELECT RAISE(ABORT, 'injected refresh failure'); END;",
+        )
+        .unwrap();
+        fs::remove_file(root.join("old.sh")).unwrap();
+        fs::write(root.join("new.sh"), "no schema").unwrap();
+
+        let err = index.search(&root, "old").unwrap_err();
+        assert!(err.contains("injected refresh failure"), "{err}");
+        assert_eq!(index.query("old").unwrap().len(), 1);
+        assert!(index.query("new").unwrap().is_empty());
+        conn.execute_batch("DROP TRIGGER reject_insert").unwrap();
+        let results = index.search(&root, "").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].script_path, Path::new("new.sh"));
+        assert!(results[0].schema_error.is_some());
+    }
+
+    #[test]
+    fn commit_failure_does_not_return_uncommitted_results() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("scripts");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("old.sh"), "no schema").unwrap();
+        let db = tmp.path().join("search.sqlite");
+        let index = SearchIndex::new(db.clone());
+        index.search(&root, "").unwrap();
+        let conn = open_connection(&db).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE commit_guard (
+                script_path TEXT REFERENCES script_index(script_path)
+                DEFERRABLE INITIALLY DEFERRED
+             );
+             CREATE TRIGGER fail_commit AFTER INSERT ON script_index
+             BEGIN INSERT INTO commit_guard VALUES ('missing.sh'); END;",
+        )
+        .unwrap();
+        fs::remove_file(root.join("old.sh")).unwrap();
+        fs::write(root.join("new.sh"), "no schema").unwrap();
+        let err = index.search(&root, "new").unwrap_err();
+        assert!(err.contains("Commit search index failed"), "{err}");
+        assert_eq!(index.query("old").unwrap().len(), 1);
+        assert!(index.query("new").unwrap().is_empty());
+    }
+
+    #[test]
+    fn locked_index_returns_an_error_instead_of_cached_results() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("scripts");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("old.sh"), "no schema").unwrap();
+        let db = tmp.path().join("search.sqlite");
+        let index = SearchIndex::new(db.clone());
+        index.search(&root, "").unwrap();
+        let mut conn = open_connection(&db).unwrap();
+        let lock = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .unwrap();
+        let err = index.search(&root, "old").unwrap_err();
+        assert!(err.contains("locked"), "{err}");
+        lock.rollback().unwrap();
+        assert_eq!(index.search(&root, "old").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn concurrent_searches_return_complete_snapshots() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("scripts");
+        fs::create_dir(&root).unwrap();
+        for name in ["a.sh", "b.sh", "c.sh"] {
+            fs::write(root.join(name), "no schema").unwrap();
+        }
+        let index = SearchIndex::new(tmp.path().join("search.sqlite"));
+        // Initialize WAL before testing writer serialization.
+        index.search(&root, "").unwrap();
+        let barrier = std::sync::Barrier::new(3);
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..3)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        index.search(&root, "").map(|results| {
+                            results
+                                .into_iter()
+                                .map(|entry| entry.script_path)
+                                .collect::<Vec<_>>()
+                        })
+                    })
+                })
+                .collect();
+            let mut completed = 0;
+            for handle in handles {
+                match handle.join().unwrap() {
+                    Ok(paths) => {
+                        completed += 1;
+                        assert_eq!(
+                            paths,
+                            vec![
+                                PathBuf::from("a.sh"),
+                                PathBuf::from("b.sh"),
+                                PathBuf::from("c.sh")
+                            ]
+                        );
+                    }
+                    // Contention is bounded, including on a heavily loaded CI runner.
+                    Err(err) => assert!(err.contains("database is locked"), "{err}"),
+                }
+            }
+            assert!(completed > 0, "at least one writer must complete");
+        });
+    }
+
+    #[test]
     fn test_query_empty_index() {
         let tmp = TempDir::new().unwrap();
         let db = tmp.path().join("test.sqlite");
@@ -574,10 +646,8 @@ echo deploying
         fs::write(scripts_dir.join("test.sh"), "#!/bin/bash\necho testing").unwrap();
 
         let db = tmp.path().join("search.sqlite");
-        let count = rebuild_index(&db, &scripts_dir).unwrap();
-        assert_eq!(count, 2);
-
         let index = SearchIndex::new(db);
+        assert_eq!(index.search(&scripts_dir, "").unwrap().len(), 2);
 
         // Query by name
         let results = index.query("deploy").unwrap();
@@ -620,10 +690,8 @@ echo deploying
         fs::write(scripts_dir.join(".omakureignore"), "hidden.sh\n").unwrap();
 
         let db = tmp.path().join("search.sqlite");
-        let count = rebuild_index(&db, &scripts_dir).unwrap();
-        assert_eq!(count, 1);
-
         let index = SearchIndex::new(db);
+        assert_eq!(index.search(&scripts_dir, "").unwrap().len(), 1);
         assert_eq!(index.query("visible").unwrap().len(), 1);
         assert!(index.query("hidden").unwrap().is_empty());
     }
@@ -646,9 +714,8 @@ echo setup
         .unwrap();
 
         let db = tmp.path().join("search.sqlite");
-        rebuild_index(&db, &scripts_dir).unwrap();
-
         let index = SearchIndex::new(db);
+        index.search(&scripts_dir, "").unwrap();
         let details = index.load_details(Path::new("setup.sh")).unwrap().unwrap();
         assert_eq!(details.display_name, "Setup");
         assert_eq!(details.fields.len(), 1);
@@ -667,18 +734,6 @@ echo setup
     }
 
     #[test]
-    fn test_status_lifecycle() {
-        let index = SearchIndex::new(PathBuf::from(":memory:"));
-        assert_eq!(index.status(), SearchStatus::Idle);
-    }
-
-    #[test]
-    fn test_new_in_memory_constructor() {
-        let index = SearchIndex::new_in_memory();
-        assert_eq!(index.status(), SearchStatus::Idle);
-    }
-
-    #[test]
     fn test_query_with_multiple_tokens_uses_and() {
         let tmp = TempDir::new().unwrap();
         let scripts_dir = tmp.path().join("scripts");
@@ -693,8 +748,8 @@ echo setup
         )
         .unwrap();
         let db = tmp.path().join("search.sqlite");
-        rebuild_index(&db, &scripts_dir).unwrap();
         let index = SearchIndex::new(db);
+        index.search(&scripts_dir, "").unwrap();
 
         let hit = index.query("alpha beta").unwrap();
         assert_eq!(hit.len(), 1);

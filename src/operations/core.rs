@@ -479,7 +479,7 @@ fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
         .all(|tag| entry.tags.iter().any(|entry_tag| entry_tag == tag))
 }
 
-fn resolve_script_path(script: &str, scripts_root: &Path) -> OperationResult<PathBuf> {
+pub(crate) fn resolve_script_path(script: &str, scripts_root: &Path) -> OperationResult<PathBuf> {
     if script.trim().is_empty() {
         return Err(OperationError::new(
             OperationErrorCode::InvalidInput,
@@ -593,7 +593,10 @@ fn reject_absolute_path_outside_root(path: &Path, scripts_root: &Path) -> Operat
     }
 }
 
-fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<PathBuf> {
+/// Validate both the requested path and its destination. Metadata (including
+/// downloaded but uninstalled Batteries) is never an executable subject.
+/// Call again when consuming a queued row, since its path may have changed.
+pub(crate) fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<PathBuf> {
     let canonical = path.canonicalize().map_err(|err| {
         OperationError::new(
             OperationErrorCode::IoFailed,
@@ -606,14 +609,37 @@ fn canonical_script_path(path: &Path, scripts_root: &Path) -> OperationResult<Pa
             format!("failed to canonicalize scripts root: {err}"),
         )
     })?;
-    if canonical.starts_with(&canonical_root) {
-        Ok(canonical)
-    } else {
-        Err(OperationError::new(
+    let relative = canonical.strip_prefix(&canonical_root).map_err(|_| {
+        OperationError::new(
             OperationErrorCode::UnsafePath,
             format!("script path escapes scripts root: {}", path.display()),
-        ))
+        )
+    })?;
+    let requested = path.strip_prefix(scripts_root).unwrap_or(relative);
+    if has_reserved_component(relative) || has_reserved_component(requested) {
+        return Err(OperationError::new(
+            OperationErrorCode::UnsafePath,
+            format!(
+                "script path enters reserved workspace metadata: {}",
+                path.display()
+            ),
+        ));
     }
+    if !canonical.is_file() {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!("script is not a file: {}", path.display()),
+        ));
+    }
+    Ok(canonical)
+}
+
+fn has_reserved_component(path: &Path) -> bool {
+    path.components().any(|component| {
+        matches!(component, Component::Normal(name) if name.to_str().is_some_and(|name| {
+            [".omakure", ".history", ".git"].iter().any(|reserved| name.eq_ignore_ascii_case(reserved))
+        }))
+    })
 }
 
 fn resolve_states(states: &[String], state_set: Option<&str>) -> OperationResult<Vec<RunState>> {
@@ -701,6 +727,75 @@ mod tests {
             parent_run_id: None,
             cron_schedule_id: None,
         }
+    }
+
+    #[test]
+    fn reserved_metadata_is_not_an_executable_subject() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        for script in [
+            ".omakure/batteries/cache/uninstalled/job.sh",
+            ".history/job.sh",
+            ".git/hooks/job.sh",
+            "tools/.omakure/job.sh",
+        ] {
+            write_script(ws.scripts_root(), script, &[]);
+            for requested in [
+                script.to_string(),
+                ws.root().join(script).to_string_lossy().into(),
+            ] {
+                let error = enqueue_run(
+                    &ws,
+                    EnqueueRunRequest {
+                        script: requested,
+                        ..cue_request()
+                    },
+                )
+                .unwrap_err();
+                assert_eq!(error.code, OperationErrorCode::UnsafePath);
+            }
+        }
+        write_script(ws.scripts_root(), "installed/job.sh", &[]);
+        assert!(enqueue_run(
+            &ws,
+            EnqueueRunRequest {
+                script: "installed/job".into(),
+                ..cue_request()
+            }
+        )
+        .is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn metadata_aliases_are_rejected_but_subject_aliases_are_allowed() {
+        use std::os::unix::fs::symlink;
+        let dir = TempDir::new().unwrap();
+        let ws = workspace_in(&dir);
+        write_script(ws.root(), ".omakure/batteries/cache/job.sh", &[]);
+        write_script(ws.root(), "installed/job.sh", &[]);
+        symlink(
+            ws.root().join(".omakure/batteries/cache"),
+            ws.root().join("cache-alias"),
+        )
+        .unwrap();
+        symlink(
+            ws.root().join(".omakure/batteries/cache/job.sh"),
+            ws.root().join("job.sh"),
+        )
+        .unwrap();
+        symlink(
+            ws.root().join("installed/job.sh"),
+            ws.root().join("installed-alias.sh"),
+        )
+        .unwrap();
+        for script in ["cache-alias/job.sh", "job.sh"] {
+            assert_eq!(
+                resolve_script_path(script, ws.root()).unwrap_err().code,
+                OperationErrorCode::UnsafePath
+            );
+        }
+        assert!(resolve_script_path("installed-alias.sh", ws.root()).is_ok());
     }
 
     /// Asserted against what landed in the database, not inferred from the call.

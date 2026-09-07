@@ -1264,41 +1264,46 @@ impl Drop for AdmissionReservation {
             }
         }
         state.bytes = state.bytes.saturating_sub(self.bytes);
-        if let Some(source) = self.source {
-            if let Some(source_state) = state.sources.get_mut(&source) {
-                match self.phase {
-                    AdmissionPhase::Handshake => {
-                        source_state.handshakes = source_state.handshakes.saturating_sub(1);
-                    }
-                    AdmissionPhase::Session => {
-                        source_state.sessions = source_state.sessions.saturating_sub(1);
-                    }
-                }
-                source_state.bytes = source_state.bytes.saturating_sub(self.bytes);
-                if source_state.handshakes == 0
-                    && source_state.sessions == 0
-                    && source_state.bytes == 0
-                    && source_state.attempts.is_empty()
-                {
-                    state.sources.remove(&source);
-                }
-            }
+        state.release_source(self.source, self.phase, self.bytes);
+        state.release_node(self.node_id.as_deref(), self.phase, self.bytes);
+    }
+}
+
+impl SourceAdmission {
+    fn release(&mut self, phase: AdmissionPhase, bytes: usize) {
+        match phase {
+            AdmissionPhase::Handshake => self.handshakes = self.handshakes.saturating_sub(1),
+            AdmissionPhase::Session => self.sessions = self.sessions.saturating_sub(1),
         }
-        if let Some(node_id) = self.node_id.as_deref() {
-            if let Some(node_state) = state.nodes.get_mut(node_id) {
-                match self.phase {
-                    AdmissionPhase::Handshake => {
-                        node_state.handshakes = node_state.handshakes.saturating_sub(1);
-                    }
-                    AdmissionPhase::Session => {
-                        node_state.sessions = node_state.sessions.saturating_sub(1);
-                    }
-                }
-                node_state.bytes = node_state.bytes.saturating_sub(self.bytes);
-                if node_state.handshakes == 0 && node_state.sessions == 0 && node_state.bytes == 0 {
-                    state.nodes.remove(node_id);
-                }
-            }
+        self.bytes = self.bytes.saturating_sub(bytes);
+    }
+
+    fn idle(&self) -> bool {
+        self.handshakes == 0 && self.sessions == 0 && self.bytes == 0
+    }
+}
+
+impl AdmissionState {
+    fn release_source(&mut self, source: Option<IpAddr>, phase: AdmissionPhase, bytes: usize) {
+        let Some(source) = source else { return };
+        let Some(bucket) = self.sources.get_mut(&source) else {
+            return;
+        };
+        bucket.release(phase, bytes);
+        // Recent arrivals keep their rate-limit history even when idle.
+        if bucket.idle() && bucket.attempts.is_empty() {
+            self.sources.remove(&source);
+        }
+    }
+
+    fn release_node(&mut self, node_id: Option<&str>, phase: AdmissionPhase, bytes: usize) {
+        let Some(node_id) = node_id else { return };
+        let Some(bucket) = self.nodes.get_mut(node_id) else {
+            return;
+        };
+        bucket.release(phase, bytes);
+        if bucket.idle() {
+            self.nodes.remove(node_id);
         }
     }
 }

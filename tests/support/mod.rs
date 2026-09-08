@@ -14,6 +14,12 @@ use std::time::{Duration, Instant};
 
 static RESERVED_TEST_PORTS: OnceLock<Mutex<HashSet<u16>>> = OnceLock::new();
 
+/// Cold node provisioning and readiness on shared runners are not a latency
+/// assertion. Allow scheduling/IO contention without restarting a live child.
+/// This is one total startup budget, not a delay or a per-retry allowance;
+/// operation, shutdown and protocol deadlines remain independent.
+pub const NODE_STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
+
 pub fn unique_loopback_port() -> u16 {
     let ports = RESERVED_TEST_PORTS.get_or_init(|| Mutex::new(HashSet::new()));
     loop {

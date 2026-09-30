@@ -42,7 +42,12 @@ pub fn is_lower(value: impl AsRef<[u8]>) -> bool {
 }
 
 fn pair(value: &str, index: usize) -> Option<u8> {
-    u8::from_str_radix(value.get(index * 2..index * 2 + 2)?, 16).ok()
+    let digits = value.as_bytes().get(index * 2..index * 2 + 2)?;
+    Some((nibble(digits[0])? << 4) | nibble(digits[1])?)
+}
+
+fn nibble(digit: u8) -> Option<u8> {
+    (digit as char).to_digit(16).map(|value| value as u8)
 }
 
 #[cfg(test)]
@@ -63,6 +68,8 @@ mod tests {
         assert_eq!(decode("abc"), None);
         assert_eq!(decode("zz"), None);
         assert_eq!(decode("aéb"), None);
+        assert_eq!(decode("+f"), None);
+        assert_eq!(decode_array::<1>("-1"), None);
         assert_eq!(decode_array::<2>("00"), None);
     }
 

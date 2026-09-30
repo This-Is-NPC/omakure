@@ -82,6 +82,21 @@ Validação: `check:fast`.
 
 ---
 
+## Achados durante a execução
+
+- [x] `util::hex::decode` aceitava `+` inicial via `u8::from_str_radix`.
+- [ ] `history`: `split_at(len - 1)` pode entrar em pânico com caractere
+      multibyte.
+- [ ] Clippy no alvo Windows tem ~26 avisos que o CI não verifica; zerar e
+      adicionar clippy Windows ao CI (Fase 10).
+- [ ] `tests/architecture_contract.rs` não roda no `check:fast`; incluí-lo.
+- [ ] Tipos de schema `Outputs`/`Queue` são lidos mas nunca usados (decidir:
+      remover e rejeitar ou passar a usar).
+- [ ] `health_peer_snapshot`, `register_pending_with_transport` e
+      `health_peer_states` só são usados por testes (Fases 3/6).
+- [ ] Teste instável `git_askpass_refuses_credentials_for_another_host`
+      (ETXTBSY) (Fase 8).
+
 ## Fase 1b — Remoção de legado
 
 Muda comportamento de propósito. Ferramentas do repositório que dependam de

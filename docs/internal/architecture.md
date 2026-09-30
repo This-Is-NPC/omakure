@@ -200,7 +200,7 @@ src/
 │   ├── bounds.rs            frozen size and rate bounds
 │   ├── report.rs            Performer-side reporting
 │   └── lifecycle.rs         enrolled/revoked lifecycle Signals
-├── remote_cue.rs            receive half of the Cue plane and its refusal codes
+├── remote_cue/              receive half of the Cue plane and its refusal codes
 ├── baseline.rs              signed baseline manifest: the versioned set a fleet ships
 ├── baseline_push/           receive half of baseline delivery, install, and rollback
 ├── baseline_publisher.rs    custody of the key that signs a baseline

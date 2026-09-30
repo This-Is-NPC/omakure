@@ -18,5 +18,4 @@ pub use node_config::{
 pub use node_id::{is_node_id, NODE_ID_BYTES, NODE_ID_PREFIX};
 pub use parsing::{extract_schema_block, parse_schema};
 pub use schedule::{next_fire_after, parse_cron};
-#[allow(unused_imports)]
-pub use schema::{Field, Schema};
+pub use schema::Schema;

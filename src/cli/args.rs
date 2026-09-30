@@ -1026,12 +1026,8 @@ pub struct EnvRemoveArgs {
 #[derive(Args, Debug)]
 pub struct InitArgs {
     /// Script path
-    #[arg(value_name = "SCRIPT", required_unless_present = "name")]
-    pub script: Option<String>,
-
-    /// Script path (legacy)
-    #[arg(long, value_name = "SCRIPT")]
-    pub name: Option<String>,
+    #[arg(value_name = "SCRIPT")]
+    pub script: String,
 
     /// Inline schema JSON or `@path/to/schema.json`. When set, the new
     /// script is generated with this schema embedded between the
@@ -1719,7 +1715,7 @@ mod tests {
         let cli = parse(&["init", "new.sh", "--schema-json", "{}"]).unwrap();
         match cli.command.unwrap() {
             Commands::Init(args) => {
-                assert_eq!(args.script, Some("new.sh".to_string()));
+                assert_eq!(args.script, "new.sh");
                 assert_eq!(args.schema_json, Some("{}".to_string()));
             }
             _ => panic!("expected Init"),

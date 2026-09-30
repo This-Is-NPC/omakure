@@ -131,8 +131,7 @@ that report, update `docs/usage/fidelity-allowlist.json` manually only when
 the change is reviewed, then run `mise run usage:kdl -- --write` followed by
 `mise run usage:kdl -- --check`. Write and check are fail-closed: neither
 auto-approves a changed loss nor overwrites a stale allowlist, residual
-semantics record, or generated artifact. The checked residual for
-`init script` is also exercised through actual Clap parser outcomes.
+semantics record, or generated artifact.
 
 After KDL changes, run `mise run usage:docs -- --write` and then
 `mise run usage:docs -- --check`. The check command fails if either generated

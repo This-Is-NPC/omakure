@@ -79,15 +79,6 @@
     {
       "command": [
         "omakure",
-        "init"
-      ],
-      "argument": "script",
-      "kind": "required-unless-present",
-      "detail": "required_unless_present=name"
-    },
-    {
-      "command": [
-        "omakure",
         "node",
         "serve"
       ],

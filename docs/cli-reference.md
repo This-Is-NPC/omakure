@@ -451,10 +451,9 @@ Create a new script template
 - `--body-stdin` — Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written (values: `false`, `true`)
 - `--force` — Overwrite an existing script of the same name (values: `false`, `true`)
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
-- `--name SCRIPT` — Script path (legacy)
 - `--schema-json SCHEMA_JSON` — Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override
-- `SCRIPT` — Script path
+- `SCRIPT` — Script path **(required)**
 
 ## `omakure node`
 

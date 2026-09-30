@@ -22,12 +22,7 @@ pub fn run_with_format(
     options: InitArgs,
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let name = options
-        .name
-        .clone()
-        .or_else(|| options.script.clone())
-        .ok_or_else(|| "Missing script name. Use `omakure init <script-name>`.".to_string())?;
-    let name = name.trim().to_string();
+    let name = options.script.trim().to_string();
     if name.is_empty() {
         return Err("Script name cannot be empty".into());
     }
@@ -527,8 +522,7 @@ mod tests {
         run_with_format(
             tmp.path().to_path_buf(),
             InitArgs {
-                script: None,
-                name: Some("deploy".into()),
+                script: "deploy".into(),
                 schema_json: None,
                 body_stdin: false,
                 force: false,
@@ -546,8 +540,7 @@ mod tests {
         let err = run_with_format(
             tmp.path().to_path_buf(),
             InitArgs {
-                script: Some("dup.sh".into()),
-                name: None,
+                script: "dup.sh".into(),
                 schema_json: None,
                 body_stdin: false,
                 force: false,
@@ -565,8 +558,7 @@ mod tests {
         run_with_format(
             tmp.path().to_path_buf(),
             InitArgs {
-                script: Some("ow.sh".into()),
-                name: None,
+                script: "ow.sh".into(),
                 schema_json: None,
                 body_stdin: false,
                 force: true,
@@ -582,8 +574,7 @@ mod tests {
         run_with_format(
             tmp.path().to_path_buf(),
             InitArgs {
-                script: Some("with_schema.sh".into()),
-                name: None,
+                script: "with_schema.sh".into(),
                 schema_json: Some(r#"{"Name":"x","Fields":[]}"#.into()),
                 body_stdin: false,
                 force: false,
@@ -599,8 +590,7 @@ mod tests {
         let err = run_with_format(
             tmp.path().to_path_buf(),
             InitArgs {
-                script: Some("bad.sh".into()),
-                name: None,
+                script: "bad.sh".into(),
                 schema_json: Some("not json".into()),
                 body_stdin: false,
                 force: false,
@@ -609,24 +599,6 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("schema-json invalid"));
-    }
-
-    #[test]
-    fn run_with_format_rejects_missing_name() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let err = run_with_format(
-            tmp.path().to_path_buf(),
-            InitArgs {
-                script: None,
-                name: None,
-                schema_json: None,
-                body_stdin: false,
-                force: false,
-            },
-            false,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("Missing script name"));
     }
 
     #[test]

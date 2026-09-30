@@ -1112,30 +1112,27 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
 .SH "OMAKURE INIT"
 Create a new script template
 .PP
-\fBUsage:\fR omakure init [OPTIONS] [<SCRIPT>]
+\fBUsage:\fR omakure init [OPTIONS] <SCRIPT>
 .PP
 \fBOptions:\fR
 .PP
 .TP
-\fB\-\-name\fR \fI<SCRIPT>\fR
-Script path (legacy)
+\fB\-\-schema\-json\fR \fI<SCHEMA_JSON>\fR
+Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template
 .TP
 \fB\-\-scripts\-dir\fR \fI<SCRIPTS_DIR>\fR
 Scripts directory override
 .TP
-\fB\-\-schema\-json\fR \fI<SCHEMA_JSON>\fR
-Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template
+\fB\-\-body\-stdin\fR
+Read the script body from stdin and write it verbatim under the schema header when `\-\-schema\-json` is set. Without `\-\-schema\-json`, stdin is ignored and the default placeholder template is written
+.RS
+\fIDefault: \fRfalse
+.RE
 .TP
 \fB\-\-json\fR
 Emit machine\-readable JSON output for AI\-facing subcommands.
 
 When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human\-readable form. Subcommands that do not support JSON ignore this flag.
-.RS
-\fIDefault: \fRfalse
-.RE
-.TP
-\fB\-\-body\-stdin\fR
-Read the script body from stdin and write it verbatim under the schema header when `\-\-schema\-json` is set. Without `\-\-schema\-json`, stdin is ignored and the default placeholder template is written
 .RS
 \fIDefault: \fRfalse
 .RE

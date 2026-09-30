@@ -4,7 +4,7 @@
 //! is deliberately feature-gated: `clap_usage` is not part of the shipped
 //! omakure dependency graph.
 
-use clap::{CommandFactory, Parser};
+use clap::CommandFactory;
 use omakure::cli::args::Cli;
 use omakure::cli_http_parity::{checked_manifest, current_cli_ids};
 use serde::{Deserialize, Serialize};
@@ -319,14 +319,6 @@ fn count_commands(command: &clap::Command) -> usize {
 fn collect_unreportable_semantics(command: &clap::Command) -> Vec<UnreportableSemantic> {
     let mut semantics = Vec::new();
     collect_unreportable_for_command(command, &[], &mut semantics);
-    // Clap's required_unless_present relation is setter-only: clap exposes no
-    // getter for it, so keep the current declaration explicit and reviewed.
-    semantics.push(UnreportableSemantic {
-        command: vec!["omakure".into(), "init".into()],
-        argument: "script".into(),
-        kind: "required-unless-present".into(),
-        detail: "required_unless_present=name".into(),
-    });
     semantics.sort_by(|left, right| {
         (&left.command, &left.argument, &left.kind, &left.detail).cmp(&(
             &right.command,
@@ -399,32 +391,6 @@ fn validate_unreportable_semantics(
                 {
                     return Err(format!(
                         "environment metadata changed for {} {}",
-                        semantic.command.join(" "),
-                        semantic.argument
-                    ));
-                }
-            }
-            "required-unless-present" => {
-                let fallback = semantic
-                    .detail
-                    .strip_prefix("required_unless_present=")
-                    .filter(|fallback| !fallback.is_empty())
-                    .ok_or_else(|| {
-                        format!("malformed requiredness detail for {}", semantic.argument)
-                    })?;
-                let mut missing = semantic.command.clone();
-                if Cli::try_parse_from(&missing).is_ok() {
-                    return Err(format!(
-                        "{} {} is no longer required without --{fallback}",
-                        semantic.command.join(" "),
-                        semantic.argument
-                    ));
-                }
-                missing.push(format!("--{fallback}"));
-                missing.push("example".to_string());
-                if Cli::try_parse_from(&missing).is_err() {
-                    return Err(format!(
-                        "{} {} no longer accepts --{fallback} as its requiredness escape",
                         semantic.command.join(" "),
                         semantic.argument
                     ));
@@ -644,26 +610,18 @@ mod tests {
     }
 
     #[test]
-    fn residual_init_condition_preserves_clap_parser_boundary() {
-        use clap::Parser;
-
-        assert!(Cli::try_parse_from(["omakure", "init"]).is_err());
-        assert!(Cli::try_parse_from(["omakure", "init", "--name", "example"]).is_ok());
-    }
-
-    #[test]
-    fn residual_requiredness_mutation_is_rejected() {
+    fn residual_environment_mutation_is_rejected() {
         let command = Cli::command();
         let semantic = UnreportableSemantic {
-            command: vec!["omakure".into(), "init".into()],
-            argument: "script".into(),
-            kind: "required-unless-present".into(),
-            detail: "required_unless_present=name".into(),
+            command: vec!["omakure".into(), "api".into()],
+            argument: "tokens_file".into(),
+            kind: "environment-fallback".into(),
+            detail: "env=OMAKURE_TOKENS_FILE".into(),
         };
         validate_unreportable_semantics(&command, std::slice::from_ref(&semantic)).unwrap();
 
         let mut mutated = semantic;
-        mutated.detail = "required_unless_present=other".into();
+        mutated.detail = "env=OMAKURE_OTHER_FILE".into();
         assert!(validate_unreportable_semantics(&command, &[mutated]).is_err());
     }
 

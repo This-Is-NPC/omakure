@@ -614,14 +614,11 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
     complete scripts_dir type=path
 }
 cmd init display_order=14 disable_version_flag=#true args_override_self=#false help="Create a new script template" unknown_flags=error {
-    flag --name help="Script path (legacy)" display_order=0 {
-        arg <SCRIPT>
-    }
-    flag --schema-json help="Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template" display_order=1 {
+    flag --schema-json help="Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template" display_order=0 {
         arg <SCHEMA_JSON>
     }
-    flag --body-stdin help="Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written" display_order=2 default="false"
-    flag --force help="Overwrite an existing script of the same name" display_order=3 default="false"
+    flag --body-stdin help="Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written" display_order=1 default="false"
+    flag --force help="Overwrite an existing script of the same name" display_order=2 default="false"
     flag --scripts-dir help="Scripts directory override" global=#true display_order=0 {
         arg <SCRIPTS_DIR>
     }
@@ -632,7 +629,7 @@ Emit machine-readable JSON output for AI-facing subcommands.
 When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
 """#
     }
-    arg "[SCRIPT]" help="Script path" required=#false
+    arg <SCRIPT> help="Script path"
     complete scripts_dir type=path
 }
 cmd env display_order=15 subcommand_required=#true arg_required_else_help=#true disable_version_flag=#true args_override_self=#false help="Manage named environment files" unknown_flags=error {

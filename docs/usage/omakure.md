@@ -603,23 +603,22 @@ Agents can cache the payload per binary version (`--version`).
 
 ## `omakure init`
 
-- **Usage:** `omakure init [FLAGS] [SCRIPT]`
+- **Usage:** `omakure init [FLAGS] <SCRIPT>`
 
 Create a new script template
 
 ### Arguments
-- **`[SCRIPT]`** — Script path
+- **`<SCRIPT>`** — Script path
 
 ### Flags
-- **`--name <SCRIPT>`** — Script path (legacy)
-- **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
 - **`--schema-json <SCHEMA_JSON>`** — Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template
+- **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
+- **`--body-stdin`** — Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written
+
+  **Default:** `false`
 - **`--json`** — Emit machine-readable JSON output for AI-facing subcommands.
 
   When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
-
-  **Default:** `false`
-- **`--body-stdin`** — Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written
 
   **Default:** `false`
 - **`--force`** — Overwrite an existing script of the same name

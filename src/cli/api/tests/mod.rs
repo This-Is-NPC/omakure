@@ -8,26 +8,21 @@ use super::router::{
 use super::scripts::{MAX_SEARCH_QUERY_LEN, MAX_SEARCH_TAGS, MAX_SEARCH_TAG_LEN};
 use super::state::{ApiPolicy, ReadinessGate};
 use crate::app_meta;
-use crate::auth::{self, AuthContext, Authenticator};
+use crate::auth::{self, test_credential, AuthContext, Authenticator};
 use crate::cli::args::ApiArgs;
 use crate::operations::battery as battery_ops;
 use crate::operations::envs as env_ops;
 use crate::operations::{OperationError, OperationErrorCode};
 use crate::policy::DeployPolicy;
 use crate::workspace::Workspace;
-use axum::body::to_bytes;
-use axum::body::Body;
-use axum::http::Method;
-use axum::http::{header, Request, StatusCode};
+use axum::body::{to_bytes, Body};
+use axum::http::{header, Method, Request, StatusCode};
 use axum::response::Response;
 use std::net::SocketAddr;
 use std::process::Command;
-use std::sync::OnceLock;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use tempfile::TempDir;
 use tower::ServiceExt;
-
-use crate::auth::test_credential;
 
 mod audit;
 mod battery;

@@ -4,10 +4,8 @@ use super::open::{
 };
 use super::*;
 use crate::enrollment::{ManualEnrollmentRequest, SignedEnrollmentBundle};
-use crate::node::NodeContext;
-use crate::node::{NodePathOverrides, NodePlatform};
-use crate::node_identity::node_id_for_x_only_public_key;
-use crate::node_identity::NodeIdentity;
+use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
 use crate::test_support::node_context;
 use crate::util::hex;
 use rusqlite::{Connection, TransactionBehavior};

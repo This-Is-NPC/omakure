@@ -3,11 +3,11 @@
 //! `runs.rs` is the **only** code path that persists script execution
 //! history.
 
+use crate::util::sqlite::{is_lock_contention, WalDatabase, OPEN_RETRY_DELAYS};
 use crate::util::time::unix_millis;
 use crate::workspace::Workspace;
 use rusqlite::{
-    params, params_from_iter, Connection, ErrorCode, OptionalExtension, Transaction,
-    TransactionBehavior,
+    params, params_from_iter, Connection, OptionalExtension, Transaction, TransactionBehavior,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -19,29 +19,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
-/// SQLite's WAL-mode transition can briefly report `SQLITE_BUSY` or
-/// `SQLITE_LOCKED` when another process is opening the same database. The
-/// process-local open lock handles threads; these bounded delays cover the
-/// remaining cross-process handoff without treating other SQL failures as
-/// recoverable.
-const OPEN_RETRY_DELAYS: [Duration; 5] = [
-    Duration::from_millis(10),
-    Duration::from_millis(25),
-    Duration::from_millis(50),
-    Duration::from_millis(100),
-    Duration::from_millis(200),
-];
+const RUNS_DATABASE: WalDatabase = WalDatabase {
+    name: "runs",
+    busy_timeout: Duration::from_millis(2_000),
+    wal_retry_delays: &OPEN_RETRY_DELAYS,
+};
 static RUNS_OPEN_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn runs_open_lock() -> &'static Mutex<()> {
     &RUNS_OPEN_LOCK
-}
-
-fn is_retryable_open_error(error: &rusqlite::Error) -> bool {
-    matches!(
-        error.sqlite_error_code(),
-        Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
-    )
 }
 
 /// Internal heartbeat lease duration in milliseconds (60 s).
@@ -430,24 +416,7 @@ fn open_connection(db_path: &Path) -> Result<Connection, String> {
 }
 
 fn open_connection_inner(db_path: &Path) -> Result<Connection, String> {
-    if let Some(parent) = db_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("Create runs db folder failed: {}", err))?;
-    }
-    let conn = Connection::open(db_path).map_err(|err| format!("Open runs db failed: {}", err))?;
-    conn.busy_timeout(std::time::Duration::from_millis(2_000))
-        .map_err(|err| format!("Runs db busy timeout failed: {}", err))?;
-    let mut retry = 0;
-    let _journal_mode: String = loop {
-        match conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0)) {
-            Ok(mode) => break mode,
-            Err(err) if is_retryable_open_error(&err) && retry < OPEN_RETRY_DELAYS.len() => {
-                std::thread::sleep(OPEN_RETRY_DELAYS[retry]);
-                retry += 1;
-            }
-            Err(err) => return Err(format!("Enable WAL failed: {}", err)),
-        }
-    };
+    let conn = RUNS_DATABASE.open(db_path)?;
     // ON DELETE CASCADE on run_traces requires foreign keys to be enforced
     // explicitly: SQLite ships with foreign_keys=OFF for backward
     // compatibility.
@@ -455,7 +424,6 @@ fn open_connection_inner(db_path: &Path) -> Result<Connection, String> {
         .map_err(|err| format!("Enable foreign keys failed: {}", err))?;
     Ok(conn)
 }
-
 /// Initialize the `runs` and `run_traces` tables and indexes. Idempotent
 /// (uses `CREATE TABLE IF NOT EXISTS`), so safe to call on every open.
 pub fn init_schema(conn: &Connection) -> Result<(), String> {
@@ -1629,11 +1597,7 @@ enum TraceInsertError {
 
 impl TraceInsertError {
     fn is_retryable(&self) -> bool {
-        matches!(self, Self::Sqlite { error, .. }
-        if matches!(
-            error.sqlite_error_code(),
-            Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
-        ))
+        matches!(self, Self::Sqlite { error, .. } if is_lock_contention(error))
     }
 
     fn into_message(self) -> String {

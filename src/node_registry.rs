@@ -11,10 +11,10 @@ use crate::enrollment::{self, ManualEnrollmentRequest, SignedEnrollmentBundle};
 use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
 use crate::util::hex;
+use crate::util::sqlite::{is_lock_contention, OPEN_RETRY_DELAYS};
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{
-    params, Connection, ErrorCode, OpenFlags, OptionalExtension, Row, Transaction,
-    TransactionBehavior,
+    params, Connection, OpenFlags, OptionalExtension, Row, Transaction, TransactionBehavior,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -28,22 +28,6 @@ pub mod health;
 
 pub const SCHEMA_VERSION: i64 = 8;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
-/// Bounded waits for a lock met while a connection is being opened.
-///
-/// `BUSY_TIMEOUT` covers a statement that finds the database busy. Opening is
-/// different: the journal-mode handshake a fresh connection performs can
-/// report `SQLITE_BUSY` or `SQLITE_LOCKED` outright while another process is
-/// opening or closing the same file, and the busy handler is not consulted
-/// for it. `runs.rs` met the same transition and waits it out the same way.
-/// Every operation here opens its own connection, so a Conductor whose
-/// operator just ran a registry command in another process meets it too.
-const OPEN_RETRY_DELAYS: [Duration; 5] = [
-    Duration::from_millis(10),
-    Duration::from_millis(25),
-    Duration::from_millis(50),
-    Duration::from_millis(100),
-    Duration::from_millis(200),
-];
 /// One writer per database per process.
 ///
 /// Every mutation opens its own connection and begins `IMMEDIATE`, so writers
@@ -1940,11 +1924,7 @@ impl NodeRegistry {
 fn is_transient_lock(error: &RegistryError) -> bool {
     matches!(
         error,
-        RegistryError::Sqlite(inner)
-            if matches!(
-                inner.sqlite_error_code(),
-                Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
-            )
+        RegistryError::Sqlite(inner) if is_lock_contention(inner)
     )
 }
 

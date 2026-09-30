@@ -1,8 +1,8 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::operations::path::logical_relative_path;
 use crate::ports::ScriptRepository;
+use crate::util::sqlite::WalDatabase;
 use rusqlite::{params, params_from_iter, Connection, TransactionBehavior};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -210,21 +210,15 @@ fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn open_connection(db_path: &Path) -> Result<Connection, String> {
-    if let Some(parent) = db_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("Create search db folder failed: {}", err))?;
-    }
-    let conn =
-        Connection::open(db_path).map_err(|err| format!("Open search db failed: {}", err))?;
-    conn.busy_timeout(Duration::from_millis(500))
-        .map_err(|err| format!("Search db busy timeout failed: {}", err))?;
-    let _journal_mode: String = conn
-        .query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0))
-        .map_err(|err| format!("Enable WAL failed: {}", err))?;
-    Ok(conn)
-}
+const SEARCH_DATABASE: WalDatabase = WalDatabase {
+    name: "search",
+    busy_timeout: Duration::from_millis(500),
+    wal_retry_delays: &[],
+};
 
+fn open_connection(db_path: &Path) -> Result<Connection, String> {
+    SEARCH_DATABASE.open(db_path)
+}
 fn init_db(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS script_index (\
@@ -309,6 +303,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use rstest::rstest;
+    use std::fs;
     use tempfile::TempDir;
 
     // --- Pure helper tests ---

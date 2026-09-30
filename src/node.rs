@@ -1600,12 +1600,9 @@ fn validate_file_security_metadata(
 
 #[cfg(windows)]
 fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError> {
-    use std::os::windows::ffi::OsStrExt;
-
     const INVALID_FILE_ATTRIBUTES: u32 = u32::MAX;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
-    wide.push(0);
+    let wide = crate::util::windows::wide_path(path);
     let attributes = unsafe { GetFileAttributesW(wide.as_ptr()) };
     if attributes == INVALID_FILE_ATTRIBUTES {
         let err = io::Error::last_os_error();
@@ -1630,15 +1627,13 @@ fn validate_windows_security(
     directory: bool,
     test_mode: bool,
 ) -> Result<(), NodeError> {
-    use std::os::windows::ffi::OsStrExt;
     use std::ptr;
 
     if windows_has_reparse_point(path)? {
         return Err(NodeError::UnsafePath(path.display().to_string()));
     }
 
-    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
-    wide.push(0);
+    let wide = crate::util::windows::wide_path(path);
     let mut security_descriptor: *mut std::ffi::c_void = ptr::null_mut();
     let mut owner_sid: *mut std::ffi::c_void = ptr::null_mut();
     let mut dacl: *mut std::ffi::c_void = ptr::null_mut();

@@ -108,7 +108,7 @@ fn update_staging_in(parent: &Path) -> io::Result<UpdateStaging> {
 
 #[cfg(windows)]
 fn create_private_windows_directory(path: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
+    use crate::util::windows::{wide_path, wide_str};
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -118,15 +118,8 @@ fn create_private_windows_directory(path: &Path) -> io::Result<()> {
 
     // Protected DACL: owner, SYSTEM and administrators only, inherited by files.
     // Apply at creation, not after exposing a directory with inherited access.
-    let sddl = "D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
-        .encode_utf16()
-        .chain(Some(0))
-        .collect::<Vec<_>>();
-    let name = path
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect::<Vec<_>>();
+    let sddl = wide_str("D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)");
+    let name = wide_path(path);
     let mut descriptor = std::ptr::null_mut();
     // SAFETY: strings are NUL-terminated; Windows allocates the descriptor,
     // which remains live until CreateDirectoryW completes.

@@ -41,19 +41,11 @@ pub fn read_file_if_exists(path: &Path) -> io::Result<Option<String>> {
 /// unlike remove-then-rename there is no observable delete gap.
 #[cfg(windows)]
 pub fn replace_existing_windows(tmp: &Path, destination: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
+    use crate::util::windows::wide_path;
     use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
 
-    let replacement = tmp
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let replaced = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
+    let replacement = wide_path(tmp);
+    let replaced = wide_path(destination);
     // SAFETY: Both paths are NUL-terminated UTF-16 strings that remain alive
     // for the duration of the synchronous API call. The null backup and
     // exclusion/preserve pointers request no backup and default behavior.

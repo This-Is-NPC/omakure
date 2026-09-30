@@ -1,13 +1,16 @@
 /// Native Windows process and named-event primitives for `serve`.
+use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER,
-    HANDLE, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    GetLastError, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER, HANDLE,
+    WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
 use windows_sys::Win32::System::Threading::{
     CreateEventW, OpenEventW, OpenProcess, SetEvent, WaitForSingleObject, EVENT_MODIFY_STATE,
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
 };
+
+use crate::util::windows::{wide_path, wide_str};
 
 const STOP_EVENT_PREFIX: &str = "Local\\OmakureServeStop-";
 
@@ -17,55 +20,45 @@ pub(crate) fn is_stop_event_name(name: &str) -> bool {
 }
 
 pub(crate) struct StopEvent {
-    handle: HANDLE,
+    handle: OwnedHandle,
 }
 
 impl StopEvent {
     pub(crate) fn is_signaled(&self) -> Result<bool, String> {
-        let result = unsafe { WaitForSingleObject(self.handle, 0) };
-        match result {
-            WAIT_OBJECT_0 => Ok(true),
-            WAIT_TIMEOUT => Ok(false),
-            WAIT_FAILED => Err(last_error("WaitForSingleObject")),
-            other => Err(format!(
-                "WaitForSingleObject returned unexpected status {other}"
-            )),
-        }
-    }
-}
-
-impl Drop for StopEvent {
-    fn drop(&mut self) {
-        unsafe {
-            CloseHandle(self.handle);
-        }
+        wait_for(&self.handle, 0)
     }
 }
 
 pub(crate) struct ProcessHandle {
-    handle: HANDLE,
+    handle: OwnedHandle,
 }
 
 impl ProcessHandle {
     pub(crate) fn wait(&self, timeout: std::time::Duration) -> Result<bool, String> {
-        let milliseconds = timeout.as_millis().min(u32::MAX as u128) as u32;
-        let result = unsafe { WaitForSingleObject(self.handle, milliseconds) };
-        match result {
-            WAIT_OBJECT_0 => Ok(true),
-            WAIT_TIMEOUT => Ok(false),
-            WAIT_FAILED => Err(last_error("WaitForSingleObject")),
-            other => Err(format!(
-                "WaitForSingleObject returned unexpected status {other}"
-            )),
-        }
+        wait_for(
+            &self.handle,
+            timeout.as_millis().min(u32::MAX as u128) as u32,
+        )
     }
 }
 
-impl Drop for ProcessHandle {
-    fn drop(&mut self) {
-        unsafe {
-            CloseHandle(self.handle);
-        }
+/// Take ownership of a handle a Win32 call just returned, so dropping it
+/// closes it.
+fn owned(handle: HANDLE) -> OwnedHandle {
+    // SAFETY: callers pass a non-null handle freshly returned by a Win32
+    // open/create call and never close or share it elsewhere.
+    unsafe { OwnedHandle::from_raw_handle(handle) }
+}
+
+fn wait_for(handle: &OwnedHandle, milliseconds: u32) -> Result<bool, String> {
+    let result = unsafe { WaitForSingleObject(handle.as_raw_handle(), milliseconds) };
+    match result {
+        WAIT_OBJECT_0 => Ok(true),
+        WAIT_TIMEOUT => Ok(false),
+        WAIT_FAILED => Err(last_error("WaitForSingleObject")),
+        other => Err(format!(
+            "WaitForSingleObject returned unexpected status {other}"
+        )),
     }
 }
 
@@ -94,7 +87,9 @@ pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
         };
     }
 
-    let process = ProcessHandle { handle };
+    let process = ProcessHandle {
+        handle: owned(handle),
+    };
     match process.wait(std::time::Duration::ZERO) {
         Ok(true) => ProcessProbe::Dead,
         Ok(false) => ProcessProbe::Live(process),
@@ -104,18 +99,19 @@ pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
 
 pub(crate) fn create_stop_event() -> Result<(String, StopEvent), String> {
     let name = format!("{STOP_EVENT_PREFIX}{:032x}", rand::random::<u128>());
-    let wide_name = wide_null(&name);
+    let wide_name = wide_str(&name);
     let handle = unsafe { CreateEventW(std::ptr::null(), 1, 0, wide_name.as_ptr()) };
     if handle.is_null() {
         return Err(last_error("CreateEventW"));
     }
-    if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
-        unsafe {
-            CloseHandle(handle);
-        }
+    let already_exists = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+    let event = StopEvent {
+        handle: owned(handle),
+    };
+    if already_exists {
         return Err("CreateEventW generated an existing event identity".to_string());
     }
-    Ok((name, StopEvent { handle }))
+    Ok((name, event))
 }
 
 pub(crate) enum OpenEventError {
@@ -124,7 +120,7 @@ pub(crate) enum OpenEventError {
 }
 
 pub(crate) fn open_stop_event(name: &str) -> Result<StopEvent, OpenEventError> {
-    let wide_name = wide_null(name);
+    let wide_name = wide_str(name);
     let handle = unsafe { OpenEventW(EVENT_MODIFY_STATE, 0, wide_name.as_ptr()) };
     if handle.is_null() {
         let error = unsafe { GetLastError() };
@@ -136,7 +132,9 @@ pub(crate) fn open_stop_event(name: &str) -> Result<StopEvent, OpenEventError> {
             )))
         }
     } else {
-        Ok(StopEvent { handle })
+        Ok(StopEvent {
+            handle: owned(handle),
+        })
     }
 }
 
@@ -145,7 +143,7 @@ pub(crate) fn signal_stop(name: &str) -> Result<(), String> {
         OpenEventError::NotFound => "the daemon stop event no longer exists".to_string(),
         OpenEventError::Indeterminate(error) => error,
     })?;
-    if unsafe { SetEvent(event.handle) } == 0 {
+    if unsafe { SetEvent(event.handle.as_raw_handle()) } == 0 {
         return Err(last_error("SetEvent"));
     }
     Ok(())
@@ -163,19 +161,6 @@ pub(crate) fn publish_exclusive(
         return Err(last_error("MoveFileExW"));
     }
     Ok(())
-}
-
-fn wide_null(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-fn wide_path(path: &std::path::Path) -> Vec<u16> {
-    use std::os::windows::ffi::OsStrExt;
-
-    path.as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect()
 }
 
 fn last_error(operation: &str) -> String {

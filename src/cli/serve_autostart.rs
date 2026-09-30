@@ -9,12 +9,15 @@
 //! service-manager integration is unsupported.
 
 use crate::cli::emit::exit_with_error;
-use crate::cli::json::{self, codes};
+use crate::cli::json::codes;
 use crate::workspace::Workspace;
-use serde_json::json;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "linux")]
+use crate::cli::json;
+#[cfg(target_os = "linux")]
+use serde_json::json;
 #[cfg(target_os = "linux")]
 use std::fs;
 #[cfg(target_os = "linux")]

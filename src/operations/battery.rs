@@ -1,7 +1,6 @@
 use crate::domain::{extract_schema_block, parse_schema};
 use crate::runtime::{script_kind, ScriptKind};
 use crate::secrets::{self, SecretAccess};
-use crate::util::hex;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -587,6 +586,8 @@ pub fn install_battery_script(
     }
     #[cfg(unix)]
     {
+        use crate::util::hex;
+
         let inspect = inspect_battery(
             workspace,
             InspectBatteryRequest {
@@ -3149,6 +3150,7 @@ pub fn git_checkout_detached_spec(cache_path: &Path, commit: &str) -> GitCommand
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::hex;
     use std::cell::Cell;
     fn env_key_eq(key: &std::ffi::OsStr, expected: &str) -> bool {
         #[cfg(windows)]

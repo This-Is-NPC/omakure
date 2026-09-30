@@ -143,16 +143,16 @@ Cada arquivo vira um diretório de submódulos. Commits de movimento sem
 alterar lógica; testes inline vão para `tests.rs` do próprio módulo
 (`#[cfg(test)] mod tests;`).
 
-- [ ] `src/cli/api.rs` → `src/cli/api/`
+- [x] `src/cli/api.rs` → `src/cli/api/`
       `{mod, boot, auth, policy, types, router, audit, tests}` +
       `handlers/{health, scripts, envs, runs, node, battery, secrets}`.
-- [ ] `src/direct_service.rs` → `src/direct_service/`
+- [x] `src/direct_service.rs` → `src/direct_service/`
       `{mod, error, admission, resolver, session, cue, baseline, enrollment,
       status, tests}`.
-- [ ] `src/node_registry.rs` → `src/node_registry/`
+- [x] `src/node_registry.rs` → `src/node_registry/`
       `{mod, types, error, open, peers, enrollment, audit, migrate,
       schema_validate, locks, tests}` (mantendo `health/`).
-- [ ] `src/node_registry/health.rs` → `src/node_registry/health/`
+- [x] `src/node_registry/health.rs` → `src/node_registry/health/`
       `{mod, types, apply, evaluate, outbox, feed, prune, audit, rows, tests}`.
 - [ ] `src/operations/battery.rs` → `src/operations/battery/`
       `{mod, types, registry, sync, install, manifest, git, path_safety,

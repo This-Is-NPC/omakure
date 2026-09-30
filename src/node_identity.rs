@@ -286,19 +286,8 @@ fn read_private_key(
     context: &NodeContext,
     path: &Path,
 ) -> Result<[u8; IDENTITY_PRIVATE_BYTES], NodeIdentityError> {
-    let mut options = fs::OpenOptions::new();
+    let mut options = crate::util::fs::no_follow_open_options();
     options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-    }
     let mut file = options.open(path)?;
     if !file.metadata()?.file_type().is_file() {
         return Err(NodeIdentityError::State(
@@ -365,18 +354,12 @@ struct IdentityLock {
 impl IdentityLock {
     fn acquire(context: &NodeContext) -> Result<Self, NodeIdentityError> {
         let path = context.state_dir().join(IDENTITY_LOCK_FILE);
-        let mut options = fs::OpenOptions::new();
+        let mut options = crate::util::fs::no_follow_open_options();
         options.read(true).write(true).create(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+            options.mode(0o600);
         }
         let file = options.open(&path)?;
         if fs::symlink_metadata(&path)?.file_type().is_symlink() {

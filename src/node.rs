@@ -788,21 +788,10 @@ impl NodeContext {
     ) -> Result<OpenedPrivateFile, NodeError> {
         validate_absolute_path(self.platform, "private file", path, true)?;
         ensure_safe_parent(path, self.test_mode)?;
-        let mut options = fs::OpenOptions::new();
+        let mut options = crate::util::fs::no_follow_open_options();
         options.read(true);
         #[cfg(not(windows))]
         options.write(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.custom_flags(libc::O_NOFOLLOW);
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-        }
         let file = options.open(path)?;
         let metadata = file.metadata()?;
         if !metadata.file_type().is_file() {
@@ -841,19 +830,8 @@ impl NodeContext {
         if !ensure_safe_parent_if_present(path, self.test_mode)? {
             return Ok(None);
         }
-        let mut options = fs::OpenOptions::new();
+        let mut options = crate::util::fs::no_follow_open_options();
         options.read(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.custom_flags(libc::O_NOFOLLOW);
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-        }
         let file = match options.open(path) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -935,18 +913,12 @@ fn open_lifecycle_lock(
     path: &Path,
     nonblocking: bool,
 ) -> Result<fs::File, NodeError> {
-    let mut options = fs::OpenOptions::new();
+    let mut options = crate::util::fs::no_follow_open_options();
     options.read(true).write(true).create(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        options.mode(0o600);
     }
     let file = options
         .open(path)
@@ -1217,12 +1189,8 @@ fn validate_open_file_identity(path: &Path, opened_file: &fs::File) -> Result<()
             "node configuration path has a reparse point".to_string(),
         ));
     }
-    use std::os::windows::fs::OpenOptionsExt;
-    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-    let mut options = fs::OpenOptions::new();
-    options
-        .read(true)
-        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let mut options = crate::util::fs::no_follow_open_options();
+    options.read(true);
     let current_file = options.open(path).map_err(NodeError::Io)?;
     let opened_identity = windows_file_identity(opened_file)?;
     let current_identity = windows_file_identity(&current_file)?;

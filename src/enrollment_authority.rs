@@ -193,19 +193,8 @@ fn read_authority_key(
     context: &NodeContext,
     path: &Path,
 ) -> Result<[u8; AUTHORITY_PRIVATE_BYTES], AuthorityError> {
-    let mut options = fs::OpenOptions::new();
+    let mut options = crate::util::fs::no_follow_open_options();
     options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-    }
     let mut file = options.open(path)?;
     if !file.metadata()?.file_type().is_file() {
         return Err(AuthorityError::State(

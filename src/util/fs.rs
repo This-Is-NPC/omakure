@@ -18,6 +18,24 @@ pub fn set_executable_permissions(_path: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Open options that refuse to follow a final symlink (Unix) or reparse point
+/// (Windows), so a planted link cannot redirect private node state.
+pub fn no_follow_open_options() -> fs::OpenOptions {
+    let mut options = fs::OpenOptions::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    options
+}
+
 /// Read a directory, returning an empty list if missing.
 pub fn read_dir_or_empty(dir: &Path) -> io::Result<Vec<fs::DirEntry>> {
     match fs::read_dir(dir) {

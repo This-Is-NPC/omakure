@@ -24,6 +24,7 @@
 //!
 //! [`baseline_id`]: SignedBaselineManifest::baseline_id
 
+use crate::util::bytes::ByteReader;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use k256::schnorr::{
@@ -174,7 +175,7 @@ impl SignedBaselineManifest {
         if bytes.len() > MAX_MANIFEST_BYTES {
             return Err(BaselineError::TooLarge);
         }
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = ByteReader::new(bytes, BaselineError::Invalid);
         if cursor.take(4)? != MAGIC || cursor.byte()? != VERSION || cursor.take(2)? != [0, 0] {
             return Err(BaselineError::Invalid);
         }
@@ -451,64 +452,6 @@ fn validate_entry_path(path: &str) -> Result<(), BaselineError> {
         return Err(BaselineError::Invalid);
     }
     Ok(())
-}
-
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
-
-impl<'a> Cursor<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, offset: 0 }
-    }
-
-    fn take(&mut self, length: usize) -> Result<&'a [u8], BaselineError> {
-        let end = self
-            .offset
-            .checked_add(length)
-            .ok_or(BaselineError::Invalid)?;
-        let value = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or(BaselineError::Invalid)?;
-        self.offset = end;
-        Ok(value)
-    }
-
-    fn byte(&mut self) -> Result<u8, BaselineError> {
-        Ok(*self.take(1)?.first().ok_or(BaselineError::Invalid)?)
-    }
-
-    fn u16(&mut self) -> Result<u16, BaselineError> {
-        Ok(u16::from_be_bytes(
-            self.take(2)?
-                .try_into()
-                .map_err(|_| BaselineError::Invalid)?,
-        ))
-    }
-
-    fn u64(&mut self) -> Result<u64, BaselineError> {
-        Ok(u64::from_be_bytes(
-            self.take(8)?
-                .try_into()
-                .map_err(|_| BaselineError::Invalid)?,
-        ))
-    }
-
-    fn array<const N: usize>(&mut self) -> Result<[u8; N], BaselineError> {
-        self.take(N)?.try_into().map_err(|_| BaselineError::Invalid)
-    }
-
-    fn text(&mut self, length: usize) -> Result<String, BaselineError> {
-        std::str::from_utf8(self.take(length)?)
-            .map(str::to_string)
-            .map_err(|_| BaselineError::Invalid)
-    }
-
-    fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.offset)
-    }
 }
 
 #[cfg(test)]

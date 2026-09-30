@@ -7,6 +7,7 @@
 use crate::direct_transport::validate_x25519_public;
 use crate::domain::{is_node_id, NODE_ID_BYTES};
 use crate::node_identity::NodeIdentity;
+use crate::util::bytes::ByteReader;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use k256::schnorr::{
@@ -168,7 +169,7 @@ impl SignedEnrollmentBundle {
         if bytes.len() > MAX_BUNDLE_BYTES {
             return Err(EnrollmentError::TooLarge);
         }
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = ByteReader::new(bytes, EnrollmentError::Invalid);
         if cursor.take(4)? != b"OMEB"
             || cursor.byte()? != BUNDLE_VERSION
             || cursor.take(2)? != [0, 0]
@@ -178,9 +179,9 @@ impl SignedEnrollmentBundle {
         let bundle_id = cursor.array::<REQUEST_ID_BYTES>()?;
         let authority_key_id = cursor.array::<BUNDLE_AUTHORITY_ID_BYTES>()?;
         let organization_length = usize::from(cursor.u16()?);
-        let organization = cursor.text(organization_length)?;
-        let audience_node_id = cursor.text(NODE_ID_BYTES)?;
-        let subject_node_id = cursor.text(NODE_ID_BYTES)?;
+        let organization = cursor.printable_text(organization_length)?;
+        let audience_node_id = cursor.printable_text(NODE_ID_BYTES)?;
+        let subject_node_id = cursor.printable_text(NODE_ID_BYTES)?;
         let subject_xonly = cursor.array::<IDENTITY_KEY_BYTES>()?;
         let subject_transport_x25519 = cursor.array::<TRANSPORT_KEY_BYTES>()?;
         let subject_certificate =
@@ -193,7 +194,7 @@ impl SignedEnrollmentBundle {
         let mut capabilities = Vec::with_capacity(capability_count);
         for _ in 0..capability_count {
             let length = usize::from(cursor.u16()?);
-            capabilities.push(cursor.text(length)?);
+            capabilities.push(cursor.printable_text(length)?);
         }
         let issued_at = cursor.u64()?;
         let expires_at = cursor.u64()?;
@@ -539,13 +540,13 @@ impl ManualEnrollmentRequest {
         if bytes.len() > MAX_REQUEST_BYTES {
             return Err(EnrollmentError::TooLarge);
         }
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = ByteReader::new(bytes, EnrollmentError::Invalid);
         if cursor.take(4)? != MAGIC || cursor.byte()? != VERSION {
             return Err(EnrollmentError::Invalid);
         }
         let pairing_id = cursor.array::<PAIRING_ID_BYTES>()?;
         let request_id = cursor.array::<REQUEST_ID_BYTES>()?;
-        let proposer_node_id = cursor.text(NODE_ID_BYTES)?;
+        let proposer_node_id = cursor.printable_text(NODE_ID_BYTES)?;
         let proposer_xonly = cursor.array::<IDENTITY_KEY_BYTES>()?;
         let proposer_transport_x25519 = cursor.array::<TRANSPORT_KEY_BYTES>()?;
         validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
@@ -560,7 +561,7 @@ impl ManualEnrollmentRequest {
             if length == 0 || length > MAX_CAPABILITY_BYTES {
                 return Err(EnrollmentError::Invalid);
             }
-            capabilities.push(cursor.text(length)?);
+            capabilities.push(cursor.printable_text(length)?);
         }
         let created_at = cursor.u64()?;
         let expires_at = cursor.u64()?;
@@ -710,72 +711,6 @@ fn parse_hex_array<const N: usize>(value: &str) -> Result<[u8; N], EnrollmentErr
     parse_hex(value, N)?
         .try_into()
         .map_err(|_| EnrollmentError::Invalid)
-}
-
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
-
-impl<'a> Cursor<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, offset: 0 }
-    }
-
-    fn take(&mut self, length: usize) -> Result<&'a [u8], EnrollmentError> {
-        let end = self
-            .offset
-            .checked_add(length)
-            .ok_or(EnrollmentError::Invalid)?;
-        let value = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or(EnrollmentError::Invalid)?;
-        self.offset = end;
-        Ok(value)
-    }
-
-    fn byte(&mut self) -> Result<u8, EnrollmentError> {
-        Ok(*self.take(1)?.first().ok_or(EnrollmentError::Invalid)?)
-    }
-
-    fn u16(&mut self) -> Result<u16, EnrollmentError> {
-        Ok(u16::from_be_bytes(
-            self.take(2)?
-                .try_into()
-                .map_err(|_| EnrollmentError::Invalid)?,
-        ))
-    }
-
-    fn u64(&mut self) -> Result<u64, EnrollmentError> {
-        Ok(u64::from_be_bytes(
-            self.take(8)?
-                .try_into()
-                .map_err(|_| EnrollmentError::Invalid)?,
-        ))
-    }
-
-    fn array<const N: usize>(&mut self) -> Result<[u8; N], EnrollmentError> {
-        self.take(N)?
-            .try_into()
-            .map_err(|_| EnrollmentError::Invalid)
-    }
-
-    fn text(&mut self, length: usize) -> Result<String, EnrollmentError> {
-        let value =
-            std::str::from_utf8(self.take(length)?).map_err(|_| EnrollmentError::Invalid)?;
-        if value
-            .chars()
-            .any(|character| character == '\0' || character.is_control())
-        {
-            return Err(EnrollmentError::Invalid);
-        }
-        Ok(value.to_string())
-    }
-
-    fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.offset)
-    }
 }
 
 #[cfg(test)]

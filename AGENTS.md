@@ -71,32 +71,32 @@ fixtures is never a Battery subject.
 
 ## Architecture
 
+`docs/internal/architecture.md` is the canonical module map, stack, and
+invariant list; update it with any structural change. In summary:
+
 ```text
 src/
-├── cli/                  # clap command adapters and JSON output
-│   ├── args.rs           # command tree and long-form help
-│   ├── api.rs            # authenticated HTTP adapter
-│   ├── node_service.rs   # HTTP + workers + scheduler lifecycle
-│   ├── run.rs            # direct execution
-│   ├── queue.rs          # queue producers and workers
-│   ├── history.rs        # run and trace reads
-│   ├── serve.rs          # cron scheduler
-│   ├── env.rs            # environment management
-│   ├── battery.rs        # Battery management
-│   ├── help_ai.rs        # clap-derived machine surface
-│   └── json.rs           # stable envelope/errors
-├── domain/               # pure schemas, parsing, validation, cron
-├── operations/           # shared behavior used by CLI and HTTP
-├── adapters/             # filesystem, process, env, runtime checks
-├── ports/                # repository and environment interfaces
-├── runs.rs               # SQLite state machine and trace storage
-├── run_executor.rs       # shared child lifecycle and redaction
-├── search_index.rs       # SQLite full-text search
-├── runtime.rs            # Bash/PowerShell/Python command construction
-├── workspace.rs          # one-root workspace layout
-├── auth.rs/policy.rs     # tokens and deploy policy
-├── secrets.rs/redaction.rs
-└── installer.rs          # standalone installer binary
+├── main.rs, lib.rs, bin/    # binary entry, crate surface, doc/catalog generators
+├── cli/                     # clap adapters (args, api, node_service, node, run,
+│                            #   queue, history, serve, env, battery, help_ai,
+│                            #   inventory, json, …)
+├── operations/              # protocol-neutral behavior shared by CLI and HTTP
+├── domain/                  # pure schemas, parsing, validation, cron, node config
+├── adapters/, ports/, use_cases/  # filesystem/process adapters and interfaces
+├── runs.rs, run_executor.rs # runs.sqlite state machine; shared child lifecycle
+├── runtime.rs, search_index.rs, workspace.rs
+├── auth.rs, policy.rs, secrets.rs, redaction.rs
+├── cli_http_parity.rs, operation_catalog.rs  # versioned parity and operation catalogs
+├── installer.rs             # standalone installer binary
+└── fleet planes:
+    ├── node.rs, node_identity.rs, node_transport.rs  # node state and identity
+    ├── node_registry.rs (+ health.rs)    # node.sqlite trust/health persistence
+    ├── direct_transport.rs, direct_service.rs  # Noise transport and listener
+    ├── discovery.rs                      # trust-neutral LAN discovery
+    ├── enrollment.rs, enrollment_authority.rs  # manual/signed enrollment
+    ├── health_plane/, direct_health.rs   # Health Plane domain and carriage
+    ├── remote_cue.rs                     # Cue plane receive half
+    └── baseline.rs, baseline_push.rs, baseline_publisher.rs  # Baseline plane
 ```
 
 ### Boundaries
@@ -113,13 +113,18 @@ src/
 
 ## Dependencies
 
-Retained runtime dependencies include `clap`, `clap_complete`, `serde`,
-`serde_json`, `toml`, `rusqlite`, `axum`, `tokio`, `tower`, `thiserror`, `cron`,
-`chrono`, `signal-hook`, `daemonize`, `humantime`, `dirs`, `fs2`, `argon2`,
-`subtle`, `sha2`, `rand`, and Windows-only `winreg`. The headless package must
-not reintroduce `ratatui`, `crossterm`, or `rattles`. `mlua` is declared
-deliberately and must stay: it is the embedded runtime for the `.lua` script
-kind, which is a different Lua from the removed TUI widget runtime.
+Runtime dependencies are exactly those in `Cargo.toml`: `mlua`, `serde`,
+`serde_json`, `rusqlite`, `thiserror`, `clap`, `clap_complete`, `toml`,
+`humantime`, `signal-hook`, `cron`, `chrono`, `axum`, `tokio`, `tower`,
+`serde_urlencoded`, `subtle`, `sha2`, `k256`, `argon2`, `rand`, `fs2`, `snow`,
+`hickory-resolver`, `curve25519-dalek`, `serde_jcs`, and `tempfile`; Unix-only
+`daemonize` and `libc`; Windows-only `winreg` and `windows-sys`. `clap_usage`
+and `usage-lib` are optional and enabled only by the `usage-generator` feature.
+The stack table in `docs/internal/architecture.md` records what each one is
+for. The headless package must not reintroduce `ratatui`, `crossterm`, or
+`rattles`. `mlua` is declared deliberately and must stay: it is the embedded
+runtime for the `.lua` script kind, which is a different Lua from the removed
+TUI widget runtime.
 
 ## Script schema
 

@@ -114,16 +114,21 @@ verify workspace paths or host runtimes.
 |---|---|---|
 | Language | Rust 2021 | Portable application and CLI |
 | CLI | clap 4.5, clap_complete 4.5 | Commands, help, and completions |
-| Serialization | serde, serde_json, toml | Schemas, envelopes, config, policy |
+| Serialization | serde, serde_json, toml 0.8, serde_urlencoded 0.7 | Schemas, envelopes, config, policy, HTTP query strings |
+| Canonical JSON | serde_jcs 0.2 | RFC 8785 bytes for signed envelopes and Health reports |
 | HTTP | axum 0.7, tokio 1, tower 0.5 | Authenticated management API |
-| Storage | rusqlite 0.31, bundled SQLite | Runs, queue state, traces, search index |
+| Storage | rusqlite 0.31, bundled SQLite | Runs, queue state, traces, search index, node registry |
 | Errors | thiserror 1.0 | Typed domain and application errors |
-| Scheduling | cron 0.12, chrono 0.4 | Schedule parsing and next-fire calculation |
+| Scheduling | cron 0.12, chrono 0.4, humantime 2.1 | Schedule parsing, next-fire calculation, duration flags |
 | Processes | signal-hook 0.3, daemonize 0.5 | Graceful workers and Unix daemon mode |
-| Security | argon2, subtle, sha2, rand, k256, snow | Token hashing, BIP-340 identity, Noise transport, comparison, and generation |
-| Resolution | hickory-resolver | Bounded async static-peer DNS resolution |
-| Filesystem | dirs 5, fs2 | Platform paths and file coordination |
-| Windows | winreg 0.52 | Documents path and install-path handling |
+| Script runtime | mlua 0.10 (`lua54`, `vendored`) | Embedded Lua host for `.lua` scripts |
+| Tokens | argon2 0.5, subtle 2.6, sha2 0.10, rand 0.8 | Token hashing, constant-time comparison, digests, generation |
+| Identity and transport | k256 0.14, snow 0.10, curve25519-dalek 4.1 | BIP-340 identity, Noise XX sessions, X25519 key checks |
+| Resolution | hickory-resolver 0.25 | Bounded async static-peer DNS resolution |
+| Filesystem | fs2 0.4, tempfile 3.10 | File locks, staged installs, and atomic writes |
+| Unix | libc 0.2 | Ownership, permission, and process checks |
+| Windows | winreg 0.52, windows-sys 0.61 | Install-path registry handling, ACLs, and process checks |
+| Docs generator (`usage-generator` feature) | clap_usage 5, usage-lib 6.6 (`jdx/usage` rev `9732c63`) | Usage KDL, Markdown, and roff artifacts; not in runtime builds |
 
 Direct dependencies are intentionally limited to the retained headless surface.
 The package does not declare `ratatui`, `crossterm`, or `rattles`. It does
@@ -135,6 +140,8 @@ script kind; the removed TUI widget runtime is unrelated and stays removed.
 ```text
 src/
 ├── main.rs                  CLI parsing, workspace resolution, dispatch
+├── lib.rs                   crate surface shared by the binaries and tests
+├── bin/                     cli-reference, usage-kdl, usage-docs, operation-catalog generators
 ├── cli/                     command adapters and JSON output
 │   ├── args.rs              clap command tree and long-form help
 │   ├── api.rs               authenticated Axum management server
@@ -146,7 +153,10 @@ src/
 │   ├── env.rs               managed environment commands
 │   ├── battery.rs           Battery repository commands
 │   ├── help_ai.rs           clap-derived machine surface
-│   └── json.rs              stable envelope and error codes
+│   ├── inventory.rs         Clap command inventory and generated CLI reference
+│   ├── node.rs              node, trust, enrollment, health, and baseline commands
+│   ├── json.rs              stable envelope and error codes
+│   └── …                    one adapter per remaining verb (init, trace, token, update, …)
 ├── domain/                  pure schema, parsing, validation, scheduling
 ├── operations/              protocol-neutral CLI/HTTP behavior
 │   ├── core.rs              scripts, runs, queue, and workspace operations
@@ -155,9 +165,18 @@ src/
 │   ├── envs.rs              managed environment operations
 │   ├── scripts.rs           safe tree/content operations
 │   ├── search.rs            indexed script search
-│   └── battery.rs           sync, inspect, install, and provenance
+│   ├── battery.rs           sync, inspect, install, and provenance
+│   ├── node.rs              node status, trust, enrollment, and discovery
+│   ├── health.rs            fleet-status and Signal-feed projections
+│   └── baseline.rs          baseline push, status, and rollback
 ├── adapters/                filesystem, process, environment, and checks
 ├── ports/                   repository and environment interfaces
+├── use_cases/               environment service over the environment port
+├── error.rs                 schema and environment application errors
+├── util.rs                  shared filesystem and process helpers
+├── app_meta.rs              package version constant
+├── cli_http_parity.rs       CLI/HTTP parity manifest and observable comparator
+├── operation_catalog.rs     versioned operation metadata catalog
 ├── runs.rs                  SQLite state machine and structured traces
 ├── run_executor.rs          shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index

@@ -1,11 +1,16 @@
 //! Domain layer - core types and validation logic.
 
+mod capability;
 mod node_config;
 mod node_id;
 mod parsing;
 mod schedule;
 mod schema;
 
+pub use capability::{
+    CAPABILITY_ALLOWLIST, CAPABILITY_BASELINE_PUSH, CAPABILITY_INVENTORY_HEALTH,
+    CAPABILITY_NOTIFICATIONS, CAPABILITY_REMOTE_RUN,
+};
 pub use node_config::{
     parse_node_config, DiscoverySettings, EnrollmentAuthority, NodeConfig, NodeConfigError,
     TrustedBaselinePublisher,

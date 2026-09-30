@@ -78,16 +78,6 @@ type StagedManualEnrollment = (
     String,
 );
 
-const SUPPORTED_CAPABILITIES: &[&str] = &[
-    "backup-orchestration",
-    "baseline-push",
-    "inventory-health",
-    "lost-device-revocation",
-    "notifications",
-    "remote-run",
-    "ssh-credential-rotation",
-];
-
 #[derive(Debug, Error)]
 pub enum RegistryError {
     #[error("node registry I/O error: {0}")]
@@ -3753,7 +3743,7 @@ fn validate_capabilities(capabilities: &[String]) -> Result<(), RegistryError> {
             || capability.bytes().any(|byte| {
                 !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte))
             })
-            || !SUPPORTED_CAPABILITIES.contains(&capability.as_str())
+            || !crate::domain::CAPABILITY_ALLOWLIST.contains(&capability.as_str())
         {
             return Err(RegistryError::InvalidInput(format!(
                 "unsupported or invalid capability {capability:?}"

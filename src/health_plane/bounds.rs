@@ -16,20 +16,12 @@ pub const ROLE_CONDUCTOR: i64 = 1;
 pub const ROLE_PERFORMER: i64 = 2;
 
 /// Capability required by `health_profile` and `health_pulse`.
-pub const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
+pub const CAPABILITY_PROFILE_PULSE: &str = crate::domain::CAPABILITY_INVENTORY_HEALTH;
 /// Capability required by `health_signal`.
-pub const CAPABILITY_SIGNAL: &str = "notifications";
+pub const CAPABILITY_SIGNAL: &str = crate::domain::CAPABILITY_NOTIFICATIONS;
 
 /// The frozen capability allow-list shared with the transport contract.
-pub const CAPABILITY_ALLOWLIST: [&str; 7] = [
-    "backup-orchestration",
-    "baseline-push",
-    "inventory-health",
-    "lost-device-revocation",
-    "notifications",
-    "remote-run",
-    "ssh-credential-rotation",
-];
+pub use crate::domain::CAPABILITY_ALLOWLIST;
 
 /// The frozen runtime-name allow-list, in the sorted order the closed schema
 /// requires.

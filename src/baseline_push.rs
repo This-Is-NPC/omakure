@@ -44,10 +44,7 @@ pub const KIND_PUSH: &str = "baseline_push";
 pub const KIND_ACK: &str = "baseline_ack";
 
 /// The capability a peer must hold to push a baseline.
-///
-/// Already in the frozen transport allow-list, so nothing about the capability
-/// vocabulary changes here.
-pub const CAPABILITY_BASELINE_PUSH: &str = "baseline-push";
+pub use crate::domain::CAPABILITY_BASELINE_PUSH;
 
 /// The most script content one push may carry, in raw bytes before hex.
 ///

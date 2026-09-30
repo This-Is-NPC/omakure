@@ -45,15 +45,6 @@ pub const BUNDLE_FUTURE_SKEW_SECONDS: u64 = 300;
 pub const BUNDLE_MAX_LIFETIME_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 const MAGIC: &[u8; 4] = b"OMMA";
-const SUPPORTED_CAPABILITIES: &[&str] = &[
-    "backup-orchestration",
-    "baseline-push",
-    "inventory-health",
-    "lost-device-revocation",
-    "notifications",
-    "remote-run",
-    "ssh-credential-rotation",
-];
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum EnrollmentError {
@@ -693,7 +684,7 @@ pub fn validate_capabilities(capabilities: &[String]) -> Result<(), EnrollmentEr
             || capability.bytes().any(|byte| {
                 !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte))
             })
-            || !SUPPORTED_CAPABILITIES.contains(&capability.as_str())
+            || !crate::domain::CAPABILITY_ALLOWLIST.contains(&capability.as_str())
             || previous.is_some_and(|previous: &str| previous >= capability.as_str())
         {
             return Err(EnrollmentError::Invalid);

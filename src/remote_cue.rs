@@ -114,11 +114,11 @@ impl CueCode {
     }
 }
 
-/// The capability required to send a Cue at all.
-pub const CAPABILITY_REMOTE_RUN: &str = "remote-run";
 /// Required too, because a peer that cannot receive an outcome must not be able
 /// to create work whose result is unobservable.
-pub const CAPABILITY_NOTIFICATIONS: &str = "notifications";
+pub use crate::domain::CAPABILITY_NOTIFICATIONS;
+/// The capability required to send a Cue at all.
+pub use crate::domain::CAPABILITY_REMOTE_RUN;
 
 /// Serialize authorization changes with the final worker check and process spawn.
 pub struct ExecutionGuard {

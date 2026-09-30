@@ -40,12 +40,13 @@ rather than mitigating it:
 `HealthKind` is closed at five (`src/health_plane/model.rs:91`) and stays closed.
 Cues use a `cue_` kind namespace with a sibling signer in `direct_transport`,
 reusing the private kind-agnostic `sign_envelope`
-(`src/direct_transport.rs:1263`). `sign_health_envelope` (`:1150`) keeps refusing
+(`src/direct_transport/envelope.rs:163`). `sign_health_envelope`
+(`src/direct_transport/carriage.rs:108`) keeps refusing
 any kind without the `health_` prefix, so it never becomes a generic signing
 oracle for a plane it does not govern.
 
 The inner frame is unchanged: `ENVELOPE_KIND = 1`
-(`src/direct_transport.rs:43`). No transport code changes.
+(`src/direct_transport/mod.rs:56`). No transport code changes.
 
 ## Version and Domains
 

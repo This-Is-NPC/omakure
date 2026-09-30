@@ -191,7 +191,7 @@ src/
 ├── node_identity.rs         BIP-340 machine identity and node ID derivation
 ├── node_registry/           node-owned trust and delivery persistence boundary
 │   └── health/              Health Plane reads and receive-order application
-├── direct_transport.rs      Noise framing, certificates, envelopes, and replay limits
+├── direct_transport/        Noise framing, certificates, envelopes, and replay limits
 ├── direct_service/          production direct listener, peer admission, and outboxes
 ├── direct_health.rs         Health Plane carriage over an established direct session
 ├── health_plane/            protocol-neutral Health Plane domain and operations

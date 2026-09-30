@@ -323,7 +323,7 @@ fn node_id(scalar_hex: &str) -> String {
 
 /// Build the frozen seven-field direct envelope and sign it with the frozen
 /// BIP-340 construction. This mirrors the private `sign_envelope` in
-/// `src/direct_transport.rs` byte for byte and adds no production surface.
+/// `src/direct_transport/envelope.rs` byte for byte and adds no production surface.
 fn sign_envelope(
     scalar_hex: &str,
     kind: &str,

@@ -5,15 +5,20 @@
 
 use omakure::cli_http_parity::current_cli_ids;
 use std::{collections::BTreeSet, env, fs};
+use usage_artifacts::{compare_file, normalize, write_file};
 use usage_docs::{
     docs::{manpage::ManpageRenderer, markdown::MarkdownRenderer},
     spec::cmd::SpecExample,
     Spec, SpecAdmonition, SpecArg, SpecChoice, SpecCommand, SpecFlag,
 };
 
+#[path = "usage_artifacts/mod.rs"]
+mod usage_artifacts;
+
 const KDL_PATH: &str = "docs/usage/omakure.kdl";
 const MARKDOWN_PATH: &str = "docs/usage/omakure.md";
 const MANPAGE_PATH: &str = "docs/usage/omakure.1";
+const REGENERATE: &str = "scripts/tasks/usage-docs --write";
 
 fn replace_newline_placeholder(value: &mut String) {
     *value = value.replace("{n}", "\n");
@@ -172,7 +177,7 @@ fn render_artifacts() -> Result<(String, String), String> {
     let manpage = ManpageRenderer::new(spec)
         .render()
         .map_err(|error| format!("cannot render manpage: {error}"))?;
-    Ok((normalize(markdown), normalize(manpage)))
+    Ok((normalize(&markdown), normalize(&manpage)))
 }
 
 fn write_artifacts() {
@@ -183,34 +188,8 @@ fn write_artifacts() {
 
 fn check_artifacts() {
     let (markdown, manpage) = render_artifacts().unwrap_or_else(|error| fail("check", error));
-    compare_file(MARKDOWN_PATH, &markdown).unwrap_or_else(|error| fail("check", error));
-    compare_file(MANPAGE_PATH, &manpage).unwrap_or_else(|error| fail("check", error));
-}
-
-fn normalize(value: String) -> String {
-    let normalized = value.replace("\r\n", "\n").replace('\r', "\n");
-    let mut lines = normalized
-        .lines()
-        .map(str::trim_end)
-        .collect::<Vec<_>>()
-        .join("\n");
-    lines.push('\n');
-    lines
-}
-
-fn compare_file(path: &str, expected: &str) -> Result<(), String> {
-    let actual =
-        fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
-    if actual != expected {
-        return Err(format!(
-            "{path} is stale; run `scripts/tasks/usage-docs --write`"
-        ));
-    }
-    Ok(())
-}
-
-fn write_file(path: &str, contents: &str) -> Result<(), String> {
-    fs::write(path, contents).map_err(|error| format!("cannot write {path}: {error}"))
+    compare_file(MARKDOWN_PATH, &markdown, REGENERATE).unwrap_or_else(|error| fail("check", error));
+    compare_file(MANPAGE_PATH, &manpage, REGENERATE).unwrap_or_else(|error| fail("check", error));
 }
 
 fn fail(operation: &str, error: String) -> ! {
@@ -273,18 +252,5 @@ mod tests {
             .unwrap()
             .contains(original_json_shape));
         assert_eq!(spec.cmd.name, original_name);
-    }
-
-    #[test]
-    fn stale_file_comparison_fails_closed() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("artifact");
-        fs::write(&path, "stale\n").unwrap();
-        assert!(compare_file(path.to_str().unwrap(), "fresh\n").is_err());
-    }
-
-    #[test]
-    fn normalization_removes_host_dependent_line_endings() {
-        assert_eq!(normalize("a  \r\nb\r".into()), "a\nb\n");
     }
 }

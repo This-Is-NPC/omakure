@@ -965,6 +965,29 @@ mod tests {
     }
 
     #[test]
+    fn matches_all_tags_is_a_case_sensitive_and_over_every_required_tag() {
+        let entry = ScriptSummary {
+            absolute_path: "/x/a.sh".into(),
+            relative_path: "a.sh".into(),
+            name: Some("a".into()),
+            description: None,
+            tags: vec!["Prefeitura".into(), "sp".into()],
+            field_count: 0,
+            schema_error: None,
+        };
+        assert!(matches_all_tags(&entry, &[]));
+        assert!(matches_all_tags(
+            &entry,
+            &["Prefeitura".into(), "sp".into()]
+        ));
+        assert!(!matches_all_tags(
+            &entry,
+            &["Prefeitura".into(), "rj".into()]
+        ));
+        assert!(!matches_all_tags(&entry, &["prefeitura".into()]));
+    }
+
+    #[test]
     fn describe_script_returns_schema_payload() {
         let dir = TempDir::new().unwrap();
         let ws = workspace_in(&dir);

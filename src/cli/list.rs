@@ -42,59 +42,9 @@ pub fn run(
     Ok(())
 }
 
-/// Test/internal helper: returns true when `entry` carries every tag in
-/// `required` (case-sensitive literal AND match). When `required` is
-/// empty, every entry passes.
-#[cfg(test)]
-pub(crate) fn matches_all_tags(entry: &ScriptListEntry, required: &[String]) -> bool {
-    if required.is_empty() {
-        return true;
-    }
-    required.iter().all(|t| entry.tags.iter().any(|et| et == t))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn entry_with_tags(tags: &[&str]) -> ScriptListEntry {
-        ScriptListEntry {
-            absolute_path: "/x/a.sh".into(),
-            relative_path: "a.sh".into(),
-            name: Some("a".into()),
-            description: None,
-            tags: tags.iter().map(|t| (*t).to_string()).collect(),
-            field_count: 0,
-            schema_error: None,
-        }
-    }
-
-    #[test]
-    fn matches_all_tags_no_required_passes() {
-        let e = entry_with_tags(&["foo"]);
-        assert!(matches_all_tags(&e, &[]));
-    }
-
-    #[test]
-    fn matches_all_tags_single_required() {
-        let e = entry_with_tags(&["prefeitura"]);
-        assert!(matches_all_tags(&e, &["prefeitura".into()]));
-        assert!(!matches_all_tags(&e, &["other".into()]));
-    }
-
-    #[test]
-    fn matches_all_tags_multi_required_and_semantics() {
-        let e = entry_with_tags(&["prefeitura", "sp", "production"]);
-        assert!(matches_all_tags(&e, &["prefeitura".into(), "sp".into()]));
-        assert!(!matches_all_tags(&e, &["prefeitura".into(), "rj".into()]));
-    }
-
-    #[test]
-    fn matches_all_tags_case_sensitive() {
-        let e = entry_with_tags(&["Prefeitura"]);
-        assert!(!matches_all_tags(&e, &["prefeitura".into()]));
-        assert!(matches_all_tags(&e, &["Prefeitura".into()]));
-    }
 
     fn write_script(dir: &std::path::Path, name: &str, schema: Option<&str>) {
         let body = match schema {

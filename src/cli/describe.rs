@@ -75,48 +75,6 @@ fn is_missing_schema_message(message: &str) -> bool {
     message.contains("Schema block not found") || message.contains("Schema JSON object not found")
 }
 
-#[cfg(test)]
-pub(crate) fn build_payload(
-    script_path: &std::path::Path,
-    root: &std::path::Path,
-    schema: &crate::domain::Schema,
-) -> DescribePayload {
-    let mut fields: Vec<DescribeField> = schema
-        .fields
-        .iter()
-        .map(|f| DescribeField {
-            name: f.name.clone(),
-            prompt: f.prompt.clone(),
-            kind: f.kind.clone(),
-            order: f.order.unwrap_or(0),
-            required: f.required.unwrap_or(false),
-            arg: f.arg.clone(),
-            default: if f.is_secret() {
-                None
-            } else {
-                f.default.clone()
-            },
-            choices: f.choices.clone(),
-        })
-        .collect();
-    fields.sort_by_key(|f| f.order);
-
-    let absolute_path = std::fs::canonicalize(script_path)
-        .unwrap_or_else(|_| script_path.to_path_buf())
-        .to_string_lossy()
-        .to_string();
-    let relative_path = logical_relative_path(script_path, root);
-
-    DescribePayload {
-        absolute_path,
-        relative_path,
-        name: schema.name.clone(),
-        description: schema.description.clone(),
-        tags: schema.tags.clone().unwrap_or_default(),
-        fields,
-    }
-}
-
 fn payload_from_description(description: ScriptDescription) -> DescribePayload {
     DescribePayload {
         absolute_path: description.absolute_path,
@@ -144,23 +102,6 @@ fn payload_from_description(description: ScriptDescription) -> DescribePayload {
             })
             .collect(),
     }
-}
-
-#[cfg(test)]
-fn logical_relative_path(path: &std::path::Path, root: &std::path::Path) -> String {
-    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
-    let root_text = canonical_root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
 }
 
 fn print_human_payload(payload: &DescribePayload) {
@@ -230,38 +171,33 @@ pub fn sample_envelope() -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{Field, Schema};
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
-    fn test_schema() -> Schema {
-        Schema {
-            name: "Deploy".to_string(),
-            description: Some("Deploy the app".to_string()),
-            tags: Some(vec!["ops".to_string()]),
-            fields: vec![Field {
-                name: "target".to_string(),
-                prompt: Some("Target env".to_string()),
-                kind: "string".to_string(),
-                order: Some(1),
-                required: Some(true),
-                default: None,
-                choices: Some(vec!["dev".to_string(), "prod".to_string()]),
-                arg: Some("--target".to_string()),
-            }],
-            outputs: None,
-            queue: None,
-            schedule: None,
-        }
+    fn describe_payload(schema_json: &str) -> DescribePayload {
+        let tmp = TempDir::new().unwrap();
+        write_schema_script(
+            &tmp,
+            "deploy.sh",
+            &format!(
+                "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {schema_json}\n# OMAKURE_SCHEMA_END\n"
+            ),
+        );
+        let description = core::describe_script(
+            &Workspace::new(tmp.path().to_path_buf()),
+            DescribeScriptRequest {
+                script: "deploy.sh".into(),
+            },
+        )
+        .unwrap();
+        payload_from_description(description)
     }
 
     #[test]
-    fn test_build_payload_structure() {
-        let tmp = TempDir::new().unwrap();
-        let script = tmp.path().join("deploy.sh");
-        std::fs::write(&script, "#!/bin/bash").unwrap();
-
-        let payload = build_payload(&script, tmp.path(), &test_schema());
+    fn payload_carries_the_schema_structure() {
+        let payload = describe_payload(
+            r#"{"Name":"Deploy","Description":"Deploy the app","Tags":["ops"],"Fields":[{"Name":"target","Prompt":"Target env","Type":"string","Order":1,"Required":true,"Choices":["dev","prod"],"Arg":"--target"}]}"#,
+        );
         assert_eq!(payload.name, "Deploy");
         assert_eq!(payload.description, Some("Deploy the app".to_string()));
         assert_eq!(payload.tags, vec!["ops"]);
@@ -276,36 +212,17 @@ mod tests {
     }
 
     #[test]
-    fn build_payload_marks_secret_fields_without_returning_values() {
-        let tmp = TempDir::new().unwrap();
-        let script = tmp.path().join("deploy.sh");
-        std::fs::write(&script, "#!/bin/bash").unwrap();
-
-        let mut schema = test_schema();
-        schema.fields[0].kind = "secret".to_string();
-        schema.fields[0].default = Some("supersecret".to_string());
-
-        let payload = build_payload(&script, tmp.path(), &schema);
+    fn payload_marks_secret_fields_without_returning_values() {
+        let payload = describe_payload(
+            r#"{"Name":"Deploy","Fields":[{"Name":"token","Type":"secret","Default":"supersecret"}]}"#,
+        );
         assert_eq!(payload.fields[0].kind, "secret");
         assert_eq!(payload.fields[0].default, None);
     }
 
     #[test]
-    fn test_build_payload_no_fields() {
-        let tmp = TempDir::new().unwrap();
-        let script = tmp.path().join("simple.sh");
-        std::fs::write(&script, "#!/bin/bash").unwrap();
-
-        let schema = Schema {
-            name: "Simple".to_string(),
-            description: None,
-            tags: None,
-            fields: vec![],
-            outputs: None,
-            queue: None,
-            schedule: None,
-        };
-        let payload = build_payload(&script, tmp.path(), &schema);
+    fn payload_without_fields_is_empty() {
+        let payload = describe_payload(r#"{"Name":"Simple","Fields":[]}"#);
         assert_eq!(payload.name, "Simple");
         assert!(payload.description.is_none());
         assert!(payload.tags.is_empty());
@@ -381,16 +298,6 @@ mod tests {
         )
         .unwrap_err();
         assert!(!err.to_string().is_empty());
-    }
-
-    #[test]
-    fn build_payload_normalizes_windows_relative_separators() {
-        let root = PathBuf::from(r"C:\workspace\scripts");
-        let script = PathBuf::from(r"C:\workspace\scripts\tools\deploy.sh");
-
-        let payload = build_payload(&script, &root, &test_schema());
-
-        assert_eq!(payload.relative_path, "tools/deploy.sh");
     }
 
     #[test]

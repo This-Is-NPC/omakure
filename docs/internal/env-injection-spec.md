@@ -218,7 +218,7 @@ it**:
    `run_executor.rs` (`command.spawn()`); the env exists solely inside
    the child process from that point on.
 
-3. **Persistence point (env-value-free by construction)** — `src/runs.rs`,
+3. **Persistence point (env-value-free by construction)** — `src/runs/enqueue.rs`,
    `insert_run(conn, row)` executes `INSERT INTO runs (...)`. The `runs`
    table schema has columns for `args_json, actor, reason, state, ...,
    stdout, stderr, error, omakure_version` and so on — **there is no env value

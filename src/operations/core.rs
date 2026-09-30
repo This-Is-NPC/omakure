@@ -340,7 +340,7 @@ pub fn enqueue_run_with_access(
 /// * secret access is an explicit empty policy, meaning deny-all.
 ///
 /// The second is why this is a function and not a parameter. `None` writes
-/// ALLOW-ALL (`runs.rs`), and a policy *lookup error* also grants allow-all
+/// ALLOW-ALL (`runs/`), and a policy *lookup error* also grants allow-all
 /// (`run_executor.rs`), so a caller who forgot the field would hand a remote
 /// instruction every secret the node holds. Here there is no field to forget:
 /// the signature cannot express allow-all.

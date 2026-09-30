@@ -91,7 +91,7 @@ access paths are the documented verbs:
 - reads: `omakure history list|show|stats|traces`, `omakure queue stats`
 
 This is an architectural rule, not a soft convention. Every code path
-in the omakure binary that touches `runs.sqlite` lives in `src/runs.rs`
+in the omakure binary that touches `runs.sqlite` lives in `src/runs/`
 and is the only writer in the codebase. Scripts launched by
 `omakure run` or `omakure queue worker` reach the database **only** by
 re-executing the omakure binary (typically via `omakure trace`), which
@@ -169,7 +169,7 @@ filesystem attribute on each invocation.
 
 This is the trust boundary: anything that wants to write the audit
 log must `execve` the omakure binary, which means it goes through
-clap argument parsing, the typed `runs.rs` helpers, and the JSON
+clap argument parsing, the typed `runs/` helpers, and the JSON
 envelope contract. There is no "write a row directly" path.
 
 ## JSON envelope
@@ -539,7 +539,7 @@ failed → dead_letter
 timed_out → dead_letter
 ```
 
-Any other transition is rejected by `runs.rs` and surfaces as
+Any other transition is rejected by `runs/` and surfaces as
 `error.code = "invalid_argument"` to the caller.
 
 `omakure run` is a synchronous fast path: it inserts the row directly

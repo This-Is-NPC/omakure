@@ -19,9 +19,9 @@ must be updated in the same change.
 | FR-009 | Bash, PowerShell, and Python commands resolve interpreters and preserve injected `PATH` semantics; `.lua` resolves no interpreter at all and re-executes the binary as an embedded Lua host. | `src/runtime.rs`, `src/adapters/script_runner.rs` |
 | FR-010 | Active and per-run environment values are injected with reserved Omakure variables last; sensitive values are masked and not persisted. | `src/adapters/environments.rs`, `src/run_executor.rs`, `src/redaction.rs` |
 | FR-011 | Named environments can be listed, created, shown, set, removed, replaced, activated, deactivated, and deleted through CLI and HTTP. | `src/cli/env.rs`, `src/operations/envs.rs` |
-| FR-012 | Runs are stored in SQLite with state, actor, reason, args, output, timing, trigger, and schedule provenance. | `src/runs.rs` |
-| FR-013 | Queue producers add, cancel, dead-letter, and report jobs; workers claim jobs atomically, heartbeat leases, honor timeouts, and drain on signals. | `src/cli/queue.rs`, `src/runs.rs`, `src/run_executor.rs` |
-| FR-014 | History lists, shows, tails, aggregates, and filters runs; trace events can be written from a child and read incrementally. | `src/cli/history.rs`, `src/cli/trace.rs`, `src/runs.rs` |
+| FR-012 | Runs are stored in SQLite with state, actor, reason, args, output, timing, trigger, and schedule provenance. | `src/runs/` |
+| FR-013 | Queue producers add, cancel, dead-letter, and report jobs; workers claim jobs atomically, heartbeat leases, honor timeouts, and drain on signals. | `src/cli/queue.rs`, `src/runs/`, `src/run_executor.rs` |
+| FR-014 | History lists, shows, tails, aggregates, and filters runs; trace events can be written from a child and read incrementally. | `src/cli/history.rs`, `src/cli/trace.rs`, `src/runs/` |
 | FR-015 | Schema schedules accept supported cron forms, enqueue due runs every five seconds, skip overlap, and log lifecycle/errors. | `src/domain/schedule.rs`, `src/cli/serve.rs` |
 | FR-016 | Linux systemd user lifecycle operations install, uninstall, and report the per-workspace scheduler service. | `src/cli/serve_autostart.rs`, `src/cli/serve.rs` |
 | FR-017 | Batteries can be registered, synced, inspected, listed, installed with validation/provenance, and removed; installation is Unix-only and may be initiated locally by the CLI or authenticated HTTP, never by a peer or Cue; cached content is untrusted. | `src/cli/battery.rs`, `src/operations/battery/` |
@@ -47,7 +47,7 @@ must be updated in the same change.
 |---|---|---|
 | NFR-001 | Linux, macOS, and Windows builds use conditional platform adapters for paths, daemonization, signals, and services. | `src/main.rs`, `src/cli/serve.rs`, `src/cli/serve_autostart.rs`, `Cargo.toml` |
 | NFR-002 | CLI and HTTP behavior remains protocol-neutral in `operations/`; adapters do not duplicate business rules. | `src/operations/`, `src/cli/`, `src/cli/api/` |
-| NFR-003 | SQLite uses WAL/busy-timeout behavior for concurrent local readers and writers; one workspace remains single-host storage. | `src/runs.rs`, `src/search_index.rs` |
+| NFR-003 | SQLite uses WAL/busy-timeout behavior for concurrent local readers and writers; one workspace remains single-host storage. | `src/runs/`, `src/search_index.rs` |
 | NFR-004 | HTTP request bodies and script/tree responses are bounded, and unsafe paths/symlinks/metadata paths are rejected. | `src/cli/api/`, `src/operations/scripts.rs` |
 | NFR-005 | Bearer tokens are hashed, scopes are explicit, token values are redacted from logs/responses, and auth failures do not reveal secrets. | `src/auth.rs`, `src/cli/api/` |
 | NFR-006 | Release CI tests the eight x86_64/aarch64 target assets, denies clippy warnings, checks formatting, and verifies binary-only archives; GitHub generates release notes from commits. | `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `tests/packaging_smoke.rs` |
@@ -55,7 +55,7 @@ must be updated in the same change.
 | NFR-008 | Linux CI runs the bounded four-service transport certification; Linux, macOS, and Windows CI run native protocol/build/lifecycle coverage without Docker assumptions. | `scripts/tasks/cert/transport`, `.github/workflows/ci.yml` |
 | NFR-009 | Linux CI runs the bounded four-node Health Plane certification over production Noise, with management HTTP loopback-only so it can never be the node-to-node data path; macOS and Windows CI run the native Health Plane protocol, schema, and lifecycle suites without Docker assumptions. | `scripts/tasks/cert/health`, `ci/compose/compose.health-plane-certification.e2e.yaml`, `tests/docker_health_plane_adversary.rs`, `tests/docker_health_plane_exhaustion.rs`, `.github/workflows/ci.yml` |
 | NFR-010 | Every certification wait, retry, Docker command, curl, and sqlite query is explicitly bounded, and cleanup is verified after success, failure, interrupt, and partial startup; inspection errors fail closed. | `scripts/tasks/cert/health`, `scripts/tasks/cert/health-cleanup` |
-| NFR-011 | A Cue-origin run executes at most once: it is excluded from the worker lease steal, its run id is the primary key derived from the Cue id, and a run abandoned by a crashed worker is resolved to a terminal state without re-executing. | `src/runs.rs`, `src/cli/queue.rs` |
+| NFR-011 | A Cue-origin run executes at most once: it is excluded from the worker lease steal, its run id is the primary key derived from the Cue id, and a run abandoned by a crashed worker is resolved to a terminal state without re-executing. | `src/runs/`, `src/cli/queue.rs` |
 | NFR-012 | Baseline push, drift detection, and verified rollback are proved on the packaged release image across three containers through the shipped read surfaces only, in the existing `docker-smoke` job. | `.github/workflows/ci.yml`, `Dockerfile` |
 
 ## Business rules
@@ -65,8 +65,8 @@ must be updated in the same change.
 | BR-001 | `.history`, `.git`, and `.omakure` metadata are excluded from script discovery. | `src/adapters/workspace_repository.rs` |
 | BR-002 | Schema markers and field names use extension comment syntax (`#` for Bash and Python, `#` or `;` for PowerShell, `--` for Lua) and PascalCase JSON keys. | `src/domain/parsing.rs`, `src/domain/schema.rs` |
 | BR-003 | Scheduled runs use declared field defaults; missing defaults are omitted rather than blocking the scheduler. | `src/cli/serve.rs` |
-| BR-004 | Scheduler overlap is keyed by canonical script path and cron expression. | `src/cli/serve.rs`, `src/runs.rs` |
-| BR-005 | Secret schema fields cannot declare choices; plaintext secret values are redacted while provider references can be retained. | `src/domain/schema.rs`, `src/secrets.rs`, `src/runs.rs` |
+| BR-004 | Scheduler overlap is keyed by canonical script path and cron expression. | `src/cli/serve.rs`, `src/runs/` |
+| BR-005 | Secret schema fields cannot declare choices; plaintext secret values are redacted while provider references can be retained. | `src/domain/schema.rs`, `src/secrets.rs`, `src/runs/` |
 | BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor.rs` |
 | BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery/`, `src/cli/api/` |
 | BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api/`, `src/policy.rs` |

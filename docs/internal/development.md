@@ -157,7 +157,7 @@ only under their documented preconditions.
 - `src/operations/`: shared behavior called by CLI and HTTP adapters.
 - `src/cli/`: clap commands, JSON envelopes, API/node-service lifecycle, workers,
   scheduler, history, and local lifecycle commands.
-- `src/runs.rs`: SQLite run state machine and trace storage.
+- `src/runs/`: SQLite run state machine and trace storage.
 - `src/run_executor.rs`: one execution path for direct, queued, and scheduled runs.
 - `src/adapters/`: filesystem repository, process runner, environments, and
   runtime checks.

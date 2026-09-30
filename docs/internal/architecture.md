@@ -178,7 +178,7 @@ src/
 ├── app_meta.rs              package version constant
 ├── cli_http_parity.rs       CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog.rs     versioned operation metadata catalog
-├── runs.rs                  SQLite state machine and structured traces
+├── runs/                    SQLite state machine and structured traces
 ├── run_executor.rs          shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index
 ├── runtime.rs               Script-kind detection and command construction
@@ -215,7 +215,7 @@ src/
 
 - `domain/` is I/O-free. `operations/` owns validation and stable errors;
   CLI and HTTP only parse/render requests and responses.
-- `runs.rs` is the sole owner of `runs.sqlite`. The state machine allows
+- `runs/` is the sole owner of `runs.sqlite`. The state machine allows
   `queued`, `running`, `completed`, `failed`, `cancelled`, `timed_out`, and
   `dead_letter` with a closed transition graph.
 - Direct runs, queue workers, and scheduled runs all use
@@ -227,7 +227,7 @@ src/
   other routes require bearer auth and policy scopes.
 - Schedules are declared in script schemas. `serve` scans every five seconds,
   prevents overlapping fires, and records scheduler provenance in SQLite.
-- Scheduler run-table reads are exposed by the tested `runs.rs` APIs
+- Scheduler run-table reads are exposed by the tested `runs/` APIs
   `last_scheduled_fire_ms` and `has_live_scheduled_run`; `src/cli/serve.rs`
   only discovers schedules and enqueues due work.
 - `tests/architecture_contract.rs` parses handwritten Rust with the pinned

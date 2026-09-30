@@ -83,7 +83,7 @@ src/
 ├── operations/              # protocol-neutral behavior shared by CLI and HTTP
 ├── domain/                  # pure schemas, parsing, validation, cron, node config
 ├── adapters/, ports/, use_cases/  # filesystem/process adapters and interfaces
-├── runs.rs, run_executor.rs # runs.sqlite state machine; shared child lifecycle
+├── runs/, run_executor.rs   # runs.sqlite state machine; shared child lifecycle
 ├── runtime.rs, search_index.rs, workspace.rs
 ├── auth.rs, policy.rs, secrets.rs, redaction.rs
 ├── cli_http_parity.rs, operation_catalog.rs  # versioned parity and operation catalogs
@@ -108,7 +108,7 @@ src/
   SQLite directly.
 - Direct runs, queue workers, and scheduled runs must use
   `run_executor::execute_with_heartbeat`.
-- `runs.rs` is the sole owner of `.history/runs.sqlite` access.
+- `runs/` is the sole owner of `.history/runs.sqlite` access.
 - Keep Omakure-reserved variables and secret redaction rules centralized.
 
 ## Dependencies

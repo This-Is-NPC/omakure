@@ -211,10 +211,10 @@ elimination.
 
 A Cue-origin run row is written with an explicit **deny-all** secret policy:
 `allowed_secret_refs: Some(vec![])`. Empty already means deny-all
-(`src/runs.rs:897-907`).
+(`src/runs/enqueue.rs:372-378`).
 
 `None` must never be used for a Cue-origin run. `None` writes
-`ALLOW_ALL_SECRET_REFS_POLICY` (`src/runs.rs:819-825`), and
+`ALLOW_ALL_SECRET_REFS_POLICY` (`src/runs/enqueue.rs:131-138`), and
 `src/run_executor.rs:399` returns `SecretAccess::allow_all()` both when the
 policy row is missing **and when the lookup errors**. A Cue "carrying no secrets"
 written the obvious way would therefore receive *every* secret the node holds,
@@ -278,7 +278,7 @@ outbox and does not amend [Explicitly Out of Scope](#explicitly-out-of-scope).
 
 The local run id is a deterministic function of the `cue_id` under the
 run-id derivation domain. `runs.run_id` is a `TEXT PRIMARY KEY`
-(`src/runs.rs:493`), so the database is the durable at-most-once key: a duplicate
+(`src/runs/open.rs:67`), so the database is the durable at-most-once key: a duplicate
 `cue_dispatch` collides on insert and is answered from the existing row rather
 than starting a second run.
 
@@ -291,7 +291,7 @@ needs no new field on any message.
 A Cue-origin run left `running` by a crash is **never re-claimed and never
 re-executed**.
 
-`claim_next` (`src/runs.rs:965`) currently re-claims any `running` row whose
+`claim_next` (`src/runs/lifecycle.rs:21`) currently re-claims any `running` row whose
 lease expired after `HEARTBEAT_MS = 60_000`. That is correct for a queued job and
 wrong for a Cue: it silently converts at-most-once into at-least-once, and the
 remote caller has no way to know a side effect happened twice. `RunTrigger::Cue`

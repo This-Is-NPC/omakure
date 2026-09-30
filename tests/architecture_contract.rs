@@ -136,7 +136,7 @@ impl<'ast> Visit<'ast> for ContractVisitor {
         if self.rule == Rule::RunsSql {
             if let Lit::Str(value) = literal {
                 if contains_run_table_sql(&value.value()) {
-                    self.record("ARCH-RUNS-SQL", "run-table SQL belongs only to runs.rs");
+                    self.record("ARCH-RUNS-SQL", "run-table SQL belongs only to runs/");
                 }
             }
         }
@@ -150,7 +150,7 @@ impl<'ast> Visit<'ast> for ContractVisitor {
             // remaining conservative for non-SQL macros.
             let fragments = node.tokens.to_string().replace('"', " ");
             if contains_run_table_sql(&fragments) {
-                self.record("ARCH-RUNS-SQL", "run-table SQL belongs only to runs.rs");
+                self.record("ARCH-RUNS-SQL", "run-table SQL belongs only to runs/");
             }
         }
         visit::visit_macro(self, node);
@@ -435,7 +435,7 @@ fn production_architecture_boundaries_are_clean() {
     }
 
     for path in source_files(&src) {
-        if path == src.join("runs.rs") {
+        if path.starts_with(src.join("runs")) {
             continue;
         }
         let display = path.strip_prefix(root).unwrap().display().to_string();
@@ -446,7 +446,7 @@ fn production_architecture_boundaries_are_clean() {
                 .findings
                 .iter()
                 .all(|finding| finding.rule != "ARCH-RUNS-SQL"),
-            "run-table SQL outside runs.rs in {display}: {:?}",
+            "run-table SQL outside runs/ in {display}: {:?}",
             contract.findings
         );
     }

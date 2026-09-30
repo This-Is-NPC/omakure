@@ -7,7 +7,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::util::read_dir_or_empty;
+use crate::util::fs::read_dir_or_empty;
 pub struct FsWorkspaceRepository {
     root: PathBuf,
 }

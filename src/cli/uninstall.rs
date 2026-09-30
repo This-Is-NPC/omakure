@@ -1,5 +1,5 @@
 use crate::cli::args::UninstallArgs;
-use crate::util::ps_quote;
+use crate::util::exec::ps_quote;
 use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};

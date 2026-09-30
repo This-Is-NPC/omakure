@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::{AppResult, EnvironmentError};
 pub use crate::ports::{EnvFile, EnvironmentConfig};
 use crate::ports::{EnvPreview, EnvironmentRepository};
-use crate::util::{read_dir_or_empty, read_file_if_exists};
+use crate::util::fs::{read_dir_or_empty, read_file_if_exists};
 
 pub(crate) const MASKED_ENV_VALUE: &str = "****";
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);

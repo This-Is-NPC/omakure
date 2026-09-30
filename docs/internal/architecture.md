@@ -173,7 +173,7 @@ src/
 ├── ports/                   repository and environment interfaces
 ├── use_cases/               environment service over the environment port
 ├── error.rs                 schema and environment application errors
-├── util.rs                  shared filesystem and process helpers
+├── util/                    shared filesystem, process, and encoding helpers
 ├── app_meta.rs              package version constant
 ├── cli_http_parity.rs       CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog.rs     versioned operation metadata catalog

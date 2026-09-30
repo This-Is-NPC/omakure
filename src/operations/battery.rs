@@ -492,7 +492,7 @@ fn prepare_git_askpass(
         ));
     }
     // Unique per-sync directory on tmpfs (/dev/shm on Linux), never on workspace overlay.
-    let temp = crate::util::generated_executable_tempdir().map_err(|err| {
+    let temp = crate::util::exec::generated_executable_tempdir().map_err(|err| {
         OperationError::new(
             OperationErrorCode::IoFailed,
             format!("failed to create askpass temp directory: {err}"),

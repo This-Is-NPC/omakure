@@ -1,5 +1,5 @@
 use crate::cli::args::UpdateArgs;
-use crate::util::ps_quote;
+use crate::util::exec::ps_quote;
 use serde_json::Value;
 use std::env;
 use std::error::Error;

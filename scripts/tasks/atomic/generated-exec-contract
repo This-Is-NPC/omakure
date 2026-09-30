@@ -22,7 +22,7 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 #   src/node_identity.rs              TempDir::new + fs::set_permissions in test fixtures only
 #   src/node_registry.rs              TempDir::new + fs::set_permissions in test fixtures only
 #   src/operations/node.rs            TempDir::new + fs::set_permissions in test fixtures only
-#   src/util.rs                       canonical generated_executable_tempdir + set_executable_permissions
+#   src/util/fs.rs                    canonical set_executable_permissions
 #   src/cli/init.rs                   init chmods the created script; TempDir tokens are test fixtures
 #   src/cli/update.rs                 update chmods the installed binary; TempDir tokens are test install roots
 #   src/operations/battery.rs         install keeps the source script's mode via fchmod on the temp descriptor; TempDir tokens are test fixtures
@@ -65,8 +65,8 @@ is_allowlisted_tempdir_permissions() {
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
-        src/util.rs)
-            # canonical generated_executable_tempdir + set_executable_permissions
+        src/util/fs.rs)
+            # canonical set_executable_permissions
             return 0
             ;;
         src/cli/init.rs)
@@ -103,7 +103,7 @@ is_allowlisted_tempdir_permissions() {
 
 is_allowlisted_set_executable_permissions() {
     case "$1" in
-        src/util.rs | src/cli/init.rs)
+        src/util/fs.rs | src/cli/init.rs)
             return 0
             ;;
         src/cli/update.rs)

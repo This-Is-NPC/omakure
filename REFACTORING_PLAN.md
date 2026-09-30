@@ -96,6 +96,12 @@ Validação: `check:fast`.
       `health_peer_states` só são usados por testes (Fases 3/6).
 - [ ] Teste instável `git_askpass_refuses_credentials_for_another_host`
       (ETXTBSY) (Fase 8).
+- [ ] Docs citam itens que não existem: `SUPPORTED_CAPABILITIES`
+      (`remote-cue-contract.md`, `health-plane-contract.md`) e
+      `MAX_RETRY_ATTEMPTS` (`scripts/tasks/cert/health`).
+- [ ] Inventário por arquivo de `scripts/coverage/baseline.json`
+      desatualizado (111 arquivos faltando, `src/util.rs` obsoleto); regenerar
+      com `llvm-cov` (Fase 8).
 
 ## Fase 1b — Remoção de legado
 

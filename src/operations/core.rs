@@ -669,6 +669,42 @@ fn io_error_string(message: String) -> OperationError {
     OperationError::new(OperationErrorCode::IoFailed, message)
 }
 
+/// Verify that every required field on the script's schema has its
+/// `--<field>` (or `Arg` override) among `args`. Returns
+/// `Err((field_name, message))` for the first missing one. A script without a
+/// readable schema passes: it may validate its own input.
+pub(crate) fn check_required_fields(
+    workspace: &Workspace,
+    script: &Path,
+    args: &[String],
+) -> Result<(), (String, String)> {
+    let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
+    let Ok(schema) = repo.read_schema(script) else {
+        return Ok(());
+    };
+    for field in &schema.fields {
+        if !field.required.unwrap_or(false) {
+            continue;
+        }
+        let arg_flag = field
+            .arg
+            .clone()
+            .unwrap_or_else(|| format!("--{}", field.name));
+        if !args_contain_flag(args, &arg_flag) {
+            return Err((
+                field.name.clone(),
+                format!("expected `{}` on the command line", arg_flag),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn args_contain_flag(args: &[String], flag: &str) -> bool {
+    args.iter()
+        .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1273,5 +1309,29 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(err.code, OperationErrorCode::InvalidInput);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn check_required_fields_passes_when_arg_present() {
+        let ws = crate::test_support::scratch_workspace("required_present");
+        let script = ws.root().join("ok.sh");
+        let body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"name\", \"Type\": \"string\", \"Order\": 1, \"Required\": true}]}\n# OMAKURE_SCHEMA_END\necho done\n";
+        std::fs::write(&script, body).unwrap();
+
+        let res = check_required_fields(&ws, &script, &["--name=alice".to_string()]);
+        assert!(res.is_ok());
+
+        // Optional field absent — also OK.
+        let opt_body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"opt\", \"Type\": \"string\", \"Order\": 1}]}\n# OMAKURE_SCHEMA_END\n";
+        std::fs::write(&script, opt_body).unwrap();
+        assert!(check_required_fields(&ws, &script, &[]).is_ok());
+
+        // Schema absent — permissive.
+        let bare = "#!/usr/bin/env bash\necho hi\n";
+        std::fs::write(&script, bare).unwrap();
+        assert!(check_required_fields(&ws, &script, &[]).is_ok());
+
+        let _ = std::fs::remove_dir_all(ws.root());
     }
 }

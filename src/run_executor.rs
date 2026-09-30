@@ -11,8 +11,6 @@
 //! `omakure run` both call this function so the two surfaces never drift.
 
 use crate::adapters::script_runner::MultiScriptRunner;
-use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
 use crate::runs::{self, RunCompletion, RunRow, RunState, RunTrigger};
 use crate::runtime::bash_safe_path;
 use crate::workspace::Workspace;
@@ -127,9 +125,11 @@ pub fn execute_with_heartbeat_guarded(
             };
         }
     };
-    if let Err((field, message)) =
-        check_required_fields(workspace, &script_path, &resolved_args.persisted_args)
-    {
+    if let Err((field, message)) = crate::operations::core::check_required_fields(
+        workspace,
+        &script_path,
+        &resolved_args.persisted_args,
+    ) {
         return ExecutionResult {
             terminal: ExecutionTerminal::Failed,
             completion: RunCompletion {
@@ -571,42 +571,6 @@ fn drain_channel(rx: &std::sync::mpsc::Receiver<String>, budget: Duration) -> St
 
 fn parse_args_json(args_json: &str) -> Vec<String> {
     serde_json::from_str(args_json).unwrap_or_else(|_| Vec::new())
-}
-
-/// Verify that every required field on the script's schema has its
-/// `--<field>` (or `Arg` override) among `args`. Returns
-/// `Err((field_name, message))` for the first missing one. A script without a
-/// readable schema passes: it may validate its own input.
-pub(crate) fn check_required_fields(
-    workspace: &Workspace,
-    script: &Path,
-    args: &[String],
-) -> Result<(), (String, String)> {
-    let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
-    let Ok(schema) = repo.read_schema(script) else {
-        return Ok(());
-    };
-    for field in &schema.fields {
-        if !field.required.unwrap_or(false) {
-            continue;
-        }
-        let arg_flag = field
-            .arg
-            .clone()
-            .unwrap_or_else(|| format!("--{}", field.name));
-        if !args_contain_flag(args, &arg_flag) {
-            return Err((
-                field.name.clone(),
-                format!("expected `{}` on the command line", arg_flag),
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn args_contain_flag(args: &[String], flag: &str) -> bool {
-    args.iter()
-        .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
 }
 
 /// Path to the running omakure binary, normalized for bash scripts on Windows.
@@ -1214,30 +1178,6 @@ echo done"#,
             .as_deref()
             .unwrap_or("")
             .contains("required field"));
-        let _ = fs::remove_dir_all(ws.root());
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn check_required_fields_passes_when_arg_present() {
-        let ws = scratch_workspace("required_present");
-        let script = ws.root().join("ok.sh");
-        let body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"name\", \"Type\": \"string\", \"Order\": 1, \"Required\": true}]}\n# OMAKURE_SCHEMA_END\necho done\n";
-        fs::write(&script, body).unwrap();
-
-        let res = check_required_fields(&ws, &script, &["--name=alice".to_string()]);
-        assert!(res.is_ok());
-
-        // Optional field absent — also OK.
-        let opt_body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"opt\", \"Type\": \"string\", \"Order\": 1}]}\n# OMAKURE_SCHEMA_END\n";
-        fs::write(&script, opt_body).unwrap();
-        assert!(check_required_fields(&ws, &script, &[]).is_ok());
-
-        // Schema absent — permissive.
-        let bare = "#!/usr/bin/env bash\necho hi\n";
-        fs::write(&script, bare).unwrap();
-        assert!(check_required_fields(&ws, &script, &[]).is_ok());
-
         let _ = fs::remove_dir_all(ws.root());
     }
 

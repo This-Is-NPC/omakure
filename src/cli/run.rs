@@ -10,8 +10,9 @@ use crate::app_meta;
 use crate::cli::args::RunArgs;
 use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
+use crate::operations::core::check_required_fields;
 use crate::operations::core::resolve_script_path;
-use crate::run_executor::{check_required_fields, execute_with_heartbeat, ExecutionTerminal};
+use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
 use crate::runs::{self, EnqueueOptions};
 use crate::workspace::Workspace;
 use std::error::Error;
@@ -185,7 +186,8 @@ fn finalize_run(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::run_executor::{args_contain_flag, ExecutionResult, ExecutionTerminal};
+    use crate::operations::core::args_contain_flag;
+    use crate::run_executor::{ExecutionResult, ExecutionTerminal};
     use crate::runs::RunState;
     use crate::test_support::workspace_in;
     use pretty_assertions::assert_eq;

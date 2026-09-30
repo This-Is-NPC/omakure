@@ -127,10 +127,8 @@ pub fn execute_with_heartbeat_guarded(
             };
         }
     };
-    let persisted_args_json = serde_json::to_string(&resolved_args.persisted_args)
-        .unwrap_or_else(|_| row.args_json.clone());
     if let Err((field, message)) =
-        check_required_fields(workspace, &script_path, &persisted_args_json)
+        check_required_fields(workspace, &script_path, &resolved_args.persisted_args)
     {
         return ExecutionResult {
             terminal: ExecutionTerminal::Failed,
@@ -572,17 +570,19 @@ fn parse_args_json(args_json: &str) -> Vec<String> {
     serde_json::from_str(args_json).unwrap_or_else(|_| Vec::new())
 }
 
-fn check_required_fields(
+/// Verify that every required field on the script's schema has its
+/// `--<field>` (or `Arg` override) among `args`. Returns
+/// `Err((field_name, message))` for the first missing one. A script without a
+/// readable schema passes: it may validate its own input.
+pub(crate) fn check_required_fields(
     workspace: &Workspace,
     script: &Path,
-    args_json: &str,
+    args: &[String],
 ) -> Result<(), (String, String)> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
-    let schema = match repo.read_schema(script) {
-        Ok(s) => s,
-        Err(_) => return Ok(()), // permissive when no schema
+    let Ok(schema) = repo.read_schema(script) else {
+        return Ok(());
     };
-    let args: Vec<String> = serde_json::from_str(args_json).unwrap_or_default();
     for field in &schema.fields {
         if !field.required.unwrap_or(false) {
             continue;
@@ -591,10 +591,7 @@ fn check_required_fields(
             .arg
             .clone()
             .unwrap_or_else(|| format!("--{}", field.name));
-        let present = args
-            .iter()
-            .any(|a| a == &arg_flag || a.starts_with(&format!("{}=", arg_flag)));
-        if !present {
+        if !args_contain_flag(args, &arg_flag) {
             return Err((
                 field.name.clone(),
                 format!("expected `{}` on the command line", arg_flag),
@@ -602,6 +599,11 @@ fn check_required_fields(
         }
     }
     Ok(())
+}
+
+pub(crate) fn args_contain_flag(args: &[String], flag: &str) -> bool {
+    args.iter()
+        .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
 }
 
 /// Path to the running omakure binary, normalized for bash scripts on Windows.
@@ -1243,19 +1245,18 @@ echo done"#,
         let body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"name\", \"Type\": \"string\", \"Order\": 1, \"Required\": true}]}\n# OMAKURE_SCHEMA_END\necho done\n";
         fs::write(&script, body).unwrap();
 
-        let args_json = serde_json::to_string(&vec!["--name=alice"]).unwrap();
-        let res = check_required_fields(&ws, &script, &args_json);
+        let res = check_required_fields(&ws, &script, &["--name=alice".to_string()]);
         assert!(res.is_ok());
 
         // Optional field absent — also OK.
         let opt_body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"opt\", \"Type\": \"string\", \"Order\": 1}]}\n# OMAKURE_SCHEMA_END\n";
         fs::write(&script, opt_body).unwrap();
-        assert!(check_required_fields(&ws, &script, "[]").is_ok());
+        assert!(check_required_fields(&ws, &script, &[]).is_ok());
 
         // Schema absent — permissive.
         let bare = "#!/usr/bin/env bash\necho hi\n";
         fs::write(&script, bare).unwrap();
-        assert!(check_required_fields(&ws, &script, "[]").is_ok());
+        assert!(check_required_fields(&ws, &script, &[]).is_ok());
 
         let _ = fs::remove_dir_all(ws.root());
     }

@@ -6,17 +6,16 @@
 //! transitions to `completed`/`failed`/`timed_out` on completion via
 //! the shared [`crate::run_executor::execute_with_heartbeat`] helper.
 
-use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::app_meta;
 use crate::cli::args::RunArgs;
 use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
-use crate::ports::ScriptRepository;
-use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
+use crate::operations::core::resolve_script_path;
+use crate::run_executor::{check_required_fields, execute_with_heartbeat, ExecutionTerminal};
 use crate::runs::{self, EnqueueOptions};
 use crate::workspace::Workspace;
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub fn run(
     scripts_dir: PathBuf,
@@ -183,60 +182,15 @@ fn finalize_run(
     runs::get_run(&conn, run_id).ok().flatten()
 }
 
-/// Verify that every required field on the script's schema either has a
-/// `--<field>` (or its `Arg` override) on the command line, or is
-/// non-required. Returns `Err((field_name, message))` if any required
-/// field is missing.
-fn check_required_fields(
-    workspace: &Workspace,
-    script_path: &Path,
-    args: &[String],
-) -> Result<(), (String, String)> {
-    let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
-    let schema = match repo.read_schema(script_path) {
-        Ok(s) => s,
-        // No schema means no required-field check is possible. Treat as
-        // a permissive pass — the script may have its own validation.
-        Err(_) => return Ok(()),
-    };
-    for field in &schema.fields {
-        if !field.required.unwrap_or(false) {
-            continue;
-        }
-        let arg_flag = field
-            .arg
-            .clone()
-            .unwrap_or_else(|| format!("--{}", field.name));
-        if !cli_args_contain_flag(args, &arg_flag) {
-            return Err((
-                field.name.clone(),
-                format!("expected `{}` on the command line", arg_flag),
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn resolve_script_path(
-    script: &str,
-    scripts_dir: &Path,
-) -> crate::operations::OperationResult<PathBuf> {
-    crate::operations::core::resolve_script_path(script, scripts_dir)
-}
-
-pub(crate) fn cli_args_contain_flag(args: &[String], flag: &str) -> bool {
-    args.iter()
-        .any(|a| a == flag || a.starts_with(&format!("{}=", flag)))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::run_executor::{ExecutionResult, ExecutionTerminal};
+    use crate::run_executor::{args_contain_flag, ExecutionResult, ExecutionTerminal};
     use crate::runs::RunState;
     use pretty_assertions::assert_eq;
     use rstest::rstest;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     fn write_file(path: &Path, contents: &str) {
@@ -311,7 +265,7 @@ mod tests {
         #[case] expected: bool,
     ) {
         let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-        assert_eq!(cli_args_contain_flag(&args, flag), expected);
+        assert_eq!(args_contain_flag(&args, flag), expected);
     }
 
     #[test]

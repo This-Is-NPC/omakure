@@ -166,7 +166,7 @@ src/
 │   ├── envs.rs              managed environment operations
 │   ├── scripts.rs           safe tree/content operations
 │   ├── search.rs            indexed script search
-│   ├── battery.rs           sync, inspect, install, and provenance
+│   ├── battery/             sync, inspect, install, and provenance
 │   ├── node.rs              node status, trust, enrollment, and discovery
 │   ├── health.rs            fleet-status and Signal-feed projections
 │   └── baseline.rs          baseline push, status, and rollback

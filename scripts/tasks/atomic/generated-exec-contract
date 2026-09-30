@@ -25,7 +25,7 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 #   src/util/fs.rs                    canonical set_executable_permissions
 #   src/cli/init.rs                   init chmods the created script; TempDir tokens are test fixtures
 #   src/cli/update.rs                 update chmods the installed binary; TempDir tokens are test install roots
-#   src/operations/battery.rs         install keeps the source script's mode via fchmod on the temp descriptor; TempDir tokens are test fixtures
+#   src/operations/battery/tests/install.rs  install tests set source script modes; TempDir tokens are test fixtures
 #   tests/support/mod.rs              shared test helper chmod
 #   tests/docker_signed_bundle_e2e.rs e2e bootstrap token mode
 #   tests/enrollment_authority_e2e.rs e2e bootstrap token permissions
@@ -77,8 +77,8 @@ is_allowlisted_tempdir_permissions() {
             # update chmods the installed binary; TempDir tokens are test install roots
             return 0
             ;;
-        src/operations/battery.rs)
-            # install keeps the source script's mode via fchmod on the temp descriptor; TempDir tokens are test fixtures
+        src/operations/battery/tests/install.rs)
+            # install tests set source script modes; TempDir tokens are test fixtures
             return 0
             ;;
         tests/support/mod.rs)

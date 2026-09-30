@@ -24,7 +24,7 @@ must be updated in the same change.
 | FR-014 | History lists, shows, tails, aggregates, and filters runs; trace events can be written from a child and read incrementally. | `src/cli/history.rs`, `src/cli/trace.rs`, `src/runs.rs` |
 | FR-015 | Schema schedules accept supported cron forms, enqueue due runs every five seconds, skip overlap, and log lifecycle/errors. | `src/domain/schedule.rs`, `src/cli/serve.rs` |
 | FR-016 | Linux systemd user lifecycle operations install, uninstall, and report the per-workspace scheduler service. | `src/cli/serve_autostart.rs`, `src/cli/serve.rs` |
-| FR-017 | Batteries can be registered, synced, inspected, listed, installed with validation/provenance, and removed; installation is Unix-only and may be initiated locally by the CLI or authenticated HTTP, never by a peer or Cue; cached content is untrusted. | `src/cli/battery.rs`, `src/operations/battery.rs` |
+| FR-017 | Batteries can be registered, synced, inspected, listed, installed with validation/provenance, and removed; installation is Unix-only and may be initiated locally by the CLI or authenticated HTTP, never by a peer or Cue; cached content is untrusted. | `src/cli/battery.rs`, `src/operations/battery/` |
 | FR-018 | `doctor`, `config`, `completion`, `update`, and `uninstall` provide local diagnostics, integration, lifecycle, and release operations. | `src/cli/doctor.rs`, `src/cli/config.rs`, `src/main.rs` |
 | FR-019 | `help-ai` derives a machine-readable command and data-shape inventory from clap metadata. | `src/cli/help_ai.rs`, `src/cli/args.rs` |
 | FR-020 | CLI JSON uses `{ ok, data, error, schema_version }` and stable error codes. | `src/cli/json.rs`, `src/cli/args.rs` |
@@ -68,7 +68,7 @@ must be updated in the same change.
 | BR-004 | Scheduler overlap is keyed by canonical script path and cron expression. | `src/cli/serve.rs`, `src/runs.rs` |
 | BR-005 | Secret schema fields cannot declare choices; plaintext secret values are redacted while provider references can be retained. | `src/domain/schema.rs`, `src/secrets.rs`, `src/runs.rs` |
 | BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor.rs` |
-| BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery.rs`, `src/cli/api/` |
+| BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery/`, `src/cli/api/` |
 | BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api/`, `src/policy.rs` |
 | BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args.rs`, `src/main.rs`, `tests/packaging_smoke.rs` |
 | BR-010 | Machine identity and trust are independent of script workspaces; normal update, replacement, restart, and uninstall preserve node state, while `node reset --confirmed` removes it and creates no replacement until the next service start. | `src/node.rs`, `src/node_identity.rs`, `src/operations/node.rs`, `src/cli/node.rs` |

@@ -214,7 +214,7 @@ struct ConnectionState {
     /// Cue work in a managed fleet: dialling a second time is refused, and
     /// correctly so -- two sessions with one peer would give the Health Plane
     /// two cursors for the same node.
-    outbox: Mutex<HashMap<String, Vec<PendingCue>>>,
+    outbox: Outbox<PendingCue>,
     /// Baselines waiting for the session that can carry them, by peer node id.
     ///
     /// A separate queue from the Cue outbox rather than one queue of a sum
@@ -223,7 +223,33 @@ struct ConnectionState {
     /// -- and folding them together would have meant reworking the Cue path
     /// that item 6 certified, to no benefit. The door into the session thread
     /// is the same door; only the queue is new.
-    baseline_outbox: Mutex<HashMap<String, Vec<PendingBaseline>>>,
+    baseline_outbox: Outbox<PendingBaseline>,
+}
+
+/// Items waiting for the session thread that can carry them, by peer node id.
+type Outbox<T> = Mutex<HashMap<String, Vec<T>>>;
+
+fn push_pending<T>(
+    outbox: &Outbox<T>,
+    peer_node_id: &str,
+    pending: T,
+) -> Result<(), TransportError> {
+    outbox
+        .lock()
+        .map_err(|_| TransportError::Internal)?
+        .entry(peer_node_id.to_string())
+        .or_default()
+        .push(pending);
+    Ok(())
+}
+
+fn take_pending<T>(outbox: &Outbox<T>, peer_node_id: &str) -> Option<T> {
+    let mut outbox = outbox.lock().ok()?;
+    let queue = outbox.get_mut(peer_node_id)?;
+    if queue.is_empty() {
+        return None;
+    }
+    Some(queue.remove(0))
 }
 
 /// A baseline handed to the session thread, with the channel its answer goes
@@ -363,28 +389,13 @@ impl ConnectionState {
     /// Refused when there is no live session: a caller must not be told its
     /// instruction is on its way when nothing can carry it.
     fn enqueue_cue(&self, peer_node_id: &str, pending: PendingCue) -> Result<(), TransportError> {
-        let active = self.active.lock().map_err(|_| TransportError::Internal)?;
-        if !active.contains_key(peer_node_id) {
-            return Err(TransportError::NotEnrolled);
-        }
-        drop(active);
-        self.outbox
-            .lock()
-            .map_err(|_| TransportError::Internal)?
-            .entry(peer_node_id.to_string())
-            .or_default()
-            .push(pending);
-        Ok(())
+        self.require_session(peer_node_id)?;
+        push_pending(&self.outbox, peer_node_id, pending)
     }
 
     /// The next Cue this session should carry, if any.
     fn take_pending_cue(&self, peer_node_id: &str) -> Option<PendingCue> {
-        let mut outbox = self.outbox.lock().ok()?;
-        let queue = outbox.get_mut(peer_node_id)?;
-        if queue.is_empty() {
-            return None;
-        }
-        Some(queue.remove(0))
+        take_pending(&self.outbox, peer_node_id)
     }
 
     /// Hand a baseline to whichever thread holds the session with this peer.
@@ -399,28 +410,30 @@ impl ConnectionState {
         peer_node_id: &str,
         pending: PendingBaseline,
     ) -> Result<(), TransportError> {
-        let active = self.active.lock().map_err(|_| TransportError::Internal)?;
-        if !active.contains_key(peer_node_id) {
-            return Err(TransportError::NotEnrolled);
-        }
-        drop(active);
-        self.baseline_outbox
-            .lock()
-            .map_err(|_| TransportError::Internal)?
-            .entry(peer_node_id.to_string())
-            .or_default()
-            .push(pending);
-        Ok(())
+        self.require_session(peer_node_id)?;
+        push_pending(&self.baseline_outbox, peer_node_id, pending)
     }
 
     /// The next baseline this session should carry, if any.
     fn take_pending_baseline(&self, peer_node_id: &str) -> Option<PendingBaseline> {
-        let mut outbox = self.baseline_outbox.lock().ok()?;
-        let queue = outbox.get_mut(peer_node_id)?;
-        if queue.is_empty() {
-            return None;
+        take_pending(&self.baseline_outbox, peer_node_id)
+    }
+
+    /// Whether a live session with this peer exists to carry an instruction.
+    fn has_session(&self, peer_node_id: &str) -> bool {
+        self.active
+            .lock()
+            .map(|active| active.contains_key(peer_node_id))
+            .unwrap_or(false)
+    }
+
+    fn require_session(&self, peer_node_id: &str) -> Result<(), TransportError> {
+        let active = self.active.lock().map_err(|_| TransportError::Internal)?;
+        if active.contains_key(peer_node_id) {
+            Ok(())
+        } else {
+            Err(TransportError::NotEnrolled)
         }
-        Some(queue.remove(0))
     }
 
     /// Fail every Cue still waiting on a session that just ended.
@@ -827,9 +840,7 @@ impl Resolver {
             if stop.load(Ordering::SeqCst) || self.stop.load(Ordering::SeqCst) {
                 return Err(TransportError::Internal);
             }
-            let remaining = deadline
-                .checked_duration_since(Instant::now())
-                .ok_or(TransportError::Internal)?;
+            let remaining = time_until(deadline)?;
             match self.sender.try_send(request) {
                 Ok(()) => break,
                 Err(mpsc::error::TrySendError::Full(returned_request)) => {
@@ -843,9 +854,7 @@ impl Resolver {
             if stop.load(Ordering::SeqCst) || self.stop.load(Ordering::SeqCst) {
                 return Err(TransportError::Internal);
             }
-            let remaining = deadline
-                .checked_duration_since(Instant::now())
-                .ok_or(TransportError::Internal)?;
+            let remaining = time_until(deadline)?;
             match response_receiver.recv_timeout(Duration::from_millis(25).min(remaining)) {
                 Ok(result) => return result.map_err(|_| TransportError::Internal),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
@@ -1579,9 +1588,7 @@ fn connect_and_hold(
     let opening_message = handshake.write_next()?;
     let mut stream = None;
     for endpoint in endpoints {
-        let remaining = deadline
-            .checked_duration_since(Instant::now())
-            .ok_or(TransportError::Internal)?;
+        let remaining = time_until(deadline)?;
         if let Ok(candidate) = TcpStream::connect_timeout(&endpoint, remaining) {
             stream = Some(candidate);
             break;
@@ -2041,11 +2048,7 @@ impl CueDispatcher {
 
     /// Whether a live session with this peer exists to carry a Cue.
     pub fn has_session(&self, peer_node_id: &str) -> bool {
-        self.state
-            .active
-            .lock()
-            .map(|active| active.contains_key(peer_node_id))
-            .unwrap_or(false)
+        self.state.has_session(peer_node_id)
     }
 }
 
@@ -2126,11 +2129,7 @@ impl BaselineDispatcher {
 
     /// Whether a live session with this peer exists to carry a baseline.
     pub fn has_session(&self, peer_node_id: &str) -> bool {
-        self.state
-            .active
-            .lock()
-            .map(|active| active.contains_key(peer_node_id))
-            .unwrap_or(false)
+        self.state.has_session(peer_node_id)
     }
 }
 
@@ -2648,12 +2647,7 @@ pub fn probe(
     let local = LocalTransport::load_existing(context, &identity)?;
     let registry = NodeRegistry::open_existing(context, identity.public_status())?;
     let deadline = initiator_deadline(Instant::now());
-    let mut stream = TcpStream::connect_timeout(
-        &endpoint,
-        deadline
-            .checked_duration_since(Instant::now())
-            .ok_or(TransportError::Internal)?,
-    )?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, time_until(deadline)?)?;
     set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;
     let mut handshake = local.handshake(HandshakeRole::Initiator)?;
     write_bytes(&mut stream, &handshake.write_next()?, deadline)?;
@@ -2747,12 +2741,7 @@ pub fn dispatch_cue(
     let local = LocalTransport::load_existing(context, &identity)?;
     let registry = NodeRegistry::open_existing(context, identity.public_status())?;
     let deadline = initiator_deadline(Instant::now());
-    let mut stream = TcpStream::connect_timeout(
-        &endpoint,
-        deadline
-            .checked_duration_since(Instant::now())
-            .ok_or(TransportError::Internal)?,
-    )?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, time_until(deadline)?)?;
     set_stream_timeouts(&stream, deadline)?;
 
     let mut handshake = local.handshake(HandshakeRole::Initiator)?;
@@ -3067,12 +3056,7 @@ pub fn request_manual_enrollment(
     let local = LocalTransport::load_existing(context, &identity)?;
     let registry = NodeRegistry::open_existing(context, identity.public_status())?;
     let deadline = initiator_deadline(Instant::now());
-    let mut stream = TcpStream::connect_timeout(
-        &endpoint,
-        deadline
-            .checked_duration_since(Instant::now())
-            .ok_or(TransportError::Internal)?,
-    )?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, time_until(deadline)?)?;
     set_stream_timeouts(&stream, deadline).map_err(|_| TransportError::Internal)?;
     let mut handshake = local.handshake(HandshakeRole::Initiator)?;
     write_bytes(&mut stream, &handshake.write_next()?, deadline)?;
@@ -3501,6 +3485,14 @@ fn audit_error(
     Ok(())
 }
 
+/// Time left before `deadline`; zero once it has just been reached.
+fn time_until(deadline: Instant) -> Result<Duration, TransportError> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .ok_or(TransportError::Internal)
+}
+
+/// Time left before `deadline`, refusing a deadline already reached.
 fn deadline_timeout(deadline: Instant) -> Result<Duration, TransportError> {
     deadline
         .checked_duration_since(Instant::now())

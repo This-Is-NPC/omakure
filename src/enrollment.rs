@@ -108,7 +108,7 @@ impl fmt::Debug for SignedEnrollmentBundle {
             .field("capabilities", &self.capabilities)
             .field("issued_at", &self.issued_at)
             .field("expires_at", &self.expires_at)
-            .field("authority_signature", &"<redacted>")
+            .field("authority_signature", &crate::secrets::REDACTED)
             .finish()
     }
 }
@@ -398,8 +398,8 @@ impl fmt::Debug for ManualEnrollmentRequest {
             .field("capabilities", &self.capabilities)
             .field("created_at", &self.created_at)
             .field("expires_at", &self.expires_at)
-            .field("code_hash", &"<redacted>")
-            .field("signature", &"<redacted>")
+            .field("code_hash", &crate::secrets::REDACTED)
+            .field("signature", &crate::secrets::REDACTED)
             .finish()
     }
 }

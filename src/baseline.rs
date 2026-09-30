@@ -121,7 +121,7 @@ impl fmt::Debug for SignedBaselineManifest {
             )
             .field("issued_at", &self.issued_at)
             .field("expires_at", &self.expires_at)
-            .field("publisher_signature", &"<redacted>")
+            .field("publisher_signature", &crate::secrets::REDACTED)
             .finish()
     }
 }

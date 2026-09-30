@@ -594,7 +594,7 @@ pub struct NodeServeArgs {
     pub secret_refs: Vec<String>,
 
     /// Node-local one-time bootstrap token file for the signed-bundle API.
-    #[arg(long = "bootstrap-token-file", env = "OMAKURE_BOOTSTRAP_TOKEN_FILE")]
+    #[arg(long = "bootstrap-token-file", env = crate::operations::node::BOOTSTRAP_TOKEN_FILE_ENV)]
     pub bootstrap_token_file: Option<std::path::PathBuf>,
 }
 

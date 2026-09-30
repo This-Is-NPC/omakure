@@ -25,6 +25,8 @@ const PUBLIC_PEER_LIMIT: usize = 256;
 const MAX_NODE_CONFIG_BYTES: usize = 64 * 1024;
 const SIGNED_BUNDLE_ACTOR: &str = "signed-bundle-installer";
 const SIGNED_BUNDLE_REASON: &str = "unattended signed enrollment bundle";
+/// Environment variable naming the token file `node serve` bootstraps from.
+pub const BOOTSTRAP_TOKEN_FILE_ENV: &str = "OMAKURE_BOOTSTRAP_TOKEN_FILE";
 
 pub fn resolve_context(overrides: NodePathOverrides) -> OperationResult<NodeContext> {
     NodeContext::resolve(overrides).map_err(map_node_error)
@@ -944,7 +946,7 @@ pub fn apply_signed_bundle_from_local_token(
     mut request: SignedBundleApplyRequest,
     token_id: &str,
 ) -> OperationResult<PublicPeer> {
-    let token_path = std::env::var_os("OMAKURE_BOOTSTRAP_TOKEN_FILE")
+    let token_path = std::env::var_os(BOOTSTRAP_TOKEN_FILE_ENV)
         .map(PathBuf::from)
         .ok_or_else(|| {
             OperationError::new(
@@ -1066,7 +1068,7 @@ fn recover_private_token_tombstones(
 }
 
 pub fn recover_local_bootstrap_token_tombstones(context: &NodeContext) -> OperationResult<()> {
-    let Some(path) = std::env::var_os("OMAKURE_BOOTSTRAP_TOKEN_FILE").map(PathBuf::from) else {
+    let Some(path) = std::env::var_os(BOOTSTRAP_TOKEN_FILE_ENV).map(PathBuf::from) else {
         return Ok(());
     };
     let result = (|| {

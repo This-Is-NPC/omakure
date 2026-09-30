@@ -110,7 +110,7 @@ pub fn run(
     args: NodeServeArgs,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(path) = &args.bootstrap_token_file {
-        std::env::set_var("OMAKURE_BOOTSTRAP_TOKEN_FILE", path);
+        std::env::set_var(crate::operations::node::BOOTSTRAP_TOKEN_FILE_ENV, path);
     }
     let lifecycle = context.acquire_lifecycle_lock()?;
     context.validate_existing_state_directory()?;

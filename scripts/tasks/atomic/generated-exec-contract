@@ -18,7 +18,10 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 #   src/baseline_publisher.rs         tempfile::tempdir + set_mode/set_permissions in test fixtures only
 #   src/baseline_push.rs              tempfile::tempdir + set_permissions in test fixtures only
 #   src/enrollment_authority.rs       tempfile::tempdir + set_mode/set_permissions in test fixtures only
-#   src/node.rs                       TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/policy.rs          TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/private_token.rs   TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/security.rs        TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/state.rs           TempDir::new + fs::set_permissions in test fixtures only
 #   src/node_identity.rs              TempDir::new + fs::set_permissions in test fixtures only
 #   src/node_registry/tests/open.rs   TempDir::new + fs::set_permissions in test fixtures only
 #   src/operations/node/tests/status.rs  TempDir::new + fs::set_permissions in test fixtures only
@@ -51,7 +54,19 @@ is_allowlisted_tempdir_permissions() {
             # tempfile::tempdir + set_mode/set_permissions in test fixtures only
             return 0
             ;;
-        src/node.rs)
+        src/node/tests/policy.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node/tests/private_token.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node/tests/security.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node/tests/state.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;

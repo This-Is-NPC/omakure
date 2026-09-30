@@ -33,7 +33,7 @@ COPY tests ./tests
 # Built in the debug profile deliberately, exactly like the host-side adversary
 # harness. `NodeContext::resolve_for` refuses a state-directory override outside
 # `cfg!(debug_assertions)` (the `test_mode && !cfg!(debug_assertions)` guard in
-# src/node.rs), which is a security property of the shipped binary; a release
+# src/node/context.rs), which is a security property of the shipped binary; a release
 # harness cannot read the adversary's node material.
 # Only the harness is affected -- the node under test is the release `runtime`
 # image, unchanged.

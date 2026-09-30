@@ -187,7 +187,7 @@ src/
 ├── policy.rs                deploy-time route and runtime policy
 ├── secrets.rs               secret references and provider resolution
 ├── redaction.rs             output and trace redaction
-├── node.rs                  node paths, platform rules, and state validation
+├── node/                    node paths, platform rules, and state validation
 ├── node_identity.rs         BIP-340 machine identity and node ID derivation
 ├── node_registry/           node-owned trust and delivery persistence boundary
 │   └── health/              Health Plane reads and receive-order application

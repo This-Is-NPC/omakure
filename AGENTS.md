@@ -89,7 +89,7 @@ src/
 ├── cli_http_parity.rs, operation_catalog.rs  # versioned parity and operation catalogs
 ├── installer.rs             # standalone installer binary
 └── fleet planes:
-    ├── node.rs, node_identity.rs, node_transport.rs  # node state and identity
+    ├── node/, node_identity.rs, node_transport.rs  # node state and identity
     ├── node_registry/ (+ health/)        # node.sqlite trust/health persistence
     ├── direct_transport.rs, direct_service/  # Noise transport and listener
     ├── discovery.rs                      # trust-neutral LAN discovery

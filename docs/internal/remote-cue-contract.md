@@ -236,7 +236,8 @@ discovery is not remotely runnable even when it is declared.
 
 Resolution is never a string comparison on the name. The resolved path must be a
 regular file by `symlink_metadata`, following the rejection pattern already used
-at `src/node.rs:1057`, so a symlink cannot redirect a Cue outside the workspace.
+in `validate_file_security` (`src/node/security.rs`), so a symlink cannot redirect
+a Cue outside the workspace.
 
 The resolved file's content hash is recorded when gate E authorizes it and
 **re-verified at the accept→run transition**. The gates walk the filesystem and

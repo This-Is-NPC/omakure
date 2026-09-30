@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "14ab3928118ddd642432b03271c2f6f1f1347da48f6b7e1fed68b852b4c44f7a",
+  "canonical_sha256": "c379934ec1dede176d16f865e0cdb4319a12657313cefe5fb4df14e62e46762d",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -90057,32 +90057,6 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::check_required_fields::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": ".unwrap_or_else(|| format!(\"--{}\", field.name));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::check_required_fields::<closure>",
-      "kind": "closure",
-      "line": 591,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 591,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": ".unwrap_or_else(|| format!(\"--{}\", field.name));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
         "identity": "crate::run_executor::a_cue_run_refuses_a_script_that_changed_after_it_was_authorized",
         "macro_expansion": "not_measured",
         "path": "src/run_executor.rs",
@@ -90467,32 +90441,6 @@
       },
       "path": "src/run_executor.rs",
       "signature": "fn execute_fails_when_required_field_missing()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::check_required_fields_passes_when_arg_present",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn check_required_fields_passes_when_arg_present()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::check_required_fields_passes_when_arg_present",
-      "kind": "function",
-      "line": 1150,
-      "name": "check_required_fields_passes_when_arg_present",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 1150,
-        "name": "check_required_fields_passes_when_arg_present"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "fn check_required_fields_passes_when_arg_present()",
       "source_class": "handwritten"
     },
     {
@@ -100196,7 +100144,7 @@
   ],
   "source_accounting": {
     "files": 86,
-    "functions": 3807,
+    "functions": 3805,
     "generated": 0,
     "handwritten": 86,
     "parse_failures": 0

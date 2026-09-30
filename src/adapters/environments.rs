@@ -90,7 +90,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
 
     fn load_environment_config(&self) -> AppResult<EnvironmentConfig> {
         let active = load_active_env_name(&self.envs_dir)?;
-        let defaults = if let Some(name) = &active {
+        if let Some(name) = &active {
             let path = self.envs_dir.join(name);
             if !path.is_file() {
                 return Err(EnvironmentError::NotFound {
@@ -98,16 +98,10 @@ impl EnvironmentRepository for FsEnvironmentRepository {
                 }
                 .into());
             }
-            self.read_env_defaults(&path)?
-        } else {
-            HashMap::new()
-        };
+            self.read_env_defaults(&path)?;
+        }
 
-        Ok(EnvironmentConfig {
-            envs_dir: self.envs_dir.clone(),
-            active,
-            defaults,
-        })
+        Ok(EnvironmentConfig { active })
     }
 
     fn set_active_env(&self, name: Option<&str>) -> AppResult<()> {
@@ -1320,7 +1314,6 @@ mod tests {
         let config = repo.load_environment_config().unwrap();
 
         assert!(config.active.is_none());
-        assert!(config.defaults.is_empty());
     }
 
     #[rstest]
@@ -1332,8 +1325,6 @@ mod tests {
         let config = repo.load_environment_config().unwrap();
 
         assert_eq!(config.active, Some("dev.conf".to_string()));
-        assert_eq!(config.defaults.get("host").unwrap(), "localhost");
-        assert_eq!(config.defaults.get("port").unwrap(), "3000");
     }
 
     #[test]

@@ -86,21 +86,6 @@ impl RunState {
         }
     }
 
-    /// True for any state from which no further transition is allowed
-    /// (apart from the explicit `failed|timed_out -> dead_letter` promotion
-    /// handled by [`dead_letter`]).
-    #[allow(dead_code)] // exposed for future trigger-rule callers
-    pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            RunState::Completed
-                | RunState::Failed
-                | RunState::Cancelled
-                | RunState::TimedOut
-                | RunState::DeadLetter
-        )
-    }
-
     /// All seven legal values, in stable order.
     pub fn all() -> &'static [RunState] {
         &[
@@ -3169,21 +3154,6 @@ mod tests {
         let conn = open(&ws).expect("open");
         assert!(get_run(&conn, "missing").unwrap().is_none());
         let _ = fs::remove_dir_all(ws.root());
-    }
-
-    #[test]
-    fn run_state_is_terminal_classification() {
-        assert!(!RunState::Queued.is_terminal());
-        assert!(!RunState::Running.is_terminal());
-        for terminal in [
-            RunState::Completed,
-            RunState::Failed,
-            RunState::Cancelled,
-            RunState::TimedOut,
-            RunState::DeadLetter,
-        ] {
-            assert!(terminal.is_terminal(), "{:?}", terminal);
-        }
     }
 
     #[test]

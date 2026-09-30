@@ -564,8 +564,6 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
 #[derive(Clone)]
 pub(crate) struct ApiBoot {
     pub bind: SocketAddr,
-    #[allow(dead_code)] // surfaced for callers / tests inspecting boot
-    pub allow_non_loopback: bool,
     pub auth: Authenticator,
     pub api_policy: ApiPolicy,
     pub deploy: DeployPolicy,
@@ -600,7 +598,6 @@ pub(crate) fn prepare_api_boot(args: &ApiArgs) -> Result<ApiBoot, ApiConfigError
 
     Ok(ApiBoot {
         bind,
-        allow_non_loopback,
         auth,
         api_policy,
         deploy,
@@ -750,7 +747,6 @@ fn router_with_deploy(
 /// parse the markers below so route drift fails the suite without importing
 /// the binary crate as a library.
 // OMAKURE_HTTP_ROUTE_INVENTORY_START
-#[allow(dead_code)] // consumed by black-box E2E via source markers; kept as router source of truth
 pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
     ("GET", "/v1/health"),
     ("GET", "/v1/ready"),
@@ -6018,6 +6014,5 @@ enabled = true
         };
         let boot = prepare_api_boot(&args).unwrap();
         assert_eq!(boot.bind.to_string(), "0.0.0.0:7878");
-        assert!(boot.allow_non_loopback);
     }
 }

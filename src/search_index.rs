@@ -1,6 +1,6 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::ports::ScriptRepository;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{params, params_from_iter, Connection, TransactionBehavior};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -21,16 +21,6 @@ pub struct SearchField {
     pub prompt: Option<String>,
     pub kind: String,
     pub required: bool,
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // detail projection: constructed by `load_details`, asserted by tests
-pub struct SearchDetails {
-    pub display_name: String,
-    pub description: Option<String>,
-    pub tags: Vec<String>,
-    pub fields: Vec<SearchField>,
-    pub schema_error: Option<String>,
 }
 
 #[derive(Clone)]
@@ -116,68 +106,6 @@ impl SearchIndex {
             results.push(row.map_err(|err| format!("Search row failed: {}", err))?);
         }
         Ok(results)
-    }
-
-    #[allow(dead_code)]
-    pub fn load_details(&self, script_path: &Path) -> Result<Option<SearchDetails>, String> {
-        let conn = open_connection(&self.db_path)?;
-        init_db(&conn)?;
-        let script_path = script_path.to_string_lossy().to_string();
-
-        let mut stmt = conn
-            .prepare(
-                "SELECT display_name, description, tags, schema_error \
-                 FROM script_index WHERE script_path = ?",
-            )
-            .map_err(|err| format!("Search detail prepare failed: {}", err))?;
-
-        let base = stmt
-            .query_row([script_path.clone()], |row| {
-                let display_name: String = row.get(0)?;
-                let description: Option<String> = row.get(1)?;
-                let tags_raw: Option<String> = row.get(2)?;
-                let schema_error: Option<String> = row.get(3)?;
-                Ok((display_name, description, tags_raw, schema_error))
-            })
-            .optional()
-            .map_err(|err| format!("Search detail query failed: {}", err))?;
-
-        let (display_name, description, tags_raw, schema_error) = match base {
-            Some(base) => base,
-            None => return Ok(None),
-        };
-
-        let mut field_stmt = conn
-            .prepare(
-                "SELECT name, prompt, kind, required \
-                 FROM script_fields WHERE script_path = ? \
-                 ORDER BY field_order",
-            )
-            .map_err(|err| format!("Search fields prepare failed: {}", err))?;
-
-        let rows = field_stmt
-            .query_map([script_path], |row| {
-                Ok(SearchField {
-                    name: row.get(0)?,
-                    prompt: row.get(1)?,
-                    kind: row.get(2)?,
-                    required: row.get::<_, i64>(3)? != 0,
-                })
-            })
-            .map_err(|err| format!("Search fields query failed: {}", err))?;
-
-        let mut fields = Vec::new();
-        for row in rows {
-            fields.push(row.map_err(|err| format!("Search field row failed: {}", err))?);
-        }
-
-        Ok(Some(SearchDetails {
-            display_name,
-            description,
-            tags: parse_tags(tags_raw),
-            fields,
-            schema_error,
-        }))
     }
 }
 
@@ -694,43 +622,6 @@ echo deploying
         assert_eq!(index.search(&scripts_dir, "").unwrap().len(), 1);
         assert_eq!(index.query("visible").unwrap().len(), 1);
         assert!(index.query("hidden").unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_load_details() {
-        let tmp = TempDir::new().unwrap();
-        let scripts_dir = tmp.path().join("scripts");
-        fs::create_dir_all(&scripts_dir).unwrap();
-
-        fs::write(
-            scripts_dir.join("setup.sh"),
-            r#"#!/bin/bash
-# OMAKURE_SCHEMA_START
-# {"Name": "Setup", "Fields": [{"Name": "env", "Type": "string", "Order": 0, "Required": true}]}
-# OMAKURE_SCHEMA_END
-echo setup
-"#,
-        )
-        .unwrap();
-
-        let db = tmp.path().join("search.sqlite");
-        let index = SearchIndex::new(db);
-        index.search(&scripts_dir, "").unwrap();
-        let details = index.load_details(Path::new("setup.sh")).unwrap().unwrap();
-        assert_eq!(details.display_name, "Setup");
-        assert_eq!(details.fields.len(), 1);
-        assert_eq!(details.fields[0].name, "env");
-        assert!(details.fields[0].required);
-    }
-
-    #[test]
-    fn test_load_details_not_found() {
-        let tmp = TempDir::new().unwrap();
-        let db = tmp.path().join("search.sqlite");
-        let index = SearchIndex::new(db);
-        let _ = index.query(""); // initialize DB
-        let details = index.load_details(Path::new("nonexistent.sh")).unwrap();
-        assert!(details.is_none());
     }
 
     #[test]

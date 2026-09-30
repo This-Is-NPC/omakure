@@ -1,14 +1,10 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::AppResult;
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // `envs_dir`/`defaults` are read by the adapter tests only
 pub struct EnvironmentConfig {
-    pub envs_dir: PathBuf,
     pub active: Option<String>,
-    pub defaults: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -36,17 +32,6 @@ pub trait EnvironmentRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_environment_config_construction() {
-        let config = EnvironmentConfig {
-            envs_dir: PathBuf::from("/tmp/envs"),
-            active: Some("dev.conf".to_string()),
-            defaults: HashMap::from([("host".to_string(), "localhost".to_string())]),
-        };
-        assert_eq!(config.active, Some("dev.conf".to_string()));
-        assert_eq!(config.defaults.get("host").unwrap(), "localhost");
-    }
 
     #[test]
     fn test_environment_repository_is_object_safe() {

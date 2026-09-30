@@ -522,29 +522,22 @@ fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Bo
     emit_error(json_output, code, err.message)
 }
 
-// Used by tests to make captured-output assertions.
-#[allow(dead_code)] // test-support: dead in the lib target, used by the tests below
-pub(crate) fn make_completion(
-    stdout: &str,
-    stderr: &str,
-    exit: Option<i32>,
-    ok: bool,
-) -> RunCompletion {
-    RunCompletion {
-        stdout: stdout.to_string(),
-        stderr: stderr.to_string(),
-        exit_code: exit,
-        success: ok,
-        error: None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::runs::{enqueue, EnqueueOptions, RunState};
     use std::fs;
     use std::path::PathBuf;
+
+    fn make_completion(stdout: &str, stderr: &str, exit: Option<i32>, ok: bool) -> RunCompletion {
+        RunCompletion {
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            exit_code: exit,
+            success: ok,
+            error: None,
+        }
+    }
 
     fn make_workspace(label: &str) -> (Workspace, PathBuf) {
         let dir = std::env::temp_dir().join(format!(

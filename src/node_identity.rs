@@ -1,5 +1,5 @@
 use crate::domain::NODE_ID_PREFIX;
-use crate::node::{write_atomic_new, NodeContext, NodeError};
+use crate::node::{write_new_file_atomically, NodeContext, NodeError};
 use crate::node_registry::RegistryError;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
@@ -161,7 +161,7 @@ impl NodeIdentity {
         } else {
             let signing_key = imported.unwrap_or_else(SigningKey::generate);
             let normalized = signing_key.to_bytes();
-            write_atomic_new(&identity_path, normalized.as_ref(), 0o600)?;
+            write_new_file_atomically(&identity_path, normalized.as_ref(), 0o600)?;
             context.validate_private_file(&identity_path)?;
             signing_key
         };

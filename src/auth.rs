@@ -654,7 +654,8 @@ fn install_staged_token_file(
     // preserving its metadata and security descriptor. Keep the sidecar lock
     // held for the whole operation so token writers remain serialized.
     if destination.exists() {
-        replace_existing_windows(tmp, destination)
+        crate::util::fs::replace_existing_windows(tmp, destination)
+            .map_err(|e| AuthError::Io(e.to_string()))
     } else {
         fs::rename(tmp, destination).map_err(|e| AuthError::Io(e.to_string()))
     }
@@ -667,43 +668,6 @@ fn install_staged_token_file(
     _replaced_metadata: Option<&fs::Metadata>,
 ) -> Result<(), AuthError> {
     fs::rename(tmp, destination).map_err(|e| AuthError::Io(e.to_string()))
-}
-
-/// Atomically install a staged token file over an existing destination on
-/// Windows. `ReplaceFileW` preserves the destination's metadata and security
-/// descriptor; unlike remove-then-rename there is no observable delete gap.
-#[cfg(windows)]
-fn replace_existing_windows(tmp: &Path, destination: &Path) -> Result<(), AuthError> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
-    let replacement = tmp
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let replaced = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    // SAFETY: Both paths are NUL-terminated UTF-16 strings that remain alive
-    // for the duration of the synchronous API call. The null backup and
-    // exclusion/preserve pointers request no backup and default behavior.
-    let result = unsafe {
-        ReplaceFileW(
-            replaced.as_ptr(),
-            replacement.as_ptr(),
-            std::ptr::null(),
-            0,
-            std::ptr::null(),
-            std::ptr::null(),
-        )
-    };
-    if result == 0 {
-        Err(AuthError::Io(std::io::Error::last_os_error().to_string()))
-    } else {
-        Ok(())
-    }
 }
 
 /// Apply `existing`'s mode and ownership to the staged replacement at `tmp`.
@@ -1211,22 +1175,6 @@ enabled = true
         assert!(ok.last_reload_error.is_none());
     }
 
-    /// Existing token stores must be replaced in place on Windows rather than
-    /// removed before the staged file is installed.
-    #[cfg(windows)]
-    #[test]
-    fn windows_replaces_existing_token_store_atomically() {
-        let dir = TempDir::new().unwrap();
-        let destination = dir.path().join("tokens.toml");
-        let replacement = dir.path().join("tokens.toml.tmp");
-        fs::write(&destination, "old").unwrap();
-        fs::write(&replacement, "new").unwrap();
-
-        replace_existing_windows(&replacement, &destination).unwrap();
-
-        assert_eq!(fs::read_to_string(&destination).unwrap(), "new");
-        assert!(!replacement.exists(), "staged file must be consumed");
-    }
     /// Appending a token must not narrow the tokens file's permissions.
     ///
     /// The installer creates `/etc/omakure/tokens.toml` as `root:omakure 0640`

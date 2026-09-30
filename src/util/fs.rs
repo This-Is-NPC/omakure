@@ -36,9 +36,64 @@ pub fn read_file_if_exists(path: &Path) -> io::Result<Option<String>> {
     }
 }
 
+/// Atomically install a staged file over an existing destination on Windows.
+/// ReplaceFileW preserves the destination's metadata and security descriptor;
+/// unlike remove-then-rename there is no observable delete gap.
+#[cfg(windows)]
+pub fn replace_existing_windows(tmp: &Path, destination: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+
+    let replacement = tmp
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let replaced = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    // SAFETY: Both paths are NUL-terminated UTF-16 strings that remain alive
+    // for the duration of the synchronous API call. The null backup and
+    // exclusion/preserve pointers request no backup and default behavior.
+    let result = unsafe {
+        ReplaceFileW(
+            replaced.as_ptr(),
+            replacement.as_ptr(),
+            std::ptr::null(),
+            0,
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    if result == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Existing files must be replaced in place on Windows rather than removed
+    /// before the staged file is installed.
+    #[cfg(windows)]
+    #[test]
+    fn windows_replaces_existing_file_atomically() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let destination = dir.path().join("target.toml");
+        let replacement = dir.path().join("target.toml.tmp");
+        fs::write(&destination, "old").unwrap();
+        fs::write(&replacement, "new").unwrap();
+
+        replace_existing_windows(&replacement, &destination).unwrap();
+
+        assert_eq!(fs::read_to_string(&destination).unwrap(), "new");
+        assert!(!replacement.exists(), "staged file must be consumed");
+    }
 
     #[test]
     #[cfg(not(windows))]

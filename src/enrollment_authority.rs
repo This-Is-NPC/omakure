@@ -91,7 +91,7 @@ impl EnrollmentAuthority {
             ));
         }
         let signing_key = SigningKey::generate();
-        crate::node::write_atomic_new(&path, signing_key.to_bytes().as_ref(), 0o600)?;
+        crate::node::write_new_file_atomically(&path, signing_key.to_bytes().as_ref(), 0o600)?;
         context.validate_private_file(&path)?;
         Ok(Self { signing_key })
     }

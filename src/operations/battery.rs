@@ -437,7 +437,7 @@ fn prepare_git_config_in(dir: &Path) -> OperationResult<PathBuf> {
         )
     })?;
     let path = dir.join("git-empty-config");
-    write_atomic(&path, b"", "git isolation config")?;
+    replace_file_atomically(&path, b"", "git isolation config")?;
     Ok(path)
 }
 
@@ -704,7 +704,9 @@ pub fn install_battery_script(
             target_existed,
         )?;
 
-        if let Err(err) = write_atomic(&provenance_path, contents.as_bytes(), "provenance") {
+        if let Err(err) =
+            replace_file_atomically(&provenance_path, contents.as_bytes(), "provenance")
+        {
             install_state.rollback();
             return Err(err);
         }
@@ -1963,7 +1965,7 @@ pub fn write_registry(path: &Path, registry: &BatteryRegistry) -> OperationResul
             format!("failed to serialize battery registry: {err}"),
         )
     })?;
-    write_atomic(path, contents.as_bytes(), "registry")
+    replace_file_atomically(path, contents.as_bytes(), "registry")
 }
 
 pub fn parse_manifest(contents: &str) -> OperationResult<BatteryManifest> {
@@ -2960,7 +2962,7 @@ fn ensure_opened_regular_file(file: &File) -> OperationResult<()> {
     Ok(())
 }
 
-fn write_atomic(path: &Path, contents: &[u8], label: &str) -> OperationResult<()> {
+fn replace_file_atomically(path: &Path, contents: &[u8], label: &str) -> OperationResult<()> {
     let parent = path.parent().ok_or_else(|| {
         OperationError::new(
             OperationErrorCode::UnsafePath,
@@ -3002,13 +3004,15 @@ fn write_atomic(path: &Path, contents: &[u8], label: &str) -> OperationResult<()
                     // ReplaceFileW performs the replacement in one operation,
                     // so readers never observe a remove gap.
                     if path.exists() {
-                        replace_existing_windows(&tmp_path, path).map_err(|err| {
-                            let _ = fs::remove_file(&tmp_path);
-                            OperationError::new(
-                                OperationErrorCode::IoFailed,
-                                format!("failed to replace {label}: {err}"),
-                            )
-                        })?;
+                        crate::util::fs::replace_existing_windows(&tmp_path, path).map_err(
+                            |err| {
+                                let _ = fs::remove_file(&tmp_path);
+                                OperationError::new(
+                                    OperationErrorCode::IoFailed,
+                                    format!("failed to replace {label}: {err}"),
+                                )
+                            },
+                        )?;
                     } else {
                         fs::rename(&tmp_path, path).map_err(|err| {
                             let _ = fs::remove_file(&tmp_path);
@@ -3042,44 +3046,6 @@ fn write_atomic(path: &Path, contents: &[u8], label: &str) -> OperationResult<()
         OperationErrorCode::Conflict,
         format!("failed to allocate a unique {label} temp file"),
     ))
-}
-
-/// Atomically install a staged file over an existing destination on Windows.
-/// ReplaceFileW preserves the destination's metadata and security descriptor;
-/// unlike remove-then-rename there is no observable delete gap.
-#[cfg(windows)]
-fn replace_existing_windows(tmp: &Path, destination: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
-
-    let replacement = tmp
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let replaced = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    // SAFETY: Both paths are NUL-terminated UTF-16 strings that remain alive
-    // for the duration of the synchronous API call. The null backup and
-    // exclusion/preserve pointers request no backup and default behavior.
-    let result = unsafe {
-        ReplaceFileW(
-            replaced.as_ptr(),
-            replacement.as_ptr(),
-            std::ptr::null(),
-            0,
-            std::ptr::null(),
-            std::ptr::null(),
-        )
-    };
-    if result == 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
 }
 
 fn validate_script_schema_from_file(path: &Path, file: &mut File) -> OperationResult<()> {

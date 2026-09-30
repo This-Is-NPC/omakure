@@ -8,7 +8,7 @@ use crate::direct_transport::{
     unix_seconds, x25519_public_from_private, HandshakeRole, NoiseHandshake, TransportCertificate,
     TransportError, CERTIFICATE_MAX_LIFETIME_SECONDS,
 };
-use crate::node::{write_atomic_new, NodeContext, NodeError};
+use crate::node::{write_new_file_atomically, NodeContext, NodeError};
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
 use rand::rngs::OsRng;
@@ -93,8 +93,8 @@ impl LocalTransport {
             now.saturating_add(CERTIFICATE_MAX_LIFETIME_SECONDS),
             random_certificate_id(),
         )?;
-        write_atomic_new(&context.transport_key_path(), &private_key, 0o600)?;
-        if let Err(error) = write_atomic_new(
+        write_new_file_atomically(&context.transport_key_path(), &private_key, 0o600)?;
+        if let Err(error) = write_new_file_atomically(
             &context.transport_certificate_path(),
             certificate.as_bytes(),
             0o600,

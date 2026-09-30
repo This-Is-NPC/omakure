@@ -453,8 +453,11 @@ impl NodeContext {
                 }
                 Err(err) if err.kind() == io::ErrorKind::NotFound => {
                     let contents = config.to_toml()?;
-                    let created = match write_atomic_config(self.config_path(), contents.as_bytes())
-                    {
+                    let created = match write_new_file_atomically(
+                        self.config_path(),
+                        contents.as_bytes(),
+                        0o640,
+                    ) {
                         Ok(()) => true,
                         // Another first start may win the config race. Never
                         // replace its file; validate and converge on it.
@@ -1236,11 +1239,7 @@ fn windows_file_identity(file: &fs::File) -> Result<WindowsFileIdentity, NodeErr
     })
 }
 
-fn write_atomic_config(path: &Path, contents: &[u8]) -> Result<(), NodeError> {
-    write_atomic_new(path, contents, 0o640)
-}
-
-pub(crate) fn write_atomic_new(
+pub(crate) fn write_new_file_atomically(
     path: &Path,
     contents: &[u8],
     #[cfg(unix)] mode: u32,

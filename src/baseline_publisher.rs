@@ -99,7 +99,7 @@ impl BaselinePublisher {
             ));
         }
         let signing_key = SigningKey::generate();
-        crate::node::write_atomic_new(&path, signing_key.to_bytes().as_ref(), 0o600)?;
+        crate::node::write_new_file_atomically(&path, signing_key.to_bytes().as_ref(), 0o600)?;
         if let Err(error) = registry.reject_conductor_authority() {
             let _ = fs::remove_file(&path);
             return Err(PublisherError::State(error.to_string()));

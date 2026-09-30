@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "e44cc36e48106f13da0dc7f4b45c6322513e7f87e4256fad2fc3d5ea096493b8",
+  "canonical_sha256": "2eab715ecc983ea2e15ad564af8161ea628a49faa6786e8735a751a0d68a05dd",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -9,14 +9,98 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 129,
+        "invocations": 10,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 124,
-        "cyclomatic": 208
+        "cognitive": 10,
+        "cyclomatic": 22
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 38,
+        "cyclomatic": 38
+      },
+      "path": "src/adapters/environments/layers.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 14,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 29,
+        "cyclomatic": 64
+      },
+      "path": "src/adapters/environments/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 38,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 20
+      },
+      "path": "src/adapters/environments/tests/layers.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 35,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 9
+      },
+      "path": "src/adapters/environments/tests/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 28,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 20
+      },
+      "path": "src/adapters/environments/tests/repository.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 46,
+        "cyclomatic": 35
+      },
+      "path": "src/adapters/environments/values.rs",
       "source_class": "handwritten"
     },
     {
@@ -3849,23 +3933,23 @@
       "derived": {
         "identity": "crate::adapters::environments::new",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "pub fn new<P: Into<PathBuf>>(envs_dir: P) -> Self",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::new",
       "kind": "method",
-      "line": 21,
+      "line": 27,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 21,
+        "line": 27,
         "name": "new"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "pub fn new<P: Into<PathBuf>>(envs_dir: P) -> Self",
       "source_class": "handwritten"
     },
@@ -3875,23 +3959,23 @@
       "derived": {
         "identity": "crate::adapters::environments::read_env_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn read_env_defaults(&self, path: &Path) -> AppResult<HashMap<String, String>>",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::read_env_defaults",
       "kind": "method",
-      "line": 27,
+      "line": 33,
       "name": "read_env_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 27,
+        "line": 33,
         "name": "read_env_defaults"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn read_env_defaults(&self, path: &Path) -> AppResult<HashMap<String, String>>",
       "source_class": "handwritten"
     },
@@ -3901,23 +3985,23 @@
       "derived": {
         "identity": "crate::adapters::environments::read_env_defaults::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "let contents = fs::read_to_string(path).map_err(|err| {",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::read_env_defaults::<closure>",
       "kind": "closure",
-      "line": 28,
+      "line": 34,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 28,
+        "line": 34,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "let contents = fs::read_to_string(path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -3927,23 +4011,23 @@
       "derived": {
         "identity": "crate::adapters::environments::env_path_for_name",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "pub(crate) fn env_path_for_name(&self, name: &str, must_exist: bool) -> AppResult<PathBuf>",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::env_path_for_name",
       "kind": "method",
-      "line": 38,
+      "line": 44,
       "name": "env_path_for_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 38,
+        "line": 44,
         "name": "env_path_for_name"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "pub(crate) fn env_path_for_name(&self, name: &str, must_exist: bool) -> AppResult<PathBuf>",
       "source_class": "handwritten"
     },
@@ -3953,23 +4037,23 @@
       "derived": {
         "identity": "crate::adapters::environments::env_path_for_name::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fs::create_dir_all(&self.envs_dir).map_err(|err| {",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::env_path_for_name::<closure>",
       "kind": "closure",
-      "line": 40,
+      "line": 46,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 40,
+        "line": 46,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fs::create_dir_all(&self.envs_dir).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -3979,23 +4063,23 @@
       "derived": {
         "identity": "crate::adapters::environments::list_env_files",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn list_env_files(&self) -> AppResult<Vec<EnvFile>>",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::list_env_files",
       "kind": "method",
-      "line": 55,
+      "line": 61,
       "name": "list_env_files",
       "native": {
         "analyzer": "cccc",
         "cognitive": 9,
         "cyclomatic": 6,
         "kind": "method",
-        "line": 55,
+        "line": 61,
         "name": "list_env_files"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn list_env_files(&self) -> AppResult<Vec<EnvFile>>",
       "source_class": "handwritten"
     },
@@ -4005,23 +4089,23 @@
       "derived": {
         "identity": "crate::adapters::environments::list_env_files::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "let dir = read_dir_or_empty(&self.envs_dir).map_err(|err| {",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::list_env_files::<closure>",
       "kind": "closure",
-      "line": 57,
+      "line": 63,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 57,
+        "line": 63,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "let dir = read_dir_or_empty(&self.envs_dir).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4029,25 +4113,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::list_env_files::<closure>@69#2",
+        "identity": "crate::adapters::environments::list_env_files::<closure>@75#2",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": ".map(|metadata| metadata.file_type().is_symlink())",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::list_env_files::<closure>@69#2",
+      "identity": "crate::adapters::environments::list_env_files::<closure>@75#2",
       "kind": "closure",
-      "line": 69,
+      "line": 75,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 69,
+        "line": 75,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": ".map(|metadata| metadata.file_type().is_symlink())",
       "source_class": "handwritten"
     },
@@ -4055,25 +4139,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::list_env_files::<closure>@77#3",
+        "identity": "crate::adapters::environments::list_env_files::<closure>@83#3",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "let name = match path.file_name().and_then(|name| name.to_str()) {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::list_env_files::<closure>@77#3",
+      "identity": "crate::adapters::environments::list_env_files::<closure>@83#3",
       "kind": "closure",
-      "line": 77,
+      "line": 83,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 77,
+        "line": 83,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "let name = match path.file_name().and_then(|name| name.to_str()) {",
       "source_class": "handwritten"
     },
@@ -4081,25 +4165,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::list_env_files::<closure>@87#4",
+        "identity": "crate::adapters::environments::list_env_files::<closure>@93#4",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "entries.sort_by(|a, b| a.name.cmp(&b.name));",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::list_env_files::<closure>@87#4",
+      "identity": "crate::adapters::environments::list_env_files::<closure>@93#4",
       "kind": "closure",
-      "line": 87,
+      "line": 93,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 87,
+        "line": 93,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "entries.sort_by(|a, b| a.name.cmp(&b.name));",
       "source_class": "handwritten"
     },
@@ -4109,23 +4193,23 @@
       "derived": {
         "identity": "crate::adapters::environments::load_environment_config",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn load_environment_config(&self) -> AppResult<EnvironmentConfig>",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::environments::load_environment_config",
       "kind": "method",
-      "line": 91,
+      "line": 97,
       "name": "load_environment_config",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 91,
+        "line": 97,
         "name": "load_environment_config"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn load_environment_config(&self) -> AppResult<EnvironmentConfig>",
       "source_class": "handwritten"
     },
@@ -4135,7 +4219,7 @@
       "derived": {
         "identity": "crate::adapters::environments::set_active_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn set_active_env(&self, name: Option<&str>) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4151,7 +4235,7 @@
         "line": 113,
         "name": "set_active_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn set_active_env(&self, name: Option<&str>) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4161,7 +4245,7 @@
       "derived": {
         "identity": "crate::adapters::environments::set_active_env::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fs::create_dir_all(&self.envs_dir).map_err(|err| {",
         "source_class": "handwritten"
       },
@@ -4177,7 +4261,7 @@
         "line": 114,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fs::create_dir_all(&self.envs_dir).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4187,7 +4271,7 @@
       "derived": {
         "identity": "crate::adapters::environments::set_active_env::<closure>@136#2",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fs::remove_file(&active_path).map_err(|err| {",
         "source_class": "handwritten"
       },
@@ -4203,7 +4287,7 @@
         "line": 136,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fs::remove_file(&active_path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4213,7 +4297,7 @@
       "derived": {
         "identity": "crate::adapters::environments::load_env_preview",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview>",
         "source_class": "handwritten"
       },
@@ -4229,7 +4313,7 @@
         "line": 150,
         "name": "load_env_preview"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview>",
       "source_class": "handwritten"
     },
@@ -4239,7 +4323,7 @@
       "derived": {
         "identity": "crate::adapters::environments::load_env_preview::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "let contents = fs::read_to_string(path).map_err(|err| {",
         "source_class": "handwritten"
       },
@@ -4255,7 +4339,7 @@
         "line": 151,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "let contents = fs::read_to_string(path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4265,7 +4349,7 @@
       "derived": {
         "identity": "crate::adapters::environments::create_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4281,7 +4365,7 @@
         "line": 161,
         "name": "create_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4291,7 +4375,7 @@
       "derived": {
         "identity": "crate::adapters::environments::load_env_preview_by_name",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview>",
         "source_class": "handwritten"
       },
@@ -4307,7 +4391,7 @@
         "line": 173,
         "name": "load_env_preview_by_name"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview>",
       "source_class": "handwritten"
     },
@@ -4317,7 +4401,7 @@
       "derived": {
         "identity": "crate::adapters::environments::replace_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4333,7 +4417,7 @@
         "line": 178,
         "name": "replace_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4343,7 +4427,7 @@
       "derived": {
         "identity": "crate::adapters::environments::set_env_param",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4359,7 +4443,7 @@
         "line": 183,
         "name": "set_env_param"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4369,7 +4453,7 @@
       "derived": {
         "identity": "crate::adapters::environments::set_env_param::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {",
         "source_class": "handwritten"
       },
@@ -4385,7 +4469,7 @@
         "line": 186,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4395,7 +4479,7 @@
       "derived": {
         "identity": "crate::adapters::environments::set_env_param::<closure>@193#2",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "match params.iter_mut().find(|(existing, _)| existing == key) {",
         "source_class": "handwritten"
       },
@@ -4411,7 +4495,7 @@
         "line": 193,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "match params.iter_mut().find(|(existing, _)| existing == key) {",
       "source_class": "handwritten"
     },
@@ -4421,7 +4505,7 @@
       "derived": {
         "identity": "crate::adapters::environments::set_env_param::<closure>@199#3",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": ".map(|(k, v)| (k.as_str(), v.as_str()))",
         "source_class": "handwritten"
       },
@@ -4437,7 +4521,7 @@
         "line": 199,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": ".map(|(k, v)| (k.as_str(), v.as_str()))",
       "source_class": "handwritten"
     },
@@ -4447,7 +4531,7 @@
       "derived": {
         "identity": "crate::adapters::environments::remove_env_param",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4463,7 +4547,7 @@
         "line": 204,
         "name": "remove_env_param"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4473,7 +4557,7 @@
       "derived": {
         "identity": "crate::adapters::environments::remove_env_param::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {",
         "source_class": "handwritten"
       },
@@ -4489,7 +4573,7 @@
         "line": 207,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4499,7 +4583,7 @@
       "derived": {
         "identity": "crate::adapters::environments::remove_env_param::<closure>@214#2",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "params.retain(|(existing, _)| existing != key);",
         "source_class": "handwritten"
       },
@@ -4515,7 +4599,7 @@
         "line": 214,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "params.retain(|(existing, _)| existing != key);",
       "source_class": "handwritten"
     },
@@ -4525,7 +4609,7 @@
       "derived": {
         "identity": "crate::adapters::environments::activate_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn activate_env(&self, name: &str) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4541,7 +4625,7 @@
         "line": 222,
         "name": "activate_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn activate_env(&self, name: &str) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4551,7 +4635,7 @@
       "derived": {
         "identity": "crate::adapters::environments::activate_env::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": ".and_then(|name| name.to_str())",
         "source_class": "handwritten"
       },
@@ -4567,7 +4651,7 @@
         "line": 226,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": ".and_then(|name| name.to_str())",
       "source_class": "handwritten"
     },
@@ -4577,7 +4661,7 @@
       "derived": {
         "identity": "crate::adapters::environments::activate_env::<closure>@227#2",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": ".ok_or_else(|| EnvironmentError::UnsafePath {",
         "source_class": "handwritten"
       },
@@ -4593,7 +4677,7 @@
         "line": 227,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": ".ok_or_else(|| EnvironmentError::UnsafePath {",
       "source_class": "handwritten"
     },
@@ -4603,7 +4687,7 @@
       "derived": {
         "identity": "crate::adapters::environments::deactivate_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn deactivate_env(&self) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4619,7 +4703,7 @@
         "line": 233,
         "name": "deactivate_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn deactivate_env(&self) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4629,7 +4713,7 @@
       "derived": {
         "identity": "crate::adapters::environments::delete_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn delete_env(&self, name: &str) -> AppResult<()>",
         "source_class": "handwritten"
       },
@@ -4645,7 +4729,7 @@
         "line": 237,
         "name": "delete_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn delete_env(&self, name: &str) -> AppResult<()>",
       "source_class": "handwritten"
     },
@@ -4655,7 +4739,7 @@
       "derived": {
         "identity": "crate::adapters::environments::delete_env::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fs::remove_file(&path).map_err(|err| {",
         "source_class": "handwritten"
       },
@@ -4671,7 +4755,7 @@
         "line": 239,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fs::remove_file(&path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4681,7 +4765,7 @@
       "derived": {
         "identity": "crate::adapters::environments::load_active_env_name",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn load_active_env_name(envs_dir: &Path) -> AppResult<Option<String>>",
         "source_class": "handwritten"
       },
@@ -4697,7 +4781,7 @@
         "line": 254,
         "name": "load_active_env_name"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn load_active_env_name(envs_dir: &Path) -> AppResult<Option<String>>",
       "source_class": "handwritten"
     },
@@ -4707,7 +4791,7 @@
       "derived": {
         "identity": "crate::adapters::environments::load_active_env_name::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": ".map_err(|err| {",
         "source_class": "handwritten"
       },
@@ -4723,7 +4807,7 @@
         "line": 257,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": ".map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4733,7 +4817,7 @@
       "derived": {
         "identity": "crate::adapters::environments::validate_env_name",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn validate_env_name(name: &str) -> Result<(), EnvironmentError>",
         "source_class": "handwritten"
       },
@@ -4749,7 +4833,7 @@
         "line": 281,
         "name": "validate_env_name"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn validate_env_name(name: &str) -> Result<(), EnvironmentError>",
       "source_class": "handwritten"
     },
@@ -4759,7 +4843,7 @@
       "derived": {
         "identity": "crate::adapters::environments::validate_env_key",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/mod.rs",
         "signature": "fn validate_env_key(key: &str) -> Result<(), EnvironmentError>",
         "source_class": "handwritten"
       },
@@ -4775,7 +4859,7 @@
         "line": 298,
         "name": "validate_env_key"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/mod.rs",
       "signature": "fn validate_env_key(key: &str) -> Result<(), EnvironmentError>",
       "source_class": "handwritten"
     },
@@ -4783,51 +4867,51 @@
       "cognitive": 6,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::adapters::environments::ensure_env_path_safe",
+        "identity": "crate::adapters::environments::files::ensure_env_path_safe",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn ensure_env_path_safe(envs_dir: &Path, path: &Path, must_exist: bool) -> AppResult<()>",
+        "path": "src/adapters/environments/files.rs",
+        "signature": "pub(super) fn ensure_env_path_safe( envs_dir: &Path, path: &Path, must_exist: bool, ) -> AppResult<()>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::ensure_env_path_safe",
+      "identity": "crate::adapters::environments::files::ensure_env_path_safe",
       "kind": "function",
-      "line": 308,
+      "line": 11,
       "name": "ensure_env_path_safe",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 308,
+        "line": 11,
         "name": "ensure_env_path_safe"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn ensure_env_path_safe(envs_dir: &Path, path: &Path, must_exist: bool) -> AppResult<()>",
+      "path": "src/adapters/environments/files.rs",
+      "signature": "pub(super) fn ensure_env_path_safe( envs_dir: &Path, path: &Path, must_exist: bool, ) -> AppResult<()>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::ensure_env_path_safe::<closure>",
+        "identity": "crate::adapters::environments::files::ensure_env_path_safe::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": "let envs = envs_dir.canonicalize().map_err(|err| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::ensure_env_path_safe::<closure>",
+      "identity": "crate::adapters::environments::files::ensure_env_path_safe::<closure>",
       "kind": "closure",
-      "line": 309,
+      "line": 16,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 309,
+        "line": 16,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": "let envs = envs_dir.canonicalize().map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4835,103 +4919,103 @@
       "cognitive": 4,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::adapters::environments::write_env_params_atomic",
+        "identity": "crate::adapters::environments::files::write_env_params_atomic",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn write_env_params_atomic(path: &Path, params: &[(&str, &str)]) -> AppResult<()>",
+        "path": "src/adapters/environments/files.rs",
+        "signature": "pub(super) fn write_env_params_atomic(path: &Path, params: &[(&str, &str)]) -> AppResult<()>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_env_params_atomic",
+      "identity": "crate::adapters::environments::files::write_env_params_atomic",
       "kind": "function",
-      "line": 354,
+      "line": 61,
       "name": "write_env_params_atomic",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 354,
+        "line": 61,
         "name": "write_env_params_atomic"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn write_env_params_atomic(path: &Path, params: &[(&str, &str)]) -> AppResult<()>",
+      "path": "src/adapters/environments/files.rs",
+      "signature": "pub(super) fn write_env_params_atomic(path: &Path, params: &[(&str, &str)]) -> AppResult<()>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_active_atomic",
+        "identity": "crate::adapters::environments::files::write_active_atomic",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn write_active_atomic(path: &Path, name: &str) -> AppResult<()>",
+        "path": "src/adapters/environments/files.rs",
+        "signature": "pub(super) fn write_active_atomic(path: &Path, name: &str) -> AppResult<()>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_active_atomic",
+      "identity": "crate::adapters::environments::files::write_active_atomic",
       "kind": "function",
-      "line": 372,
+      "line": 79,
       "name": "write_active_atomic",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 372,
+        "line": 79,
         "name": "write_active_atomic"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn write_active_atomic(path: &Path, name: &str) -> AppResult<()>",
+      "path": "src/adapters/environments/files.rs",
+      "signature": "pub(super) fn write_active_atomic(path: &Path, name: &str) -> AppResult<()>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic",
+        "identity": "crate::adapters::environments::files::write_file_atomic",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn write_file_atomic(path: &Path, contents: &[u8]) -> AppResult<()>",
+        "path": "src/adapters/environments/files.rs",
+        "signature": "pub(super) fn write_file_atomic(path: &Path, contents: &[u8]) -> AppResult<()>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic",
+      "identity": "crate::adapters::environments::files::write_file_atomic",
       "kind": "function",
-      "line": 376,
+      "line": 83,
       "name": "write_file_atomic",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 376,
+        "line": 83,
         "name": "write_file_atomic"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn write_file_atomic(path: &Path, contents: &[u8]) -> AppResult<()>",
+      "path": "src/adapters/environments/files.rs",
+      "signature": "pub(super) fn write_file_atomic(path: &Path, contents: &[u8]) -> AppResult<()>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic::<closure>",
+        "identity": "crate::adapters::environments::files::write_file_atomic::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": "let parent = path.parent().ok_or_else(|| EnvironmentError::UnsafePath {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic::<closure>",
+      "identity": "crate::adapters::environments::files::write_file_atomic::<closure>",
       "kind": "closure",
-      "line": 377,
+      "line": 84,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 377,
+        "line": 84,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": "let parent = path.parent().ok_or_else(|| EnvironmentError::UnsafePath {",
       "source_class": "handwritten"
     },
@@ -4939,25 +5023,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic::<closure>@380#2",
+        "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@87#2",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": "fs::create_dir_all(parent).map_err(|err| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic::<closure>@380#2",
+      "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@87#2",
       "kind": "closure",
-      "line": 380,
+      "line": 87,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 380,
+        "line": 87,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": "fs::create_dir_all(parent).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -4965,25 +5049,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic::<closure>@394#4",
+        "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@101#4",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": ".map(|duration| duration.as_nanos())",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic::<closure>@394#4",
+      "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@101#4",
       "kind": "closure",
-      "line": 394,
+      "line": 101,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 394,
+        "line": 101,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": ".map(|duration| duration.as_nanos())",
       "source_class": "handwritten"
     },
@@ -4991,25 +5075,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic::<closure>@411#5",
+        "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@118#5",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": "let mut file = options.open(&tmp).map_err(|err| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic::<closure>@411#5",
+      "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@118#5",
       "kind": "closure",
-      "line": 411,
+      "line": 118,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 411,
+        "line": 118,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": "let mut file = options.open(&tmp).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -5017,25 +5101,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic::<closure>@418#6",
+        "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@125#6",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": "file.write_all(contents).map_err(|err| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic::<closure>@418#6",
+      "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@125#6",
       "kind": "closure",
-      "line": 418,
+      "line": 125,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 418,
+        "line": 125,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": "file.write_all(contents).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -5043,25 +5127,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic::<closure>@425#7",
+        "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@132#7",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": "file.sync_all().map_err(|err| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic::<closure>@425#7",
+      "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@132#7",
       "kind": "closure",
-      "line": 425,
+      "line": 132,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 425,
+        "line": 132,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": "file.sync_all().map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -5069,25 +5153,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic::<closure>@434#8",
+        "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@141#8",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/files.rs",
         "signature": "fs::rename(&tmp, path).map_err(|err| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic::<closure>@434#8",
+      "identity": "crate::adapters::environments::files::write_file_atomic::<closure>@141#8",
       "kind": "closure",
-      "line": 434,
+      "line": 141,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 434,
+        "line": 141,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/files.rs",
       "signature": "fs::rename(&tmp, path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -5095,25 +5179,25 @@
       "cognitive": 10,
       "cyclomatic": 8,
       "derived": {
-        "identity": "crate::adapters::environments::parse_env_preview",
+        "identity": "crate::adapters::environments::layers::parse_env_preview",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "pub(crate) fn parse_env_preview(contents: &str) -> Vec<(String, String)>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::parse_env_preview",
+      "identity": "crate::adapters::environments::layers::parse_env_preview",
       "kind": "function",
-      "line": 445,
+      "line": 8,
       "name": "parse_env_preview",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 445,
+        "line": 8,
         "name": "parse_env_preview"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "pub(crate) fn parse_env_preview(contents: &str) -> Vec<(String, String)>",
       "source_class": "handwritten"
     },
@@ -5121,25 +5205,25 @@
       "cognitive": 10,
       "cyclomatic": 8,
       "derived": {
-        "identity": "crate::adapters::environments::parse_env_defaults",
+        "identity": "crate::adapters::environments::layers::parse_env_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::parse_env_defaults",
+      "identity": "crate::adapters::environments::layers::parse_env_defaults",
       "kind": "function",
-      "line": 473,
+      "line": 36,
       "name": "parse_env_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 473,
+        "line": 36,
         "name": "parse_env_defaults"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String>",
       "source_class": "handwritten"
     },
@@ -5147,51 +5231,51 @@
       "cognitive": 10,
       "cyclomatic": 8,
       "derived": {
-        "identity": "crate::adapters::environments::parse_env_pairs_raw",
+        "identity": "crate::adapters::environments::layers::parse_env_pairs_raw",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)>",
+        "path": "src/adapters/environments/layers.rs",
+        "signature": "pub(super) fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::parse_env_pairs_raw",
+      "identity": "crate::adapters::environments::layers::parse_env_pairs_raw",
       "kind": "function",
-      "line": 515,
+      "line": 78,
       "name": "parse_env_pairs_raw",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 515,
+        "line": 78,
         "name": "parse_env_pairs_raw"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)>",
+      "path": "src/adapters/environments/layers.rs",
+      "signature": "pub(super) fn parse_env_pairs_raw(contents: &str) -> Vec<(String, String)>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::parent_env",
+        "identity": "crate::adapters::environments::layers::parent_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "fn parent_env() -> HashMap<String, String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::parent_env",
+      "identity": "crate::adapters::environments::layers::parent_env",
       "kind": "function",
-      "line": 547,
+      "line": 110,
       "name": "parent_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 547,
+        "line": 110,
         "name": "parent_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "fn parent_env() -> HashMap<String, String>",
       "source_class": "handwritten"
     },
@@ -5199,51 +5283,51 @@
       "cognitive": 6,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::adapters::environments::merge_env_layers",
+        "identity": "crate::adapters::environments::layers::merge_env_layers",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn merge_env_layers( base: &HashMap<String, String>, layers: &[&[(String, String)]], ) -> Vec<(String, String)>",
+        "path": "src/adapters/environments/layers.rs",
+        "signature": "pub(super) fn merge_env_layers( base: &HashMap<String, String>, layers: &[&[(String, String)]], ) -> Vec<(String, String)>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::merge_env_layers",
+      "identity": "crate::adapters::environments::layers::merge_env_layers",
       "kind": "function",
-      "line": 567,
+      "line": 130,
       "name": "merge_env_layers",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 567,
+        "line": 130,
         "name": "merge_env_layers"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn merge_env_layers( base: &HashMap<String, String>, layers: &[&[(String, String)]], ) -> Vec<(String, String)>",
+      "path": "src/adapters/environments/layers.rs",
+      "signature": "pub(super) fn merge_env_layers( base: &HashMap<String, String>, layers: &[&[(String, String)]], ) -> Vec<(String, String)>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::merge_env_layers::<closure>",
+        "identity": "crate::adapters::environments::layers::merge_env_layers::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "match out.iter_mut().find(|(k, _)| k == key) {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::merge_env_layers::<closure>",
+      "identity": "crate::adapters::environments::layers::merge_env_layers::<closure>",
       "kind": "closure",
-      "line": 578,
+      "line": 141,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 578,
+        "line": 141,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "match out.iter_mut().find(|(k, _)| k == key) {",
       "source_class": "handwritten"
     },
@@ -5251,25 +5335,25 @@
       "cognitive": 1,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::adapters::environments::active_env_raw",
+        "identity": "crate::adapters::environments::layers::active_env_raw",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::active_env_raw",
+      "identity": "crate::adapters::environments::layers::active_env_raw",
       "kind": "function",
-      "line": 592,
+      "line": 155,
       "name": "active_env_raw",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 592,
+        "line": 155,
         "name": "active_env_raw"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)>",
       "source_class": "handwritten"
     },
@@ -5277,25 +5361,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::read_managed_env_defaults",
+        "identity": "crate::adapters::environments::layers::read_managed_env_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "pub(crate) fn read_managed_env_defaults( envs_dir: &Path, name: &str, ) -> AppResult<HashMap<String, String>>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::read_managed_env_defaults",
+      "identity": "crate::adapters::environments::layers::read_managed_env_defaults",
       "kind": "function",
-      "line": 607,
+      "line": 170,
       "name": "read_managed_env_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 607,
+        "line": 170,
         "name": "read_managed_env_defaults"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "pub(crate) fn read_managed_env_defaults( envs_dir: &Path, name: &str, ) -> AppResult<HashMap<String, String>>",
       "source_class": "handwritten"
     },
@@ -5303,25 +5387,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::resolve_active_env",
+        "identity": "crate::adapters::environments::layers::resolve_active_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "pub(crate) fn resolve_active_env(envs_dir: &Path) -> Vec<(String, String)>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::resolve_active_env",
+      "identity": "crate::adapters::environments::layers::resolve_active_env",
       "kind": "function",
-      "line": 654,
+      "line": 212,
       "name": "resolve_active_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 654,
+        "line": 212,
         "name": "resolve_active_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "pub(crate) fn resolve_active_env(envs_dir: &Path) -> Vec<(String, String)>",
       "source_class": "handwritten"
     },
@@ -5329,25 +5413,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::adapters::environments::resolve_run_env",
+        "identity": "crate::adapters::environments::layers::resolve_run_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "pub(crate) fn resolve_run_env( envs_dir: &Path, env_file: Option<&Path>, ) -> Result<Vec<(String, String)>, EnvironmentError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::resolve_run_env",
+      "identity": "crate::adapters::environments::layers::resolve_run_env",
       "kind": "function",
-      "line": 674,
+      "line": 232,
       "name": "resolve_run_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 674,
+        "line": 232,
         "name": "resolve_run_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "pub(crate) fn resolve_run_env( envs_dir: &Path, env_file: Option<&Path>, ) -> Result<Vec<(String, String)>, EnvironmentError>",
       "source_class": "handwritten"
     },
@@ -5355,25 +5439,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::resolve_run_env::<closure>",
+        "identity": "crate::adapters::environments::layers::resolve_run_env::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/layers.rs",
         "signature": "let contents = fs::read_to_string(path).map_err(|err| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::resolve_run_env::<closure>",
+      "identity": "crate::adapters::environments::layers::resolve_run_env::<closure>",
       "kind": "closure",
-      "line": 681,
+      "line": 239,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 681,
+        "line": 239,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/layers.rs",
       "signature": "let contents = fs::read_to_string(path).map_err(|err| {",
       "source_class": "handwritten"
     },
@@ -5381,25 +5465,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::adapters::environments::is_name_start",
+        "identity": "crate::adapters::environments::values::is_name_start",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/values.rs",
         "signature": "fn is_name_start(c: char) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::is_name_start",
+      "identity": "crate::adapters::environments::values::is_name_start",
       "kind": "function",
-      "line": 698,
+      "line": 3,
       "name": "is_name_start",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 698,
+        "line": 3,
         "name": "is_name_start"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/values.rs",
       "signature": "fn is_name_start(c: char) -> bool",
       "source_class": "handwritten"
     },
@@ -5407,25 +5491,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::adapters::environments::is_name_char",
+        "identity": "crate::adapters::environments::values::is_name_char",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/values.rs",
         "signature": "fn is_name_char(c: char) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::is_name_char",
+      "identity": "crate::adapters::environments::values::is_name_char",
       "kind": "function",
-      "line": 702,
+      "line": 7,
       "name": "is_name_char",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 702,
+        "line": 7,
         "name": "is_name_char"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/values.rs",
       "signature": "fn is_name_char(c: char) -> bool",
       "source_class": "handwritten"
     },
@@ -5433,77 +5517,77 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::adapters::environments::is_valid_var_name",
+        "identity": "crate::adapters::environments::values::is_valid_var_name",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn is_valid_var_name(name: &str) -> bool",
+        "path": "src/adapters/environments/values.rs",
+        "signature": "pub(super) fn is_valid_var_name(name: &str) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::is_valid_var_name",
+      "identity": "crate::adapters::environments::values::is_valid_var_name",
       "kind": "function",
-      "line": 707,
+      "line": 12,
       "name": "is_valid_var_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 707,
+        "line": 12,
         "name": "is_valid_var_name"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn is_valid_var_name(name: &str) -> bool",
+      "path": "src/adapters/environments/values.rs",
+      "signature": "pub(super) fn is_valid_var_name(name: &str) -> bool",
       "source_class": "handwritten"
     },
     {
       "cognitive": 33,
       "cyclomatic": 14,
       "derived": {
-        "identity": "crate::adapters::environments::expand_env_value",
+        "identity": "crate::adapters::environments::values::expand_env_value",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn expand_env_value(input: &str, vars: &HashMap<String, String>) -> String",
+        "path": "src/adapters/environments/values.rs",
+        "signature": "pub(super) fn expand_env_value(input: &str, vars: &HashMap<String, String>) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::expand_env_value",
+      "identity": "crate::adapters::environments::values::expand_env_value",
       "kind": "function",
-      "line": 728,
+      "line": 33,
       "name": "expand_env_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 33,
         "cyclomatic": 14,
         "kind": "function",
-        "line": 728,
+        "line": 33,
         "name": "expand_env_value"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn expand_env_value(input: &str, vars: &HashMap<String, String>) -> String",
+      "path": "src/adapters/environments/values.rs",
+      "signature": "pub(super) fn expand_env_value(input: &str, vars: &HashMap<String, String>) -> String",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::expand_env_value::<closure>",
+        "identity": "crate::adapters::environments::values::expand_env_value::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/values.rs",
         "signature": "if let Some(close) = (i + 2..chars.len()).find(|&j| chars[j] == '}') {",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::expand_env_value::<closure>",
+      "identity": "crate::adapters::environments::values::expand_env_value::<closure>",
       "kind": "closure",
-      "line": 751,
+      "line": 56,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 751,
+        "line": 56,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/values.rs",
       "signature": "if let Some(close) = (i + 2..chars.len()).find(|&j| chars[j] == '}') {",
       "source_class": "handwritten"
     },
@@ -5511,51 +5595,51 @@
       "cognitive": 6,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::adapters::environments::strip_quotes",
+        "identity": "crate::adapters::environments::values::strip_quotes",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
-        "signature": "fn strip_quotes(value: &str) -> &str",
+        "path": "src/adapters/environments/values.rs",
+        "signature": "pub(super) fn strip_quotes(value: &str) -> &str",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::strip_quotes",
+      "identity": "crate::adapters::environments::values::strip_quotes",
       "kind": "function",
-      "line": 791,
+      "line": 96,
       "name": "strip_quotes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 791,
+        "line": 96,
         "name": "strip_quotes"
       },
-      "path": "src/adapters/environments.rs",
-      "signature": "fn strip_quotes(value: &str) -> &str",
+      "path": "src/adapters/environments/values.rs",
+      "signature": "pub(super) fn strip_quotes(value: &str) -> &str",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::is_sensitive_key",
+        "identity": "crate::adapters::environments::values::is_sensitive_key",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/values.rs",
         "signature": "pub(crate) fn is_sensitive_key(key: &str) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::is_sensitive_key",
+      "identity": "crate::adapters::environments::values::is_sensitive_key",
       "kind": "function",
-      "line": 803,
+      "line": 108,
       "name": "is_sensitive_key",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 803,
+        "line": 108,
         "name": "is_sensitive_key"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/values.rs",
       "signature": "pub(crate) fn is_sensitive_key(key: &str) -> bool",
       "source_class": "handwritten"
     },
@@ -5563,25 +5647,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::is_sensitive_key::<closure>",
+        "identity": "crate::adapters::environments::values::is_sensitive_key::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/values.rs",
         "signature": "tokens.iter().any(|token| lower.contains(token))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::is_sensitive_key::<closure>",
+      "identity": "crate::adapters::environments::values::is_sensitive_key::<closure>",
       "kind": "closure",
-      "line": 819,
+      "line": 124,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 819,
+        "line": 124,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/values.rs",
       "signature": "tokens.iter().any(|token| lower.contains(token))",
       "source_class": "handwritten"
     },
@@ -5589,25 +5673,25 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::adapters::environments::value_contains_credentials",
+        "identity": "crate::adapters::environments::values::value_contains_credentials",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/values.rs",
         "signature": "pub(crate) fn value_contains_credentials(value: &str) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::value_contains_credentials",
+      "identity": "crate::adapters::environments::values::value_contains_credentials",
       "kind": "function",
-      "line": 822,
+      "line": 127,
       "name": "value_contains_credentials",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 822,
+        "line": 127,
         "name": "value_contains_credentials"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/values.rs",
       "signature": "pub(crate) fn value_contains_credentials(value: &str) -> bool",
       "source_class": "handwritten"
     },
@@ -5615,25 +5699,25 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::adapters::environments::should_mask_env_value",
+        "identity": "crate::adapters::environments::values::should_mask_env_value",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/values.rs",
         "signature": "pub(crate) fn should_mask_env_value(key: &str, value: &str) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::should_mask_env_value",
+      "identity": "crate::adapters::environments::values::should_mask_env_value",
       "kind": "function",
-      "line": 855,
+      "line": 160,
       "name": "should_mask_env_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 855,
+        "line": 160,
         "name": "should_mask_env_value"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/values.rs",
       "signature": "pub(crate) fn should_mask_env_value(key: &str, value: &str) -> bool",
       "source_class": "handwritten"
     },
@@ -5641,25 +5725,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_is_sensitive_key",
+        "identity": "crate::adapters::environments::tests::test_is_sensitive_key",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": "fn test_is_sensitive_key(#[case] key: &str, #[case] expected: bool)",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_is_sensitive_key",
+      "identity": "crate::adapters::environments::tests::test_is_sensitive_key",
       "kind": "function",
-      "line": 887,
+      "line": 35,
       "name": "test_is_sensitive_key",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 887,
+        "line": 35,
         "name": "test_is_sensitive_key"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": "fn test_is_sensitive_key(#[case] key: &str, #[case] expected: bool)",
       "source_class": "handwritten"
     },
@@ -5667,25 +5751,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_defaults",
+        "identity": "crate::adapters::environments::tests::test_parse_env_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": "fn test_parse_env_defaults(#[case] input: &str, #[case] expected: Vec<(&str, &str)>)",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_defaults",
+      "identity": "crate::adapters::environments::tests::test_parse_env_defaults",
       "kind": "function",
-      "line": 901,
+      "line": 49,
       "name": "test_parse_env_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 901,
+        "line": 49,
         "name": "test_parse_env_defaults"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": "fn test_parse_env_defaults(#[case] input: &str, #[case] expected: Vec<(&str, &str)>)",
       "source_class": "handwritten"
     },
@@ -5693,25 +5777,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_defaults::<closure>",
+        "identity": "crate::adapters::environments::tests::test_parse_env_defaults::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": ".map(|(k, v)| (k.to_string(), v.to_string()))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_defaults::<closure>",
+      "identity": "crate::adapters::environments::tests::test_parse_env_defaults::<closure>",
       "kind": "closure",
-      "line": 905,
+      "line": 53,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 905,
+        "line": 53,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": ".map(|(k, v)| (k.to_string(), v.to_string()))",
       "source_class": "handwritten"
     },
@@ -5719,25 +5803,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_defaults_characterization_lowercases_and_strips",
+        "identity": "crate::adapters::environments::tests::test_parse_env_defaults_characterization_lowercases_and_strips",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": "fn test_parse_env_defaults_characterization_lowercases_and_strips()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_defaults_characterization_lowercases_and_strips",
+      "identity": "crate::adapters::environments::tests::test_parse_env_defaults_characterization_lowercases_and_strips",
       "kind": "function",
-      "line": 915,
+      "line": 63,
       "name": "test_parse_env_defaults_characterization_lowercases_and_strips",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 915,
+        "line": 63,
         "name": "test_parse_env_defaults_characterization_lowercases_and_strips"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": "fn test_parse_env_defaults_characterization_lowercases_and_strips()",
       "source_class": "handwritten"
     },
@@ -5745,25 +5829,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_defaults_multiline",
+        "identity": "crate::adapters::environments::tests::test_parse_env_defaults_multiline",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": "fn test_parse_env_defaults_multiline()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_defaults_multiline",
+      "identity": "crate::adapters::environments::tests::test_parse_env_defaults_multiline",
       "kind": "function",
-      "line": 947,
+      "line": 95,
       "name": "test_parse_env_defaults_multiline",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 947,
+        "line": 95,
         "name": "test_parse_env_defaults_multiline"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": "fn test_parse_env_defaults_multiline()",
       "source_class": "handwritten"
     },
@@ -5771,25 +5855,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::write_file_atomic_does_not_follow_predictable_temp_symlink",
+        "identity": "crate::adapters::environments::tests::write_file_atomic_does_not_follow_predictable_temp_symlink",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": "fn write_file_atomic_does_not_follow_predictable_temp_symlink()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::write_file_atomic_does_not_follow_predictable_temp_symlink",
+      "identity": "crate::adapters::environments::tests::write_file_atomic_does_not_follow_predictable_temp_symlink",
       "kind": "function",
-      "line": 958,
+      "line": 106,
       "name": "write_file_atomic_does_not_follow_predictable_temp_symlink",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 958,
+        "line": 106,
         "name": "write_file_atomic_does_not_follow_predictable_temp_symlink"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": "fn write_file_atomic_does_not_follow_predictable_temp_symlink()",
       "source_class": "handwritten"
     },
@@ -5797,25 +5881,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_preview",
+        "identity": "crate::adapters::environments::tests::test_parse_env_preview",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": "fn test_parse_env_preview(#[case] input: &str, #[case] expected: Vec<(&str, &str)>)",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_preview",
+      "identity": "crate::adapters::environments::tests::test_parse_env_preview",
       "kind": "function",
-      "line": 987,
+      "line": 135,
       "name": "test_parse_env_preview",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 987,
+        "line": 135,
         "name": "test_parse_env_preview"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": "fn test_parse_env_preview(#[case] input: &str, #[case] expected: Vec<(&str, &str)>)",
       "source_class": "handwritten"
     },
@@ -5823,25 +5907,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_preview::<closure>",
+        "identity": "crate::adapters::environments::tests::test_parse_env_preview::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": ".map(|(k, v)| (k.to_string(), v.to_string()))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_preview::<closure>",
+      "identity": "crate::adapters::environments::tests::test_parse_env_preview::<closure>",
       "kind": "closure",
-      "line": 991,
+      "line": 139,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 991,
+        "line": 139,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": ".map(|(k, v)| (k.to_string(), v.to_string()))",
       "source_class": "handwritten"
     },
@@ -5849,25 +5933,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_pairs_raw_preserves_key_case",
+        "identity": "crate::adapters::environments::tests::layers::test_parse_env_pairs_raw_preserves_key_case",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_parse_env_pairs_raw_preserves_key_case()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_pairs_raw_preserves_key_case",
+      "identity": "crate::adapters::environments::tests::layers::test_parse_env_pairs_raw_preserves_key_case",
       "kind": "function",
-      "line": 999,
+      "line": 9,
       "name": "test_parse_env_pairs_raw_preserves_key_case",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 999,
+        "line": 9,
         "name": "test_parse_env_pairs_raw_preserves_key_case"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_parse_env_pairs_raw_preserves_key_case()",
       "source_class": "handwritten"
     },
@@ -5875,25 +5959,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_pairs_raw_line_handling_matches_defaults",
+        "identity": "crate::adapters::environments::tests::layers::test_parse_env_pairs_raw_line_handling_matches_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_parse_env_pairs_raw_line_handling_matches_defaults()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_pairs_raw_line_handling_matches_defaults",
+      "identity": "crate::adapters::environments::tests::layers::test_parse_env_pairs_raw_line_handling_matches_defaults",
       "kind": "function",
-      "line": 1013,
+      "line": 23,
       "name": "test_parse_env_pairs_raw_line_handling_matches_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1013,
+        "line": 23,
         "name": "test_parse_env_pairs_raw_line_handling_matches_defaults"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_parse_env_pairs_raw_line_handling_matches_defaults()",
       "source_class": "handwritten"
     },
@@ -5901,25 +5985,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_merge_env_layers_expands_bare_and_braced_within_layer",
+        "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_expands_bare_and_braced_within_layer",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_merge_env_layers_expands_bare_and_braced_within_layer()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_merge_env_layers_expands_bare_and_braced_within_layer",
+      "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_expands_bare_and_braced_within_layer",
       "kind": "function",
-      "line": 1036,
+      "line": 46,
       "name": "test_merge_env_layers_expands_bare_and_braced_within_layer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1036,
+        "line": 46,
         "name": "test_merge_env_layers_expands_bare_and_braced_within_layer"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_merge_env_layers_expands_bare_and_braced_within_layer()",
       "source_class": "handwritten"
     },
@@ -5927,25 +6011,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_merge_env_layers_self_reference_prepends_to_base_path",
+        "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_self_reference_prepends_to_base_path",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_merge_env_layers_self_reference_prepends_to_base_path()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_merge_env_layers_self_reference_prepends_to_base_path",
+      "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_self_reference_prepends_to_base_path",
       "kind": "function",
-      "line": 1054,
+      "line": 64,
       "name": "test_merge_env_layers_self_reference_prepends_to_base_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1054,
+        "line": 64,
         "name": "test_merge_env_layers_self_reference_prepends_to_base_path"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_merge_env_layers_self_reference_prepends_to_base_path()",
       "source_class": "handwritten"
     },
@@ -5953,25 +6037,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_merge_env_layers_returns_only_layer_keys_not_base",
+        "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_returns_only_layer_keys_not_base",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_merge_env_layers_returns_only_layer_keys_not_base()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_merge_env_layers_returns_only_layer_keys_not_base",
+      "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_returns_only_layer_keys_not_base",
       "kind": "function",
-      "line": 1067,
+      "line": 77,
       "name": "test_merge_env_layers_returns_only_layer_keys_not_base",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1067,
+        "line": 77,
         "name": "test_merge_env_layers_returns_only_layer_keys_not_base"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_merge_env_layers_returns_only_layer_keys_not_base()",
       "source_class": "handwritten"
     },
@@ -5979,25 +6063,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_merge_env_layers_undefined_in_file_and_base_is_empty",
+        "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_undefined_in_file_and_base_is_empty",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_merge_env_layers_undefined_in_file_and_base_is_empty()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_merge_env_layers_undefined_in_file_and_base_is_empty",
+      "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_undefined_in_file_and_base_is_empty",
       "kind": "function",
-      "line": 1079,
+      "line": 89,
       "name": "test_merge_env_layers_undefined_in_file_and_base_is_empty",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1079,
+        "line": 89,
         "name": "test_merge_env_layers_undefined_in_file_and_base_is_empty"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_merge_env_layers_undefined_in_file_and_base_is_empty()",
       "source_class": "handwritten"
     },
@@ -6005,25 +6089,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_merge_env_layers_later_layer_expands_against_earlier",
+        "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_later_layer_expands_against_earlier",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_merge_env_layers_later_layer_expands_against_earlier()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_merge_env_layers_later_layer_expands_against_earlier",
+      "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_later_layer_expands_against_earlier",
       "kind": "function",
-      "line": 1090,
+      "line": 100,
       "name": "test_merge_env_layers_later_layer_expands_against_earlier",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1090,
+        "line": 100,
         "name": "test_merge_env_layers_later_layer_expands_against_earlier"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_merge_env_layers_later_layer_expands_against_earlier()",
       "source_class": "handwritten"
     },
@@ -6031,25 +6115,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_merge_env_layers_file_key_overrides_base_no_ref",
+        "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_file_key_overrides_base_no_ref",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_merge_env_layers_file_key_overrides_base_no_ref()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_merge_env_layers_file_key_overrides_base_no_ref",
+      "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_file_key_overrides_base_no_ref",
       "kind": "function",
-      "line": 1103,
+      "line": 113,
       "name": "test_merge_env_layers_file_key_overrides_base_no_ref",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1103,
+        "line": 113,
         "name": "test_merge_env_layers_file_key_overrides_base_no_ref"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_merge_env_layers_file_key_overrides_base_no_ref()",
       "source_class": "handwritten"
     },
@@ -6057,25 +6141,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_resolve_active_env_none_when_no_active_pointer",
+        "identity": "crate::adapters::environments::tests::layers::test_resolve_active_env_none_when_no_active_pointer",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_resolve_active_env_none_when_no_active_pointer()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_resolve_active_env_none_when_no_active_pointer",
+      "identity": "crate::adapters::environments::tests::layers::test_resolve_active_env_none_when_no_active_pointer",
       "kind": "function",
-      "line": 1117,
+      "line": 127,
       "name": "test_resolve_active_env_none_when_no_active_pointer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1117,
+        "line": 127,
         "name": "test_resolve_active_env_none_when_no_active_pointer"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_resolve_active_env_none_when_no_active_pointer()",
       "source_class": "handwritten"
     },
@@ -6083,25 +6167,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_resolve_active_env_reads_active_conf_case_preserving",
+        "identity": "crate::adapters::environments::tests::layers::test_resolve_active_env_reads_active_conf_case_preserving",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_resolve_active_env_reads_active_conf_case_preserving()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_resolve_active_env_reads_active_conf_case_preserving",
+      "identity": "crate::adapters::environments::tests::layers::test_resolve_active_env_reads_active_conf_case_preserving",
       "kind": "function",
-      "line": 1127,
+      "line": 137,
       "name": "test_resolve_active_env_reads_active_conf_case_preserving",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1127,
+        "line": 137,
         "name": "test_resolve_active_env_reads_active_conf_case_preserving"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_resolve_active_env_reads_active_conf_case_preserving()",
       "source_class": "handwritten"
     },
@@ -6109,25 +6193,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_resolve_active_env_missing_conf_is_best_effort_empty",
+        "identity": "crate::adapters::environments::tests::layers::test_resolve_active_env_missing_conf_is_best_effort_empty",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_resolve_active_env_missing_conf_is_best_effort_empty()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_resolve_active_env_missing_conf_is_best_effort_empty",
+      "identity": "crate::adapters::environments::tests::layers::test_resolve_active_env_missing_conf_is_best_effort_empty",
       "kind": "function",
-      "line": 1146,
+      "line": 156,
       "name": "test_resolve_active_env_missing_conf_is_best_effort_empty",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1146,
+        "line": 156,
         "name": "test_resolve_active_env_missing_conf_is_best_effort_empty"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_resolve_active_env_missing_conf_is_best_effort_empty()",
       "source_class": "handwritten"
     },
@@ -6135,25 +6219,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_resolve_run_env_no_env_file_equals_active_env",
+        "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_no_env_file_equals_active_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_resolve_run_env_no_env_file_equals_active_env()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_resolve_run_env_no_env_file_equals_active_env",
+      "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_no_env_file_equals_active_env",
       "kind": "function",
-      "line": 1158,
+      "line": 168,
       "name": "test_resolve_run_env_no_env_file_equals_active_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1158,
+        "line": 168,
         "name": "test_resolve_run_env_no_env_file_equals_active_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_resolve_run_env_no_env_file_equals_active_env()",
       "source_class": "handwritten"
     },
@@ -6161,25 +6245,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_resolve_run_env_env_file_overrides_active_env",
+        "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_env_file_overrides_active_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_resolve_run_env_env_file_overrides_active_env()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_resolve_run_env_env_file_overrides_active_env",
+      "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_env_file_overrides_active_env",
       "kind": "function",
-      "line": 1173,
+      "line": 183,
       "name": "test_resolve_run_env_env_file_overrides_active_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1173,
+        "line": 183,
         "name": "test_resolve_run_env_env_file_overrides_active_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_resolve_run_env_env_file_overrides_active_env()",
       "source_class": "handwritten"
     },
@@ -6187,25 +6271,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_resolve_run_env_env_file_only_no_active",
+        "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_env_file_only_no_active",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_resolve_run_env_env_file_only_no_active()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_resolve_run_env_env_file_only_no_active",
+      "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_env_file_only_no_active",
       "kind": "function",
-      "line": 1199,
+      "line": 209,
       "name": "test_resolve_run_env_env_file_only_no_active",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1199,
+        "line": 209,
         "name": "test_resolve_run_env_env_file_only_no_active"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_resolve_run_env_env_file_only_no_active()",
       "source_class": "handwritten"
     },
@@ -6213,25 +6297,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_resolve_run_env_missing_env_file_is_error",
+        "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_missing_env_file_is_error",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_resolve_run_env_missing_env_file_is_error()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_resolve_run_env_missing_env_file_is_error",
+      "identity": "crate::adapters::environments::tests::layers::test_resolve_run_env_missing_env_file_is_error",
       "kind": "function",
-      "line": 1215,
+      "line": 225,
       "name": "test_resolve_run_env_missing_env_file_is_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1215,
+        "line": 225,
         "name": "test_resolve_run_env_missing_env_file_is_error"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_resolve_run_env_missing_env_file_is_error()",
       "source_class": "handwritten"
     },
@@ -6239,25 +6323,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::vars",
+        "identity": "crate::adapters::environments::tests::layers::vars",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn vars(pairs: &[(&str, &str)]) -> HashMap<String, String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::vars",
+      "identity": "crate::adapters::environments::tests::layers::vars",
       "kind": "function",
-      "line": 1233,
+      "line": 243,
       "name": "vars",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1233,
+        "line": 243,
         "name": "vars"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn vars(pairs: &[(&str, &str)]) -> HashMap<String, String>",
       "source_class": "handwritten"
     },
@@ -6265,25 +6349,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::vars::<closure>",
+        "identity": "crate::adapters::environments::tests::layers::vars::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": ".map(|(k, v)| (k.to_string(), v.to_string()))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::vars::<closure>",
+      "identity": "crate::adapters::environments::tests::layers::vars::<closure>",
       "kind": "closure",
-      "line": 1236,
+      "line": 246,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1236,
+        "line": 246,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": ".map(|(k, v)| (k.to_string(), v.to_string()))",
       "source_class": "handwritten"
     },
@@ -6291,25 +6375,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_expand_env_value_grammar",
+        "identity": "crate::adapters::environments::tests::layers::test_expand_env_value_grammar",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_expand_env_value_grammar(#[case] input: &str, #[case] expected: &str)",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_expand_env_value_grammar",
+      "identity": "crate::adapters::environments::tests::layers::test_expand_env_value_grammar",
       "kind": "function",
-      "line": 1256,
+      "line": 266,
       "name": "test_expand_env_value_grammar",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1256,
+        "line": 266,
         "name": "test_expand_env_value_grammar"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_expand_env_value_grammar(#[case] input: &str, #[case] expected: &str)",
       "source_class": "handwritten"
     },
@@ -6317,25 +6401,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_expand_env_value_no_recursion",
+        "identity": "crate::adapters::environments::tests::layers::test_expand_env_value_no_recursion",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_expand_env_value_no_recursion()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_expand_env_value_no_recursion",
+      "identity": "crate::adapters::environments::tests::layers::test_expand_env_value_no_recursion",
       "kind": "function",
-      "line": 1262,
+      "line": 272,
       "name": "test_expand_env_value_no_recursion",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1262,
+        "line": 272,
         "name": "test_expand_env_value_no_recursion"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_expand_env_value_no_recursion()",
       "source_class": "handwritten"
     },
@@ -6343,25 +6427,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_merge_env_layers_command_substitution_not_executed",
+        "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_command_substitution_not_executed",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/layers.rs",
         "signature": "fn test_merge_env_layers_command_substitution_not_executed()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_merge_env_layers_command_substitution_not_executed",
+      "identity": "crate::adapters::environments::tests::layers::test_merge_env_layers_command_substitution_not_executed",
       "kind": "function",
-      "line": 1270,
+      "line": 280,
       "name": "test_merge_env_layers_command_substitution_not_executed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1270,
+        "line": 280,
         "name": "test_merge_env_layers_command_substitution_not_executed"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/layers.rs",
       "signature": "fn test_merge_env_layers_command_substitution_not_executed()",
       "source_class": "handwritten"
     },
@@ -6369,25 +6453,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::envs_dir",
+        "identity": "crate::adapters::environments::tests::repository::envs_dir",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn envs_dir() -> (TempDir, PathBuf)",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::envs_dir",
+      "identity": "crate::adapters::environments::tests::repository::envs_dir",
       "kind": "function",
-      "line": 1285,
+      "line": 10,
       "name": "envs_dir",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1285,
+        "line": 10,
         "name": "envs_dir"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn envs_dir() -> (TempDir, PathBuf)",
       "source_class": "handwritten"
     },
@@ -6395,25 +6479,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_list_env_files",
+        "identity": "crate::adapters::environments::tests::repository::test_list_env_files",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_list_env_files(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_list_env_files",
+      "identity": "crate::adapters::environments::tests::repository::test_list_env_files",
       "kind": "function",
-      "line": 1301,
+      "line": 26,
       "name": "test_list_env_files",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1301,
+        "line": 26,
         "name": "test_list_env_files"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_list_env_files(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6421,25 +6505,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_list_env_files::<closure>",
+        "identity": "crate::adapters::environments::tests::repository::test_list_env_files::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_list_env_files::<closure>",
+      "identity": "crate::adapters::environments::tests::repository::test_list_env_files::<closure>",
       "kind": "closure",
-      "line": 1306,
+      "line": 31,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1306,
+        "line": 31,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();",
       "source_class": "handwritten"
     },
@@ -6447,25 +6531,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_list_env_files_skips_active",
+        "identity": "crate::adapters::environments::tests::repository::test_list_env_files_skips_active",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_list_env_files_skips_active(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_list_env_files_skips_active",
+      "identity": "crate::adapters::environments::tests::repository::test_list_env_files_skips_active",
       "kind": "function",
-      "line": 1311,
+      "line": 36,
       "name": "test_list_env_files_skips_active",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1311,
+        "line": 36,
         "name": "test_list_env_files_skips_active"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_list_env_files_skips_active(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6473,25 +6557,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_list_env_files_skips_active::<closure>",
+        "identity": "crate::adapters::environments::tests::repository::test_list_env_files_skips_active::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_list_env_files_skips_active::<closure>",
+      "identity": "crate::adapters::environments::tests::repository::test_list_env_files_skips_active::<closure>",
       "kind": "closure",
-      "line": 1317,
+      "line": 42,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1317,
+        "line": 42,
         "name": "<closure>"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();",
       "source_class": "handwritten"
     },
@@ -6499,25 +6583,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_load_environment_config_no_active",
+        "identity": "crate::adapters::environments::tests::repository::test_load_environment_config_no_active",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_load_environment_config_no_active(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_load_environment_config_no_active",
+      "identity": "crate::adapters::environments::tests::repository::test_load_environment_config_no_active",
       "kind": "function",
-      "line": 1322,
+      "line": 47,
       "name": "test_load_environment_config_no_active",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1322,
+        "line": 47,
         "name": "test_load_environment_config_no_active"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_load_environment_config_no_active(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6525,25 +6609,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_load_environment_config_with_active",
+        "identity": "crate::adapters::environments::tests::repository::test_load_environment_config_with_active",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_load_environment_config_with_active(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_load_environment_config_with_active",
+      "identity": "crate::adapters::environments::tests::repository::test_load_environment_config_with_active",
       "kind": "function",
-      "line": 1332,
+      "line": 56,
       "name": "test_load_environment_config_with_active",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1332,
+        "line": 56,
         "name": "test_load_environment_config_with_active"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_load_environment_config_with_active(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6551,25 +6635,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::resolve_active_env_ignores_symlink_target",
+        "identity": "crate::adapters::environments::tests::repository::resolve_active_env_ignores_symlink_target",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn resolve_active_env_ignores_symlink_target()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::resolve_active_env_ignores_symlink_target",
+      "identity": "crate::adapters::environments::tests::repository::resolve_active_env_ignores_symlink_target",
       "kind": "function",
-      "line": 1346,
+      "line": 68,
       "name": "resolve_active_env_ignores_symlink_target",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1346,
+        "line": 68,
         "name": "resolve_active_env_ignores_symlink_target"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn resolve_active_env_ignores_symlink_target()",
       "source_class": "handwritten"
     },
@@ -6577,25 +6661,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_set_active_env",
+        "identity": "crate::adapters::environments::tests::repository::test_set_active_env",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_set_active_env(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_set_active_env",
+      "identity": "crate::adapters::environments::tests::repository::test_set_active_env",
       "kind": "function",
-      "line": 1363,
+      "line": 85,
       "name": "test_set_active_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1363,
+        "line": 85,
         "name": "test_set_active_env"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_set_active_env(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6603,25 +6687,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_set_active_env_clear",
+        "identity": "crate::adapters::environments::tests::repository::test_set_active_env_clear",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_set_active_env_clear(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_set_active_env_clear",
+      "identity": "crate::adapters::environments::tests::repository::test_set_active_env_clear",
       "kind": "function",
-      "line": 1373,
+      "line": 95,
       "name": "test_set_active_env_clear",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1373,
+        "line": 95,
         "name": "test_set_active_env_clear"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_set_active_env_clear(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6629,25 +6713,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_set_active_env_nonexistent",
+        "identity": "crate::adapters::environments::tests::repository::test_set_active_env_nonexistent",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_set_active_env_nonexistent(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_set_active_env_nonexistent",
+      "identity": "crate::adapters::environments::tests::repository::test_set_active_env_nonexistent",
       "kind": "function",
-      "line": 1383,
+      "line": 105,
       "name": "test_set_active_env_nonexistent",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1383,
+        "line": 105,
         "name": "test_set_active_env_nonexistent"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_set_active_env_nonexistent(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6655,25 +6739,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_load_environment_config_active_points_to_missing_file",
+        "identity": "crate::adapters::environments::tests::repository::test_load_environment_config_active_points_to_missing_file",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_load_environment_config_active_points_to_missing_file(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_load_environment_config_active_points_to_missing_file",
+      "identity": "crate::adapters::environments::tests::repository::test_load_environment_config_active_points_to_missing_file",
       "kind": "function",
-      "line": 1392,
+      "line": 114,
       "name": "test_load_environment_config_active_points_to_missing_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1392,
+        "line": 114,
         "name": "test_load_environment_config_active_points_to_missing_file"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_load_environment_config_active_points_to_missing_file(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6681,25 +6765,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_load_active_env_name_skips_comments_only",
+        "identity": "crate::adapters::environments::tests::repository::test_load_active_env_name_skips_comments_only",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_load_active_env_name_skips_comments_only(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_load_active_env_name_skips_comments_only",
+      "identity": "crate::adapters::environments::tests::repository::test_load_active_env_name_skips_comments_only",
       "kind": "function",
-      "line": 1401,
+      "line": 123,
       "name": "test_load_active_env_name_skips_comments_only",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1401,
+        "line": 123,
         "name": "test_load_active_env_name_skips_comments_only"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_load_active_env_name_skips_comments_only(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6707,25 +6791,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_preview_strips_export_prefix",
+        "identity": "crate::adapters::environments::tests::repository::test_parse_env_preview_strips_export_prefix",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_parse_env_preview_strips_export_prefix()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_preview_strips_export_prefix",
+      "identity": "crate::adapters::environments::tests::repository::test_parse_env_preview_strips_export_prefix",
       "kind": "function",
-      "line": 1410,
+      "line": 132,
       "name": "test_parse_env_preview_strips_export_prefix",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1410,
+        "line": 132,
         "name": "test_parse_env_preview_strips_export_prefix"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_parse_env_preview_strips_export_prefix()",
       "source_class": "handwritten"
     },
@@ -6733,25 +6817,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_parse_env_defaults_strips_export_prefix",
+        "identity": "crate::adapters::environments::tests::repository::test_parse_env_defaults_strips_export_prefix",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_parse_env_defaults_strips_export_prefix()",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_parse_env_defaults_strips_export_prefix",
+      "identity": "crate::adapters::environments::tests::repository::test_parse_env_defaults_strips_export_prefix",
       "kind": "function",
-      "line": 1417,
+      "line": 139,
       "name": "test_parse_env_defaults_strips_export_prefix",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1417,
+        "line": 139,
         "name": "test_parse_env_defaults_strips_export_prefix"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_parse_env_defaults_strips_export_prefix()",
       "source_class": "handwritten"
     },
@@ -6759,25 +6843,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_load_env_preview",
+        "identity": "crate::adapters::environments::tests::repository::test_load_env_preview",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_load_env_preview(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_load_env_preview",
+      "identity": "crate::adapters::environments::tests::repository::test_load_env_preview",
       "kind": "function",
-      "line": 1424,
+      "line": 146,
       "name": "test_load_env_preview",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1424,
+        "line": 146,
         "name": "test_load_env_preview"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_load_env_preview(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6785,25 +6869,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_create_show_replace_set_remove_and_delete_env_by_logical_name",
+        "identity": "crate::adapters::environments::tests::repository::test_create_show_replace_set_remove_and_delete_env_by_logical_name",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_create_show_replace_set_remove_and_delete_env_by_logical_name( envs_dir: (TempDir, PathBuf), )",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_create_show_replace_set_remove_and_delete_env_by_logical_name",
+      "identity": "crate::adapters::environments::tests::repository::test_create_show_replace_set_remove_and_delete_env_by_logical_name",
       "kind": "function",
-      "line": 1437,
+      "line": 159,
       "name": "test_create_show_replace_set_remove_and_delete_env_by_logical_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1437,
+        "line": 159,
         "name": "test_create_show_replace_set_remove_and_delete_env_by_logical_name"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_create_show_replace_set_remove_and_delete_env_by_logical_name( envs_dir: (TempDir, PathBuf), )",
       "source_class": "handwritten"
     },
@@ -6811,25 +6895,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_env_management_rejects_unsafe_logical_names",
+        "identity": "crate::adapters::environments::tests::repository::test_env_management_rejects_unsafe_logical_names",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_env_management_rejects_unsafe_logical_names( envs_dir: (TempDir, PathBuf), #[case] name: &str, )",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_env_management_rejects_unsafe_logical_names",
+      "identity": "crate::adapters::environments::tests::repository::test_env_management_rejects_unsafe_logical_names",
       "kind": "function",
-      "line": 1486,
+      "line": 208,
       "name": "test_env_management_rejects_unsafe_logical_names",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1486,
+        "line": 208,
         "name": "test_env_management_rejects_unsafe_logical_names"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_env_management_rejects_unsafe_logical_names( envs_dir: (TempDir, PathBuf), #[case] name: &str, )",
       "source_class": "handwritten"
     },
@@ -6837,25 +6921,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_env_management_rejects_symlink_escape",
+        "identity": "crate::adapters::environments::tests::repository::test_env_management_rejects_symlink_escape",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_env_management_rejects_symlink_escape(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_env_management_rejects_symlink_escape",
+      "identity": "crate::adapters::environments::tests::repository::test_env_management_rejects_symlink_escape",
       "kind": "function",
-      "line": 1501,
+      "line": 223,
       "name": "test_env_management_rejects_symlink_escape",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1501,
+        "line": 223,
         "name": "test_env_management_rejects_symlink_escape"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_env_management_rejects_symlink_escape(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6863,25 +6947,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_env_management_activate_deactivate_uses_logical_name",
+        "identity": "crate::adapters::environments::tests::repository::test_env_management_activate_deactivate_uses_logical_name",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/repository.rs",
         "signature": "fn test_env_management_activate_deactivate_uses_logical_name(envs_dir: (TempDir, PathBuf))",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_env_management_activate_deactivate_uses_logical_name",
+      "identity": "crate::adapters::environments::tests::repository::test_env_management_activate_deactivate_uses_logical_name",
       "kind": "function",
-      "line": 1520,
+      "line": 242,
       "name": "test_env_management_activate_deactivate_uses_logical_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1520,
+        "line": 242,
         "name": "test_env_management_activate_deactivate_uses_logical_name"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/repository.rs",
       "signature": "fn test_env_management_activate_deactivate_uses_logical_name(envs_dir: (TempDir, PathBuf))",
       "source_class": "handwritten"
     },
@@ -6889,25 +6973,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::test_value_contains_credentials",
+        "identity": "crate::adapters::environments::tests::test_value_contains_credentials",
         "macro_expansion": "not_measured",
-        "path": "src/adapters/environments.rs",
+        "path": "src/adapters/environments/tests/mod.rs",
         "signature": "fn test_value_contains_credentials(#[case] value: &str, #[case] expected: bool)",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::test_value_contains_credentials",
+      "identity": "crate::adapters::environments::tests::test_value_contains_credentials",
       "kind": "function",
-      "line": 1540,
+      "line": 150,
       "name": "test_value_contains_credentials",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1540,
+        "line": 150,
         "name": "test_value_contains_credentials"
       },
-      "path": "src/adapters/environments.rs",
+      "path": "src/adapters/environments/tests/mod.rs",
       "signature": "fn test_value_contains_credentials(#[case] value: &str, #[case] expected: bool)",
       "source_class": "handwritten"
     },

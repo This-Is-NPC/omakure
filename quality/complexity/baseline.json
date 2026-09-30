@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "d0d39471b331c17c1112fa7767c6399b2fca8e81d7967d45999d8071cfeaf4b9",
+  "canonical_sha256": "fb6a9ea6a8214c1ef94d86f8773efdb1c970826f9c797a5c9ff0c4576252a665",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -583,14 +583,182 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 118,
+        "invocations": 0,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 52,
-        "cyclomatic": 72
+        "cognitive": 0,
+        "cyclomatic": 0
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/api.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/battery.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/env.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/history.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/node.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/queue.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/scripts.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/serve.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/cli/args/setup.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 17,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 6,
+        "cyclomatic": 10
+      },
+      "path": "src/cli/args/tests/api.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 64,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 31,
+        "cyclomatic": 46
+      },
+      "path": "src/cli/args/tests/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 40,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 21,
+        "cyclomatic": 21
+      },
+      "path": "src/cli/args/tests/node.rs",
       "source_class": "handwritten"
     },
     {
@@ -21809,25 +21977,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::parse",
+        "identity": "crate::cli::args::tests::parse",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn parse(args: &[&str]) -> Result<Cli, clap::Error>",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::parse",
+      "identity": "crate::cli::args::tests::parse",
       "kind": "function",
-      "line": 1242,
+      "line": 7,
       "name": "parse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1242,
+        "line": 7,
         "name": "parse"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn parse(args: &[&str]) -> Result<Cli, clap::Error>",
       "source_class": "handwritten"
     },
@@ -21835,25 +22003,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_parse_no_args_leaves_command_empty_for_help",
+        "identity": "crate::cli::args::tests::test_parse_no_args_leaves_command_empty_for_help",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_no_args_leaves_command_empty_for_help()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_no_args_leaves_command_empty_for_help",
+      "identity": "crate::cli::args::tests::test_parse_no_args_leaves_command_empty_for_help",
       "kind": "function",
-      "line": 1247,
+      "line": 12,
       "name": "test_parse_no_args_leaves_command_empty_for_help",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1247,
+        "line": 12,
         "name": "test_parse_no_args_leaves_command_empty_for_help"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_no_args_leaves_command_empty_for_help()",
       "source_class": "handwritten"
     },
@@ -21861,25 +22029,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_run_subcommand",
+        "identity": "crate::cli::args::tests::test_parse_run_subcommand",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_run_subcommand()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_run_subcommand",
+      "identity": "crate::cli::args::tests::test_parse_run_subcommand",
       "kind": "function",
-      "line": 1253,
+      "line": 18,
       "name": "test_parse_run_subcommand",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1253,
+        "line": 18,
         "name": "test_parse_run_subcommand"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_run_subcommand()",
       "source_class": "handwritten"
     },
@@ -21887,25 +22055,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_run_with_flags",
+        "identity": "crate::cli::args::tests::test_parse_run_with_flags",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_run_with_flags()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_run_with_flags",
+      "identity": "crate::cli::args::tests::test_parse_run_with_flags",
       "kind": "function",
-      "line": 1266,
+      "line": 31,
       "name": "test_parse_run_with_flags",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1266,
+        "line": 31,
         "name": "test_parse_run_with_flags"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_run_with_flags()",
       "source_class": "handwritten"
     },
@@ -21913,25 +22081,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_run_secret_input",
+        "identity": "crate::cli::args::tests::test_parse_run_secret_input",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_run_secret_input()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_run_secret_input",
+      "identity": "crate::cli::args::tests::test_parse_run_secret_input",
       "kind": "function",
-      "line": 1279,
+      "line": 44,
       "name": "test_parse_run_secret_input",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1279,
+        "line": 44,
         "name": "test_parse_run_secret_input"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_run_secret_input()",
       "source_class": "handwritten"
     },
@@ -21939,25 +22107,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_env_namespace",
+        "identity": "crate::cli::args::tests::test_parse_env_namespace",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_env_namespace()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_env_namespace",
+      "identity": "crate::cli::args::tests::test_parse_env_namespace",
       "kind": "function",
-      "line": 1289,
+      "line": 54,
       "name": "test_parse_env_namespace",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1289,
+        "line": 54,
         "name": "test_parse_env_namespace"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_env_namespace()",
       "source_class": "handwritten"
     },
@@ -21965,25 +22133,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_parse_global_json_flag",
+        "identity": "crate::cli::args::tests::test_parse_global_json_flag",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_global_json_flag()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_global_json_flag",
+      "identity": "crate::cli::args::tests::test_parse_global_json_flag",
       "kind": "function",
-      "line": 1305,
+      "line": 70,
       "name": "test_parse_global_json_flag",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1305,
+        "line": 70,
         "name": "test_parse_global_json_flag"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_global_json_flag()",
       "source_class": "handwritten"
     },
@@ -21991,25 +22159,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_unknown_top_level_command_is_rejected",
+        "identity": "crate::cli::args::tests::test_unknown_top_level_command_is_rejected",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_unknown_top_level_command_is_rejected()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_unknown_top_level_command_is_rejected",
+      "identity": "crate::cli::args::tests::test_unknown_top_level_command_is_rejected",
       "kind": "function",
-      "line": 1311,
+      "line": 76,
       "name": "test_unknown_top_level_command_is_rejected",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1311,
+        "line": 76,
         "name": "test_unknown_top_level_command_is_rejected"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_unknown_top_level_command_is_rejected()",
       "source_class": "handwritten"
     },
@@ -22017,25 +22185,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_legacy_install_url_is_rejected",
+        "identity": "crate::cli::args::tests::test_legacy_install_url_is_rejected",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_legacy_install_url_is_rejected()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_legacy_install_url_is_rejected",
+      "identity": "crate::cli::args::tests::test_legacy_install_url_is_rejected",
       "kind": "function",
-      "line": 1316,
+      "line": 81,
       "name": "test_legacy_install_url_is_rejected",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1316,
+        "line": 81,
         "name": "test_legacy_install_url_is_rejected"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_legacy_install_url_is_rejected()",
       "source_class": "handwritten"
     },
@@ -22043,25 +22211,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_queue_add",
+        "identity": "crate::cli::args::tests::test_parse_queue_add",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_queue_add()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_queue_add",
+      "identity": "crate::cli::args::tests::test_parse_queue_add",
       "kind": "function",
-      "line": 1322,
+      "line": 87,
       "name": "test_parse_queue_add",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1322,
+        "line": 87,
         "name": "test_parse_queue_add"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_queue_add()",
       "source_class": "handwritten"
     },
@@ -22069,25 +22237,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_battery_add",
+        "identity": "crate::cli::args::tests::test_parse_battery_add",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_battery_add()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_battery_add",
+      "identity": "crate::cli::args::tests::test_parse_battery_add",
       "kind": "function",
-      "line": 1337,
+      "line": 102,
       "name": "test_parse_battery_add",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1337,
+        "line": 102,
         "name": "test_parse_battery_add"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_battery_add()",
       "source_class": "handwritten"
     },
@@ -22095,25 +22263,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_battery_install_force",
+        "identity": "crate::cli::args::tests::test_parse_battery_install_force",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_battery_install_force()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_battery_install_force",
+      "identity": "crate::cli::args::tests::test_parse_battery_install_force",
       "kind": "function",
-      "line": 1362,
+      "line": 127,
       "name": "test_parse_battery_install_force",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1362,
+        "line": 127,
         "name": "test_parse_battery_install_force"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_battery_install_force()",
       "source_class": "handwritten"
     },
@@ -22121,25 +22289,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_battery_remove_cache",
+        "identity": "crate::cli::args::tests::test_parse_battery_remove_cache",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_battery_remove_cache()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_battery_remove_cache",
+      "identity": "crate::cli::args::tests::test_parse_battery_remove_cache",
       "kind": "function",
-      "line": 1378,
+      "line": 143,
       "name": "test_parse_battery_remove_cache",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1378,
+        "line": 143,
         "name": "test_parse_battery_remove_cache"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_battery_remove_cache()",
       "source_class": "handwritten"
     },
@@ -22147,25 +22315,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_api_defaults",
+        "identity": "crate::cli::args::tests::api::test_parse_api_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/api.rs",
         "signature": "fn test_parse_api_defaults()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_api_defaults",
+      "identity": "crate::cli::args::tests::api::test_parse_api_defaults",
       "kind": "function",
-      "line": 1393,
+      "line": 4,
       "name": "test_parse_api_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1393,
+        "line": 4,
         "name": "test_parse_api_defaults"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/api.rs",
       "signature": "fn test_parse_api_defaults()",
       "source_class": "handwritten"
     },
@@ -22173,25 +22341,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_token_generate",
+        "identity": "crate::cli::args::tests::api::test_parse_token_generate",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/api.rs",
         "signature": "fn test_parse_token_generate()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_token_generate",
+      "identity": "crate::cli::args::tests::api::test_parse_token_generate",
       "kind": "function",
-      "line": 1406,
+      "line": 17,
       "name": "test_parse_token_generate",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1406,
+        "line": 17,
         "name": "test_parse_token_generate"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/api.rs",
       "signature": "fn test_parse_token_generate()",
       "source_class": "handwritten"
     },
@@ -22199,25 +22367,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_api_bind_flags",
+        "identity": "crate::cli::args::tests::api::test_parse_api_bind_flags",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/api.rs",
         "signature": "fn test_parse_api_bind_flags()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_api_bind_flags",
+      "identity": "crate::cli::args::tests::api::test_parse_api_bind_flags",
       "kind": "function",
-      "line": 1438,
+      "line": 49,
       "name": "test_parse_api_bind_flags",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1438,
+        "line": 49,
         "name": "test_parse_api_bind_flags"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/api.rs",
       "signature": "fn test_parse_api_bind_flags()",
       "source_class": "handwritten"
     },
@@ -22225,25 +22393,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_api_policy_flag",
+        "identity": "crate::cli::args::tests::api::test_parse_api_policy_flag",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/api.rs",
         "signature": "fn test_parse_api_policy_flag()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_api_policy_flag",
+      "identity": "crate::cli::args::tests::api::test_parse_api_policy_flag",
       "kind": "function",
-      "line": 1450,
+      "line": 61,
       "name": "test_parse_api_policy_flag",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1450,
+        "line": 61,
         "name": "test_parse_api_policy_flag"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/api.rs",
       "signature": "fn test_parse_api_policy_flag()",
       "source_class": "handwritten"
     },
@@ -22251,25 +22419,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_api_help_surface_exists",
+        "identity": "crate::cli::args::tests::api::test_api_help_surface_exists",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/api.rs",
         "signature": "fn test_api_help_surface_exists()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_api_help_surface_exists",
+      "identity": "crate::cli::args::tests::api::test_api_help_surface_exists",
       "kind": "function",
-      "line": 1464,
+      "line": 75,
       "name": "test_api_help_surface_exists",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1464,
+        "line": 75,
         "name": "test_api_help_surface_exists"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/api.rs",
       "signature": "fn test_api_help_surface_exists()",
       "source_class": "handwritten"
     },
@@ -22277,25 +22445,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_node_serve_flags",
+        "identity": "crate::cli::args::tests::node::test_parse_node_serve_flags",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/node.rs",
         "signature": "fn test_parse_node_serve_flags()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_node_serve_flags",
+      "identity": "crate::cli::args::tests::node::test_parse_node_serve_flags",
       "kind": "function",
-      "line": 1476,
+      "line": 4,
       "name": "test_parse_node_serve_flags",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1476,
+        "line": 4,
         "name": "test_parse_node_serve_flags"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/node.rs",
       "signature": "fn test_parse_node_serve_flags()",
       "source_class": "handwritten"
     },
@@ -22303,25 +22471,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::node_serve_direct_non_loopback_flag_is_separate_from_http_flag",
+        "identity": "crate::cli::args::tests::node::node_serve_direct_non_loopback_flag_is_separate_from_http_flag",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/node.rs",
         "signature": "fn node_serve_direct_non_loopback_flag_is_separate_from_http_flag()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::node_serve_direct_non_loopback_flag_is_separate_from_http_flag",
+      "identity": "crate::cli::args::tests::node::node_serve_direct_non_loopback_flag_is_separate_from_http_flag",
       "kind": "function",
-      "line": 1520,
+      "line": 45,
       "name": "node_serve_direct_non_loopback_flag_is_separate_from_http_flag",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1520,
+        "line": 45,
         "name": "node_serve_direct_non_loopback_flag_is_separate_from_http_flag"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/node.rs",
       "signature": "fn node_serve_direct_non_loopback_flag_is_separate_from_http_flag()",
       "source_class": "handwritten"
     },
@@ -22329,25 +22497,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_node_reset_requires_explicit_flag_in_surface",
+        "identity": "crate::cli::args::tests::node::test_node_reset_requires_explicit_flag_in_surface",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/node.rs",
         "signature": "fn test_node_reset_requires_explicit_flag_in_surface()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_node_reset_requires_explicit_flag_in_surface",
+      "identity": "crate::cli::args::tests::node::test_node_reset_requires_explicit_flag_in_surface",
       "kind": "function",
-      "line": 1535,
+      "line": 60,
       "name": "test_node_reset_requires_explicit_flag_in_surface",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1535,
+        "line": 60,
         "name": "test_node_reset_requires_explicit_flag_in_surface"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/node.rs",
       "signature": "fn test_node_reset_requires_explicit_flag_in_surface()",
       "source_class": "handwritten"
     },
@@ -22355,25 +22523,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_node_serve_defaults_are_safe",
+        "identity": "crate::cli::args::tests::node::test_node_serve_defaults_are_safe",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/node.rs",
         "signature": "fn test_node_serve_defaults_are_safe()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_node_serve_defaults_are_safe",
+      "identity": "crate::cli::args::tests::node::test_node_serve_defaults_are_safe",
       "kind": "function",
-      "line": 1547,
+      "line": 72,
       "name": "test_node_serve_defaults_are_safe",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1547,
+        "line": 72,
         "name": "test_node_serve_defaults_are_safe"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/node.rs",
       "signature": "fn test_node_serve_defaults_are_safe()",
       "source_class": "handwritten"
     },
@@ -22381,25 +22549,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_node_serve_help_surface_exists",
+        "identity": "crate::cli::args::tests::node::test_node_serve_help_surface_exists",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/node.rs",
         "signature": "fn test_node_serve_help_surface_exists()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_node_serve_help_surface_exists",
+      "identity": "crate::cli::args::tests::node::test_node_serve_help_surface_exists",
       "kind": "function",
-      "line": 1568,
+      "line": 92,
       "name": "test_node_serve_help_surface_exists",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1568,
+        "line": 92,
         "name": "test_node_serve_help_surface_exists"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/node.rs",
       "signature": "fn test_node_serve_help_surface_exists()",
       "source_class": "handwritten"
     },
@@ -22407,25 +22575,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_node_serve_policy_flag",
+        "identity": "crate::cli::args::tests::node::test_parse_node_serve_policy_flag",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/node.rs",
         "signature": "fn test_parse_node_serve_policy_flag()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_node_serve_policy_flag",
+      "identity": "crate::cli::args::tests::node::test_parse_node_serve_policy_flag",
       "kind": "function",
-      "line": 1583,
+      "line": 107,
       "name": "test_parse_node_serve_policy_flag",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1583,
+        "line": 107,
         "name": "test_parse_node_serve_policy_flag"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/node.rs",
       "signature": "fn test_parse_node_serve_policy_flag()",
       "source_class": "handwritten"
     },
@@ -22433,25 +22601,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_queue_worker",
+        "identity": "crate::cli::args::tests::test_parse_queue_worker",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_queue_worker()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_queue_worker",
+      "identity": "crate::cli::args::tests::test_parse_queue_worker",
       "kind": "function",
-      "line": 1598,
+      "line": 158,
       "name": "test_parse_queue_worker",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1598,
+        "line": 158,
         "name": "test_parse_queue_worker"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_queue_worker()",
       "source_class": "handwritten"
     },
@@ -22459,25 +22627,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_history_list_with_state",
+        "identity": "crate::cli::args::tests::test_parse_history_list_with_state",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_history_list_with_state()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_history_list_with_state",
+      "identity": "crate::cli::args::tests::test_parse_history_list_with_state",
       "kind": "function",
-      "line": 1610,
+      "line": 170,
       "name": "test_parse_history_list_with_state",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1610,
+        "line": 170,
         "name": "test_parse_history_list_with_state"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_history_list_with_state()",
       "source_class": "handwritten"
     },
@@ -22485,25 +22653,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::cli::args::test_parse_history_show",
+        "identity": "crate::cli::args::tests::test_parse_history_show",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_history_show()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_history_show",
+      "identity": "crate::cli::args::tests::test_parse_history_show",
       "kind": "function",
-      "line": 1625,
+      "line": 185,
       "name": "test_parse_history_show",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1625,
+        "line": 185,
         "name": "test_parse_history_show"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_history_show()",
       "source_class": "handwritten"
     },
@@ -22511,25 +22679,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_conflicting_scripts_dir_and_path",
+        "identity": "crate::cli::args::tests::test_conflicting_scripts_dir_and_path",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_conflicting_scripts_dir_and_path()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_conflicting_scripts_dir_and_path",
+      "identity": "crate::cli::args::tests::test_conflicting_scripts_dir_and_path",
       "kind": "function",
-      "line": 1637,
+      "line": 197,
       "name": "test_conflicting_scripts_dir_and_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1637,
+        "line": 197,
         "name": "test_conflicting_scripts_dir_and_path"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_conflicting_scripts_dir_and_path()",
       "source_class": "handwritten"
     },
@@ -22537,25 +22705,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_describe",
+        "identity": "crate::cli::args::tests::test_parse_describe",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_describe()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_describe",
+      "identity": "crate::cli::args::tests::test_parse_describe",
       "kind": "function",
-      "line": 1643,
+      "line": 203,
       "name": "test_parse_describe",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1643,
+        "line": 203,
         "name": "test_parse_describe"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_describe()",
       "source_class": "handwritten"
     },
@@ -22563,25 +22731,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_search",
+        "identity": "crate::cli::args::tests::test_parse_search",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_search()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_search",
+      "identity": "crate::cli::args::tests::test_parse_search",
       "kind": "function",
-      "line": 1652,
+      "line": 212,
       "name": "test_parse_search",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1652,
+        "line": 212,
         "name": "test_parse_search"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_search()",
       "source_class": "handwritten"
     },
@@ -22589,25 +22757,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_init_with_schema",
+        "identity": "crate::cli::args::tests::test_parse_init_with_schema",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_init_with_schema()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_init_with_schema",
+      "identity": "crate::cli::args::tests::test_parse_init_with_schema",
       "kind": "function",
-      "line": 1664,
+      "line": 224,
       "name": "test_parse_init_with_schema",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1664,
+        "line": 224,
         "name": "test_parse_init_with_schema"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_init_with_schema()",
       "source_class": "handwritten"
     },
@@ -22615,25 +22783,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::args::test_parse_trace",
+        "identity": "crate::cli::args::tests::test_parse_trace",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_parse_trace()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_parse_trace",
+      "identity": "crate::cli::args::tests::test_parse_trace",
       "kind": "function",
-      "line": 1676,
+      "line": 236,
       "name": "test_parse_trace",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1676,
+        "line": 236,
         "name": "test_parse_trace"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_parse_trace()",
       "source_class": "handwritten"
     },
@@ -22641,25 +22809,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_history_success_failure_conflict",
+        "identity": "crate::cli::args::tests::test_history_success_failure_conflict",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_history_success_failure_conflict()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_history_success_failure_conflict",
+      "identity": "crate::cli::args::tests::test_history_success_failure_conflict",
       "kind": "function",
-      "line": 1689,
+      "line": 249,
       "name": "test_history_success_failure_conflict",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1689,
+        "line": 249,
         "name": "test_history_success_failure_conflict"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_history_success_failure_conflict()",
       "source_class": "handwritten"
     },
@@ -22667,25 +22835,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::args::test_history_state_and_state_set_conflict",
+        "identity": "crate::cli::args::tests::test_history_state_and_state_set_conflict",
         "macro_expansion": "not_measured",
-        "path": "src/cli/args.rs",
+        "path": "src/cli/args/tests/mod.rs",
         "signature": "fn test_history_state_and_state_set_conflict()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::args::test_history_state_and_state_set_conflict",
+      "identity": "crate::cli::args::tests::test_history_state_and_state_set_conflict",
       "kind": "function",
-      "line": 1695,
+      "line": 255,
       "name": "test_history_state_and_state_set_conflict",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1695,
+        "line": 255,
         "name": "test_history_state_and_state_set_conflict"
       },
-      "path": "src/cli/args.rs",
+      "path": "src/cli/args/tests/mod.rs",
       "signature": "fn test_history_state_and_state_set_conflict()",
       "source_class": "handwritten"
     },

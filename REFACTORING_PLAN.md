@@ -87,18 +87,18 @@ Validação: `check:fast`.
 Muda comportamento de propósito. Ferramentas do repositório que dependam de
 algum item são migradas antes da remoção.
 
-- [ ] Nomes antigos do produto: variáveis `OVERTURE_*` e `CLOUD_MGMT_*` e
+- [x] Nomes antigos do produto: variáveis `OVERTURE_*` e `CLOUD_MGMT_*` e
       diretórios padrão antigos (`overture-scripts` etc.) em `main.rs`,
       `operations/config.rs` e `cli/update.rs`.
-- [ ] Migração da v0.1 em `runs.rs`: `rebuild_legacy_schema_if_needed` e
+- [x] Migração da v0.1 em `runs.rs`: `rebuild_legacy_schema_if_needed` e
       `cleanup_legacy_json_files`.
-- [ ] Modo de token legado `OMAKURE_API_TOKEN` (`auth.rs`, `cli/api.rs`):
+- [x] Modo de token legado `OMAKURE_API_TOKEN` (`auth.rs`, `cli/api.rs`):
       apenas tokens Argon2id via `--tokens-file`.
-- [ ] Migrações antigas do schema do `node.sqlite` em `node_registry`:
+- [x] Migrações antigas do schema do `node.sqlite` em `node_registry`:
       aceitar só o schema atual.
-- [ ] Qualquer outro caminho marcado como legado, compatibilidade ou
+- [x] Qualquer outro caminho marcado como legado, compatibilidade ou
       deprecated que o produto atual não use.
-- [ ] Atualizar docs, help do clap, `help-ai`, referência da CLI e testes.
+- [x] Atualizar docs, help do clap, `help-ai`, referência da CLI e testes.
 
 Validação: `check:full`.
 

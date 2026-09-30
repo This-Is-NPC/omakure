@@ -1,4 +1,5 @@
 use crate::cli::args::InitArgs;
+use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
 use crate::domain::parse_schema;
 use crate::runtime::{script_extensions, script_kind, ScriptKind};
@@ -102,14 +103,6 @@ pub fn run_with_format(
 
     println!("Created {}", script_path.display());
     Ok(())
-}
-
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message);
-        std::process::exit(1);
-    }
-    Err(message.into())
 }
 
 /// Resolve the `--schema-json` value: either a literal JSON string, or a

@@ -193,11 +193,11 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let Some(command) = cli.command else {
         if json_output {
-            cli::json::print_err(
+            cli::emit::exit_with_error(
+                json_output,
                 cli::json::codes::INVALID_ARGUMENT,
                 "a subcommand is required; use `omakure --help` for usage",
             );
-            std::process::exit(1);
         }
 
         use clap::CommandFactory;

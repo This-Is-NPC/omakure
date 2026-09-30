@@ -1,6 +1,7 @@
 //! `omakure describe <script>` — print the full schema of one script.
 
 use crate::cli::args::DescribeArgs;
+use crate::cli::emit::emit_operation_error;
 use crate::cli::json::{self, codes};
 use crate::operations::core::{self, DescribeScriptRequest, ScriptDescription};
 use crate::operations::{OperationError, OperationErrorCode};
@@ -46,7 +47,7 @@ pub fn run(
         },
     ) {
         Ok(description) => description,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, describe_error_code),
     };
 
     if json_output {
@@ -58,8 +59,8 @@ pub fn run(
     Ok(())
 }
 
-fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
-    let code = match err.code {
+fn describe_error_code(err: &OperationError) -> &'static str {
+    match err.code {
         OperationErrorCode::NotFound => codes::NOT_FOUND,
         OperationErrorCode::InvalidInput if is_missing_schema_message(&err.message) => {
             codes::NOT_FOUND
@@ -67,23 +68,11 @@ fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Bo
         OperationErrorCode::UnsafePath => codes::INVALID_ARGUMENT,
         OperationErrorCode::InvalidInput => codes::SCHEMA_INVALID,
         _ => codes::INTERNAL,
-    };
-    emit_error(json_output, code, err.message)
+    }
 }
 
 fn is_missing_schema_message(message: &str) -> bool {
     message.contains("Schema block not found") || message.contains("Schema JSON object not found")
-}
-
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message.clone());
-        // Returning Err propagates a non-zero exit code, but main.rs's
-        // top-level handler would print "error: <msg>" to stderr — which we
-        // do not want when --json is set. Use process::exit directly.
-        std::process::exit(1);
-    }
-    Err(message.into())
 }
 
 #[cfg(test)]

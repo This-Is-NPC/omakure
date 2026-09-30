@@ -8,6 +8,7 @@
 //! Linux-only. Other platforms return `not_implemented`; platform-specific
 //! service-manager integration is unsupported.
 
+use crate::cli::emit::exit_with_error;
 use crate::cli::json::{self, codes};
 use crate::workspace::Workspace;
 use serde_json::json;
@@ -58,7 +59,7 @@ pub fn status(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Er
 
 #[cfg(not(target_os = "linux"))]
 fn unsupported(json_output: bool) -> Result<(), Box<dyn Error>> {
-    emit_error(
+    exit_with_error(
         json_output,
         codes::NOT_IMPLEMENTED,
         "serve --install is only supported on Linux (systemd user units). \
@@ -135,10 +136,10 @@ fn render_unit(workspace: &Workspace) -> Result<String, String> {
 fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let dir = match unit_dir() {
         Ok(d) => d,
-        Err(e) => return emit_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
     };
     if let Err(e) = fs::create_dir_all(&dir) {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::INTERNAL,
             format!("create {}: {e}", dir.display()),
@@ -147,14 +148,14 @@ fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn
 
     let path = match unit_path(workspace) {
         Ok(p) => p,
-        Err(e) => return emit_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
     };
     let body = match render_unit(workspace) {
         Ok(b) => b,
-        Err(e) => return emit_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
     };
     if let Err(e) = fs::write(&path, &body) {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::INTERNAL,
             format!("write {}: {e}", path.display()),
@@ -167,10 +168,10 @@ fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn
     // failures as fatal — an installed-but-unstarted unit would be
     // worse UX than a loud error.
     if let Err(e) = systemctl(&["daemon-reload"]) {
-        return emit_error(json_output, codes::INTERNAL, e);
+        exit_with_error(json_output, codes::INTERNAL, e);
     }
     if let Err(e) = systemctl(&["enable", "--now", &name]) {
-        return emit_error(json_output, codes::INTERNAL, e);
+        exit_with_error(json_output, codes::INTERNAL, e);
     }
 
     if json_output {
@@ -192,12 +193,12 @@ fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn
 fn uninstall_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let path = match unit_path(workspace) {
         Ok(p) => p,
-        Err(e) => return emit_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
     };
     let name = unit_name(workspace);
 
     if !path.exists() {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::DAEMON_NOT_RUNNING,
             format!("no systemd user unit installed for this workspace ({name})"),
@@ -209,7 +210,7 @@ fn uninstall_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<d
     // be cleaned up by the subsequent remove + reload.
     let _ = systemctl(&["disable", "--now", &name]);
     if let Err(e) = fs::remove_file(&path) {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::INTERNAL,
             format!("remove {}: {e}", path.display()),
@@ -230,7 +231,7 @@ fn status_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn 
     let name = unit_name(workspace);
     let path = match unit_path(workspace) {
         Ok(p) => p,
-        Err(e) => return emit_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
     };
     let installed = path.exists();
     let active = installed && systemctl_is_active(&name);
@@ -295,20 +296,6 @@ fn systemctl_is_enabled(name: &str) -> bool {
 // ---------------------------------------------------------------------------
 // Error helper
 // ---------------------------------------------------------------------------
-
-fn emit_error(
-    json_output: bool,
-    code: &str,
-    message: impl Into<String>,
-) -> Result<(), Box<dyn Error>> {
-    let msg = message.into();
-    if json_output {
-        json::print_err(code, msg.clone());
-    } else {
-        eprintln!("error: {msg}");
-    }
-    std::process::exit(1);
-}
 
 // ---------------------------------------------------------------------------
 // Tests

@@ -9,6 +9,7 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::app_meta;
 use crate::cli::args::RunArgs;
+use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
 use crate::ports::ScriptRepository;
 use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
@@ -214,14 +215,6 @@ fn check_required_fields(
         }
     }
     Ok(())
-}
-
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message);
-        std::process::exit(1);
-    }
-    Err(message.into())
 }
 
 pub(crate) fn resolve_script_path(

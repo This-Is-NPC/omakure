@@ -16,6 +16,7 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::app_meta;
 use crate::cli::args::ServeArgs;
+use crate::cli::emit::exit_with_error;
 use crate::cli::json::{self, codes};
 #[cfg(windows)]
 use crate::cli::serve_windows::{self, OpenEventError, ProcessProbe, StopEvent};
@@ -276,7 +277,7 @@ fn send_sigterm(pid: u32) -> bool {
 fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let path = pid_file(workspace);
     let Some(pid) = read_pid(&path) else {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::DAEMON_NOT_RUNNING,
             format!("no daemon pid file at {}", path.display()),
@@ -284,7 +285,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
     };
     if !process_alive(pid) {
         let _ = fs::remove_file(&path);
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::DAEMON_NOT_RUNNING,
             format!(
@@ -294,7 +295,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
         );
     }
     if !send_sigterm(pid) {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::INTERNAL,
             format!("failed to signal daemon pid {pid}"),
@@ -313,7 +314,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
         }
         thread::sleep(Duration::from_millis(100));
     }
-    emit_error(
+    exit_with_error(
         json_output,
         codes::INTERNAL,
         format!("daemon pid {pid} did not exit within {:?}", STOP_GRACE),
@@ -326,14 +327,14 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
     let pid_file = match read_windows_pid_file(&path) {
         Ok(pid_file) => pid_file,
         Err(_error) if !path.exists() => {
-            return emit_error(
+            exit_with_error(
                 json_output,
                 codes::DAEMON_NOT_RUNNING,
                 format!("no daemon pid file at {}", path.display()),
             );
         }
         Err(error) => {
-            return emit_error(
+            exit_with_error(
                 json_output,
                 codes::INTERNAL,
                 format!(
@@ -348,7 +349,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
         ProcessProbe::Live(process) => process,
         ProcessProbe::Dead => {
             remove_windows_pid_file_if_current(&path, &pid_file);
-            return emit_error(
+            exit_with_error(
                 json_output,
                 codes::DAEMON_NOT_RUNNING,
                 format!(
@@ -359,7 +360,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
             );
         }
         ProcessProbe::Indeterminate(error) => {
-            return emit_error(
+            exit_with_error(
                 json_output,
                 codes::INTERNAL,
                 format!(
@@ -371,7 +372,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
     };
 
     if let Err(error) = serve_windows::signal_stop(&pid_file.stop_event) {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::INTERNAL,
             format!("failed to signal daemon pid {}: {error}", pid_file.pid),
@@ -387,7 +388,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
             }
             Ok(())
         }
-        Ok(false) => emit_error(
+        Ok(false) => exit_with_error(
             json_output,
             codes::INTERNAL,
             format!(
@@ -395,7 +396,7 @@ fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> 
                 pid_file.pid, STOP_GRACE
             ),
         ),
-        Err(error) => emit_error(
+        Err(error) => exit_with_error(
             json_output,
             codes::INTERNAL,
             format!("failed waiting for daemon pid {}: {error}", pid_file.pid),
@@ -431,7 +432,7 @@ fn detach_and_run(
         .stdout(stdout)
         .stderr(stderr);
     if let Err(err) = daemon.start() {
-        return emit_error(
+        exit_with_error(
             json_output,
             codes::DAEMON_ALREADY_RUNNING,
             format!("daemonize failed: {err}"),
@@ -449,7 +450,7 @@ fn detach_and_run(
     _args: ServeArgs,
     json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
-    emit_error(
+    exit_with_error(
         json_output,
         codes::NOT_IMPLEMENTED,
         "--detach is not supported on Windows; run in the foreground",
@@ -463,13 +464,13 @@ fn run_foreground(
 ) -> Result<(), Box<dyn Error>> {
     #[cfg(unix)]
     if let Err(err) = acquire_lock(&workspace) {
-        return emit_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
+        exit_with_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
     }
     #[cfg(windows)]
     let lock = match acquire_lock(&workspace) {
         Ok(lock) => lock,
         Err(err) => {
-            return emit_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
+            exit_with_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
         }
     };
     #[cfg(windows)]
@@ -785,20 +786,6 @@ fn log_line(path: &Path, level: &str, message: &str) {
 // ---------------------------------------------------------------------------
 // Error helper
 // ---------------------------------------------------------------------------
-
-fn emit_error(
-    json_output: bool,
-    code: &str,
-    message: impl Into<String>,
-) -> Result<(), Box<dyn Error>> {
-    let msg = message.into();
-    if json_output {
-        json::print_err(code, msg.clone());
-    } else {
-        eprintln!("error: {msg}");
-    }
-    std::process::exit(1);
-}
 
 // ---------------------------------------------------------------------------
 // Tests

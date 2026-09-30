@@ -4,6 +4,7 @@ use crate::cli::args::{
     HistoryArgs, HistoryCommand, HistoryListArgs, HistoryShowArgs, HistoryTailArgs,
     HistoryTracesArgs,
 };
+use crate::cli::emit::{emit_error, emit_operation_error};
 use crate::cli::json::{self, codes};
 use crate::operations::core::{self, ListRunsRequest, ListTracesRequest, ShowRunRequest};
 use crate::operations::{OperationError, OperationErrorCode};
@@ -126,7 +127,7 @@ fn list(
 
     let rows = match core::list_runs(workspace, request) {
         Ok(rows) => rows,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, history_error_code),
     };
 
     if json_output {
@@ -169,7 +170,7 @@ fn show(
         },
     ) {
         Ok(row) => row,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, history_error_code),
     };
 
     if json_output {
@@ -244,7 +245,7 @@ fn tail(
         return emit_error(
             json_output,
             codes::NOT_IMPLEMENTED,
-            "history tail --follow is not implemented in v1".into(),
+            "history tail --follow is not implemented in v1",
         );
     }
     let list_opts = HistoryListArgs {
@@ -264,7 +265,7 @@ fn tail(
 fn stats(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let stats = match core::run_stats(workspace) {
         Ok(s) => s,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, history_error_code),
     };
     if json_output {
         json::print_ok(stats);
@@ -317,7 +318,7 @@ fn traces(
                 format!("run not found: {}", run_id),
             );
         }
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, history_error_code),
     };
 
     if json_output {
@@ -351,21 +352,12 @@ fn format_trace_row(trace: &TraceRow) -> String {
     }
 }
 
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message);
-        std::process::exit(1);
-    }
-    Err(message.into())
-}
-
-fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
-    let code = match err.code {
+fn history_error_code(err: &OperationError) -> &'static str {
+    match err.code {
         OperationErrorCode::InvalidInput => codes::INVALID_ARGUMENT,
         OperationErrorCode::NotFound => codes::NOT_FOUND,
         _ => codes::INTERNAL,
-    };
-    emit_error(json_output, code, err.message)
+    }
 }
 
 /// Parse a relative-duration string like `30s`, `15m`, `2h`, `7d` into

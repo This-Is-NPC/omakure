@@ -1,4 +1,5 @@
 use crate::cli::args::{BatteryArgs, BatteryCommand};
+use crate::cli::emit::emit_native_operation_error;
 use crate::cli::json;
 use crate::operations::battery::{
     add_battery, inspect_battery, install_battery_script, list_batteries, list_battery_scripts,
@@ -124,13 +125,7 @@ where
             }
             Ok(())
         }
-        Err(err) => {
-            if json_output {
-                json::print_err(err.code.as_str(), err.message.clone());
-                std::process::exit(1);
-            }
-            Err(Box::new(err))
-        }
+        Err(err) => emit_native_operation_error(json_output, err),
     }
 }
 

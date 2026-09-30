@@ -10,6 +10,7 @@
 //! no-op so scripts remain testable in isolation.
 
 use crate::cli::args::TraceArgs;
+use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
 use crate::runs::{self, TraceLevel};
 use crate::workspace::Workspace;
@@ -83,14 +84,6 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
         }));
     }
     Ok(())
-}
-
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message);
-        std::process::exit(1);
-    }
-    Err(message.into())
 }
 
 #[cfg(test)]

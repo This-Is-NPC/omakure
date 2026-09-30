@@ -1,4 +1,5 @@
 use crate::cli::args::{NodeArgs, NodeCommand, NodeEnrollCommand};
+use crate::cli::emit::emit_native_operation_error;
 use crate::cli::json;
 use crate::domain::NodeConfig;
 use crate::node::{NodeContext, NodeError, NodePathOverrides};
@@ -381,7 +382,7 @@ pub fn run(
     let context =
         match NodeContext::resolve(NodePathOverrides::new(args.state_dir, args.config_path)) {
             Ok(context) => context,
-            Err(error) => return emit_error(json_output, map_node_error(error)),
+            Err(error) => return emit_native_operation_error(json_output, map_node_error(error)),
         };
     let result: OperationResult<serde_json::Value> = match args.command {
         NodeCommand::Serve(args) => {
@@ -628,16 +629,8 @@ fn emit_result<T: serde::Serialize>(
             }
             Ok(())
         }
-        Err(error) => emit_error(json_output, error),
+        Err(error) => emit_native_operation_error(json_output, error),
     }
-}
-
-fn emit_error(json_output: bool, error: OperationError) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(error.code.as_str(), error.message);
-        std::process::exit(1);
-    }
-    Err(error.to_string().into())
 }
 
 fn map_node_error(error: NodeError) -> OperationError {

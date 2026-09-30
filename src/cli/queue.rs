@@ -12,6 +12,7 @@
 use crate::cli::args::{
     QueueAddArgs, QueueArgs, QueueCancelArgs, QueueCommand, QueueDeadLetterArgs, QueueWorkerArgs,
 };
+use crate::cli::emit::{emit_error, emit_operation_error};
 use crate::cli::json::{self, codes};
 use crate::operations::core::{self, CancelRunRequest, DeadLetterRunRequest, EnqueueRunRequest};
 use crate::operations::{OperationError, OperationErrorCode};
@@ -71,7 +72,7 @@ fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(
         },
     ) {
         Ok(row) => row,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, queue_error_code),
     };
     if json_output {
         json::print_ok(row);
@@ -101,7 +102,7 @@ fn cancel(
             }
             Ok(())
         }
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, queue_error_code),
     }
 }
 
@@ -125,14 +126,14 @@ fn dead_letter(
             }
             Ok(())
         }
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, queue_error_code),
     }
 }
 
 fn stats(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let stats = match core::queue_stats(workspace) {
         Ok(s) => s,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, queue_error_code),
     };
     if json_output {
         json::print_ok(stats);
@@ -503,23 +504,14 @@ fn parse_duration_ms(s: &str) -> Result<i64, String> {
     Ok(ms as i64)
 }
 
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message);
-        std::process::exit(1);
-    }
-    Err(message.into())
-}
-
-fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
-    let code = match err.code {
+fn queue_error_code(err: &OperationError) -> &'static str {
+    match err.code {
         OperationErrorCode::InvalidInput
         | OperationErrorCode::UnsafePath
         | OperationErrorCode::Conflict => codes::INVALID_ARGUMENT,
         OperationErrorCode::NotFound => codes::NOT_FOUND,
         _ => codes::INTERNAL,
-    };
-    emit_error(json_output, code, err.message)
+    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "fb6a9ea6a8214c1ef94d86f8773efdb1c970826f9c797a5c9ff0c4576252a665",
+  "canonical_sha256": "b79ecf8b95990ea53727705dd654cde14248edb818cfb7d20d0fd5e329972a7e",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -1095,6 +1095,132 @@
         "cyclomatic": 96
       },
       "path": "src/cli/update.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 3,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 34,
+        "cyclomatic": 42
+      },
+      "path": "src/cli_http_parity/compare.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 6,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 12,
+        "cyclomatic": 16
+      },
+      "path": "src/cli_http_parity/docs.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 7,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 53,
+        "cyclomatic": 72
+      },
+      "path": "src/cli_http_parity/manifest.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 6
+      },
+      "path": "src/cli_http_parity/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 3
+      },
+      "path": "src/cli_http_parity/model.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 6,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 20,
+        "cyclomatic": 41
+      },
+      "path": "src/cli_http_parity/schema.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 28,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 1,
+        "cyclomatic": 7
+      },
+      "path": "src/cli_http_parity/tests/compare.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 72,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 3,
+        "cyclomatic": 25
+      },
+      "path": "src/cli_http_parity/tests/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 42,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 5
+      },
+      "path": "src/cli_http_parity/tests/schema.rs",
       "source_class": "handwritten"
     },
     {

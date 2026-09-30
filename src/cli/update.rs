@@ -22,7 +22,7 @@ pub fn run(_scripts_dir: PathBuf, args: UpdateArgs) -> Result<(), Box<dyn Error>
 
     validate_version(&version)?;
 
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = crate::app_meta::APP_VERSION;
     let target_version = version.trim_start_matches('v');
     let should_update = target_version != current_version;
 
@@ -624,7 +624,7 @@ mod tests {
             workspace.clone(),
             UpdateArgs {
                 repo: Some(DEFAULT_REPO.into()),
-                version: Some(env!("CARGO_PKG_VERSION").into()),
+                version: Some(crate::app_meta::APP_VERSION.into()),
             },
         )
         .unwrap();

@@ -202,7 +202,7 @@ src/
 │   └── lifecycle.rs         enrolled/revoked lifecycle Signals
 ├── remote_cue.rs            receive half of the Cue plane and its refusal codes
 ├── baseline.rs              signed baseline manifest: the versioned set a fleet ships
-├── baseline_push.rs         receive half of baseline delivery, install, and rollback
+├── baseline_push/           receive half of baseline delivery, install, and rollback
 ├── baseline_publisher.rs    custody of the key that signs a baseline
 ├── enrollment_authority.rs  custody of the key that mints fleet membership
 ├── discovery.rs             bounded trust-neutral LAN discovery
@@ -280,7 +280,7 @@ src/
 - The baseline plane is the only one that carries code, so it is the only one
   authorized by two independent authorities: `src/baseline.rs` signs a versioned
   set of scripts under a publisher key held in `src/baseline_publisher.rs`, and
-  `src/baseline_push.rs` will install one only for an active Conductor holding
+  `src/baseline_push/` will install one only for an active Conductor holding
   `baseline-push` *and* a publisher the receiver's own config names.
   `src/operations/baseline.rs` makes the install all-or-nothing on the
   filesystem, retains exactly one previous version, and re-runs the same

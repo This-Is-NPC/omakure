@@ -212,7 +212,7 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
     CommandCoverage {
         command: "node baseline",
         coverage: Coverage::Covered(
-            "tests/cli_surface_e2e.rs + src/baseline_push.rs delivery_tests",
+            "tests/cli_surface_e2e.rs + src/baseline_push/tests/delivery.rs",
         ),
     },
     CommandCoverage {

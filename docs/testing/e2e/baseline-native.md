@@ -5,7 +5,7 @@
 ## Source
 
 - `tests/baseline_push_e2e.rs`
-- Baseline delivery implementation and contract tests in `src/baseline_push.rs` and related modules.
+- Baseline delivery implementation and contract tests in `src/baseline_push/` and related modules.
 
 ## Run
 

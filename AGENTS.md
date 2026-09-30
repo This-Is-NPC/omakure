@@ -96,7 +96,7 @@ src/
     ├── enrollment.rs, enrollment_authority.rs  # manual/signed enrollment
     ├── health_plane/, direct_health.rs   # Health Plane domain and carriage
     ├── remote_cue.rs                     # Cue plane receive half
-    └── baseline.rs, baseline_push.rs, baseline_publisher.rs  # Baseline plane
+    └── baseline.rs, baseline_push/, baseline_publisher.rs  # Baseline plane
 ```
 
 ### Boundaries

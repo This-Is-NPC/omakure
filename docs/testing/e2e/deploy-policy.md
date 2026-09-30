@@ -17,7 +17,7 @@ cargo test --test policy_e2e --locked
 
 - A read-only policy blocks wildcard-token writes.
 - Disabled Battery routes are denied.
-- Legacy-disabled and malformed policy files fail before the listener binds.
+- A missing tokens file and malformed policy files fail before the listener binds.
 - Non-loopback binding requires explicit opt-in; policy can supply that opt-in.
 - Worker defaults are taken from policy and are observable through node-service behavior.
 

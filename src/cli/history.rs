@@ -157,33 +157,6 @@ fn format_list_row(row: &RunRow) -> String {
     )
 }
 
-/// Resolve the user-supplied `--state` and `--state-set` flags into concrete
-/// run states. Retained as characterization coverage for the operation-backed
-/// adapter migration.
-///
-/// Default (neither flag): the terminal set.
-#[cfg(test)]
-fn resolve_state_filter(
-    states: &[String],
-    state_set: Option<&str>,
-) -> Result<Vec<crate::runs::RunState>, String> {
-    if !states.is_empty() && state_set.is_some() {
-        return Err("--state and --state-set are mutually exclusive".to_string());
-    }
-    if let Some(set) = state_set {
-        let parsed: crate::runs::RunStateSet = set.parse()?;
-        return Ok(parsed.to_states());
-    }
-    if !states.is_empty() {
-        let mut out = Vec::with_capacity(states.len());
-        for s in states {
-            out.push(s.parse::<crate::runs::RunState>()?);
-        }
-        return Ok(out);
-    }
-    Ok(crate::runs::RunStateSet::Terminal.to_states())
-}
-
 fn show(
     workspace: &Workspace,
     opts: HistoryShowArgs,
@@ -422,7 +395,7 @@ pub fn parse_duration_to_ms(s: &str) -> Result<i64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runs::{RunState, RunStateSet};
+    use crate::runs::RunState;
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -477,45 +450,6 @@ mod tests {
         assert!(parse_duration_to_ms("abc").is_err());
         assert!(parse_duration_to_ms("10x").is_err());
         assert!(parse_duration_to_ms("h").is_err());
-    }
-
-    #[test]
-    fn resolve_state_filter_default_is_terminal_set() {
-        let resolved = resolve_state_filter(&[], None).unwrap();
-        let expected = RunStateSet::Terminal.to_states();
-        assert_eq!(resolved, expected);
-    }
-
-    #[test]
-    fn resolve_state_filter_state_set_in_flight() {
-        let resolved = resolve_state_filter(&[], Some("in_flight")).unwrap();
-        assert!(resolved.contains(&RunState::Queued));
-        assert!(resolved.contains(&RunState::Running));
-        assert!(!resolved.contains(&RunState::Completed));
-    }
-
-    #[test]
-    fn resolve_state_filter_explicit_states() {
-        let resolved = resolve_state_filter(&["queued".into(), "running".into()], None).unwrap();
-        assert_eq!(resolved, vec![RunState::Queued, RunState::Running]);
-    }
-
-    #[test]
-    fn resolve_state_filter_invalid_value_returns_error() {
-        let err = resolve_state_filter(&["bogus".into()], None).unwrap_err();
-        assert!(err.contains("invalid run state"));
-    }
-
-    #[test]
-    fn resolve_state_filter_mutually_exclusive_with_state_set() {
-        let err = resolve_state_filter(&["queued".into()], Some("terminal")).unwrap_err();
-        assert!(err.contains("mutually exclusive"));
-    }
-
-    #[test]
-    fn resolve_state_filter_invalid_state_set_returns_error() {
-        let err = resolve_state_filter(&[], Some("bogus")).unwrap_err();
-        assert!(err.contains("invalid state-set"));
     }
 
     #[test]

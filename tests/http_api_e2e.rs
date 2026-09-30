@@ -1767,7 +1767,7 @@ fi
 /// file-mode branch of `require_scope`. The headline node-service feature — per-token
 /// scopes — otherwise had only in-crate unit tests; this locks it end-to-end so
 /// a regression that makes file-mode scope checks always-allow (or inverts the
-/// `is_file_mode` branch, or lets the legacy env token slip through) fails here.
+/// `is_file_mode` branch) fails here.
 #[test]
 fn tokens_file_mode_enforces_per_token_scopes() {
     let workspace = support::TestWorkspace::new("http_tokens_file_scopes");

@@ -342,8 +342,8 @@ fn service_holds_session(context: &NodeContext, scripts_dir: &std::path::Path, p
 ///
 /// The service records this itself, because `api.bind` in the config is only a
 /// request — `node serve --bind` wins over it, and a process reading the config
-/// alone would look in the wrong place. The config is still the fallback for a
-/// service started before this file existed.
+/// alone would look in the wrong place. The config is still the fallback when
+/// the service could not record it.
 fn node_api_bind(
     context: &NodeContext,
     scripts_dir: &std::path::Path,

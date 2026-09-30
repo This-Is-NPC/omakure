@@ -502,7 +502,7 @@ pub(crate) fn parse_env_defaults(contents: &str) -> HashMap<String, String> {
 /// key/value pairs.
 ///
 /// This is a deliberately separate path from [`parse_env_defaults`] (which
-/// lowercases keys for legacy schema-field prefill). Real environment variables
+/// lowercases keys for case-insensitive field lookups). Real environment variables
 /// such as `PATH` and `VIRTUAL_ENV` are case-sensitive on Linux, so keys are
 /// preserved verbatim here.
 ///
@@ -641,11 +641,6 @@ pub(crate) fn read_managed_env_defaults(
 ///   [`crate::run_executor::execute_with_heartbeat`], and is therefore
 ///   **non-overridable**: a user key of the same name from this env file
 ///   cannot clobber the reserved value.
-///
-/// Behavior change (was: prefill-only): prior to this, `.omakure/envs/*.conf`
-/// only provided legacy schema-field defaults and never reached the spawned
-/// process. Those files now inject into the child's `os.environ`. There is
-/// no CHANGELOG file in this repo, so this doc-comment records the change.
 ///
 /// Injection is best-effort: an absent `active` pointer or an unreadable env
 /// file yields an empty vec rather than failing the run. Per spec §3 the

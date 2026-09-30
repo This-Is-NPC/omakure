@@ -163,7 +163,7 @@ src/
 ├── search_index.rs          SQLite full-text index
 ├── runtime.rs               Script-kind detection and command construction
 ├── workspace.rs             one workspace root and metadata layout
-├── auth.rs                  token-file and legacy token authentication
+├── auth.rs                  token-file authentication
 ├── policy.rs                deploy-time route and runtime policy
 ├── secrets.rs               secret references and provider resolution
 ├── redaction.rs             output and trace redaction

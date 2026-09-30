@@ -707,6 +707,45 @@ mod tests {
     use crate::runs::{RunCompletion, RunState};
     use tempfile::TempDir;
 
+    #[test]
+    fn resolve_states_default_is_terminal_set() {
+        let resolved = resolve_states(&[], None).unwrap();
+        assert_eq!(resolved, RunStateSet::Terminal.to_states());
+    }
+
+    #[test]
+    fn resolve_states_state_set_in_flight() {
+        let resolved = resolve_states(&[], Some("in_flight")).unwrap();
+        assert!(resolved.contains(&RunState::Queued));
+        assert!(resolved.contains(&RunState::Running));
+        assert!(!resolved.contains(&RunState::Completed));
+    }
+
+    #[test]
+    fn resolve_states_explicit_states() {
+        let resolved = resolve_states(&["queued".into(), "running".into()], None).unwrap();
+        assert_eq!(resolved, vec![RunState::Queued, RunState::Running]);
+    }
+
+    #[test]
+    fn resolve_states_invalid_value_returns_error() {
+        let err = resolve_states(&["bogus".into()], None).unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::InvalidInput);
+        assert!(err.message.contains("invalid run state"));
+    }
+
+    #[test]
+    fn resolve_states_mutually_exclusive_with_state_set() {
+        let err = resolve_states(&["queued".into()], Some("terminal")).unwrap_err();
+        assert!(err.message.contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn resolve_states_invalid_state_set_returns_error() {
+        let err = resolve_states(&[], Some("bogus")).unwrap_err();
+        assert!(err.message.contains("invalid state-set"));
+    }
+
     fn workspace_in(dir: &TempDir) -> Workspace {
         let ws = Workspace::new(dir.path().to_path_buf());
         ws.ensure_layout().unwrap();

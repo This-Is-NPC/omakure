@@ -1387,7 +1387,7 @@ cmd config display_order=17 disable_version_flag=#true args_override_self=#false
     long_help #"""
 Show resolved paths and environment diagnostics
 
-Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `--json` for the machine-readable envelope.
+Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `REPO`, `VERSION`). Pass `--json` for the machine-readable envelope.
 """#
     flag --scripts-dir help="Scripts directory override" global=#true {
         arg <SCRIPTS_DIR>
@@ -1405,9 +1405,9 @@ cmd update display_order=18 disable_version_flag=#true args_override_self=#false
     long_help #"""
 Update omakure from GitHub releases
 
-Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `--repo` defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release.
+Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `--repo` defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release.
 """#
-    flag --repo help="GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`" display_order=0 {
+    flag --repo help="GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`" display_order=0 {
         arg <REPO>
     }
     flag --version help="Release tag to install (e.g. `v0.1.9`). Defaults to `$VERSION` or the latest GitHub release for the configured repo" display_order=1 {

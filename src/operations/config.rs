@@ -147,17 +147,8 @@ pub fn collect_env_overrides() -> BTreeMap<String, String> {
     out
 }
 
-pub fn env_override_names() -> [&'static str; 8] {
-    [
-        "OMAKURE_SCRIPTS_DIR",
-        "OMAKURE_REPO",
-        "REPO",
-        "VERSION",
-        "OVERTURE_SCRIPTS_DIR",
-        "OVERTURE_REPO",
-        "CLOUD_MGMT_SCRIPTS_DIR",
-        "CLOUD_MGMT_REPO",
-    ]
+pub fn env_override_names() -> [&'static str; 4] {
+    ["OMAKURE_SCRIPTS_DIR", "OMAKURE_REPO", "REPO", "VERSION"]
 }
 
 #[cfg(test)]

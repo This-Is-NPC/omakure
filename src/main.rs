@@ -5,7 +5,9 @@ use std::env;
 use std::error::Error;
 use std::path::PathBuf;
 
-fn scripts_dir_for(name: &str) -> PathBuf {
+fn default_scripts_dir() -> PathBuf {
+    let name = "omakure-scripts";
+
     #[cfg(windows)]
     {
         if let Some(documents) = windows_documents_dir() {
@@ -96,20 +98,8 @@ fn expand_windows_env_vars(value: &str) -> String {
     output
 }
 
-fn default_scripts_dir() -> PathBuf {
-    scripts_dir_for("omakure-scripts")
-}
-
 fn scripts_dir() -> PathBuf {
     if let Ok(dir) = env::var("OMAKURE_SCRIPTS_DIR") {
-        return PathBuf::from(dir);
-    }
-
-    if let Ok(dir) = env::var("OVERTURE_SCRIPTS_DIR") {
-        return PathBuf::from(dir);
-    }
-
-    if let Ok(dir) = env::var("CLOUD_MGMT_SCRIPTS_DIR") {
         return PathBuf::from(dir);
     }
 
@@ -120,21 +110,7 @@ fn scripts_dir() -> PathBuf {
         }
     }
 
-    let default_dir = default_scripts_dir();
-    if default_dir.is_dir() {
-        return default_dir;
-    }
-
-    for legacy_dir in [
-        scripts_dir_for("overture-scripts"),
-        scripts_dir_for("cloud-mgmt-scripts"),
-    ] {
-        if legacy_dir.is_dir() {
-            return legacy_dir;
-        }
-    }
-
-    default_dir
+    default_scripts_dir()
 }
 
 /// Run a Lua script in the embedded runtime and exit.

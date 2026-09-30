@@ -197,8 +197,6 @@ fn validate_version(version: &str) -> Result<(), Box<dyn Error>> {
 
 fn resolve_repo(repo: Option<String>) -> String {
     repo.or_else(|| env::var("OMAKURE_REPO").ok())
-        .or_else(|| env::var("OVERTURE_REPO").ok())
-        .or_else(|| env::var("CLOUD_MGMT_REPO").ok())
         .or_else(|| env::var("REPO").ok())
         .unwrap_or_else(|| DEFAULT_REPO.to_string())
 }
@@ -592,8 +590,6 @@ mod tests {
     #[test]
     fn test_resolve_repo_default() {
         env::remove_var("OMAKURE_REPO");
-        env::remove_var("OVERTURE_REPO");
-        env::remove_var("CLOUD_MGMT_REPO");
         env::remove_var("REPO");
         assert_eq!(resolve_repo(None), DEFAULT_REPO);
     }

@@ -1343,7 +1343,7 @@ Explicitly remove validated machine identity and node trust state
 
 Show resolved paths and environment diagnostics
 
-Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `--json` for the machine-readable envelope.
+Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `REPO`, `VERSION`). Pass `--json` for the machine-readable envelope.
 
 ### Flags
 - **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
@@ -1359,10 +1359,10 @@ Prints the resolved binary path, omakure version, workspace root, scripts root, 
 
 Update omakure from GitHub releases
 
-Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `--repo` defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release.
+Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `--repo` defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release.
 
 ### Flags
-- **`--repo <REPO>`** — GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`
+- **`--repo <REPO>`** — GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`
 - **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
 - **`--version <VERSION>`** — Release tag to install (e.g. `v0.1.9`). Defaults to `$VERSION` or the latest GitHub release for the configured repo
 - **`--json`** — Emit machine-readable JSON output for AI-facing subcommands.

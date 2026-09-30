@@ -60,9 +60,8 @@ cleans up.
 ## Workspace selection
 
 `--scripts-dir` is the supported explicit override. Resolution then considers
-`OMAKURE_SCRIPTS_DIR`, legacy `OVERTURE_SCRIPTS_DIR` and
-`CLOUD_MGMT_SCRIPTS_DIR`, the debug `scripts/workspace` fixture, platform
-defaults, and legacy default directory names. Positional script paths are not
+`OMAKURE_SCRIPTS_DIR`, the debug `scripts/workspace` fixture, and the platform
+default `~/Documents/omakure-scripts`. Positional script paths are not
 accepted.
 
 The debug build uses `scripts/workspace` when it exists. Omakure creates

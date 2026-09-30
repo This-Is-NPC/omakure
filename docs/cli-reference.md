@@ -1142,7 +1142,7 @@ Update omakure from GitHub releases
 ### Options
 
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
-- `--repo REPO` — GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`
+- `--repo REPO` — GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override
 - `--version VERSION` — Release tag to install (e.g. `v0.1.9`). Defaults to `$VERSION` or the latest GitHub release for the configured repo
 

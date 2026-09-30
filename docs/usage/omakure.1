@@ -2168,7 +2168,7 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
 .SH "OMAKURE CONFIG"
 Show resolved paths and environment diagnostics
 
-Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `\-\-json` for the machine\-readable envelope.
+Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `REPO`, `VERSION`). Pass `\-\-json` for the machine\-readable envelope.
 .PP
 \fBUsage:\fR omakure config [OPTIONS]
 .PP
@@ -2188,7 +2188,7 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
 .SH "OMAKURE UPDATE"
 Update omakure from GitHub releases
 
-Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `\-\-repo` defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This\-Is\-NPC/omakure`; `\-\-version` defaults to `$VERSION` or the latest GitHub release.
+Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `\-\-repo` defaults to `$OMAKURE_REPO` / `$REPO` / `This\-Is\-NPC/omakure`; `\-\-version` defaults to `$VERSION` or the latest GitHub release.
 .PP
 \fBUsage:\fR omakure update [OPTIONS]
 .PP
@@ -2196,7 +2196,7 @@ Downloads the release archive for the current OS/arch and replaces the running b
 .PP
 .TP
 \fB\-\-repo\fR \fI<REPO>\fR
-GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This\-Is\-NPC/omakure`
+GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$REPO` / `This\-Is\-NPC/omakure`
 .TP
 \fB\-\-scripts\-dir\fR \fI<SCRIPTS_DIR>\fR
 Scripts directory override

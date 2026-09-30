@@ -141,8 +141,7 @@ pub enum Commands {
     /// scripts root, `.omakure/` directory, history directory, workspace
     /// config file, environments directory, active environment, and any
     /// known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`,
-    /// `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `--json`
-    /// for the machine-readable envelope.
+    /// `REPO`, `VERSION`). Pass `--json` for the machine-readable envelope.
     Config,
 
     /// Update omakure from GitHub releases
@@ -151,8 +150,7 @@ pub enum Commands {
     /// replaces the running binary in place. Also copies any scripts
     /// missing from your local scripts directory from the source
     /// archive of the target version — existing files are never
-    /// overwritten. `--repo` defaults to `$OMAKURE_REPO` /
-    /// `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` /
+    /// overwritten. `--repo` defaults to `$OMAKURE_REPO` / `$REPO` /
     /// `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the
     /// latest GitHub release.
     Update(UpdateArgs),
@@ -1076,8 +1074,7 @@ pub struct InitArgs {
 #[command(disable_version_flag = true)]
 pub struct UpdateArgs {
     /// GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` /
-    /// `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` /
-    /// `This-Is-NPC/omakure`.
+    /// `$REPO` / `This-Is-NPC/omakure`.
     #[arg(long)]
     pub repo: Option<String>,
 

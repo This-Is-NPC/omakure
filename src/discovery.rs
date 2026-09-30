@@ -8,6 +8,7 @@ use crate::domain::{is_node_id, NODE_ID_BYTES};
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
+use crate::util::time::unix_seconds;
 use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -18,7 +19,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 pub const BEACON_MAGIC: &[u8; 4] = b"OMKB";
@@ -925,12 +926,6 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
                 difference | (left ^ right)
             })
             == 0
-}
-
-fn unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs())
 }
 
 #[cfg(test)]

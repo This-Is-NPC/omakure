@@ -96,7 +96,7 @@ mod tests {
             "omakure_trace_test_{}_{}_{}",
             label,
             std::process::id(),
-            runs::current_unix_ms()
+            crate::util::time::unix_millis()
         ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();

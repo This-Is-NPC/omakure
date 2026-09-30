@@ -16,7 +16,6 @@ use k256::schnorr::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 use thiserror::Error;
 
@@ -664,13 +663,6 @@ impl ManualEnrollmentRequest {
         }
         Ok(())
     }
-}
-
-pub fn now_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0)
 }
 
 pub fn parse_hex(value: &str, expected_bytes: usize) -> Result<Vec<u8>, EnrollmentError> {

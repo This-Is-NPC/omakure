@@ -504,7 +504,7 @@ fn write_redaction_file(
     let path = workspace.history_dir().join(format!(
         ".redact.{}.{}.tmp",
         sanitize_run_id_for_filename(run_id),
-        runs::current_unix_ms()
+        crate::util::time::unix_millis()
     ));
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
@@ -632,7 +632,7 @@ mod tests {
             "omakure_executor_test_{}_{}_{}",
             label,
             std::process::id(),
-            runs::current_unix_ms()
+            crate::util::time::unix_millis()
         ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();

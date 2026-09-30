@@ -35,7 +35,7 @@ impl ProbeFixture {
         Self {
             workspace: workspace.to_path_buf(),
             repository: repository.to_path_buf(),
-            clock_seconds: omakure::enrollment::now_seconds(),
+            clock_seconds: omakure::direct_transport::unix_seconds(),
             authorized_actor: "authorized".into(),
             unauthenticated_actor: "unauthenticated".into(),
             forbidden_actor: "forbidden".into(),
@@ -181,7 +181,7 @@ impl BehavioralContext {
         self.fixture.clock_seconds
     }
     pub fn fresh_clock_seconds(&self) -> u64 {
-        omakure::enrollment::now_seconds()
+        omakure::direct_transport::unix_seconds()
     }
 
     pub fn cli(&self, args: &[&str]) -> Output {
@@ -405,10 +405,10 @@ fn derived_contexts_retain_fixture_actor_and_clock_values() {
 #[test]
 fn fresh_clock_seconds_is_current_and_monotonic() {
     let context = BehavioralContext::new("parity_fresh_clock", &["config:read"]);
-    let before = omakure::enrollment::now_seconds();
+    let before = omakure::direct_transport::unix_seconds();
     let first = context.fresh_clock_seconds();
     let second = context.fresh_clock_seconds();
-    let after = omakure::enrollment::now_seconds();
+    let after = omakure::direct_transport::unix_seconds();
 
     assert!(
         before <= first && first <= second && second <= after,

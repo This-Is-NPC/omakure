@@ -9,6 +9,7 @@ use crate::node_identity::{Bip340Signature, DirectEnvelopePrehash, NodeIdentity}
 use crate::node_registry::PeerState;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
+pub use crate::util::time::unix_seconds;
 use curve25519_dalek::{constants::X25519_BASEPOINT, montgomery::MontgomeryPoint};
 use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
 use rand::rngs::OsRng;
@@ -18,7 +19,6 @@ use snow::{params::NoiseParams, Builder, HandshakeState, TransportState};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io;
-use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 pub const CONTRACT_ID: &[u8] = b"omakure/direct-transport/v1";
@@ -300,13 +300,6 @@ impl Frame {
         }
         Ok(self.body[0])
     }
-}
-
-pub fn unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0)
 }
 
 pub fn x25519_public_from_private(private: &[u8]) -> Result<[u8; 32], TransportError> {

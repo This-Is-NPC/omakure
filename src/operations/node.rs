@@ -643,7 +643,7 @@ pub fn issue_enrollment_bundle(
 
     let mut bundle_id = [0u8; crate::enrollment::REQUEST_ID_BYTES];
     rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut bundle_id);
-    let issued_at = crate::enrollment::now_seconds();
+    let issued_at = crate::util::time::unix_seconds();
     let expires_at = issued_at.saturating_add(request.lifetime_seconds);
 
     let subject_node_id = identity.public_status().node_id.clone();
@@ -846,7 +846,7 @@ fn apply_signed_bundle_with_actor(
                 })?,
             revoked: authority.revoked,
         };
-        let now = enrollment::now_seconds();
+        let now = crate::util::time::unix_seconds();
         bundle
             .verify(
                 &authority,
@@ -1157,7 +1157,7 @@ pub fn stage_manual_enrollment(
 ) -> OperationResult<PublicPeer> {
     manual_enrollment_enabled(context)?;
     request
-        .verify(enrollment::now_seconds())
+        .verify(crate::util::time::unix_seconds())
         .map_err(map_enrollment_error)?;
     let registry = open_initialized_registry(context)?;
     registry
@@ -1166,7 +1166,7 @@ pub fn stage_manual_enrollment(
             transport_certificate,
             "authenticated-untrusted",
             "authenticated manual enrollment request",
-            enrollment::now_seconds(),
+            crate::util::time::unix_seconds(),
         )
         .map_err(map_registry_error)
         .map(public_peer)
@@ -1220,7 +1220,7 @@ pub fn approve_manual_enrollment(
             &code,
             &request.actor,
             &request.reason,
-            enrollment::now_seconds(),
+            crate::util::time::unix_seconds(),
         )
         .map_err(map_registry_error)
         .map(public_peer)
@@ -1266,7 +1266,7 @@ pub fn request_manual_enrollment(
         *transport.certificate().transport_public(),
         role,
         capabilities,
-        enrollment::now_seconds(),
+        crate::util::time::unix_seconds(),
         lifetime_seconds,
     )
     .map_err(map_enrollment_error)?;
@@ -1507,7 +1507,7 @@ pub fn public_discovery_status_with_config(
             OperationError::new(OperationErrorCode::IoFailed, "discovery status unavailable")
         })
         .map(|mut snapshot| {
-            snapshot.public_status(include_addresses, crate::enrollment::now_seconds())
+            snapshot.public_status(include_addresses, crate::util::time::unix_seconds())
         })
 }
 
@@ -1929,7 +1929,7 @@ mod tests {
         let manager = NodeIdentity::load_or_initialize(&manager_context).unwrap();
         let manager_transport = LocalTransport::provision_new(&manager_context, &manager).unwrap();
         let target_identity = NodeIdentity::load_existing(&target).unwrap();
-        let now = enrollment::now_seconds();
+        let now = crate::util::time::unix_seconds();
         let bundle = enrollment::SignedEnrollmentBundle::sign_with_material(
             &authority_private,
             [bundle_byte; enrollment::REQUEST_ID_BYTES],
@@ -2380,7 +2380,7 @@ mod tests {
             *candidate_transport.certificate().transport_public(),
             EnrollmentRole::Performer,
             vec!["remote-run".into()],
-            enrollment::now_seconds(),
+            crate::util::time::unix_seconds(),
             300,
         )
         .unwrap();
@@ -2462,7 +2462,7 @@ mod tests {
             *candidate_transport.certificate().transport_public(),
             EnrollmentRole::Performer,
             vec!["remote-run".into()],
-            enrollment::now_seconds(),
+            crate::util::time::unix_seconds(),
             300,
         )
         .unwrap();
@@ -2768,7 +2768,7 @@ mod tests {
         let manager_transport = LocalTransport::provision_new(&manager_context, &manager).unwrap();
         initialize_node(&target, &config).unwrap();
         let target_identity = NodeIdentity::load_existing(&target).unwrap();
-        let now = enrollment::now_seconds();
+        let now = crate::util::time::unix_seconds();
         let bundle = enrollment::SignedEnrollmentBundle::sign_with_material(
             &authority_private,
             [7; enrollment::REQUEST_ID_BYTES],
@@ -3024,8 +3024,8 @@ mod tests {
                     *transport.certificate().as_bytes(),
                     EnrollmentRole::Conductor,
                     vec!["remote-run".into()],
-                    enrollment::now_seconds(),
-                    enrollment::now_seconds() + 600,
+                    crate::util::time::unix_seconds(),
+                    crate::util::time::unix_seconds() + 600,
                 )
                 .unwrap()
             };

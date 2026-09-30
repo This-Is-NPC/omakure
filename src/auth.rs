@@ -116,10 +116,7 @@ impl Authenticator {
     /// Reload tokens from disk. On failure, keeps the last valid set and returns Err.
     pub fn reload(&self) -> Result<(), AuthError> {
         let mut guard = self.inner.write().expect("auth lock");
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
+        let now_ms = crate::util::time::unix_millis();
         match load_tokens_file(&guard.path) {
             Ok(loaded) => {
                 guard.tokens = loaded;

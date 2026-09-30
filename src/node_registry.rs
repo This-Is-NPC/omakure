@@ -4509,7 +4509,7 @@ mod tests {
             Err(RegistryError::PublisherConductorConflict)
         ));
 
-        let now = crate::enrollment::now_seconds();
+        let now = crate::util::time::unix_seconds();
         let (_remote_context, remote) = remote_identity(&temp);
         let certificate = remote_certificate(&remote, now);
         let offer = ManualEnrollmentRequest::create(

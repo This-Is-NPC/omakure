@@ -464,14 +464,6 @@ pub fn content_hash(path: &std::path::Path) -> Option<String> {
     Some(hex::encode(&hasher.finalize()))
 }
 
-/// UTC Unix seconds, for the second validity check at the accept transition.
-fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs() as i64)
-        .unwrap_or_default()
-}
-
 /// The receive-side Cue session.
 ///
 /// Holds only what the gates read, all of it local. It is constructed beside a
@@ -715,7 +707,7 @@ impl<'a> CueSession<'a> {
         // Checked again at the accept transition. The gates above read the
         // registry and walk the workspace; a Cue that expired while they ran
         // must land `Expired`, not become a run.
-        let at_accept = unix_now();
+        let at_accept = crate::util::time::unix_seconds() as i64;
         if let Err(code) =
             within_validity_window(dispatch.not_before, dispatch.expires_at, at_accept)
         {
@@ -922,7 +914,7 @@ impl<'a> CueSession<'a> {
     /// for one instruction, which makes the trail harder to read for no gain.
     pub fn decide(&mut self, cue_id: Option<&str>) -> CueOutcome {
         if let Some(cue_id) = cue_id {
-            self.prune_cue_state(unix_now());
+            self.prune_cue_state(crate::util::time::unix_seconds() as i64);
             if self
                 .cue_records
                 .iter()
@@ -939,7 +931,7 @@ impl<'a> CueSession<'a> {
                 );
                 return CueOutcome::Repeat;
             }
-            self.remember_cue(cue_id, unix_now());
+            self.remember_cue(cue_id, crate::util::time::unix_seconds() as i64);
         }
 
         let authority = LocalAuthority {

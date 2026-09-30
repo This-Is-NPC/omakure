@@ -8,7 +8,7 @@ use crate::cli::emit::{emit_error, emit_operation_error};
 use crate::cli::json::{self, codes};
 use crate::operations::core::{self, ListRunsRequest, ListTracesRequest, ShowRunRequest};
 use crate::operations::{OperationError, OperationErrorCode};
-use crate::runs::{self, format_run_timestamp, RunRow, RunStats, TraceRow};
+use crate::runs::{format_run_timestamp, RunRow, RunStats, TraceRow};
 use crate::workspace::Workspace;
 use serde::Serialize;
 use std::error::Error;
@@ -102,7 +102,7 @@ fn list(
         None
     };
 
-    let now = runs::current_unix_ms();
+    let now = crate::util::time::unix_millis();
     let since_ms = match opts.since.as_deref().map(parse_duration_to_ms) {
         Some(Ok(d)) => Some(now - d),
         Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
@@ -387,7 +387,7 @@ pub fn parse_duration_to_ms(s: &str) -> Result<i64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runs::RunState;
+    use crate::runs::{self, RunState};
     use std::collections::HashMap;
     use tempfile::TempDir;
 

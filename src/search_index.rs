@@ -4,7 +4,7 @@ use crate::ports::ScriptRepository;
 use rusqlite::{params, params_from_iter, Connection, TransactionBehavior};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct SearchResult {
@@ -171,7 +171,7 @@ fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
         } else {
             Some(tags.join(","))
         };
-        let indexed_at = timestamp_ms();
+        let indexed_at = crate::util::time::unix_millis();
 
         tx.execute(
             "INSERT OR REPLACE INTO script_index \
@@ -302,13 +302,6 @@ pub(crate) fn parse_tags(tags_raw: Option<String>) -> Vec<String> {
         .filter(|tag| !tag.is_empty())
         .map(|tag| tag.to_string())
         .collect()
-}
-
-fn timestamp_ms() -> i64 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    duration.as_millis() as i64
 }
 
 #[cfg(test)]

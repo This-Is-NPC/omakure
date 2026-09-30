@@ -159,7 +159,7 @@ fn dispatch_baseline(
                 &publisher,
                 &config.organization.id,
                 &publish.scripts,
-                unix_now(),
+                crate::util::time::unix_seconds(),
                 publish.lifetime_seconds,
                 &publish.out,
             )
@@ -200,7 +200,7 @@ fn dispatch_baseline(
                 &workspace,
                 &policy,
                 rollback.confirmed,
-                unix_now() as i64,
+                crate::util::time::unix_seconds() as i64,
             )
             .map(|record| serde_json::to_value(record).expect("baseline record serializes"))
         }
@@ -237,13 +237,6 @@ fn push_baseline_via_service(
             args.wait_seconds,
         ))),
     )
-}
-
-fn unix_now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or_default()
 }
 
 /// Probe one peer, and name the one cause the prober cannot see for itself.

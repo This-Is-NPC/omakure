@@ -651,7 +651,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     let authority_cert = fs::read(&authority_cert_path).expect("authority certificate");
     let target_a_cert = fs::read(&target_a_cert_path).expect("target A certificate");
     let private_key = [2_u8; 32];
-    let now = enrollment::now_seconds();
+    let now = omakure::direct_transport::unix_seconds();
     let target_a_bundle = bundle(
         &private_key,
         [1; 16],

@@ -3,6 +3,7 @@
 //! `runs.rs` is the **only** code path that persists script execution
 //! history.
 
+use crate::util::time::unix_millis;
 use crate::workspace::Workspace;
 use rusqlite::{
     params, params_from_iter, Connection, ErrorCode, OptionalExtension, Transaction,
@@ -16,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 /// SQLite's WAL-mode transition can briefly report `SQLITE_BUSY` or
 /// `SQLITE_LOCKED` when another process is opening the same database. The
@@ -793,7 +794,7 @@ pub fn enqueue(
 ) -> Result<RunRow, String> {
     let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
         .map_err(|err| format!("Begin enqueue failed: {}", err))?;
-    let now = current_unix_ms();
+    let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
         script_path: script_path.to_string(),
@@ -871,7 +872,7 @@ pub fn enqueue_scheduled(
         return Ok(None);
     }
 
-    let now = current_unix_ms();
+    let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
         script_path: script_path.to_string(),
@@ -938,7 +939,7 @@ pub fn enqueue_cue(
     let transaction = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|err| format!("Begin Cue enqueue failed: {}", err))?;
-    let now = current_unix_ms();
+    let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
         script_path: script_path.to_string(),
@@ -997,7 +998,7 @@ pub fn start_inline(
     worker_id: &str,
     opts: EnqueueOptions,
 ) -> Result<RunRow, String> {
-    let now = current_unix_ms();
+    let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
         script_path: script_path.to_string(),
@@ -1160,7 +1161,7 @@ pub fn claim_next(
     worker_id: &str,
     filters: &ClaimFilters,
 ) -> Result<Option<RunRow>, String> {
-    let now = current_unix_ms();
+    let now = unix_millis();
     // Build the inner SELECT with optional filters. The outer UPDATE always
     // sets state='running'.
     // A Cue-origin run is claimable once, like anything else, but is never
@@ -1258,7 +1259,7 @@ pub fn heartbeat(
     run_id: &str,
     worker_id: &str,
 ) -> Result<Option<RunState>, String> {
-    let now = current_unix_ms();
+    let now = unix_millis();
     let updated = conn
         .execute(
             "UPDATE runs
@@ -1292,7 +1293,7 @@ fn finalize(
     target: RunState,
     completion: &RunCompletion,
 ) -> Result<(), String> {
-    let now = current_unix_ms();
+    let now = unix_millis();
     // Look up the row first so we can compute duration_ms relative to its
     // started_at and reject illegal transitions.
     let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
@@ -1353,7 +1354,7 @@ pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Resul
 ///
 /// Returns the run ids it resolved.
 pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, String> {
-    let now = current_unix_ms();
+    let now = unix_millis();
     let mut statement = conn
         .prepare(
             "UPDATE runs
@@ -1397,7 +1398,7 @@ pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, Stri
 /// appear on locally-initiated work, and revoking a peer is not a licence to
 /// cancel what this node's owner started.
 pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, String> {
-    let now = current_unix_ms();
+    let now = unix_millis();
     let mut statement = conn
         .prepare(
             "UPDATE runs
@@ -1453,7 +1454,7 @@ pub fn cancel(
     completion: Option<RunCompletion>,
 ) -> Result<RunRow, String> {
     let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
-    let now = current_unix_ms();
+    let now = unix_millis();
     match row.state {
         RunState::Queued => {
             conn.execute(
@@ -1514,7 +1515,7 @@ pub fn record_cancelled_output(
     completion: RunCompletion,
 ) -> Result<(), String> {
     let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
-    let now = current_unix_ms();
+    let now = unix_millis();
     let started = row.started_at.unwrap_or(now);
     let duration_ms = (now - started).max(0);
     conn.execute(
@@ -1683,7 +1684,7 @@ fn insert_trace_once(
             operation: "Compute next sequence failed",
             error,
         })?;
-    let now = current_unix_ms();
+    let now = unix_millis();
     tx.execute(
         "INSERT INTO run_traces (run_id, timestamp, sequence, level, message, data_json)
              VALUES (?,?,?,?,?,?)",
@@ -1826,18 +1827,9 @@ pub fn query_traces(
 /// processes, the `<pid>` segment provides uniqueness.
 pub fn generate_run_id() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let ms = current_unix_ms();
+    let ms = unix_millis();
     let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("{}-{}-{}", ms, std::process::id(), counter)
-}
-
-/// Current Unix time in milliseconds. Saturates at 0 if the system clock
-/// is set to a value before 1970.
-pub fn current_unix_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 /// Format a Unix-millisecond timestamp as `YYYY-MM-DD HH:MM` (UTC).
@@ -1883,7 +1875,7 @@ mod tests {
             "omakure_runs_test_{}_{}_{}_{}",
             label,
             std::process::id(),
-            current_unix_ms(),
+            unix_millis(),
             // Local atomic disambiguates two helpers spinning up workspaces
             // in the same millisecond.
             unique_seq()
@@ -2104,7 +2096,7 @@ mod tests {
         .unwrap();
         conn.execute(
             "UPDATE runs SET state = 'running', started_at = ?1 WHERE run_id = ?2",
-            rusqlite::params![current_unix_ms(), running.run_id],
+            rusqlite::params![unix_millis(), running.run_id],
         )
         .unwrap();
 
@@ -2207,7 +2199,7 @@ mod tests {
         // The worker dies. Its lease lapses.
         conn.execute(
             "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
-            rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, row.run_id],
+            rusqlite::params![unix_millis() - HEARTBEAT_MS - 1, row.run_id],
         )
         .unwrap();
 
@@ -2256,7 +2248,7 @@ mod tests {
             // The worker dies holding the lease.
             conn.execute(
                 "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
-                rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, row.run_id],
+                rusqlite::params![unix_millis() - HEARTBEAT_MS - 1, row.run_id],
             )
             .unwrap();
         }
@@ -2331,7 +2323,7 @@ mod tests {
             .unwrap();
         conn.execute(
             "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
-            rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, queued.run_id],
+            rusqlite::params![unix_millis() - HEARTBEAT_MS - 1, queued.run_id],
         )
         .unwrap();
 
@@ -2359,7 +2351,7 @@ mod tests {
             .unwrap();
         conn.execute(
             "UPDATE runs SET lease_until = ?1 WHERE run_id = ?2",
-            rusqlite::params![current_unix_ms() - HEARTBEAT_MS - 1, row.run_id],
+            rusqlite::params![unix_millis() - HEARTBEAT_MS - 1, row.run_id],
         )
         .unwrap();
 
@@ -2630,11 +2622,7 @@ mod tests {
         conn.execute(
             "UPDATE runs SET state='running', worker_id='dead', started_at=?, lease_until=?
                 WHERE run_id=?",
-            params![
-                current_unix_ms() - 100_000,
-                current_unix_ms() - 50_000,
-                row.run_id
-            ],
+            params![unix_millis() - 100_000, unix_millis() - 50_000, row.run_id],
         )
         .unwrap();
         let reclaimed = claim_next(&conn, "fresh", &ClaimFilters::default())
@@ -3179,7 +3167,7 @@ mod tests {
     fn query_runs_applies_all_filters() {
         let ws = unique_workspace("query_filters");
         let conn = open(&ws).expect("open");
-        let now = current_unix_ms();
+        let now = unix_millis();
 
         let r1 = enqueue(&conn, "/scripts/alpha.sh", &[], enqueue_opts()).unwrap();
         let r2 = enqueue(

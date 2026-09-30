@@ -2080,7 +2080,7 @@ mod tests {
     };
     use crate::health_plane::model::{HealthBody, HealthPayload};
     use crate::node::NodeContext;
-    use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
+    use crate::node_identity::NodeIdentity;
     use crate::node_registry::{PeerRegistration, PeerSource, SCHEMA_VERSION};
     use rusqlite::{Connection, TransactionBehavior};
     use std::sync::Arc;
@@ -2111,21 +2111,8 @@ mod tests {
         NodeRegistry::open(&fixture.context, identity.public_status()).unwrap()
     }
 
-    fn scalar(seed: u32) -> [u8; 32] {
-        let mut value = [0_u8; 32];
-        value[28..].copy_from_slice(&seed.saturating_add(1).to_be_bytes());
-        value
-    }
-
-    fn peer_identity(seed: u32) -> (String, String) {
-        let key = k256::schnorr::SigningKey::from_slice(&scalar(seed)).unwrap();
-        let xonly = key.verifying_key().to_bytes();
-        let public_key = hex::encode(&xonly);
-        (node_id_for_x_only_public_key(&xonly), public_key)
-    }
-
     fn trust(registry: &NodeRegistry, seed: u32, role: PeerRole, capabilities: &[&str]) -> String {
-        let (node_id, public_key) = peer_identity(seed);
+        let (node_id, public_key, _) = crate::test_support::peer_identity(seed);
         registry
             .import_manual_peer_with_transport(
                 PeerRegistration {
@@ -2152,13 +2139,9 @@ mod tests {
         )
     }
 
-    fn hex16(seed: u64) -> String {
-        format!("{seed:032x}")
-    }
-
     fn profile(target: &str, message_seed: u64, revision: u64) -> HealthPayload {
         HealthPayload {
-            message_id: hex16(message_seed),
+            message_id: crate::test_support::opaque_id_hex(message_seed),
             target: target.to_string(),
             body: HealthBody::Profile(ProfileSnapshot {
                 agent_version: "0.3.0".to_string(),
@@ -2185,7 +2168,7 @@ mod tests {
 
     fn pulse(target: &str, message_seed: u64, sequence: u64, emitted_at: i64) -> HealthPayload {
         HealthPayload {
-            message_id: hex16(message_seed),
+            message_id: crate::test_support::opaque_id_hex(message_seed),
             target: target.to_string(),
             body: HealthBody::Pulse(PulseSnapshot {
                 emitted_at,
@@ -2212,7 +2195,7 @@ mod tests {
         occurred_at: i64,
     ) -> HealthPayload {
         HealthPayload {
-            message_id: hex16(message_seed),
+            message_id: crate::test_support::opaque_id_hex(message_seed),
             target: target.to_string(),
             body: HealthBody::Signal(SignalRecord {
                 kind: SignalKind::RunCompleted,
@@ -2220,14 +2203,14 @@ mod tests {
                 run: Some(RunFact {
                     exit_code: Some(0),
                     finished_at: occurred_at,
-                    run_id: hex16(signal_seed + 900_000),
+                    run_id: crate::test_support::opaque_id_hex(signal_seed + 900_000),
                     script: "deploy".to_string(),
                     started_at: None,
                     state: "completed".to_string(),
                     trigger: None,
                 }),
                 sequence,
-                signal_id: hex16(signal_seed),
+                signal_id: crate::test_support::opaque_id_hex(signal_seed),
                 subject: None,
             }),
         }
@@ -2366,7 +2349,7 @@ mod tests {
         assert_eq!(fixture.registry.audit_events().unwrap().len(), before);
         assert!(fixture.registry.health_peer_states().unwrap().is_empty());
 
-        let (unknown, _) = peer_identity(77);
+        let (unknown, _, _) = crate::test_support::peer_identity(77);
         assert!(fixture
             .registry
             .health_authorization(&unknown)
@@ -2795,7 +2778,7 @@ mod tests {
         let performer = performer(&fixture.registry);
         let limited = trust(&fixture.registry, 2, PeerRole::Performer, &["remote-run"]);
         let conductor = trust(&fixture.registry, 3, PeerRole::Conductor, &[]);
-        let (stranger, _) = peer_identity(9);
+        let (stranger, _, _) = crate::test_support::peer_identity(9);
 
         // A peer with no registry row at all.
         assert_eq!(
@@ -2829,11 +2812,11 @@ mod tests {
         );
         // A Performer cannot acknowledge.
         let ack = HealthPayload {
-            message_id: hex16(4),
+            message_id: crate::test_support::opaque_id_hex(4),
             target: local.clone(),
             body: HealthBody::Ack(crate::health_plane::model::AckBody {
                 accepted: true,
-                acked_message_id: hex16(1),
+                acked_message_id: crate::test_support::opaque_id_hex(1),
                 cursor: 0,
             }),
         };
@@ -3061,7 +3044,7 @@ mod tests {
                 .registry
                 .health_enqueue_signal(
                     &conductor,
-                    &hex16(3_000 + index),
+                    &crate::test_support::opaque_id_hex(3_000 + index),
                     SignalKind::Enrolled,
                     BASE_NOW + index as i64,
                     Some(&conductor),
@@ -3080,7 +3063,7 @@ mod tests {
         assert!(matches!(
             fixture.registry.health_enqueue_signal(
                 &conductor,
-                &hex16(3_000 + SIGNAL_OUTBOX_CAPACITY as u64),
+                &crate::test_support::opaque_id_hex(3_000 + SIGNAL_OUTBOX_CAPACITY as u64),
                 SignalKind::Enrolled,
                 BASE_NOW,
                 Some(&conductor),
@@ -3094,15 +3077,19 @@ mod tests {
         let target = outbox.first().unwrap().signal_id.clone();
         assert!(fixture
             .registry
-            .health_mark_signal_sent(&target, &hex16(7_777), BASE_NOW + 100)
+            .health_mark_signal_sent(
+                &target,
+                &crate::test_support::opaque_id_hex(7_777),
+                BASE_NOW + 100
+            )
             .unwrap());
         let local = fixture.registry.local_node_id().to_string();
         let ack = HealthPayload {
-            message_id: hex16(8_888),
+            message_id: crate::test_support::opaque_id_hex(8_888),
             target: local,
             body: HealthBody::Ack(crate::health_plane::model::AckBody {
                 accepted: true,
-                acked_message_id: hex16(7_777),
+                acked_message_id: crate::test_support::opaque_id_hex(7_777),
                 cursor: 5,
             }),
         };

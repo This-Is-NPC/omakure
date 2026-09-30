@@ -688,9 +688,9 @@ fn project(peer: HealthFleetPeer, now: i64) -> FleetNode {
 mod tests {
     use super::*;
 
-    use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
+    use crate::node_identity::NodeIdentity;
     use crate::node_registry::{PeerRegistration, PeerRole, PeerSource};
-    use crate::util::hex;
+
     use bounds::{
         MAX_AGE_SECONDS, MAX_CANONICAL_PROFILE, MAX_FUTURE_SKEW_SECONDS, PRESENCE_ONLINE_SECONDS,
         PRESENCE_STALE_SECONDS,
@@ -745,26 +745,13 @@ mod tests {
         local: String,
     }
 
-    fn scalar(seed: u32) -> [u8; 32] {
-        let mut value = [0_u8; 32];
-        value[28..].copy_from_slice(&seed.saturating_add(1).to_be_bytes());
-        value
-    }
-
-    fn peer_identity(seed: u32) -> (String, String) {
-        let key = k256::schnorr::SigningKey::from_slice(&scalar(seed)).unwrap();
-        let xonly = key.verifying_key().to_bytes();
-        let public_key = hex::encode(&xonly);
-        (node_id_for_x_only_public_key(&xonly), public_key)
-    }
-
     fn fixture() -> Fixture {
         let temp = TempDir::new().unwrap();
         let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let trust = |seed: u32, role: PeerRole, capabilities: &[&str]| {
-            let (node_id, public_key) = peer_identity(seed);
+            let (node_id, public_key, _) = crate::test_support::peer_identity(seed);
             registry
                 .import_manual_peer_with_transport(
                     PeerRegistration {
@@ -830,14 +817,10 @@ mod tests {
         }
     }
 
-    fn hex16(seed: u64) -> String {
-        format!("{seed:032x}")
-    }
-
     fn profile_payload(target: &str, message_seed: u64, revision: u64) -> Value {
         json!({
             "health_version": 1,
-            "message_id": hex16(message_seed),
+            "message_id": crate::test_support::opaque_id_hex(message_seed),
             "profile": {
                 "agent_version": "0.3.0",
                 "arch": "x86_64",
@@ -861,7 +844,7 @@ mod tests {
     fn pulse_payload(target: &str, message_seed: u64, sequence: u64, emitted_at: i64) -> Value {
         json!({
             "health_version": 1,
-            "message_id": hex16(message_seed),
+            "message_id": crate::test_support::opaque_id_hex(message_seed),
             "pulse": {
                 "emitted_at": emitted_at,
                 "last_run": Value::Null,
@@ -889,19 +872,19 @@ mod tests {
     ) -> Value {
         json!({
             "health_version": 1,
-            "message_id": hex16(message_seed),
+            "message_id": crate::test_support::opaque_id_hex(message_seed),
             "signal": {
                 "kind": "run-completed",
                 "occurred_at": occurred_at,
                 "run": {
                     "exit_code": 0,
                     "finished_at": occurred_at,
-                    "run_id": hex16(signal_seed + 900_000),
+                    "run_id": crate::test_support::opaque_id_hex(signal_seed + 900_000),
                     "script": "deploy",
                     "state": "completed"
                 },
                 "sequence": sequence,
-                "signal_id": hex16(signal_seed),
+                "signal_id": crate::test_support::opaque_id_hex(signal_seed),
                 "subject": Value::Null
             },
             "target": target,
@@ -946,7 +929,7 @@ mod tests {
         assert_eq!(
             profile.reply,
             HealthReply::Ack {
-                acked_message_id: hex16(1),
+                acked_message_id: crate::test_support::opaque_id_hex(1),
                 cursor: 0
             }
         );
@@ -970,7 +953,7 @@ mod tests {
         assert_eq!(
             signal.reply,
             HealthReply::Ack {
-                acked_message_id: hex16(3),
+                acked_message_id: crate::test_support::opaque_id_hex(3),
                 cursor: 1
             }
         );
@@ -1152,7 +1135,7 @@ mod tests {
             HealthCode::InvalidMessage
         );
         // A third party's node ID as the target.
-        let (other, _) = peer_identity(40);
+        let (other, _, _) = crate::test_support::peer_identity(40);
         assert_eq!(
             fixture.code(
                 &fixture.performer,
@@ -1182,7 +1165,7 @@ mod tests {
             HealthCode::MissingCapability
         );
         // An identity the registry has never seen.
-        let (stranger, _) = peer_identity(41);
+        let (stranger, _, _) = crate::test_support::peer_identity(41);
         assert_eq!(
             fixture.code(
                 &stranger,
@@ -1267,7 +1250,7 @@ mod tests {
         assert_eq!(
             outcome.reply,
             HealthReply::Error {
-                acked_message_id: hex16(3),
+                acked_message_id: crate::test_support::opaque_id_hex(3),
                 code: HealthCode::Stale
             }
         );
@@ -1301,7 +1284,7 @@ mod tests {
         assert_eq!(
             outcome.reply,
             HealthReply::Error {
-                acked_message_id: hex16(1),
+                acked_message_id: crate::test_support::opaque_id_hex(1),
                 code: HealthCode::UnsupportedVersion
             }
         );
@@ -1313,7 +1296,7 @@ mod tests {
         assert!(node.version_incompatible);
 
         // A message addressed elsewhere gets no reply at all.
-        let (other, _) = peer_identity(42);
+        let (other, _, _) = crate::test_support::peer_identity(42);
         let mut payload = profile_payload(&other, 2, 1);
         payload.as_object_mut().unwrap()["health_version"] = json!(3);
         let outcome = fixture.ingest(&fixture.performer, "health_profile", BASE_NOW, &payload);
@@ -1353,7 +1336,7 @@ mod tests {
         assert_eq!(
             held.reply,
             HealthReply::Ack {
-                acked_message_id: hex16(2),
+                acked_message_id: crate::test_support::opaque_id_hex(2),
                 cursor: 1
             }
         );

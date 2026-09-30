@@ -905,28 +905,6 @@ mod tests {
         facts: Arc<MutableFacts>,
     }
 
-    fn scalar(seed: u32) -> [u8; 32] {
-        let mut value = [0_u8; 32];
-        value[28..].copy_from_slice(&seed.saturating_add(1).to_be_bytes());
-        value
-    }
-
-    fn peer_identity(seed: u32) -> (String, String, [u8; 32]) {
-        let key = k256::schnorr::SigningKey::from_slice(&scalar(seed)).unwrap();
-        let xonly: [u8; 32] = key
-            .verifying_key()
-            .to_bytes()
-            .as_slice()
-            .try_into()
-            .unwrap();
-        let public_key = hex::encode(&xonly);
-        (
-            crate::node_identity::node_id_for_x_only_public_key(&xonly),
-            public_key,
-            xonly,
-        )
-    }
-
     fn fixture() -> Fixture {
         let temp = TempDir::new().unwrap();
         let context = crate::test_support::node_context(temp.path());
@@ -935,9 +913,10 @@ mod tests {
         let conductor_root = temp.path().join("conductor");
         std::fs::create_dir_all(&conductor_root).unwrap();
         let conductor_context = crate::test_support::node_context(&conductor_root);
-        let conductor_identity = NodeIdentity::import(&conductor_context, &scalar(11)).unwrap();
+        let conductor_identity =
+            NodeIdentity::import(&conductor_context, &crate::test_support::scalar(11)).unwrap();
         let trust = |seed: u32, role: PeerRole, capabilities: &[&str]| {
-            let (node_id, public_key, xonly) = peer_identity(seed);
+            let (node_id, public_key, xonly) = crate::test_support::peer_identity(seed);
             registry
                 .import_manual_peer_with_transport(
                     PeerRegistration {
@@ -1192,7 +1171,7 @@ mod tests {
         let mut session = fixture.session(&fixture.conductor, fixture.conductor_key);
         let payload = serde_json::json!({
             "health_version": 1,
-            "message_id": format!("{:032x}", 78_u64),
+            "message_id": crate::test_support::opaque_id_hex(78),
             "pulse": {
                 "emitted_at": BASE_NOW,
                 "last_run": null,
@@ -1254,7 +1233,7 @@ mod tests {
             .expect("read Health Plane state before ingest");
         let payload = serde_json::json!({
             "health_version": 1,
-            "message_id": format!("{:032x}", 77_u64),
+            "message_id": crate::test_support::opaque_id_hex(77),
             "pulse": {
                 "emitted_at": BASE_NOW,
                 "last_run": null,
@@ -1311,7 +1290,7 @@ mod tests {
     #[test]
     fn a_performer_peer_never_receives_profile_or_pulse_from_this_node() {
         let fixture = fixture();
-        let (_, _, performer_key) = peer_identity(12);
+        let (_, _, performer_key) = crate::test_support::peer_identity(12);
         let mut session = fixture.session(&fixture.performer, performer_key);
         for step in 0..4 {
             fixture
@@ -1594,9 +1573,11 @@ mod tests {
         let mut session = fixture.conductor_session();
         settle(&fixture, &mut session);
         for index in 0..(MAX_SIGNALS_PER_PEER_PER_MINUTE as usize + 4) {
-            fixture
-                .facts
-                .finish_run(&format!("{index:032x}"), "deploy", BASE_NOW + 1);
+            fixture.facts.finish_run(
+                &crate::test_support::opaque_id_hex(index as u64),
+                "deploy",
+                BASE_NOW + 1,
+            );
         }
 
         let mut sent = 0;

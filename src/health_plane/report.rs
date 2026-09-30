@@ -1378,7 +1378,7 @@ mod tests {
         assert!(reporter.run_signals().is_empty());
         for index in 0..(SIGNAL_OUTBOX_CAPACITY as usize + 40) {
             shared.push(run_fact(
-                &format!("{index:032x}"),
+                &crate::test_support::opaque_id_hex(index as u64),
                 "deploy",
                 1_700_000_000 + index as i64,
             ));

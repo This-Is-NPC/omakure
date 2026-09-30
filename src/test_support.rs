@@ -72,3 +72,27 @@ pub(crate) fn write_bash_script(
     write!(file, "#!/usr/bin/env bash\n{body}\n").unwrap();
     path
 }
+
+/// A valid secp256k1 secret scalar derived from `seed`.
+pub(crate) fn scalar(seed: u32) -> [u8; 32] {
+    let mut value = [0_u8; 32];
+    value[28..].copy_from_slice(&seed.saturating_add(1).to_be_bytes());
+    value
+}
+
+/// The node ID, public key hex and x-only public key of the identity whose
+/// secret is [`scalar`]`(seed)`.
+pub(crate) fn peer_identity(seed: u32) -> (String, String, [u8; 32]) {
+    let key = k256::schnorr::SigningKey::from_slice(&scalar(seed)).unwrap();
+    let xonly: [u8; 32] = key.verifying_key().to_bytes().into();
+    (
+        crate::node_identity::node_id_for_x_only_public_key(&xonly),
+        crate::util::hex::encode(&xonly),
+        xonly,
+    )
+}
+
+/// A 16-byte opaque message or signal ID in lowercase hex.
+pub(crate) fn opaque_id_hex(seed: u64) -> String {
+    format!("{seed:032x}")
+}

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "982879c38e033c969bde8f65456de99e96a37b4d89fb85efc543cae32b39bc06",
+  "canonical_sha256": "1d26a607f2dd6d00ad253f14172cfd5949d0040d989757acb35b54d2442e8dd8",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -1521,14 +1521,238 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 114,
+        "invocations": 4,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 221,
-        "cyclomatic": 340
+        "cognitive": 34,
+        "cyclomatic": 49
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 4,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 25,
+        "cyclomatic": 27
+      },
+      "path": "src/node/fs_unix.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 12,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 40,
+        "cyclomatic": 43
+      },
+      "path": "src/node/fs_windows.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 10,
+        "cyclomatic": 32
+      },
+      "path": "src/node/layout.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 9,
+        "cyclomatic": 22
+      },
+      "path": "src/node/lifecycle.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/node/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 4,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 5,
+        "cyclomatic": 12
+      },
+      "path": "src/node/policy.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 5,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 21,
+        "cyclomatic": 39
+      },
+      "path": "src/node/private_token.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 7,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 19,
+        "cyclomatic": 35
+      },
+      "path": "src/node/security.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 3,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 43,
+        "cyclomatic": 54
+      },
+      "path": "src/node/state.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 25,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 6,
+        "cyclomatic": 13
+      },
+      "path": "src/node/tests/layout.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 1,
+        "cyclomatic": 2
+      },
+      "path": "src/node/tests/lifecycle.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 1
+      },
+      "path": "src/node/tests/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 9,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 1
+      },
+      "path": "src/node/tests/policy.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 8,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 3,
+        "cyclomatic": 6
+      },
+      "path": "src/node/tests/private_token.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 30,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 18,
+        "cyclomatic": 22
+      },
+      "path": "src/node/tests/security.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 15,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 3
+      },
+      "path": "src/node/tests/state.rs",
       "source_class": "handwritten"
     },
     {
@@ -57205,25 +57429,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::current",
+        "identity": "crate::node::layout::current",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn current() -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::current",
+      "identity": "crate::node::layout::current",
       "kind": "method",
-      "line": 30,
+      "line": 19,
       "name": "current",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 30,
+        "line": 19,
         "name": "current"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn current() -> Self",
       "source_class": "handwritten"
     },
@@ -57231,25 +57455,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::new",
+        "identity": "crate::node::layout::new",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn new(state_dir: Option<PathBuf>, config_path: Option<PathBuf>) -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::new",
+      "identity": "crate::node::layout::new",
       "kind": "method",
-      "line": 55,
+      "line": 44,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 55,
+        "line": 44,
         "name": "new"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn new(state_dir: Option<PathBuf>, config_path: Option<PathBuf>) -> Self",
       "source_class": "handwritten"
     },
@@ -57257,25 +57481,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::config_path",
+        "identity": "crate::node::layout::config_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn config_path(&self) -> &Path",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::config_path",
+      "identity": "crate::node::layout::config_path",
       "kind": "method",
-      "line": 70,
+      "line": 59,
       "name": "config_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 70,
+        "line": 59,
         "name": "config_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn config_path(&self) -> &Path",
       "source_class": "handwritten"
     },
@@ -57283,25 +57507,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::state_dir",
+        "identity": "crate::node::layout::state_dir",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn state_dir(&self) -> &Path",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::state_dir",
+      "identity": "crate::node::layout::state_dir",
       "kind": "method",
-      "line": 74,
+      "line": 63,
       "name": "state_dir",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 74,
+        "line": 63,
         "name": "state_dir"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn state_dir(&self) -> &Path",
       "source_class": "handwritten"
     },
@@ -57309,25 +57533,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::authority_key_path",
+        "identity": "crate::node::layout::authority_key_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn authority_key_path(&self) -> PathBuf",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::authority_key_path",
+      "identity": "crate::node::layout::authority_key_path",
       "kind": "method",
-      "line": 82,
+      "line": 71,
       "name": "authority_key_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 82,
+        "line": 71,
         "name": "authority_key_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn authority_key_path(&self) -> PathBuf",
       "source_class": "handwritten"
     },
@@ -57335,25 +57559,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::publisher_key_path",
+        "identity": "crate::node::layout::publisher_key_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn publisher_key_path(&self) -> PathBuf",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::publisher_key_path",
+      "identity": "crate::node::layout::publisher_key_path",
       "kind": "method",
-      "line": 91,
+      "line": 80,
       "name": "publisher_key_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 91,
+        "line": 80,
         "name": "publisher_key_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn publisher_key_path(&self) -> PathBuf",
       "source_class": "handwritten"
     },
@@ -57361,25 +57585,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::identity_path",
+        "identity": "crate::node::layout::identity_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn identity_path(&self) -> PathBuf",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::identity_path",
+      "identity": "crate::node::layout::identity_path",
       "kind": "method",
-      "line": 95,
+      "line": 84,
       "name": "identity_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 95,
+        "line": 84,
         "name": "identity_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn identity_path(&self) -> PathBuf",
       "source_class": "handwritten"
     },
@@ -57387,25 +57611,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::database_path",
+        "identity": "crate::node::layout::database_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn database_path(&self) -> PathBuf",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::database_path",
+      "identity": "crate::node::layout::database_path",
       "kind": "method",
-      "line": 99,
+      "line": 88,
       "name": "database_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 99,
+        "line": 88,
         "name": "database_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn database_path(&self) -> PathBuf",
       "source_class": "handwritten"
     },
@@ -57413,25 +57637,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::transport_key_path",
+        "identity": "crate::node::layout::transport_key_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn transport_key_path(&self) -> PathBuf",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::transport_key_path",
+      "identity": "crate::node::layout::transport_key_path",
       "kind": "method",
-      "line": 103,
+      "line": 92,
       "name": "transport_key_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 103,
+        "line": 92,
         "name": "transport_key_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn transport_key_path(&self) -> PathBuf",
       "source_class": "handwritten"
     },
@@ -57439,25 +57663,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::transport_certificate_path",
+        "identity": "crate::node::layout::transport_certificate_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn transport_certificate_path(&self) -> PathBuf",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::transport_certificate_path",
+      "identity": "crate::node::layout::transport_certificate_path",
       "kind": "method",
-      "line": 107,
+      "line": 96,
       "name": "transport_certificate_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 107,
+        "line": 96,
         "name": "transport_certificate_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn transport_certificate_path(&self) -> PathBuf",
       "source_class": "handwritten"
     },
@@ -57465,25 +57689,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::set_private_token_fault",
+        "identity": "crate::node::private_token::set_private_token_fault",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn set_private_token_fault(fault: PrivateTokenFault)",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::set_private_token_fault",
+      "identity": "crate::node::private_token::set_private_token_fault",
       "kind": "function",
-      "line": 170,
+      "line": 45,
       "name": "set_private_token_fault",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 170,
+        "line": 45,
         "name": "set_private_token_fault"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn set_private_token_fault(fault: PrivateTokenFault)",
       "source_class": "handwritten"
     },
@@ -57491,25 +57715,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::private_token_fault",
+        "identity": "crate::node::private_token::private_token_fault",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "fn private_token_fault(fault: PrivateTokenFault) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::private_token_fault",
+      "identity": "crate::node::private_token::private_token_fault",
       "kind": "function",
-      "line": 175,
+      "line": 50,
       "name": "private_token_fault",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 175,
+        "line": 50,
         "name": "private_token_fault"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "fn private_token_fault(fault: PrivateTokenFault) -> bool",
       "source_class": "handwritten"
     },
@@ -57517,25 +57741,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::contents",
+        "identity": "crate::node::private_token::contents",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn contents(&self) -> &[u8]",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::contents",
+      "identity": "crate::node::private_token::contents",
       "kind": "method",
-      "line": 203,
+      "line": 78,
       "name": "contents",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 203,
+        "line": 78,
         "name": "contents"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn contents(&self) -> &[u8]",
       "source_class": "handwritten"
     },
@@ -57543,25 +57767,25 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::node::restore",
+        "identity": "crate::node::private_token::restore",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn restore(self) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::restore",
+      "identity": "crate::node::private_token::restore",
       "kind": "method",
-      "line": 207,
+      "line": 82,
       "name": "restore",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 207,
+        "line": 82,
         "name": "restore"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn restore(self) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
@@ -57569,25 +57793,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::restore::<closure>",
+        "identity": "crate::node::private_token::restore::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "sync_directory(self.original_path.parent().ok_or_else(|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::restore::<closure>",
+      "identity": "crate::node::private_token::restore::<closure>",
       "kind": "closure",
-      "line": 220,
+      "line": 95,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 220,
+        "line": 95,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "sync_directory(self.original_path.parent().ok_or_else(|| {",
       "source_class": "handwritten"
     },
@@ -57595,25 +57819,25 @@
       "cognitive": 7,
       "cyclomatic": 9,
       "derived": {
-        "identity": "crate::node::finish_success",
+        "identity": "crate::node::private_token::finish_success",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn finish_success(mut self) -> PrivateFileCommitStatus",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::finish_success",
+      "identity": "crate::node::private_token::finish_success",
       "kind": "method",
-      "line": 226,
+      "line": 101,
       "name": "finish_success",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 9,
         "kind": "method",
-        "line": 226,
+        "line": 101,
         "name": "finish_success"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn finish_success(mut self) -> PrivateFileCommitStatus",
       "source_class": "handwritten"
     },
@@ -57621,25 +57845,25 @@
       "cognitive": 7,
       "cyclomatic": 11,
       "derived": {
-        "identity": "crate::node::resolve",
+        "identity": "crate::node::context::resolve",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/context.rs",
         "signature": "pub fn resolve(overrides: NodePathOverrides) -> Result<Self, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::resolve",
+      "identity": "crate::node::context::resolve",
       "kind": "method",
-      "line": 262,
+      "line": 30,
       "name": "resolve",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 11,
         "kind": "method",
-        "line": 262,
+        "line": 30,
         "name": "resolve"
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
       "signature": "pub fn resolve(overrides: NodePathOverrides) -> Result<Self, NodeError>",
       "source_class": "handwritten"
     },
@@ -57647,25 +57871,25 @@
       "cognitive": 15,
       "cyclomatic": 18,
       "derived": {
-        "identity": "crate::node::resolve_for",
+        "identity": "crate::node::context::resolve_for",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/context.rs",
         "signature": "pub fn resolve_for( platform: NodePlatform, cli_overrides: NodePathOverrides, test_mode: bool, env_state_dir: Option<PathBuf>, env_config_path: Option<PathBuf>, windows_program_data: Option<PathBuf>, ) -> Result<Self, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::resolve_for",
+      "identity": "crate::node::context::resolve_for",
       "kind": "method",
-      "line": 289,
+      "line": 57,
       "name": "resolve_for",
       "native": {
         "analyzer": "cccc",
         "cognitive": 15,
         "cyclomatic": 18,
         "kind": "method",
-        "line": 289,
+        "line": 57,
         "name": "resolve_for"
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
       "signature": "pub fn resolve_for( platform: NodePlatform, cli_overrides: NodePathOverrides, test_mode: bool, env_state_dir: Option<PathBuf>, env_config_path: Option<PathBuf>, windows_program_data: Option<PathBuf>, ) -> Result<Self, NodeError>",
       "source_class": "handwritten"
     },
@@ -57673,25 +57897,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::resolve_for::<closure>",
+        "identity": "crate::node::context::resolve_for::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/context.rs",
         "signature": ".unwrap_or_else(|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::resolve_for::<closure>",
+      "identity": "crate::node::context::resolve_for::<closure>",
       "kind": "closure",
-      "line": 323,
+      "line": 91,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 323,
+        "line": 91,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
       "signature": ".unwrap_or_else(|| {",
       "source_class": "handwritten"
     },
@@ -57699,25 +57923,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::layout",
+        "identity": "crate::node::context::layout",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/context.rs",
         "signature": "pub fn layout(&self) -> &NodeLayout",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::layout",
+      "identity": "crate::node::context::layout",
       "kind": "method",
-      "line": 359,
+      "line": 127,
       "name": "layout",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 359,
+        "line": 127,
         "name": "layout"
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
       "signature": "pub fn layout(&self) -> &NodeLayout",
       "source_class": "handwritten"
     },
@@ -57725,25 +57949,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::open_trust_registry",
+        "identity": "crate::node::context::open_trust_registry",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/context.rs",
         "signature": "pub(crate) fn open_trust_registry( &self, identity: &NodeIdentityStatus, ) -> Result<NodeRegistry, RegistryError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::open_trust_registry",
+      "identity": "crate::node::context::open_trust_registry",
       "kind": "method",
-      "line": 399,
+      "line": 163,
       "name": "open_trust_registry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 399,
+        "line": 163,
         "name": "open_trust_registry"
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
       "signature": "pub(crate) fn open_trust_registry( &self, identity: &NodeIdentityStatus, ) -> Result<NodeRegistry, RegistryError>",
       "source_class": "handwritten"
     },
@@ -57751,25 +57975,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::open_trust_registry_for_initialization",
+        "identity": "crate::node::context::open_trust_registry_for_initialization",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/context.rs",
         "signature": "pub(crate) fn open_trust_registry_for_initialization( &self, identity: &NodeIdentityStatus, ) -> Result<NodeRegistry, RegistryError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::open_trust_registry_for_initialization",
+      "identity": "crate::node::context::open_trust_registry_for_initialization",
       "kind": "method",
-      "line": 406,
+      "line": 170,
       "name": "open_trust_registry_for_initialization",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 406,
+        "line": 170,
         "name": "open_trust_registry_for_initialization"
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
       "signature": "pub(crate) fn open_trust_registry_for_initialization( &self, identity: &NodeIdentityStatus, ) -> Result<NodeRegistry, RegistryError>",
       "source_class": "handwritten"
     },
@@ -57777,25 +58001,25 @@
       "cognitive": 5,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::node::initialize",
+        "identity": "crate::node::state::initialize",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": "pub fn initialize(&self, config: &NodeConfig) -> Result<NodeInitialization, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::initialize",
+      "identity": "crate::node::state::initialize",
       "kind": "method",
-      "line": 415,
+      "line": 29,
       "name": "initialize",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 6,
         "kind": "method",
-        "line": 415,
+        "line": 29,
         "name": "initialize"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": "pub fn initialize(&self, config: &NodeConfig) -> Result<NodeInitialization, NodeError>",
       "source_class": "handwritten"
     },
@@ -57803,25 +58027,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::initialize::<closure>",
+        "identity": "crate::node::state::initialize::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": ".ok_or_else(|| NodeError::InvalidPath {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::initialize::<closure>",
+      "identity": "crate::node::state::initialize::<closure>",
       "kind": "closure",
-      "line": 420,
+      "line": 34,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 420,
+        "line": 34,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": ".ok_or_else(|| NodeError::InvalidPath {",
       "source_class": "handwritten"
     },
@@ -57829,25 +58053,25 @@
       "cognitive": 10,
       "cyclomatic": 11,
       "derived": {
-        "identity": "crate::node::initialize::<closure>@439#2",
+        "identity": "crate::node::state::initialize::<closure>@53#2",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": "(|| match fs::symlink_metadata(self.config_path()) {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::initialize::<closure>@439#2",
+      "identity": "crate::node::state::initialize::<closure>@53#2",
       "kind": "closure",
-      "line": 439,
+      "line": 53,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 11,
         "kind": "closure",
-        "line": 439,
+        "line": 53,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": "(|| match fs::symlink_metadata(self.config_path()) {",
       "source_class": "handwritten"
     },
@@ -57855,25 +58079,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::initialize::<closure>::<closure>",
+        "identity": "crate::node::state::initialize::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": ".map_err(|err| NodeError::ExistingConfig(err.to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::initialize::<closure>::<closure>",
+      "identity": "crate::node::state::initialize::<closure>::<closure>",
       "kind": "closure",
-      "line": 453,
+      "line": 67,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 453,
+        "line": 67,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": ".map_err(|err| NodeError::ExistingConfig(err.to_string()))?;",
       "source_class": "handwritten"
     },
@@ -57881,25 +58105,25 @@
       "cognitive": 10,
       "cyclomatic": 11,
       "derived": {
-        "identity": "crate::node::ensure_state_directory",
+        "identity": "crate::node::state::ensure_state_directory",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": "pub(crate) fn ensure_state_directory(&self) -> Result<bool, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::ensure_state_directory",
+      "identity": "crate::node::state::ensure_state_directory",
       "kind": "method",
-      "line": 516,
+      "line": 133,
       "name": "ensure_state_directory",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 11,
         "kind": "method",
-        "line": 516,
+        "line": 133,
         "name": "ensure_state_directory"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": "pub(crate) fn ensure_state_directory(&self) -> Result<bool, NodeError>",
       "source_class": "handwritten"
     },
@@ -57907,25 +58131,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::ensure_state_directory::<closure>",
+        "identity": "crate::node::state::ensure_state_directory::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": "if let Err(err) = (|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::ensure_state_directory::<closure>",
+      "identity": "crate::node::state::ensure_state_directory::<closure>",
       "kind": "closure",
-      "line": 537,
+      "line": 154,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 537,
+        "line": 154,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": "if let Err(err) = (|| {",
       "source_class": "handwritten"
     },
@@ -57933,25 +58157,25 @@
       "cognitive": 4,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::node::validate_existing_state_directory",
+        "identity": "crate::node::state::validate_existing_state_directory",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": "pub(crate) fn validate_existing_state_directory(&self) -> Result<bool, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_existing_state_directory",
+      "identity": "crate::node::state::validate_existing_state_directory",
       "kind": "method",
-      "line": 561,
+      "line": 178,
       "name": "validate_existing_state_directory",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 6,
         "kind": "method",
-        "line": 561,
+        "line": 178,
         "name": "validate_existing_state_directory"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": "pub(crate) fn validate_existing_state_directory(&self) -> Result<bool, NodeError>",
       "source_class": "handwritten"
     },
@@ -57959,25 +58183,25 @@
       "cognitive": 8,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::node::validate_existing_state_contents",
+        "identity": "crate::node::state::validate_existing_state_contents",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": "pub(crate) fn validate_existing_state_contents(&self) -> Result<bool, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_existing_state_contents",
+      "identity": "crate::node::state::validate_existing_state_contents",
       "kind": "method",
-      "line": 584,
+      "line": 201,
       "name": "validate_existing_state_contents",
       "native": {
         "analyzer": "cccc",
         "cognitive": 8,
         "cyclomatic": 7,
         "kind": "method",
-        "line": 584,
+        "line": 201,
         "name": "validate_existing_state_contents"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": "pub(crate) fn validate_existing_state_contents(&self) -> Result<bool, NodeError>",
       "source_class": "handwritten"
     },
@@ -57985,25 +58209,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::validate_existing_state_contents::<closure>",
+        "identity": "crate::node::state::validate_existing_state_contents::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": ".and_then(|digest| digest.strip_suffix(\".lock\"))",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_existing_state_contents::<closure>",
+      "identity": "crate::node::state::validate_existing_state_contents::<closure>",
       "kind": "closure",
-      "line": 620,
+      "line": 240,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 620,
+        "line": 240,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": ".and_then(|digest| digest.strip_suffix(\".lock\"))",
       "source_class": "handwritten"
     },
@@ -58011,25 +58235,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::acquire_lifecycle_lock",
+        "identity": "crate::node::lifecycle::acquire_lifecycle_lock",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/lifecycle.rs",
         "signature": "pub(crate) fn acquire_lifecycle_lock(&self) -> Result<NodeLifecycleLock, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::acquire_lifecycle_lock",
+      "identity": "crate::node::lifecycle::acquire_lifecycle_lock",
       "kind": "method",
-      "line": 636,
+      "line": 10,
       "name": "acquire_lifecycle_lock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 636,
+        "line": 10,
         "name": "acquire_lifecycle_lock"
       },
-      "path": "src/node.rs",
+      "path": "src/node/lifecycle.rs",
       "signature": "pub(crate) fn acquire_lifecycle_lock(&self) -> Result<NodeLifecycleLock, NodeError>",
       "source_class": "handwritten"
     },
@@ -58037,25 +58261,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::try_acquire_lifecycle_lock",
+        "identity": "crate::node::lifecycle::try_acquire_lifecycle_lock",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/lifecycle.rs",
         "signature": "pub(crate) fn try_acquire_lifecycle_lock(&self) -> Result<NodeLifecycleLock, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::try_acquire_lifecycle_lock",
+      "identity": "crate::node::lifecycle::try_acquire_lifecycle_lock",
       "kind": "method",
-      "line": 640,
+      "line": 14,
       "name": "try_acquire_lifecycle_lock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 640,
+        "line": 14,
         "name": "try_acquire_lifecycle_lock"
       },
-      "path": "src/node.rs",
+      "path": "src/node/lifecycle.rs",
       "signature": "pub(crate) fn try_acquire_lifecycle_lock(&self) -> Result<NodeLifecycleLock, NodeError>",
       "source_class": "handwritten"
     },
@@ -58063,25 +58287,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::validate_private_file",
+        "identity": "crate::node::private_token::validate_private_file",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn validate_private_file(&self, path: &Path) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_private_file",
+      "identity": "crate::node::private_token::validate_private_file",
       "kind": "method",
-      "line": 644,
+      "line": 137,
       "name": "validate_private_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 644,
+        "line": 137,
         "name": "validate_private_file"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn validate_private_file(&self, path: &Path) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
@@ -58089,25 +58313,25 @@
       "cognitive": 4,
       "cyclomatic": 5,
       "derived": {
-        "identity": "crate::node::stage_private_bounded_file",
+        "identity": "crate::node::private_token::stage_private_bounded_file",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn stage_private_bounded_file( &self, path: &Path, max_bytes: usize, ) -> Result<PrivateTokenLease, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::stage_private_bounded_file",
+      "identity": "crate::node::private_token::stage_private_bounded_file",
       "kind": "method",
-      "line": 656,
+      "line": 149,
       "name": "stage_private_bounded_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 656,
+        "line": 149,
         "name": "stage_private_bounded_file"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn stage_private_bounded_file( &self, path: &Path, max_bytes: usize, ) -> Result<PrivateTokenLease, NodeError>",
       "source_class": "handwritten"
     },
@@ -58115,25 +58339,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::stage_private_bounded_file::<closure>",
+        "identity": "crate::node::private_token::stage_private_bounded_file::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::stage_private_bounded_file::<closure>",
+      "identity": "crate::node::private_token::stage_private_bounded_file::<closure>",
       "kind": "closure",
-      "line": 665,
+      "line": 158,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 665,
+        "line": 158,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
       "source_class": "handwritten"
     },
@@ -58141,25 +58365,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::acquire_private_token_lock",
+        "identity": "crate::node::private_token::acquire_private_token_lock",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn acquire_private_token_lock( &self, path: &Path, ) -> Result<PrivateTokenLock, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::acquire_private_token_lock",
+      "identity": "crate::node::private_token::acquire_private_token_lock",
       "kind": "method",
-      "line": 698,
+      "line": 191,
       "name": "acquire_private_token_lock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 698,
+        "line": 191,
         "name": "acquire_private_token_lock"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn acquire_private_token_lock( &self, path: &Path, ) -> Result<PrivateTokenLock, NodeError>",
       "source_class": "handwritten"
     },
@@ -58167,25 +58391,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::acquire_private_token_lock::<closure>",
+        "identity": "crate::node::private_token::acquire_private_token_lock::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::acquire_private_token_lock::<closure>",
+      "identity": "crate::node::private_token::acquire_private_token_lock::<closure>",
       "kind": "closure",
-      "line": 706,
+      "line": 199,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 706,
+        "line": 199,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
       "source_class": "handwritten"
     },
@@ -58193,25 +58417,25 @@
       "cognitive": 4,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::list_private_token_tombstones",
+        "identity": "crate::node::private_token::list_private_token_tombstones",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "pub(crate) fn list_private_token_tombstones( &self, path: &Path, max_bytes: usize, ) -> Result<Vec<PrivateTokenLease>, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::list_private_token_tombstones",
+      "identity": "crate::node::private_token::list_private_token_tombstones",
       "kind": "method",
-      "line": 733,
+      "line": 226,
       "name": "list_private_token_tombstones",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 733,
+        "line": 226,
         "name": "list_private_token_tombstones"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "pub(crate) fn list_private_token_tombstones( &self, path: &Path, max_bytes: usize, ) -> Result<Vec<PrivateTokenLease>, NodeError>",
       "source_class": "handwritten"
     },
@@ -58219,25 +58443,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::list_private_token_tombstones::<closure>",
+        "identity": "crate::node::private_token::list_private_token_tombstones::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::list_private_token_tombstones::<closure>",
+      "identity": "crate::node::private_token::list_private_token_tombstones::<closure>",
       "kind": "closure",
-      "line": 742,
+      "line": 235,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 742,
+        "line": 235,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
       "source_class": "handwritten"
     },
@@ -58245,25 +58469,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::list_private_token_tombstones::<closure>@745#2",
+        "identity": "crate::node::private_token::list_private_token_tombstones::<closure>@238#2",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::list_private_token_tombstones::<closure>@745#2",
+      "identity": "crate::node::private_token::list_private_token_tombstones::<closure>@238#2",
       "kind": "closure",
-      "line": 745,
+      "line": 238,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 745,
+        "line": 238,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?",
       "source_class": "handwritten"
     },
@@ -58271,25 +58495,25 @@
       "cognitive": 3,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::open_private_bounded_file",
+        "identity": "crate::node::private_token::open_private_bounded_file",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "fn open_private_bounded_file( &self, path: &Path, max_bytes: usize, ) -> Result<OpenedPrivateFile, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::open_private_bounded_file",
+      "identity": "crate::node::private_token::open_private_bounded_file",
       "kind": "method",
-      "line": 768,
+      "line": 261,
       "name": "open_private_bounded_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 768,
+        "line": 261,
         "name": "open_private_bounded_file"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "fn open_private_bounded_file( &self, path: &Path, max_bytes: usize, ) -> Result<OpenedPrivateFile, NodeError>",
       "source_class": "handwritten"
     },
@@ -58297,25 +58521,25 @@
       "cognitive": 4,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::node::open_public_file",
+        "identity": "crate::node::context::open_public_file",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/context.rs",
         "signature": "pub(crate) fn open_public_file(&self) -> Result<Option<fs::File>, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::open_public_file",
+      "identity": "crate::node::context::open_public_file",
       "kind": "method",
-      "line": 823,
+      "line": 181,
       "name": "open_public_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 7,
         "kind": "method",
-        "line": 823,
+        "line": 181,
         "name": "open_public_file"
       },
-      "path": "src/node.rs",
+      "path": "src/node/context.rs",
       "signature": "pub(crate) fn open_public_file(&self) -> Result<Option<fs::File>, NodeError>",
       "source_class": "handwritten"
     },
@@ -58323,25 +58547,25 @@
       "cognitive": 7,
       "cyclomatic": 11,
       "derived": {
-        "identity": "crate::node::acquire",
+        "identity": "crate::node::lifecycle::acquire",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/lifecycle.rs",
         "signature": "fn acquire(context: &NodeContext, nonblocking: bool) -> Result<Self, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::acquire",
+      "identity": "crate::node::lifecycle::acquire",
       "kind": "method",
-      "line": 890,
+      "line": 28,
       "name": "acquire",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 11,
         "kind": "method",
-        "line": 890,
+        "line": 28,
         "name": "acquire"
       },
-      "path": "src/node.rs",
+      "path": "src/node/lifecycle.rs",
       "signature": "fn acquire(context: &NodeContext, nonblocking: bool) -> Result<Self, NodeError>",
       "source_class": "handwritten"
     },
@@ -58349,25 +58573,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::drop",
+        "identity": "crate::node::lifecycle::drop",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/lifecycle.rs",
         "signature": "fn drop(&mut self)",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::drop",
+      "identity": "crate::node::lifecycle::drop",
       "kind": "method",
-      "line": 947,
+      "line": 115,
       "name": "drop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 947,
+        "line": 115,
         "name": "drop"
       },
-      "path": "src/node.rs",
+      "path": "src/node/lifecycle.rs",
       "signature": "fn drop(&mut self)",
       "source_class": "handwritten"
     },
@@ -58375,25 +58599,25 @@
       "cognitive": 1,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::default_layout",
+        "identity": "crate::node::layout::default_layout",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "pub fn default_layout( platform: NodePlatform, windows_program_data: Option<&Path>, ) -> Result<NodeLayout, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::default_layout",
+      "identity": "crate::node::layout::default_layout",
       "kind": "function",
-      "line": 952,
+      "line": 126,
       "name": "default_layout",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 952,
+        "line": 126,
         "name": "default_layout"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "pub fn default_layout( platform: NodePlatform, windows_program_data: Option<&Path>, ) -> Result<NodeLayout, NodeError>",
       "source_class": "handwritten"
     },
@@ -58401,25 +58625,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::default_layout::<closure>",
+        "identity": "crate::node::layout::default_layout::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": ".or_else(|| env::var_os(\"ProgramData\").map(PathBuf::from))",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::default_layout::<closure>",
+      "identity": "crate::node::layout::default_layout::<closure>",
       "kind": "closure",
-      "line": 968,
+      "line": 142,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 968,
+        "line": 142,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": ".or_else(|| env::var_os(\"ProgramData\").map(PathBuf::from))",
       "source_class": "handwritten"
     },
@@ -58427,51 +58651,51 @@
       "cognitive": 6,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::node::validate_absolute_path",
+        "identity": "crate::node::layout::validate_absolute_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn validate_absolute_path( platform: NodePlatform, field: &'static str, path: &Path, is_file: bool, ) -> Result<(), NodeError>",
+        "path": "src/node/layout.rs",
+        "signature": "pub(super) fn validate_absolute_path( platform: NodePlatform, field: &'static str, path: &Path, is_file: bool, ) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_absolute_path",
+      "identity": "crate::node::layout::validate_absolute_path",
       "kind": "function",
-      "line": 982,
+      "line": 156,
       "name": "validate_absolute_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 982,
+        "line": 156,
         "name": "validate_absolute_path"
       },
-      "path": "src/node.rs",
-      "signature": "fn validate_absolute_path( platform: NodePlatform, field: &'static str, path: &Path, is_file: bool, ) -> Result<(), NodeError>",
+      "path": "src/node/layout.rs",
+      "signature": "pub(super) fn validate_absolute_path( platform: NodePlatform, field: &'static str, path: &Path, is_file: bool, ) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 1,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::node::validate_absolute_path::<closure>",
+        "identity": "crate::node::layout::validate_absolute_path::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": "if path.components().any(|component| match component {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_absolute_path::<closure>",
+      "identity": "crate::node::layout::validate_absolute_path::<closure>",
       "kind": "closure",
-      "line": 994,
+      "line": 168,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "closure",
-        "line": 994,
+        "line": 168,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": "if path.components().any(|component| match component {",
       "source_class": "handwritten"
     },
@@ -58479,25 +58703,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::validate_absolute_path::<closure>@1007#2",
+        "identity": "crate::node::layout::validate_absolute_path::<closure>@184#2",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/layout.rs",
         "signature": ".any(|component| matches!(component, Component::Normal(_)))",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_absolute_path::<closure>@1007#2",
+      "identity": "crate::node::layout::validate_absolute_path::<closure>@184#2",
       "kind": "closure",
-      "line": 1007,
+      "line": 184,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1007,
+        "line": 184,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/layout.rs",
       "signature": ".any(|component| matches!(component, Component::Normal(_)))",
       "source_class": "handwritten"
     },
@@ -58505,51 +58729,51 @@
       "cognitive": 2,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::paths_overlap",
+        "identity": "crate::node::layout::paths_overlap",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
+        "path": "src/node/layout.rs",
+        "signature": "pub(super) fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::paths_overlap",
+      "identity": "crate::node::layout::paths_overlap",
       "kind": "function",
-      "line": 1023,
+      "line": 200,
       "name": "paths_overlap",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 1023,
+        "line": 200,
         "name": "paths_overlap"
       },
-      "path": "src/node.rs",
-      "signature": "fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
+      "path": "src/node/layout.rs",
+      "signature": "pub(super) fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
       "source_class": "handwritten"
     },
     {
       "cognitive": 3,
       "cyclomatic": 5,
       "derived": {
-        "identity": "crate::node::cleanup_partial_initialization",
+        "identity": "crate::node::state::cleanup_partial_initialization",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/state.rs",
         "signature": "fn cleanup_partial_initialization( state_dir: &Path, config_path: &Path, remove_config: bool, ) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::cleanup_partial_initialization",
+      "identity": "crate::node::state::cleanup_partial_initialization",
       "kind": "function",
-      "line": 1031,
+      "line": 252,
       "name": "cleanup_partial_initialization",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 1031,
+        "line": 252,
         "name": "cleanup_partial_initialization"
       },
-      "path": "src/node.rs",
+      "path": "src/node/state.rs",
       "signature": "fn cleanup_partial_initialization( state_dir: &Path, config_path: &Path, remove_config: bool, ) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
@@ -58557,25 +58781,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::ensure_safe_parent_if_present::<closure>",
+        "identity": "crate::node::security::ensure_safe_parent_if_present::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/security.rs",
         "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::ensure_safe_parent_if_present::<closure>",
+      "identity": "crate::node::security::ensure_safe_parent_if_present::<closure>",
       "kind": "closure",
-      "line": 1062,
+      "line": 33,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1062,
+        "line": 33,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/security.rs",
       "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
       "source_class": "handwritten"
     },
@@ -58583,25 +58807,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::private_token_tombstone_path",
+        "identity": "crate::node::private_token::private_token_tombstone_path",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": "fn private_token_tombstone_path(path: &Path) -> Result<PathBuf, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::private_token_tombstone_path",
+      "identity": "crate::node::private_token::private_token_tombstone_path",
       "kind": "function",
-      "line": 1085,
+      "line": 304,
       "name": "private_token_tombstone_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1085,
+        "line": 304,
         "name": "private_token_tombstone_path"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": "fn private_token_tombstone_path(path: &Path) -> Result<PathBuf, NodeError>",
       "source_class": "handwritten"
     },
@@ -58609,25 +58833,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::private_token_tombstone_path::<closure>",
+        "identity": "crate::node::private_token::private_token_tombstone_path::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/private_token.rs",
         "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::private_token_tombstone_path::<closure>",
+      "identity": "crate::node::private_token::private_token_tombstone_path::<closure>",
       "kind": "closure",
-      "line": 1088,
+      "line": 307,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1088,
+        "line": 307,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/private_token.rs",
       "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
       "source_class": "handwritten"
     },
@@ -58635,51 +58859,51 @@
       "cognitive": 3,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::validate_open_file_identity",
+        "identity": "crate::node::fs_unix::validate_open_file_identity",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn validate_open_file_identity(path: &Path, opened_file: &fs::File) -> Result<(), NodeError>",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn validate_open_file_identity( path: &Path, opened_file: &fs::File, ) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_open_file_identity",
+      "identity": "crate::node::fs_unix::validate_open_file_identity",
       "kind": "function",
-      "line": 1105,
+      "line": 8,
       "name": "validate_open_file_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 1105,
+        "line": 8,
         "name": "validate_open_file_identity"
       },
-      "path": "src/node.rs",
-      "signature": "fn validate_open_file_identity(path: &Path, opened_file: &fs::File) -> Result<(), NodeError>",
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn validate_open_file_identity( path: &Path, opened_file: &fs::File, ) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::same_file_identity",
+        "identity": "crate::node::fs_unix::same_file_identity",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/fs_unix.rs",
         "signature": "fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::same_file_identity",
+      "identity": "crate::node::fs_unix::same_file_identity",
       "kind": "function",
-      "line": 1122,
+      "line": 28,
       "name": "same_file_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1122,
+        "line": 28,
         "name": "same_file_identity"
       },
-      "path": "src/node.rs",
+      "path": "src/node/fs_unix.rs",
       "signature": "fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool",
       "source_class": "handwritten"
     },
@@ -58687,25 +58911,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::windows_file_identity",
+        "identity": "crate::node::fs_windows::windows_file_identity",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/fs_windows.rs",
         "signature": "fn windows_file_identity(file: &fs::File) -> Result<WindowsFileIdentity, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::windows_file_identity",
+      "identity": "crate::node::fs_windows::windows_file_identity",
       "kind": "function",
-      "line": 1188,
+      "line": 65,
       "name": "windows_file_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1188,
+        "line": 65,
         "name": "windows_file_identity"
       },
-      "path": "src/node.rs",
+      "path": "src/node/fs_windows.rs",
       "signature": "fn windows_file_identity(file: &fs::File) -> Result<WindowsFileIdentity, NodeError>",
       "source_class": "handwritten"
     },
@@ -58713,25 +58937,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::write_new_file_atomically::<closure>",
+        "identity": "crate::node::security::write_new_file_atomically::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/security.rs",
         "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::write_new_file_atomically::<closure>",
+      "identity": "crate::node::security::write_new_file_atomically::<closure>",
       "kind": "closure",
-      "line": 1235,
+      "line": 66,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1235,
+        "line": 66,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/security.rs",
       "signature": ".ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;",
       "source_class": "handwritten"
     },
@@ -58739,25 +58963,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::write_atomic_new::<closure>@1228#3",
+        "identity": "crate::node::security::write_new_file_atomically::<closure>@75#2",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/security.rs",
         "signature": "let result = (|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::write_atomic_new::<closure>@1228#3",
+      "identity": "crate::node::security::write_new_file_atomically::<closure>@75#2",
       "kind": "closure",
-      "line": 1228,
+      "line": 75,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1228,
+        "line": 75,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/security.rs",
       "signature": "let result = (|| {",
       "source_class": "handwritten"
     },
@@ -58765,103 +58989,103 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::sync_directory",
+        "identity": "crate::node::security::sync_directory",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn sync_directory(path: &Path) -> io::Result<()>",
+        "path": "src/node/security.rs",
+        "signature": "pub(super) fn sync_directory(path: &Path) -> io::Result<()>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::sync_directory",
+      "identity": "crate::node::security::sync_directory",
       "kind": "function",
-      "line": 1252,
+      "line": 99,
       "name": "sync_directory",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1252,
+        "line": 99,
         "name": "sync_directory"
       },
-      "path": "src/node.rs",
-      "signature": "fn sync_directory(path: &Path) -> io::Result<()>",
+      "path": "src/node/security.rs",
+      "signature": "pub(super) fn sync_directory(path: &Path) -> io::Result<()>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::set_directory_mode",
+        "identity": "crate::node::security::set_directory_mode",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn set_directory_mode(path: &Path) -> io::Result<()>",
+        "path": "src/node/security.rs",
+        "signature": "pub(super) fn set_directory_mode(path: &Path) -> io::Result<()>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::set_directory_mode",
+      "identity": "crate::node::security::set_directory_mode",
       "kind": "function",
-      "line": 1264,
+      "line": 111,
       "name": "set_directory_mode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1264,
+        "line": 111,
         "name": "set_directory_mode"
       },
-      "path": "src/node.rs",
-      "signature": "fn set_directory_mode(path: &Path) -> io::Result<()>",
+      "path": "src/node/security.rs",
+      "signature": "pub(super) fn set_directory_mode(path: &Path) -> io::Result<()>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 2,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::create_secure_directory",
+        "identity": "crate::node::fs_unix::create_secure_directory",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn create_secure_directory(path: &Path) -> io::Result<()>",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn create_secure_directory(path: &Path) -> io::Result<()>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::create_secure_directory",
+      "identity": "crate::node::fs_unix::create_secure_directory",
       "kind": "function",
-      "line": 1274,
+      "line": 35,
       "name": "create_secure_directory",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1274,
+        "line": 35,
         "name": "create_secure_directory"
       },
-      "path": "src/node.rs",
-      "signature": "fn create_secure_directory(path: &Path) -> io::Result<()>",
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn create_secure_directory(path: &Path) -> io::Result<()>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::create_secure_directory::<closure>",
+        "identity": "crate::node::fs_unix::create_secure_directory::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/fs_unix.rs",
         "signature": "let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::create_secure_directory::<closure>",
+      "identity": "crate::node::fs_unix::create_secure_directory::<closure>",
       "kind": "closure",
-      "line": 1280,
+      "line": 39,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1280,
+        "line": 39,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/fs_unix.rs",
       "signature": "let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {",
       "source_class": "handwritten"
     },
@@ -58869,207 +59093,207 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::grow_principal_lookup_buffer",
+        "identity": "crate::node::fs_unix::grow_principal_lookup_buffer",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::grow_principal_lookup_buffer",
+      "identity": "crate::node::fs_unix::grow_principal_lookup_buffer",
       "kind": "function",
-      "line": 1307,
+      "line": 61,
       "name": "grow_principal_lookup_buffer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1307,
+        "line": 61,
         "name": "grow_principal_lookup_buffer"
       },
-      "path": "src/node.rs",
-      "signature": "fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 4,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::node::owner_policy",
+        "identity": "crate::node::fs_unix::owner_policy",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::owner_policy",
+      "identity": "crate::node::fs_unix::owner_policy",
       "kind": "function",
-      "line": 1397,
+      "line": 154,
       "name": "owner_policy",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 1397,
+        "line": 154,
         "name": "owner_policy"
       },
-      "path": "src/node.rs",
-      "signature": "fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::owner_policy@1428#2",
+        "identity": "crate::node::security::owner_policy",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn owner_policy( _platform: NodePlatform, _custom_paths: bool, _state: bool, ) -> Result<(), NodeError>",
+        "path": "src/node/security.rs",
+        "signature": "pub(super) fn owner_policy( _platform: NodePlatform, _custom_paths: bool, _state: bool, ) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::owner_policy@1428#2",
+      "identity": "crate::node::security::owner_policy",
       "kind": "function",
-      "line": 1428,
+      "line": 127,
       "name": "owner_policy",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1428,
+        "line": 127,
         "name": "owner_policy"
       },
-      "path": "src/node.rs",
-      "signature": "fn owner_policy( _platform: NodePlatform, _custom_paths: bool, _state: bool, ) -> Result<(), NodeError>",
+      "path": "src/node/security.rs",
+      "signature": "pub(super) fn owner_policy( _platform: NodePlatform, _custom_paths: bool, _state: bool, ) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::mode_is_no_broader_than",
+        "identity": "crate::node::fs_unix::mode_is_no_broader_than",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::mode_is_no_broader_than",
+      "identity": "crate::node::fs_unix::mode_is_no_broader_than",
       "kind": "function",
-      "line": 1505,
+      "line": 198,
       "name": "mode_is_no_broader_than",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1505,
+        "line": 198,
         "name": "mode_is_no_broader_than"
       },
-      "path": "src/node.rs",
-      "signature": "fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
       "source_class": "handwritten"
     },
     {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::windows_has_reparse_point",
+        "identity": "crate::node::fs_windows::windows_has_reparse_point",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::windows_has_reparse_point",
+      "identity": "crate::node::fs_windows::windows_has_reparse_point",
       "kind": "function",
-      "line": 1551,
+      "line": 82,
       "name": "windows_has_reparse_point",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1551,
+        "line": 82,
         "name": "windows_has_reparse_point"
       },
-      "path": "src/node.rs",
-      "signature": "fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::node::validate_windows_security",
+        "identity": "crate::node::fs_windows::validate_windows_security",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_windows_security",
+      "identity": "crate::node::fs_windows::validate_windows_security",
       "kind": "function",
-      "line": 1573,
+      "line": 107,
       "name": "validate_windows_security",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 1573,
+        "line": 107,
         "name": "validate_windows_security"
       },
-      "path": "src/node.rs",
-      "signature": "fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::validate_windows_security_handle",
+        "identity": "crate::node::fs_windows::validate_windows_security_handle",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_windows_security_handle",
+      "identity": "crate::node::fs_windows::validate_windows_security_handle",
       "kind": "function",
-      "line": 1619,
+      "line": 151,
       "name": "validate_windows_security_handle",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1619,
+        "line": 151,
         "name": "validate_windows_security_handle"
       },
-      "path": "src/node.rs",
-      "signature": "fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::validate_windows_security_descriptor",
+        "identity": "crate::node::fs_windows::validate_windows_security_descriptor",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/fs_windows.rs",
         "signature": "fn validate_windows_security_descriptor( path: &Path, directory: bool, test_mode: bool, owner_sid: *mut std::ffi::c_void, dacl: *mut std::ffi::c_void, security_descriptor: *mut std::ffi::c_void, ) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_windows_security_descriptor",
+      "identity": "crate::node::fs_windows::validate_windows_security_descriptor",
       "kind": "function",
-      "line": 1659,
+      "line": 191,
       "name": "validate_windows_security_descriptor",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1659,
+        "line": 191,
         "name": "validate_windows_security_descriptor"
       },
-      "path": "src/node.rs",
+      "path": "src/node/fs_windows.rs",
       "signature": "fn validate_windows_security_descriptor( path: &Path, directory: bool, test_mode: bool, owner_sid: *mut std::ffi::c_void, dacl: *mut std::ffi::c_void, security_descriptor: *mut std::ffi::c_void, ) -> Result<(), NodeError>",
       "source_class": "handwritten"
     },
@@ -59077,25 +59301,25 @@
       "cognitive": 23,
       "cyclomatic": 19,
       "derived": {
-        "identity": "crate::node::validate_windows_security_descriptor::<closure>",
+        "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/fs_windows.rs",
         "signature": "let result = (|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::validate_windows_security_descriptor::<closure>",
+      "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>",
       "kind": "closure",
-      "line": 1688,
+      "line": 220,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 23,
         "cyclomatic": 19,
         "kind": "closure",
-        "line": 1688,
+        "line": 220,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/fs_windows.rs",
       "signature": "let result = (|| {",
       "source_class": "handwritten"
     },
@@ -59103,51 +59327,51 @@
       "cognitive": 6,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::node::windows_security_access_allowed",
+        "identity": "crate::node::fs_windows::windows_security_access_allowed",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
-        "signature": "fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::windows_security_access_allowed",
+      "identity": "crate::node::fs_windows::windows_security_access_allowed",
       "kind": "function",
-      "line": 1821,
+      "line": 353,
       "name": "windows_security_access_allowed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 1821,
+        "line": 353,
         "name": "windows_security_access_allowed"
       },
-      "path": "src/node.rs",
-      "signature": "fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
       "source_class": "handwritten"
     },
     {
       "cognitive": 3,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::node::read_policy_config",
+        "identity": "crate::node::policy::read_policy_config",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/policy.rs",
         "signature": "pub(crate) fn read_policy_config(context: &NodeContext) -> PolicyConfig",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::read_policy_config",
+      "identity": "crate::node::policy::read_policy_config",
       "kind": "function",
-      "line": 1953,
+      "line": 25,
       "name": "read_policy_config",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 1953,
+        "line": 25,
         "name": "read_policy_config"
       },
-      "path": "src/node.rs",
+      "path": "src/node/policy.rs",
       "signature": "pub(crate) fn read_policy_config(context: &NodeContext) -> PolicyConfig",
       "source_class": "handwritten"
     },
@@ -59155,25 +59379,25 @@
       "cognitive": 2,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::warn_policy_unreadable",
+        "identity": "crate::node::policy::warn_policy_unreadable",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/policy.rs",
         "signature": "pub(crate) fn warn_policy_unreadable(gate: &str, reason: &str)",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::warn_policy_unreadable",
+      "identity": "crate::node::policy::warn_policy_unreadable",
       "kind": "function",
-      "line": 1981,
+      "line": 53,
       "name": "warn_policy_unreadable",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 1981,
+        "line": 53,
         "name": "warn_policy_unreadable"
       },
-      "path": "src/node.rs",
+      "path": "src/node/policy.rs",
       "signature": "pub(crate) fn warn_policy_unreadable(gate: &str, reason: &str)",
       "source_class": "handwritten"
     },
@@ -59181,25 +59405,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::warn_policy_unreadable::<closure>",
+        "identity": "crate::node::policy::warn_policy_unreadable::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/policy.rs",
         "signature": "let reported = REPORTED.get_or_init(|| Mutex::new(HashSet::new()));",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::warn_policy_unreadable::<closure>",
+      "identity": "crate::node::policy::warn_policy_unreadable::<closure>",
       "kind": "closure",
-      "line": 1986,
+      "line": 58,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1986,
+        "line": 58,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/policy.rs",
       "signature": "let reported = REPORTED.get_or_init(|| Mutex::new(HashSet::new()));",
       "source_class": "handwritten"
     },
@@ -59207,25 +59431,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::test_context",
+        "identity": "crate::node::tests::test_context",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/mod.rs",
         "signature": "fn test_context(root: &Path) -> NodeContext",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::test_context",
+      "identity": "crate::node::tests::test_context",
       "kind": "function",
-      "line": 2005,
+      "line": 30,
       "name": "test_context",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2005,
+        "line": 30,
         "name": "test_context"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/mod.rs",
       "signature": "fn test_context(root: &Path) -> NodeContext",
       "source_class": "handwritten"
     },
@@ -59233,25 +59457,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::platform_defaults_match_the_frozen_contract",
+        "identity": "crate::node::tests::layout::platform_defaults_match_the_frozen_contract",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn platform_defaults_match_the_frozen_contract()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::platform_defaults_match_the_frozen_contract",
+      "identity": "crate::node::tests::layout::platform_defaults_match_the_frozen_contract",
       "kind": "function",
-      "line": 2018,
+      "line": 4,
       "name": "platform_defaults_match_the_frozen_contract",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2018,
+        "line": 4,
         "name": "platform_defaults_match_the_frozen_contract"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn platform_defaults_match_the_frozen_contract()",
       "source_class": "handwritten"
     },
@@ -59259,25 +59483,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::unix_principal_lookup_is_safe_under_concurrency",
+        "identity": "crate::node::tests::security::unix_principal_lookup_is_safe_under_concurrency",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/security.rs",
         "signature": "fn unix_principal_lookup_is_safe_under_concurrency()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::unix_principal_lookup_is_safe_under_concurrency",
+      "identity": "crate::node::tests::security::unix_principal_lookup_is_safe_under_concurrency",
       "kind": "function",
-      "line": 2065,
+      "line": 5,
       "name": "unix_principal_lookup_is_safe_under_concurrency",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 2065,
+        "line": 5,
         "name": "unix_principal_lookup_is_safe_under_concurrency"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/security.rs",
       "signature": "fn unix_principal_lookup_is_safe_under_concurrency()",
       "source_class": "handwritten"
     },
@@ -59285,25 +59509,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::unix_principal_lookup_is_safe_under_concurrency::<closure>",
+        "identity": "crate::node::tests::security::unix_principal_lookup_is_safe_under_concurrency::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/security.rs",
         "signature": ".map(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::unix_principal_lookup_is_safe_under_concurrency::<closure>",
+      "identity": "crate::node::tests::security::unix_principal_lookup_is_safe_under_concurrency::<closure>",
       "kind": "closure",
-      "line": 2072,
+      "line": 66,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 2072,
+        "line": 66,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/security.rs",
       "signature": ".map(|_| {",
       "source_class": "handwritten"
     },
@@ -59311,25 +59535,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::unix_principal_lookup_is_safe_under_concurrency::<closure>::<closure>",
+        "identity": "crate::node::tests::security::unix_principal_lookup_is_safe_under_concurrency::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/security.rs",
         "signature": "std::thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::unix_principal_lookup_is_safe_under_concurrency::<closure>::<closure>",
+      "identity": "crate::node::tests::security::unix_principal_lookup_is_safe_under_concurrency::<closure>::<closure>",
       "kind": "closure",
-      "line": 2074,
+      "line": 70,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 2074,
+        "line": 70,
         "name": "<closure>"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/security.rs",
       "signature": "std::thread::spawn(move || {",
       "source_class": "handwritten"
     },
@@ -59337,25 +59561,25 @@
       "cognitive": 4,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::node::every_platform_layout_can_initialize_with_shared_defaults",
+        "identity": "crate::node::tests::layout::every_platform_layout_can_initialize_with_shared_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn every_platform_layout_can_initialize_with_shared_defaults()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::every_platform_layout_can_initialize_with_shared_defaults",
+      "identity": "crate::node::tests::layout::every_platform_layout_can_initialize_with_shared_defaults",
       "kind": "function",
-      "line": 2093,
+      "line": 30,
       "name": "every_platform_layout_can_initialize_with_shared_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 2093,
+        "line": 30,
         "name": "every_platform_layout_can_initialize_with_shared_defaults"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn every_platform_layout_can_initialize_with_shared_defaults()",
       "source_class": "handwritten"
     },
@@ -59363,25 +59587,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::cli_overrides_env_and_env_overrides_defaults",
+        "identity": "crate::node::tests::layout::cli_overrides_env_and_env_overrides_defaults",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn cli_overrides_env_and_env_overrides_defaults()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::cli_overrides_env_and_env_overrides_defaults",
+      "identity": "crate::node::tests::layout::cli_overrides_env_and_env_overrides_defaults",
       "kind": "function",
-      "line": 2125,
+      "line": 62,
       "name": "cli_overrides_env_and_env_overrides_defaults",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2125,
+        "line": 62,
         "name": "cli_overrides_env_and_env_overrides_defaults"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn cli_overrides_env_and_env_overrides_defaults()",
       "source_class": "handwritten"
     },
@@ -59389,25 +59613,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::constructor_has_no_filesystem_side_effects_and_resolves_identity_paths",
+        "identity": "crate::node::tests::layout::constructor_has_no_filesystem_side_effects_and_resolves_identity_paths",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn constructor_has_no_filesystem_side_effects_and_resolves_identity_paths()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::constructor_has_no_filesystem_side_effects_and_resolves_identity_paths",
+      "identity": "crate::node::tests::layout::constructor_has_no_filesystem_side_effects_and_resolves_identity_paths",
       "kind": "function",
-      "line": 2166,
+      "line": 104,
       "name": "constructor_has_no_filesystem_side_effects_and_resolves_identity_paths",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2166,
+        "line": 104,
         "name": "constructor_has_no_filesystem_side_effects_and_resolves_identity_paths"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn constructor_has_no_filesystem_side_effects_and_resolves_identity_paths()",
       "source_class": "handwritten"
     },
@@ -59415,25 +59639,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::initialization_is_explicit_atomic_and_does_not_create_identity_or_database",
+        "identity": "crate::node::tests::state::initialization_is_explicit_atomic_and_does_not_create_identity_or_database",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/state.rs",
         "signature": "fn initialization_is_explicit_atomic_and_does_not_create_identity_or_database()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::initialization_is_explicit_atomic_and_does_not_create_identity_or_database",
+      "identity": "crate::node::tests::state::initialization_is_explicit_atomic_and_does_not_create_identity_or_database",
       "kind": "function",
-      "line": 2183,
+      "line": 5,
       "name": "initialization_is_explicit_atomic_and_does_not_create_identity_or_database",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2183,
+        "line": 5,
         "name": "initialization_is_explicit_atomic_and_does_not_create_identity_or_database"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/state.rs",
       "signature": "fn initialization_is_explicit_atomic_and_does_not_create_identity_or_database()",
       "source_class": "handwritten"
     },
@@ -59441,25 +59665,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::initialization_rejects_missing_parents_and_symlink_boundaries",
+        "identity": "crate::node::tests::state::initialization_rejects_missing_parents_and_symlink_boundaries",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/state.rs",
         "signature": "fn initialization_rejects_missing_parents_and_symlink_boundaries()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::initialization_rejects_missing_parents_and_symlink_boundaries",
+      "identity": "crate::node::tests::state::initialization_rejects_missing_parents_and_symlink_boundaries",
       "kind": "function",
-      "line": 2201,
+      "line": 23,
       "name": "initialization_rejects_missing_parents_and_symlink_boundaries",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2201,
+        "line": 23,
         "name": "initialization_rejects_missing_parents_and_symlink_boundaries"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/state.rs",
       "signature": "fn initialization_rejects_missing_parents_and_symlink_boundaries()",
       "source_class": "handwritten"
     },
@@ -59467,25 +59691,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::failed_config_initialization_cleans_up_a_new_state_directory",
+        "identity": "crate::node::tests::state::failed_config_initialization_cleans_up_a_new_state_directory",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/state.rs",
         "signature": "fn failed_config_initialization_cleans_up_a_new_state_directory()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::failed_config_initialization_cleans_up_a_new_state_directory",
+      "identity": "crate::node::tests::state::failed_config_initialization_cleans_up_a_new_state_directory",
       "kind": "function",
-      "line": 2247,
+      "line": 66,
       "name": "failed_config_initialization_cleans_up_a_new_state_directory",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2247,
+        "line": 66,
         "name": "failed_config_initialization_cleans_up_a_new_state_directory"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/state.rs",
       "signature": "fn failed_config_initialization_cleans_up_a_new_state_directory()",
       "source_class": "handwritten"
     },
@@ -59493,25 +59717,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::production_rejects_test_environment_overrides",
+        "identity": "crate::node::tests::layout::production_rejects_test_environment_overrides",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn production_rejects_test_environment_overrides()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::production_rejects_test_environment_overrides",
+      "identity": "crate::node::tests::layout::production_rejects_test_environment_overrides",
       "kind": "function",
-      "line": 2271,
+      "line": 120,
       "name": "production_rejects_test_environment_overrides",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2271,
+        "line": 120,
         "name": "production_rejects_test_environment_overrides"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn production_rejects_test_environment_overrides()",
       "source_class": "handwritten"
     },
@@ -59519,25 +59743,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::unsafe_paths_are_rejected_without_io",
+        "identity": "crate::node::tests::layout::unsafe_paths_are_rejected_without_io",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn unsafe_paths_are_rejected_without_io()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::unsafe_paths_are_rejected_without_io",
+      "identity": "crate::node::tests::layout::unsafe_paths_are_rejected_without_io",
       "kind": "function",
-      "line": 2286,
+      "line": 135,
       "name": "unsafe_paths_are_rejected_without_io",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 2286,
+        "line": 135,
         "name": "unsafe_paths_are_rejected_without_io"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn unsafe_paths_are_rejected_without_io()",
       "source_class": "handwritten"
     },
@@ -59545,25 +59769,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::opened_file_identity_detects_path_replacement",
+        "identity": "crate::node::tests::private_token::opened_file_identity_detects_path_replacement",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/private_token.rs",
         "signature": "fn opened_file_identity_detects_path_replacement()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::opened_file_identity_detects_path_replacement",
+      "identity": "crate::node::tests::private_token::opened_file_identity_detects_path_replacement",
       "kind": "function",
-      "line": 2309,
+      "line": 5,
       "name": "opened_file_identity_detects_path_replacement",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2309,
+        "line": 5,
         "name": "opened_file_identity_detects_path_replacement"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/private_token.rs",
       "signature": "fn opened_file_identity_detects_path_replacement()",
       "source_class": "handwritten"
     },
@@ -59571,25 +59795,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::private_bounded_file_reader_enforces_path_mode_and_size",
+        "identity": "crate::node::tests::private_token::private_bounded_file_reader_enforces_path_mode_and_size",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/private_token.rs",
         "signature": "fn private_bounded_file_reader_enforces_path_mode_and_size()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::private_bounded_file_reader_enforces_path_mode_and_size",
+      "identity": "crate::node::tests::private_token::private_bounded_file_reader_enforces_path_mode_and_size",
       "kind": "function",
-      "line": 2322,
+      "line": 18,
       "name": "private_bounded_file_reader_enforces_path_mode_and_size",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2322,
+        "line": 18,
         "name": "private_bounded_file_reader_enforces_path_mode_and_size"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/private_token.rs",
       "signature": "fn private_bounded_file_reader_enforces_path_mode_and_size()",
       "source_class": "handwritten"
     },
@@ -59597,25 +59821,25 @@
       "cognitive": 3,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::startup_tombstone_scan_is_bounded",
+        "identity": "crate::node::tests::private_token::startup_tombstone_scan_is_bounded",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/private_token.rs",
         "signature": "fn startup_tombstone_scan_is_bounded()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::startup_tombstone_scan_is_bounded",
+      "identity": "crate::node::tests::private_token::startup_tombstone_scan_is_bounded",
       "kind": "function",
-      "line": 2347,
+      "line": 43,
       "name": "startup_tombstone_scan_is_bounded",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 2347,
+        "line": 43,
         "name": "startup_tombstone_scan_is_bounded"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/private_token.rs",
       "signature": "fn startup_tombstone_scan_is_bounded()",
       "source_class": "handwritten"
     },
@@ -59623,25 +59847,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::windows_drive_prefix_is_accepted_but_parent_components_are_not",
+        "identity": "crate::node::tests::layout::windows_drive_prefix_is_accepted_but_parent_components_are_not",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn windows_drive_prefix_is_accepted_but_parent_components_are_not()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::windows_drive_prefix_is_accepted_but_parent_components_are_not",
+      "identity": "crate::node::tests::layout::windows_drive_prefix_is_accepted_but_parent_components_are_not",
       "kind": "function",
-      "line": 2373,
+      "line": 158,
       "name": "windows_drive_prefix_is_accepted_but_parent_components_are_not",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2373,
+        "line": 158,
         "name": "windows_drive_prefix_is_accepted_but_parent_components_are_not"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn windows_drive_prefix_is_accepted_but_parent_components_are_not()",
       "source_class": "handwritten"
     },
@@ -59649,25 +59873,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::windows_service_acl_policy_allows_only_required_principals_and_access",
+        "identity": "crate::node::tests::security::windows_service_acl_policy_allows_only_required_principals_and_access",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/security.rs",
         "signature": "fn windows_service_acl_policy_allows_only_required_principals_and_access()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::windows_service_acl_policy_allows_only_required_principals_and_access",
+      "identity": "crate::node::tests::security::windows_service_acl_policy_allows_only_required_principals_and_access",
       "kind": "function",
-      "line": 2402,
+      "line": 88,
       "name": "windows_service_acl_policy_allows_only_required_principals_and_access",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2402,
+        "line": 88,
         "name": "windows_service_acl_policy_allows_only_required_principals_and_access"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/security.rs",
       "signature": "fn windows_service_acl_policy_allows_only_required_principals_and_access()",
       "source_class": "handwritten"
     },
@@ -59675,25 +59899,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::release_build_rejects_test_mode_even_when_requested",
+        "identity": "crate::node::tests::layout::release_build_rejects_test_mode_even_when_requested",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/layout.rs",
         "signature": "fn release_build_rejects_test_mode_even_when_requested()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::release_build_rejects_test_mode_even_when_requested",
+      "identity": "crate::node::tests::layout::release_build_rejects_test_mode_even_when_requested",
       "kind": "function",
-      "line": 2430,
+      "line": 206,
       "name": "release_build_rejects_test_mode_even_when_requested",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2430,
+        "line": 206,
         "name": "release_build_rejects_test_mode_even_when_requested"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/layout.rs",
       "signature": "fn release_build_rejects_test_mode_even_when_requested()",
       "source_class": "handwritten"
     },
@@ -59701,25 +59925,25 @@
       "cognitive": 6,
       "cyclomatic": 5,
       "derived": {
-        "identity": "crate::node::a_public_config_may_be_hardened_but_never_loosened",
+        "identity": "crate::node::tests::security::a_public_config_may_be_hardened_but_never_loosened",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/security.rs",
         "signature": "fn a_public_config_may_be_hardened_but_never_loosened()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::a_public_config_may_be_hardened_but_never_loosened",
+      "identity": "crate::node::tests::security::a_public_config_may_be_hardened_but_never_loosened",
       "kind": "function",
-      "line": 2452,
+      "line": 130,
       "name": "a_public_config_may_be_hardened_but_never_loosened",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 2452,
+        "line": 130,
         "name": "a_public_config_may_be_hardened_but_never_loosened"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/security.rs",
       "signature": "fn a_public_config_may_be_hardened_but_never_loosened()",
       "source_class": "handwritten"
     },
@@ -59727,25 +59951,25 @@
       "cognitive": 4,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::node::no_group_or_other_bit_can_ever_pass_on_a_private_file",
+        "identity": "crate::node::tests::security::no_group_or_other_bit_can_ever_pass_on_a_private_file",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/security.rs",
         "signature": "fn no_group_or_other_bit_can_ever_pass_on_a_private_file()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::no_group_or_other_bit_can_ever_pass_on_a_private_file",
+      "identity": "crate::node::tests::security::no_group_or_other_bit_can_ever_pass_on_a_private_file",
       "kind": "function",
-      "line": 2497,
+      "line": 175,
       "name": "no_group_or_other_bit_can_ever_pass_on_a_private_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 2497,
+        "line": 175,
         "name": "no_group_or_other_bit_can_ever_pass_on_a_private_file"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/security.rs",
       "signature": "fn no_group_or_other_bit_can_ever_pass_on_a_private_file()",
       "source_class": "handwritten"
     },
@@ -59753,25 +59977,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::a_refused_mode_names_the_file_the_mode_and_the_remedy",
+        "identity": "crate::node::tests::security::a_refused_mode_names_the_file_the_mode_and_the_remedy",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/security.rs",
         "signature": "fn a_refused_mode_names_the_file_the_mode_and_the_remedy()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::a_refused_mode_names_the_file_the_mode_and_the_remedy",
+      "identity": "crate::node::tests::security::a_refused_mode_names_the_file_the_mode_and_the_remedy",
       "kind": "function",
-      "line": 2535,
+      "line": 213,
       "name": "a_refused_mode_names_the_file_the_mode_and_the_remedy",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2535,
+        "line": 213,
         "name": "a_refused_mode_names_the_file_the_mode_and_the_remedy"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/security.rs",
       "signature": "fn a_refused_mode_names_the_file_the_mode_and_the_remedy()",
       "source_class": "handwritten"
     },
@@ -59779,25 +60003,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node::an_unreadable_policy_config_is_distinguishable_from_nothing_declared",
+        "identity": "crate::node::tests::policy::an_unreadable_policy_config_is_distinguishable_from_nothing_declared",
         "macro_expansion": "not_measured",
-        "path": "src/node.rs",
+        "path": "src/node/tests/policy.rs",
         "signature": "fn an_unreadable_policy_config_is_distinguishable_from_nothing_declared()",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::an_unreadable_policy_config_is_distinguishable_from_nothing_declared",
+      "identity": "crate::node::tests::policy::an_unreadable_policy_config_is_distinguishable_from_nothing_declared",
       "kind": "function",
-      "line": 2573,
+      "line": 12,
       "name": "an_unreadable_policy_config_is_distinguishable_from_nothing_declared",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 2573,
+        "line": 12,
         "name": "an_unreadable_policy_config_is_distinguishable_from_nothing_declared"
       },
-      "path": "src/node.rs",
+      "path": "src/node/tests/policy.rs",
       "signature": "fn an_unreadable_policy_config_is_distinguishable_from_nothing_declared()",
       "source_class": "handwritten"
     },

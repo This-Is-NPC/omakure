@@ -53,9 +53,9 @@ mise run test:node-service  # focused CLI/HTTP/node-service integration tests
 
 Never use bare `omakure` as an interactive app. No-argument invocation prints
 help; operational commands must be explicit (`omakure scripts`, `omakure run`,
-`omakure api`, or `omakure node serve`). The `scripts/tasks/dev/smoke` helper
-starts the node service on a temporary local port, checks health/readiness, and
-cleans up.
+`omakure api`, or `omakure node serve`). The `scripts/tasks/atomic/dev-smoke` atomic
+(`mise run dev:smoke`) starts the node service on a local port
+(`OMAKURE_DEV_PORT`, default 17878), checks health/readiness, and cleans up.
 
 ## Workspace selection
 

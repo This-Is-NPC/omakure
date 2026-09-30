@@ -30,7 +30,6 @@ for pattern in \
   scripts/tasks/suite/* \
   scripts/tasks/check/platform/* \
   scripts/tasks/cert/* \
-  scripts/tasks/dev/* \
   .githooks/* \
   scripts/install/*.sh \
   scripts/release/*.sh

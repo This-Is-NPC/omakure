@@ -1,9 +1,53 @@
 #!/usr/bin/env bash
+# Build and smoke-test the node service without leaving a daemon running.
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 cd "$root"
-canonical="$root/scripts/tasks/dev/smoke"
+command -v cargo >/dev/null 2>&1 || { printf 'atomic/dev-smoke: cargo is required\n' >&2; exit 1; }
+command -v curl >/dev/null 2>&1 || { printf 'atomic/dev-smoke: curl is required\n' >&2; exit 1; }
 bounded="$root/scripts/tasks/atomic/run-bounded"
-[[ -x "$canonical" && -x "$bounded" ]] || { printf 'atomic/dev-smoke: required scripts are missing\n' >&2; exit 1; }
-exec "$bounded" 15m "$canonical" "$@"
+[[ -x "$bounded" ]] || { printf 'atomic/dev-smoke: bounded runner is missing\n' >&2; exit 1; }
+
+workspace="${OMAKURE_DEV_WORKSPACE:-$root/scripts/workspace}"
+bin="$root/target/debug/omakure"
+port="${OMAKURE_DEV_PORT:-17878}"
+log="$workspace/.omakure/dev-node.log"
+
+"$bounded" 15m cargo build --bin omakure
+mkdir -p "$workspace/.omakure/dev-node-state"
+chmod 700 "$workspace/.omakure/dev-node-state"
+
+tokens_file="$workspace/.omakure/dev-node-tokens.toml"
+rm -f "$tokens_file"
+token="$("$bin" --json token generate --id dev-smoke --scope '*' --append "$tokens_file" --confirmed |
+  sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+[[ -n "$token" ]] || { printf 'atomic/dev-smoke: token generation failed\n' >&2; exit 1; }
+ready_url="http://127.0.0.1:${port}/v1/ready"
+health_url="http://127.0.0.1:${port}/v1/health"
+
+OMAKURE_NODE_TEST_MODE=1 "$bin" node --node-state-dir "$workspace/.omakure/dev-node-state" \
+  --node-config "$workspace/.omakure/dev-node.toml" serve \
+  --bind "127.0.0.1:${port}" --workers 0 --no-scheduler \
+  --tokens-file "$tokens_file" >"$log" 2>&1 &
+node_pid=$!
+
+cleanup() {
+  kill "$node_pid" 2>/dev/null || true
+  wait "$node_pid" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+for _ in {1..50}; do
+  if curl -fsS --max-time 2 "$health_url" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.1
+done
+
+curl -fsS --max-time 5 "$health_url" >/dev/null
+curl -fsS --max-time 5 "$ready_url" >/dev/null
+curl -fsS --max-time 5 -H "Authorization: Bearer ${token}" \
+  "http://127.0.0.1:${port}/v1/scripts" >/dev/null
+
+printf 'node service ready on %s (log: %s)\n' "127.0.0.1:${port}" "$log"

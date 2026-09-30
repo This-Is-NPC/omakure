@@ -39,3 +39,7 @@ scripts/workspace/.omakure/.dev-node-tokens.toml.append.lock
 /rebuild-omakure.md
 /PLANO-CORRECAO.md
 /CI-ERROS.md
+
+# Python bytecode from repository automation helpers.
+__pycache__/
+*.pyc

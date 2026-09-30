@@ -96,7 +96,7 @@ the shell suites rather than inline task commands or dependencies.
 | `mise run test:integration` | every native `tests/*.rs` target once |
 | `mise run test:e2e` | selected end-to-end suite |
 | `mise run lint` | formatting and Clippy suite |
-| `mise run dev` | bounded node-service smoke atomic |
+| `mise run dev:smoke` | bounded node-service smoke atomic |
 | `mise run node` | authenticated node service atomic |
 | `mise run cert` | transport, Health, and VM certification suite |
 | `mise run cert:vm` | destructive Fedora VM certification |
@@ -143,9 +143,9 @@ Usage's rename-sensitive `full_cmd`.
 
 Repository automation is under `scripts/tasks/atomic/`, `scripts/tasks/suite/`,
 and `scripts/tasks/check/`. The latter exposes the four platform suites;
-retained certification and developer implementations stay under
-`scripts/tasks/cert/` and `scripts/tasks/dev/`. Installers are under
-`scripts/install/`, release tooling under `scripts/release/`, and fixtures
+retained certification implementations stay under `scripts/tasks/cert/`.
+Installers are under `scripts/install/`, release tooling under
+`scripts/release/`, and fixtures
 under `scripts/fixtures/`. Installers never copy repository automation into a
 workspace. Every resource-owning task is bounded and trap-cleaned, while
 stateful install, node, release, and live certification tasks are repeat-safe

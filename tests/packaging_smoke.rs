@@ -836,7 +836,7 @@ raw = true"
     );
     let node = read("scripts/tasks/atomic/node-serve");
     assert!(
-        node.contains("scripts/tasks/dev/smoke") || node.contains("node serve"),
+        node.contains("node serve"),
         "canonical node route must remain a node-service entry point"
     );
     // The archive contract is as-is and keeps its own document.
@@ -892,7 +892,6 @@ fn automation_scripts_are_canonical_executable_routes() {
         "scripts/tasks/suite",
         "scripts/tasks/check/platform",
         "scripts/tasks/cert",
-        "scripts/tasks/dev",
         ".githooks",
         "scripts/install",
         "scripts/release",

@@ -99,7 +99,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          scripts=(scripts/tasks/cert/* scripts/tasks/dev/smoke scripts/tasks/complexity-setup-test)
+          scripts=(scripts/tasks/cert/* scripts/tasks/atomic/dev-smoke scripts/tasks/complexity-setup-test)
           (( ${#scripts[@]} >= 5 )) || { echo "expected the certification and complexity scripts; found ${#scripts[@]}" >&2; exit 1; }
           for script in "${scripts[@]}"; do bash -n "$script"; done
           # Fails on zero matches as well as on a parse error: a compose file

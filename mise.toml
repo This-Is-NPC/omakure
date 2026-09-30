@@ -12,7 +12,7 @@ description = "Run the authenticated machine node service in the foreground"
 run = "scripts/tasks/atomic/node-serve"
 raw = true
 
-[tasks.dev]
+[tasks."dev:smoke"]
 description = "Run the bounded node-service smoke check"
 run = "scripts/tasks/atomic/dev-smoke"
 

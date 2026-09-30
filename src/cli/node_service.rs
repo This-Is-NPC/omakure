@@ -449,9 +449,6 @@ fn run_health_maintenance(context: &crate::node::NodeContext, workspace: &Worksp
         return;
     };
     let plane = crate::health_plane::HealthPlane::new(&registry);
-    if !plane.enabled().unwrap_or(false) {
-        return;
-    }
     // Revocation cleanup first: a peer that is no longer actively trusted must
     // stop occupying Health Plane capacity before retention is measured.
     let _ = plane.purge_revoked();

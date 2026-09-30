@@ -16,8 +16,6 @@ use rusqlite::{
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-#[cfg(test)]
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -68,41 +66,6 @@ const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
 /// Signals. The projection itself is bounded by the frozen Signal capacity;
 /// this only bounds how far back a single read may look.
 const MAX_LIFECYCLE_SCAN_ROWS: usize = 4_096;
-const HEALTH_PLANE_DISABLED: &str = "disabled";
-
-#[cfg(test)]
-thread_local! {
-    /// Test-only fault injection for the Health Plane migration, so the
-    /// "migration failed, keep serving with the plane disabled" path can be proven
-    /// without leaving unexpected schema objects behind.
-    static HEALTH_MIGRATION_FAULT: Cell<bool> = const { Cell::new(false) };
-}
-
-/// Arms [`HEALTH_MIGRATION_FAULT`] for the current thread and restores the
-/// previous value on drop (including panic unwinding).
-#[cfg(test)]
-struct HealthMigrationFaultGuard {
-    previous: bool,
-}
-
-#[cfg(test)]
-impl HealthMigrationFaultGuard {
-    fn arm() -> Self {
-        HEALTH_MIGRATION_FAULT.with(|fault| {
-            let previous = fault.get();
-            fault.set(true);
-            Self { previous }
-        })
-    }
-}
-
-#[cfg(test)]
-impl Drop for HealthMigrationFaultGuard {
-    fn drop(&mut self) {
-        HEALTH_MIGRATION_FAULT.with(|fault| fault.set(self.previous));
-    }
-}
-
 const HEALTH_PLANE_ENABLED: &str = "enabled";
 const MAX_ENROLLMENT_REPLAY_ROWS: i64 = 1_000_000;
 const MAX_ENROLLMENT_AUDIT_ROWS: i64 = 1_000_000;
@@ -351,7 +314,7 @@ pub struct NodeRegistry {
     publisher_key_path: PathBuf,
     local_node_id: String,
     local_public_key: String,
-    /// Observational opens must not migrate the schema or change journal mode.
+    /// Observational opens must not create the schema or change journal mode.
     schema_mutation_allowed: bool,
     /// Reused for observational reads so HTTP health surfaces do not open SQLite
     /// per request (Windows lock races against the ingest writer).
@@ -423,7 +386,7 @@ impl NodeRegistry {
         Ok(registry)
     }
     /// Open and validate an existing registry without creating state or
-    /// mutating its schema. Schema creation and migrations belong to the
+    /// mutating its schema. Schema creation belongs to the
     /// serialized node initialization path (`open`).
     pub fn open_existing(
         context: &NodeContext,
@@ -1731,8 +1694,8 @@ impl NodeRegistry {
         self.with_connection(|connection| lifecycle_trust_events_in(connection, limit))
     }
 
-    /// Return the v2 projection for transport authorization. Legacy `peers`
-    /// rows are intentionally not consulted by the runtime path.
+    /// Return the v2 projection for transport authorization. `peers` rows are
+    /// intentionally not consulted by the runtime path.
     pub fn transport_peer(
         &self,
         node_id: &str,
@@ -1926,7 +1889,6 @@ impl NodeRegistry {
         }
         let now = chrono::Utc::now().timestamp();
         self.with_mutating_connection(|connection| {
-            ensure_transport_audit_cue_columns(connection)?;
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let audit_count: i64 =
@@ -1972,7 +1934,6 @@ impl NodeRegistry {
             ));
         }
         self.with_mutating_connection(|connection| {
-            ensure_transport_audit_cue_columns(connection)?;
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let existing: Option<(i64, i64)> = transaction
@@ -2220,25 +2181,7 @@ fn validate_existing_database(
             "existing node.sqlite has no schema version".to_string(),
         ));
     }
-    if version > SCHEMA_VERSION {
-        return Err(RegistryError::InvalidSchema(format!(
-            "database version {version} is newer than supported version {SCHEMA_VERSION}"
-        )));
-    }
-    if version < SCHEMA_VERSION {
-        let health_plane: Option<String> = connection
-            .query_row(
-                "SELECT value FROM metadata WHERE key = 'health_plane'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if !(version == 6 && health_plane.as_deref() == Some(HEALTH_PLANE_DISABLED)) {
-            return Err(RegistryError::InvalidSchema(format!(
-                "database schema marker is {version}, expected {SCHEMA_VERSION}"
-            )));
-        }
-    }
+    ensure_current_schema_version(version)?;
     validate_schema(connection, registry)
 }
 
@@ -2248,16 +2191,6 @@ fn initialize_database(
 ) -> Result<(), RegistryError> {
     integrity_check(connection)?;
     let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version > SCHEMA_VERSION {
-        return Err(RegistryError::InvalidSchema(format!(
-            "database version {version} is newer than supported version {SCHEMA_VERSION}"
-        )));
-    }
-    if version < 0 {
-        return Err(RegistryError::InvalidSchema(
-            "negative database version".to_string(),
-        ));
-    }
     if version == 0 {
         if has_user_objects(connection)? {
             return Err(RegistryError::InvalidSchema(
@@ -2266,166 +2199,28 @@ fn initialize_database(
         }
         let transaction = connection.transaction()?;
         create_schema(&transaction, registry)?;
-        transaction.execute_batch("PRAGMA user_version = 1")?;
         transaction.commit()?;
+    } else {
+        ensure_current_schema_version(version)?;
     }
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 1 {
-        migrate_v1_to_v2(connection, registry)?;
-    }
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 2 {
-        migrate_v2_to_v3(connection)?;
-    }
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 3 {
-        migrate_v3_to_v4(connection)?;
-    }
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 4 {
-        migrate_v4_to_v5(connection)?;
-    }
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 5 {
-        migrate_v5_to_v6(connection)?;
-    }
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 6 {
-        apply_health_plane_migration(connection)?;
-    }
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 7 {
-        migrate_v7_to_v8(connection)?;
-    }
-    ensure_transport_audit_cue_columns(connection)?;
     validate_schema(connection, registry)
 }
 
-/// Add the Cue-only schema pieces to registries created before Cue support.
-/// This is intentionally additive and does not alter the trust schema version:
-/// old audit rows remain valid with NULL Cue metadata.
-fn ensure_transport_audit_cue_columns(connection: &Connection) -> Result<(), RegistryError> {
-    connection.execute_batch(
-        "CREATE TABLE IF NOT EXISTS cue_rate_limits (
-           node_id TEXT PRIMARY KEY,
-           window_start INTEGER NOT NULL CHECK (window_start > 0),
-           count INTEGER NOT NULL CHECK (count >= 0)
-         )",
-    )?;
-    let mut statement = connection.prepare("PRAGMA table_info(transport_audit)")?;
-    let columns = statement
-        .query_map([], |row| row.get::<_, String>(1))?
-        .collect::<Result<std::collections::HashSet<_>, _>>()?;
-    drop(statement);
-
-    if !columns.contains("cue_id") {
-        connection.execute(
-            "ALTER TABLE transport_audit ADD COLUMN cue_id TEXT NULL CHECK (cue_id IS NULL OR length(cue_id) = 32)",
-            [],
-        )?;
+/// Only the current schema is accepted. Older registries are not migrated:
+/// the node refuses to open them rather than guess at their rows.
+fn ensure_current_schema_version(version: i64) -> Result<(), RegistryError> {
+    if version > SCHEMA_VERSION {
+        return Err(RegistryError::InvalidSchema(format!(
+            "database version {version} is newer than supported version {SCHEMA_VERSION}"
+        )));
     }
-    if !columns.contains("cue_script") {
-        connection.execute(
-            "ALTER TABLE transport_audit ADD COLUMN cue_script TEXT NULL CHECK (cue_script IS NULL OR length(CAST(cue_script AS BLOB)) BETWEEN 1 AND 64)",
-            [],
-        )?;
-    }
-    if !columns.contains("cue_reason") {
-        connection.execute(
-            "ALTER TABLE transport_audit ADD COLUMN cue_reason TEXT NULL CHECK (cue_reason IS NULL OR length(CAST(cue_reason AS BLOB)) BETWEEN 1 AND 128)",
-            [],
-        )?;
+    if version < SCHEMA_VERSION {
+        return Err(RegistryError::InvalidSchema(format!(
+            "database version {version} is older than supported version {SCHEMA_VERSION}; \
+             older node registries are not migrated"
+        )));
     }
     Ok(())
-}
-
-/// Widen the stored Profile with the baseline a Performer holds.
-///
-/// Forward-only and fail-hard, unlike the Health Plane migration it follows.
-/// That one degraded gracefully because the plane it created was new and a node
-/// could serve everything else without it; there is no equivalent half-state
-/// here. The Profile schema is closed, so a receiver whose storage lacks these
-/// two columns and whose validator requires them would accept a Profile it
-/// cannot write, and reporting drift from a table that does not hold the answer
-/// is worse than refusing to open.
-///
-/// A node that never completed the Health Plane migration stays at version 6
-/// with the plane disabled and never reaches here.
-fn migrate_v7_to_v8(connection: &mut Connection) -> Result<(), RegistryError> {
-    let metadata_version: String = connection.query_row(
-        "SELECT value FROM metadata WHERE key = 'schema_version'",
-        [],
-        |row| row.get(0),
-    )?;
-    if metadata_version != "7" {
-        return Err(RegistryError::InvalidSchema(
-            "v7 database metadata marker is invalid".to_string(),
-        ));
-    }
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    // Empty is the shipped answer for every existing row: a Performer that
-    // already reported under version 7 said nothing about a baseline, and
-    // inventing one for it would make a node read as in sync with a set it
-    // never received. The next Profile it sends replaces the row.
-    transaction.execute_batch(
-        "ALTER TABLE health_profiles ADD COLUMN baseline_id TEXT NOT NULL DEFAULT ''
-           CHECK (baseline_id = '' OR length(baseline_id) = 64);
-         ALTER TABLE health_profiles ADD COLUMN baseline_observed_id TEXT NOT NULL DEFAULT ''
-           CHECK (baseline_observed_id = '' OR length(baseline_observed_id) = 64);",
-    )?;
-    transaction.execute(
-        "UPDATE metadata SET value = '8' WHERE key = 'schema_version'",
-        [],
-    )?;
-    transaction.execute_batch("PRAGMA user_version = 8")?;
-    transaction.commit()?;
-    Ok(())
-}
-
-/// Attempt the Health Plane migration to schema version 7.
-///
-/// The migration is forward-only and runs in one transaction. A failure rolls
-/// back completely, leaves the database at version 6, records a
-/// `health_corrupt_state` (1115) transport audit, and marks the Health Plane
-/// disabled so transport, enrollment, HTTP, and runs keep serving. Retry is
-/// never automatic; an operator clears the marker explicitly.
-fn apply_health_plane_migration(connection: &mut Connection) -> Result<(), RegistryError> {
-    let blocked: Option<String> = connection
-        .query_row(
-            "SELECT value FROM metadata WHERE key = 'health_plane'",
-            [],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if blocked.as_deref() == Some(HEALTH_PLANE_DISABLED) {
-        return Ok(());
-    }
-    match migrate_v6_to_v7(connection) {
-        Ok(()) => Ok(()),
-        Err(_) => {
-            let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            transaction.execute(
-                "INSERT OR REPLACE INTO metadata (key, value) VALUES ('health_plane', ?1)",
-                [HEALTH_PLANE_DISABLED],
-            )?;
-            let audit_count: i64 =
-                transaction
-                    .query_row("SELECT COUNT(*) FROM transport_audit", [], |row| row.get(0))?;
-            if audit_count < MAX_TRANSPORT_AUDIT_ROWS {
-                transaction.execute(
-                    "INSERT INTO transport_audit
-                     (event_type, node_id, session_id, bundle_id, direction, byte_count,
-                      outcome, error_code, occurred_at)
-                     VALUES ('health_plane_migration', (SELECT value FROM metadata WHERE key = 'node_id'),
-                             NULL, NULL, NULL, 0, 'rejected', 1115, ?1)",
-                    params![Utc::now().timestamp()],
-                )?;
-            }
-            transaction.commit()?;
-            Ok(())
-        }
-    }
 }
 
 fn configure_connection(connection: &mut Connection) -> Result<(), RegistryError> {
@@ -2500,463 +2295,339 @@ fn create_schema(
     transaction: &Transaction<'_>,
     registry: &NodeRegistry,
 ) -> Result<(), RegistryError> {
-    transaction.execute_batch(
-        "CREATE TABLE metadata (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
-        CREATE TABLE peers (
-            node_id TEXT PRIMARY KEY,
-            public_key TEXT NOT NULL UNIQUE,
-            role TEXT NOT NULL,
-            state TEXT NOT NULL,
-            capabilities_json TEXT NOT NULL,
-            added_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            last_seen TEXT NULL,
-            source TEXT NOT NULL
-        );
-        CREATE TABLE revocations (
-            id INTEGER PRIMARY KEY,
-            node_id TEXT NOT NULL,
-            public_key TEXT NOT NULL,
-            revoked_at TEXT NOT NULL,
-            reason TEXT NOT NULL,
-            replacement_node_id TEXT NULL
-        );
-        CREATE TABLE audit_events (
-            id INTEGER PRIMARY KEY,
-            event_type TEXT NOT NULL,
-            node_id TEXT NOT NULL,
-            from_state TEXT NULL,
-            to_state TEXT NULL,
-            actor TEXT NOT NULL,
-            reason TEXT NOT NULL,
-            occurred_at TEXT NOT NULL
-        );
-        CREATE TABLE replay_keys (
-            key TEXT PRIMARY KEY,
-            first_seen TEXT NOT NULL,
-            expires_at TEXT NOT NULL
-        );
-        -- Declared, integrity-checked and exported, and deliberately never
-        -- written. It was sketched for remote Cues before that plane existed;
-        -- when Cues shipped, the design refused it, because it would have been
-        -- eight states re-implementing `RunState` and the durable at-most-once
-        -- guarantee already falls out of `runs.run_id` being a primary key
-        -- derived from the cue id. Left in place rather than dropped: removing
-        -- it costs a registry schema bump, and this comment costs nothing.
-        -- If you are looking for where a Cue is recorded, it is the runs table.
-        CREATE TABLE inbox (
-            cue_id TEXT PRIMARY KEY,
-            state TEXT NOT NULL,
-            received_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            outcome_hash TEXT NULL
-        );
-        CREATE INDEX peers_state_idx ON peers(state);
-        CREATE INDEX audit_events_node_idx ON audit_events(node_id, id);
-        CREATE TRIGGER revocations_no_update BEFORE UPDATE ON revocations
-        BEGIN SELECT RAISE(ABORT, 'revocations are append-only'); END;
-        CREATE TRIGGER revocations_no_delete BEFORE DELETE ON revocations
-        BEGIN SELECT RAISE(ABORT, 'revocations are append-only'); END;
-        CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON audit_events
-        BEGIN SELECT RAISE(ABORT, 'audit events are append-only'); END;
-        CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON audit_events
-        BEGIN SELECT RAISE(ABORT, 'audit events are append-only'); END;
-        INSERT INTO metadata (key, value) VALUES
-            ('schema_version', '1'),
-            ('node_id', ''),
-            ('public_key_encoding', 'x-only-bip340-hex-lowercase');",
-    )?;
+    transaction.execute_batch(SCHEMA)?;
     transaction.execute(
-        "UPDATE metadata SET value = ?1 WHERE key = 'node_id'",
-        [registry.local_node_id.as_str()],
+        "INSERT INTO metadata (key, value) VALUES
+            ('schema_version', ?1),
+            ('node_id', ?2),
+            ('public_key_encoding', 'x-only-bip340-hex-lowercase'),
+            ('health_plane', ?3)",
+        params![
+            SCHEMA_VERSION.to_string(),
+            registry.local_node_id.as_str(),
+            HEALTH_PLANE_ENABLED
+        ],
     )?;
+    transaction.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
     Ok(())
 }
 
-fn migrate_v1_to_v2(
-    connection: &mut Connection,
-    registry: &NodeRegistry,
-) -> Result<(), RegistryError> {
-    validate_v1_preflight(connection, registry)?;
-    let metadata_version: String = connection.query_row(
-        "SELECT value FROM metadata WHERE key = 'schema_version'",
-        [],
-        |row| row.get(0),
-    )?;
-    if metadata_version != "1" {
-        return Err(RegistryError::InvalidSchema(
-            "v1 database metadata marker is invalid".to_string(),
-        ));
-    }
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    create_v2_schema(&transaction)?;
+/// The complete current schema.
+const SCHEMA: &str = "
+    CREATE TABLE metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE peers (
+      node_id TEXT PRIMARY KEY,
+      public_key TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL,
+      state TEXT NOT NULL,
+      capabilities_json TEXT NOT NULL,
+      added_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      last_seen TEXT NULL,
+      source TEXT NOT NULL
+    );
+    CREATE TABLE revocations (
+      id INTEGER PRIMARY KEY,
+      node_id TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      revoked_at TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      replacement_node_id TEXT NULL
+    );
+    CREATE TABLE audit_events (
+      id INTEGER PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      from_state TEXT NULL,
+      to_state TEXT NULL,
+      actor TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      occurred_at TEXT NOT NULL
+    );
+    CREATE TABLE replay_keys (
+      key TEXT PRIMARY KEY,
+      first_seen TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+    -- Declared, integrity-checked and exported, and deliberately never
+    -- written. It was sketched for remote Cues before that plane existed;
+    -- when Cues shipped, the design refused it, because it would have been
+    -- eight states re-implementing `RunState` and the durable at-most-once
+    -- guarantee already falls out of `runs.run_id` being a primary key
+    -- derived from the cue id. Left in place rather than dropped: removing
+    -- it costs a registry schema bump, and this comment costs nothing.
+    -- If you are looking for where a Cue is recorded, it is the runs table.
+    CREATE TABLE inbox (
+      cue_id TEXT PRIMARY KEY,
+      state TEXT NOT NULL,
+      received_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      outcome_hash TEXT NULL
+    );
+    CREATE INDEX peers_state_idx ON peers(state);
+    CREATE INDEX audit_events_node_idx ON audit_events(node_id, id);
+    CREATE TRIGGER revocations_no_update BEFORE UPDATE ON revocations
+    BEGIN SELECT RAISE(ABORT, 'revocations are append-only'); END;
+    CREATE TRIGGER revocations_no_delete BEFORE DELETE ON revocations
+    BEGIN SELECT RAISE(ABORT, 'revocations are append-only'); END;
+    CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON audit_events
+    BEGIN SELECT RAISE(ABORT, 'audit events are append-only'); END;
+    CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON audit_events
+    BEGIN SELECT RAISE(ABORT, 'audit events are append-only'); END;
 
-    let mut statement = transaction.prepare(
-        "SELECT node_id, public_key, role, state, capabilities_json, added_at, updated_at
-         FROM peers ORDER BY node_id",
-    )?;
-    let rows = statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, String>(6)?,
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    drop(statement);
-    for (node_id, public_key, role, state, capabilities_json, added_at, updated_at) in rows {
-        let identity_key = decode_hex(&public_key)?;
-        let first_seen = timestamp_seconds(&added_at)?;
-        let updated = timestamp_seconds(&updated_at)?;
-        let (identity_state, revoked_at) = match state.as_str() {
-            "active" => ("active", None),
-            "revoked" => ("revoked", Some(updated)),
-            "pending" | "suspended" => ("authenticated_untrusted", None),
-            _ => {
-                return Err(RegistryError::InvalidSchema(format!(
-                    "unknown v1 peer state {state:?}"
-                )))
-            }
-        };
-        transaction.execute(
-            "INSERT INTO remote_identities
-             (node_id, identity_key, state, first_seen, revoked_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                node_id,
-                identity_key,
-                identity_state,
-                first_seen,
-                revoked_at
-            ],
-        )?;
-        if state == "active" || state == "suspended" || state == "revoked" {
-            let role = match role.as_str() {
-                "conductor" => 1,
-                "performer" => 2,
-                _ => {
-                    return Err(RegistryError::InvalidSchema(format!(
-                        "unknown v1 peer role {role:?}"
-                    )))
-                }
-            };
-            validate_capabilities_json_bytes(&capabilities_json)?;
-            transaction.execute(
-                "INSERT INTO trusted_peers
-                 (node_id, role, capabilities, state, added_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![
-                    node_id,
-                    role,
-                    capabilities_json.as_bytes(),
-                    if state == "active" {
-                        "active"
-                    } else {
-                        "revoked"
-                    },
-                    first_seen,
-                    updated,
-                ],
-            )?;
-        }
-    }
-    transaction.execute(
-        "UPDATE metadata SET value = '2' WHERE key = 'schema_version'",
-        [],
-    )?;
-    transaction.execute_batch("PRAGMA user_version = 2")?;
-    transaction.commit()?;
-    validate_v2_invariants(connection, registry)
-}
+    CREATE TABLE remote_identities (
+      node_id TEXT PRIMARY KEY CHECK (length(CAST(node_id AS BLOB)) = 69),
+      identity_key BLOB NOT NULL UNIQUE CHECK (length(identity_key) = 32),
+      state TEXT NOT NULL CHECK (state IN ('authenticated_untrusted', 'active', 'revoked')),
+      first_seen INTEGER NOT NULL CHECK (first_seen > 0),
+      revoked_at INTEGER NULL CHECK (revoked_at IS NULL OR revoked_at >= first_seen)
+    );
+    CREATE TABLE trusted_peers (
+      node_id TEXT PRIMARY KEY REFERENCES remote_identities(node_id),
+      role INTEGER NOT NULL CHECK (role IN (1, 2)),
+      capabilities BLOB NOT NULL CHECK (length(capabilities) <= 4096),
+      state TEXT NOT NULL CHECK (state IN ('active', 'revoked')),
+      added_at INTEGER NOT NULL CHECK (added_at > 0),
+      updated_at INTEGER NOT NULL CHECK (updated_at >= added_at)
+    );
+    CREATE TABLE transport_key_epochs (
+      node_id TEXT NOT NULL REFERENCES remote_identities(node_id),
+      key_epoch INTEGER NOT NULL CHECK (key_epoch > 0),
+      public_key BLOB NOT NULL CHECK (length(public_key) = 32),
+      certificate BLOB NOT NULL CHECK (length(certificate) = 245),
+      state TEXT NOT NULL CHECK (state IN ('pending', 'active', 'revoked')),
+      added_at INTEGER NOT NULL CHECK (added_at > 0),
+      retired_at INTEGER NULL CHECK (retired_at IS NULL OR retired_at >= added_at),
+      PRIMARY KEY (node_id, key_epoch),
+      UNIQUE (node_id, public_key)
+    );
+    CREATE TABLE channel_sessions (
+      session_id BLOB PRIMARY KEY CHECK (length(session_id) = 32),
+      node_id TEXT NOT NULL REFERENCES remote_identities(node_id),
+      direction INTEGER NOT NULL CHECK (direction IN (0, 1)),
+      send_sequence INTEGER NOT NULL CHECK (send_sequence >= 0),
+      receive_sequence INTEGER NOT NULL CHECK (receive_sequence >= 0),
+      state TEXT NOT NULL CHECK (state IN ('handshaking', 'authenticated_untrusted', 'active', 'closed')),
+      started_at INTEGER NOT NULL CHECK (started_at > 0),
+      last_seen INTEGER NOT NULL CHECK (last_seen >= started_at),
+      expires_at INTEGER NOT NULL CHECK (expires_at >= last_seen)
+    );
+    CREATE TABLE enrollment_replays (
+      replay_kind TEXT NOT NULL CHECK (replay_kind IN ('bundle', 'manual_request')),
+      replay_id BLOB NOT NULL CHECK (length(replay_id) = 16),
+      expires_at INTEGER NOT NULL CHECK (expires_at > 0),
+      first_seen INTEGER NOT NULL CHECK (first_seen > 0),
+      PRIMARY KEY (replay_kind, replay_id)
+    );
+    CREATE TABLE transport_audit (
+      id INTEGER PRIMARY KEY,
+      event_type TEXT NOT NULL CHECK (length(CAST(event_type AS BLOB)) BETWEEN 1 AND 64),
+      node_id TEXT NOT NULL,
+      session_id BLOB NULL CHECK (session_id IS NULL OR length(session_id) = 32),
+      bundle_id BLOB NULL CHECK (bundle_id IS NULL OR length(bundle_id) = 16),
+      direction INTEGER NULL CHECK (direction IS NULL OR direction IN (0, 1)),
+      byte_count INTEGER NOT NULL CHECK (byte_count >= 0),
+      outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
+      error_code INTEGER NULL CHECK (error_code IS NULL OR error_code BETWEEN 1000 AND 1999),
+      cue_id TEXT NULL CHECK (cue_id IS NULL OR length(cue_id) = 32),
+      cue_script TEXT NULL CHECK (cue_script IS NULL OR length(CAST(cue_script AS BLOB)) BETWEEN 1 AND 64),
+      cue_reason TEXT NULL CHECK (cue_reason IS NULL OR length(CAST(cue_reason AS BLOB)) BETWEEN 1 AND 128),
+      occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
+    );
+    CREATE TABLE cue_rate_limits (
+      node_id TEXT PRIMARY KEY,
+      window_start INTEGER NOT NULL CHECK (window_start > 0),
+      count INTEGER NOT NULL CHECK (count >= 0)
+    );
+    CREATE INDEX transport_key_epochs_state_idx ON transport_key_epochs(state, node_id);
+    CREATE UNIQUE INDEX transport_key_epochs_one_active
+      ON transport_key_epochs(node_id) WHERE state = 'active';
+    CREATE INDEX channel_sessions_peer_idx ON channel_sessions(node_id, state, last_seen);
+    CREATE INDEX enrollment_replays_expiry_idx ON enrollment_replays(expires_at);
+    CREATE INDEX transport_audit_node_idx ON transport_audit(node_id, id);
+    CREATE INDEX transport_audit_expiry_idx ON transport_audit(occurred_at);
+    CREATE TRIGGER trusted_peers_require_known_identity
+    BEFORE INSERT ON trusted_peers
+    WHEN (SELECT state FROM remote_identities WHERE node_id = NEW.node_id)
+      NOT IN ('authenticated_untrusted', 'active')
+    BEGIN SELECT RAISE(ABORT, 'trusted peer requires known identity'); END;
+    CREATE TRIGGER transport_key_epochs_active_require_trust
+    BEFORE INSERT ON transport_key_epochs
+    WHEN NEW.state = 'active' AND (
+      (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+      OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+    )
+    BEGIN SELECT RAISE(ABORT, 'active transport key requires active trusted peer'); END;
+    CREATE TRIGGER transport_key_epochs_active_update_require_trust
+    BEFORE UPDATE OF state ON transport_key_epochs
+    WHEN NEW.state = 'active' AND (
+      (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+      OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+    )
+    BEGIN SELECT RAISE(ABORT, 'active transport key requires active trusted peer'); END;
+    CREATE TRIGGER remote_identities_no_untrusted_trust_update
+    BEFORE UPDATE OF state ON remote_identities
+    WHEN NEW.state = 'active' AND NOT EXISTS (
+      SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id
+    )
+    BEGIN SELECT RAISE(ABORT, 'active identity requires trusted peer'); END;
+    CREATE TRIGGER trusted_peers_no_identity_demotion
+    BEFORE UPDATE OF state ON remote_identities
+    WHEN NEW.state <> 'active' AND EXISTS (
+      SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active'
+    )
+    BEGIN SELECT RAISE(ABORT, 'trusted peer must be revoked before identity demotion'); END;
+    CREATE TRIGGER channel_sessions_active_requires_trust
+    BEFORE INSERT ON channel_sessions
+    WHEN NEW.state = 'active' AND (
+      (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+      OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+    )
+    BEGIN SELECT RAISE(ABORT, 'active session requires active trusted peer'); END;
+    CREATE TRIGGER channel_sessions_active_update_requires_trust
+    BEFORE UPDATE OF state, node_id ON channel_sessions
+    WHEN NEW.state = 'active' AND (
+      (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
+      OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
+    )
+    BEGIN SELECT RAISE(ABORT, 'active session requires active trusted peer'); END;
+    CREATE TRIGGER transport_key_epochs_monotonic_insert
+    BEFORE INSERT ON transport_key_epochs
+    WHEN NEW.key_epoch <= COALESCE((SELECT MAX(key_epoch) FROM transport_key_epochs WHERE node_id = NEW.node_id), 0)
+    BEGIN SELECT RAISE(ABORT, 'transport key epoch must increase'); END;
+    CREATE TRIGGER transport_key_epochs_monotonic_update
+    BEFORE UPDATE OF key_epoch ON transport_key_epochs
+    WHEN NEW.key_epoch <= COALESCE((SELECT MAX(key_epoch) FROM transport_key_epochs WHERE node_id = NEW.node_id AND key_epoch <> OLD.key_epoch), 0)
+    BEGIN SELECT RAISE(ABORT, 'transport key epoch must increase'); END;
+    CREATE TRIGGER remote_identities_no_delete
+    BEFORE DELETE ON remote_identities
+    BEGIN SELECT RAISE(ABORT, 'remote identities are retained'); END;
+    CREATE TRIGGER trusted_peers_no_delete
+    BEFORE DELETE ON trusted_peers
+    BEGIN SELECT RAISE(ABORT, 'trusted peer history is retained'); END;
+    CREATE TRIGGER transport_key_epochs_no_delete
+    BEFORE DELETE ON transport_key_epochs
+    BEGIN SELECT RAISE(ABORT, 'transport key epochs are retained'); END;
+    CREATE TRIGGER revoked_identity_no_resurrection
+    BEFORE UPDATE OF state ON remote_identities
+    WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
+    BEGIN SELECT RAISE(ABORT, 'revoked identity cannot be resurrected'); END;
+    CREATE TRIGGER revoked_trusted_peer_no_resurrection
+    BEFORE UPDATE OF state ON trusted_peers
+    WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
+    BEGIN SELECT RAISE(ABORT, 'revoked trust cannot be resurrected'); END;
+    CREATE TRIGGER revoked_transport_epoch_no_resurrection
+    BEFORE UPDATE OF state ON transport_key_epochs
+    WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
+    BEGIN SELECT RAISE(ABORT, 'revoked transport epoch cannot be resurrected'); END;
 
-fn migrate_v2_to_v3(connection: &mut Connection) -> Result<(), RegistryError> {
-    let metadata_version: String = connection.query_row(
-        "SELECT value FROM metadata WHERE key = 'schema_version'",
-        [],
-        |row| row.get(0),
-    )?;
-    if metadata_version != "2" {
-        return Err(RegistryError::InvalidSchema(
-            "v2 database metadata marker is invalid".to_string(),
-        ));
-    }
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    create_v3_schema(&transaction)?;
-    transaction.execute(
-        "UPDATE metadata SET value = '3' WHERE key = 'schema_version'",
-        [],
-    )?;
-    transaction.execute_batch("PRAGMA user_version = 3")?;
-    transaction.commit()?;
-    Ok(())
-}
+    CREATE TABLE manual_enrollment_requests (
+      request_id BLOB PRIMARY KEY CHECK (length(request_id) = 16),
+      request_bytes BLOB NOT NULL CHECK (length(request_bytes) BETWEEN 1 AND 2048),
+      request_digest BLOB NOT NULL CHECK (length(request_digest) = 32),
+      code_hash BLOB NOT NULL CHECK (length(code_hash) = 32),
+      node_id TEXT NOT NULL CHECK (length(CAST(node_id AS BLOB)) = 69),
+      identity_key BLOB NOT NULL CHECK (length(identity_key) = 32),
+      transport_key BLOB NOT NULL CHECK (length(transport_key) = 32),
+      role INTEGER NOT NULL CHECK (role IN (1, 2)),
+      capabilities BLOB NOT NULL CHECK (length(capabilities) <= 4096),
+      request_created_at INTEGER NOT NULL CHECK (request_created_at > 0),
+      request_expires_at INTEGER NOT NULL CHECK (request_expires_at > request_created_at),
+      certificate BLOB NOT NULL CHECK (length(certificate) = 245),
+      certificate_digest BLOB NOT NULL CHECK (length(certificate_digest) = 32),
+      certificate_id BLOB NOT NULL CHECK (length(certificate_id) = 16),
+      key_epoch INTEGER NOT NULL CHECK (key_epoch > 0),
+      not_before INTEGER NOT NULL CHECK (not_before > 0),
+      not_after INTEGER NOT NULL CHECK (not_after > not_before),
+      state TEXT NOT NULL CHECK (state IN ('pending', 'approved', 'rejected')),
+      source TEXT NOT NULL CHECK (source = 'manual'),
+      staged_at INTEGER NOT NULL CHECK (staged_at > 0),
+      resolved_at INTEGER NULL CHECK (resolved_at IS NULL OR resolved_at >= staged_at),
+      pairing_id BLOB NULL CHECK (pairing_id IS NULL OR length(pairing_id) = 16)
+    );
+    CREATE TABLE enrollment_audits (
+      id INTEGER PRIMARY KEY,
+      event_code TEXT NOT NULL CHECK (length(CAST(event_code AS BLOB)) BETWEEN 1 AND 64),
+      request_id BLOB NULL CHECK (request_id IS NULL OR length(request_id) = 16),
+      request_digest BLOB NULL CHECK (request_digest IS NULL OR length(request_digest) = 32),
+      node_id TEXT NOT NULL,
+      outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
+      detail TEXT NOT NULL CHECK (length(CAST(detail AS BLOB)) <= 256),
+      occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
+    );
+    CREATE INDEX manual_enrollment_requests_state_idx
+      ON manual_enrollment_requests(state, node_id);
+    CREATE INDEX manual_enrollment_requests_pairing_idx
+      ON manual_enrollment_requests(pairing_id);
+    CREATE INDEX enrollment_audits_node_idx ON enrollment_audits(node_id, id);
+    CREATE INDEX enrollment_audits_request_idx ON enrollment_audits(request_id, id);
+    CREATE TRIGGER manual_enrollment_request_immutable
+    BEFORE UPDATE ON manual_enrollment_requests
+    WHEN NEW.request_id <> OLD.request_id
+      OR COALESCE(NEW.pairing_id, X'') <> COALESCE(OLD.pairing_id, X'')
+      OR NEW.request_bytes <> OLD.request_bytes
+      OR NEW.request_digest <> OLD.request_digest
+      OR NEW.code_hash <> OLD.code_hash
+      OR NEW.node_id <> OLD.node_id
+      OR NEW.identity_key <> OLD.identity_key
+      OR NEW.transport_key <> OLD.transport_key
+      OR NEW.role <> OLD.role
+      OR NEW.capabilities <> OLD.capabilities
+      OR NEW.request_created_at <> OLD.request_created_at
+      OR NEW.request_expires_at <> OLD.request_expires_at
+      OR NEW.certificate <> OLD.certificate
+      OR NEW.certificate_digest <> OLD.certificate_digest
+      OR NEW.certificate_id <> OLD.certificate_id
+      OR NEW.key_epoch <> OLD.key_epoch
+      OR NEW.not_before <> OLD.not_before
+      OR NEW.not_after <> OLD.not_after
+      OR NEW.source <> OLD.source
+      OR NEW.staged_at <> OLD.staged_at
+    BEGIN SELECT RAISE(ABORT, 'manual enrollment evidence is immutable'); END;
+    CREATE TRIGGER enrollment_audits_no_update
+    BEFORE UPDATE ON enrollment_audits
+    BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;
+    CREATE TRIGGER enrollment_audits_no_delete
+    BEFORE DELETE ON enrollment_audits
+    BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;
 
-fn migrate_v3_to_v4(connection: &mut Connection) -> Result<(), RegistryError> {
-    let metadata_version: String = connection.query_row(
-        "SELECT value FROM metadata WHERE key = 'schema_version'",
-        [],
-        |row| row.get(0),
-    )?;
-    if metadata_version != "3" {
-        return Err(RegistryError::InvalidSchema(
-            "v3 database metadata marker is invalid".to_string(),
-        ));
-    }
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    transaction.execute_batch(
-        "ALTER TABLE manual_enrollment_requests ADD COLUMN pairing_id BLOB NULL
-             CHECK (pairing_id IS NULL OR length(pairing_id) = 16);
-         CREATE INDEX manual_enrollment_requests_pairing_idx
-             ON manual_enrollment_requests(pairing_id);",
-    )?;
-    transaction.execute_batch(
-        "DROP TRIGGER manual_enrollment_request_immutable;
-         CREATE TRIGGER manual_enrollment_request_immutable
-         BEFORE UPDATE ON manual_enrollment_requests
-          WHEN NEW.request_id <> OLD.request_id
-            OR COALESCE(NEW.pairing_id, X'') <> COALESCE(OLD.pairing_id, X'')
-            OR NEW.request_bytes <> OLD.request_bytes
-           OR NEW.request_digest <> OLD.request_digest
-           OR NEW.code_hash <> OLD.code_hash
-           OR NEW.node_id <> OLD.node_id
-           OR NEW.identity_key <> OLD.identity_key
-           OR NEW.transport_key <> OLD.transport_key
-           OR NEW.role <> OLD.role
-           OR NEW.capabilities <> OLD.capabilities
-           OR NEW.request_created_at <> OLD.request_created_at
-           OR NEW.request_expires_at <> OLD.request_expires_at
-           OR NEW.certificate <> OLD.certificate
-           OR NEW.certificate_digest <> OLD.certificate_digest
-           OR NEW.certificate_id <> OLD.certificate_id
-           OR NEW.key_epoch <> OLD.key_epoch
-           OR NEW.not_before <> OLD.not_before
-           OR NEW.not_after <> OLD.not_after
-           OR NEW.source <> OLD.source
-           OR NEW.staged_at <> OLD.staged_at
-         BEGIN SELECT RAISE(ABORT, 'manual enrollment evidence is immutable'); END;",
-    )?;
-    let migration_now = Utc::now().timestamp().max(1);
-    let migration_timestamp = now_timestamp();
-    let legacy_pending: Vec<([u8; 16], [u8; 32], String)> = {
-        let mut statement = transaction.prepare(
-            "SELECT request_id, request_digest, node_id
-             FROM manual_enrollment_requests
-             WHERE state = 'pending'
-             ORDER BY request_id",
-        )?;
-        let rows = statement
-            .query_map([], |row| {
-                let request_id: Vec<u8> = row.get(0)?;
-                let request_digest: Vec<u8> = row.get(1)?;
-                let node_id: String = row.get(2)?;
-                let request_id = request_id.try_into().map_err(|_| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        16,
-                        rusqlite::types::Type::Blob,
-                        Box::new(RegistryError::InvalidSchema(
-                            "legacy enrollment request ID has invalid length".to_string(),
-                        )),
-                    )
-                })?;
-                let request_digest = request_digest.try_into().map_err(|_| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        32,
-                        rusqlite::types::Type::Blob,
-                        Box::new(RegistryError::InvalidSchema(
-                            "legacy enrollment request digest has invalid length".to_string(),
-                        )),
-                    )
-                })?;
-                Ok((request_id, request_digest, node_id))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        rows
-    };
-    for (request_id, request_digest, node_id) in &legacy_pending {
-        record_enrollment_audit_tx(
-            &transaction,
-            "legacy_expired",
-            Some(request_id),
-            Some(request_digest),
-            node_id,
-            "rejected",
-            "legacy manual enrollment request expired during schema migration",
-        )?;
-        let current = load_peer(&transaction, node_id)?.ok_or_else(|| {
-            RegistryError::InvalidSchema(
-                "legacy pending enrollment is missing its peer projection".to_string(),
-            )
-        })?;
-        if current.source != PeerSource::Manual || current.state != PeerState::Pending {
-            return Err(RegistryError::InvalidSchema(
-                "legacy pending enrollment has inconsistent peer state".to_string(),
-            ));
-        }
-        project_v2_transition(&transaction, &current, PeerState::Suspended, migration_now)?;
-        transaction.execute(
-            "UPDATE peers SET state = 'suspended', updated_at = ?1
-             WHERE node_id = ?2 AND state = 'pending' AND source = 'manual'",
-            params![migration_timestamp, node_id],
-        )?;
-    }
-    transaction.execute(
-        "UPDATE manual_enrollment_requests
-         SET state = 'rejected',
-             resolved_at = CASE WHEN staged_at > ?1 THEN staged_at ELSE ?1 END
-         WHERE state = 'pending'",
-        [migration_now],
-    )?;
-    transaction.execute(
-        "UPDATE metadata SET value = '4' WHERE key = 'schema_version'",
-        [],
-    )?;
-    transaction.execute_batch("PRAGMA user_version = 4")?;
-    transaction.commit()?;
-    Ok(())
-}
+    CREATE TABLE bootstrap_proofs (
+      target_node_id TEXT NOT NULL CHECK (length(CAST(target_node_id AS BLOB)) = 69),
+      organization TEXT NOT NULL CHECK (length(CAST(organization AS BLOB)) BETWEEN 1 AND 128),
+      token_hash BLOB NOT NULL CHECK (length(token_hash) = 32),
+      nonce_hash BLOB NOT NULL CHECK (length(nonce_hash) = 32),
+      expires_at INTEGER NOT NULL CHECK (expires_at > 0),
+      consumed_at INTEGER NULL CHECK (consumed_at IS NULL OR consumed_at > 0),
+      bundle_id BLOB NULL CHECK (bundle_id IS NULL OR length(bundle_id) = 16),
+      cleanup_state TEXT NULL
+        CHECK (cleanup_state IS NULL OR cleanup_state IN ('pending', 'complete')),
+      PRIMARY KEY (target_node_id, organization, token_hash, nonce_hash)
+    );
+    CREATE INDEX bootstrap_proofs_expiry_idx ON bootstrap_proofs(expires_at);
+    CREATE TRIGGER bootstrap_proofs_no_update
+    BEFORE UPDATE ON bootstrap_proofs
+    WHEN NEW.target_node_id <> OLD.target_node_id
+      OR NEW.organization <> OLD.organization
+      OR NEW.token_hash <> OLD.token_hash
+      OR NEW.nonce_hash <> OLD.nonce_hash
+      OR NEW.expires_at <> OLD.expires_at
+      OR (OLD.consumed_at IS NOT NULL AND (
+           NEW.consumed_at IS NOT OLD.consumed_at
+           OR NEW.bundle_id IS NOT OLD.bundle_id
+           OR NEW.cleanup_state IS NULL
+           OR NEW.cleanup_state NOT IN ('pending', 'complete')
+           OR (OLD.cleanup_state = 'complete' AND NEW.cleanup_state <> OLD.cleanup_state)
+         ))
+      OR (OLD.consumed_at IS NULL AND (
+           NEW.consumed_at IS NULL OR NEW.bundle_id IS NULL
+           OR (NEW.cleanup_state IS NOT NULL AND NEW.cleanup_state <> 'pending')
+         ))
+    BEGIN SELECT RAISE(ABORT, 'bootstrap proof identity is immutable'); END;
 
-fn migrate_v4_to_v5(connection: &mut Connection) -> Result<(), RegistryError> {
-    let metadata_version: String = connection.query_row(
-        "SELECT value FROM metadata WHERE key = 'schema_version'",
-        [],
-        |row| row.get(0),
-    )?;
-    if metadata_version != "4" {
-        return Err(RegistryError::InvalidSchema(
-            "v4 database metadata marker is invalid".to_string(),
-        ));
-    }
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    transaction.execute_batch(
-        "CREATE TABLE bootstrap_proofs (
-           target_node_id TEXT NOT NULL CHECK (length(CAST(target_node_id AS BLOB)) = 69),
-           organization TEXT NOT NULL CHECK (length(CAST(organization AS BLOB)) BETWEEN 1 AND 128),
-           token_hash BLOB NOT NULL CHECK (length(token_hash) = 32),
-           nonce_hash BLOB NOT NULL CHECK (length(nonce_hash) = 32),
-           expires_at INTEGER NOT NULL CHECK (expires_at > 0),
-           consumed_at INTEGER NULL CHECK (consumed_at IS NULL OR consumed_at > 0),
-           bundle_id BLOB NULL CHECK (bundle_id IS NULL OR length(bundle_id) = 16),
-           PRIMARY KEY (target_node_id, organization, token_hash, nonce_hash)
-         );
-         CREATE INDEX bootstrap_proofs_expiry_idx ON bootstrap_proofs(expires_at);
-         CREATE TRIGGER bootstrap_proofs_no_update
-         BEFORE UPDATE ON bootstrap_proofs
-         WHEN NEW.target_node_id <> OLD.target_node_id
-           OR NEW.organization <> OLD.organization
-           OR NEW.token_hash <> OLD.token_hash
-           OR NEW.nonce_hash <> OLD.nonce_hash
-           OR NEW.expires_at <> OLD.expires_at
-           OR (OLD.consumed_at IS NOT NULL AND (
-                NEW.consumed_at IS NOT OLD.consumed_at
-                OR NEW.bundle_id IS NOT OLD.bundle_id
-              ))
-           OR (OLD.consumed_at IS NULL AND (
-                NEW.consumed_at IS NULL OR NEW.bundle_id IS NULL
-              ))
-         BEGIN SELECT RAISE(ABORT, 'bootstrap proof identity is immutable'); END;",
-    )?;
-    transaction.execute(
-        "UPDATE metadata SET value = '5' WHERE key = 'schema_version'",
-        [],
-    )?;
-    transaction.execute_batch("PRAGMA user_version = 5")?;
-    transaction.commit()?;
-    Ok(())
-}
-
-fn migrate_v5_to_v6(connection: &mut Connection) -> Result<(), RegistryError> {
-    let metadata_version: String = connection.query_row(
-        "SELECT value FROM metadata WHERE key = 'schema_version'",
-        [],
-        |row| row.get(0),
-    )?;
-    if metadata_version != "5" {
-        return Err(RegistryError::InvalidSchema(
-            "v5 database metadata marker is invalid".to_string(),
-        ));
-    }
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    transaction.execute_batch(
-        "ALTER TABLE bootstrap_proofs ADD COLUMN cleanup_state TEXT NULL
-           CHECK (cleanup_state IS NULL OR cleanup_state IN ('pending', 'complete'));
-         UPDATE bootstrap_proofs
-            SET cleanup_state = 'complete'
-          WHERE consumed_at IS NOT NULL;
-         DROP TRIGGER bootstrap_proofs_no_update;
-         CREATE TRIGGER bootstrap_proofs_no_update
-         BEFORE UPDATE ON bootstrap_proofs
-         WHEN NEW.target_node_id <> OLD.target_node_id
-           OR NEW.organization <> OLD.organization
-           OR NEW.token_hash <> OLD.token_hash
-           OR NEW.nonce_hash <> OLD.nonce_hash
-           OR NEW.expires_at <> OLD.expires_at
-           OR (OLD.consumed_at IS NOT NULL AND (
-                NEW.consumed_at IS NOT OLD.consumed_at
-                OR NEW.bundle_id IS NOT OLD.bundle_id
-                OR NEW.cleanup_state IS NULL
-                OR NEW.cleanup_state NOT IN ('pending', 'complete')
-                OR (OLD.cleanup_state = 'complete' AND NEW.cleanup_state <> OLD.cleanup_state)
-              ))
-           OR (OLD.consumed_at IS NULL AND (
-                NEW.consumed_at IS NULL OR NEW.bundle_id IS NULL
-                OR (NEW.cleanup_state IS NOT NULL AND NEW.cleanup_state <> 'pending')
-              ))
-         BEGIN SELECT RAISE(ABORT, 'bootstrap proof identity is immutable'); END;",
-    )?;
-    transaction.execute(
-        "UPDATE metadata SET value = '6' WHERE key = 'schema_version'",
-        [],
-    )?;
-    transaction.execute_batch("PRAGMA user_version = 6")?;
-    transaction.commit()?;
-    Ok(())
-}
-
-/// Create the bounded Health Plane tables. The migration is additive: it never
-/// mutates, drops, or rewrites a row created by schema versions 1 through 6.
-fn migrate_v6_to_v7(connection: &mut Connection) -> Result<(), RegistryError> {
-    #[cfg(test)]
-    if HEALTH_MIGRATION_FAULT.with(|fault| fault.get()) {
-        return Err(RegistryError::InvalidSchema(
-            "injected health plane migration failure".to_string(),
-        ));
-    }
-    let metadata_version: String = connection.query_row(
-        "SELECT value FROM metadata WHERE key = 'schema_version'",
-        [],
-        |row| row.get(0),
-    )?;
-    if metadata_version != "6" {
-        return Err(RegistryError::InvalidSchema(
-            "v6 database metadata marker is invalid".to_string(),
-        ));
-    }
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    transaction.execute_batch(HEALTH_PLANE_SCHEMA)?;
-    transaction.execute(
-        "UPDATE metadata SET value = '7' WHERE key = 'schema_version'",
-        [],
-    )?;
-    transaction.execute(
-        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('health_plane', ?1)",
-        [HEALTH_PLANE_ENABLED],
-    )?;
-    transaction.execute_batch("PRAGMA user_version = 7")?;
-    transaction.commit()?;
-    Ok(())
-}
-
-/// The complete schema version 7 Health Plane object set.
-const HEALTH_PLANE_SCHEMA: &str = "
     CREATE TABLE health_peers (
       node_id TEXT PRIMARY KEY REFERENCES remote_identities(node_id),
       role INTEGER NOT NULL CHECK (role IN (1, 2)),
@@ -2988,7 +2659,11 @@ const HEALTH_PLANE_SCHEMA: &str = "
       role TEXT NOT NULL CHECK (role = 'performer'),
       runtimes TEXT NOT NULL CHECK (length(runtimes) <= 512),
       message_bytes INTEGER NOT NULL CHECK (message_bytes BETWEEN 1 AND 2112),
-      received_at INTEGER NOT NULL CHECK (received_at > 0)
+      received_at INTEGER NOT NULL CHECK (received_at > 0),
+      baseline_id TEXT NOT NULL DEFAULT ''
+        CHECK (baseline_id = '' OR length(baseline_id) = 64),
+      baseline_observed_id TEXT NOT NULL DEFAULT ''
+        CHECK (baseline_observed_id = '' OR length(baseline_observed_id) = 64)
     );
     CREATE TABLE health_pulses (
       node_id TEXT PRIMARY KEY REFERENCES health_peers(node_id),
@@ -3074,386 +2749,21 @@ const HEALTH_PLANE_SCHEMA: &str = "
     INSERT INTO health_local (key, value) VALUES ('signal_sequence', 0), ('signals_dropped', 0);
 ";
 
-fn validate_v1_preflight(
-    connection: &Connection,
-    registry: &NodeRegistry,
-) -> Result<(), RegistryError> {
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version != 1 {
-        return Err(RegistryError::InvalidSchema(
-            "v1 preflight requires schema version 1".to_string(),
-        ));
-    }
-    let expected_metadata = [
-        ("schema_version", "1"),
-        ("node_id", registry.local_node_id.as_str()),
-        ("public_key_encoding", "x-only-bip340-hex-lowercase"),
-    ];
-    let metadata: Vec<(String, String)> = connection
-        .prepare("SELECT key, value FROM metadata ORDER BY key")?
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-        .collect::<Result<Vec<_>, _>>()?;
-    if metadata.len() != expected_metadata.len()
-        || expected_metadata.iter().any(|expected| {
-            !metadata
-                .iter()
-                .any(|actual| actual.0 == expected.0 && actual.1 == expected.1)
-        })
-    {
-        return Err(RegistryError::InvalidSchema(
-            "v1 metadata does not match the active identity".to_string(),
-        ));
-    }
-    validate_columns(connection, "metadata", &["key", "value"])?;
-    validate_columns(
-        connection,
-        "peers",
-        &[
-            "node_id",
-            "public_key",
-            "role",
-            "state",
-            "capabilities_json",
-            "added_at",
-            "updated_at",
-            "last_seen",
-            "source",
-        ],
-    )?;
-    validate_columns(
-        connection,
-        "revocations",
-        &[
-            "id",
-            "node_id",
-            "public_key",
-            "revoked_at",
-            "reason",
-            "replacement_node_id",
-        ],
-    )?;
-    validate_columns(
-        connection,
-        "audit_events",
-        &[
-            "id",
-            "event_type",
-            "node_id",
-            "from_state",
-            "to_state",
-            "actor",
-            "reason",
-            "occurred_at",
-        ],
-    )?;
-    validate_columns(
-        connection,
-        "replay_keys",
-        &["key", "first_seen", "expires_at"],
-    )?;
-    validate_columns(
-        connection,
-        "inbox",
-        &[
-            "cue_id",
-            "state",
-            "received_at",
-            "updated_at",
-            "expires_at",
-            "outcome_hash",
-        ],
-    )?;
-    let actual_objects: Vec<(String, String)> = connection
-        .prepare(
-            "SELECT type, name FROM sqlite_master
-             WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
-        )?
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-        .collect::<Result<Vec<_>, _>>()?;
-    let expected_objects = vec![
-        ("index".to_string(), "audit_events_node_idx".to_string()),
-        ("index".to_string(), "peers_state_idx".to_string()),
-        ("table".to_string(), "audit_events".to_string()),
-        ("table".to_string(), "inbox".to_string()),
-        ("table".to_string(), "metadata".to_string()),
-        ("table".to_string(), "peers".to_string()),
-        ("table".to_string(), "replay_keys".to_string()),
-        ("table".to_string(), "revocations".to_string()),
-        ("trigger".to_string(), "audit_events_no_delete".to_string()),
-        ("trigger".to_string(), "audit_events_no_update".to_string()),
-        ("trigger".to_string(), "revocations_no_delete".to_string()),
-        ("trigger".to_string(), "revocations_no_update".to_string()),
-    ];
-    if actual_objects != expected_objects {
-        return Err(RegistryError::InvalidSchema(
-            "v1 database contains unexpected or missing schema objects".to_string(),
-        ));
-    }
-    validate_all_rows(connection)
-}
-
-fn create_v2_schema(transaction: &Transaction<'_>) -> Result<(), RegistryError> {
-    transaction.execute_batch(
-        "CREATE TABLE remote_identities (
-          node_id TEXT PRIMARY KEY CHECK (length(CAST(node_id AS BLOB)) = 69),
-          identity_key BLOB NOT NULL UNIQUE CHECK (length(identity_key) = 32),
-          state TEXT NOT NULL CHECK (state IN ('authenticated_untrusted', 'active', 'revoked')),
-          first_seen INTEGER NOT NULL CHECK (first_seen > 0),
-          revoked_at INTEGER NULL CHECK (revoked_at IS NULL OR revoked_at >= first_seen)
-        );
-        CREATE TABLE trusted_peers (
-          node_id TEXT PRIMARY KEY REFERENCES remote_identities(node_id),
-          role INTEGER NOT NULL CHECK (role IN (1, 2)),
-          capabilities BLOB NOT NULL CHECK (length(capabilities) <= 4096),
-          state TEXT NOT NULL CHECK (state IN ('active', 'revoked')),
-          added_at INTEGER NOT NULL CHECK (added_at > 0),
-          updated_at INTEGER NOT NULL CHECK (updated_at >= added_at)
-        );
-        CREATE TABLE transport_key_epochs (
-          node_id TEXT NOT NULL REFERENCES remote_identities(node_id),
-          key_epoch INTEGER NOT NULL CHECK (key_epoch > 0),
-          public_key BLOB NOT NULL CHECK (length(public_key) = 32),
-          certificate BLOB NOT NULL CHECK (length(certificate) = 245),
-          state TEXT NOT NULL CHECK (state IN ('pending', 'active', 'revoked')),
-          added_at INTEGER NOT NULL CHECK (added_at > 0),
-          retired_at INTEGER NULL CHECK (retired_at IS NULL OR retired_at >= added_at),
-          PRIMARY KEY (node_id, key_epoch),
-          UNIQUE (node_id, public_key)
-        );
-        CREATE TABLE channel_sessions (
-          session_id BLOB PRIMARY KEY CHECK (length(session_id) = 32),
-          node_id TEXT NOT NULL REFERENCES remote_identities(node_id),
-          direction INTEGER NOT NULL CHECK (direction IN (0, 1)),
-          send_sequence INTEGER NOT NULL CHECK (send_sequence >= 0),
-          receive_sequence INTEGER NOT NULL CHECK (receive_sequence >= 0),
-          state TEXT NOT NULL CHECK (state IN ('handshaking', 'authenticated_untrusted', 'active', 'closed')),
-          started_at INTEGER NOT NULL CHECK (started_at > 0),
-          last_seen INTEGER NOT NULL CHECK (last_seen >= started_at),
-          expires_at INTEGER NOT NULL CHECK (expires_at >= last_seen)
-        );
-        CREATE TABLE enrollment_replays (
-          replay_kind TEXT NOT NULL CHECK (replay_kind IN ('bundle', 'manual_request')),
-          replay_id BLOB NOT NULL CHECK (length(replay_id) = 16),
-          expires_at INTEGER NOT NULL CHECK (expires_at > 0),
-          first_seen INTEGER NOT NULL CHECK (first_seen > 0),
-          PRIMARY KEY (replay_kind, replay_id)
-        );
-        CREATE TABLE transport_audit (
-          id INTEGER PRIMARY KEY,
-          event_type TEXT NOT NULL CHECK (length(CAST(event_type AS BLOB)) BETWEEN 1 AND 64),
-          node_id TEXT NOT NULL,
-          session_id BLOB NULL CHECK (session_id IS NULL OR length(session_id) = 32),
-          bundle_id BLOB NULL CHECK (bundle_id IS NULL OR length(bundle_id) = 16),
-          direction INTEGER NULL CHECK (direction IS NULL OR direction IN (0, 1)),
-          byte_count INTEGER NOT NULL CHECK (byte_count >= 0),
-           outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
-           error_code INTEGER NULL CHECK (error_code IS NULL OR error_code BETWEEN 1000 AND 1999),
-           cue_id TEXT NULL CHECK (cue_id IS NULL OR length(cue_id) = 32),
-           cue_script TEXT NULL CHECK (cue_script IS NULL OR length(CAST(cue_script AS BLOB)) BETWEEN 1 AND 64),
-           cue_reason TEXT NULL CHECK (cue_reason IS NULL OR length(CAST(cue_reason AS BLOB)) BETWEEN 1 AND 128),
-           occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
-        );
-        CREATE TABLE cue_rate_limits (
-          node_id TEXT PRIMARY KEY,
-          window_start INTEGER NOT NULL CHECK (window_start > 0),
-          count INTEGER NOT NULL CHECK (count >= 0)
-        );
-        CREATE INDEX transport_key_epochs_state_idx ON transport_key_epochs(state, node_id);
-        CREATE UNIQUE INDEX transport_key_epochs_one_active
-          ON transport_key_epochs(node_id) WHERE state = 'active';
-        CREATE INDEX channel_sessions_peer_idx ON channel_sessions(node_id, state, last_seen);
-         CREATE INDEX enrollment_replays_expiry_idx ON enrollment_replays(expires_at);
-         CREATE INDEX transport_audit_node_idx ON transport_audit(node_id, id);
-         CREATE INDEX transport_audit_expiry_idx ON transport_audit(occurred_at);
-         CREATE TRIGGER trusted_peers_require_known_identity
-        BEFORE INSERT ON trusted_peers
-        WHEN (SELECT state FROM remote_identities WHERE node_id = NEW.node_id)
-          NOT IN ('authenticated_untrusted', 'active')
-        BEGIN SELECT RAISE(ABORT, 'trusted peer requires known identity'); END;
-        CREATE TRIGGER transport_key_epochs_active_require_trust
-        BEFORE INSERT ON transport_key_epochs
-          WHEN NEW.state = 'active' AND (
-          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
-          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
-        )
-        BEGIN SELECT RAISE(ABORT, 'active transport key requires active trusted peer'); END;
-        CREATE TRIGGER transport_key_epochs_active_update_require_trust
-        BEFORE UPDATE OF state ON transport_key_epochs
-          WHEN NEW.state = 'active' AND (
-          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
-          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
-        )
-        BEGIN SELECT RAISE(ABORT, 'active transport key requires active trusted peer'); END;
-        CREATE TRIGGER remote_identities_no_untrusted_trust_update
-        BEFORE UPDATE OF state ON remote_identities
-        WHEN NEW.state = 'active' AND NOT EXISTS (
-          SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id
-        )
-        BEGIN SELECT RAISE(ABORT, 'active identity requires trusted peer'); END;
-        CREATE TRIGGER trusted_peers_no_identity_demotion
-        BEFORE UPDATE OF state ON remote_identities
-        WHEN NEW.state <> 'active' AND EXISTS (
-          SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active'
-        )
-        BEGIN SELECT RAISE(ABORT, 'trusted peer must be revoked before identity demotion'); END;
-        CREATE TRIGGER channel_sessions_active_requires_trust
-        BEFORE INSERT ON channel_sessions
-        WHEN NEW.state = 'active' AND (
-          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
-          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
-        )
-        BEGIN SELECT RAISE(ABORT, 'active session requires active trusted peer'); END;
-        CREATE TRIGGER channel_sessions_active_update_requires_trust
-        BEFORE UPDATE OF state, node_id ON channel_sessions
-        WHEN NEW.state = 'active' AND (
-          (SELECT state FROM remote_identities WHERE node_id = NEW.node_id) <> 'active'
-          OR NOT EXISTS (SELECT 1 FROM trusted_peers WHERE node_id = NEW.node_id AND state = 'active')
-        )
-        BEGIN SELECT RAISE(ABORT, 'active session requires active trusted peer'); END;
-        CREATE TRIGGER transport_key_epochs_monotonic_insert
-        BEFORE INSERT ON transport_key_epochs
-        WHEN NEW.key_epoch <= COALESCE((SELECT MAX(key_epoch) FROM transport_key_epochs WHERE node_id = NEW.node_id), 0)
-        BEGIN SELECT RAISE(ABORT, 'transport key epoch must increase'); END;
-        CREATE TRIGGER transport_key_epochs_monotonic_update
-        BEFORE UPDATE OF key_epoch ON transport_key_epochs
-        WHEN NEW.key_epoch <= COALESCE((SELECT MAX(key_epoch) FROM transport_key_epochs WHERE node_id = NEW.node_id AND key_epoch <> OLD.key_epoch), 0)
-        BEGIN SELECT RAISE(ABORT, 'transport key epoch must increase'); END;
-        CREATE TRIGGER remote_identities_no_delete
-        BEFORE DELETE ON remote_identities
-        BEGIN SELECT RAISE(ABORT, 'remote identities are retained'); END;
-        CREATE TRIGGER trusted_peers_no_delete
-        BEFORE DELETE ON trusted_peers
-        BEGIN SELECT RAISE(ABORT, 'trusted peer history is retained'); END;
-        CREATE TRIGGER transport_key_epochs_no_delete
-        BEFORE DELETE ON transport_key_epochs
-        BEGIN SELECT RAISE(ABORT, 'transport key epochs are retained'); END;
-        CREATE TRIGGER revoked_identity_no_resurrection
-        BEFORE UPDATE OF state ON remote_identities
-        WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
-        BEGIN SELECT RAISE(ABORT, 'revoked identity cannot be resurrected'); END;
-        CREATE TRIGGER revoked_trusted_peer_no_resurrection
-        BEFORE UPDATE OF state ON trusted_peers
-        WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
-        BEGIN SELECT RAISE(ABORT, 'revoked trust cannot be resurrected'); END;
-        CREATE TRIGGER revoked_transport_epoch_no_resurrection
-        BEFORE UPDATE OF state ON transport_key_epochs
-        WHEN OLD.state = 'revoked' AND NEW.state <> 'revoked'
-        BEGIN SELECT RAISE(ABORT, 'revoked transport epoch cannot be resurrected'); END;",
-    )?;
-    Ok(())
-}
-
-fn create_v3_schema(transaction: &Transaction<'_>) -> Result<(), RegistryError> {
-    transaction.execute_batch(
-        "CREATE TABLE manual_enrollment_requests (
-           request_id BLOB PRIMARY KEY CHECK (length(request_id) = 16),
-           request_bytes BLOB NOT NULL CHECK (length(request_bytes) BETWEEN 1 AND 2048),
-           request_digest BLOB NOT NULL CHECK (length(request_digest) = 32),
-           code_hash BLOB NOT NULL CHECK (length(code_hash) = 32),
-           node_id TEXT NOT NULL CHECK (length(CAST(node_id AS BLOB)) = 69),
-           identity_key BLOB NOT NULL CHECK (length(identity_key) = 32),
-           transport_key BLOB NOT NULL CHECK (length(transport_key) = 32),
-           role INTEGER NOT NULL CHECK (role IN (1, 2)),
-           capabilities BLOB NOT NULL CHECK (length(capabilities) <= 4096),
-           request_created_at INTEGER NOT NULL CHECK (request_created_at > 0),
-           request_expires_at INTEGER NOT NULL CHECK (request_expires_at > request_created_at),
-           certificate BLOB NOT NULL CHECK (length(certificate) = 245),
-           certificate_digest BLOB NOT NULL CHECK (length(certificate_digest) = 32),
-           certificate_id BLOB NOT NULL CHECK (length(certificate_id) = 16),
-           key_epoch INTEGER NOT NULL CHECK (key_epoch > 0),
-           not_before INTEGER NOT NULL CHECK (not_before > 0),
-           not_after INTEGER NOT NULL CHECK (not_after > not_before),
-           state TEXT NOT NULL CHECK (state IN ('pending', 'approved', 'rejected')),
-           source TEXT NOT NULL CHECK (source = 'manual'),
-           staged_at INTEGER NOT NULL CHECK (staged_at > 0),
-           resolved_at INTEGER NULL CHECK (resolved_at IS NULL OR resolved_at >= staged_at)
-         );
-         CREATE TABLE enrollment_audits (
-           id INTEGER PRIMARY KEY,
-           event_code TEXT NOT NULL CHECK (length(CAST(event_code AS BLOB)) BETWEEN 1 AND 64),
-           request_id BLOB NULL CHECK (request_id IS NULL OR length(request_id) = 16),
-           request_digest BLOB NULL CHECK (request_digest IS NULL OR length(request_digest) = 32),
-           node_id TEXT NOT NULL,
-           outcome TEXT NOT NULL CHECK (length(CAST(outcome AS BLOB)) BETWEEN 1 AND 32),
-           detail TEXT NOT NULL CHECK (length(CAST(detail AS BLOB)) <= 256),
-           occurred_at INTEGER NOT NULL CHECK (occurred_at > 0)
-         );
-         CREATE INDEX manual_enrollment_requests_state_idx
-           ON manual_enrollment_requests(state, node_id);
-         CREATE INDEX enrollment_audits_node_idx ON enrollment_audits(node_id, id);
-         CREATE INDEX enrollment_audits_request_idx ON enrollment_audits(request_id, id);
-         CREATE TRIGGER manual_enrollment_request_immutable
-         BEFORE UPDATE ON manual_enrollment_requests
-          WHEN NEW.request_id <> OLD.request_id
-            OR NEW.request_bytes <> OLD.request_bytes
-           OR NEW.request_digest <> OLD.request_digest
-           OR NEW.code_hash <> OLD.code_hash
-           OR NEW.node_id <> OLD.node_id
-           OR NEW.identity_key <> OLD.identity_key
-           OR NEW.transport_key <> OLD.transport_key
-           OR NEW.role <> OLD.role
-           OR NEW.capabilities <> OLD.capabilities
-           OR NEW.request_created_at <> OLD.request_created_at
-           OR NEW.request_expires_at <> OLD.request_expires_at
-           OR NEW.certificate <> OLD.certificate
-           OR NEW.certificate_digest <> OLD.certificate_digest
-           OR NEW.certificate_id <> OLD.certificate_id
-           OR NEW.key_epoch <> OLD.key_epoch
-           OR NEW.not_before <> OLD.not_before
-           OR NEW.not_after <> OLD.not_after
-           OR NEW.source <> OLD.source
-           OR NEW.staged_at <> OLD.staged_at
-         BEGIN SELECT RAISE(ABORT, 'manual enrollment evidence is immutable'); END;
-         CREATE TRIGGER enrollment_audits_no_update
-         BEFORE UPDATE ON enrollment_audits
-         BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;
-         CREATE TRIGGER enrollment_audits_no_delete
-         BEFORE DELETE ON enrollment_audits
-         BEGIN SELECT RAISE(ABORT, 'enrollment audits are append-only'); END;",
-    )?;
-    Ok(())
-}
-
-fn validate_v2_invariants(
-    connection: &Connection,
-    _registry: &NodeRegistry,
-) -> Result<(), RegistryError> {
-    let active_without_trust: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM remote_identities WHERE state = 'active' AND NOT EXISTS
-         (SELECT 1 FROM trusted_peers WHERE node_id = remote_identities.node_id AND state = 'active')",
-        [],
-        |row| row.get(0),
-    )?;
-    if active_without_trust != 0 {
-        return Err(RegistryError::InvalidSchema(
-            "active identity has no active trusted peer".to_string(),
-        ));
-    }
-    Ok(())
-}
-
 fn timestamp_seconds(value: &str) -> Result<i64, RegistryError> {
     let parsed = DateTime::parse_from_rfc3339(value)
-        .map_err(|_| RegistryError::InvalidSchema(format!("invalid v1 timestamp {value:?}")))?;
+        .map_err(|_| RegistryError::InvalidSchema(format!("invalid timestamp {value:?}")))?;
     if parsed.offset().local_minus_utc() != 0 {
         return Err(RegistryError::InvalidSchema(format!(
-            "v1 timestamp is not UTC: {value:?}"
+            "timestamp is not UTC: {value:?}"
         )));
     }
     let seconds = parsed.timestamp();
     if seconds <= 0 {
         return Err(RegistryError::InvalidSchema(
-            "v1 timestamp is not positive".to_string(),
+            "timestamp is not positive".to_string(),
         ));
     }
     Ok(seconds)
-}
-
-fn validate_capabilities_json_bytes(value: &str) -> Result<(), RegistryError> {
-    let capabilities: Vec<String> = serde_json::from_str(value).map_err(|_| {
-        RegistryError::InvalidSchema("v1 capabilities are not valid JSON".to_string())
-    })?;
-    validate_capabilities(&capabilities)
 }
 
 fn digest(bytes: &[u8]) -> [u8; 32] {
@@ -3796,25 +3106,12 @@ fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(
 
 fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(), RegistryError> {
     let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    let health_plane: Option<String> = connection
-        .query_row(
-            "SELECT value FROM metadata WHERE key = 'health_plane'",
-            [],
-            |row| row.get(0),
-        )
-        .optional()?;
-    // A node whose Health Plane migration failed stays at version 6 with the
-    // plane disabled and keeps serving transport, enrollment, HTTP, and runs.
-    let health_plane_present = match (version, health_plane.as_deref()) {
-        (SCHEMA_VERSION, Some(HEALTH_PLANE_ENABLED)) => true,
-        (6, Some(HEALTH_PLANE_DISABLED)) => false,
-        _ => {
-            return Err(RegistryError::InvalidSchema(format!(
-                "database schema marker is {version}, expected {SCHEMA_VERSION}"
-            )))
-        }
-    };
-    validate_objects(connection, health_plane_present)?;
+    if version != SCHEMA_VERSION {
+        return Err(RegistryError::InvalidSchema(format!(
+            "database schema marker is {version}, expected {SCHEMA_VERSION}"
+        )));
+    }
+    validate_objects(connection)?;
     validate_columns(connection, "metadata", &["key", "value"])?;
     validate_columns(
         connection,
@@ -4010,9 +3307,7 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
             "cleanup_state",
         ],
     )?;
-    if health_plane_present {
-        validate_health_plane_columns(connection)?;
-    }
+    validate_health_plane_columns(connection)?;
     let metadata: Vec<(String, String)> = connection
         .prepare("SELECT key, value FROM metadata ORDER BY key")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -4022,19 +3317,10 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
             "metadata contains unexpected keys".to_string(),
         ));
     }
+    let schema_version = SCHEMA_VERSION.to_string();
     let expected = [
-        (
-            "schema_version",
-            if health_plane_present { "8" } else { "6" },
-        ),
-        (
-            "health_plane",
-            if health_plane_present {
-                HEALTH_PLANE_ENABLED
-            } else {
-                HEALTH_PLANE_DISABLED
-            },
-        ),
+        ("schema_version", schema_version.as_str()),
+        ("health_plane", HEALTH_PLANE_ENABLED),
         ("node_id", registry.local_node_id.as_str()),
         ("public_key_encoding", "x-only-bip340-hex-lowercase"),
     ];
@@ -4048,10 +3334,7 @@ fn validate_schema(connection: &Connection, registry: &NodeRegistry) -> Result<(
     validate_all_rows(connection)
 }
 
-fn validate_objects(
-    connection: &Connection,
-    health_plane_present: bool,
-) -> Result<(), RegistryError> {
+fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {
     let actual: Vec<(String, String)> = connection
         .prepare(
             "SELECT type, name FROM sqlite_master
@@ -4197,14 +3480,12 @@ fn validate_objects(
             "trusted_peers_require_known_identity".to_string(),
         ),
     ];
-    if health_plane_present {
-        expected.extend(
-            HEALTH_PLANE_OBJECTS
-                .iter()
-                .map(|(object_type, name)| ((*object_type).to_string(), (*name).to_string())),
-        );
-        expected.sort();
-    }
+    expected.extend(
+        HEALTH_PLANE_OBJECTS
+            .iter()
+            .map(|(object_type, name)| ((*object_type).to_string(), (*name).to_string())),
+    );
+    expected.sort();
     if actual != expected {
         return Err(RegistryError::InvalidSchema(
             "database contains unexpected or missing schema objects".to_string(),
@@ -4334,7 +3615,7 @@ fn validate_health_plane_columns(connection: &Connection) -> Result<(), Registry
     validate_columns(connection, "health_local", &["key", "value"])
 }
 
-/// Every object the schema version 7 Health Plane migration creates.
+/// Every Health Plane schema object.
 const HEALTH_PLANE_OBJECTS: [(&str, &str); 15] = [
     ("index", "health_audit_expiry_idx"),
     ("index", "health_outbox_order_idx"),
@@ -4881,6 +4162,24 @@ fn registration_from_manual(
     })
 }
 
+fn require_remote_identity(
+    transaction: &Transaction<'_>,
+    node_id: &str,
+) -> Result<(), RegistryError> {
+    let exists: bool = transaction.query_row(
+        "SELECT EXISTS(SELECT 1 FROM remote_identities WHERE node_id = ?1)",
+        [node_id],
+        |row| row.get::<_, i64>(0),
+    )? != 0;
+    if exists {
+        Ok(())
+    } else {
+        Err(RegistryError::Corrupt(format!(
+            "peer {node_id} has no remote identity"
+        )))
+    }
+}
+
 fn project_v2_transition(
     transaction: &Transaction<'_>,
     current: &PeerRecord,
@@ -4889,30 +4188,7 @@ fn project_v2_transition(
 ) -> Result<(), RegistryError> {
     match target {
         PeerState::Active => {
-            let identity_state: Option<String> = transaction
-                .query_row(
-                    "SELECT state FROM remote_identities WHERE node_id = ?1",
-                    [&current.node_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if identity_state.is_none() {
-                let registration = PeerRegistration {
-                    node_id: current.node_id.clone(),
-                    public_key: current.public_key.clone(),
-                    role: current.role,
-                    capabilities: current.capabilities.clone(),
-                    source: current.source,
-                    actor: "migration".to_string(),
-                    reason: "v2 projection".to_string(),
-                };
-                insert_v2_identity_projection(
-                    transaction,
-                    &registration,
-                    now,
-                    "authenticated_untrusted",
-                )?;
-            }
+            require_remote_identity(transaction, &current.node_id)?;
             transaction.execute(
                 "INSERT INTO trusted_peers (node_id, role, capabilities, state, added_at, updated_at)
                  VALUES (?1, ?2, ?3, 'active', ?4, ?4)
@@ -4940,28 +4216,7 @@ fn project_v2_transition(
                  WHERE node_id = ?2 AND state = 'active'",
                 params![now, current.node_id],
             )?;
-            let identity_exists: bool = transaction.query_row(
-                "SELECT EXISTS(SELECT 1 FROM remote_identities WHERE node_id = ?1)",
-                [&current.node_id],
-                |row| row.get::<_, i64>(0),
-            )? != 0;
-            if !identity_exists {
-                let registration = PeerRegistration {
-                    node_id: current.node_id.clone(),
-                    public_key: current.public_key.clone(),
-                    role: current.role,
-                    capabilities: current.capabilities.clone(),
-                    source: current.source,
-                    actor: "migration".to_string(),
-                    reason: "v2 projection".to_string(),
-                };
-                insert_v2_identity_projection(
-                    transaction,
-                    &registration,
-                    now,
-                    "authenticated_untrusted",
-                )?;
-            }
+            require_remote_identity(transaction, &current.node_id)?;
         }
         PeerState::Revoked => {
             transaction.execute(
@@ -5230,7 +4485,7 @@ mod tests {
     }
 
     #[test]
-    fn cue_audit_persists_correlation_without_changing_legacy_rows() {
+    fn cue_audit_persists_correlation_and_leaves_plain_rows_null() {
         let temp = TempDir::new().unwrap();
         let node_context = context(&temp);
         let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
@@ -5253,7 +4508,7 @@ mod tests {
             .unwrap();
         registry
             .record_transport_audit(
-                "legacy_event",
+                "plain_event",
                 &identity.public_status().node_id,
                 None,
                 None,
@@ -5280,15 +4535,15 @@ mod tests {
                 "approved by operator".into()
             )
         );
-        let legacy_nulls: (Option<String>, Option<String>, Option<String>) = connection
+        let plain_nulls: (Option<String>, Option<String>, Option<String>) = connection
             .query_row(
                 "SELECT cue_id, cue_script, cue_reason FROM transport_audit
-                 WHERE event_type = 'legacy_event'",
+                 WHERE event_type = 'plain_event'",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .unwrap();
-        assert_eq!(legacy_nulls, (None, None, None));
+        assert_eq!(plain_nulls, (None, None, None));
     }
     #[test]
     fn ignore_vanished_private_file_skips_not_found_only() {
@@ -5329,105 +4584,6 @@ mod tests {
             fs::remove_file(&wal).unwrap();
         }
         assert!(NodeRegistry::open_health_observational(&node_context, status).is_ok());
-    }
-
-    fn seed_v3_pending_enrollment() -> (TempDir, NodeContext, NodeRegistry, [u8; 16], String) {
-        let temp = TempDir::new().unwrap();
-        let context = context(&temp);
-        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
-        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        fs::remove_file(context.database_path()).unwrap();
-
-        let mut connection = Connection::open(context.database_path()).unwrap();
-        configure_connection(&mut connection).unwrap();
-        let transaction = connection.transaction().unwrap();
-        create_schema(&transaction, &registry).unwrap();
-        transaction
-            .execute_batch("PRAGMA user_version = 1")
-            .unwrap();
-        transaction.commit().unwrap();
-        migrate_v1_to_v2(&mut connection, &registry).unwrap();
-        migrate_v2_to_v3(&mut connection).unwrap();
-
-        let remote_key = k256::schnorr::SigningKey::from_slice(&[3; 32]).unwrap();
-        let remote_xonly = remote_key.verifying_key().to_bytes();
-        let remote_public_key = remote_xonly
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        let remote_node_id = node_id_for_x_only_public_key(&remote_xonly);
-        let request_id = [0x11; 16];
-        let transport_key = [9u8; 32];
-        let certificate = [0u8; 245];
-        let code_hash = [7u8; 32];
-        let certificate_digest = [8u8; 32];
-        let certificate_id = [6u8; 16];
-        let request_bytes = b"OMMA legacy v1 request".to_vec();
-        let request_digest = digest(&request_bytes);
-        let capabilities = "[\"remote-run\"]";
-        let now = now_timestamp();
-        let transaction = connection.transaction().unwrap();
-        transaction
-            .execute(
-                "INSERT INTO peers
-                 (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
-                 VALUES (?1, ?2, 'performer', 'pending', ?3, ?4, ?4, NULL, 'manual')",
-                params![remote_node_id, remote_public_key, capabilities, now],
-            )
-            .unwrap();
-        transaction
-            .execute(
-                "INSERT INTO remote_identities
-                 (node_id, identity_key, state, first_seen, revoked_at)
-                 VALUES (?1, ?2, 'authenticated_untrusted', 100, NULL)",
-                params![remote_node_id, remote_xonly.as_slice()],
-            )
-            .unwrap();
-        transaction
-            .execute(
-                "INSERT INTO transport_key_epochs
-                 (node_id, key_epoch, public_key, certificate, state, added_at, retired_at)
-                 VALUES (?1, 1, ?2, ?3, 'pending', 100, NULL)",
-                params![
-                    remote_node_id,
-                    transport_key.as_slice(),
-                    certificate.as_slice()
-                ],
-            )
-            .unwrap();
-        transaction
-            .execute(
-                "INSERT INTO manual_enrollment_requests
-                 (request_id, request_bytes, request_digest, code_hash, node_id, identity_key,
-                  transport_key, role, capabilities, request_created_at, request_expires_at,
-                  certificate, certificate_digest, certificate_id, key_epoch, not_before, not_after,
-                  state, source, staged_at, resolved_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 2, ?8, 100, 200, ?9, ?10, ?11, 1, 100, 200,
-                         'pending', 'manual', 100, NULL)",
-                params![
-                    request_id.as_slice(),
-                    &request_bytes,
-                    request_digest.as_slice(),
-                    code_hash.as_slice(),
-                    remote_node_id,
-                    remote_xonly.as_slice(),
-                    transport_key.as_slice(),
-                    capabilities.as_bytes(),
-                    certificate.as_slice(),
-                    certificate_digest.as_slice(),
-                    certificate_id.as_slice(),
-                ],
-            )
-            .unwrap();
-        transaction
-            .execute(
-                "INSERT INTO enrollment_replays (replay_kind, replay_id, expires_at, first_seen)
-                 VALUES ('manual_request', ?1, 1000, 100)",
-                [request_id.as_slice()],
-            )
-            .unwrap();
-        transaction.commit().unwrap();
-        (temp, context, registry, request_id, remote_node_id)
     }
 
     fn registration(identity: &NodeIdentity, scalar: u8) -> PeerRegistration {
@@ -5929,250 +5085,33 @@ mod tests {
     }
 
     #[test]
-    fn v3_pending_legacy_enrollment_is_terminalized_with_redacted_evidence() {
-        let (_temp, context, registry, request_id, remote_node_id) = seed_v3_pending_enrollment();
-        let mut connection = Connection::open(context.database_path()).unwrap();
-        configure_connection(&mut connection).unwrap();
-        migrate_v3_to_v4(&mut connection).unwrap();
-        migrate_v4_to_v5(&mut connection).unwrap();
-        migrate_v5_to_v6(&mut connection).unwrap();
-        migrate_v6_to_v7(&mut connection).unwrap();
-        migrate_v7_to_v8(&mut connection).unwrap();
-        validate_schema(&connection, &registry).unwrap();
-        set_new_database_mode(&context.database_path()).unwrap();
-        drop(connection);
-
-        let identity = NodeIdentity::load_existing(&context).unwrap();
-        let reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        let peer = reopened.peer(&remote_node_id).unwrap().unwrap();
-        assert_eq!(peer.state, PeerState::Suspended);
-
-        let connection = Connection::open(context.database_path()).unwrap();
-        let request_state: (String, Option<Vec<u8>>) = connection
-            .query_row(
-                "SELECT state, pairing_id FROM manual_enrollment_requests WHERE request_id = ?1",
-                [request_id.as_slice()],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap();
-        assert_eq!(request_state.0, "rejected");
-        assert!(request_state.1.is_none());
-        assert_eq!(
-            connection
-                .query_row(
-                    "SELECT COUNT(*) FROM manual_enrollment_requests WHERE state = 'pending'",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap(),
-            0
-        );
-        assert_eq!(
-            connection
-                .query_row(
-                    "SELECT COUNT(*) FROM enrollment_replays WHERE replay_kind = 'manual_request' AND replay_id = ?1",
-                    [request_id.as_slice()],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap(),
-            1
-        );
-        let audit: (String, String, String, Vec<u8>) = connection
-            .query_row(
-                "SELECT event_code, outcome, detail, request_digest
-                 FROM enrollment_audits WHERE request_id = ?1",
-                [request_id.as_slice()],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )
-            .unwrap();
-        assert_eq!(audit.0, "legacy_expired");
-        assert_eq!(audit.1, "rejected");
-        assert_eq!(
-            audit.2,
-            "legacy manual enrollment request expired during schema migration"
-        );
-        assert_eq!(audit.3.len(), 32);
-        assert!(!audit.2.contains("OMMA"));
-        assert_eq!(
-            connection
-                .query_row(
-                    "SELECT COUNT(*) FROM remote_identities WHERE state = 'active'",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap(),
-            0
-        );
-        assert_eq!(
-            connection
-                .query_row(
-                    "SELECT COUNT(*) FROM trusted_peers WHERE state = 'active'",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap(),
-            0
-        );
-    }
-
-    #[test]
-    fn v3_migration_rolls_back_when_legacy_audit_cannot_be_recorded() {
-        let (_temp, context, registry, request_id, remote_node_id) = seed_v3_pending_enrollment();
-        let connection = Connection::open(context.database_path()).unwrap();
-        connection
-            .execute_batch(
-                "DROP TRIGGER enrollment_audits_no_update;
-                 CREATE TRIGGER enrollment_audits_no_update
-                 BEFORE INSERT ON enrollment_audits
-                 BEGIN SELECT RAISE(ABORT, 'injected migration audit failure'); END;",
-            )
-            .unwrap();
-        drop(connection);
-
-        let mut connection = Connection::open(context.database_path()).unwrap();
-        configure_connection(&mut connection).unwrap();
-        assert!(migrate_v3_to_v4(&mut connection).is_err());
-        assert_eq!(
-            connection
-                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
-                .unwrap(),
-            3
-        );
-        assert!(connection
-            .query_row(
-                "SELECT 1 FROM pragma_table_info('manual_enrollment_requests') WHERE name = 'pairing_id'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()
-            .unwrap()
-            .is_none());
-        assert_eq!(
-            connection
-                .query_row(
-                    "SELECT state FROM manual_enrollment_requests WHERE request_id = ?1",
-                    [request_id.as_slice()],
-                    |row| row.get::<_, String>(0),
-                )
-                .unwrap(),
-            "pending"
-        );
-        assert_eq!(
-            connection
-                .query_row(
-                    "SELECT state FROM peers WHERE node_id = ?1",
-                    [&remote_node_id],
-                    |row| row.get::<_, String>(0),
-                )
-                .unwrap(),
-            "pending"
-        );
-        assert_eq!(
-            connection
-                .query_row("SELECT COUNT(*) FROM enrollment_audits", [], |row| {
-                    row.get::<_, i64>(0)
-                })
-                .unwrap(),
-            0
-        );
-        assert!(registry.path().exists());
-    }
-
-    #[test]
-    fn a_failed_health_plane_migration_keeps_the_node_serving_with_the_plane_disabled() {
+    fn older_schema_versions_fail_closed_without_mutation() {
         let temp = TempDir::new().unwrap();
         let context = context(&temp);
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
-        let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        fs::remove_file(context.database_path()).unwrap();
-        let mut connection = Connection::open(context.database_path()).unwrap();
-        configure_connection(&mut connection).unwrap();
-        let transaction = connection.transaction().unwrap();
-        create_schema(&transaction, &registry).unwrap();
-        transaction
-            .execute_batch("PRAGMA user_version = 1")
+        drop(NodeRegistry::open(&context, identity.public_status()).unwrap());
+        let connection = Connection::open(context.database_path()).unwrap();
+        connection
+            .execute_batch(&format!("PRAGMA user_version = {}", SCHEMA_VERSION - 1))
             .unwrap();
-        transaction.commit().unwrap();
-        migrate_v1_to_v2(&mut connection, &registry).unwrap();
-        migrate_v2_to_v3(&mut connection).unwrap();
-        migrate_v3_to_v4(&mut connection).unwrap();
-        migrate_v4_to_v5(&mut connection).unwrap();
-        migrate_v5_to_v6(&mut connection).unwrap();
-        set_new_database_mode(&context.database_path()).unwrap();
         drop(connection);
 
-        let identity = NodeIdentity::load_existing(&context).unwrap();
-        let reopened;
-        {
-            let _fault_guard = HealthMigrationFaultGuard::arm();
-            let degraded = NodeRegistry::open(&context, identity.public_status()).unwrap();
-            assert!(!degraded.health_plane_enabled().unwrap());
-
-            let connection = Connection::open(context.database_path()).unwrap();
-            let version: i64 = connection
-                .query_row("PRAGMA user_version", [], |row| row.get(0))
-                .unwrap();
-            assert_eq!(version, 6, "the database stays at version 6");
-            let audits: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*) FROM transport_audit
-                     WHERE event_type = 'health_plane_migration' AND error_code = 1115",
-                    [],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(audits, 1, "the failure is audited once");
-            let health_tables: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'health!_%' ESCAPE '!'",
-                    [],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(health_tables, 0, "the failed migration left nothing behind");
-            drop(connection);
-
-            // Trust operations keep working while the Health Plane is disabled.
-            let remote = k256::schnorr::SigningKey::from_slice(&[5; 32]).unwrap();
-            let xonly = remote.verifying_key().to_bytes();
-            let public_key: String = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
-            degraded
-                .import_manual_peer(PeerRegistration {
-                    node_id: node_id_for_x_only_public_key(&xonly),
-                    public_key,
-                    role: PeerRole::Performer,
-                    capabilities: vec!["inventory-health".to_string()],
-                    source: PeerSource::Manual,
-                    actor: "operator".to_string(),
-                    reason: "degraded mode still serves trust".to_string(),
-                })
-                .unwrap();
-
-            // A restart never retries the migration on its own.
-            reopened = NodeRegistry::open(&context, identity.public_status()).unwrap();
-            assert!(!reopened.health_plane_enabled().unwrap());
-            let connection = Connection::open(context.database_path()).unwrap();
-            let audits: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*) FROM transport_audit
-                     WHERE event_type = 'health_plane_migration' AND error_code = 1115",
-                    [],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(audits, 1, "retry is never automatic");
-            drop(connection);
+        for result in [
+            NodeRegistry::open(&context, identity.public_status()),
+            NodeRegistry::open_existing(&context, identity.public_status()),
+        ] {
+            match result {
+                Err(RegistryError::InvalidSchema(message)) => {
+                    assert!(message.contains("older than supported"), "{message}");
+                }
+                other => panic!("older schema must fail closed: {other:?}"),
+            }
         }
-
-        // An explicit operator retry moves the registry forward.
-        assert!(reopened.clear_health_plane_migration_block().unwrap());
-        let repaired = NodeRegistry::open(&context, identity.public_status()).unwrap();
-        assert!(repaired.health_plane_enabled().unwrap());
         let connection = Connection::open(context.database_path()).unwrap();
         let version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(version, SCHEMA_VERSION - 1);
     }
 
     #[test]
@@ -6184,7 +5123,7 @@ mod tests {
         let connection = Connection::open(&database).unwrap();
         // One past whatever this build supports: the property is that a
         // database written by a newer Omakure is refused, and pinning the
-        // literal here would quietly stop testing that at the next migration.
+        // literal here would quietly stop testing that at the next version bump.
         connection
             .execute_batch(&format!("PRAGMA user_version = {}", SCHEMA_VERSION + 1))
             .unwrap();

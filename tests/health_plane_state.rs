@@ -287,7 +287,7 @@ fn ingest(
 }
 
 #[test]
-fn a_production_node_migrates_to_schema_seven_and_serves_bounded_health_state() {
+fn a_production_node_serves_bounded_health_state() {
     let node = Node::start();
     let performer = trust_peer(
         &node,
@@ -296,10 +296,6 @@ fn a_production_node_migrates_to_schema_seven_and_serves_bounded_health_state() 
         &["inventory-health", "notifications"],
     );
     let registry = node.registry();
-    assert!(
-        registry.health_plane_enabled().expect("plane state"),
-        "the shipped node must migrate to the Health Plane schema"
-    );
 
     let plane = HealthPlane::with_clock(&registry, Box::new(SharedClock(Arc::clone(&node.clock))));
     let target = node.local_node_id.clone();

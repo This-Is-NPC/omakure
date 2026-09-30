@@ -20,7 +20,7 @@ cargo test --test health_plane_contract --test health_plane_state \
 
 ## Proves
 
-- Frozen Profile/Pulse/Signal contracts, schema migration, durable replay protection, retention, revocation, and redacted public projections.
+- Frozen Profile/Pulse/Signal contracts, current-schema validation, durable replay protection, retention, revocation, and redacted public projections.
 - Real production Noise sessions carry Profile and Pulse messages between nodes.
 - CLI and HTTP fleet projections agree on presence/status.
 - Signal delivery is idempotent across duplicates and restarts; injected clocks test exact freshness, reorder, rate, and retention boundaries without sleeping.

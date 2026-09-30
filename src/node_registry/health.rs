@@ -8,7 +8,7 @@
 
 use super::{
     decode_hex, lifecycle_trust_events_in, validate_node_id, AuditEvent, NodeRegistry, PeerRole,
-    PeerState, RegistryError, SCHEMA_VERSION,
+    PeerState, RegistryError,
 };
 use crate::health_plane::bounds::{
     AUDIT_RETENTION_SECONDS, AUDIT_ROW_BYTES, MAX_AUDIT_ROWS, MAX_CONDUCTORS_PER_PERFORMER,
@@ -154,28 +154,6 @@ pub(crate) struct HealthApplyRequest<'a> {
 }
 
 impl NodeRegistry {
-    /// Report whether the schema version 7 Health Plane tables are present.
-    /// A node whose Health Plane migration failed keeps serving transport,
-    /// enrollment, HTTP, and runs with the Health Plane disabled.
-    pub fn health_plane_enabled(&self) -> Result<bool, RegistryError> {
-        self.with_connection(|connection| {
-            let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-            Ok(version >= SCHEMA_VERSION)
-        })
-    }
-
-    /// Clear the "migration already failed" marker so an operator can retry the
-    /// Health Plane migration explicitly. Retry is never automatic.
-    pub fn clear_health_plane_migration_block(&self) -> Result<bool, RegistryError> {
-        self.with_mutating_connection(|connection| {
-            let removed = connection.execute(
-                "DELETE FROM metadata WHERE key = 'health_plane' AND value = 'disabled'",
-                [],
-            )?;
-            Ok(removed > 0)
-        })
-    }
-
     /// The one new read-only projection required by Health Plane
     /// authorization: `role` and `capabilities` from `trusted_peers` alongside
     /// the identity and trust state. It creates nothing and mutates nothing.
@@ -2111,7 +2089,7 @@ mod tests {
     use crate::health_plane::model::{HealthBody, HealthPayload};
     use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
     use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
-    use crate::node_registry::{PeerRegistration, PeerSource};
+    use crate::node_registry::{PeerRegistration, PeerSource, SCHEMA_VERSION};
     use rusqlite::{Connection, TransactionBehavior};
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -2329,7 +2307,7 @@ mod tests {
     }
 
     #[test]
-    fn migration_creates_bounded_tables_and_leaves_earlier_rows_untouched() {
+    fn schema_creates_bounded_empty_tables_beside_trust_rows() {
         let fixture = fixture();
         let node_id = performer(&fixture.registry);
         let connection = Connection::open(fixture.registry.path()).unwrap();
@@ -2356,8 +2334,7 @@ mod tests {
                 .unwrap();
             assert_eq!(present, 1, "missing {object_type} {name}");
         }
-        // Every Health Plane table starts empty and the trust rows created
-        // before the plane existed are still exactly as they were.
+        // Every Health Plane table starts empty and the trust rows are intact.
         for table in [
             "health_peers",
             "health_profiles",
@@ -2382,7 +2359,6 @@ mod tests {
             )
             .unwrap();
         assert_eq!(trust_state, "active");
-        assert!(fixture.registry.health_plane_enabled().unwrap());
     }
 
     #[test]

@@ -241,11 +241,6 @@ impl<'registry> HealthPlane<'registry> {
         self.clock.unix_seconds()
     }
 
-    /// Whether Health Plane storage is available on this node.
-    pub fn enabled(&self) -> Result<bool, RegistryError> {
-        self.registry.health_plane_enabled()
-    }
-
     /// Evaluate one inbound message under the frozen receive order.
     ///
     /// Steps 1 and 3 (transport framing, envelope shape, and signature) are the
@@ -257,18 +252,6 @@ impl<'registry> HealthPlane<'registry> {
         let now = self.clock.unix_seconds();
         let started = self.clock.monotonic_millis();
         let byte_count = (message.canonical_len + SIGNATURE_BYTES) as i64;
-
-        // Fail closed when the Health Plane migration did not land: the node
-        // keeps serving transport, enrollment, HTTP, and runs, and every Health
-        // Plane message is refused instead of half-applied.
-        if !self.registry.health_plane_enabled()? {
-            return Ok(HealthIngest {
-                kind: HealthKind::parse(message.kind),
-                message_id: None,
-                decision: HealthDecision::Rejected(HealthCode::CorruptState),
-                reply: HealthReply::None,
-            });
-        }
 
         // The sender is the session's authenticated node ID. A syntactically
         // impossible one cannot be audited against a peer, so it is dropped.

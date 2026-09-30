@@ -72,7 +72,7 @@ const MAX_VERSION_BANNER_BYTES: usize = 256;
 /// shows them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FleetStatusReport {
-    /// Whether Health Plane storage is available on this node.
+    /// Always `true`: Health Plane storage is part of every node registry.
     pub enabled: bool,
     /// The reporting node's own canonical node ID.
     pub local_node_id: String,
@@ -201,17 +201,12 @@ fn tally_fleet_counts(nodes: &[FleetNode]) -> (PresenceCounts, BaselineCounts) {
 /// re-implements authorization.
 pub fn fleet_status(registry: &NodeRegistry) -> OperationResult<FleetStatusReport> {
     let plane = HealthPlane::new(registry);
-    let enabled = plane.enabled().map_err(map_registry_error)?;
     let observed_at = plane.now();
-    let nodes = if enabled {
-        let nodes = plane.fleet_status().map_err(map_registry_error)?;
-        collect_active_fleet_nodes(&plane, registry, observed_at, nodes)?
-    } else {
-        Vec::new()
-    };
+    let nodes = plane.fleet_status().map_err(map_registry_error)?;
+    let nodes = collect_active_fleet_nodes(&plane, registry, observed_at, nodes)?;
     let (presence, baselines) = tally_fleet_counts(&nodes);
     Ok(FleetStatusReport {
-        enabled,
+        enabled: true,
         local_node_id: registry.local_node_id().to_string(),
         observed_at,
         presence,
@@ -256,7 +251,7 @@ pub struct SignalCursor {
 /// engine.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SignalFeedReport {
-    /// Whether Health Plane storage is available on this node.
+    /// Always `true`: Health Plane storage is part of every node registry.
     pub enabled: bool,
     /// The reading node's own canonical node ID.
     pub local_node_id: String,
@@ -287,63 +282,59 @@ pub struct SignalFeedReport {
 /// peer that is no longer actively trusted.
 pub fn signal_feed(registry: &NodeRegistry) -> OperationResult<SignalFeedReport> {
     let plane = HealthPlane::new(registry);
-    let enabled = plane.enabled().map_err(map_registry_error)?;
     let limit = SIGNAL_INBOX_CAPACITY as usize;
-    let mut observed_at = plane.now();
+    // One snapshot for the cursors, the Signals, and the trust log the
+    // local lifecycle Signals are projected from. Read separately, the
+    // report could contradict itself: ingest commits between the counter
+    // read and the Signal read, and the feed then shows a Signal beside a
+    // cursor that has not counted it. `gap` is derived from those same
+    // counters, and it is the field an operator reads to decide whether a
+    // fleet's Signal delivery has stalled.
+    let feed = plane.signal_feed(limit).map_err(map_registry_error)?;
+    let observed_at = feed.observed_at;
     let mut entries: Vec<SignalEntry> = Vec::new();
     let mut cursors: Vec<SignalCursor> = Vec::new();
-    if enabled {
-        // One snapshot for the cursors, the Signals, and the trust log the
-        // local lifecycle Signals are projected from. Read separately, the
-        // report could contradict itself: ingest commits between the counter
-        // read and the Signal read, and the feed then shows a Signal beside a
-        // cursor that has not counted it. `gap` is derived from those same
-        // counters, and it is the field an operator reads to decide whether a
-        // fleet's Signal delivery has stalled.
-        let feed = plane.signal_feed(limit).map_err(map_registry_error)?;
-        observed_at = feed.observed_at;
-        for signal in feed.local {
-            entries.push(SignalEntry {
-                source: LOCAL_SIGNAL_SOURCE.to_string(),
-                signal,
-            });
+    for signal in feed.local {
+        entries.push(SignalEntry {
+            source: LOCAL_SIGNAL_SOURCE.to_string(),
+            signal,
+        });
+    }
+    // The feed shows the *actively trusted* fleet, exactly like the
+    // fleet-status projection: a peer whose trust was revoked, suspended,
+    // or replaced stops appearing at once, which is what makes a
+    // revocation change the operator's view immediately. The retained rows
+    // are removed for good by the frozen revocation cleanup.
+    let mut active: HashSet<String> = HashSet::new();
+    for node in feed.nodes {
+        if node.trust_state != "active" {
+            continue;
         }
-        // The feed shows the *actively trusted* fleet, exactly like the
-        // fleet-status projection: a peer whose trust was revoked, suspended,
-        // or replaced stops appearing at once, which is what makes a
-        // revocation change the operator's view immediately. The retained rows
-        // are removed for good by the frozen revocation cleanup.
-        let mut active: HashSet<String> = HashSet::new();
-        for node in feed.nodes {
-            if node.trust_state != "active" {
-                continue;
-            }
-            active.insert(node.node_id.clone());
-            cursors.push(SignalCursor {
-                node_id: node.node_id,
-                cursor: node.cursor,
-                stored: node.stored,
-                held: node.held,
-                gap: node.held > 0,
-            });
+        active.insert(node.node_id.clone());
+        cursors.push(SignalCursor {
+            node_id: node.node_id,
+            cursor: node.cursor,
+            stored: node.stored,
+            held: node.held,
+            gap: node.held > 0,
+        });
+    }
+    cursors.sort_by(|left, right| left.node_id.cmp(&right.node_id));
+    for entry in feed.signals {
+        // The bounded page is already restricted to actively trusted
+        // peers by the read itself; this repeats the decision here so the
+        // rule stays visible where the projection is assembled.
+        if !active.contains(&entry.source) {
+            continue;
         }
-        cursors.sort_by(|left, right| left.node_id.cmp(&right.node_id));
-        for entry in feed.signals {
-            // The bounded page is already restricted to actively trusted
-            // peers by the read itself; this repeats the decision here so the
-            // rule stays visible where the projection is assembled.
-            if !active.contains(&entry.source) {
-                continue;
-            }
-            entries.push(SignalEntry {
-                source: entry.source,
-                signal: entry.signal,
-            });
-        }
+        entries.push(SignalEntry {
+            source: entry.source,
+            signal: entry.signal,
+        });
     }
     reduce_to_newest(&mut entries, limit);
     Ok(SignalFeedReport {
-        enabled,
+        enabled: true,
         local_node_id: registry.local_node_id().to_string(),
         observed_at,
         retention_seconds: SIGNAL_RETENTION_SECONDS,

@@ -41,7 +41,7 @@ and bounds.
 | Direct envelope version | integer `1`, carried as envelope `version` (frozen, unchanged) |
 | Signature domain | Existing `omakure/direct-envelope/v1` followed by one NUL byte (frozen, unchanged) |
 | Node ID domain | Existing `omakure/node-id/v1` followed by one NUL byte (frozen, unchanged) |
-| Node registry schema version | `8` (version 7 created the Health Plane tables; version 8 widened the stored Profile with the two baseline fields) |
+| Node registry schema version | `8`; the Health Plane tables are part of every node registry |
 
 `payload.health_version` is deliberately independent of the envelope `version`.
 The envelope version governs the signed container; the Health Plane version
@@ -517,8 +517,8 @@ successful handshake.
 `NodeRegistry::transport_peer(node_id, public_key_hex) -> Option<TransportPeer>`
 deliberately returns only `node_id`, `identity_key`, `transport_public_key`,
 `key_epoch`, and `state`; it carries no role and no capability set, and
-`NodeRegistry::peer(node_id)` reads the legacy version-1 `peers` table that the
-runtime transport path intentionally does not consult. Health Plane
+`NodeRegistry::peer(node_id)` reads the `peers` table that the runtime
+transport path intentionally does not consult. Health Plane
 authorization therefore requires exactly one new **read-only** registry
 projection that returns `role` and `capabilities` from `trusted_peers` alongside
 the existing `state`. This is a new query, not a new capability, not a new trust
@@ -778,7 +778,7 @@ closed:
    message kind, and byte counts. They never record payload bytes, field values,
    signatures, or key material.
 
-## Corruption and Migration Failure
+## Corruption and Schema Versions
 
 Health Plane state is **derived and disposable**. It can be discarded and rebuilt
 from subsequent Profiles, Pulses, and Signals. Identity, trust, revocation, and
@@ -786,12 +786,9 @@ run history are not derived and are never touched by Health Plane recovery.
 
 | Case | Frozen behavior |
 |---|---|
-| Schema migration to version 7 | Forward-only, one transaction, updates both `PRAGMA user_version` and the `metadata.schema_version` row atomically, exactly like the existing v1 through v6 migrations |
-| Schema migration to version 8 | Forward-only, one transaction, adds `health_profiles.baseline_id` and `health_profiles.baseline_observed_id` defaulted to empty, and fails hard rather than degrading: there is no half-state in which a closed Profile schema requires two fields the storage cannot hold. A node that never completed the version 7 migration stays at version 6 with the plane disabled and never reaches it |
-| Migration failure | Full rollback; the database stays at version 6; the node starts with the Health Plane disabled while transport, enrollment, HTTP, and runs continue; a `health_corrupt_state` (1115) audit is written |
-| Migration retry | Only on explicit operator action; never automatic on every start |
+| Schema creation | A new `node.sqlite` is created at version 8 in one transaction that sets both `PRAGMA user_version` and the `metadata.schema_version` row, with every Health Plane table present |
+| Older schema | A node that finds `schema_version < 8` refuses to start without mutating the database; older registries are not migrated |
 | Second database | Never created; the Health Plane lives only in `node.sqlite` |
-| Rows from schema versions 1 through 6 | Never mutated in place, never dropped by the Health Plane migration |
 | Downgrade | A node that finds `schema_version > 8` refuses to start rather than downgrading |
 | Single corrupt Health Plane row | Delete only that row, audit `health_corrupt_state` (1115), continue |
 | `SQLITE_CORRUPT` on a Health Plane table | Disable the Health Plane for the process lifetime, audit, keep transport and runs serving; never rebuild trust from incoming data |

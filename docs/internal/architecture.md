@@ -167,7 +167,7 @@ src/
 │   ├── scripts.rs           safe tree/content operations
 │   ├── search.rs            indexed script search
 │   ├── battery/             sync, inspect, install, and provenance
-│   ├── node.rs              node status, trust, enrollment, and discovery
+│   ├── node/                node status, trust, enrollment, and discovery
 │   ├── health.rs            fleet-status and Signal-feed projections
 │   └── baseline.rs          baseline push, status, and rollback
 ├── adapters/                filesystem, process, environment, and checks

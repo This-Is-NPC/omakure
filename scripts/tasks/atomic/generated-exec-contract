@@ -21,7 +21,9 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 #   src/node.rs                       TempDir::new + fs::set_permissions in test fixtures only
 #   src/node_identity.rs              TempDir::new + fs::set_permissions in test fixtures only
 #   src/node_registry/tests/open.rs   TempDir::new + fs::set_permissions in test fixtures only
-#   src/operations/node.rs            TempDir::new + fs::set_permissions in test fixtures only
+#   src/operations/node/tests/status.rs  TempDir::new + fs::set_permissions in test fixtures only
+#   src/operations/node/tests/bundle.rs  TempDir::new + fs::set_permissions in test fixtures only
+#   src/operations/node/tests/mod.rs     TempDir::new + fs::set_permissions in test fixtures only
 #   src/util/fs.rs                    canonical set_executable_permissions
 #   src/cli/init.rs                   init chmods the created script; TempDir tokens are test fixtures
 #   src/cli/update.rs                 update chmods the installed binary; TempDir tokens are test install roots
@@ -61,7 +63,15 @@ is_allowlisted_tempdir_permissions() {
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
-        src/operations/node.rs)
+        src/operations/node/tests/status.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/operations/node/tests/bundle.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/operations/node/tests/mod.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;

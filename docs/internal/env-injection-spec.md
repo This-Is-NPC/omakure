@@ -12,7 +12,7 @@ Terminology: "env" means the ordered set of `KEY=value` pairs that will be
 handed to a script process. "Merged env" means the single map produced
 after all precedence layers have been folded together. Keys are compared
 **case-sensitively** at injection time (unlike schema-field matching in
-`src/adapters/environments.rs`, which lowercases keys to match schema
+`src/adapters/environments/layers.rs`, which lowercases keys to match schema
 fields — that path is unrelated to process injection).
 
 ---
@@ -229,7 +229,7 @@ it**:
    data_json` and likewise has no env-value sink.
 
 4. **Masking (defense in depth, diagnostic previews only)** —
-   `src/adapters/environments.rs`, `is_sensitive_key(key)` flags keys
+   `src/adapters/environments/values.rs`, `is_sensitive_key(key)` flags keys
    containing `password`, `secret`, `token`, `key`, `api`,
    `private`, or `cred`, and the Environments **preview** masks their
     values with `****`. This is a *display* control for diagnostic output,

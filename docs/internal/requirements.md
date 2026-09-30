@@ -17,7 +17,7 @@ must be updated in the same change.
 | FR-007 | `init` creates schema-bearing Bash, PowerShell, Python, or Lua templates, validates supplied schema JSON, reads optional body stdin, and protects existing files unless forced. | `src/cli/init.rs` |
 | FR-008 | Direct runs support actors, reasons, caller IDs, parent IDs, forwarded args, per-run env files, no-prompt mode, timeouts, and secret inputs. | `src/cli/run.rs`, `src/run_executor.rs` |
 | FR-009 | Bash, PowerShell, and Python commands resolve interpreters and preserve injected `PATH` semantics; `.lua` resolves no interpreter at all and re-executes the binary as an embedded Lua host. | `src/runtime.rs`, `src/adapters/script_runner.rs` |
-| FR-010 | Active and per-run environment values are injected with reserved Omakure variables last; sensitive values are masked and not persisted. | `src/adapters/environments.rs`, `src/run_executor.rs`, `src/redaction.rs` |
+| FR-010 | Active and per-run environment values are injected with reserved Omakure variables last; sensitive values are masked and not persisted. | `src/adapters/environments/`, `src/run_executor.rs`, `src/redaction.rs` |
 | FR-011 | Named environments can be listed, created, shown, set, removed, replaced, activated, deactivated, and deleted through CLI and HTTP. | `src/cli/env.rs`, `src/operations/envs.rs` |
 | FR-012 | Runs are stored in SQLite with state, actor, reason, args, output, timing, trigger, and schedule provenance. | `src/runs/` |
 | FR-013 | Queue producers add, cancel, dead-letter, and report jobs; workers claim jobs atomically, heartbeat leases, honor timeouts, and drain on signals. | `src/cli/queue.rs`, `src/runs/`, `src/run_executor.rs` |

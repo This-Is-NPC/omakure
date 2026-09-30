@@ -161,8 +161,7 @@ fn format_list_row(row: &RunRow) -> String {
 /// run states. Retained as characterization coverage for the operation-backed
 /// adapter migration.
 ///
-/// Default (neither flag): the terminal set, so v0.1 callers see no behavior
-/// change.
+/// Default (neither flag): the terminal set.
 #[cfg(test)]
 fn resolve_state_filter(
     states: &[String],

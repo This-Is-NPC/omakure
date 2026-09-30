@@ -1,23 +1,7 @@
 //! SQLite-backed run history with a state machine and structured trace stream.
 //!
 //! `runs.rs` is the **only** code path that persists script execution
-//! history. The legacy `history.rs` JSON-file format has been removed; there
-//! is no shim, no fallback, and no migration.
-//!
-//! On first open against a workspace, two destructive cleanups run:
-//!
-//! 1. Every top-level `*.json` file in `<workspace>/.history/` is unlinked
-//!    (legacy cleanup from the v0.1 AI surface release).
-//! 2. If the existing `runs` table lacks the `state` column (i.e. it was
-//!    written by the v0.1 schema), the table is dropped and recreated with
-//!    the new schema. The state-machine release ships with zero
-//!    released-version users on the v0.1 schema, so this destructive
-//!    rebuild is acceptable.
-//!
-//! Subdirectories and other files (notably `runs.sqlite` itself and
-//! `search-index.sqlite`) are left untouched by the legacy cleanup. The
-//! schema rebuild only drops and recreates the `runs` and `run_traces`
-//! tables — not the database file.
+//! history.
 
 use crate::workspace::Workspace;
 use rusqlite::{
@@ -332,8 +316,7 @@ pub struct RunRow {
 
 /// Filters for [`query_runs`]. All filters are AND-combined; `None`
 /// fields are ignored. Default filters return only **terminal** rows
-/// ordered by `started_at DESC` (the v0.1 default), so existing callers
-/// keep their previous semantics.
+/// ordered by `started_at DESC`.
 #[derive(Debug, Clone)]
 pub struct RunFilters {
     pub script: Option<String>,
@@ -345,8 +328,8 @@ pub struct RunFilters {
     pub success: Option<bool>,
     pub limit: Option<i64>,
     /// Filter by state. Empty vec means "no state filter" — every state
-    /// is returned. Default value is the [`RunStateSet::Terminal`] set so
-    /// that callers from v0.1 keep their "completed runs only" behavior.
+    /// is returned. Default value is the [`RunStateSet::Terminal`] set, which
+    /// returns completed runs only.
     pub states: Vec<RunState>,
 }
 
@@ -433,26 +416,16 @@ pub struct RunStats {
 // Open / schema
 // ---------------------------------------------------------------------------
 
-/// Open the run-log database for `workspace`, creating it if necessary,
-/// running any pending schema setup, and (on first open against a workspace
-/// that still contains legacy state) cleaning it up.
-///
-/// Two destructive cleanups may run on first open:
-///
-/// 1. Every top-level `*.json` file under `<workspace>/.history/` is
-///    deleted (legacy v0.1 cleanup).
-/// 2. If the existing `runs` table lacks the `state` column it is dropped
-///    and recreated with the new schema.
+/// Open the run-log database for `workspace`, creating it and its schema if
+/// necessary.
 pub fn open(workspace: &Workspace) -> Result<Connection, String> {
     let history_dir = workspace.history_dir();
     fs::create_dir_all(history_dir).map_err(|err| format!("Create history dir failed: {}", err))?;
     let _open_guard = runs_open_lock()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    cleanup_legacy_json_files(history_dir);
     let db_path = runs_db_path(workspace);
     let conn = open_connection_inner(&db_path)?;
-    rebuild_legacy_schema_if_needed(&conn)?;
     init_schema(&conn)?;
     Ok(conn)
 }
@@ -495,49 +468,6 @@ fn open_connection_inner(db_path: &Path) -> Result<Connection, String> {
     conn.execute_batch("PRAGMA foreign_keys = ON")
         .map_err(|err| format!("Enable foreign keys failed: {}", err))?;
     Ok(conn)
-}
-
-/// Detect a v0.1-shaped `runs` table (no `state` column) and drop it so
-/// [`init_schema`] can recreate it with the new layout. Idempotent: if
-/// the table is already on the new shape, this is a no-op.
-fn rebuild_legacy_schema_if_needed(conn: &Connection) -> Result<(), String> {
-    let has_runs_table: bool = conn
-        .query_row(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='runs'",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(|err| format!("Inspect runs table failed: {}", err))?
-        .is_some();
-    if !has_runs_table {
-        return Ok(());
-    }
-    let mut stmt = conn
-        .prepare("PRAGMA table_info(runs)")
-        .map_err(|err| format!("Inspect runs schema failed: {}", err))?;
-    let mut has_state_column = false;
-    let mut has_trigger_column = false;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|err| format!("Read runs schema rows failed: {}", err))?;
-    for col in rows {
-        let name = col.map_err(|err| format!("Read schema row failed: {}", err))?;
-        match name.as_str() {
-            "state" => has_state_column = true,
-            "trigger" => has_trigger_column = true,
-            _ => {}
-        }
-    }
-    drop(stmt);
-    if !has_state_column || !has_trigger_column {
-        eprintln!(
-            "omakure: rebuilding runs.sqlite schema (legacy layout detected; existing rows will be dropped)"
-        );
-        conn.execute_batch("DROP TABLE IF EXISTS run_traces; DROP TABLE IF EXISTS runs;")
-            .map_err(|err| format!("Drop legacy runs table failed: {}", err))?;
-    }
-    Ok(())
 }
 
 /// Initialize the `runs` and `run_traces` tables and indexes. Idempotent
@@ -1959,25 +1889,6 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     (year, month, day)
 }
 
-/// Delete every top-level `*.json` file inside `history_dir` and ignore
-/// errors. Subdirectories and non-`.json` files are left untouched.
-fn cleanup_legacy_json_files(history_dir: &Path) {
-    let entries = match fs::read_dir(history_dir) {
-        Ok(entries) => entries,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
-        }
-        let _ = fs::remove_file(&path);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2074,63 +1985,12 @@ mod tests {
     }
 
     #[test]
-    fn open_recreates_table_when_legacy_schema_detected() {
-        let ws = unique_workspace("legacy_rebuild");
-        // Manually create a legacy v0.1 table layout: no `state` column.
-        let db_path = runs_db_path(&ws);
-        {
-            let conn = Connection::open(&db_path).expect("open legacy");
-            conn.execute_batch(
-                "CREATE TABLE runs (
-                    run_id TEXT PRIMARY KEY,
-                    script_path TEXT NOT NULL,
-                    args_json TEXT NOT NULL,
-                    actor TEXT NOT NULL,
-                    started_at INTEGER NOT NULL,
-                    finished_at INTEGER NOT NULL,
-                    duration_ms INTEGER NOT NULL,
-                    success INTEGER NOT NULL,
-                    omakure_version TEXT NOT NULL
-                );
-                INSERT INTO runs VALUES('legacy', '/x/a.sh', '[]', 'human', 1, 2, 1, 1, 'old');",
-            )
-            .expect("seed legacy");
-        }
-        let conn = open(&ws).expect("open after legacy detection");
-        // The legacy row should be gone.
-        assert!(get_run(&conn, "legacy").unwrap().is_none());
-        // The new schema must have the state column.
-        let row = enqueue(&conn, "/x/b.sh", &[], enqueue_opts()).unwrap();
-        let loaded = get_run(&conn, &row.run_id).unwrap().unwrap();
-        assert_eq!(loaded.state, RunState::Queued);
-        let _ = fs::remove_dir_all(ws.root());
-    }
-
-    #[test]
     fn open_idempotent_on_new_schema() {
         let ws = unique_workspace("open_idempotent");
         let _ = open(&ws).expect("first open");
         let conn = open(&ws).expect("second open");
         let rows = query_runs(&conn, &RunFilters::default()).unwrap();
         assert!(rows.is_empty());
-        let _ = fs::remove_dir_all(ws.root());
-    }
-
-    #[test]
-    fn open_deletes_top_level_json_files_only() {
-        let ws = unique_workspace("cleanup_legacy");
-        let history = ws.history_dir().to_path_buf();
-        fs::write(history.join("legit.json"), "{}").unwrap();
-        fs::write(history.join("keep.txt"), "keep").unwrap();
-        fs::create_dir_all(history.join("subdir")).unwrap();
-        fs::write(history.join("subdir").join("nested.json"), "{}").unwrap();
-
-        let _conn = open(&ws).expect("open");
-
-        assert!(!history.join("legit.json").exists());
-        assert!(history.join("keep.txt").exists());
-        assert!(history.join("subdir").join("nested.json").exists());
-        assert!(history.join("runs.sqlite").exists());
         let _ = fs::remove_dir_all(ws.root());
     }
 

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "3d55dae4d343c1db04b605731a58030ea9c3da7e82f70b5c559e5fa3244f9d37",
+  "canonical_sha256": "d0d39471b331c17c1112fa7767c6399b2fca8e81d7967d45999d8071cfeaf4b9",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -135,14 +135,42 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 91,
+        "invocations": 5,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 43,
-        "cyclomatic": 159
+        "cognitive": 31,
+        "cyclomatic": 90
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 51,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 3,
+        "cyclomatic": 31
+      },
+      "path": "src/baseline_push/tests/delivery.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 33,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 5,
+        "cyclomatic": 27
+      },
+      "path": "src/baseline_push/tests/mod.rs",
       "source_class": "handwritten"
     },
     {
@@ -12527,23 +12555,23 @@
       "derived": {
         "identity": "crate::baseline_push::code",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn code(self) -> u16",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::code",
       "kind": "method",
-      "line": 91,
+      "line": 89,
       "name": "code",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 14,
         "kind": "method",
-        "line": 91,
+        "line": 89,
         "name": "code"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn code(self) -> u16",
       "source_class": "handwritten"
     },
@@ -12553,23 +12581,23 @@
       "derived": {
         "identity": "crate::baseline_push::name",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn name(self) -> &'static str",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::name",
       "kind": "method",
-      "line": 109,
+      "line": 107,
       "name": "name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 14,
         "kind": "method",
-        "line": 109,
+        "line": 107,
         "name": "name"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn name(self) -> &'static str",
       "source_class": "handwritten"
     },
@@ -12579,23 +12607,23 @@
       "derived": {
         "identity": "crate::baseline_push::is_reportable",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn is_reportable(self) -> bool",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::is_reportable",
       "kind": "method",
-      "line": 135,
+      "line": 133,
       "name": "is_reportable",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 135,
+        "line": 133,
         "name": "is_reportable"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn is_reportable(self) -> bool",
       "source_class": "handwritten"
     },
@@ -12605,23 +12633,23 @@
       "derived": {
         "identity": "crate::baseline_push::read_policy",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn read_policy(context: &crate::node::NodeContext) -> BaselinePolicy",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::read_policy",
       "kind": "function",
-      "line": 166,
+      "line": 164,
       "name": "read_policy",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 166,
+        "line": 164,
         "name": "read_policy"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn read_policy(context: &crate::node::NodeContext) -> BaselinePolicy",
       "source_class": "handwritten"
     },
@@ -12631,23 +12659,23 @@
       "derived": {
         "identity": "crate::baseline_push::evaluate_sender_gates",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn evaluate_sender_gates( enabled: bool, authorization: Option<&HealthAuthorization>, ) -> Result<(), BaselineCode>",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::evaluate_sender_gates",
       "kind": "function",
-      "line": 241,
+      "line": 228,
       "name": "evaluate_sender_gates",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 241,
+        "line": 228,
         "name": "evaluate_sender_gates"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn evaluate_sender_gates( enabled: bool, authorization: Option<&HealthAuthorization>, ) -> Result<(), BaselineCode>",
       "source_class": "handwritten"
     },
@@ -12657,23 +12685,23 @@
       "derived": {
         "identity": "crate::baseline_push::evaluate_sender_gates::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": ".any(|held| held == CAPABILITY_BASELINE_PUSH)",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::evaluate_sender_gates::<closure>",
       "kind": "closure",
-      "line": 257,
+      "line": 244,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 257,
+        "line": 244,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": ".any(|held| held == CAPABILITY_BASELINE_PUSH)",
       "source_class": "handwritten"
     },
@@ -12683,23 +12711,23 @@
       "derived": {
         "identity": "crate::baseline_push::named_publisher",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn named_publisher<'a>( publishers: &'a [BaselinePublisherKey], key_id: &[u8",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::named_publisher",
       "kind": "function",
-      "line": 268,
+      "line": 255,
       "name": "named_publisher",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 268,
+        "line": 255,
         "name": "named_publisher"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn named_publisher<'a>( publishers: &'a [BaselinePublisherKey], key_id: &[u8",
       "source_class": "handwritten"
     },
@@ -12709,23 +12737,23 @@
       "derived": {
         "identity": "crate::baseline_push::named_publisher::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": ".find(|publisher| &publisher.key_id == key_id)",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::named_publisher::<closure>",
       "kind": "closure",
-      "line": 274,
+      "line": 261,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 274,
+        "line": 261,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": ".find(|publisher| &publisher.key_id == key_id)",
       "source_class": "handwritten"
     },
@@ -12735,23 +12763,23 @@
       "derived": {
         "identity": "crate::baseline_push::map_error",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn map_error(error: BaselineError) -> BaselineCode",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::map_error",
       "kind": "function",
-      "line": 279,
+      "line": 266,
       "name": "map_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 9,
         "kind": "function",
-        "line": 279,
+        "line": 266,
         "name": "map_error"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn map_error(error: BaselineError) -> BaselineCode",
       "source_class": "handwritten"
     },
@@ -12761,23 +12789,23 @@
       "derived": {
         "identity": "crate::baseline_push::encode",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn encode(manifest: &[u8], bodies: &[Vec<u8>]) -> serde_json::Value",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::encode",
       "kind": "method",
-      "line": 306,
+      "line": 293,
       "name": "encode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 306,
+        "line": 293,
         "name": "encode"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn encode(manifest: &[u8], bodies: &[Vec<u8>]) -> serde_json::Value",
       "source_class": "handwritten"
     },
@@ -12787,23 +12815,23 @@
       "derived": {
         "identity": "crate::baseline_push::parse",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn parse(payload: &serde_json::Value) -> Result<Self, BaselineCode>",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::parse",
       "kind": "method",
-      "line": 319,
+      "line": 306,
       "name": "parse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 6,
         "kind": "method",
-        "line": 319,
+        "line": 306,
         "name": "parse"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn parse(payload: &serde_json::Value) -> Result<Self, BaselineCode>",
       "source_class": "handwritten"
     },
@@ -12813,23 +12841,23 @@
       "derived": {
         "identity": "crate::baseline_push::verify_push",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn verify_push( push: &BaselinePush, policy: &BaselinePolicy, now: u64, ) -> Result<VerifiedBaseline, BaselineCode>",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::verify_push",
       "kind": "function",
-      "line": 361,
+      "line": 348,
       "name": "verify_push",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 361,
+        "line": 348,
         "name": "verify_push"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn verify_push( push: &BaselinePush, policy: &BaselinePolicy, now: u64, ) -> Result<VerifiedBaseline, BaselineCode>",
       "source_class": "handwritten"
     },
@@ -12839,23 +12867,23 @@
       "derived": {
         "identity": "crate::baseline_push::verify_push::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": ".map(|entry| entry.path.clone())",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::verify_push::<closure>",
       "kind": "closure",
-      "line": 381,
+      "line": 368,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 381,
+        "line": 368,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": ".map(|entry| entry.path.clone())",
       "source_class": "handwritten"
     },
@@ -12865,23 +12893,23 @@
       "derived": {
         "identity": "crate::baseline_push::new",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn new( registry: &'a crate::node_registry::NodeRegistry, identity: &'a crate::node_identity::NodeIdentity, remote_node_id: &str, remote_identity_key: [u8",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::new",
       "kind": "method",
-      "line": 426,
+      "line": 400,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 426,
+        "line": 400,
         "name": "new"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn new( registry: &'a crate::node_registry::NodeRegistry, identity: &'a crate::node_identity::NodeIdentity, remote_node_id: &str, remote_identity_key: [u8",
       "source_class": "handwritten"
     },
@@ -12891,23 +12919,23 @@
       "derived": {
         "identity": "crate::baseline_push::handle_envelope",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn handle_envelope(&mut self, encoded: &[u8], now: u64) -> BaselineOutcome",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::handle_envelope",
       "kind": "method",
-      "line": 452,
+      "line": 426,
       "name": "handle_envelope",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 10,
         "kind": "method",
-        "line": 452,
+        "line": 426,
         "name": "handle_envelope"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn handle_envelope(&mut self, encoded: &[u8], now: u64) -> BaselineOutcome",
       "source_class": "handwritten"
     },
@@ -12917,23 +12945,23 @@
       "derived": {
         "identity": "crate::baseline_push::handle_envelope::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "let verified = crate::direct_transport::envelope_nonce(encoded).and_then(|nonce| {",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::handle_envelope::<closure>",
       "kind": "closure",
-      "line": 465,
+      "line": 439,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 465,
+        "line": 439,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "let verified = crate::direct_transport::envelope_nonce(encoded).and_then(|nonce| {",
       "source_class": "handwritten"
     },
@@ -12943,23 +12971,23 @@
       "derived": {
         "identity": "crate::baseline_push::install_when_still_trusted",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "fn install_when_still_trusted( &mut self, baseline: &VerifiedBaseline, baseline_id: [u8",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::install_when_still_trusted",
       "kind": "method",
-      "line": 528,
+      "line": 502,
       "name": "install_when_still_trusted",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 528,
+        "line": 502,
         "name": "install_when_still_trusted"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "fn install_when_still_trusted( &mut self, baseline: &VerifiedBaseline, baseline_id: [u8",
       "source_class": "handwritten"
     },
@@ -12969,11 +12997,63 @@
       "derived": {
         "identity": "crate::baseline_push::install_when_still_trusted::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": ".map(|_| ())",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::install_when_still_trusted::<closure>",
+      "kind": "closure",
+      "line": 515,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 515,
+        "name": "<closure>"
+      },
+      "path": "src/baseline_push/mod.rs",
+      "signature": ".map(|_| ())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::baseline_push::peek_id",
+        "macro_expansion": "not_measured",
+        "path": "src/baseline_push/mod.rs",
+        "signature": "fn peek_id(&self, push: &BaselinePush) -> Option<[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::baseline_push::peek_id",
+      "kind": "method",
+      "line": 538,
+      "name": "peek_id",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 538,
+        "name": "peek_id"
+      },
+      "path": "src/baseline_push/mod.rs",
+      "signature": "fn peek_id(&self, push: &BaselinePush) -> Option<[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::baseline_push::peek_id::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/baseline_push/mod.rs",
+        "signature": ".and_then(|manifest| manifest.baseline_id().ok())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::baseline_push::peek_id::<closure>",
       "kind": "closure",
       "line": 541,
       "name": "<closure>",
@@ -12985,59 +13065,7 @@
         "line": 541,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
-      "signature": ".map(|_| ())",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::baseline_push::peek_id",
-        "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
-        "signature": "fn peek_id(&self, push: &BaselinePush) -> Option<[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::baseline_push::peek_id",
-      "kind": "method",
-      "line": 564,
-      "name": "peek_id",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 564,
-        "name": "peek_id"
-      },
-      "path": "src/baseline_push.rs",
-      "signature": "fn peek_id(&self, push: &BaselinePush) -> Option<[u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::baseline_push::peek_id::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
-        "signature": ".and_then(|manifest| manifest.baseline_id().ok())",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::baseline_push::peek_id::<closure>",
-      "kind": "closure",
-      "line": 567,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 567,
-        "name": "<closure>"
-      },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": ".and_then(|manifest| manifest.baseline_id().ok())",
       "source_class": "handwritten"
     },
@@ -13047,23 +13075,23 @@
       "derived": {
         "identity": "crate::baseline_push::authorization",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "fn authorization(&self) -> Option<HealthAuthorization>",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::authorization",
       "kind": "method",
-      "line": 570,
+      "line": 544,
       "name": "authorization",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 570,
+        "line": 544,
         "name": "authorization"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "fn authorization(&self) -> Option<HealthAuthorization>",
       "source_class": "handwritten"
     },
@@ -13073,23 +13101,23 @@
       "derived": {
         "identity": "crate::baseline_push::audit",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "fn audit(&self, event: &str, outcome: &str, code: Option<BaselineCode>)",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::audit",
       "kind": "method",
-      "line": 577,
+      "line": 551,
       "name": "audit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 577,
+        "line": 551,
         "name": "audit"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "fn audit(&self, event: &str, outcome: &str, code: Option<BaselineCode>)",
       "source_class": "handwritten"
     },
@@ -13099,23 +13127,23 @@
       "derived": {
         "identity": "crate::baseline_push::refuse",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "fn refuse( &mut self, baseline_id: Option<[u8",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::refuse",
       "kind": "method",
-      "line": 589,
+      "line": 563,
       "name": "refuse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 589,
+        "line": 563,
         "name": "refuse"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "fn refuse( &mut self, baseline_id: Option<[u8",
       "source_class": "handwritten"
     },
@@ -13125,23 +13153,23 @@
       "derived": {
         "identity": "crate::baseline_push::queue_reply",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "fn queue_reply( &mut self, baseline_id: &[u8",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::queue_reply",
       "kind": "method",
-      "line": 604,
+      "line": 578,
       "name": "queue_reply",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 604,
+        "line": 578,
         "name": "queue_reply"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "fn queue_reply( &mut self, baseline_id: &[u8",
       "source_class": "handwritten"
     },
@@ -13151,23 +13179,23 @@
       "derived": {
         "identity": "crate::baseline_push::queue_reply::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": ".map(|envelope| envelope.encoded());",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::queue_reply::<closure>",
       "kind": "closure",
-      "line": 629,
+      "line": 603,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 629,
+        "line": 603,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": ".map(|envelope| envelope.encoded());",
       "source_class": "handwritten"
     },
@@ -13177,23 +13205,23 @@
       "derived": {
         "identity": "crate::baseline_push::take_reply",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/mod.rs",
         "signature": "pub fn take_reply(&mut self) -> Option<Vec<u8>>",
         "source_class": "handwritten"
       },
       "identity": "crate::baseline_push::take_reply",
       "kind": "method",
-      "line": 633,
+      "line": 607,
       "name": "take_reply",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 633,
+        "line": 607,
         "name": "take_reply"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/mod.rs",
       "signature": "pub fn take_reply(&mut self) -> Option<Vec<u8>>",
       "source_class": "handwritten"
     },
@@ -13201,25 +13229,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::publisher",
+        "identity": "crate::baseline_push::tests::publisher",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn publisher(scalar: u8) -> (SigningKey, BaselinePublisherKey)",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::publisher",
+      "identity": "crate::baseline_push::tests::publisher",
       "kind": "function",
-      "line": 647,
+      "line": 26,
       "name": "publisher",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 647,
+        "line": 26,
         "name": "publisher"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn publisher(scalar: u8) -> (SigningKey, BaselinePublisherKey)",
       "source_class": "handwritten"
     },
@@ -13227,25 +13255,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::signed",
+        "identity": "crate::baseline_push::tests::signed",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn signed(scalar: u8, bodies: &[(String, Vec<u8>)]) -> SignedBaselineManifest",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::signed",
+      "identity": "crate::baseline_push::tests::signed",
       "kind": "function",
-      "line": 670,
+      "line": 42,
       "name": "signed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 670,
+        "line": 42,
         "name": "signed"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn signed(scalar: u8, bodies: &[(String, Vec<u8>)]) -> SignedBaselineManifest",
       "source_class": "handwritten"
     },
@@ -13253,25 +13281,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::push_for",
+        "identity": "crate::baseline_push::tests::push_for",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn push_for(manifest: &SignedBaselineManifest, bodies: &[(String, Vec<u8>)]) -> BaselinePush",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::push_for",
+      "identity": "crate::baseline_push::tests::push_for",
       "kind": "function",
-      "line": 684,
+      "line": 56,
       "name": "push_for",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 684,
+        "line": 56,
         "name": "push_for"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn push_for(manifest: &SignedBaselineManifest, bodies: &[(String, Vec<u8>)]) -> BaselinePush",
       "source_class": "handwritten"
     },
@@ -13279,25 +13307,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::push_for::<closure>",
+        "identity": "crate::baseline_push::tests::push_for::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": ".map(|entry| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::push_for::<closure>",
+      "identity": "crate::baseline_push::tests::push_for::<closure>",
       "kind": "closure",
-      "line": 688,
+      "line": 60,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 688,
+        "line": 60,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": ".map(|entry| {",
       "source_class": "handwritten"
     },
@@ -13305,25 +13333,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::push_for::<closure>::<closure>",
+        "identity": "crate::baseline_push::tests::push_for::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": ".find(|(path, _)| path == &entry.path)",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::push_for::<closure>::<closure>",
+      "identity": "crate::baseline_push::tests::push_for::<closure>::<closure>",
       "kind": "closure",
-      "line": 691,
+      "line": 63,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 691,
+        "line": 63,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": ".find(|(path, _)| path == &entry.path)",
       "source_class": "handwritten"
     },
@@ -13331,25 +13359,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::push_for::<closure>::<closure>@692#2",
+        "identity": "crate::baseline_push::tests::push_for::<closure>::<closure>@64#2",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": ".map(|(_, body)| body.clone())",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::push_for::<closure>::<closure>@692#2",
+      "identity": "crate::baseline_push::tests::push_for::<closure>::<closure>@64#2",
       "kind": "closure",
-      "line": 692,
+      "line": 64,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 692,
+        "line": 64,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": ".map(|(_, body)| body.clone())",
       "source_class": "handwritten"
     },
@@ -13357,25 +13385,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::policy",
+        "identity": "crate::baseline_push::tests::policy",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn policy(scalar: u8) -> BaselinePolicy",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::policy",
+      "identity": "crate::baseline_push::tests::policy",
       "kind": "function",
-      "line": 699,
+      "line": 71,
       "name": "policy",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 699,
+        "line": 71,
         "name": "policy"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn policy(scalar: u8) -> BaselinePolicy",
       "source_class": "handwritten"
     },
@@ -13383,25 +13411,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit",
+        "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn a_maximal_push_fits_inside_the_frozen_plaintext_limit()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit",
+      "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit",
       "kind": "function",
-      "line": 715,
+      "line": 87,
       "name": "a_maximal_push_fits_inside_the_frozen_plaintext_limit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 715,
+        "line": 87,
         "name": "a_maximal_push_fits_inside_the_frozen_plaintext_limit"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn a_maximal_push_fits_inside_the_frozen_plaintext_limit()",
       "source_class": "handwritten"
     },
@@ -13409,25 +13437,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>",
+        "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": ".map(|index| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>",
+      "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>",
       "kind": "closure",
-      "line": 719,
+      "line": 91,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 719,
+        "line": 91,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": ".map(|index| {",
       "source_class": "handwritten"
     },
@@ -13435,25 +13463,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>@698#2",
+        "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>@102#2",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": ".map(|entry| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>@698#2",
+      "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>@102#2",
       "kind": "closure",
-      "line": 698,
+      "line": 102,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 698,
+        "line": 102,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": ".map(|entry| {",
       "source_class": "handwritten"
     },
@@ -13461,25 +13489,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>::<closure>",
+        "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": ".find(|(path, _)| path == &entry.path)",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>::<closure>",
+      "identity": "crate::baseline_push::tests::a_maximal_push_fits_inside_the_frozen_plaintext_limit::<closure>::<closure>",
       "kind": "closure",
-      "line": 733,
+      "line": 105,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 733,
+        "line": 105,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": ".find(|(path, _)| path == &entry.path)",
       "source_class": "handwritten"
     },
@@ -13487,25 +13515,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_push_over_the_delivery_bound_is_refused",
+        "identity": "crate::baseline_push::tests::a_push_over_the_delivery_bound_is_refused",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn a_push_over_the_delivery_bound_is_refused()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_push_over_the_delivery_bound_is_refused",
+      "identity": "crate::baseline_push::tests::a_push_over_the_delivery_bound_is_refused",
       "kind": "function",
-      "line": 760,
+      "line": 132,
       "name": "a_push_over_the_delivery_bound_is_refused",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 760,
+        "line": 132,
         "name": "a_push_over_the_delivery_bound_is_refused"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn a_push_over_the_delivery_bound_is_refused()",
       "source_class": "handwritten"
     },
@@ -13513,25 +13541,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_baseline_from_a_publisher_this_node_does_not_name_is_refused",
+        "identity": "crate::baseline_push::tests::a_baseline_from_a_publisher_this_node_does_not_name_is_refused",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn a_baseline_from_a_publisher_this_node_does_not_name_is_refused()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_baseline_from_a_publisher_this_node_does_not_name_is_refused",
+      "identity": "crate::baseline_push::tests::a_baseline_from_a_publisher_this_node_does_not_name_is_refused",
       "kind": "function",
-      "line": 772,
+      "line": 144,
       "name": "a_baseline_from_a_publisher_this_node_does_not_name_is_refused",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 772,
+        "line": 144,
         "name": "a_baseline_from_a_publisher_this_node_does_not_name_is_refused"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn a_baseline_from_a_publisher_this_node_does_not_name_is_refused()",
       "source_class": "handwritten"
     },
@@ -13539,25 +13567,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push",
+        "identity": "crate::baseline_push::tests::a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push",
+      "identity": "crate::baseline_push::tests::a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push",
       "kind": "function",
-      "line": 811,
+      "line": 183,
       "name": "a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 811,
+        "line": 183,
         "name": "a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push()",
       "source_class": "handwritten"
     },
@@ -13565,25 +13593,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_baseline_for_another_organization_or_outside_its_window_is_refused",
+        "identity": "crate::baseline_push::tests::a_baseline_for_another_organization_or_outside_its_window_is_refused",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn a_baseline_for_another_organization_or_outside_its_window_is_refused()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_baseline_for_another_organization_or_outside_its_window_is_refused",
+      "identity": "crate::baseline_push::tests::a_baseline_for_another_organization_or_outside_its_window_is_refused",
       "kind": "function",
-      "line": 841,
+      "line": 213,
       "name": "a_baseline_for_another_organization_or_outside_its_window_is_refused",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 841,
+        "line": 213,
         "name": "a_baseline_for_another_organization_or_outside_its_window_is_refused"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn a_baseline_for_another_organization_or_outside_its_window_is_refused()",
       "source_class": "handwritten"
     },
@@ -13591,25 +13619,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::each_sender_gate_refuses_on_its_own",
+        "identity": "crate::baseline_push::tests::each_sender_gate_refuses_on_its_own",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn each_sender_gate_refuses_on_its_own()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::each_sender_gate_refuses_on_its_own",
+      "identity": "crate::baseline_push::tests::each_sender_gate_refuses_on_its_own",
       "kind": "function",
-      "line": 866,
+      "line": 238,
       "name": "each_sender_gate_refuses_on_its_own",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 866,
+        "line": 238,
         "name": "each_sender_gate_refuses_on_its_own"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn each_sender_gate_refuses_on_its_own()",
       "source_class": "handwritten"
     },
@@ -13617,25 +13645,25 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::baseline_push::only_refusals_about_the_sender_are_silent",
+        "identity": "crate::baseline_push::tests::only_refusals_about_the_sender_are_silent",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn only_refusals_about_the_sender_are_silent()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::only_refusals_about_the_sender_are_silent",
+      "identity": "crate::baseline_push::tests::only_refusals_about_the_sender_are_silent",
       "kind": "function",
-      "line": 924,
+      "line": 296,
       "name": "only_refusals_about_the_sender_are_silent",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 924,
+        "line": 296,
         "name": "only_refusals_about_the_sender_are_silent"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn only_refusals_about_the_sender_are_silent()",
       "source_class": "handwritten"
     },
@@ -13643,25 +13671,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::baseline_push::the_code_band_is_disjoint_from_every_other_plane",
+        "identity": "crate::baseline_push::tests::the_code_band_is_disjoint_from_every_other_plane",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn the_code_band_is_disjoint_from_every_other_plane()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::the_code_band_is_disjoint_from_every_other_plane",
+      "identity": "crate::baseline_push::tests::the_code_band_is_disjoint_from_every_other_plane",
       "kind": "function",
-      "line": 959,
+      "line": 331,
       "name": "the_code_band_is_disjoint_from_every_other_plane",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 959,
+        "line": 331,
         "name": "the_code_band_is_disjoint_from_every_other_plane"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn the_code_band_is_disjoint_from_every_other_plane()",
       "source_class": "handwritten"
     },
@@ -13669,25 +13697,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::baseline_push::a_config_that_cannot_be_read_denies_everything",
+        "identity": "crate::baseline_push::tests::a_config_that_cannot_be_read_denies_everything",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn a_config_that_cannot_be_read_denies_everything()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_config_that_cannot_be_read_denies_everything",
+      "identity": "crate::baseline_push::tests::a_config_that_cannot_be_read_denies_everything",
       "kind": "function",
-      "line": 997,
+      "line": 369,
       "name": "a_config_that_cannot_be_read_denies_everything",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 997,
+        "line": 369,
         "name": "a_config_that_cannot_be_read_denies_everything"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn a_config_that_cannot_be_read_denies_everything()",
       "source_class": "handwritten"
     },
@@ -13695,25 +13723,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::valid_config",
+        "identity": "crate::baseline_push::tests::valid_config",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn valid_config() -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::valid_config",
+      "identity": "crate::baseline_push::tests::valid_config",
       "kind": "function",
-      "line": 1029,
+      "line": 401,
       "name": "valid_config",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1029,
+        "line": 401,
         "name": "valid_config"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn valid_config() -> String",
       "source_class": "handwritten"
     },
@@ -13721,25 +13749,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::baseline_push::policy_from",
+        "identity": "crate::baseline_push::tests::policy_from",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn policy_from(text: &str, mode: Option<u32>) -> BaselinePolicy",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::policy_from",
+      "identity": "crate::baseline_push::tests::policy_from",
       "kind": "function",
-      "line": 1045,
+      "line": 417,
       "name": "policy_from",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1045,
+        "line": 417,
         "name": "policy_from"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn policy_from(text: &str, mode: Option<u32>) -> BaselinePolicy",
       "source_class": "handwritten"
     },
@@ -13747,25 +13775,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::test_identity",
+        "identity": "crate::baseline_push::tests::test_identity",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/mod.rs",
         "signature": "fn test_identity(dir: &tempfile::TempDir) -> crate::node_identity::NodeIdentity",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::test_identity",
+      "identity": "crate::baseline_push::tests::test_identity",
       "kind": "function",
-      "line": 1067,
+      "line": 429,
       "name": "test_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1067,
+        "line": 429,
         "name": "test_identity"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/mod.rs",
       "signature": "fn test_identity(dir: &tempfile::TempDir) -> crate::node_identity::NodeIdentity",
       "source_class": "handwritten"
     },
@@ -13773,25 +13801,25 @@
       "cognitive": 2,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::new@1121#2",
+        "identity": "crate::baseline_push::tests::delivery::new",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn new() -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::new@1121#2",
+      "identity": "crate::baseline_push::tests::delivery::new",
       "kind": "method",
-      "line": 1121,
+      "line": 24,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 1121,
+        "line": 24,
         "name": "new"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn new() -> Self",
       "source_class": "handwritten"
     },
@@ -13799,25 +13827,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::identity",
+        "identity": "crate::baseline_push::tests::delivery::identity",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn identity(&self) -> NodeIdentity",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::identity",
+      "identity": "crate::baseline_push::tests::delivery::identity",
       "kind": "method",
-      "line": 1143,
+      "line": 36,
       "name": "identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 1143,
+        "line": 36,
         "name": "identity"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn identity(&self) -> NodeIdentity",
       "source_class": "handwritten"
     },
@@ -13825,25 +13853,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::registry",
+        "identity": "crate::baseline_push::tests::delivery::registry",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn registry(&self, identity: &NodeIdentity) -> NodeRegistry",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::registry",
+      "identity": "crate::baseline_push::tests::delivery::registry",
       "kind": "method",
-      "line": 1147,
+      "line": 40,
       "name": "registry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 1147,
+        "line": 40,
         "name": "registry"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn registry(&self, identity: &NodeIdentity) -> NodeRegistry",
       "source_class": "handwritten"
     },
@@ -13851,25 +13879,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::installed",
+        "identity": "crate::baseline_push::tests::delivery::installed",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn installed(&self, relative: &str) -> Option<Vec<u8>>",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::installed",
+      "identity": "crate::baseline_push::tests::delivery::installed",
       "kind": "method",
-      "line": 1152,
+      "line": 45,
       "name": "installed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 1152,
+        "line": 45,
         "name": "installed"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn installed(&self, relative: &str) -> Option<Vec<u8>>",
       "source_class": "handwritten"
     },
@@ -13877,25 +13905,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::publisher@1158#2",
+        "identity": "crate::baseline_push::tests::delivery::publisher",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn publisher(scalar: u8) -> (k256::schnorr::SigningKey, BaselinePublisherKey)",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::publisher@1158#2",
+      "identity": "crate::baseline_push::tests::delivery::publisher",
       "kind": "function",
-      "line": 1158,
+      "line": 51,
       "name": "publisher",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1158,
+        "line": 51,
         "name": "publisher"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn publisher(scalar: u8) -> (k256::schnorr::SigningKey, BaselinePublisherKey)",
       "source_class": "handwritten"
     },
@@ -13903,25 +13931,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::fleet_scripts",
+        "identity": "crate::baseline_push::tests::delivery::fleet_scripts",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn fleet_scripts() -> Vec<(String, Vec<u8>)>",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::fleet_scripts",
+      "identity": "crate::baseline_push::tests::delivery::fleet_scripts",
       "kind": "function",
-      "line": 1175,
+      "line": 68,
       "name": "fleet_scripts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1175,
+        "line": 68,
         "name": "fleet_scripts"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn fleet_scripts() -> Vec<(String, Vec<u8>)>",
       "source_class": "handwritten"
     },
@@ -13929,25 +13957,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::sign",
+        "identity": "crate::baseline_push::tests::delivery::sign",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn sign(scalar: u8, bodies: &[(String, Vec<u8>)]) -> SignedBaselineManifest",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::sign",
+      "identity": "crate::baseline_push::tests::delivery::sign",
       "kind": "function",
-      "line": 1188,
+      "line": 81,
       "name": "sign",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1188,
+        "line": 81,
         "name": "sign"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn sign(scalar: u8, bodies: &[(String, Vec<u8>)]) -> SignedBaselineManifest",
       "source_class": "handwritten"
     },
@@ -13955,25 +13983,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::wire",
+        "identity": "crate::baseline_push::tests::delivery::wire",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn wire(manifest: &SignedBaselineManifest, bodies: &[(String, Vec<u8>)]) -> serde_json::Value",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::wire",
+      "identity": "crate::baseline_push::tests::delivery::wire",
       "kind": "function",
-      "line": 1202,
+      "line": 95,
       "name": "wire",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1202,
+        "line": 95,
         "name": "wire"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn wire(manifest: &SignedBaselineManifest, bodies: &[(String, Vec<u8>)]) -> serde_json::Value",
       "source_class": "handwritten"
     },
@@ -13981,25 +14009,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::wire::<closure>",
+        "identity": "crate::baseline_push::tests::delivery::wire::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": ".map(|entry| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::wire::<closure>",
+      "identity": "crate::baseline_push::tests::delivery::wire::<closure>",
       "kind": "closure",
-      "line": 1206,
+      "line": 99,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1206,
+        "line": 99,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": ".map(|entry| {",
       "source_class": "handwritten"
     },
@@ -14007,25 +14035,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::wire::<closure>::<closure>",
+        "identity": "crate::baseline_push::tests::delivery::wire::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": ".find(|(path, _)| path == &entry.path)",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::wire::<closure>::<closure>",
+      "identity": "crate::baseline_push::tests::delivery::wire::<closure>::<closure>",
       "kind": "closure",
-      "line": 1209,
+      "line": 102,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1209,
+        "line": 102,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": ".find(|(path, _)| path == &entry.path)",
       "source_class": "handwritten"
     },
@@ -14033,25 +14061,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::wire::<closure>::<closure>@1150#2",
+        "identity": "crate::baseline_push::tests::delivery::wire::<closure>::<closure>@103#2",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": ".map(|(_, body)| body.clone())",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::wire::<closure>::<closure>@1150#2",
+      "identity": "crate::baseline_push::tests::delivery::wire::<closure>::<closure>@103#2",
       "kind": "closure",
-      "line": 1150,
+      "line": 103,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1150,
+        "line": 103,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": ".map(|(_, body)| body.clone())",
       "source_class": "handwritten"
     },
@@ -14059,25 +14087,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::policy@1217#2",
+        "identity": "crate::baseline_push::tests::delivery::policy",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn policy(enabled: bool, publishers: Vec<BaselinePublisherKey>) -> BaselinePolicy",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::policy@1217#2",
+      "identity": "crate::baseline_push::tests::delivery::policy",
       "kind": "function",
-      "line": 1217,
+      "line": 110,
       "name": "policy",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1217,
+        "line": 110,
         "name": "policy"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn policy(enabled: bool, publishers: Vec<BaselinePublisherKey>) -> BaselinePolicy",
       "source_class": "handwritten"
     },
@@ -14085,25 +14113,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::trust_conductor",
+        "identity": "crate::baseline_push::tests::delivery::trust_conductor",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn trust_conductor(registry: &NodeRegistry, node_id: &str, public_key: &str, capability: &str)",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::trust_conductor",
+      "identity": "crate::baseline_push::tests::delivery::trust_conductor",
       "kind": "function",
-      "line": 1226,
+      "line": 119,
       "name": "trust_conductor",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1226,
+        "line": 119,
         "name": "trust_conductor"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn trust_conductor(registry: &NodeRegistry, node_id: &str, public_key: &str, capability: &str)",
       "source_class": "handwritten"
     },
@@ -14111,25 +14139,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::deliver",
+        "identity": "crate::baseline_push::tests::delivery::deliver",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn deliver( performer: &Performer, conductor: &Performer, policy: BaselinePolicy, payload: serde_json::Value, ) -> BaselineOutcome",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::deliver",
+      "identity": "crate::baseline_push::tests::delivery::deliver",
       "kind": "function",
-      "line": 1241,
+      "line": 137,
       "name": "deliver",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1241,
+        "line": 137,
         "name": "deliver"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn deliver( performer: &Performer, conductor: &Performer, policy: BaselinePolicy, payload: serde_json::Value, ) -> BaselineOutcome",
       "source_class": "handwritten"
     },
@@ -14137,25 +14165,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::deliver_with_registry",
+        "identity": "crate::baseline_push::tests::delivery::deliver_with_registry",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn deliver_with_registry( performer: &Performer, registry: &NodeRegistry, performer_identity: &NodeIdentity, conductor_identity: &NodeIdentity, policy: BaselinePolicy, payload: serde_json::Value, ) -> BaselineOutcome",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::deliver_with_registry",
+      "identity": "crate::baseline_push::tests::delivery::deliver_with_registry",
       "kind": "function",
-      "line": 1268,
+      "line": 164,
       "name": "deliver_with_registry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1268,
+        "line": 164,
         "name": "deliver_with_registry"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn deliver_with_registry( performer: &Performer, registry: &NodeRegistry, performer_identity: &NodeIdentity, conductor_identity: &NodeIdentity, policy: BaselinePolicy, payload: serde_json::Value, ) -> BaselineOutcome",
       "source_class": "handwritten"
     },
@@ -14163,25 +14191,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::accepted",
+        "identity": "crate::baseline_push::tests::delivery::accepted",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn accepted(outcome: &BaselineOutcome) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::accepted",
+      "identity": "crate::baseline_push::tests::delivery::accepted",
       "kind": "function",
-      "line": 1315,
+      "line": 200,
       "name": "accepted",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1315,
+        "line": 200,
         "name": "accepted"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn accepted(outcome: &BaselineOutcome) -> bool",
       "source_class": "handwritten"
     },
@@ -14189,25 +14217,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::baseline_push::refused_with",
+        "identity": "crate::baseline_push::tests::delivery::refused_with",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn refused_with(outcome: &BaselineOutcome) -> Option<BaselineCode>",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::refused_with",
+      "identity": "crate::baseline_push::tests::delivery::refused_with",
       "kind": "function",
-      "line": 1322,
+      "line": 207,
       "name": "refused_with",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1322,
+        "line": 207,
         "name": "refused_with"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn refused_with(outcome: &BaselineOutcome) -> Option<BaselineCode>",
       "source_class": "handwritten"
     },
@@ -14215,25 +14243,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::baseline_push::a_named_publishers_baseline_installs_and_the_scripts_run",
+        "identity": "crate::baseline_push::tests::delivery::a_named_publishers_baseline_installs_and_the_scripts_run",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn a_named_publishers_baseline_installs_and_the_scripts_run()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_named_publishers_baseline_installs_and_the_scripts_run",
+      "identity": "crate::baseline_push::tests::delivery::a_named_publishers_baseline_installs_and_the_scripts_run",
       "kind": "function",
-      "line": 1334,
+      "line": 219,
       "name": "a_named_publishers_baseline_installs_and_the_scripts_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1334,
+        "line": 219,
         "name": "a_named_publishers_baseline_installs_and_the_scripts_run"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn a_named_publishers_baseline_installs_and_the_scripts_run()",
       "source_class": "handwritten"
     },
@@ -14241,25 +14269,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_repeated_push_is_answered_rather_than_silently_dropped",
+        "identity": "crate::baseline_push::tests::delivery::a_repeated_push_is_answered_rather_than_silently_dropped",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn a_repeated_push_is_answered_rather_than_silently_dropped()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_repeated_push_is_answered_rather_than_silently_dropped",
+      "identity": "crate::baseline_push::tests::delivery::a_repeated_push_is_answered_rather_than_silently_dropped",
       "kind": "function",
-      "line": 1382,
+      "line": 267,
       "name": "a_repeated_push_is_answered_rather_than_silently_dropped",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1382,
+        "line": 267,
         "name": "a_repeated_push_is_answered_rather_than_silently_dropped"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn a_repeated_push_is_answered_rather_than_silently_dropped()",
       "source_class": "handwritten"
     },
@@ -14267,25 +14295,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::an_unnamed_publisher_changes_nothing_on_disk",
+        "identity": "crate::baseline_push::tests::delivery::an_unnamed_publisher_changes_nothing_on_disk",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn an_unnamed_publisher_changes_nothing_on_disk()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::an_unnamed_publisher_changes_nothing_on_disk",
+      "identity": "crate::baseline_push::tests::delivery::an_unnamed_publisher_changes_nothing_on_disk",
       "kind": "function",
-      "line": 1464,
+      "line": 338,
       "name": "an_unnamed_publisher_changes_nothing_on_disk",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1464,
+        "line": 338,
         "name": "an_unnamed_publisher_changes_nothing_on_disk"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn an_unnamed_publisher_changes_nothing_on_disk()",
       "source_class": "handwritten"
     },
@@ -14293,25 +14321,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_revoked_publisher_changes_nothing_on_disk",
+        "identity": "crate::baseline_push::tests::delivery::a_revoked_publisher_changes_nothing_on_disk",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn a_revoked_publisher_changes_nothing_on_disk()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_revoked_publisher_changes_nothing_on_disk",
+      "identity": "crate::baseline_push::tests::delivery::a_revoked_publisher_changes_nothing_on_disk",
       "kind": "function",
-      "line": 1499,
+      "line": 373,
       "name": "a_revoked_publisher_changes_nothing_on_disk",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1499,
+        "line": 373,
         "name": "a_revoked_publisher_changes_nothing_on_disk"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn a_revoked_publisher_changes_nothing_on_disk()",
       "source_class": "handwritten"
     },
@@ -14319,25 +14347,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::one_mismatched_script_installs_none_of_the_set",
+        "identity": "crate::baseline_push::tests::delivery::one_mismatched_script_installs_none_of_the_set",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn one_mismatched_script_installs_none_of_the_set()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::one_mismatched_script_installs_none_of_the_set",
+      "identity": "crate::baseline_push::tests::delivery::one_mismatched_script_installs_none_of_the_set",
       "kind": "function",
-      "line": 1524,
+      "line": 398,
       "name": "one_mismatched_script_installs_none_of_the_set",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1524,
+        "line": 398,
         "name": "one_mismatched_script_installs_none_of_the_set"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn one_mismatched_script_installs_none_of_the_set()",
       "source_class": "handwritten"
     },
@@ -14345,25 +14373,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::one_mismatched_script_installs_none_of_the_set::<closure>",
+        "identity": "crate::baseline_push::tests::delivery::one_mismatched_script_installs_none_of_the_set::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": ".find(|(path, _)| path == \"ops/deploy.sh\")",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::one_mismatched_script_installs_none_of_the_set::<closure>",
+      "identity": "crate::baseline_push::tests::delivery::one_mismatched_script_installs_none_of_the_set::<closure>",
       "kind": "closure",
-      "line": 1533,
+      "line": 407,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1533,
+        "line": 407,
         "name": "<closure>"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": ".find(|(path, _)| path == \"ops/deploy.sh\")",
       "source_class": "handwritten"
     },
@@ -14371,25 +14399,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::with_the_gate_off_nothing_installs_and_the_node_keeps_serving",
+        "identity": "crate::baseline_push::tests::delivery::with_the_gate_off_nothing_installs_and_the_node_keeps_serving",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn with_the_gate_off_nothing_installs_and_the_node_keeps_serving()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::with_the_gate_off_nothing_installs_and_the_node_keeps_serving",
+      "identity": "crate::baseline_push::tests::delivery::with_the_gate_off_nothing_installs_and_the_node_keeps_serving",
       "kind": "function",
-      "line": 1561,
+      "line": 435,
       "name": "with_the_gate_off_nothing_installs_and_the_node_keeps_serving",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1561,
+        "line": 435,
         "name": "with_the_gate_off_nothing_installs_and_the_node_keeps_serving"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn with_the_gate_off_nothing_installs_and_the_node_keeps_serving()",
       "source_class": "handwritten"
     },
@@ -14397,25 +14425,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_conductor_without_the_capability_installs_nothing",
+        "identity": "crate::baseline_push::tests::delivery::a_conductor_without_the_capability_installs_nothing",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn a_conductor_without_the_capability_installs_nothing()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_conductor_without_the_capability_installs_nothing",
+      "identity": "crate::baseline_push::tests::delivery::a_conductor_without_the_capability_installs_nothing",
       "kind": "function",
-      "line": 1608,
+      "line": 482,
       "name": "a_conductor_without_the_capability_installs_nothing",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1608,
+        "line": 482,
         "name": "a_conductor_without_the_capability_installs_nothing"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn a_conductor_without_the_capability_installs_nothing()",
       "source_class": "handwritten"
     },
@@ -14423,25 +14451,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::an_untrusted_sender_never_learns_anything_about_the_artefact",
+        "identity": "crate::baseline_push::tests::delivery::an_untrusted_sender_never_learns_anything_about_the_artefact",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn an_untrusted_sender_never_learns_anything_about_the_artefact()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::an_untrusted_sender_never_learns_anything_about_the_artefact",
+      "identity": "crate::baseline_push::tests::delivery::an_untrusted_sender_never_learns_anything_about_the_artefact",
       "kind": "function",
-      "line": 1651,
+      "line": 525,
       "name": "an_untrusted_sender_never_learns_anything_about_the_artefact",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1651,
+        "line": 525,
         "name": "an_untrusted_sender_never_learns_anything_about_the_artefact"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn an_untrusted_sender_never_learns_anything_about_the_artefact()",
       "source_class": "handwritten"
     },
@@ -14449,25 +14477,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::a_peer_revoked_during_verification_does_not_get_its_code_installed",
+        "identity": "crate::baseline_push::tests::delivery::a_peer_revoked_during_verification_does_not_get_its_code_installed",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn a_peer_revoked_during_verification_does_not_get_its_code_installed()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::a_peer_revoked_during_verification_does_not_get_its_code_installed",
+      "identity": "crate::baseline_push::tests::delivery::a_peer_revoked_during_verification_does_not_get_its_code_installed",
       "kind": "function",
-      "line": 1713,
+      "line": 587,
       "name": "a_peer_revoked_during_verification_does_not_get_its_code_installed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1713,
+        "line": 587,
         "name": "a_peer_revoked_during_verification_does_not_get_its_code_installed"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn a_peer_revoked_during_verification_does_not_get_its_code_installed()",
       "source_class": "handwritten"
     },
@@ -14475,25 +14503,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::the_wire_cannot_name_a_destination_the_publisher_did_not_sign",
+        "identity": "crate::baseline_push::tests::delivery::the_wire_cannot_name_a_destination_the_publisher_did_not_sign",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn the_wire_cannot_name_a_destination_the_publisher_did_not_sign()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::the_wire_cannot_name_a_destination_the_publisher_did_not_sign",
+      "identity": "crate::baseline_push::tests::delivery::the_wire_cannot_name_a_destination_the_publisher_did_not_sign",
       "kind": "function",
-      "line": 1784,
+      "line": 658,
       "name": "the_wire_cannot_name_a_destination_the_publisher_did_not_sign",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1784,
+        "line": 658,
         "name": "the_wire_cannot_name_a_destination_the_publisher_did_not_sign"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn the_wire_cannot_name_a_destination_the_publisher_did_not_sign()",
       "source_class": "handwritten"
     },
@@ -14501,25 +14529,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::baseline_push::publishing_more_than_one_push_can_carry_is_refused_at_signing_time",
+        "identity": "crate::baseline_push::tests::delivery::publishing_more_than_one_push_can_carry_is_refused_at_signing_time",
         "macro_expansion": "not_measured",
-        "path": "src/baseline_push.rs",
+        "path": "src/baseline_push/tests/delivery.rs",
         "signature": "fn publishing_more_than_one_push_can_carry_is_refused_at_signing_time()",
         "source_class": "handwritten"
       },
-      "identity": "crate::baseline_push::publishing_more_than_one_push_can_carry_is_refused_at_signing_time",
+      "identity": "crate::baseline_push::tests::delivery::publishing_more_than_one_push_can_carry_is_refused_at_signing_time",
       "kind": "function",
-      "line": 1809,
+      "line": 683,
       "name": "publishing_more_than_one_push_can_carry_is_refused_at_signing_time",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1809,
+        "line": 683,
         "name": "publishing_more_than_one_push_can_carry_is_refused_at_signing_time"
       },
-      "path": "src/baseline_push.rs",
+      "path": "src/baseline_push/tests/delivery.rs",
       "signature": "fn publishing_more_than_one_push_can_carry_is_refused_at_signing_time()",
       "source_class": "handwritten"
     },

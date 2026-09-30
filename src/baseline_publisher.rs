@@ -60,14 +60,13 @@ impl From<NodeError> for PublisherError {
     }
 }
 
-impl From<KeyFileError> for PublisherError {
-    fn from(error: KeyFileError) -> Self {
-        match error {
-            KeyFileError::State(detail) => Self::State(detail),
-            KeyFileError::Node(error) => error.into(),
-            KeyFileError::Io(error) => Self::Io(error),
-            KeyFileError::InvalidKey => Self::InvalidKey,
-        }
+impl KeyFileError for PublisherError {
+    fn state(detail: String) -> Self {
+        Self::State(detail)
+    }
+
+    fn invalid_key() -> Self {
+        Self::InvalidKey
     }
 }
 
@@ -103,7 +102,7 @@ impl BaselinePublisher {
         registry: &crate::node_registry::NodeRegistry,
     ) -> Result<Self, PublisherError> {
         let path = context.publisher_key_path();
-        let signing_key = PUBLISHER_KEY.generate(context, &path)?;
+        let signing_key = PUBLISHER_KEY.generate::<PublisherError>(context, &path)?;
         if let Err(error) = registry.reject_conductor_authority() {
             let _ = fs::remove_file(&path);
             return Err(PublisherError::State(error.to_string()));
@@ -114,7 +113,8 @@ impl BaselinePublisher {
 
     /// Load the publisher key, without creating anything.
     pub fn load_existing(context: &NodeContext) -> Result<Self, PublisherError> {
-        let signing_key = PUBLISHER_KEY.load(context, &context.publisher_key_path())?;
+        let signing_key =
+            PUBLISHER_KEY.load::<PublisherError>(context, &context.publisher_key_path())?;
         Ok(Self { signing_key })
     }
 

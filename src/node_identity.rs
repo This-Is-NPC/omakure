@@ -33,14 +33,13 @@ pub enum NodeIdentityError {
     Registry(#[from] RegistryError),
 }
 
-impl From<KeyFileError> for NodeIdentityError {
-    fn from(error: KeyFileError) -> Self {
-        match error {
-            KeyFileError::State(detail) => Self::State(detail),
-            KeyFileError::Node(error) => Self::Node(error),
-            KeyFileError::Io(error) => Self::Io(error),
-            KeyFileError::InvalidKey => Self::InvalidKey,
-        }
+impl KeyFileError for NodeIdentityError {
+    fn state(detail: String) -> Self {
+        Self::State(detail)
+    }
+
+    fn invalid_key() -> Self {
+        Self::InvalidKey
     }
 }
 
@@ -297,11 +296,7 @@ fn read_private_key(
     context: &NodeContext,
     path: &Path,
 ) -> Result<[u8; PRIVATE_KEY_BYTES], NodeIdentityError> {
-    Ok(crate::node_key::read_private_key(
-        context,
-        path,
-        "identity state has an unexpected file type",
-    )?)
+    crate::node_key::read_private_key(context, path, "identity state has an unexpected file type")
 }
 
 fn inspect_existing_state_file(path: &Path, label: &str) -> Result<bool, NodeIdentityError> {

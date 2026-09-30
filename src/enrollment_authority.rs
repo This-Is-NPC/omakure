@@ -63,14 +63,13 @@ impl From<NodeError> for AuthorityError {
     }
 }
 
-impl From<KeyFileError> for AuthorityError {
-    fn from(error: KeyFileError) -> Self {
-        match error {
-            KeyFileError::State(detail) => Self::State(detail),
-            KeyFileError::Node(error) => error.into(),
-            KeyFileError::Io(error) => Self::Io(error),
-            KeyFileError::InvalidKey => Self::InvalidKey,
-        }
+impl KeyFileError for AuthorityError {
+    fn state(detail: String) -> Self {
+        Self::State(detail)
+    }
+
+    fn invalid_key() -> Self {
+        Self::InvalidKey
     }
 }
 
@@ -94,14 +93,15 @@ impl EnrollmentAuthority {
     /// side effect of running a command twice.
     pub fn create(context: &NodeContext) -> Result<Self, AuthorityError> {
         let path = context.authority_key_path();
-        let signing_key = AUTHORITY_KEY.generate(context, &path)?;
+        let signing_key = AUTHORITY_KEY.generate::<AuthorityError>(context, &path)?;
         context.validate_private_file(&path)?;
         Ok(Self { signing_key })
     }
 
     /// Load the authority key, without creating anything.
     pub fn load_existing(context: &NodeContext) -> Result<Self, AuthorityError> {
-        let signing_key = AUTHORITY_KEY.load(context, &context.authority_key_path())?;
+        let signing_key =
+            AUTHORITY_KEY.load::<AuthorityError>(context, &context.authority_key_path())?;
         Ok(Self { signing_key })
     }
 

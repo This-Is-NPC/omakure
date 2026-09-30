@@ -16,45 +16,30 @@ use std::path::Path;
 /// The bytes of a persisted scalar.
 pub const PRIVATE_KEY_BYTES: usize = 32;
 
-/// Why a key file could not be created or read. Each key's own error type
-/// decides how these surface.
-#[derive(Debug)]
-pub enum KeyFileError {
-    State(String),
-    Node(NodeError),
-    Io(io::Error),
-    InvalidKey,
-}
-
-impl From<io::Error> for KeyFileError {
-    fn from(error: io::Error) -> Self {
-        Self::Io(error)
-    }
-}
-
-impl From<NodeError> for KeyFileError {
-    fn from(error: NodeError) -> Self {
-        Self::Node(error)
-    }
+/// How a key's own error type surfaces key-file refusals, so each key keeps
+/// its own messages and `Display`.
+pub trait KeyFileError: From<io::Error> + From<NodeError> {
+    fn state(detail: String) -> Self;
+    fn invalid_key() -> Self;
 }
 
 /// Read a scalar without following a symlink, re-validating owner and mode.
 /// `unexpected_type` is the refusal when the opened path is not a regular file.
-pub fn read_private_key(
+pub fn read_private_key<E: KeyFileError>(
     context: &NodeContext,
     path: &Path,
     unexpected_type: &str,
-) -> Result<[u8; PRIVATE_KEY_BYTES], KeyFileError> {
+) -> Result<[u8; PRIVATE_KEY_BYTES], E> {
     let mut options = crate::util::fs::no_follow_open_options();
     options.read(true);
     let mut file = options.open(path)?;
     if !file.metadata()?.file_type().is_file() {
-        return Err(KeyFileError::State(unexpected_type.to_string()));
+        return Err(E::state(unexpected_type.to_string()));
     }
     context.validate_private_file(path)?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
-    bytes.try_into().map_err(|_| KeyFileError::InvalidKey)
+    bytes.try_into().map_err(|_| E::invalid_key())
 }
 
 /// A signing key held in its own file beside the node identity, named in
@@ -68,10 +53,14 @@ pub struct HeldKey {
 impl HeldKey {
     /// Generate and persist a new key at `path`, refusing to replace one that
     /// already exists. The caller validates the file once it has accepted it.
-    pub fn generate(&self, context: &NodeContext, path: &Path) -> Result<SigningKey, KeyFileError> {
+    pub fn generate<E: KeyFileError>(
+        &self,
+        context: &NodeContext,
+        path: &Path,
+    ) -> Result<SigningKey, E> {
         context.ensure_state_directory()?;
         if fs::symlink_metadata(path).is_ok() {
-            return Err(KeyFileError::State(format!(
+            return Err(E::state(format!(
                 "this node already holds {} {} key",
                 self.article, self.label
             )));
@@ -82,31 +71,33 @@ impl HeldKey {
     }
 
     /// Load the key at `path`, without creating anything.
-    pub fn load(&self, context: &NodeContext, path: &Path) -> Result<SigningKey, KeyFileError> {
+    pub fn load<E: KeyFileError>(
+        &self,
+        context: &NodeContext,
+        path: &Path,
+    ) -> Result<SigningKey, E> {
         if !context.validate_existing_state_directory()? {
-            return Err(KeyFileError::State(
-                crate::node::STATE_NOT_INITIALIZED.to_string(),
-            ));
+            return Err(E::state(crate::node::STATE_NOT_INITIALIZED.to_string()));
         }
         let metadata = fs::symlink_metadata(path)
-            .map_err(|_| KeyFileError::State(format!("this node holds no {} key", self.label)))?;
+            .map_err(|_| E::state(format!("this node holds no {} key", self.label)))?;
         if !metadata.file_type().is_file() {
-            return Err(KeyFileError::State(format!(
+            return Err(E::state(format!(
                 "the {} key is not a regular file",
                 self.label
             )));
         }
         context.validate_private_file(path)?;
-        let bytes = read_private_key(
+        let bytes = read_private_key::<E>(
             context,
             path,
             &format!("the {} key has an unexpected file type", self.label),
         )?;
-        let signing_key = SigningKey::from_slice(&bytes).map_err(|_| KeyFileError::InvalidKey)?;
+        let signing_key = SigningKey::from_slice(&bytes).map_err(|_| E::invalid_key())?;
         // A scalar that was not stored even-Y normalized would sign under a
         // different public key than the one the fleet records.
         if signing_key.to_bytes().as_slice() != bytes.as_slice() {
-            return Err(KeyFileError::State(format!(
+            return Err(E::state(format!(
                 "the persisted {} scalar is not even-Y normalized",
                 self.scalar
             )));

@@ -8,9 +8,6 @@ use std::path::{Component, Path, PathBuf};
 
 use super::{OperationError, OperationErrorCode, OperationResult};
 
-pub const MAX_SCRIPT_CONTENT_BYTES: u64 = 1024 * 1024;
-pub const MAX_TREE_ENTRIES: usize = 1000;
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ListTreeRequest {
     pub path: Option<String>,
@@ -37,13 +34,6 @@ pub struct ScriptContent {
 }
 
 pub fn list_tree(
-    workspace: &Workspace,
-    request: ListTreeRequest,
-) -> OperationResult<Vec<TreeEntry>> {
-    list_tree_limited(workspace, request, MAX_TREE_ENTRIES)
-}
-
-pub fn list_tree_limited(
     workspace: &Workspace,
     request: ListTreeRequest,
     max_entries: usize,
@@ -91,13 +81,6 @@ pub fn list_tree_limited(
 }
 
 pub fn read_script_content(
-    workspace: &Workspace,
-    request: ReadScriptContentRequest,
-) -> OperationResult<ScriptContent> {
-    read_script_content_limited(workspace, request, MAX_SCRIPT_CONTENT_BYTES)
-}
-
-pub fn read_script_content_limited(
     workspace: &Workspace,
     request: ReadScriptContentRequest,
     max_bytes: u64,
@@ -295,6 +278,14 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn max_content_bytes() -> u64 {
+        crate::policy::ScriptsPolicy::default().max_content_bytes as u64
+    }
+
+    fn tree_entry_limit() -> usize {
+        crate::policy::ScriptsPolicy::default().tree_entry_limit
+    }
+
     fn workspace_in(dir: &TempDir) -> Workspace {
         let workspace = Workspace::new(dir.path().to_path_buf());
         workspace.ensure_layout().unwrap();
@@ -327,6 +318,7 @@ mod tests {
             ListTreeRequest {
                 path: Some("scripts".into()),
             },
+            tree_entry_limit(),
         )
         .unwrap();
 
@@ -344,6 +336,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "../outside.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
@@ -360,6 +353,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "/tmp/outside.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
@@ -370,7 +364,7 @@ mod tests {
     fn list_tree_rejects_too_many_entries() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        for idx in 0..=MAX_TREE_ENTRIES {
+        for idx in 0..=tree_entry_limit() {
             std::fs::write(
                 workspace.scripts_root().join(format!("script-{idx}.sh")),
                 "#!/bin/sh\n",
@@ -378,7 +372,12 @@ mod tests {
             .unwrap();
         }
 
-        let err = list_tree(&workspace, ListTreeRequest { path: None }).unwrap_err();
+        let err = list_tree(
+            &workspace,
+            ListTreeRequest { path: None },
+            tree_entry_limit(),
+        )
+        .unwrap_err();
 
         assert_eq!(err.code, OperationErrorCode::PayloadTooLarge);
     }
@@ -394,6 +393,7 @@ mod tests {
                 ListTreeRequest {
                     path: Some(path.into()),
                 },
+                tree_entry_limit(),
             )
             .unwrap_err();
             assert_eq!(tree_err.code, OperationErrorCode::UnsafePath);
@@ -403,6 +403,7 @@ mod tests {
                 ReadScriptContentRequest {
                     script: format!("{path}/secret.sh"),
                 },
+                max_content_bytes(),
             )
             .unwrap_err();
             assert_eq!(content_err.code, OperationErrorCode::UnsafePath);
@@ -415,7 +416,7 @@ mod tests {
         let workspace = workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("big.sh"),
-            vec![b'a'; MAX_SCRIPT_CONTENT_BYTES as usize + 1],
+            vec![b'a'; max_content_bytes() as usize + 1],
         )
         .unwrap();
 
@@ -424,6 +425,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "big.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
@@ -446,6 +448,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "binary.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
         assert_eq!(binary_err.code, OperationErrorCode::UnsupportedScript);
@@ -455,6 +458,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "bad-utf8.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
         assert_eq!(utf8_err.code, OperationErrorCode::UnsupportedScript);
@@ -480,6 +484,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "escape.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
@@ -547,6 +552,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "ok.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap();
 

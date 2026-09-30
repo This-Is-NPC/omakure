@@ -1722,7 +1722,7 @@ async fn script_content_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(scripts_ops::read_script_content_limited(
+    operation_response(scripts_ops::read_script_content(
         &state.workspace,
         scripts_ops::ReadScriptContentRequest { script: script_id },
         state.deploy.scripts.max_content_bytes as u64,
@@ -1736,7 +1736,7 @@ async fn tree_root_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(scripts_ops::list_tree_limited(
+    operation_response(scripts_ops::list_tree(
         &state.workspace,
         scripts_ops::ListTreeRequest { path: None },
         state.deploy.scripts.tree_entry_limit,
@@ -1751,7 +1751,7 @@ async fn tree_path_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(scripts_ops::list_tree_limited(
+    operation_response(scripts_ops::list_tree(
         &state.workspace,
         scripts_ops::ListTreeRequest { path: Some(path) },
         state.deploy.scripts.tree_entry_limit,

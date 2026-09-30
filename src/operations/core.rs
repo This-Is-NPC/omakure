@@ -11,7 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 
 use super::path::{canonical_relative_path, canonical_scripts_root, has_windows_prefix};
-use super::{OperationError, OperationErrorCode, OperationResult};
+use super::{io_error, OperationError, OperationErrorCode, OperationResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceSummary {
@@ -661,10 +661,6 @@ fn map_not_found_string(message: String) -> OperationError {
 
 fn invalid_input(message: String) -> OperationError {
     OperationError::new(OperationErrorCode::InvalidInput, message)
-}
-
-fn io_error(err: impl std::error::Error) -> OperationError {
-    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
 }
 
 fn io_error_string(message: String) -> OperationError {

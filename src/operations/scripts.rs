@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use super::path::{canonical_relative_path, canonical_scripts_root, has_windows_prefix};
-use super::{OperationError, OperationErrorCode, OperationResult};
+use super::{io_error, OperationError, OperationErrorCode, OperationResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ListTreeRequest {
@@ -238,10 +238,6 @@ fn is_hidden_metadata_component(component: Component<'_>) -> bool {
         Component::Normal(name)
             if name == ".omakure" || name == ".history" || name == ".git"
     )
-}
-
-fn io_error(err: impl std::error::Error) -> OperationError {
-    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
 }
 
 #[cfg(test)]

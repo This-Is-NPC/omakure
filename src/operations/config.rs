@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::path::Path;
 
-use super::{OperationError, OperationErrorCode, OperationResult};
+use super::{io_error, OperationResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigSummary {
@@ -44,8 +44,7 @@ pub struct InterpreterView {
 }
 
 pub fn config_summary(workspace: &Workspace) -> OperationResult<ConfigSummary> {
-    let exe = env::current_exe()
-        .map_err(|err| OperationError::new(OperationErrorCode::IoFailed, err.to_string()))?;
+    let exe = env::current_exe().map_err(io_error)?;
     let active_env = read_active_env(workspace);
     let (active_env_keys, interpreter) = resolve_env_diagnostics(workspace.envs_dir());
 

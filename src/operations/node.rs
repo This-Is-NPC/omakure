@@ -1428,14 +1428,14 @@ fn read_node_config(context: &NodeContext) -> OperationResult<Option<NodeConfig>
     let Some(file) = context.open_public_file().map_err(map_node_error)? else {
         return Ok(None);
     };
-    let metadata = file.metadata().map_err(map_io_error)?;
+    let metadata = file.metadata().map_err(super::io_error)?;
     if metadata.len() > MAX_NODE_CONFIG_BYTES as u64 {
         return Err(registry_error("node configuration exceeds maximum size"));
     }
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
     file.take((MAX_NODE_CONFIG_BYTES as u64) + 1)
         .read_to_end(&mut bytes)
-        .map_err(map_io_error)?;
+        .map_err(super::io_error)?;
     if bytes.len() > MAX_NODE_CONFIG_BYTES {
         return Err(registry_error("node configuration exceeds maximum size"));
     }
@@ -1455,7 +1455,7 @@ fn path_is_present(path: &std::path::Path, label: &str) -> OperationResult<bool>
         }
         Ok(_) => Ok(true),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(map_io_error(error)),
+        Err(error) => Err(super::io_error(error)),
     }
 }
 
@@ -1803,10 +1803,6 @@ pub(crate) fn map_registry_error(error: RegistryError) -> OperationError {
             "signed enrollment bundle rate limit exceeded",
         ),
     }
-}
-
-fn map_io_error(error: io::Error) -> OperationError {
-    OperationError::new(OperationErrorCode::IoFailed, error.to_string())
 }
 
 pub(crate) fn registry_error(message: impl Into<String>) -> OperationError {

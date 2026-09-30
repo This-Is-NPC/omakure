@@ -4,7 +4,7 @@ use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 
 use super::path::canonical_relative_path;
-use super::{OperationError, OperationErrorCode, OperationResult};
+use super::{io_error, OperationError, OperationErrorCode, OperationResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchScriptsRequest {
@@ -51,10 +51,6 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
         field_count: result.field_count,
         schema_error: result.schema_error,
     }
-}
-
-fn io_error(err: impl std::error::Error) -> OperationError {
-    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
 }
 
 #[cfg(test)]

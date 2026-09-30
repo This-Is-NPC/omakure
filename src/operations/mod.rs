@@ -128,6 +128,10 @@ impl OperationError {
     }
 }
 
+pub(crate) fn io_error(err: impl std::error::Error) -> OperationError {
+    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
+}
+
 impl fmt::Display for OperationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.code.as_str(), self.message)

@@ -1,4 +1,5 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
+use crate::operations::path::logical_relative_path;
 use crate::ports::ScriptRepository;
 use rusqlite::{params, params_from_iter, Connection, TransactionBehavior};
 use std::fs;
@@ -209,20 +210,6 @@ fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let path_text = path.to_string_lossy().replace('\\', "/");
-    let root_text = root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
-}
-
 fn open_connection(db_path: &Path) -> Result<Connection, String> {
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent)
@@ -337,14 +324,6 @@ mod tests {
     fn test_build_search_blob_basic() {
         let result = build_search_blob("path/script.sh", "My Script", Some("desc"), &[], &[]);
         assert_eq!(result, "path/script.sh my script desc");
-    }
-
-    #[test]
-    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
-        let root = Path::new(r"C:\workspace\scripts");
-        let path = Path::new(r"C:\workspace\scripts\tools\deploy.sh");
-
-        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
     }
 
     #[test]

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 
+use super::path::{canonical_relative_path, canonical_scripts_root, has_windows_prefix};
 use super::{OperationError, OperationErrorCode, OperationResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -166,37 +167,12 @@ pub fn describe_script(
         .unwrap_or_else(|_| path.clone())
         .to_string_lossy()
         .to_string();
-    let relative_path = logical_relative_path(&path, &root);
+    let relative_path = canonical_relative_path(&path, &root);
     Ok(ScriptDescription {
         absolute_path,
         relative_path,
         schema: script_schema_from_domain(schema),
     })
-}
-
-fn canonical_scripts_root(scripts_root: &Path) -> OperationResult<PathBuf> {
-    scripts_root.canonicalize().map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::IoFailed,
-            format!("failed to canonicalize scripts root: {err}"),
-        )
-    })
-}
-
-fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
-    let root_text = canonical_root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
 }
 
 fn script_schema_from_domain(schema: crate::domain::Schema) -> ScriptSchema {
@@ -446,7 +422,7 @@ fn build_script_summary(
     root: &Path,
     script: PathBuf,
 ) -> ScriptSummary {
-    let relative_path = logical_relative_path(&script, root);
+    let relative_path = canonical_relative_path(&script, root);
     let absolute_path = std::fs::canonicalize(&script)
         .unwrap_or_else(|_| script.clone())
         .to_string_lossy()
@@ -473,7 +449,7 @@ fn build_script_summary(
     }
 }
 
-fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
+pub(crate) fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
     required
         .iter()
         .all(|tag| entry.tags.iter().any(|entry_tag| entry_tag == tag))
@@ -519,12 +495,6 @@ pub(crate) fn resolve_script_path(script: &str, scripts_root: &Path) -> Operatio
         root.join(script)
     };
     resolve_with_extensions(candidate, &root)
-}
-
-fn has_windows_prefix(path: &str) -> bool {
-    path.starts_with("\\\\")
-        || (path.as_bytes().get(1).is_some_and(|colon| *colon == b':')
-            && path.as_bytes()[0].is_ascii_alphabetic())
 }
 
 fn resolve_with_extensions(path: PathBuf, scripts_root: &Path) -> OperationResult<PathBuf> {
@@ -1104,31 +1074,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(description.relative_path, "deploy.sh");
-    }
-
-    #[test]
-    fn logical_relative_paths_handle_windows_alias_fixtures() {
-        let verbatim_root = Path::new(r"\\?\C:\workspace\scripts");
-        let verbatim_path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
-        let short_root = Path::new(r"C:\PROGRA~1\OMAKURE\scripts");
-        let short_path = Path::new(r"C:\PROGRA~1\OMAKURE\scripts\tools\deploy.cmd");
-
-        assert_eq!(
-            logical_relative_path(verbatim_path, verbatim_root),
-            "tools/deploy.cmd"
-        );
-        assert_eq!(
-            logical_relative_path(short_path, short_root),
-            "tools/deploy.cmd"
-        );
-    }
-
-    #[test]
-    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
-        let root = Path::new(r"C:\workspace\scripts");
-        let path = Path::new(r"C:\workspace\scripts\tools\deploy.sh");
-
-        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
     }
 
     #[cfg(unix)]

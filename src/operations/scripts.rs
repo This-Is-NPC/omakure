@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
+use super::path::{canonical_relative_path, canonical_scripts_root, has_windows_prefix};
 use super::{OperationError, OperationErrorCode, OperationResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +39,7 @@ pub fn list_tree(
     request: ListTreeRequest,
     max_entries: usize,
 ) -> OperationResult<Vec<TreeEntry>> {
-    let root = canonical_scripts_root(workspace)?;
+    let root = canonical_scripts_root(workspace.scripts_root())?;
     let dir = resolve_workspace_path(request.path.as_deref().unwrap_or(""), &root)?;
     if !dir.is_dir() {
         return Err(OperationError::new(
@@ -59,7 +60,7 @@ pub fn list_tree(
     Ok(entries
         .into_iter()
         .map(|entry| {
-            let relative_path = logical_relative_path(&entry.path, &root);
+            let relative_path = canonical_relative_path(&entry.path, &root);
             let name = entry
                 .path
                 .file_name()
@@ -85,7 +86,7 @@ pub fn read_script_content(
     request: ReadScriptContentRequest,
     max_bytes: u64,
 ) -> OperationResult<ScriptContent> {
-    let root = canonical_scripts_root(workspace)?;
+    let root = canonical_scripts_root(workspace.scripts_root())?;
     let path = resolve_workspace_path(&request.script, &root)?;
     if !path.is_file() {
         return Err(OperationError::new(
@@ -122,43 +123,13 @@ pub fn read_script_content(
             "script content is not valid UTF-8",
         )
     })?;
-    let relative_path = logical_relative_path(&path, &root);
+    let relative_path = canonical_relative_path(&path, &root);
     Ok(ScriptContent {
         absolute_path: path.to_string_lossy().to_string(),
         relative_path,
         size_bytes: metadata.len(),
         content,
     })
-}
-
-fn canonical_scripts_root(workspace: &Workspace) -> OperationResult<PathBuf> {
-    workspace.scripts_root().canonicalize().map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::IoFailed,
-            format!("failed to canonicalize scripts root: {err}"),
-        )
-    })
-}
-fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
-    let root_text = canonical_root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
-}
-
-fn has_windows_prefix(path: &str) -> bool {
-    path.starts_with("\\\\")
-        || (path.as_bytes().get(1).is_some_and(|colon| *colon == b':')
-            && path.as_bytes()[0].is_ascii_alphabetic())
 }
 
 fn resolve_workspace_path(path: &str, root: &Path) -> OperationResult<PathBuf> {
@@ -503,7 +474,7 @@ mod tests {
             resolve_workspace_path(r"tools\deploy.sh", workspace.scripts_root()).unwrap();
         assert_eq!(resolved, script.canonicalize().unwrap());
         assert_eq!(
-            logical_relative_path(&resolved, workspace.scripts_root()),
+            canonical_relative_path(&resolved, workspace.scripts_root()),
             "tools/deploy.sh"
         );
     }
@@ -527,14 +498,6 @@ mod tests {
             .expect("raw workspace aliases must be canonicalized before containment");
 
         assert_eq!(resolved, script.canonicalize().unwrap());
-    }
-
-    #[test]
-    fn logical_relative_paths_handle_verbatim_windows_fixtures() {
-        let root = Path::new(r"\\?\C:\workspace\scripts");
-        let path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
-
-        assert_eq!(logical_relative_path(path, root), "tools/deploy.cmd");
     }
 
     #[test]

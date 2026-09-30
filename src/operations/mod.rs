@@ -6,6 +6,7 @@ pub mod doctor;
 pub mod envs;
 pub mod health;
 pub mod node;
+pub(crate) mod path;
 pub mod scripts;
 pub mod search;
 

@@ -18,6 +18,7 @@ use super::model::{
     PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalKind, SignalRecord,
 };
 use crate::domain::is_node_id;
+use crate::util::hex;
 use serde_json::{Map, Value};
 
 const RUN_STATES: [&str; 5] = [
@@ -160,14 +161,10 @@ fn hex16(value: Option<&Value>) -> Result<String, HealthCode> {
     let text = value
         .and_then(Value::as_str)
         .ok_or(HealthCode::InvalidMessage)?;
-    if text.len() != OPAQUE_ID_HEX_CHARS || !text.bytes().all(is_lower_hex) {
+    if text.len() != OPAQUE_ID_HEX_CHARS || !hex::is_lower(text) {
         return Err(HealthCode::InvalidMessage);
     }
     Ok(text.to_string())
-}
-
-fn is_lower_hex(byte: u8) -> bool {
-    byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
 }
 
 /// A baseline identity as the Profile carries it: empty, or the exact width
@@ -180,8 +177,7 @@ fn baseline_id_field(value: Option<&Value>) -> Result<String, HealthCode> {
     let text = value
         .and_then(Value::as_str)
         .ok_or(HealthCode::InvalidMessage)?;
-    if !text.is_empty() && (text.len() != BASELINE_ID_HEX_CHARS || !text.bytes().all(is_lower_hex))
-    {
+    if !text.is_empty() && (text.len() != BASELINE_ID_HEX_CHARS || !hex::is_lower(text)) {
         return Err(HealthCode::InvalidMessage);
     }
     Ok(text.to_string())

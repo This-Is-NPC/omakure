@@ -246,9 +246,7 @@ mod tests {
         assert_ne!(first, project(&[other_row], NOW, 64).remove(0).signal_id);
         assert_ne!(first, project(&[other_node], NOW, 64).remove(0).signal_id);
         assert_eq!(first.len(), 32);
-        assert!(first
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+        assert!(crate::util::hex::is_lower(&first));
     }
 
     #[test]

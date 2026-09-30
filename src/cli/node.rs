@@ -529,11 +529,7 @@ fn apply_bundle_inputs(
                 "signed enrollment bundle could not be read",
             )
         })?;
-    let bundle_hex = if bundle.len().is_multiple_of(2)
-        && bundle
-            .iter()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
+    let bundle_hex = if bundle.len().is_multiple_of(2) && hex::is_lower(&bundle) {
         String::from_utf8(bundle).map_err(|_| {
             OperationError::new(
                 OperationErrorCode::EnrollmentInvalid,
@@ -541,7 +537,7 @@ fn apply_bundle_inputs(
             )
         })?
     } else {
-        crate::enrollment::hex_bytes(&bundle)
+        hex::encode(&bundle)
     };
     Ok(node_ops::SignedBundleApplyRequest {
         bundle_hex,

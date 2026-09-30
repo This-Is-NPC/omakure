@@ -56,4 +56,6 @@ mod use_cases;
 mod util;
 #[doc(hidden)]
 pub use util::exec::{generated_executable_tempdir, write_generated_executable};
+#[doc(hidden)]
+pub use util::hex;
 mod workspace;

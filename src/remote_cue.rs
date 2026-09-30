@@ -290,10 +290,7 @@ pub fn within_validity_window(not_before: i64, expires_at: i64, now: i64) -> Res
 
 /// The frozen `cue_id` grammar: 32 lowercase hex chars.
 pub fn is_well_formed_cue_id(cue_id: &str) -> bool {
-    cue_id.len() == crate::health_plane::bounds::OPAQUE_ID_HEX_CHARS
-        && cue_id
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    cue_id.len() == crate::health_plane::bounds::OPAQUE_ID_HEX_CHARS && hex::is_lower(cue_id)
 }
 
 /// The frozen script-name grammar: `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`.

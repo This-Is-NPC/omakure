@@ -19,6 +19,7 @@ use super::bounds::{
     SIGNATURE_BYTES,
 };
 use super::model::{HealthKind, RunFact, RunnerFact, RuntimeFact, SignalRecord};
+use crate::util::hex;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
@@ -416,10 +417,7 @@ pub fn sanitize_signal_run(run: &mut RunFact) -> bool {
 fn run_fact_is_valid(run: &RunFact) -> bool {
     !run.script.is_empty()
         && run.run_id.len() == OPAQUE_ID_HEX_CHARS
-        && run
-            .run_id
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        && hex::is_lower(&run.run_id)
         && run.finished_at >= 1
         && RUN_STATES.contains(&run.state.as_str())
 }
@@ -653,11 +651,7 @@ fn sanitize_profile(facts: &mut ProfileFacts) {
 /// identity is not a shorter identity, and the receiver would read it as a
 /// different set rather than as an unreadable one.
 fn clamp_baseline_id(value: &mut String) {
-    if value.len() != BASELINE_ID_HEX_CHARS
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
+    if value.len() != BASELINE_ID_HEX_CHARS || !hex::is_lower(&value) {
         value.clear();
     }
 }
@@ -1049,9 +1043,7 @@ mod tests {
         assert_eq!(first, opaque_run_id("1700000000-4242-7"));
         assert_ne!(first, opaque_run_id("1700000000-4242-8"));
         assert_eq!(first.len(), 32);
-        assert!(first
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+        assert!(hex::is_lower(&first));
         assert!(!first.contains("4242"));
     }
 
@@ -1247,9 +1239,7 @@ mod tests {
         assert_ne!(first, run_signal_id("run-b"));
         assert_ne!(first, opaque_run_id("run-a"));
         assert_eq!(first.len(), 32);
-        assert!(first
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+        assert!(hex::is_lower(&first));
     }
 
     #[test]

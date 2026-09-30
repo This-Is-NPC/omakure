@@ -1283,12 +1283,7 @@ pub fn request_manual_enrollment(
         ));
     }
     let (reciprocal_request_hex, reciprocal_code) = reciprocal
-        .map(|(request, code)| {
-            (
-                enrollment::hex_bytes(&request),
-                enrollment::hex_bytes(&code),
-            )
-        })
+        .map(|(request, code)| (hex::encode(&request), hex::encode(&code)))
         .unzip();
     Ok(ManualEnrollmentResult {
         pairing_id: offer.request.pairing_id_hex(),

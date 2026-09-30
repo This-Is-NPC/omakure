@@ -33,11 +33,12 @@ pub fn decode_array<const N: usize>(value: &str) -> Option<[u8; N]> {
     Some(bytes)
 }
 
-/// Whether every character is one of `0-9a-f`; vacuously true when empty.
-pub fn is_lower(value: &str) -> bool {
+/// Whether every byte is one of `0-9a-f`; vacuously true when empty.
+pub fn is_lower(value: impl AsRef<[u8]>) -> bool {
     value
-        .bytes()
-        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        .as_ref()
+        .iter()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
 }
 
 fn pair(value: &str, index: usize) -> Option<u8> {

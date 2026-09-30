@@ -1,4 +1,5 @@
 use super::node_id::is_node_id;
+use crate::util::hex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -425,11 +426,7 @@ fn validate_text(
 }
 
 fn validate_lower_hex(field: &str, value: &str, bytes: usize) -> Result<(), NodeConfigError> {
-    if value.len() != bytes * 2
-        || value
-            .bytes()
-            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
-    {
+    if value.len() != bytes * 2 || !hex::is_lower(value) {
         return Err(NodeConfigError::Invalid(format!("{field} is invalid")));
     }
     Ok(())

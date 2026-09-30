@@ -666,11 +666,7 @@ mod tests {
                 .any(|window| window == private));
         }
         assert_eq!(identity.public_status().public_key_hex.len(), 64);
-        assert!(identity
-            .public_status()
-            .public_key_hex
-            .chars()
-            .all(|character| character.is_ascii_hexdigit() && !character.is_ascii_uppercase()));
+        assert!(hex::is_lower(&identity.public_status().public_key_hex));
         assert!(!format!("{:?}", identity.public_status()).contains("private"));
     }
 

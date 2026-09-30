@@ -407,10 +407,8 @@ bootstrap_nonce_hash = "{}"
 id = "omakure"
 discovery_secret_ref = ""
 "#,
-        omakure::enrollment::hex_bytes(&omakure::enrollment::hash_bootstrap_token(
-            token.as_bytes(),
-        )),
-        omakure::enrollment::hex_bytes(&omakure::enrollment::hash_bootstrap_nonce(&nonce)),
+        omakure::hex::encode(&omakure::enrollment::hash_bootstrap_token(token.as_bytes(),)),
+        omakure::hex::encode(&omakure::enrollment::hash_bootstrap_nonce(&nonce)),
     );
     fs::write(&config, config_text).unwrap();
 

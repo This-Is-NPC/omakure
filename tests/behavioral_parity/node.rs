@@ -408,7 +408,7 @@ fn enrollment_material(
     )
     .map_err(|error| format!("create enrollment request: {error}"))?;
     let node_id = offer.request.proposer_node_id.clone();
-    let certificate = enrollment::hex_bytes(transport.certificate().as_bytes());
+    let certificate = omakure::hex::encode(transport.certificate().as_bytes());
     Ok((node_id, offer.request_hex(), certificate, offer.code_hex()))
 }
 
@@ -756,7 +756,7 @@ fn identity_material(ctx: &BehavioralContext) -> Result<(String, String, String)
     Ok((
         identity.public_status().node_id.clone(),
         identity.public_status().public_key_hex.clone(),
-        enrollment::hex_bytes(transport.certificate().as_bytes()),
+        omakure::hex::encode(transport.certificate().as_bytes()),
     ))
 }
 
@@ -862,7 +862,7 @@ fn rollback_expectation(ctx: &BehavioralContext) -> Result<(String, Vec<Vec<u8>>
     let baseline_id = manifest
         .baseline_id()
         .map_err(|error| format!("derive retained baseline id: {error}"))?;
-    Ok((enrollment::hex_bytes(&baseline_id), push.bodies))
+    Ok((omakure::hex::encode(&baseline_id), push.bodies))
 }
 
 fn assert_rollback_files(
@@ -1528,12 +1528,12 @@ fn node_enroll_apply(parent: &BehavioralContext) -> Result<ProbeEvidence, String
     let cli_bootstrap_token = b"behavioral-parity-cli-bootstrap-token-000000";
     let http_bootstrap_token = b"behavioral-parity-http-bootstrap-token-000000";
     let cli_token_hash =
-        enrollment::hex_bytes(&enrollment::hash_bootstrap_token(cli_bootstrap_token));
+        omakure::hex::encode(&enrollment::hash_bootstrap_token(cli_bootstrap_token));
     let http_token_hash =
-        enrollment::hex_bytes(&enrollment::hash_bootstrap_token(http_bootstrap_token));
+        omakure::hex::encode(&enrollment::hash_bootstrap_token(http_bootstrap_token));
     let nonce = "00112233445566778899aabbccddeeff";
     let nonce_bytes = enrollment::parse_hex(nonce, 16).map_err(|e| format!("nonce: {e}"))?;
-    let nonce_hash = enrollment::hex_bytes(&enrollment::hash_bootstrap_nonce(&nonce_bytes));
+    let nonce_hash = omakure::hex::encode(&enrollment::hash_bootstrap_nonce(&nonce_bytes));
     for (target, token_hash) in [
         (&cli, cli_token_hash.as_str()),
         (&http_ctx, http_token_hash.as_str()),

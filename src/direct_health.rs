@@ -758,9 +758,7 @@ mod tests {
     fn a_fresh_id_is_thirty_two_lowercase_hex_characters_and_unique() {
         let first = fresh_id();
         assert_eq!(first.len(), 32);
-        assert!(first
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+        assert!(hex::is_lower(&first));
         assert_ne!(first, fresh_id());
     }
 

@@ -680,10 +680,6 @@ pub fn parse_hex(value: &str, expected_bytes: usize) -> Result<Vec<u8>, Enrollme
     hex::decode(value).ok_or(EnrollmentError::Invalid)
 }
 
-pub fn hex_bytes(bytes: &[u8]) -> String {
-    hex::encode(bytes)
-}
-
 pub fn validate_capabilities(capabilities: &[String]) -> Result<(), EnrollmentError> {
     if capabilities.len() > MAX_CAPABILITIES {
         return Err(EnrollmentError::Invalid);

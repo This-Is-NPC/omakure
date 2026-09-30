@@ -1002,7 +1002,7 @@ impl NodeRegistry {
         };
         let registration = PeerRegistration {
             node_id: bundle.subject_node_id.clone(),
-            public_key: enrollment::hex_bytes(bundle.subject_xonly.as_slice()),
+            public_key: hex::encode(bundle.subject_xonly.as_slice()),
             role,
             capabilities: bundle.capabilities.clone(),
             source: PeerSource::Bundle,
@@ -1745,11 +1745,7 @@ impl NodeRegistry {
             ));
         }
         if let Some(cue_id) = cue_id {
-            if cue_id.len() != 32
-                || !cue_id
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-            {
+            if cue_id.len() != 32 || !hex::is_lower(cue_id) {
                 return Err(RegistryError::InvalidInput(
                     "Cue audit id must be 32 lowercase hex characters".to_string(),
                 ));
@@ -3710,11 +3706,7 @@ fn validate_registration(
 }
 
 fn validate_public_key(value: &str) -> Result<(), RegistryError> {
-    if value.len() != PUBLIC_KEY_BYTES
-        || value
-            .bytes()
-            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
-    {
+    if value.len() != PUBLIC_KEY_BYTES || !hex::is_lower(value) {
         return Err(RegistryError::InvalidInput(
             "public key must be 64 lowercase hexadecimal x-only bytes".to_string(),
         ));

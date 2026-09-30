@@ -619,12 +619,7 @@ impl NodeContext {
             ) || name
                 .strip_prefix(".cue-execution-")
                 .and_then(|digest| digest.strip_suffix(".lock"))
-                .is_some_and(|digest| {
-                    digest.len() == 64
-                        && digest
-                            .bytes()
-                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-                });
+                .is_some_and(|digest| digest.len() == 64 && crate::util::hex::is_lower(digest));
             if !allowed {
                 return Err(NodeError::InsecurePath(format!(
                     "unsupported node state entry {name:?}"

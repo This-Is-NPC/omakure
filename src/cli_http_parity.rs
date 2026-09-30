@@ -8,8 +8,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::path::PathBuf;
-pub mod probes;
 
 pub const SCHEMA_VERSION: u32 = 1;
 pub const MANIFEST_PATH: &str = "fixtures/cli-http-parity.toml";
@@ -418,161 +416,6 @@ pub struct BehaviorCase {
     pub http_ids: Vec<String>,
 }
 
-/// Deterministic fixture passed to every paired adapter probe.  Family probes
-/// may create their own temporary child paths, but must derive IDs, clock and
-/// actors from this fixture rather than wall-clock or random process state.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProbeFixture {
-    pub workspace: PathBuf,
-    pub repository: PathBuf,
-    pub clock_seconds: u64,
-    pub generated_ids: Vec<String>,
-    pub authorized_actor: String,
-    pub unauthenticated_actor: String,
-    pub forbidden_actor: String,
-}
-
-impl ProbeFixture {
-    pub fn deterministic(workspace: impl Into<PathBuf>, repository: impl Into<PathBuf>) -> Self {
-        Self {
-            workspace: workspace.into(),
-            repository: repository.into(),
-            clock_seconds: 1_800_000_000,
-            generated_ids: vec!["fixture-id-1".into(), "fixture-id-2".into()],
-            authorized_actor: "authorized".into(),
-            unauthenticated_actor: "unauthenticated".into(),
-            forbidden_actor: "forbidden".into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProbeEvidence {
-    pub cli: serde_json::Value,
-    pub http: serde_json::Value,
-    /// Semantic mismatch probes name the manifest difference they exercised.
-    /// Exact probes leave this unset and are compared by the harness.
-    pub semantic_difference: Option<String>,
-}
-
-pub type ProbeFn = fn(&ProbeFixture) -> Result<ProbeEvidence, ProbeError>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ProbeError {
-    Manifest(ManifestError),
-    MissingProbe(String),
-    DuplicateProbe(String),
-    UnknownProbe(String),
-    UnexpectedDifference(String),
-    Observable(ObservableError),
-    Execution(String),
-}
-
-impl fmt::Display for ProbeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::error::Error for ProbeError {}
-
-/// Executable, manifest-driven paired probe registry.  Registration is
-/// deliberately separate from the manifest so family owners can implement
-/// real CLI and in-process HTTP calls without duplicating the case list.
-pub struct PairedProbeRegistry {
-    manifest: Manifest,
-    cases: Vec<BehaviorCase>,
-    probes: BTreeMap<String, ProbeFn>,
-}
-
-impl PairedProbeRegistry {
-    pub fn from_manifest(manifest: Manifest) -> Result<Self, ProbeError> {
-        let cases = manifest.behavior_cases().map_err(ProbeError::Manifest)?;
-        Ok(Self {
-            manifest,
-            cases,
-            probes: BTreeMap::new(),
-        })
-    }
-
-    pub fn register(&mut self, behavior_case: &str, probe: ProbeFn) -> Result<(), ProbeError> {
-        if !self
-            .cases
-            .iter()
-            .any(|case| case.behavior_case == behavior_case)
-        {
-            return Err(ProbeError::UnknownProbe(behavior_case.into()));
-        }
-        if self.probes.insert(behavior_case.into(), probe).is_some() {
-            return Err(ProbeError::DuplicateProbe(behavior_case.into()));
-        }
-        Ok(())
-    }
-
-    pub fn registered_count(&self) -> usize {
-        self.probes.len()
-    }
-
-    pub fn expected_count(&self) -> usize {
-        self.cases.len()
-    }
-
-    pub fn run_all(&self, fixture: &ProbeFixture) -> Result<usize, ProbeError> {
-        if let Some(case) = self
-            .cases
-            .iter()
-            .find(|case| !self.probes.contains_key(&case.behavior_case))
-        {
-            return Err(ProbeError::MissingProbe(case.behavior_case.clone()));
-        }
-        let schemas: BTreeMap<_, _> = self
-            .manifest
-            .schemas
-            .iter()
-            .map(|schema| (schema.operation_family.as_str(), schema))
-            .collect();
-        for case in &self.cases {
-            let evidence = (self.probes[&case.behavior_case])(fixture)?;
-            let schema = schemas
-                .get(case.operation_family.as_str())
-                .ok_or_else(|| ProbeError::Execution(case.operation_family.clone()))?;
-            if case.class == ParityClass::Exact {
-                compare_observables_for_case(
-                    schema,
-                    &case.behavior_case,
-                    &evidence.cli,
-                    &evidence.http,
-                )
-                .map_err(ProbeError::Observable)?;
-                if evidence.semantic_difference.is_some() {
-                    return Err(ProbeError::UnexpectedDifference(case.behavior_case.clone()));
-                }
-            } else {
-                validate_observables_for_case(
-                    schema,
-                    &case.behavior_case,
-                    &evidence.cli,
-                    &evidence.http,
-                )
-                .map_err(ProbeError::Observable)?;
-                let expected = self
-                    .manifest
-                    .entries
-                    .iter()
-                    .find(|entry| {
-                        entry.behavior_case.as_deref() == Some(case.behavior_case.as_str())
-                    })
-                    .and_then(|entry| entry.semantic_difference.as_ref())
-                    .map(|difference| difference.kind.clone());
-                if evidence.semantic_difference.as_deref() != expected.as_deref() {
-                    return Err(ProbeError::UnexpectedDifference(case.behavior_case.clone()));
-                }
-            }
-        }
-        Ok(self.cases.len())
-    }
-}
-
 /// Parse and validate the checked-in schemas and cases.
 pub fn checked_registry() -> Result<(Manifest, Vec<BehaviorCase>), ManifestError> {
     let manifest = checked_manifest()?;
@@ -799,15 +642,6 @@ impl fmt::Display for ObservableError {
 
 impl std::error::Error for ObservableError {}
 
-/// Compare adapter observations against a schema's family-level contract.
-pub fn compare_observables(
-    schema: &ObservableSchema,
-    cli: &serde_json::Value,
-    http: &serde_json::Value,
-) -> Result<(), ObservableError> {
-    compare_observables_inner(schema, None, cli, http)
-}
-
 /// Compare observations using the exact semantic requirement for one case.
 pub fn compare_observables_for_case(
     schema: &ObservableSchema,
@@ -815,7 +649,13 @@ pub fn compare_observables_for_case(
     cli: &serde_json::Value,
     http: &serde_json::Value,
 ) -> Result<(), ObservableError> {
-    compare_observables_inner(schema, Some(behavior_case), cli, http)
+    let (left, right) = validated_observations(schema, behavior_case, cli, http)?;
+    if left != right {
+        return Err(ObservableError::Mismatch {
+            field: "<observable>".into(),
+        });
+    }
+    Ok(())
 }
 
 /// Validate each side of a semantic-mismatch case without requiring equality.
@@ -825,61 +665,30 @@ pub fn validate_observables_for_case(
     cli: &serde_json::Value,
     http: &serde_json::Value,
 ) -> Result<(), ObservableError> {
-    let (required, generated, invariants) = observation_contract(schema, Some(behavior_case))?;
-    let left = normalized_observation(schema, cli, required, generated, "cli")?;
-    let right = normalized_observation(schema, http, required, generated, "http")?;
-    validate_invariants(&left, invariants, "cli")?;
-    validate_invariants(&right, invariants, "http")
+    validated_observations(schema, behavior_case, cli, http).map(|_| ())
 }
 
-type ObservationContract<'a> = (&'a [String], &'a [String], &'a [String]);
-
-fn observation_contract<'a>(
-    schema: &'a ObservableSchema,
-    behavior_case: Option<&str>,
-) -> Result<ObservationContract<'a>, ObservableError> {
-    let requirement = behavior_case.and_then(|case| {
-        schema
-            .case_requirements
-            .iter()
-            .find(|requirement| requirement.behavior_case == case)
-    });
-    if behavior_case.is_some() && requirement.is_none() {
-        return Err(ObservableError::MissingCaseRequirement {
-            case: behavior_case.unwrap_or_default().into(),
-        });
-    }
-    Ok(
-        match requirement
-            .or_else(|| (schema.case_requirements.len() == 1).then(|| &schema.case_requirements[0]))
-        {
-            Some(requirement) => (
-                &requirement.required_fields,
-                &requirement.generated_id_fields,
-                &requirement.invariant_fields,
-            ),
-            None => (&schema.required_fields, &[], &[]),
-        },
-    )
-}
-
-fn compare_observables_inner(
+fn validated_observations(
     schema: &ObservableSchema,
-    behavior_case: Option<&str>,
+    behavior_case: &str,
     cli: &serde_json::Value,
     http: &serde_json::Value,
-) -> Result<(), ObservableError> {
-    let (required, generated, invariants) = observation_contract(schema, behavior_case)?;
+) -> Result<(serde_json::Value, serde_json::Value), ObservableError> {
+    let requirement = schema
+        .case_requirements
+        .iter()
+        .find(|requirement| requirement.behavior_case == behavior_case)
+        .ok_or_else(|| ObservableError::MissingCaseRequirement {
+            case: behavior_case.into(),
+        })?;
+    let required = &requirement.required_fields;
+    let generated = &requirement.generated_id_fields;
+    let invariants = &requirement.invariant_fields;
     let left = normalized_observation(schema, cli, required, generated, "cli")?;
     let right = normalized_observation(schema, http, required, generated, "http")?;
     validate_invariants(&left, invariants, "cli")?;
     validate_invariants(&right, invariants, "http")?;
-    if left != right {
-        return Err(ObservableError::Mismatch {
-            field: "<observable>".into(),
-        });
-    }
-    Ok(())
+    Ok((left, right))
 }
 
 fn normalized_observation(
@@ -1591,42 +1400,7 @@ mod tests {
             9
         );
     }
-    fn equal_probe(_fixture: &ProbeFixture) -> Result<ProbeEvidence, ProbeError> {
-        Ok(ProbeEvidence {
-            cli: serde_json::json!({"status": "ok"}),
-            http: serde_json::json!({"status": "ok"}),
-            semantic_difference: None,
-        })
-    }
 
-    #[test]
-    fn paired_registry_requires_and_executes_each_registered_case() {
-        let mut registry = PairedProbeRegistry::from_manifest(valid()).unwrap();
-        assert_eq!(registry.expected_count(), 1);
-        assert_eq!(registry.registered_count(), 0);
-        assert!(matches!(
-            registry.run_all(&ProbeFixture::deterministic("/tmp/workspace", "/tmp/repository")),
-            Err(ProbeError::MissingProbe(case)) if case == "config.read"
-        ));
-        assert!(matches!(
-            registry.register("missing.case", equal_probe),
-            Err(ProbeError::UnknownProbe(case)) if case == "missing.case"
-        ));
-        registry.register("config.read", equal_probe).unwrap();
-        assert!(matches!(
-            registry.register("config.read", equal_probe),
-            Err(ProbeError::DuplicateProbe(case)) if case == "config.read"
-        ));
-        assert_eq!(
-            registry
-                .run_all(&ProbeFixture::deterministic(
-                    "/tmp/workspace",
-                    "/tmp/repository"
-                ))
-                .unwrap(),
-            1
-        );
-    }
     #[test]
     fn every_semantic_mismatch_has_a_paired_case_assertion() {
         let manifest = checked_manifest().unwrap();
@@ -1746,13 +1520,13 @@ mod tests {
         });
         let mut right = left.clone();
         right["status"] = serde_json::json!("failed");
-        assert!(compare_observables(&schema, &left, &right).is_err());
+        assert!(compare_observables_for_case(&schema, "fixture.success", &left, &right).is_err());
         let mut right = left.clone();
         right["auth"] = serde_json::json!("forbidden");
-        assert!(compare_observables(&schema, &left, &right).is_err());
+        assert!(compare_observables_for_case(&schema, "fixture.success", &left, &right).is_err());
         let mut right = left.clone();
         right["items"] = serde_json::json!(["second", "first"]);
-        assert!(compare_observables(&schema, &left, &right).is_err());
+        assert!(compare_observables_for_case(&schema, "fixture.success", &left, &right).is_err());
     }
 
     #[test]
@@ -1772,28 +1546,13 @@ mod tests {
                 "metadata": {"b": 2, "a": 1}
             }
         });
-        assert!(compare_observables(&schema, &left, &right).is_ok());
+        assert!(compare_observables_for_case(&schema, "fixture.success", &left, &right).is_ok());
         let mut changed = right.clone();
         changed["data"]["status"] = serde_json::Value::Null;
-        assert!(compare_observables(&schema, &left, &changed).is_err());
+        assert!(compare_observables_for_case(&schema, "fixture.success", &left, &changed).is_err());
         let mut absent = right["data"].clone();
         absent.as_object_mut().unwrap().remove("status");
-        assert!(compare_observables(&schema, &left, &absent).is_err());
-    }
-    #[test]
-    fn probe_modules_form_complete_disjoint_manifest_partition() {
-        let (_, cases) = checked_registry().unwrap();
-        probes::partition_case_ids().unwrap();
-        let mut manifest_ids: Vec<_> = cases
-            .iter()
-            .map(|case| case.behavior_case.as_str())
-            .collect();
-
-        let mut module_ids = probes::case_ids();
-        manifest_ids.sort_unstable();
-        module_ids.sort_unstable();
-        assert_eq!(module_ids.len(), 44);
-        assert_eq!(manifest_ids, module_ids);
+        assert!(compare_observables_for_case(&schema, "fixture.success", &left, &absent).is_err());
     }
     #[test]
     fn comparator_rejects_false_boolean_invariants() {
@@ -1828,25 +1587,6 @@ mod tests {
         assert!(compare_observables_for_case(&schema, "fixture.success", &left, &right).is_err());
     }
 
-    #[test]
-    fn registry_rejects_canned_ok_only_evidence() {
-        fn canned(_fixture: &ProbeFixture) -> Result<ProbeEvidence, ProbeError> {
-            Ok(ProbeEvidence {
-                cli: serde_json::json!({"ok": true}),
-                http: serde_json::json!({"ok": true}),
-                semantic_difference: None,
-            })
-        }
-        let mut registry = PairedProbeRegistry::from_manifest(valid()).unwrap();
-        registry.register("config.read", canned).unwrap();
-        assert!(matches!(
-            registry.run_all(&ProbeFixture::deterministic(
-                "/tmp/workspace",
-                "/tmp/repository"
-            )),
-            Err(ProbeError::Observable(ObservableError::MissingField { .. }))
-        ));
-    }
     #[test]
     fn validate_current_and_route_normalization_cover_live_contract() {
         let manifest = validate_current().unwrap();
@@ -1999,12 +1739,19 @@ mod tests {
             schema
                 .allowed_normalizations
                 .retain(|rule| *rule != NormalizationRule::GeneratedId);
-            assert!(compare_observables(&schema, &wrapped, &wrapped).is_ok());
+            assert!(
+                compare_observables_for_case(&schema, "fixture.success", &wrapped, &wrapped)
+                    .is_ok()
+            );
         }
         let schema = comparison_schema();
         let value = serde_json::json!({"status": "ok", "id": "same", "created_at": "now"});
-        assert!(
-            compare_observables(&schema, &value, &serde_json::json!({"transport": true})).is_err()
-        );
+        assert!(compare_observables_for_case(
+            &schema,
+            "fixture.success",
+            &value,
+            &serde_json::json!({"transport": true})
+        )
+        .is_err());
     }
 }

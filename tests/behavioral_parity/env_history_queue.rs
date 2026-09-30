@@ -1,7 +1,6 @@
 //! Real paired probes for history, queue, and managed-environment adapters.
 
-use super::{evidence, require_path, BehavioralContext};
-use omakure::cli_http_parity::ProbeEvidence;
+use super::{evidence, require_path, BehavioralContext, ProbeEvidence};
 use serde_json::{json, Value};
 use std::time::Duration;
 

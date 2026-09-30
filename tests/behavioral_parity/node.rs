@@ -1,9 +1,8 @@
 //! Real node, baseline and enrollment paired adapter probes.
 
-use super::{evidence, BehavioralContext};
+use super::{evidence, BehavioralContext, ProbeEvidence};
 use omakure::baseline::SignedBaselineManifest;
 use omakure::baseline_push::BaselinePush;
-use omakure::cli_http_parity::ProbeEvidence;
 use omakure::discovery::Beacon;
 use omakure::enrollment::{self, EnrollmentRole, ManualEnrollmentRequest};
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};

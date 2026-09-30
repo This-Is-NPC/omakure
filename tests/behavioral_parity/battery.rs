@@ -1,7 +1,6 @@
 //! Real battery paired adapter probes, including HTTPS policy mismatches.
 
-use super::{evidence, require_path, BehavioralContext};
-use omakure::cli_http_parity::ProbeEvidence;
+use super::{evidence, require_path, BehavioralContext, ProbeEvidence};
 use omakure::operations::battery::{read_registry, write_registry};
 use serde_json::{json, Value};
 use std::path::Path;

@@ -14,11 +14,42 @@ mod env_history_queue;
 #[path = "behavioral_parity/node.rs"]
 mod node;
 
-use omakure::cli_http_parity::{ProbeEvidence, ProbeFixture};
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::time::Duration;
+
+/// Fixture passed to every paired adapter probe. Probes derive paths, clock
+/// and actors from it rather than from wall-clock or random process state.
+pub struct ProbeFixture {
+    pub workspace: PathBuf,
+    pub repository: PathBuf,
+    pub clock_seconds: u64,
+    pub authorized_actor: String,
+    pub unauthenticated_actor: String,
+    pub forbidden_actor: String,
+}
+
+impl ProbeFixture {
+    fn new(workspace: &Path, repository: &Path) -> Self {
+        Self {
+            workspace: workspace.to_path_buf(),
+            repository: repository.to_path_buf(),
+            clock_seconds: omakure::enrollment::now_seconds(),
+            authorized_actor: "authorized".into(),
+            unauthenticated_actor: "unauthenticated".into(),
+            forbidden_actor: "forbidden".into(),
+        }
+    }
+}
+
+pub struct ProbeEvidence {
+    pub cli: Value,
+    pub http: Value,
+    /// Semantic mismatch probes name the manifest difference they exercised.
+    /// Exact probes leave this unset and are compared by the harness.
+    pub semantic_difference: Option<String>,
+}
 
 pub struct BehavioralContext {
     pub workspace: support::TestWorkspace,
@@ -38,8 +69,7 @@ impl BehavioralContext {
             &[],
             Duration::from_secs(10),
         );
-        let mut fixture = ProbeFixture::deterministic(workspace.path(), repository.path());
-        fixture.clock_seconds = omakure::enrollment::now_seconds();
+        let fixture = ProbeFixture::new(workspace.path(), repository.path());
         Self {
             workspace,
             repository,
@@ -108,8 +138,7 @@ impl BehavioralContext {
             )
         }))
         .unwrap_or_else(|_| panic!("node fixture {label} failed startup"));
-        let mut fixture = ProbeFixture::deterministic(workspace.path(), repository.path());
-        fixture.clock_seconds = omakure::enrollment::now_seconds();
+        let fixture = ProbeFixture::new(workspace.path(), repository.path());
         Self {
             workspace,
             repository,
@@ -121,7 +150,6 @@ impl BehavioralContext {
     pub fn derive(&self, suffix: &str, capabilities: &[&str]) -> Self {
         let mut derived = Self::new(&format!("parity_{suffix}"), capabilities);
         derived.fixture.clock_seconds = self.fixture.clock_seconds;
-        derived.fixture.generated_ids = self.fixture.generated_ids.clone();
         derived.fixture.authorized_actor = self.fixture.authorized_actor.clone();
         derived.fixture.unauthenticated_actor = self.fixture.unauthenticated_actor.clone();
         derived.fixture.forbidden_actor = self.fixture.forbidden_actor.clone();
@@ -131,7 +159,6 @@ impl BehavioralContext {
     pub fn derive_node(&self, suffix: &str, capabilities: &[&str]) -> Self {
         let mut derived = Self::new_node(&format!("parity_{suffix}"), capabilities);
         derived.fixture.clock_seconds = self.fixture.clock_seconds;
-        derived.fixture.generated_ids = self.fixture.generated_ids.clone();
         derived.fixture.authorized_actor = self.fixture.authorized_actor.clone();
         derived.fixture.unauthenticated_actor = self.fixture.unauthenticated_actor.clone();
         derived.fixture.forbidden_actor = self.fixture.forbidden_actor.clone();

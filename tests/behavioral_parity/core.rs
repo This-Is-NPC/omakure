@@ -1,7 +1,6 @@
 //! Real core/scripts/config/search paired adapter probes.
 
-use super::BehavioralContext;
-use omakure::cli_http_parity::ProbeEvidence;
+use super::{BehavioralContext, ProbeEvidence};
 use serde_json::{json, Value};
 use std::process::Output;
 

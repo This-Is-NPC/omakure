@@ -364,11 +364,11 @@ fn public_docs_expose_all_audience_tracks() {
             "docs/README.md lacks audience track {heading:?}"
         );
     }
-    let reference = docs_section(DOCS_INDEX, "## Referência");
+    let reference = docs_section(DOCS_INDEX, "## Reference");
     for target in REFERENCE_TARGETS {
         assert!(
             reference.contains(&format!("({target})")),
-            "Referência section lacks canonical target {target}"
+            "Reference section lacks canonical target {target}"
         );
     }
 }

@@ -712,9 +712,9 @@ fn docs_index_preserves_canonical_manual_ownership() {
         );
     }
     let reference = index
-        .split_once("## Referência")
+        .split_once("## Reference")
         .map(|(_, body)| body)
-        .expect("docs/README.md must have Referência section");
+        .expect("docs/README.md must have Reference section");
     for target in [
         "cli-reference.md",
         "usage/omakure.md",
@@ -726,7 +726,7 @@ fn docs_index_preserves_canonical_manual_ownership() {
     ] {
         assert!(
             reference.contains(&format!("({target})")),
-            "Referência section must link {target}"
+            "Reference section must link {target}"
         );
     }
 }

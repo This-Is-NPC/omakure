@@ -16,11 +16,6 @@ use super::{OperationError, OperationErrorCode, OperationResult};
 pub const REGISTRY_VERSION: u32 = 1;
 pub const MANIFEST_FILE: &str = "omakure-battery.toml";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BatteryRef {
-    pub name: String,
-}
-
 /// How a Battery authenticates to a private HTTPS remote.
 ///
 /// Registry stores method + secret ref only — never resolved plaintext.
@@ -288,18 +283,6 @@ pub fn sync_battery(
         workspace,
         request,
         GitTransportPolicy::Default,
-        &SecretAccess::allow_all(),
-    )
-}
-
-pub fn sync_battery_https_only(
-    workspace: &Workspace,
-    request: SyncBatteryRequest,
-) -> OperationResult<BatterySummary> {
-    sync_battery_with_access(
-        workspace,
-        request,
-        GitTransportPolicy::HttpsOnly,
         &SecretAccess::allow_all(),
     )
 }
@@ -2518,22 +2501,6 @@ pub fn confined_existing_path(root: &Path, relative: &Path) -> OperationResult<P
     Ok(PathBuf::from(strip_windows_verbatim_owned(
         full.to_string_lossy().into_owned(),
     )))
-}
-
-pub fn reject_symlink(path: &Path) -> OperationResult<()> {
-    let meta = fs::symlink_metadata(path).map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::IoFailed,
-            format!("failed to inspect battery path: {err}"),
-        )
-    })?;
-    if meta.file_type().is_symlink() {
-        return Err(OperationError::new(
-            OperationErrorCode::UnsafePath,
-            format!("battery symlink is not allowed: {}", path.display()),
-        ));
-    }
-    Ok(())
 }
 
 fn reject_symlink_components(

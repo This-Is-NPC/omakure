@@ -393,10 +393,6 @@ impl NodeContext {
         self.layout.transport_certificate_path()
     }
 
-    pub fn is_test_mode(&self) -> bool {
-        self.test_mode
-    }
-
     pub(crate) fn open_trust_registry(
         &self,
         identity: &NodeIdentityStatus,

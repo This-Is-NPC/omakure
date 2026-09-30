@@ -26,7 +26,6 @@ pub const DIRECT_ENVELOPE_DOMAIN: &[u8] = b"omakure/direct-envelope/v1\0";
 pub const NOISE_NAME: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 
 pub const MAX_FRAME_LENGTH: usize = 1_048_580;
-pub const MAX_FRAME_BYTES: usize = 1_048_584;
 pub const MAX_HANDSHAKE_MESSAGE_BYTES: usize = 4_096;
 pub const MAX_PLAINTEXT_BYTES: usize = 1_048_520;
 pub const MAX_CERTIFICATE_BYTES: usize = 245;
@@ -897,12 +896,6 @@ impl TransportSession {
     /// A malformed unauthenticated peer is still closed without a response.
     pub fn write_error(&mut self, code: ProtocolErrorCode) -> Result<Vec<u8>, TransportError> {
         let frame = self.write(ERROR_KIND, &(code as u16).to_be_bytes())?;
-        self.closed = true;
-        Ok(frame)
-    }
-
-    pub fn write_close(&mut self, reason: u16) -> Result<Vec<u8>, TransportError> {
-        let frame = self.write(CLOSE_KIND, &reason.to_be_bytes())?;
         self.closed = true;
         Ok(frame)
     }

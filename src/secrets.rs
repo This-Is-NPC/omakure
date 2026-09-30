@@ -166,15 +166,6 @@ enum SecretResolveError {
     InvalidRef,
 }
 
-pub fn resolve_args(
-    workspace: &Workspace,
-    script_path: &Path,
-    args: &[String],
-    extra_env: &[(String, String)],
-) -> Result<ResolvedArgs, (String, String)> {
-    resolve_args_with_direct_secrets(workspace, script_path, args, extra_env, &[])
-}
-
 pub fn resolve_args_with_direct_secrets(
     workspace: &Workspace,
     script_path: &Path,

@@ -66,11 +66,6 @@ impl EventId {
         ))
     }
 
-    /// Hash NIP-01 serialized event bytes into the explicit event-id prehash.
-    pub fn from_nip01_serialized(bytes: &[u8]) -> Self {
-        Self(Sha256::digest(bytes).into())
-    }
-
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
@@ -331,10 +326,6 @@ impl NodeIdentity {
 impl NodeContext {
     pub fn load_or_initialize_identity(&self) -> Result<NodeIdentity, NodeIdentityError> {
         NodeIdentity::load_or_initialize(self)
-    }
-
-    pub fn load_existing_identity(&self) -> Result<NodeIdentity, NodeIdentityError> {
-        NodeIdentity::load_existing(self)
     }
 }
 

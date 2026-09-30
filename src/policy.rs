@@ -216,7 +216,6 @@ pub const MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 8;
 #[serde(default, deny_unknown_fields)]
 pub struct AuthPolicy {
     pub tokens_file: Option<PathBuf>,
-    pub legacy_env_token: bool,
     /// Concurrency bound on in-flight Argon2id bearer verifications. Each
     /// verify is memory-hard (~64 MiB); this trades authentication
     /// availability against memory/CPU exhaustion. A tighter bound is easier
@@ -231,8 +230,6 @@ impl Default for AuthPolicy {
     fn default() -> Self {
         Self {
             tokens_file: None,
-            // Default true preserves pre-policy legacy OMAKURE_API_TOKEN behavior.
-            legacy_env_token: true,
             max_concurrent_verifications: DEFAULT_MAX_CONCURRENT_AUTH_VERIFICATIONS,
         }
     }
@@ -459,7 +456,6 @@ mod tests {
         let p = DeployPolicy::default();
         assert!(p.routes.writes);
         assert!(p.routes.battery);
-        assert!(p.auth.legacy_env_token);
         assert!(p.routes.allows("POST", "/v1/runs"));
         assert!(p.routes.allows("GET", "/v1/batteries"));
     }
@@ -624,14 +620,12 @@ metadata_endpoint = false
 
 [auth]
 tokens_file = "/run/secrets/omakure_tokens.toml"
-legacy_env_token = false
 max_concurrent_verifications = 4
 "#;
         let p = parse_policy_toml(text).unwrap();
         assert_eq!(p.version, 1);
         assert!(!p.routes.writes);
         assert!(!p.routes.battery);
-        assert!(!p.auth.legacy_env_token);
         assert_eq!(p.node.workers, Some(2));
         assert_eq!(p.node.scheduler, Some(true));
         assert_eq!(

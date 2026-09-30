@@ -43,7 +43,6 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
-const TOKEN: &str = "health-plane-transport-token-with-enough-entropy-01";
 const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
 /// How long a bounded real wait may run before the certification fails.
 const REACH_TIMEOUT: Duration = Duration::from_secs(45);
@@ -72,7 +71,7 @@ fn run_node(workspace: &Path, args: &[String]) -> Output {
         .arg(workspace.join("node.toml"))
         .args(args)
         .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
+        .env("OMAKURE_API_TOKEN", support::api_token())
         .output()
         .expect("run node command")
 }
@@ -159,14 +158,8 @@ fn configure_direct_peers(workspace: &Path, direct_port: u16, peers: &[(&str, u1
 fn serve(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         Duration::from_secs(20),
     )

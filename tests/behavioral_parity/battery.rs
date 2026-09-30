@@ -708,7 +708,7 @@ fn assert_auth(
         super::support::TestWorkspace::new(&format!("battery_forbidden_{}", ctx.forbidden_actor()));
     let denied_server = super::support::HttpServer::start_with_args(
         denied_workspace.path(),
-        super::API_TOKEN,
+        &[],
         &[],
         &[],
         Duration::from_secs(10),
@@ -717,7 +717,7 @@ fn assert_auth(
         method,
         endpoint,
         body_text,
-        super::support::AuthMode::Bearer(super::API_TOKEN),
+        super::support::AuthMode::Bearer(super::support::api_token()),
     );
     assert_eq!(
         forbidden.status, 403,

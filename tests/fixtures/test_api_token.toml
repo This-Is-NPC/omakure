@@ -1,0 +1,6 @@
+# Test-only bearer credential shared by unit and integration tests.
+# The hash uses the minimum accepted Argon2id cost so every authenticated
+# test request stays cheap. Never deploy this token.
+id = "test"
+token = "omk_live_74657374_5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+hash = "$argon2id$v=19$m=19456,t=2,p=1$b21ha3VyZS10ZXN0LXNhbHQ$uCKCbGVRKZdf/ha/iOG/aBtYcIPb3LSXXNck+EBazNc"

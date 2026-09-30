@@ -242,7 +242,7 @@ fn assert_patch_auth(ctx: &BehavioralContext, path: &str, body: &Value) -> Resul
         "PATCH",
         path,
         Some(body.to_string()),
-        AuthMode::Bearer(super::API_TOKEN),
+        AuthMode::Bearer(super::support::api_token()),
     );
     if forbidden.status != 403 {
         return Err(format!(
@@ -697,14 +697,10 @@ fn restart_node_with_env(ctx: BehavioralContext, extra_envs: &[(&str, &str)]) ->
         fixture,
     } = ctx;
     let _ = server.terminate();
-    let mut args = Vec::with_capacity(CAPS.len() * 2);
-    for capability in CAPS {
-        args.extend(["--capability", *capability]);
-    }
     let server = super::support::HttpServer::start_node_service(
         workspace.path(),
-        super::API_TOKEN,
-        &args,
+        CAPS,
+        &[],
         extra_envs,
         std::time::Duration::from_secs(10),
     );
@@ -732,15 +728,11 @@ fn fresh_uninitialized_node(ctx: BehavioralContext) -> BehavioralContext {
         fs::remove_file(&config).expect("remove initialized node config");
     }
     let state_env = state.to_string_lossy().to_string();
-    let mut args = Vec::with_capacity(CAPS.len() * 2);
-    for capability in CAPS {
-        args.extend(["--capability", *capability]);
-    }
     let config_env = config.to_string_lossy().to_string();
     let server = super::support::HttpServer::start_with_args(
         workspace.path(),
-        super::API_TOKEN,
-        &args,
+        CAPS,
+        &[],
         &[
             ("OMAKURE_NODE_TEST_MODE", "1"),
             ("OMAKURE_NODE_STATE_DIR", state_env.as_str()),

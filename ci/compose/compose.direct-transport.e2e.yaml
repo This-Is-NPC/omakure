@@ -54,8 +54,6 @@ services:
       - --workers
       - "0"
       - --no-scheduler
-      - --capability
-      - node:read
     volumes:
       - direct-a-state:/var/lib/omakure
       - direct-a-config:/etc/omakure
@@ -80,8 +78,6 @@ services:
       - --workers
       - "0"
       - --no-scheduler
-      - --capability
-      - node:read
     volumes:
       - direct-b-state:/var/lib/omakure
       - direct-b-config:/etc/omakure

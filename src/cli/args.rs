@@ -88,9 +88,8 @@ pub enum Commands {
     ///
     /// Starts a loopback-only HTTP API by default at `127.0.0.1:7878`.
     /// All endpoints except `/v1/health` and `/v1/ready` require
-    /// `Authorization: Bearer <token>`. Prefer `--tokens-file` /
-    /// `OMAKURE_TOKENS_FILE` (per-token Argon2id scopes). Legacy
-    /// `OMAKURE_API_TOKEN` still works when no tokens file is configured.
+    /// `Authorization: Bearer <token>` for a token listed in
+    /// `--tokens-file` / `OMAKURE_TOKENS_FILE` (per-token Argon2id scopes).
     /// Binding to non-loopback addresses requires `--allow-non-loopback`.
     Api(ApiArgs),
 
@@ -269,24 +268,10 @@ pub struct ApiArgs {
     pub policy: Option<std::path::PathBuf>,
 
     /// Multi-token TOML file (Argon2id hashes + per-token scopes).
-    /// Overrides `OMAKURE_TOKENS_FILE`. When set, process-wide
-    /// `--capability` is ignored; scopes come from each token.
+    /// Overrides `OMAKURE_TOKENS_FILE`. Required unless the deploy policy
+    /// sets `auth.tokens_file`.
     #[arg(long = "tokens-file", env = "OMAKURE_TOKENS_FILE")]
     pub tokens_file: Option<std::path::PathBuf>,
-
-    /// API capability to grant in legacy single-token mode
-    /// (`OMAKURE_API_TOKEN`). Repeatable. Ignored when `--tokens-file`
-    /// is set. Supported: config:read, scripts:read, env:read /
-    /// envs:read, env:write / envs:write, env:activate / envs:activate,
-    /// env:use / envs:use, secrets:use, secrets:read-metadata,
-    /// credentials:use, runs:read, runs:write / runs:enqueue,
-    /// batteries:read, batteries:write, admin:status, all.
-    /// Node management uses narrow node:read, node:write, and trust:write
-    /// capabilities.
-    /// `all` grants every route capability but does not bypass
-    /// `--secret-ref` (pass `--secret-ref '*'` for unrestricted refs).
-    #[arg(long = "capability")]
-    pub capabilities: Vec<String>,
 
     /// Allowed secret provider ref for secrets:use / credentials:use,
     /// e.g. secret://prod/token or secret://prod/*; repeatable. Empty
@@ -603,10 +588,6 @@ pub struct NodeServeArgs {
     /// Multi-token TOML file. Same as `omakure api --tokens-file`.
     #[arg(long = "tokens-file", env = "OMAKURE_TOKENS_FILE")]
     pub tokens_file: Option<std::path::PathBuf>,
-
-    /// API capability to grant in legacy single-token mode. Repeatable.
-    #[arg(long = "capability")]
-    pub capabilities: Vec<String>,
 
     /// Allowed secret provider ref for secrets:use. Same as `omakure api --secret-ref`.
     #[arg(long = "secret-ref")]
@@ -1516,8 +1497,6 @@ mod tests {
             "agent",
             "--worker-script-filter",
             "tools/",
-            "--capability",
-            "runs:write",
             "--secret-ref",
             "secret://env/*",
         ])
@@ -1534,7 +1513,6 @@ mod tests {
                     assert!(args.allow_non_loopback_direct);
                     assert_eq!(args.worker_actor_filter.as_deref(), Some("agent"));
                     assert_eq!(args.worker_script_filter.as_deref(), Some("tools/"));
-                    assert_eq!(args.capabilities, vec!["runs:write".to_string()]);
                     assert_eq!(args.secret_refs, vec!["secret://env/*".to_string()]);
                 }
                 _ => panic!("expected node serve"),
@@ -1582,7 +1560,6 @@ mod tests {
                     assert!(!args.no_scheduler);
                     assert!(!args.readiness_requires_worker);
                     assert!(!args.readiness_requires_scheduler);
-                    assert!(args.capabilities.is_empty());
                     assert!(args.secret_refs.is_empty());
                 }
                 _ => panic!("expected node serve"),

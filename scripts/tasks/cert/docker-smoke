@@ -32,15 +32,13 @@ prefix="omakure-docker-smoke-${suffix}"
 node_container="${prefix}-node"
 node_workspace="${prefix}-workspace"
 node_state="${prefix}-node-state"
+node_config="${prefix}-node-config"
 cue_network="${prefix}-cue"
 baseline_network="${prefix}-baseline"
 cue_container_prefix="${prefix}-cue"
 baseline_container_prefix="${prefix}-baseline"
 cue_volume_prefix="${prefix}-cue"
 baseline_volume_prefix="${prefix}-baseline"
-node_token='ci-node-service-token-with-enough-entropy-00001'
-cue_token='ci-node-service-token-with-enough-entropy-00001'
-baseline_token='ci-node-service-token-with-enough-entropy-00002'
 
 cue_resources=(
     "${cue_container_prefix}-conductor"
@@ -67,7 +65,7 @@ baseline_resources=(
     "${baseline_volume_prefix}-state-publisher"
     "${baseline_volume_prefix}-etc-publisher"
 )
-all_resources=("$node_container" "$node_workspace" "$node_state" "${cue_resources[@]}" "${baseline_resources[@]}")
+all_resources=("$node_container" "$node_workspace" "$node_state" "$node_config" "${cue_resources[@]}" "${baseline_resources[@]}")
 
 d() { timeout --foreground --kill-after=10s "$@"; }
 d5() { timeout --foreground --kill-after=5s "$@"; }
@@ -78,7 +76,7 @@ cleanup_all() {
     local failures=0
 
     d5 30s docker rm -f "$node_container" >/dev/null 2>&1 || true
-    d5 30s docker volume rm "$node_workspace" "$node_state" >/dev/null 2>&1 || true
+    d5 30s docker volume rm "$node_workspace" "$node_state" "$node_config" >/dev/null 2>&1 || true
     for resource_name in "${all_resources[@]}"; do
         for resource_kind in container network volume; do
             local remaining
@@ -102,26 +100,44 @@ trap cleanup_all EXIT INT TERM
 # Build once so CI and local pre-push exercise the identical packaged image.
 timeout --foreground --kill-after=10s 10m docker build --tag "$image" "$root_dir"
 
+token_json="$(d 60s docker run --rm "$image" --json token generate --id ci-smoke \
+    --scope node:read --scope node:write)"
+smoke_token="$(jq -er '.data.token' <<<"$token_json")"
+smoke_tokens_entry="$(jq -er '.data.tokens_file_entry' <<<"$token_json")"
+unset token_json
+
+# Writes the management tokens file into a node's /etc/omakure volume.
+install_tokens_file() {
+    d 60s docker run --rm --user 0 --env TOKENS_ENTRY="$smoke_tokens_entry" \
+        --volume "$1:/etc/omakure" --entrypoint /bin/sh "$image" -c \
+        'printf "version = 1\n\n%s\n" "$TOKENS_ENTRY" > /etc/omakure/tokens.toml \
+         && chown 10001:10001 /etc/omakure/tokens.toml && chmod 0600 /etc/omakure/tokens.toml'
+}
+
 run_node_health() (
     set -euo pipefail
     cleanup() {
         d5 30s docker logs "$node_container" || true
         d5 30s docker rm -f "$node_container" || true
-        d5 30s docker volume rm "$node_workspace" "$node_state" >/dev/null 2>&1 || true
+        d5 30s docker volume rm "$node_workspace" "$node_state" "$node_config" >/dev/null 2>&1 || true
     }
     trap cleanup EXIT
 
     d5 30s docker volume create "$node_workspace" >/dev/null
     d5 30s docker volume create "$node_state" >/dev/null
+    d5 30s docker volume create "$node_config" >/dev/null
     d5 60s docker run --rm --user 0 \
         --volume "$node_workspace:/workspace" \
         --volume "$node_state:/var/lib/omakure" \
+        --volume "$node_config:/etc/omakure" \
         --entrypoint /bin/sh "$image" \
-        -c 'chown 10001:10001 /workspace /var/lib/omakure && chmod 0750 /workspace && chmod 0700 /var/lib/omakure'
+        -c 'chown 10001:10001 /workspace /var/lib/omakure /etc/omakure && chmod 0750 /workspace /etc/omakure && chmod 0700 /var/lib/omakure'
+    install_tokens_file "$node_config"
     d 60s docker run --detach --name "$node_container" \
-        --env OMAKURE_API_TOKEN="$node_token" \
+        --env OMAKURE_TOKENS_FILE=/etc/omakure/tokens.toml \
         --volume "$node_workspace:/workspace" \
         --volume "$node_state:/var/lib/omakure" \
+        --volume "$node_config:/etc/omakure" \
         --publish 127.0.0.1::7878 \
         "$image"
     published_port="$(d5 30s docker port "$node_container" 7878/tcp)"
@@ -188,12 +204,13 @@ run_cue() (
             --entrypoint /bin/sh "$image" -c \
             'chown 10001:10001 /workspace /var/lib/omakure /etc/omakure \
              && chmod 0750 /workspace /etc/omakure && chmod 0700 /var/lib/omakure'
+        install_tokens_file "${cue_volume_prefix}-etc-${node_name}"
     done
     one() {
         local node_name=$1
         shift
         d 60s docker run --rm --network "$cue_network" \
-            --env OMAKURE_API_TOKEN="$cue_token" \
+            --env OMAKURE_API_TOKEN="$smoke_token" \
             --volume "${cue_volume_prefix}-ws-${node_name}:/workspace" \
             --volume "${cue_volume_prefix}-state-${node_name}:/var/lib/omakure" \
             --volume "${cue_volume_prefix}-etc-${node_name}:/etc/omakure" "$image" "$@"
@@ -231,17 +248,18 @@ run_cue() (
     sh_in performer "printf '#!/usr/bin/env bash\\n# OMAKURE_SCHEMA_START\\n# {\"Name\":\"deploy\",\"Description\":\"cue smoke\",\"Fields\":[]}\\n# OMAKURE_SCHEMA_END\\necho cue-ran\\n' > /workspace/deploy.sh && chmod 0755 /workspace/deploy.sh && chown 10001:10001 /workspace/deploy.sh"
     for node_name in conductor performer; do
         d 60s docker run --detach --name "${cue_container_prefix}-${node_name}" --network "$cue_network" \
-            --network-alias "$node_name" --env OMAKURE_API_TOKEN="$cue_token" \
+            --network-alias "$node_name" --env OMAKURE_API_TOKEN="$smoke_token" \
+            --env OMAKURE_TOKENS_FILE=/etc/omakure/tokens.toml \
             --volume "${cue_volume_prefix}-ws-${node_name}:/workspace" \
             --volume "${cue_volume_prefix}-state-${node_name}:/var/lib/omakure" \
             --volume "${cue_volume_prefix}-etc-${node_name}:/etc/omakure" \
-            --env OMAKURE_API_CAPABILITIES=node:read,node:write "$image" \
+            "$image" \
             node serve --bind 0.0.0.0:7878 --allow-non-loopback --allow-non-loopback-direct \
-            --workers 1 --no-scheduler --capability node:read --capability node:write >/dev/null
+            --workers 1 --no-scheduler >/dev/null
     done
     for attempt in $(seq 1 60); do
         connected="$(d 30s docker exec "${cue_container_prefix}-conductor" curl --fail --silent \
-            --max-time 5 -H "Authorization: Bearer ${cue_token}" \
+            --max-time 5 -H "Authorization: Bearer ${smoke_token}" \
             http://127.0.0.1:7878/v1/node/status \
             | jq -r '.data.transport.expected_connected_peer_count // 0' || echo 0)"
         [[ "$connected" == 1 ]] && break
@@ -290,12 +308,13 @@ run_baseline() (
             --entrypoint /bin/sh "$image" -c \
             'chown 10001:10001 /workspace /var/lib/omakure /etc/omakure \
              && chmod 0750 /workspace /etc/omakure && chmod 0700 /var/lib/omakure'
+        install_tokens_file "${baseline_volume_prefix}-etc-${node_name}"
     done
     one() {
         local node_name=$1
         shift
         d 120s docker run --rm --network "$baseline_network" \
-            --env OMAKURE_API_TOKEN="$baseline_token" \
+            --env OMAKURE_API_TOKEN="$smoke_token" \
             --volume "${baseline_volume_prefix}-ws-${node_name}:/workspace" \
             --volume "${baseline_volume_prefix}-state-${node_name}:/var/lib/omakure" \
             --volume "${baseline_volume_prefix}-etc-${node_name}:/etc/omakure" "$image" "$@"
@@ -362,19 +381,20 @@ run_baseline() (
 
     for node_name in conductor performer; do
         d 60s docker run --detach --name "${baseline_container_prefix}-${node_name}" --network "$baseline_network" \
-            --network-alias "$node_name" --env OMAKURE_API_TOKEN="$baseline_token" \
+            --network-alias "$node_name" --env OMAKURE_API_TOKEN="$smoke_token" \
+            --env OMAKURE_TOKENS_FILE=/etc/omakure/tokens.toml \
             --volume "${baseline_volume_prefix}-ws-${node_name}:/workspace" \
             --volume "${baseline_volume_prefix}-state-${node_name}:/var/lib/omakure" \
             --volume "${baseline_volume_prefix}-etc-${node_name}:/etc/omakure" \
-            --env OMAKURE_API_CAPABILITIES=node:read,node:write "$image" \
+            "$image" \
             node serve --bind 0.0.0.0:7878 --allow-non-loopback --allow-non-loopback-direct \
-            --workers 1 --no-scheduler --capability node:read --capability node:write >/dev/null
+            --workers 1 --no-scheduler >/dev/null
     done
     budget=90
     session_up=no
     for _ in $(seq 1 "$budget"); do
         connected="$(d 30s docker exec "${baseline_container_prefix}-conductor" curl --fail --silent \
-            --max-time 5 -H "Authorization: Bearer ${baseline_token}" \
+            --max-time 5 -H "Authorization: Bearer ${smoke_token}" \
             http://127.0.0.1:7878/v1/node/status \
             | jq -r '.data.transport.expected_connected_peer_count // 0' || echo 0)"
         if [[ "$connected" == 1 ]]; then session_up=yes; break; fi
@@ -386,7 +406,7 @@ run_baseline() (
         local want=$1 want_id=$2 why=$3 status=absent reported=
         for _ in $(seq 1 "$budget"); do
             row="$(d 30s docker exec "${baseline_container_prefix}-conductor" curl --fail --silent \
-                --max-time 5 -H "Authorization: Bearer ${baseline_token}" \
+                --max-time 5 -H "Authorization: Bearer ${smoke_token}" \
                 http://127.0.0.1:7878/v1/node/health \
                 | jq -c --arg id "$performer_id" '.data.nodes[] | select(.node_id == $id)' || echo '{}')"
             status="$(echo "$row" | jq -r '.baseline_status // "absent"')"
@@ -420,7 +440,7 @@ run_baseline() (
     await_status in_sync "$v2_id" 'a second push must land and clear the drift'
     rollback() {
         d 60s docker exec "${baseline_container_prefix}-performer" curl --silent --max-time 30 \
-            -X POST -H "Authorization: Bearer ${baseline_token}" \
+            -X POST -H "Authorization: Bearer ${smoke_token}" \
             -H 'content-type: application/json' --data '{"confirmed":true}' \
             http://127.0.0.1:7878/v1/node/baseline/rollback
     }

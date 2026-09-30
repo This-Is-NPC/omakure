@@ -68,7 +68,7 @@ fn command_timeout_drains_large_successful_json_output() {
 fn support_harness_provides_http_port_readiness_and_teardown() {
     let workspace = support::TestWorkspace::new("harness_http_self_test");
     let token = "harness-token-0123456789abcdef012345";
-    let server = support::HttpServer::start(workspace.path(), token, Duration::from_secs(10));
+    let server = support::HttpServer::start(workspace.path(), Duration::from_secs(10));
 
     let body = support::http_get_with_timeout(
         &server.url("/v1/health"),

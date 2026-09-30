@@ -70,14 +70,6 @@ services:
       - --workers
       - "0"
       - --no-scheduler
-      - --capability
-      - node:read
-      - --capability
-      - enrollment:read
-      - --capability
-      - enrollment:write
-      - --capability
-      - discovery:read
     volumes:
       - cert-a-state:/var/lib/omakure
       - cert-a-config:/etc/omakure
@@ -103,14 +95,6 @@ services:
       - --workers
       - "0"
       - --no-scheduler
-      - --capability
-      - node:read
-      - --capability
-      - enrollment:read
-      - --capability
-      - enrollment:write
-      - --capability
-      - discovery:read
     ports:
       - "127.0.0.1:${OMAKURE_CERT_B_DIRECT_PORT:-17889}:7879"
     volumes:
@@ -138,14 +122,6 @@ services:
       - --workers
       - "0"
       - --no-scheduler
-      - --capability
-      - node:read
-      - --capability
-      - enrollment:read
-      - --capability
-      - enrollment:write
-      - --capability
-      - discovery:read
     ports:
       - "127.0.0.1:${OMAKURE_CERT_C_DIRECT_PORT:-17890}:7879"
     volumes:
@@ -173,12 +149,6 @@ services:
       - --workers
       - "0"
       - --no-scheduler
-      - --capability
-      - node:read
-      - --capability
-      - enrollment:read
-      - --capability
-      - enrollment:write
     volumes:
       - cert-adversary-state:/var/lib/omakure
       - cert-adversary-config:/etc/omakure

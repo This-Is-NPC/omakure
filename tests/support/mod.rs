@@ -249,6 +249,55 @@ impl Drop for ChildGuard {
     }
 }
 
+#[derive(serde::Deserialize)]
+struct TestCredential {
+    id: String,
+    token: String,
+    hash: String,
+}
+
+fn test_credential() -> &'static TestCredential {
+    static CREDENTIAL: OnceLock<TestCredential> = OnceLock::new();
+    CREDENTIAL.get_or_init(|| {
+        toml::from_str(include_str!("../fixtures/test_api_token.toml"))
+            .expect("parse test credential fixture")
+    })
+}
+
+/// Bearer token of the shared test credential in `tests/fixtures/test_api_token.toml`.
+pub fn api_token() -> &'static str {
+    &test_credential().token
+}
+
+/// Write `dir/tokens.toml` granting the shared test credential `scopes`.
+///
+/// Tokens files reject an empty scope list, so an empty `scopes` writes a scope
+/// that matches no route: the token authenticates and is permitted nothing.
+pub fn write_tokens_file(dir: &Path, scopes: &[&str]) -> PathBuf {
+    let credential = test_credential();
+    let scopes = if scopes.is_empty() { &["none"] } else { scopes };
+    let scopes = scopes
+        .iter()
+        .map(|scope| format!("{scope:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let path = dir.join("tokens.toml");
+    fs::write(
+        &path,
+        format!(
+            "version = 1
+[[tokens]]
+id = {:?}
+hash = {:?}
+scopes = [{scopes}]
+",
+            credential.id, credential.hash
+        ),
+    )
+    .expect("write tokens file");
+    path
+}
+
 pub struct HttpResponse {
     pub status: u16,
     pub body: String,
@@ -282,41 +331,43 @@ impl HttpResponse {
     }
 }
 
+/// A spawned `api` or `node serve` process authenticating [`api_token`] with
+/// the scopes it was started with.
 pub struct HttpServer {
     addr: SocketAddr,
     child: ChildGuard,
-    token: String,
+    _tokens_dir: tempfile::TempDir,
 }
 
 impl HttpServer {
-    pub fn start(workspace: &Path, token: &str, timeout: Duration) -> Self {
-        Self::start_with_args(workspace, token, &[], &[], timeout)
+    pub fn start(workspace: &Path, timeout: Duration) -> Self {
+        Self::start_with_args(workspace, &["*"], &[], &[], timeout)
     }
 
     pub fn start_with_args(
         workspace: &Path,
-        token: &str,
+        scopes: &[&str],
         extra_args: &[&str],
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        Self::start_command("api", workspace, token, extra_args, extra_envs, timeout)
+        Self::start_command("api", workspace, scopes, extra_args, extra_envs, timeout)
     }
 
     pub fn start_node_service(
         workspace: &Path,
-        token: &str,
+        scopes: &[&str],
         extra_args: &[&str],
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        Self::start_command("node", workspace, token, extra_args, extra_envs, timeout)
+        Self::start_command("node", workspace, scopes, extra_args, extra_envs, timeout)
     }
 
     fn start_command(
         command_name: &str,
         workspace: &Path,
-        token: &str,
+        scopes: &[&str],
         extra_args: &[&str],
         extra_envs: &[(&str, &str)],
         timeout: Duration,
@@ -339,6 +390,8 @@ impl HttpServer {
         while Instant::now() < deadline {
             let addr = SocketAddr::from(([127, 0, 0, 1], unique_loopback_port()));
             last_addr = Some(addr);
+            let tokens_dir = tempfile::TempDir::new().expect("create tokens dir");
+            let tokens_file = write_tokens_file(tokens_dir.path(), scopes);
             let mut command = omakure_command();
             command
                 .arg("--scripts-dir")
@@ -348,7 +401,7 @@ impl HttpServer {
                 .arg("--bind")
                 .arg(addr.to_string())
                 .args(extra_args)
-                .env("OMAKURE_API_TOKEN", token);
+                .env("OMAKURE_TOKENS_FILE", &tokens_file);
             if command_name == "node" {
                 command
                     .env("OMAKURE_NODE_TEST_MODE", "1")
@@ -363,7 +416,7 @@ impl HttpServer {
             let mut server = Self {
                 addr,
                 child,
-                token: token.to_string(),
+                _tokens_dir: tokens_dir,
             };
             // The whole remaining budget, not a slice of it. Retrying exists for
             // the bind race, and a child that lost that race is already dead —
@@ -482,7 +535,7 @@ impl HttpServer {
     }
 
     pub fn request(&self, method: &str, path: &str, body: Option<String>) -> HttpResponse {
-        self.request_with_auth(method, path, body, AuthMode::Bearer(&self.token))
+        self.request_with_auth(method, path, body, AuthMode::Bearer(api_token()))
     }
 
     pub fn request_with_auth(

@@ -32,7 +32,6 @@ use std::path::Path;
 use std::process::{Command, Output};
 use std::time::Duration;
 
-const TOKEN: &str = "health-plane-feasibility-token-with-enough-entropy-001";
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 
 const ROLE_CONDUCTOR: i64 = 1;
@@ -240,7 +239,7 @@ fn run_node(workspace: &Path, args: &[String]) -> Output {
         .arg(config)
         .args(args)
         .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
+        .env("OMAKURE_API_TOKEN", support::api_token())
         .output()
         .expect("run node command")
 }
@@ -501,7 +500,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     let conductor_port = support::unique_loopback_port().to_string();
     let conductor_server = support::HttpServer::start_node_service(
         conductor.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",

@@ -1,8 +1,7 @@
 # Example Compose file for a single-host `omakure node serve` deployment.
 #
 # Security notes (read docs/deployment.md before production use):
-# - Prefer multi-token auth via OMAKURE_TOKENS_FILE / --tokens-file (Argon2id).
-#   Legacy OMAKURE_API_TOKEN remains supported when no tokens file is set.
+# - Auth is multi-token via OMAKURE_TOKENS_FILE / --tokens-file (Argon2id).
 # - Publish on host loopback only (127.0.0.1:7878). The container still binds
 #   0.0.0.0:7878 internally so Docker can forward the port.
 # - Run as the fixed non-root image principal (uid/gid 10001); prepare bind
@@ -22,11 +21,8 @@ services:
     ports:
       - "127.0.0.1:7878:7878"
     environment:
-      # Preferred auth: the read-only tokens TOML mounted below (Argon2id).
+      # Auth: the read-only tokens TOML mounted below (Argon2id).
       OMAKURE_TOKENS_FILE: /run/secrets/omakure_tokens.toml
-      # Legacy alternative: remove OMAKURE_TOKENS_FILE and its volume, then
-      # uncomment this line (min 32 random bytes; see deployment.md):
-      # OMAKURE_API_TOKEN: "${OMAKURE_API_TOKEN:?set OMAKURE_API_TOKEN}"
       OMAKURE_SCRIPTS_DIR: /workspace
     volumes:
       # Host workspace to container scripts/history/envs root.
@@ -40,8 +36,7 @@ services:
       - "${OMAKURE_TOKENS_FILE_HOST:-./secrets/omakure_tokens.toml}:/run/secrets/omakure_tokens.toml:ro"
     # Host publish stays 127.0.0.1 (above). `--allow-non-loopback` is only for
     # the container-internal 0.0.0.0 bind so Docker can forward the port.
-    # Legacy --capability applies only with OMAKURE_API_TOKEN (no tokens file).
-    # `all` does not bypass --secret-ref; pass explicit refs or '*'.
+    # Token scopes do not bypass --secret-ref; pass explicit refs or '*'.
     command:
       - node
       - serve
@@ -50,14 +45,6 @@ services:
       - --allow-non-loopback
       - --workers
       - "1"
-      - --capability
-      - scripts:read
-      - --capability
-      - runs:read
-      - --capability
-      - runs:write
-      - --capability
-      - config:read
     restart: unless-stopped
 
   # Reproducible manual-enrollment topology. Start with:
@@ -103,14 +90,6 @@ services:
       - --workers
       - "1"
       - --readiness-requires-worker
-      - --capability
-      - node:read
-      - --capability
-      - enrollment:read
-      - --capability
-      - enrollment:write
-      - --capability
-      - discovery:read
     healthcheck:
       test:
         - CMD-SHELL
@@ -151,14 +130,6 @@ services:
       - --workers
       - "1"
       - --readiness-requires-worker
-      - --capability
-      - node:read
-      - --capability
-      - enrollment:read
-      - --capability
-      - enrollment:write
-      - --capability
-      - discovery:read
     healthcheck:
       test:
         - CMD-SHELL

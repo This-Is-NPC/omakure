@@ -16,7 +16,6 @@ use std::path::Path;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-const TOKEN: &str = "baseline-push-e2e-token-with-enough-entropy-01";
 const ORGANIZATION: &str = "baseline-e2e-fleet";
 
 fn run_node(workspace: &Path, args: &[String]) -> Output {
@@ -31,7 +30,7 @@ fn run_node(workspace: &Path, args: &[String]) -> Output {
         .arg(workspace.join("node.toml"))
         .args(args)
         .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
+        .env("OMAKURE_API_TOKEN", support::api_token())
         .output()
         .expect("run node command");
     assert!(
@@ -61,16 +60,8 @@ fn init_node(workspace: &Path) -> Value {
 fn serve(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-            "--capability",
-            "node:write",
-        ],
+        &["node:read", "node:write"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         Duration::from_secs(20),
     )

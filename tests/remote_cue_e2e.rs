@@ -16,7 +16,6 @@ use std::path::Path;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-const TOKEN: &str = "remote-cue-e2e-token-with-enough-entropy-000001";
 /// A Cue that is going to be authorized should be decided in well under this.
 const CUE_EFFECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The Signal rides the Performer's standing reporting session, which has its
@@ -35,7 +34,7 @@ fn run_node(workspace: &Path, args: &[String]) -> Output {
         .arg(workspace.join("node.toml"))
         .args(args)
         .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
+        .env("OMAKURE_API_TOKEN", support::api_token())
         .output()
         .expect("run node command");
     // Carried on the failure message: a test that only reports "a node command
@@ -67,18 +66,10 @@ fn init_node(workspace: &Path) -> Value {
 fn serve(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-            // Dispatching a Cue is a node write, and the same scope that
-            // governs the rest of the node surface governs this.
-            "--capability",
-            "node:write",
-        ],
+        // Dispatching a Cue is a node write, and the same scope that governs
+        // the rest of the node surface governs this.
+        &["node:read", "node:write"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         Duration::from_secs(20),
     )

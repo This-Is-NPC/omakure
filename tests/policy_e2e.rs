@@ -6,30 +6,8 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-const API_TOKEN: &str = "policy-e2e-token-with-enough-entropy-00001";
-
 fn write_policy(path: &Path, body: &str) {
     fs::write(path, body).expect("write policy.toml");
-}
-
-fn write_wildcard_tokens(path: &Path) -> String {
-    // Use CLI token generate for a real Argon2id entry.
-    let output = support::omakure_command()
-        .args([
-            "token", "generate", "--id", "admin", "--scope", "*", "--json",
-        ])
-        .output()
-        .expect("token generate");
-    assert!(
-        output.status.success(),
-        "token generate failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    let plaintext = envelope["data"]["token"].as_str().unwrap().to_string();
-    let entry = envelope["data"]["tokens_file_entry"].as_str().unwrap();
-    fs::write(path, format!("version = 1\n{entry}\n")).expect("write tokens");
-    plaintext
 }
 
 #[test]
@@ -44,19 +22,12 @@ version = 1
 [routes]
 writes = false
 battery = true
-[auth]
-legacy_env_token = true
 "#,
     );
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--policy",
-            policy_path.to_str().unwrap(),
-            "--capability",
-            "all",
-        ],
+        &["*"],
+        &["--policy", policy_path.to_str().unwrap()],
         &[],
         Duration::from_secs(20),
     );
@@ -82,19 +53,12 @@ fn policy_battery_disabled_blocks_battery_routes() {
 version = 1
 [routes]
 battery = false
-[auth]
-legacy_env_token = true
 "#,
     );
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--policy",
-            policy_path.to_str().unwrap(),
-            "--capability",
-            "all",
-        ],
+        &["*"],
+        &["--policy", policy_path.to_str().unwrap()],
         &[],
         Duration::from_secs(20),
     );
@@ -104,17 +68,8 @@ legacy_env_token = true
 }
 
 #[test]
-fn policy_legacy_disabled_fails_startup_before_bind() {
-    let workspace = support::TestWorkspace::new("policy_legacy");
-    let policy_path = workspace.path().join("policy.toml");
-    write_policy(
-        &policy_path,
-        r#"
-version = 1
-[auth]
-legacy_env_token = false
-"#,
-    );
+fn api_without_tokens_file_fails_startup_before_bind() {
+    let workspace = support::TestWorkspace::new("policy_no_tokens_file");
 
     let port = support::unique_loopback_port();
     let addr = format!("127.0.0.1:{port}");
@@ -125,9 +80,8 @@ legacy_env_token = false
         .arg("api")
         .arg("--bind")
         .arg(&addr)
-        .arg("--policy")
-        .arg(&policy_path)
-        .env("OMAKURE_API_TOKEN", API_TOKEN)
+        .env_remove("OMAKURE_TOKENS_FILE")
+        .env("OMAKURE_API_TOKEN", support::api_token())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -140,7 +94,7 @@ legacy_env_token = false
         }
         if Instant::now() >= deadline {
             let _ = child.kill();
-            panic!("api should have exited on legacy_env_token=false");
+            panic!("api should have exited without a tokens file");
         }
         std::thread::sleep(Duration::from_millis(25));
     };
@@ -150,7 +104,7 @@ legacy_env_token = false
     let probe = std::net::TcpListener::bind(("127.0.0.1", port));
     assert!(
         probe.is_ok(),
-        "bind should still be free after policy failure"
+        "bind should still be free after auth failure"
     );
 }
 
@@ -172,7 +126,10 @@ fn policy_parse_error_fails_before_bind() {
             .arg(&addr)
             .arg("--policy")
             .arg(&policy_path)
-            .env("OMAKURE_API_TOKEN", API_TOKEN),
+            .env(
+                "OMAKURE_TOKENS_FILE",
+                support::write_tokens_file(workspace.path(), &["*"]),
+            ),
         Duration::from_secs(10),
     );
     assert!(!output.status.success());
@@ -191,8 +148,7 @@ fn policy_parse_error_fails_before_bind() {
 #[test]
 fn policy_non_loopback_from_file_allows_zero_bind_without_cli_flag() {
     let workspace = support::TestWorkspace::new("policy_nlb");
-    let tokens_path = workspace.path().join("tokens.toml");
-    let plaintext = write_wildcard_tokens(&tokens_path);
+    let tokens_path = support::write_tokens_file(workspace.path(), &["*"]);
     let policy_path = workspace.path().join("policy.toml");
     write_policy(
         &policy_path,
@@ -200,8 +156,6 @@ fn policy_non_loopback_from_file_allows_zero_bind_without_cli_flag() {
 version = 1
 [http]
 allow_non_loopback = true
-[auth]
-legacy_env_token = false
 "#,
     );
 
@@ -221,7 +175,6 @@ legacy_env_token = false
         .arg(&policy_path)
         .arg("--tokens-file")
         .arg(&tokens_path)
-        .env_remove("OMAKURE_API_TOKEN")
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
 
@@ -254,7 +207,6 @@ legacy_env_token = false
         ready,
         "api with policy allow_non_loopback should serve on {bind}"
     );
-    let _ = plaintext;
     let _ = child.kill_and_wait();
 }
 
@@ -268,8 +220,6 @@ fn policy_non_loopback_denied_without_opt_in() {
 version = 1
 [http]
 allow_non_loopback = false
-[auth]
-legacy_env_token = true
 "#,
     );
     let output = support::command_with_timeout(
@@ -281,7 +231,10 @@ legacy_env_token = true
             .arg("0.0.0.0:17999")
             .arg("--policy")
             .arg(&policy_path)
-            .env("OMAKURE_API_TOKEN", API_TOKEN),
+            .env(
+                "OMAKURE_TOKENS_FILE",
+                support::write_tokens_file(workspace.path(), &["*"]),
+            ),
         Duration::from_secs(10),
     );
     assert!(!output.status.success());
@@ -308,22 +261,13 @@ version = 1
 [node]
 workers = 0
 scheduler = false
-[auth]
-legacy_env_token = true
 "#,
     );
+    // omit --workers / --no-scheduler → policy defaults
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--policy",
-            policy_path.to_str().unwrap(),
-            // omit --workers / --no-scheduler → policy defaults
-            "--capability",
-            "runs:read",
-            "--capability",
-            "runs:write",
-        ],
+        &["runs:write", "runs:read"],
+        &["--policy", policy_path.to_str().unwrap()],
         &[],
         Duration::from_secs(20),
     );

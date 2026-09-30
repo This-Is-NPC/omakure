@@ -169,7 +169,7 @@ fn build_payload() -> HelpAiPayload {
             "history_show": "Same shape as `run` data above (full RunRow including stdout/stderr).",
             "api": json!({
                 "transport": "HTTP loopback/internal management API",
-                "auth": "Authorization: Bearer <token>; prefer OMAKURE_TOKENS_FILE/--tokens-file (per-token scopes); legacy OMAKURE_API_TOKEN = id legacy scopes * gated by --capability (admin:status needs explicit capability); /v1/health and /v1/ready unauthenticated; GET /v1/admin/status needs admin:status (or * / capability all); 401 and authenticated requests emit omakure.http_audit (token_id never Authorization); --capability all does not bypass --secret-ref",
+                "auth": "Authorization: Bearer <token> from OMAKURE_TOKENS_FILE/--tokens-file (Argon2id, per-token scopes); /v1/health and /v1/ready unauthenticated; GET /v1/admin/status needs admin:status (or *); 401 and authenticated requests emit omakure.http_audit (token_id never Authorization); scope * does not bypass --secret-ref",
                 "envelope": "Same { ok, data, error, schema_version } shape as CLI JSON.",
                 "body_limit": "1 MiB",
                 "reference": "docs/http-api.md",

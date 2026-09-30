@@ -20,9 +20,11 @@ scripts/workspace/.history/*
 !scripts/workspace/.history/.gitkeep
 scripts/workspace/.omakure/envs/*
 !scripts/workspace/.omakure/envs/env_template.conf
-# local debug-node identity, sqlite, and transport certs from dev:smoke.
+# local debug-node identity, sqlite, transport certs, and tokens from dev:smoke.
 scripts/workspace/.omakure/dev-node.toml
 scripts/workspace/.omakure/dev-node-state/
+scripts/workspace/.omakure/dev-node-tokens.toml
+scripts/workspace/.omakure/.dev-node-tokens.toml.append.lock
 .temp/
 
 # Root-only scratch databases and SQLite sidecars; fixtures stay visible.

@@ -7,8 +7,6 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-const API_TOKEN: &str = "node-service-e2e-token-with-enough-entropy-00001";
-
 /// Whether an identity survives is a fact about `.node-state`, and a test that
 /// reaches it through `node serve` pays for a listener it never asserts on:
 /// several of these cases start concurrently, and a cold bind on a loaded
@@ -50,18 +48,8 @@ fn node_service_workers_zero_no_scheduler_serves_http_like_api() {
     write_echo_script(workspace.path(), "echo.sh");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "scripts:read",
-            "--capability",
-            "runs:read",
-            "--capability",
-            "runs:write",
-        ],
+        &["scripts:read", "runs:read", "runs:write"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -73,7 +61,7 @@ fn node_service_workers_zero_no_scheduler_serves_http_like_api() {
     assert_eq!(ready.status, 200, "body: {}", ready.safe_body());
     assert_eq!(ready.json()["data"]["status"], "ready");
     let ready_body = ready.body.clone();
-    assert!(!ready_body.contains(API_TOKEN));
+    assert!(!ready_body.contains(support::api_token()));
     assert!(!ready_body.contains(workspace.path().to_string_lossy().as_ref()));
 
     let scripts = server.get("/v1/scripts");
@@ -102,16 +90,8 @@ fn node_service_workers_complete_enqueued_run_in_process() {
     write_echo_script(workspace.path(), "echo.sh");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "runs:read",
-            "--capability",
-            "runs:write",
-        ],
+        &["runs:read", "runs:write"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -156,7 +136,7 @@ fn node_service_ready_unauthenticated_and_minimal() {
     let workspace = support::TestWorkspace::new("node_service_ready");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
+        &["*"],
         &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
@@ -181,7 +161,7 @@ fn node_service_ready_with_readiness_requires_flags_when_loops_alive() {
     let workspace = support::TestWorkspace::new("node_service_ready_flags");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
+        &["*"],
         &[
             "--workers",
             "1",
@@ -204,7 +184,7 @@ fn node_service_sigterm_stops_cleanly() {
     let workspace = support::TestWorkspace::new("node_service_sigterm");
     let mut server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
+        &["*"],
         &["--workers", "1", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
@@ -253,7 +233,7 @@ fn node_service_can_be_terminated_and_restarted_portably() {
     let workspace = support::TestWorkspace::new("node_service_restart");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
+        &["*"],
         &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
@@ -265,7 +245,7 @@ fn node_service_can_be_terminated_and_restarted_portably() {
 
     let restarted = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
+        &["*"],
         &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
@@ -357,7 +337,10 @@ fn corrupt_node_state_fails_before_readiness_without_replacing_identity() {
                 "--no-scheduler",
             ])
             .env("OMAKURE_NODE_TEST_MODE", "1")
-            .env("OMAKURE_API_TOKEN", API_TOKEN),
+            .env(
+                "OMAKURE_TOKENS_FILE",
+                support::write_tokens_file(workspace.path(), &["*"]),
+            ),
         Duration::from_secs(5),
     );
     assert!(!output.status.success());
@@ -462,7 +445,10 @@ discovery_secret_ref = ""
             ])
             .arg(&token_path)
             .env("OMAKURE_NODE_TEST_MODE", "1")
-            .env("OMAKURE_API_TOKEN", API_TOKEN),
+            .env(
+                "OMAKURE_TOKENS_FILE",
+                support::write_tokens_file(workspace.path(), &["*"]),
+            ),
         Duration::from_secs(5),
     );
     assert!(!output.status.success());
@@ -503,7 +489,10 @@ fn missing_node_registry_blocks_start_without_replacing_identity() {
                 workspace.path().join(".node-state"),
             )
             .env("OMAKURE_NODE_CONFIG", workspace.path().join("node.toml"))
-            .env("OMAKURE_API_TOKEN", API_TOKEN),
+            .env(
+                "OMAKURE_TOKENS_FILE",
+                support::write_tokens_file(workspace.path(), &["*"]),
+            ),
         Duration::from_secs(10),
     );
     assert!(!output.status.success());
@@ -632,7 +621,7 @@ fn reset_while_node_service_is_active_refuses_without_mutation() {
     let workspace = support::TestWorkspace::new("node_service_reset_active");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
+        &["*"],
         &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
@@ -669,14 +658,8 @@ fn init_while_node_service_is_active_conflicts_without_hanging_or_mutating_ident
     let workspace = support::TestWorkspace::new("node_service_init_active");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:write",
-        ],
+        &["node:write"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );

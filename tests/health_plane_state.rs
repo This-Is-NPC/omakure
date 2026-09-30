@@ -28,7 +28,6 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tempfile::TempDir;
 
-const TOKEN: &str = "health-plane-state-token-with-enough-entropy-0001";
 const BASE_NOW: i64 = 1_700_000_000;
 
 #[derive(Debug)]
@@ -126,7 +125,7 @@ fn run_node(workspace: &Path, args: &[String]) -> Output {
         .arg(workspace.join("node.toml"))
         .args(args)
         .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
+        .env("OMAKURE_API_TOKEN", support::api_token())
         .output()
         .expect("run node command")
 }

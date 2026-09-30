@@ -534,7 +534,7 @@ Generate a plaintext token, Argon2id hash, and TOML entry
 
 Run the internal HTTP management API
 
-Starts a loopback-only HTTP API by default at `127.0.0.1:7878`. All endpoints except `/v1/health` and `/v1/ready` require `Authorization: Bearer <token>`. Prefer `--tokens-file` / `OMAKURE_TOKENS_FILE` (per-token Argon2id scopes). Legacy `OMAKURE_API_TOKEN` still works when no tokens file is configured. Binding to non-loopback addresses requires `--allow-non-loopback`.
+Starts a loopback-only HTTP API by default at `127.0.0.1:7878`. All endpoints except `/v1/health` and `/v1/ready` require `Authorization: Bearer <token>` for a token listed in `--tokens-file` / `OMAKURE_TOKENS_FILE` (per-token Argon2id scopes). Binding to non-loopback addresses requires `--allow-non-loopback`.
 
 ### Flags
 - **`--bind <BIND>`** — Address to bind the HTTP API server to
@@ -550,8 +550,7 @@ Starts a loopback-only HTTP API by default at `127.0.0.1:7878`. All endpoints ex
 
   **Default:** `false`
 - **`--policy <POLICY>`** — Deploy-only policy.toml (route groups + auth/node-service defaults). Overrides `OMAKURE_POLICY_FILE`. Separate from workspace omakure.toml
-- **`--tokens-file <TOKENS_FILE>`** — Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. When set, process-wide `--capability` is ignored; scopes come from each token
-- **`--capability <CAPABILITIES>…`** — API capability to grant in legacy single-token mode (`OMAKURE_API_TOKEN`). Repeatable. Ignored when `--tokens-file` is set. Supported: config:read, scripts:read, env:read / envs:read, env:write / envs:write, env:activate / envs:activate, env:use / envs:use, secrets:use, secrets:read-metadata, credentials:use, runs:read, runs:write / runs:enqueue, batteries:read, batteries:write, admin:status, all. Node management uses narrow node:read, node:write, and trust:write capabilities. `all` grants every route capability but does not bypass `--secret-ref` (pass `--secret-ref '*'` for unrestricted refs)
+- **`--tokens-file <TOKENS_FILE>`** — Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. Required unless the deploy policy sets `auth.tokens_file`
 - **`--secret-ref <SECRET_REFS>…`** — Allowed secret provider ref for secrets:use / credentials:use, e.g. secret://prod/token or secret://prod/*; repeatable. Empty denies provider refs
 
 ## `omakure trace`
@@ -853,7 +852,6 @@ On Linux and macOS, production node configuration and state use machine-owned pa
 
   **Default:** `false`
 - **`--tokens-file <TOKENS_FILE>`** — Multi-token TOML file. Same as `omakure api --tokens-file`
-- **`--capability <CAPABILITIES>…`** — API capability to grant in legacy single-token mode. Repeatable
 - **`--secret-ref <SECRET_REFS>…`** — Allowed secret provider ref for secrets:use. Same as `omakure api --secret-ref`
 - **`--bootstrap-token-file <BOOTSTRAP_TOKEN_FILE>`** — Node-local one-time bootstrap token file for the signed-bundle API
 

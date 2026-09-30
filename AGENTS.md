@@ -143,8 +143,7 @@ Schema fields may be strings, numbers, booleans, or secrets. Optional
 AI-facing CLI commands support `--json` and emit
 `{ ok, data, error, schema_version }`. `help-ai` always emits JSON and is
 generated from clap metadata. HTTP health/readiness are unauthenticated;
-other routes require bearer auth. Prefer scoped Argon2id tokens from a
-`--tokens-file`; legacy `OMAKURE_API_TOKEN` mode is for local compatibility.
+other routes require a scoped Argon2id bearer token from a `--tokens-file`.
 
 ## Testing
 

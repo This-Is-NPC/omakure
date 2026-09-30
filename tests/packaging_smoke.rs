@@ -299,15 +299,8 @@ fn compose_example_is_host_loopback_with_workspace_and_tokens_file() {
         "compose should publish only on host loopback 127.0.0.1:7878"
     );
     assert!(
-        compose.contains("OMAKURE_API_TOKEN"),
-        "compose must document legacy OMAKURE_API_TOKEN"
-    );
-    assert!(
-        !compose.lines().any(|line| {
-            let line = line.trim_start();
-            !line.starts_with('#') && line.starts_with("OMAKURE_API_TOKEN:")
-        }),
-        "compose must not require legacy OMAKURE_API_TOKEN"
+        !compose.contains("OMAKURE_API_TOKEN"),
+        "compose must not configure OMAKURE_API_TOKEN server auth"
     );
     assert!(
         compose.lines().any(|line| {
@@ -637,13 +630,11 @@ fn deployment_doc_covers_required_topics_and_multi_token() {
         "volume",
         "SQLite",
         "/v1/health",
-        "OMAKURE_API_TOKEN",
         "tokens-file",
         "token generate",
         "Argon2id",
         "policy.toml",
         "OMAKURE_POLICY_FILE",
-        "legacy_env_token",
         "routes.writes",
     ] {
         assert!(
@@ -655,10 +646,6 @@ fn deployment_doc_covers_required_topics_and_multi_token() {
     assert!(
         lower.contains("multi-token") || lower.contains("tokens-file"),
         "deployment.md must document multi-token / tokens-file auth"
-    );
-    assert!(
-        lower.contains("legacy"),
-        "deployment.md must still document legacy token mode"
     );
     assert!(
         lower.contains("load order"),

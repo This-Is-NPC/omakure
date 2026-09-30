@@ -14,7 +14,6 @@ use serde_json::Value;
 use std::path::Path;
 use std::process::{Command, Output};
 
-const TOKEN: &str = "authority-e2e-token-with-enough-entropy-000001";
 const ORGANIZATION: &str = "authority-e2e-org";
 /// The pre-shared bootstrap pair the audience's config commits to by hash.
 const BOOTSTRAP_TOKEN: &str = "authority-e2e-bootstrap-token-000000000001";
@@ -32,7 +31,7 @@ fn run_node(workspace: &Path, args: &[String]) -> Output {
         .arg(workspace.join("node.toml"))
         .args(args)
         .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
+        .env("OMAKURE_API_TOKEN", support::api_token())
         .output()
         .expect("run node command")
 }

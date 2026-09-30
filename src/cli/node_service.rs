@@ -132,7 +132,6 @@ pub fn run(
         allow_non_loopback: args.allow_non_loopback,
         policy: args.policy.clone(),
         tokens_file: args.tokens_file.clone(),
-        capabilities: args.capabilities.clone(),
         secret_refs: args.secret_refs.clone(),
     };
     // Fail before bind: policy parse, auth, non-loopback guard.
@@ -265,9 +264,7 @@ pub fn run(
         (cancel, handle)
     });
 
-    if boot.auth.is_file_mode() {
-        crate::auth::install_sighup_reload(boot.auth.clone());
-    }
+    crate::auth::install_sighup_reload(boot.auth.clone());
 
     let mut worker_handles = Vec::new();
     if workers >= 1 {
@@ -338,7 +335,6 @@ pub fn run(
     let health_plane = api::health_plane_router(
         Arc::clone(&health_registry),
         boot.auth.clone(),
-        boot.api_policy.clone(),
         boot.deploy.clone(),
         Arc::clone(&auth_verification_gate),
         body_limit,

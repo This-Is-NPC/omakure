@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
@@ -178,7 +178,6 @@ impl ReadinessGate {
 struct ApiState {
     auth: Authenticator,
     workspace: Workspace,
-    /// Process-wide capabilities (legacy mode) + secret-ref ACL.
     policy: ApiPolicy,
     /// Deploy-time route-group gates (before scopes).
     deploy: DeployPolicy,
@@ -223,201 +222,76 @@ enum ApiCapability {
     SecretsReadMetadata,
     CredentialsUse,
     RunRead,
-    RunWrite,
     BatteryRead,
-    BatteryWrite,
-    AdminStatus,
     NodeRead,
     NodeWrite,
-    TrustWrite,
     EnrollmentRead,
     EnrollmentWrite,
     DiscoveryRead,
 }
 
-#[derive(Debug, Clone)]
+/// Secret-ref ACL from `--secret-ref`; an empty list denies provider refs.
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ApiPolicy {
-    capabilities: Vec<ApiCapability>,
-    allowed_secret_refs: Option<Vec<String>>,
+    allowed_secret_refs: Vec<String>,
 }
 
 impl ApiPolicy {
-    fn all() -> Self {
-        let mut policy = Self::allow([
-            ApiCapability::ConfigRead,
-            ApiCapability::ScriptsRead,
-            ApiCapability::EnvRead,
-            ApiCapability::EnvWrite,
-            ApiCapability::EnvActivate,
-            ApiCapability::EnvUse,
-            ApiCapability::SecretProviderUse,
-            ApiCapability::SecretsReadMetadata,
-            ApiCapability::CredentialsUse,
-            ApiCapability::RunRead,
-            ApiCapability::RunWrite,
-            ApiCapability::BatteryRead,
-            ApiCapability::BatteryWrite,
-            ApiCapability::AdminStatus,
-            ApiCapability::NodeRead,
-            ApiCapability::NodeWrite,
-            ApiCapability::TrustWrite,
-            ApiCapability::EnrollmentRead,
-            ApiCapability::EnrollmentWrite,
-            ApiCapability::DiscoveryRead,
-        ]);
-        // Explicit empty allow-list: `all` does not bypass secret-ref ACLs.
-        // Grant refs with repeated `--secret-ref` (or leave empty to deny provider refs).
-        policy.allowed_secret_refs = Some(Vec::new());
-        policy
-    }
-
-    fn allow<const N: usize>(capabilities: [ApiCapability; N]) -> Self {
-        Self {
-            capabilities: capabilities.into(),
-            allowed_secret_refs: Some(Vec::new()),
-        }
-    }
-
-    fn from_config(capabilities: &[String], refs: &[String]) -> Result<Self, ApiConfigError> {
+    fn from_secret_refs(refs: &[String]) -> Self {
         // Normalize operator ref spellings (e.g. `secret://env:NAME`) to the
         // canonical form the ACL is compared against, so the colon form is not
         // silently dropped.
-        let refs: Vec<String> = refs
-            .iter()
-            .map(|r| crate::secrets::canonicalize_operator_secret_ref(r))
-            .collect();
-        let mut parsed = Vec::new();
-        for capability in capabilities {
-            if capability == "all" {
-                // `all` expands route capabilities only — secret-ref ACL still
-                // comes from `--secret-ref` (empty denies provider refs).
-                let mut policy = Self::all();
-                policy.allowed_secret_refs = Some(refs.clone());
-                return Ok(policy);
-            }
-            parsed.push(ApiCapability::from_config_value(capability)?);
+        Self {
+            allowed_secret_refs: refs
+                .iter()
+                .map(|r| crate::secrets::canonicalize_operator_secret_ref(r))
+                .collect(),
         }
-        Ok(Self {
-            capabilities: parsed,
-            allowed_secret_refs: Some(refs),
-        })
     }
 
     #[cfg(test)]
-    fn allow_with_secret_refs<const N: usize, const M: usize>(
-        capabilities: [ApiCapability; N],
-        refs: [&str; M],
-    ) -> Self {
+    fn with_secret_refs<const M: usize>(refs: [&str; M]) -> Self {
         Self {
-            capabilities: capabilities.into(),
-            allowed_secret_refs: Some(refs.into_iter().map(str::to_string).collect()),
+            allowed_secret_refs: refs.into_iter().map(str::to_string).collect(),
         }
     }
 
-    fn permits(&self, capability: ApiCapability) -> bool {
-        self.capabilities.contains(&capability)
-    }
-
-    fn secret_access(&self, auth: &AuthContext, file_mode: bool) -> crate::secrets::SecretAccess {
+    fn secret_access(&self, auth: &AuthContext) -> crate::secrets::SecretAccess {
         let mut scopes = Vec::new();
-        if file_mode {
-            if auth.has_scope("secrets:use") {
-                scopes.push("secrets:use");
-            }
-            if auth.has_scope("credentials:use") {
-                scopes.push("credentials:use");
-            }
-            if auth.has_scope("secrets:read-metadata") || auth.has_scope("*") {
-                scopes.push("secrets:read-metadata");
-            }
-        } else {
-            if self.permits(ApiCapability::SecretProviderUse) {
-                scopes.push("secrets:use");
-            }
-            if self.permits(ApiCapability::CredentialsUse) {
-                scopes.push("credentials:use");
-            }
-            if self.permits(ApiCapability::SecretsReadMetadata) {
-                scopes.push("secrets:read-metadata");
-            }
+        if auth.has_scope("secrets:use") {
+            scopes.push("secrets:use");
         }
-        match &self.allowed_secret_refs {
-            // None is treated as deny-all refs (same as empty list). Unrestricted
-            // secret refs require an explicit `--secret-ref '*'` / provider wildcard.
-            None => crate::secrets::SecretAccess::new(scopes, Vec::<String>::new()),
-            Some(refs) => {
-                if refs.iter().any(|r| r == "*") {
-                    // Wildcard grants every file/provider ref but keeps env refs
-                    // gated behind explicitly listed `secret://env/...` entries.
-                    let env_refs = refs.iter().filter(|r| *r != "*").cloned();
-                    crate::secrets::SecretAccess::allow_all_non_env(scopes, env_refs)
-                } else {
-                    crate::secrets::SecretAccess::new(scopes, refs.iter().cloned())
-                }
-            }
+        if auth.has_scope("credentials:use") {
+            scopes.push("credentials:use");
         }
+        if auth.has_scope("secrets:read-metadata") {
+            scopes.push("secrets:read-metadata");
+        }
+        self.access_with_scopes(scopes)
     }
 
     /// Secret ACL for Battery HTTPS token_ref (requires credentials:use).
-    fn battery_credential_access(
-        &self,
-        auth: &AuthContext,
-        file_mode: bool,
-    ) -> crate::secrets::SecretAccess {
-        let has_credentials = if file_mode {
-            auth.has_scope("credentials:use") || auth.has_scope("*")
-        } else {
-            self.permits(ApiCapability::CredentialsUse)
-        };
-        if !has_credentials {
+    fn battery_credential_access(&self, auth: &AuthContext) -> crate::secrets::SecretAccess {
+        if !auth.has_scope("credentials:use") {
             return crate::secrets::SecretAccess::new(Vec::<&str>::new(), Vec::<String>::new());
         }
-        match &self.allowed_secret_refs {
-            None => crate::secrets::SecretAccess::new(["credentials:use"], Vec::<String>::new()),
-            Some(refs) => {
-                if refs.iter().any(|r| r == "*") {
-                    let env_refs = refs.iter().filter(|r| *r != "*").cloned();
-                    crate::secrets::SecretAccess::allow_all_non_env(["credentials:use"], env_refs)
-                } else {
-                    crate::secrets::SecretAccess::new(["credentials:use"], refs.iter().cloned())
-                }
-            }
+        self.access_with_scopes(vec!["credentials:use"])
+    }
+
+    fn access_with_scopes(&self, scopes: Vec<&str>) -> crate::secrets::SecretAccess {
+        let refs = &self.allowed_secret_refs;
+        if refs.iter().any(|r| r == "*") {
+            // Wildcard grants every file/provider ref but keeps env refs
+            // gated behind explicitly listed `secret://env/...` entries.
+            let env_refs = refs.iter().filter(|r| *r != "*").cloned();
+            crate::secrets::SecretAccess::allow_all_non_env(scopes, env_refs)
+        } else {
+            crate::secrets::SecretAccess::new(scopes, refs.iter().cloned())
         }
     }
 }
 
 impl ApiCapability {
-    fn from_config_value(value: &str) -> Result<Self, ApiConfigError> {
-        match value {
-            "config:read" => Ok(Self::ConfigRead),
-            "scripts:read" => Ok(Self::ScriptsRead),
-            "env:read" | "envs:read" => Ok(Self::EnvRead),
-            "env:write" | "envs:write" => Ok(Self::EnvWrite),
-            "env:activate" | "envs:activate" => Ok(Self::EnvActivate),
-            "env:use" | "envs:use" => Ok(Self::EnvUse),
-            "secrets:use" => Ok(Self::SecretProviderUse),
-            "secrets:read-metadata" => Ok(Self::SecretsReadMetadata),
-            "credentials:use" => Ok(Self::CredentialsUse),
-            "runs:read" => Ok(Self::RunRead),
-            "runs:write" | "runs:enqueue" | "runs:cancel" | "runs:dead-letter" => {
-                Ok(Self::RunWrite)
-            }
-            "batteries:read" => Ok(Self::BatteryRead),
-            "batteries:write" | "batteries:add" | "batteries:sync" | "batteries:install"
-            | "batteries:remove" => Ok(Self::BatteryWrite),
-            "admin:status" => Ok(Self::AdminStatus),
-            "node:read" => Ok(Self::NodeRead),
-            "node:write" => Ok(Self::NodeWrite),
-            "trust:write" => Ok(Self::TrustWrite),
-            "enrollment:read" => Ok(Self::EnrollmentRead),
-            "enrollment:write" => Ok(Self::EnrollmentWrite),
-            "discovery:read" => Ok(Self::DiscoveryRead),
-            "doctor:read" | "workspace:read" => Ok(Self::ConfigRead),
-            "search:read" => Ok(Self::ScriptsRead),
-            _ => Err(ApiConfigError::InvalidCapability(value.to_string())),
-        }
-    }
-
     fn as_scope(&self) -> &'static str {
         match self {
             Self::ConfigRead => "config:read",
@@ -430,13 +304,9 @@ impl ApiCapability {
             Self::SecretsReadMetadata => "secrets:read-metadata",
             Self::CredentialsUse => "credentials:use",
             Self::RunRead => "runs:read",
-            Self::RunWrite => "runs:write",
             Self::BatteryRead => "batteries:read",
-            Self::BatteryWrite => "batteries:write",
-            Self::AdminStatus => "admin:status",
             Self::NodeRead => "node:read",
             Self::NodeWrite => "node:write",
-            Self::TrustWrite => "trust:write",
             Self::EnrollmentRead => "enrollment:read",
             Self::EnrollmentWrite => "enrollment:write",
             Self::DiscoveryRead => "discovery:read",
@@ -446,10 +316,7 @@ impl ApiCapability {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ApiConfigError {
-    MissingToken,
-    InvalidToken,
     NonLoopbackBind(SocketAddr),
-    InvalidCapability(String),
     Auth(String),
     Policy(String),
 }
@@ -457,16 +324,10 @@ pub(crate) enum ApiConfigError {
 impl std::fmt::Display for ApiConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MissingToken => write!(
-                f,
-                "auth required: set OMAKURE_TOKENS_FILE/--tokens-file or OMAKURE_API_TOKEN"
-            ),
-            Self::InvalidToken => write!(f, "OMAKURE_API_TOKEN is invalid"),
             Self::NonLoopbackBind(addr) => write!(
                 f,
                 "refusing to bind {addr}; pass --allow-non-loopback to opt in"
             ),
-            Self::InvalidCapability(value) => write!(f, "invalid API capability: {value}"),
             Self::Auth(msg) => write!(f, "{msg}"),
             Self::Policy(msg) => write!(f, "{msg}"),
         }
@@ -678,9 +539,7 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
     crate::cli::queue::install_signal_handlers(Arc::clone(&cancel_flag));
-    if boot.auth.is_file_mode() {
-        auth::install_sighup_reload(boot.auth.clone());
-    }
+    auth::install_sighup_reload(boot.auth.clone());
 
     let auth_verification_gate = auth_verification_gate(&boot.deploy);
     let runtime = tokio::runtime::Runtime::new()?;
@@ -741,8 +600,9 @@ pub(crate) fn prepare_api_boot(args: &ApiArgs) -> Result<ApiBoot, ApiConfigError
         .tokens_file
         .clone()
         .or_else(|| deploy.auth.tokens_file.clone());
-    let auth = resolve_auth_with_policy(tokens_file.as_deref(), deploy.auth.legacy_env_token)?;
-    let api_policy = ApiPolicy::from_config(&args.capabilities, &args.secret_refs)?;
+    let auth = auth::resolve_authenticator(tokens_file.as_deref())
+        .map_err(|err| ApiConfigError::Auth(err.to_string()))?;
+    let api_policy = ApiPolicy::from_secret_refs(&args.secret_refs);
 
     Ok(ApiBoot {
         bind,
@@ -762,11 +622,10 @@ pub(crate) fn auth_verification_gate(deploy: &DeployPolicy) -> Arc<tokio::sync::
     ))
 }
 
-/// Auth + policy bundle for Health Plane HTTP routes (`State` is `Arc<NodeRegistry>`).
+/// Auth bundle for Health Plane HTTP routes (`State` is `Arc<NodeRegistry>`).
 #[derive(Clone)]
 struct HealthPlaneAuthState {
     auth: Authenticator,
-    policy: ApiPolicy,
     deploy: DeployPolicy,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
 }
@@ -778,14 +637,12 @@ struct HealthPlaneAuthState {
 pub(crate) fn health_plane_router(
     registry: Arc<NodeRegistry>,
     auth: Authenticator,
-    policy: ApiPolicy,
     deploy: DeployPolicy,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
     body_limit: usize,
 ) -> Router {
     let auth_state = HealthPlaneAuthState {
         auth,
-        policy,
         deploy,
         auth_verification_gate,
     };
@@ -858,15 +715,13 @@ async fn wait_for_cancel(cancel_flag: Arc<AtomicBool>) {
 }
 
 #[cfg(test)]
-fn router(token: String, workspace: Workspace) -> Router {
-    // Test convenience: full route capabilities plus unrestricted secret refs.
-    // Production `--capability all` still requires explicit `--secret-ref`.
-    let mut policy = ApiPolicy::all();
-    policy.allowed_secret_refs = Some(vec!["*".into()]);
+fn router(workspace: Workspace) -> Router {
+    // Test convenience: wildcard scope plus unrestricted secret refs.
+    // Production scope `*` still requires explicit `--secret-ref`.
     router_with_policy(
-        Authenticator::legacy(token),
+        crate::auth::test_credential::authenticator(&["*"]),
         workspace,
-        policy,
+        ApiPolicy::with_secret_refs(["*"]),
         DeployPolicy::default(),
         None,
         BODY_LIMIT_BYTES,
@@ -1135,7 +990,7 @@ async fn admin_status_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "admin:status") {
+    if let Some(response) = require_scope(&auth_ctx, "admin:status") {
         return response;
     }
     let (ready, readiness) = match &state.readiness {
@@ -1183,7 +1038,7 @@ async fn workspace_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ConfigRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ConfigRead) {
         return response;
     }
     operation_response(core::workspace_summary(&state.workspace))
@@ -1193,7 +1048,7 @@ async fn node_status_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
     operation_response(node_context().and_then(|context| {
@@ -1218,7 +1073,7 @@ async fn node_discovery_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::DiscoveryRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::DiscoveryRead) {
         return response;
     }
     let include_addresses = query_pairs(raw_query.as_deref())
@@ -1241,7 +1096,7 @@ async fn node_initialize_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeWrite) {
         return response;
     }
     if let Err(error) =
@@ -1264,14 +1119,8 @@ async fn node_initialize_handler(
 async fn node_health_handler(
     State(registry): State<Arc<NodeRegistry>>,
     Extension(auth_ctx): Extension<AuthContext>,
-    Extension(auth_state): Extension<HealthPlaneAuthState>,
 ) -> Response {
-    if let Some(response) = require_capability_parts(
-        &auth_state.auth,
-        &auth_state.policy,
-        &auth_ctx,
-        ApiCapability::NodeRead,
-    ) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
     operation_response(crate::operations::health::fleet_status(&registry))
@@ -1287,34 +1136,22 @@ async fn node_health_handler(
 async fn node_signals_handler(
     State(registry): State<Arc<NodeRegistry>>,
     Extension(auth_ctx): Extension<AuthContext>,
-    Extension(auth_state): Extension<HealthPlaneAuthState>,
 ) -> Response {
-    if let Some(response) = require_capability_parts(
-        &auth_state.auth,
-        &auth_state.policy,
-        &auth_ctx,
-        ApiCapability::NodeRead,
-    ) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
     operation_response(crate::operations::health::signal_feed(&registry))
 }
 
-async fn node_peers_handler(
-    State(state): State<ApiState>,
-    Extension(auth_ctx): Extension<AuthContext>,
-) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::NodeRead) {
+async fn node_peers_handler(Extension(auth_ctx): Extension<AuthContext>) -> Response {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
     operation_response(node_context().and_then(|context| node_ops::list_trusted_peers(&context)))
 }
 
-async fn node_enrollments_handler(
-    State(state): State<ApiState>,
-    Extension(auth_ctx): Extension<AuthContext>,
-) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentRead) {
+async fn node_enrollments_handler(Extension(auth_ctx): Extension<AuthContext>) -> Response {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnrollmentRead) {
         return response;
     }
     operation_response(
@@ -1327,7 +1164,7 @@ async fn node_enrollment_stage_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnrollmentWrite) {
         return response;
     }
     let body =
@@ -1352,7 +1189,7 @@ async fn node_enrollment_approve_handler(
     AxumPath(node_id): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnrollmentWrite) {
         return response;
     }
     let body = match parse_json_body::<NodeEnrollmentApprovalBody>(
@@ -1386,7 +1223,7 @@ async fn node_enrollment_reject_handler(
     AxumPath(node_id): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnrollmentWrite) {
         return response;
     }
     let body =
@@ -1414,7 +1251,7 @@ async fn node_signed_bundle_apply_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnrollmentWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnrollmentWrite) {
         return response;
     }
     let body = match parse_json_body::<NodeSignedBundleApplyBody>(
@@ -1449,7 +1286,7 @@ async fn node_trust_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "trust:write") {
+    if let Some(response) = require_scope(&auth_ctx, "trust:write") {
         return response;
     }
     let body =
@@ -1480,7 +1317,7 @@ async fn node_capabilities_handler(
     AxumPath(node_id): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "trust:write") {
+    if let Some(response) = require_scope(&auth_ctx, "trust:write") {
         return response;
     }
     let body =
@@ -1515,7 +1352,7 @@ async fn node_cue_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "node:write") {
+    if let Some(response) = require_scope(&auth_ctx, "node:write") {
         return response;
     }
     let body = match parse_json_body::<NodeCueBody>(body, state.deploy.http.body_limit_bytes).await
@@ -1599,7 +1436,7 @@ async fn node_baseline_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "node:write") {
+    if let Some(response) = require_scope(&auth_ctx, "node:write") {
         return response;
     }
     let body =
@@ -1682,7 +1519,7 @@ async fn node_baseline_rollback_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "node:write") {
+    if let Some(response) = require_scope(&auth_ctx, "node:write") {
         return response;
     }
     let body =
@@ -1719,7 +1556,7 @@ async fn node_revoke_handler(
     AxumPath(node_id): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "trust:write") {
+    if let Some(response) = require_scope(&auth_ctx, "trust:write") {
         return response;
     }
     let body =
@@ -1749,7 +1586,7 @@ async fn config_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ConfigRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ConfigRead) {
         return response;
     }
     operation_response(config_ops::redacted_config_summary(&state.workspace))
@@ -1759,7 +1596,7 @@ async fn doctor_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ConfigRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ConfigRead) {
         return response;
     }
     operation_response(doctor_ops::doctor_report(&state.workspace))
@@ -1770,7 +1607,7 @@ async fn search_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ScriptsRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
     let request = query_pairs(raw_query.as_deref()).and_then(|pairs| {
@@ -1824,7 +1661,7 @@ async fn list_scripts_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ScriptsRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
     let request = query_pairs(raw_query.as_deref()).map(|pairs| core::ListScriptsRequest {
@@ -1838,7 +1675,7 @@ async fn describe_script_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     script_id: String,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ScriptsRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
     operation_response(core::describe_script(
@@ -1852,7 +1689,7 @@ async fn script_schema_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     script_id: String,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ScriptsRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
     operation_response(
@@ -1892,7 +1729,7 @@ async fn script_content_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     script_id: String,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ScriptsRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
     operation_response(scripts_ops::read_script_content_limited(
@@ -1906,7 +1743,7 @@ async fn tree_root_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ScriptsRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
     operation_response(scripts_ops::list_tree_limited(
@@ -1921,7 +1758,7 @@ async fn tree_path_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(path): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::ScriptsRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
     operation_response(scripts_ops::list_tree_limited(
@@ -1935,7 +1772,7 @@ async fn list_envs_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvRead) {
         return response;
     }
     operation_response(env_ops::list_envs(&state.workspace))
@@ -1975,7 +1812,7 @@ async fn create_env_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvWrite) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2005,7 +1842,7 @@ async fn show_env_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(name): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvRead) {
         return response;
     }
     operation_response(env_ops::show_env(&state.workspace, &name))
@@ -2017,7 +1854,7 @@ async fn put_env_handler(
     AxumPath(name): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvWrite) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2048,7 +1885,7 @@ async fn patch_env_handler(
     AxumPath(name): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvWrite) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2077,7 +1914,7 @@ async fn delete_env_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(name): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvWrite) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2095,7 +1932,7 @@ async fn set_env_param_handler(
     AxumPath((name, key)): AxumPath<(String, String)>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvWrite) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2125,7 +1962,7 @@ async fn delete_env_param_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath((name, key)): AxumPath<(String, String)>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvWrite) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvWrite) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2142,7 +1979,7 @@ async fn activate_env_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(name): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvActivate) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvActivate) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2158,7 +1995,7 @@ async fn deactivate_env_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvActivate) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvActivate) {
         return response;
     }
     if !state.deploy.envs.http_manage {
@@ -2175,7 +2012,7 @@ async fn list_runs_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::RunRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
     let request = list_runs_request(raw_query.as_deref());
@@ -2187,7 +2024,7 @@ async fn show_run_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(run_id): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::RunRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
     operation_response(core::show_run(
@@ -2202,7 +2039,7 @@ async fn list_traces_handler(
     AxumPath(run_id): AxumPath<String>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::RunRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
     let request = list_traces_request(run_id, raw_query.as_deref());
@@ -2213,7 +2050,7 @@ async fn queue_stats_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::RunRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
     operation_response(core::queue_stats(&state.workspace))
@@ -2224,7 +2061,7 @@ async fn enqueue_run_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "runs:enqueue") {
+    if let Some(response) = require_scope(&auth_ctx, "runs:enqueue") {
         return response;
     }
     let body =
@@ -2243,7 +2080,7 @@ async fn enqueue_run_handler(
                 requested_run_id,
             );
         }
-        if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::EnvUse) {
+        if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvUse) {
             return attach_audit_run_id(response, requested_run_id);
         }
     }
@@ -2260,9 +2097,7 @@ async fn enqueue_run_handler(
         );
     }
     if !body.secret_fields.is_empty() || args_use_secret_provider {
-        if let Some(response) =
-            require_capability(&state, &auth_ctx, ApiCapability::SecretProviderUse)
-        {
+        if let Some(response) = require_capability(&auth_ctx, ApiCapability::SecretProviderUse) {
             return attach_audit_run_id(response, requested_run_id);
         }
     }
@@ -2297,9 +2132,7 @@ async fn enqueue_run_handler(
             parent_run_id: body.parent_run_id,
             cron_schedule_id: body.cron_schedule_id,
         },
-        &state
-            .policy
-            .secret_access(&auth_ctx, state.auth.is_file_mode()),
+        &state.policy.secret_access(&auth_ctx),
     );
     let run_id = result
         .as_ref()
@@ -2351,9 +2184,7 @@ fn require_implicit_secret_capabilities(
                 "policy runs.allow_secret_fields=false",
             )));
         }
-        if let Some(response) =
-            require_capability(state, auth_ctx, ApiCapability::SecretProviderUse)
-        {
+        if let Some(response) = require_capability(auth_ctx, ApiCapability::SecretProviderUse) {
             return Some(response);
         }
     }
@@ -2384,7 +2215,7 @@ fn require_implicit_secret_capabilities(
             .iter()
             .any(|(key, _)| key.eq_ignore_ascii_case(&field.name))
     }) {
-        if let Some(response) = require_capability(state, auth_ctx, ApiCapability::EnvUse) {
+        if let Some(response) = require_capability(auth_ctx, ApiCapability::EnvUse) {
             return Some(response);
         }
     }
@@ -2408,7 +2239,7 @@ async fn cancel_run_handler(
     AxumPath(run_id): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "runs:cancel") {
+    if let Some(response) = require_scope(&auth_ctx, "runs:cancel") {
         return response;
     }
     let body =
@@ -2432,7 +2263,7 @@ async fn dead_letter_run_handler(
     AxumPath(run_id): AxumPath<String>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "runs:dead-letter") {
+    if let Some(response) = require_scope(&auth_ctx, "runs:dead-letter") {
         return response;
     }
     let body =
@@ -2461,14 +2292,10 @@ async fn list_secrets_metadata_handler(
             "secrets metadata endpoint is disabled by policy",
         );
     }
-    if let Some(response) =
-        require_capability(&state, &auth_ctx, ApiCapability::SecretsReadMetadata)
-    {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::SecretsReadMetadata) {
         return response;
     }
-    let access = state
-        .policy
-        .secret_access(&auth_ctx, state.auth.is_file_mode());
+    let access = state.policy.secret_access(&auth_ctx);
     // Metadata listing also accepts credentials:use as a read-adjacent scope when
     // secrets:read-metadata is granted; secret_access already folds both scopes.
     let metadata = crate::secrets::list_secret_metadata(&state.workspace, &access);
@@ -2479,7 +2306,7 @@ async fn list_batteries_handler(
     State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::BatteryRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::BatteryRead) {
         return response;
     }
     operation_response(battery_ops::list_batteries(&state.workspace))
@@ -2490,7 +2317,7 @@ async fn add_battery_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "batteries:add") {
+    if let Some(response) = require_scope(&auth_ctx, "batteries:add") {
         return response;
     }
     let body =
@@ -2537,14 +2364,11 @@ async fn add_battery_handler(
                 "policy sources.allow_private_https_batteries=false",
             ));
         }
-        if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::CredentialsUse)
-        {
+        if let Some(response) = require_capability(&auth_ctx, ApiCapability::CredentialsUse) {
             return response;
         }
         // Validate ACL only — secret need not exist until sync.
-        let access = state
-            .policy
-            .battery_credential_access(&auth_ctx, state.auth.is_file_mode());
+        let access = state.policy.battery_credential_access(&auth_ctx);
         if let Err(err) =
             crate::secrets::check_secret_access(body.token_ref.as_deref().unwrap_or(""), &access)
         {
@@ -2570,7 +2394,7 @@ async fn sync_battery_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(battery_id): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "batteries:sync") {
+    if let Some(response) = require_scope(&auth_ctx, "batteries:sync") {
         return response;
     }
     // Cheap authz/validation stays on the reactor; it must run BEFORE the
@@ -2594,22 +2418,14 @@ async fn sync_battery_handler(
                     "policy sources.allow_private_https_batteries=false",
                 ));
             }
-            let file_mode = state.auth.is_file_mode();
-            let has_credentials = if file_mode {
-                auth_ctx.has_scope("credentials:use") || auth_ctx.has_scope("*")
-            } else {
-                state.policy.permits(ApiCapability::CredentialsUse)
-            };
-            if !has_credentials {
+            if !auth_ctx.has_scope("credentials:use") {
                 return Err(OperationError::new(
                     OperationErrorCode::Forbidden,
                     "credentials:use scope is required for private HTTPS Battery sync",
                 ));
             }
         }
-        let access = state
-            .policy
-            .battery_credential_access(&auth_ctx, state.auth.is_file_mode());
+        let access = state.policy.battery_credential_access(&auth_ctx);
         Ok(access)
     })();
 
@@ -2649,7 +2465,7 @@ async fn inspect_battery_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(battery_id): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::BatteryRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::BatteryRead) {
         return response;
     }
     let request = require_https_battery_source(&state.workspace, &battery_id)
@@ -2664,7 +2480,7 @@ async fn list_battery_scripts_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(battery_id): AxumPath<String>,
 ) -> Response {
-    if let Some(response) = require_capability(&state, &auth_ctx, ApiCapability::BatteryRead) {
+    if let Some(response) = require_capability(&auth_ctx, ApiCapability::BatteryRead) {
         return response;
     }
     let request = require_https_battery_source(&state.workspace, &battery_id)
@@ -2680,7 +2496,7 @@ async fn install_battery_script_handler(
     AxumPath((battery_id, script_id)): AxumPath<(String, String)>,
     body: Body,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "batteries:install") {
+    if let Some(response) = require_scope(&auth_ctx, "batteries:install") {
         return response;
     }
     let body =
@@ -2708,7 +2524,7 @@ async fn remove_battery_handler(
     AxumPath(battery_id): AxumPath<String>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
-    if let Some(response) = require_scope(&state, &auth_ctx, "batteries:remove") {
+    if let Some(response) = require_scope(&auth_ctx, "batteries:remove") {
         return response;
     }
     let request = query_pairs(raw_query.as_deref()).and_then(|pairs| {
@@ -2748,11 +2564,6 @@ async fn authenticate_off_runtime(
     gate: &Arc<tokio::sync::Semaphore>,
     presented: &str,
 ) -> AuthAttempt {
-    // Reject excess selectorless scans BEFORE they take a shared hashing slot.
-    // Keep both permits in the blocking task, even if its caller is cancelled.
-    let Ok(legacy_permit) = auth.admit_legacy_verification(presented) else {
-        return AuthAttempt::Busy;
-    };
     // Hold the permit for the LIFETIME OF THE HASH, not of the request future.
     // `spawn_blocking` is detached: if the client cancels mid-verify the request
     // future is dropped, but the Argon2 task keeps running. Moving an *owned*
@@ -2766,7 +2577,6 @@ async fn authenticate_off_runtime(
     let token = presented.to_string();
     match tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        let _legacy_permit = legacy_permit;
         auth.authenticate(&token)
     })
     .await
@@ -2806,7 +2616,6 @@ async fn finish_bearer_auth(
     path: String,
     mut request: Request<Body>,
     next: Next,
-    on_accepted: impl FnOnce(&mut Request<Body>),
 ) -> Response {
     match authenticated {
         AuthAttempt::Accepted(ctx) => {
@@ -2823,7 +2632,6 @@ async fn finish_bearer_auth(
             }
             let token_id = ctx.token_id.clone();
             request.extensions_mut().insert(ctx);
-            on_accepted(&mut request);
             let response = next.run(request).await;
             let status = response.status().as_u16();
             let run_id = response
@@ -2904,9 +2712,6 @@ async fn health_plane_require_bearer(
         path,
         request,
         next,
-        |request| {
-            request.extensions_mut().insert(auth_state.clone());
-        },
     )
     .await
 }
@@ -2925,16 +2730,7 @@ async fn require_bearer(
 
     let authenticated =
         bearer_auth_attempt(&state.auth, &state.auth_verification_gate, &headers).await;
-    finish_bearer_auth(
-        authenticated,
-        &state.deploy,
-        method,
-        path,
-        request,
-        next,
-        |_| {},
-    )
-    .await
+    finish_bearer_auth(authenticated, &state.deploy, method, path, request, next).await
 }
 
 fn safe_audit_run_id(run_id: &str) -> Option<String> {
@@ -2987,54 +2783,18 @@ fn error_response(status: StatusCode, code: &str, message: &str) -> Response {
     (status, Json(json::err_envelope(code, message))).into_response()
 }
 
-fn require_capability_parts(
-    auth: &Authenticator,
-    policy: &ApiPolicy,
-    auth_ctx: &AuthContext,
-    capability: ApiCapability,
-) -> Option<Response> {
-    require_scope_parts(auth, policy, auth_ctx, capability.as_scope())
+fn require_capability(auth: &AuthContext, capability: ApiCapability) -> Option<Response> {
+    require_scope(auth, capability.as_scope())
 }
 
-fn require_capability(
-    state: &ApiState,
-    auth: &AuthContext,
-    capability: ApiCapability,
-) -> Option<Response> {
-    require_capability_parts(&state.auth, &state.policy, auth, capability)
-}
-
-fn require_scope_parts(
-    auth: &Authenticator,
-    policy: &ApiPolicy,
-    auth_ctx: &AuthContext,
-    scope: &str,
-) -> Option<Response> {
-    let allowed = if auth.is_file_mode() {
-        auth_ctx.has_scope(scope)
-    } else {
-        match ApiCapability::from_config_value(scope) {
-            Ok(capability) => policy.permits(capability),
-            Err(_) => {
-                return Some(error_response(
-                    StatusCode::FORBIDDEN,
-                    "forbidden",
-                    "token is not permitted for this operation",
-                ))
-            }
-        }
-    };
-    (!allowed).then(|| {
+fn require_scope(auth: &AuthContext, scope: &str) -> Option<Response> {
+    (!auth.has_scope(scope)).then(|| {
         error_response(
             StatusCode::FORBIDDEN,
             "forbidden",
             "token is not permitted for this operation",
         )
     })
-}
-
-fn require_scope(state: &ApiState, auth: &AuthContext, scope: &str) -> Option<Response> {
-    require_scope_parts(&state.auth, &state.policy, auth, scope)
 }
 
 fn operation_response<T: Serialize>(result: OperationResult<T>) -> Response {
@@ -3209,26 +2969,6 @@ fn query_bool(pairs: &[(String, String)], key: &str) -> OperationResult<Option<b
         .transpose()
 }
 
-pub(crate) fn resolve_auth_with_policy(
-    tokens_file: Option<&Path>,
-    allow_legacy_env_token: bool,
-) -> Result<Authenticator, ApiConfigError> {
-    let env_path = std::env::var("OMAKURE_TOKENS_FILE").ok();
-    auth::resolve_authenticator_with_legacy(
-        tokens_file,
-        env_path.as_deref(),
-        allow_legacy_env_token,
-    )
-    .map_err(|err| match err {
-        auth::AuthError::MissingAuth => ApiConfigError::MissingToken,
-        auth::AuthError::InvalidLegacyToken => ApiConfigError::InvalidToken,
-        auth::AuthError::LegacyEnvTokenDisabled => {
-            ApiConfigError::Auth(auth::AuthError::LegacyEnvTokenDisabled.to_string())
-        }
-        other => ApiConfigError::Auth(other.to_string()),
-    })
-}
-
 pub(crate) fn validate_bind(
     addr: SocketAddr,
     allow_non_loopback: bool,
@@ -3291,7 +3031,7 @@ fn router_with_health_plane(
         body_limit,
     );
     let auth_gate = auth_verification_gate(&deploy);
-    let health = health_plane_router(registry, auth, policy, deploy, auth_gate, body_limit);
+    let health = health_plane_router(registry, auth, deploy, auth_gate, body_limit);
     api.nest("/v1/node", health)
 }
 
@@ -3307,7 +3047,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    const TOKEN: &str = "0123456789abcdef0123456789abcdef";
+    use crate::auth::test_credential;
 
     /// Test sink for HTTP audit events (installs process-wide hook).
     /// Serialized so parallel tokio tests do not clobber the global hook.
@@ -3394,7 +3134,10 @@ echo ok
         Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", test_credential::token()),
+            )
             .body(Body::empty())
             .unwrap()
     }
@@ -3403,7 +3146,10 @@ echo ok
         Request::builder()
             .method(Method::POST)
             .uri(uri)
-            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", test_credential::token()),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(body.to_string()))
             .unwrap()
@@ -3413,7 +3159,10 @@ echo ok
         Request::builder()
             .method(method)
             .uri(uri)
-            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", test_credential::token()),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(body.to_string()))
             .unwrap()
@@ -3423,7 +3172,10 @@ echo ok
         Request::builder()
             .method(Method::DELETE)
             .uri(uri)
-            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", test_credential::token()),
+            )
             .body(Body::empty())
             .unwrap()
     }
@@ -3627,32 +3379,11 @@ echo ok
         assert!(validate_bind(addr, true).is_ok());
     }
 
-    #[test]
-    fn token_validation_rejects_empty_short_and_defaults() {
-        assert!(matches!(
-            auth::validate_legacy_token(""),
-            Err(auth::AuthError::MissingAuth)
-        ));
-        assert!(matches!(
-            auth::validate_legacy_token("short"),
-            Err(auth::AuthError::InvalidLegacyToken)
-        ));
-        assert!(matches!(
-            auth::validate_legacy_token("changeme"),
-            Err(auth::AuthError::InvalidLegacyToken)
-        ));
-    }
-
-    #[test]
-    fn token_validation_accepts_long_token() {
-        assert!(auth::validate_legacy_token(TOKEN).is_ok());
-    }
-
     #[tokio::test]
     async fn health_works_without_token() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(
                 Request::builder()
                     .method(Method::GET)
@@ -3673,7 +3404,7 @@ echo ok
     async fn ready_works_without_token_when_no_gate() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(
                 Request::builder()
                     .method(Method::GET)
@@ -3698,9 +3429,9 @@ echo ok
         let workspace = workspace_in(&dir);
         let gate = ReadinessGate::new(true, false, true, false);
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["*"]),
             workspace,
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             Some(gate),
             BODY_LIMIT_BYTES,
@@ -3755,7 +3486,7 @@ enabled = true
         let app = router_with_policy(
             auth.clone(),
             workspace,
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             Some(gate),
             BODY_LIMIT_BYTES,
@@ -3833,7 +3564,7 @@ enabled = true
         let app = router_with_policy(
             Authenticator::from_tokens_file(&tokens_path).unwrap(),
             workspace,
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -3898,9 +3629,9 @@ enabled = true
         deploy.runs.allow_secret_fields = false;
         let sink = AuditCapture::install().await;
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["*"]),
             workspace,
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             deploy,
             None,
             BODY_LIMIT_BYTES,
@@ -3923,7 +3654,7 @@ enabled = true
         assert_eq!(event.run_id.as_deref(), Some("rid-denied-audit"));
         let serialized = serde_json::to_string(&event).unwrap();
         assert!(!serialized.contains("request-secret-marker"));
-        assert!(!serialized.contains(TOKEN));
+        assert!(!serialized.contains(test_credential::token()));
     }
 
     #[tokio::test]
@@ -3931,7 +3662,7 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         let sink = AuditCapture::install().await;
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let response = app
             .oneshot(
                 Request::builder()
@@ -3957,50 +3688,16 @@ enabled = true
         assert!(!serialized.contains("Authorization"));
     }
 
-    #[tokio::test]
-    async fn legacy_admin_status_requires_explicit_capability() {
-        let dir = TempDir::new().unwrap();
-        let denied = router_with_auth(
-            Authenticator::legacy(TOKEN),
-            workspace_in(&dir),
-            ApiPolicy::allow([ApiCapability::ScriptsRead]),
-        )
-        .oneshot(authed_request("/v1/admin/status"))
-        .await
-        .unwrap();
-        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
-
-        let ok = router_with_auth(
-            Authenticator::legacy(TOKEN),
-            workspace_in(&dir),
-            ApiPolicy::allow([ApiCapability::AdminStatus]),
-        )
-        .oneshot(authed_request("/v1/admin/status"))
-        .await
-        .unwrap();
-        assert_eq!(ok.status(), StatusCode::OK);
-    }
-
     #[test]
-    fn capability_all_preserves_explicit_secret_refs() {
-        let deny = ApiPolicy::from_config(&["all".into()], &[]).unwrap();
-        let access = deny.secret_access(
-            &AuthContext {
-                token_id: "legacy".into(),
-                scopes: vec!["*".into()],
-            },
-            false,
-        );
+    fn wildcard_scope_does_not_bypass_secret_refs() {
+        let wildcard = AuthContext {
+            token_id: "admin".into(),
+            scopes: vec!["*".into()],
+        };
+        let access = ApiPolicy::from_secret_refs(&[]).secret_access(&wildcard);
         assert!(crate::secrets::check_secret_access("secret://prod/token", &access).is_err());
 
-        let allow = ApiPolicy::from_config(&["all".into()], &["*".into()]).unwrap();
-        let access = allow.secret_access(
-            &AuthContext {
-                token_id: "legacy".into(),
-                scopes: vec!["*".into()],
-            },
-            false,
-        );
+        let access = ApiPolicy::from_secret_refs(&["*".into()]).secret_access(&wildcard);
         assert!(crate::secrets::check_secret_access("secret://prod/token", &access).is_ok());
     }
 
@@ -4010,9 +3707,9 @@ enabled = true
         let workspace = workspace_in(&dir);
         let gate = ReadinessGate::new(false, false, false, false);
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["*"]),
             workspace,
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             Some(gate),
             BODY_LIMIT_BYTES,
@@ -4032,14 +3729,13 @@ enabled = true
         let data = body["data"].as_object().expect("data object");
         assert_eq!(data.keys().collect::<Vec<_>>(), vec!["status"]);
         assert!(!body.to_string().contains("token"));
-        assert!(!body.to_string().contains("legacy"));
     }
 
     #[tokio::test]
     async fn protected_route_rejects_missing_token() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(
                 Request::builder()
                     .method(Method::GET)
@@ -4060,7 +3756,7 @@ enabled = true
     async fn protected_route_rejects_invalid_token() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(
                 Request::builder()
                     .method(Method::GET)
@@ -4079,7 +3775,7 @@ enabled = true
     async fn protected_route_accepts_valid_token() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/unknown"))
             .await
             .unwrap();
@@ -4114,7 +3810,7 @@ enabled = true
         .unwrap();
         let auth = Authenticator::from_tokens_file(&path).unwrap();
         // Process-wide capabilities would allow runs:write; file mode must ignore them.
-        let app = router_with_auth(auth, workspace, ApiPolicy::all());
+        let app = router_with_auth(auth, workspace, ApiPolicy::default());
 
         let unknown = app
             .clone()
@@ -4187,7 +3883,7 @@ enabled = true
         let app = router_with_auth(
             Authenticator::from_tokens_file(&path).unwrap(),
             workspace,
-            ApiPolicy::allow([]),
+            ApiPolicy::default(),
         );
         let response = app
             .oneshot(
@@ -4209,9 +3905,9 @@ enabled = true
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["runs:write"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::RunWrite]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -4239,9 +3935,9 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         let denied = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["node:read"]),
             workspace.clone_for_executor(),
-            ApiPolicy::allow([ApiCapability::NodeRead]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -4252,9 +3948,9 @@ enabled = true
         assert_eq!(denied.status(), StatusCode::FORBIDDEN);
 
         let allowed = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["discovery:read"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::DiscoveryRead]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -4275,9 +3971,9 @@ enabled = true
         let workspace = workspace_in(&dir);
         let deploy = DeployPolicy::default();
         let denied = router_with_health_plane(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["node:write"]),
             workspace.clone_for_executor(),
-            ApiPolicy::allow([ApiCapability::NodeWrite]),
+            ApiPolicy::default(),
             deploy.clone(),
             None,
             registry,
@@ -4289,9 +3985,9 @@ enabled = true
         assert_eq!(denied.status(), StatusCode::FORBIDDEN);
 
         let allowed = router_with_health_plane(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["node:read"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::NodeRead]),
+            ApiPolicy::default(),
             deploy,
             None,
             shared_test_health_registry(),
@@ -4309,14 +4005,14 @@ enabled = true
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
-            workspace,
-            ApiPolicy::allow([
-                ApiCapability::ConfigRead,
-                ApiCapability::ScriptsRead,
-                ApiCapability::RunRead,
-                ApiCapability::BatteryRead,
+            test_credential::authenticator(&[
+                "config:read",
+                "scripts:read",
+                "runs:read",
+                "batteries:read",
             ]),
+            workspace,
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -4342,7 +4038,7 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/workspace"))
             .await
             .unwrap();
@@ -4360,7 +4056,7 @@ enabled = true
         std::fs::write(workspace.envs_dir().join("dev.conf"), "HOST=localhost\n").unwrap();
         std::fs::write(workspace.envs_active_path(), "dev.conf\n").unwrap();
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/config"))
             .await
             .unwrap();
@@ -4381,7 +4077,7 @@ enabled = true
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/doctor"))
             .await
             .unwrap();
@@ -4400,7 +4096,7 @@ enabled = true
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let list = app
             .clone()
             .oneshot(authed_request("/v1/scripts?tag=ops"))
@@ -4433,7 +4129,7 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "deploy.sh");
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/search?q=deploy&tag=ops"))
             .await
             .unwrap();
@@ -4449,7 +4145,7 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
         let root = workspace.scripts_root().to_path_buf();
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let empty = app
             .clone()
             .oneshot(authed_request("/v1/search?q=job"))
@@ -4499,7 +4195,7 @@ enabled = true
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/search"))
             .await
             .unwrap();
@@ -4513,7 +4209,7 @@ enabled = true
     async fn search_endpoint_rejects_empty_and_oversized_query() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
 
         let empty = app
             .clone()
@@ -4534,7 +4230,7 @@ enabled = true
     async fn search_endpoint_rejects_excessive_tags() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
 
         let too_many_tags = (0..=MAX_SEARCH_TAGS)
             .map(|idx| format!("tag=t{idx}"))
@@ -4575,7 +4271,7 @@ echo ok
         )
         .unwrap();
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let show = app
             .clone()
             .oneshot(authed_request("/v1/scripts/tools/job.sh"))
@@ -4609,7 +4305,7 @@ echo ok
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "tools/job.sh");
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let tree = app
             .clone()
             .oneshot(authed_request("/v1/tree"))
@@ -4647,7 +4343,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/../secret.sh/content"))
             .await
             .unwrap();
@@ -4662,7 +4358,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/%2Ftmp%2Fsecret.sh/content"))
             .await
             .unwrap();
@@ -4676,7 +4372,7 @@ echo ok
     async fn tree_and_content_endpoints_reject_metadata_paths() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
 
         for uri in [
             "/v1/tree/.omakure",
@@ -4699,7 +4395,7 @@ echo ok
         let workspace = workspace_in(&dir);
         let root = workspace.root().display().to_string();
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/../secret.sh/content"))
             .await
             .unwrap();
@@ -4715,7 +4411,7 @@ echo ok
         let workspace = workspace_in(&dir);
         std::fs::write(workspace.scripts_root().join("note.txt"), "hello\n").unwrap();
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/note.txt/content"))
             .await
             .unwrap();
@@ -4743,7 +4439,7 @@ echo ok
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/scripts?tag=ops%20team"))
             .await
             .unwrap();
@@ -4758,7 +4454,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/missing.sh"))
             .await
             .unwrap();
@@ -4772,7 +4468,7 @@ echo ok
     async fn env_endpoints_round_trip_and_redact_values() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let app = router(TOKEN.to_string(), workspace.clone_for_executor());
+        let app = router(workspace.clone_for_executor());
 
         let create = app
             .clone()
@@ -4851,7 +4547,7 @@ echo ok
     async fn env_endpoints_replace_patch_and_reject_conf_route_names() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
 
         let replace = app
             .clone()
@@ -4908,9 +4604,9 @@ echo ok
         )
         .unwrap();
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["envs:read"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::EnvRead]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -4971,7 +4667,7 @@ echo ok
         )
         .unwrap();
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let list = app
             .clone()
             .oneshot(authed_request("/v1/runs?state_set=all"))
@@ -5011,7 +4707,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/runs?state=bad"))
             .await
             .unwrap();
@@ -5026,7 +4722,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(
                 Request::builder()
                     .method(Method::POST)
@@ -5049,7 +4745,7 @@ echo ok
         let workspace = workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request(
                 "/v1/runs",
                 r#"{"script":"job","args":["--x"],"run_id":"rid-post","actor":"agent","reason":"api","priority":7,"timeout_ms":1000}"#,
@@ -5085,7 +4781,7 @@ echo ok
         )
         .unwrap();
 
-        let response = router(TOKEN.to_string(), workspace.clone_for_executor())
+        let response = router(workspace.clone_for_executor())
             .oneshot(authed_json_request(
                 "/v1/runs",
                 r#"{"script":"secret.sh","run_id":"rid-http-secret","args":["--token","secret://prod/token"]}"#,
@@ -5120,7 +4816,7 @@ echo ok
         )
         .unwrap();
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request(
                 "/v1/runs",
                 r#"{"script":"secret.sh","run_id":"rid-http-plain-secret","args":["--token","http_secret_value"]}"#,
@@ -5154,7 +4850,7 @@ echo ok
         )
         .unwrap();
 
-        let env_response = router(TOKEN.to_string(), workspace.clone_for_executor())
+        let env_response = router(workspace.clone_for_executor())
             .oneshot(authed_json_request(
                 "/v1/runs",
                 r#"{"script":"secret.sh","run_id":"rid-http-env-secret","args":["--mode","fast"],"env":"prod"}"#,
@@ -5181,7 +4877,7 @@ echo ok
         assert!(!env_row.args_json.contains("env_secret_value"));
         drop(conn);
 
-        let direct_response = router(TOKEN.to_string(), workspace.clone_for_executor())
+        let direct_response = router(workspace.clone_for_executor())
             .oneshot(authed_json_request(
                 "/v1/runs",
                 r#"{"script":"secret.sh","run_id":"rid-http-direct-secret","secret_fields":{"TOKEN":"direct_secret_value"}}"#,
@@ -5215,12 +4911,9 @@ echo ok
         )
         .unwrap();
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["runs:write", "secrets:use"]),
             workspace.clone_for_executor(),
-            ApiPolicy::allow_with_secret_refs(
-                [ApiCapability::RunWrite, ApiCapability::SecretProviderUse],
-                ["secret://prod/other"],
-            ),
+            ApiPolicy::with_secret_refs(["secret://prod/other"]),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -5251,9 +4944,9 @@ echo ok
         )
         .unwrap();
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["runs:write"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::RunWrite]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -5298,9 +4991,9 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.runs.allow_secret_fields = false;
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["*"]),
             workspace.clone_for_executor(),
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             deploy,
             None,
             BODY_LIMIT_BYTES,
@@ -5350,9 +5043,9 @@ echo ok
             Some("schema_secret_value"),
         );
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["runs:write"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::RunWrite]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -5384,9 +5077,9 @@ echo ok
         .unwrap();
         std::fs::write(workspace.envs_active_path(), "prod.conf\n").unwrap();
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["runs:write"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::RunWrite]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -5422,9 +5115,9 @@ echo ok
         )
         .unwrap();
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["envs:read"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::EnvRead]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -5441,52 +5134,13 @@ echo ok
         }
     }
 
-    #[tokio::test]
-    async fn legacy_scan_admission_preserves_modern_capacity() {
-        let dir = TempDir::new().unwrap();
-        let generated = crate::auth::generate_token("modern", &["runs:read".into()]).unwrap();
-        let path = dir.path().join("tokens.toml");
-        std::fs::write(&path, generated.tokens_file_entry).unwrap();
-        let auth = Authenticator::from_tokens_file(path).unwrap();
-        let guess = format!("omk_live_{}", "ab".repeat(32));
-        for capacity in [1, 2] {
-            let gate = Arc::new(tokio::sync::Semaphore::new(capacity));
-            // Deterministically model one admitted legacy blocking task.
-            let legacy = auth.admit_legacy_verification(&guess).unwrap().unwrap();
-            let hashing = Arc::clone(&gate).try_acquire_owned().unwrap();
-            assert!(matches!(
-                authenticate_off_runtime(&auth, &gate, &guess).await,
-                AuthAttempt::Busy
-            ));
-            assert_eq!(gate.available_permits(), capacity - 1);
-            let modern = authenticate_off_runtime(&auth, &gate, &generated.token).await;
-            if capacity == 2 {
-                assert!(matches!(modern, AuthAttempt::Accepted(_)));
-            } else {
-                // A one-slot policy deliberately serializes ALL hashing.
-                assert!(matches!(modern, AuthAttempt::Busy));
-            }
-            drop(hashing);
-            drop(legacy);
-            assert!(matches!(
-                authenticate_off_runtime(&auth, &gate, &generated.token).await,
-                AuthAttempt::Accepted(_)
-            ));
-            assert!(matches!(
-                authenticate_off_runtime(&auth, &gate, &guess).await,
-                AuthAttempt::Rejected
-            ));
-            assert_eq!(gate.available_permits(), capacity);
-        }
-    }
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn concurrent_authentications_recycle_permits_and_do_not_deadlock() {
         // Fire more concurrent requests than the bounded auth budget. Requests
         // either authenticate or fail fast; none may queue indefinitely.
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let mut handles = Vec::new();
         for _ in 0..24 {
             let app = app.clone();
@@ -5523,9 +5177,9 @@ echo ok
         )
         .unwrap();
         let app = router_with_policy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["envs:read"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::EnvRead]),
+            ApiPolicy::default(),
             DeployPolicy::default(),
             None,
             BODY_LIMIT_BYTES,
@@ -5552,7 +5206,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request(
                 "/v1/runs",
                 r#"{"script":"missing.sh"}"#,
@@ -5575,7 +5229,7 @@ echo ok
         let outside_script = outside.path().join("outside.sh").display().to_string();
         let request_body =
             serde_json::to_string(&serde_json::json!({ "script": outside_script })).unwrap();
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request("/v1/runs", &request_body))
             .await
             .unwrap();
@@ -5590,7 +5244,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request("/v1/runs", r#"{"#))
             .await
             .unwrap();
@@ -5607,7 +5261,7 @@ echo ok
         let workspace = workspace_in(&dir);
         let body = format!(r#"{{"script":"{}"}}"#, "x".repeat(BODY_LIMIT_BYTES + 1));
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request("/v1/runs", &body))
             .await
             .unwrap();
@@ -5649,7 +5303,7 @@ echo ok
         )
         .unwrap();
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let cancelled = app
             .clone()
             .oneshot(authed_json_request(
@@ -5714,7 +5368,7 @@ echo ok
         )
         .unwrap();
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request("/v1/runs/rid-done/cancel", r#"{}"#))
             .await
             .unwrap();
@@ -5794,7 +5448,7 @@ echo ok
         )
         .unwrap();
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let promoted = app
             .clone()
             .oneshot(authed_json_request(
@@ -5831,16 +5485,13 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.sources.allow_private_https_batteries = true;
         let app = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&[
+                "batteries:write",
+                "batteries:read",
+                "credentials:use",
+            ]),
             workspace.clone_for_executor(),
-            ApiPolicy::allow_with_secret_refs(
-                [
-                    ApiCapability::BatteryWrite,
-                    ApiCapability::BatteryRead,
-                    ApiCapability::CredentialsUse,
-                ],
-                ["secret://prod/GIT_TOKEN"],
-            ),
+            ApiPolicy::with_secret_refs(["secret://prod/GIT_TOKEN"]),
             deploy,
         );
         let add = app
@@ -5878,9 +5529,9 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.sources.allow_private_https_batteries = true;
         let app = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["batteries:write"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::BatteryWrite]),
+            ApiPolicy::default(),
             deploy,
         );
         let add = app
@@ -5915,9 +5566,9 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.sources.allow_private_https_batteries = true;
         let app = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["batteries:write"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::BatteryWrite]),
+            ApiPolicy::default(),
             deploy,
         );
         let response = app
@@ -5946,12 +5597,9 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.secrets.metadata_endpoint = true;
         let app = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["secrets:read-metadata"]),
             workspace,
-            ApiPolicy::allow_with_secret_refs(
-                [ApiCapability::SecretsReadMetadata],
-                ["secret://prod/*"],
-            ),
+            ApiPolicy::with_secret_refs(["secret://prod/*"]),
             deploy,
         );
         let response = app.oneshot(authed_request("/v1/secrets")).await.unwrap();
@@ -5974,9 +5622,9 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.secrets.metadata_endpoint = false;
         let disabled = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["secrets:read-metadata"]),
             workspace.clone_for_executor(),
-            ApiPolicy::allow([ApiCapability::SecretsReadMetadata]),
+            ApiPolicy::default(),
             deploy.clone(),
         );
         let response = disabled
@@ -5987,9 +5635,9 @@ echo ok
 
         deploy.secrets.metadata_endpoint = true;
         let denied = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["batteries:read"]),
             workspace,
-            ApiPolicy::allow([ApiCapability::BatteryRead]),
+            ApiPolicy::default(),
             deploy,
         );
         let response = denied.oneshot(authed_request("/v1/secrets")).await.unwrap();
@@ -6001,7 +5649,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(
                 Request::builder()
                     .method(Method::GET)
@@ -6020,7 +5668,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let add = app
             .clone()
             .oneshot(authed_json_request(
@@ -6045,7 +5693,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request(
                 "/v1/batteries",
                 r#"{"name":"plain","git_url":"http://example.invalid/plain.git"}"#,
@@ -6063,7 +5711,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request(
                 "/v1/batteries",
                 r#"{"name":"local","git_url":"/tmp/local-battery.git"}"#,
@@ -6082,7 +5730,7 @@ echo ok
         let workspace = workspace_in(&dir);
         register_invalid_https_battery_cache(&workspace, "bad");
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_request("/v1/batteries/bad"))
             .await
             .unwrap();
@@ -6108,7 +5756,7 @@ echo ok
         )
         .unwrap();
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         for request in [
             authed_json_request("/v1/batteries/local/sync", r#"{}"#),
             authed_request("/v1/batteries/local"),
@@ -6137,7 +5785,7 @@ echo ok
         )
         .unwrap();
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let missing = app
             .clone()
             .oneshot(authed_request("/v1/batteries/missing"))
@@ -6176,7 +5824,7 @@ echo ok
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
 
-        let response = router(TOKEN.to_string(), workspace)
+        let response = router(workspace)
             .oneshot(authed_json_request("/v1/batteries/missing/sync", r#"{}"#))
             .await
             .unwrap();
@@ -6213,7 +5861,7 @@ echo ok
         let paths = battery_ops::BatteryPaths::for_workspace(&workspace);
         std::fs::create_dir_all(paths.cache_path_for("drop")).unwrap();
 
-        let app = router(TOKEN.to_string(), workspace);
+        let app = router(workspace);
         let keep = app
             .clone()
             .oneshot(authed_delete_request("/v1/batteries/keep"))
@@ -6242,9 +5890,9 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.routes.writes = false;
         let app = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["*"]),
             workspace,
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             deploy,
         );
 
@@ -6278,9 +5926,9 @@ echo ok
         let mut deploy = DeployPolicy::default();
         deploy.routes.battery = false;
         let app = router_with_deploy(
-            Authenticator::legacy(TOKEN),
+            test_credential::authenticator(&["*"]),
             workspace,
-            ApiPolicy::all(),
+            ApiPolicy::default(),
             deploy,
         );
 
@@ -6309,7 +5957,6 @@ echo ok
             allow_non_loopback: false,
             policy: Some(path),
             tokens_file: None,
-            capabilities: vec!["all".into()],
             secret_refs: vec![],
         };
         let err = match prepare_api_boot(&args) {
@@ -6321,41 +5968,20 @@ echo ok
     }
 
     #[test]
-    fn prepare_api_boot_legacy_disabled_rejects_env_token() {
-        let dir = TempDir::new().unwrap();
-        let path = dir.path().join("policy.toml");
-        std::fs::write(&path, "version = 1\n[auth]\nlegacy_env_token = false\n").unwrap();
-        // Direct auth path (avoid mutating process-wide OMAKURE_API_TOKEN).
-        let err = match resolve_auth_with_policy(None, false) {
-            Err(e) => e,
-            Ok(_) => panic!("expected legacy disabled failure"),
-        };
-        assert!(matches!(err, ApiConfigError::Auth(_)), "got {err}");
-        assert!(err.to_string().contains("legacy_env_token"));
-
-        // Policy load still succeeds; boot fails at auth when no tokens file.
+    fn prepare_api_boot_requires_a_tokens_file() {
         let args = ApiArgs {
             bind: "127.0.0.1:7878".parse().unwrap(),
             allow_non_loopback: false,
-            policy: Some(path),
+            policy: None,
             tokens_file: None,
-            capabilities: vec![],
             secret_refs: vec![],
         };
-        // Clear tokens file env for this check if present.
-        let prev_tokens = std::env::var("OMAKURE_TOKENS_FILE").ok();
-        std::env::remove_var("OMAKURE_TOKENS_FILE");
-        let boot_err = match prepare_api_boot(&args) {
+        let err = match prepare_api_boot(&args) {
             Err(e) => e,
             Ok(_) => panic!("expected auth failure without tokens file"),
         };
-        if let Some(v) = prev_tokens {
-            std::env::set_var("OMAKURE_TOKENS_FILE", v);
-        }
-        assert!(
-            matches!(boot_err, ApiConfigError::Auth(_)),
-            "got {boot_err}"
-        );
+        assert!(matches!(err, ApiConfigError::Auth(_)), "got {err}");
+        assert!(err.to_string().contains("--tokens-file"));
     }
 
     #[test]
@@ -6369,8 +5995,6 @@ version = 1
 [http]
 allow_non_loopback = true
 bind = "0.0.0.0:7878"
-[auth]
-legacy_env_token = true
 "#,
         )
         .unwrap();
@@ -6396,7 +6020,6 @@ enabled = true
             allow_non_loopback: false,
             policy: Some(path),
             tokens_file: Some(tokens),
-            capabilities: vec![],
             secret_refs: vec![],
         };
         let boot = prepare_api_boot(&args).unwrap();

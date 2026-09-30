@@ -124,6 +124,6 @@ EXPOSE 7878
 #
 # CMD binds 0.0.0.0 inside the container so published ports work. Host-side
 # publish should stay on 127.0.0.1 (see compose.yaml / docs/deployment.md).
-# Prefer OMAKURE_TOKENS_FILE over legacy OMAKURE_API_TOKEN in production.
+# Management auth requires OMAKURE_TOKENS_FILE / --tokens-file.
 ENTRYPOINT ["tini", "--", "omakure"]
 CMD ["node", "serve", "--bind", "0.0.0.0:7878", "--allow-non-loopback"]

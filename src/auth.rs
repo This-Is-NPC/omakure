@@ -1,10 +1,5 @@
-//! Multi-token bearer auth: Argon2id tokens file, scopes, and legacy env token.
-//!
-//! Modes:
-//! - **Legacy** — `OMAKURE_API_TOKEN` as token id `legacy` with scopes `*`.
-//!   Process-wide `--capability` still gates routes.
-//! - **Tokens file** — `--tokens-file` / `OMAKURE_TOKENS_FILE` TOML with per-token
-//!   Argon2id hashes and scopes. Process-wide `--capability` is ignored.
+//! Multi-token bearer auth: `--tokens-file` / `OMAKURE_TOKENS_FILE` TOML with
+//! per-token Argon2id hashes and scopes.
 
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -18,7 +13,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 pub const TOKEN_PREFIX: &str = "omk_live_";
-pub const LEGACY_TOKEN_ID: &str = "legacy";
 pub const WILDCARD_SCOPE: &str = "*";
 
 /// Recommended Argon2id parameters (64 MiB, t=3, p=1).
@@ -55,26 +49,19 @@ pub struct TokenRecord {
     pub hash: String,
     pub scopes: Vec<String>,
     pub enabled: bool,
-    pub legacy_compatible: bool,
 }
 
 #[derive(Debug, Clone)]
-enum AuthBackend {
-    Legacy {
-        plaintext: String,
-    },
-    File {
-        path: PathBuf,
-        tokens: Vec<TokenRecord>,
-    },
+struct TokenStore {
+    path: PathBuf,
+    tokens: Vec<TokenRecord>,
 }
 
 /// Hot-reloadable authenticator shared by the HTTP middleware.
 #[derive(Clone)]
 pub struct Authenticator {
-    inner: Arc<RwLock<AuthBackend>>,
+    inner: Arc<RwLock<TokenStore>>,
     reload_status: Arc<RwLock<AuthReloadStatus>>,
-    legacy_verification_gate: Arc<tokio::sync::Semaphore>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -97,84 +84,31 @@ struct AuthReloadStatus {
 }
 
 impl Authenticator {
-    pub fn legacy(plaintext: impl Into<String>) -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(AuthBackend::Legacy {
-                plaintext: plaintext.into(),
-            })),
-            reload_status: Arc::new(RwLock::new(AuthReloadStatus::default())),
-            legacy_verification_gate: Arc::new(tokio::sync::Semaphore::new(1)),
-        }
-    }
-
     pub fn from_tokens_file(path: impl Into<PathBuf>) -> Result<Self, AuthError> {
         let path = path.into();
         let tokens = load_tokens_file(&path)?;
         Ok(Self {
-            inner: Arc::new(RwLock::new(AuthBackend::File { path, tokens })),
+            inner: Arc::new(RwLock::new(TokenStore { path, tokens })),
             reload_status: Arc::new(RwLock::new(AuthReloadStatus::default())),
-            legacy_verification_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         })
-    }
-
-    pub fn is_file_mode(&self) -> bool {
-        matches!(
-            *self.inner.read().expect("auth lock"),
-            AuthBackend::File { .. }
-        )
-    }
-
-    /// Admit at most one selectorless file-token scan before consuming the
-    /// shared HTTP hashing budget. Clones and reloads retain the same gate.
-    pub fn admit_legacy_verification(
-        &self,
-        presented: &str,
-    ) -> Result<Option<tokio::sync::OwnedSemaphorePermit>, tokio::sync::TryAcquireError> {
-        if !is_legacy_token_shape(presented) || !self.is_file_mode() {
-            return Ok(None);
-        }
-        Arc::clone(&self.legacy_verification_gate)
-            .try_acquire_owned()
-            .map(Some)
     }
 
     /// Authenticate a presented bearer token. Returns `None` for unknown/disabled.
     pub fn authenticate(&self, presented: &str) -> Option<AuthContext> {
         let guard = self.inner.read().expect("auth lock");
-        match &*guard {
-            AuthBackend::Legacy { plaintext } => {
-                if constant_time_eq(presented.as_bytes(), plaintext.as_bytes()) {
-                    Some(AuthContext {
-                        token_id: LEGACY_TOKEN_ID.to_string(),
-                        scopes: vec![WILDCARD_SCOPE.to_string()],
-                    })
-                } else {
-                    None
-                }
-            }
-            AuthBackend::File { tokens, .. } => authenticate_against_file(tokens, presented),
-        }
+        authenticate_against_file(&guard.tokens, presented)
     }
 
     /// Metadata-only auth status (no token ids, hashes, paths, or plaintext).
     pub fn status(&self) -> AuthStatus {
         let guard = self.inner.read().expect("auth lock");
         let reload = self.reload_status.read().expect("reload status lock");
-        match &*guard {
-            AuthBackend::Legacy { .. } => AuthStatus {
-                mode: "legacy".to_string(),
-                token_count: 1,
-                last_reload_ok: reload.last_reload_ok,
-                last_reload_error: reload.last_reload_error.clone(),
-                last_reload_at_ms: reload.last_reload_at_ms,
-            },
-            AuthBackend::File { tokens, .. } => AuthStatus {
-                mode: "tokens_file".to_string(),
-                token_count: tokens.len(),
-                last_reload_ok: reload.last_reload_ok,
-                last_reload_error: reload.last_reload_error.clone(),
-                last_reload_at_ms: reload.last_reload_at_ms,
-            },
+        AuthStatus {
+            mode: "tokens_file".to_string(),
+            token_count: guard.tokens.len(),
+            last_reload_ok: reload.last_reload_ok,
+            last_reload_error: reload.last_reload_error.clone(),
+            last_reload_at_ms: reload.last_reload_at_ms,
         }
     }
 
@@ -185,25 +119,22 @@ impl Authenticator {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as i64)
             .unwrap_or(0);
-        match &mut *guard {
-            AuthBackend::Legacy { .. } => Ok(()),
-            AuthBackend::File { path, tokens } => match load_tokens_file(path) {
-                Ok(loaded) => {
-                    *tokens = loaded;
-                    let mut reload = self.reload_status.write().expect("reload status lock");
-                    reload.last_reload_ok = Some(true);
-                    reload.last_reload_error = None;
-                    reload.last_reload_at_ms = Some(now_ms);
-                    Ok(())
-                }
-                Err(err) => {
-                    let mut reload = self.reload_status.write().expect("reload status lock");
-                    reload.last_reload_ok = Some(false);
-                    reload.last_reload_error = Some(err.status_message().to_string());
-                    reload.last_reload_at_ms = Some(now_ms);
-                    Err(err)
-                }
-            },
+        match load_tokens_file(&guard.path) {
+            Ok(loaded) => {
+                guard.tokens = loaded;
+                let mut reload = self.reload_status.write().expect("reload status lock");
+                reload.last_reload_ok = Some(true);
+                reload.last_reload_error = None;
+                reload.last_reload_at_ms = Some(now_ms);
+                Ok(())
+            }
+            Err(err) => {
+                let mut reload = self.reload_status.write().expect("reload status lock");
+                reload.last_reload_ok = Some(false);
+                reload.last_reload_error = Some(err.status_message().to_string());
+                reload.last_reload_at_ms = Some(now_ms);
+                Err(err)
+            }
         }
     }
 }
@@ -214,18 +145,10 @@ pub enum AuthError {
     Parse(String),
     DuplicateId(String),
     InvalidHash(String),
-    WeakHashParams {
-        id: String,
-        detail: String,
-    },
+    WeakHashParams { id: String, detail: String },
     EmptyId,
-    EmptyScopes {
-        id: String,
-    },
+    EmptyScopes { id: String },
     MissingAuth,
-    InvalidLegacyToken,
-    /// `auth.legacy_env_token = false` in deploy policy rejects env token.
-    LegacyEnvTokenDisabled,
 }
 
 impl fmt::Display for AuthError {
@@ -240,15 +163,9 @@ impl fmt::Display for AuthError {
             }
             Self::EmptyId => write!(f, "token id must not be empty"),
             Self::EmptyScopes { id } => write!(f, "token id {id} has empty scopes"),
-            Self::MissingAuth => write!(
-                f,
-                "auth required: set OMAKURE_TOKENS_FILE/--tokens-file or OMAKURE_API_TOKEN"
-            ),
-            Self::InvalidLegacyToken => write!(f, "OMAKURE_API_TOKEN is invalid"),
-            Self::LegacyEnvTokenDisabled => write!(
-                f,
-                "OMAKURE_API_TOKEN rejected: policy auth.legacy_env_token=false requires --tokens-file / OMAKURE_TOKENS_FILE"
-            ),
+            Self::MissingAuth => {
+                write!(f, "auth required: set OMAKURE_TOKENS_FILE/--tokens-file")
+            }
         }
     }
 }
@@ -266,8 +183,6 @@ impl AuthError {
             Self::EmptyId => "tokens file contains an empty token id",
             Self::EmptyScopes { .. } => "tokens file contains a token with empty scopes",
             Self::MissingAuth => "authentication is not configured",
-            Self::InvalidLegacyToken => "legacy authentication token is invalid",
-            Self::LegacyEnvTokenDisabled => "legacy authentication token is disabled",
         }
     }
 }
@@ -277,8 +192,6 @@ impl AuthError {
 struct TokensFileToml {
     #[serde(default = "default_version")]
     version: u32,
-    #[serde(default = "default_enabled")]
-    allow_legacy_tokens: bool,
     #[serde(default)]
     tokens: Vec<TokenToml>,
 }
@@ -296,10 +209,6 @@ struct TokenToml {
     scopes: Vec<String>,
     #[serde(default = "default_enabled")]
     enabled: bool,
-    // A PHC hash cannot reveal its plaintext format. Preserve unmarked old
-    // records; newly generated selector records explicitly opt out.
-    #[serde(default = "default_enabled")]
-    legacy_compatible: bool,
 }
 
 fn default_enabled() -> bool {
@@ -346,7 +255,6 @@ pub fn parse_tokens_toml(text: &str) -> Result<Vec<TokenRecord>, AuthError> {
             hash: normalize_phc(&entry.hash),
             scopes: entry.scopes,
             enabled: entry.enabled,
-            legacy_compatible: parsed.allow_legacy_tokens && entry.legacy_compatible,
         });
     }
     Ok(out)
@@ -403,47 +311,19 @@ fn validate_phc_hash(id: &str, hash: &str) -> Result<(), AuthError> {
     Ok(())
 }
 
+/// Bearers without a token selector cannot name a record, so they are
+/// rejected before any Argon2 work (keeps the auth-flood bound effective
+/// against arbitrary bearer strings).
 fn authenticate_against_file(tokens: &[TokenRecord], presented: &str) -> Option<AuthContext> {
-    if let Some(id) = token_selector(presented) {
-        return tokens
-            .iter()
-            .find(|token| token.enabled && token.id == id)
-            .filter(|token| verify_argon2(&token.hash, presented))
-            .map(auth_context);
-    }
-    if !is_legacy_token_shape(presented) {
-        // Neither the new selector format nor the pre-upgrade shape: cannot be
-        // a real token, so skip Argon2 entirely (keeps the auth-flood bound
-        // effective against arbitrary bearer strings).
-        return None;
-    }
-    // Tokens generated before the token_selector upgrade carry no embedded id
-    // (`omk_live_<64 hex>`, not `omk_live_<hex id>_<64 hex>`), so there is no
-    // id to look up by. Check only explicitly compatible (or unmarked old)
-    // records, bounded by MAX_TOKENS_PER_FILE, without early exit (avoids
-    // leaking a compatible token's position via timing).
-    let mut matched: Option<AuthContext> = None;
-    for token in tokens.iter().filter(|t| t.enabled && t.legacy_compatible) {
-        if verify_argon2(&token.hash, presented) {
-            matched = Some(auth_context(token));
-        }
-    }
-    matched
-}
-
-/// Whether `presented` has the pre-token_selector shape: `TOKEN_PREFIX` plus
-/// exactly `PLAINTEXT_BYTES * 2` hex characters and no embedded id/underscore.
-fn is_legacy_token_shape(presented: &str) -> bool {
-    presented.strip_prefix(TOKEN_PREFIX).is_some_and(|rest| {
-        rest.len() == PLAINTEXT_BYTES * 2 && rest.bytes().all(|b| b.is_ascii_hexdigit())
-    })
-}
-
-fn auth_context(token: &TokenRecord) -> AuthContext {
-    AuthContext {
-        token_id: token.id.clone(),
-        scopes: token.scopes.clone(),
-    }
+    let id = token_selector(presented)?;
+    tokens
+        .iter()
+        .find(|token| token.enabled && token.id == id)
+        .filter(|token| verify_argon2(&token.hash, presented))
+        .map(|token| AuthContext {
+            token_id: token.id.clone(),
+            scopes: token.scopes.clone(),
+        })
 }
 
 fn token_selector(presented: &str) -> Option<String> {
@@ -473,15 +353,6 @@ fn verify_argon2(phc: &str, presented: &str) -> bool {
     Argon2::default()
         .verify_password(presented.as_bytes(), &parsed)
         .is_ok()
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    // Digest both sides so length mismatches do not short-circuit (length oracle).
-    use sha2::{Digest, Sha256};
-    use subtle::ConstantTimeEq;
-    let ha = Sha256::digest(a);
-    let hb = Sha256::digest(b);
-    ha.ct_eq(&hb).into()
 }
 
 /// Whether `granted` scopes satisfy `required`.
@@ -536,55 +407,9 @@ fn normalize_scope(scope: &str) -> &str {
     }
 }
 
-/// Resolve auth configuration from CLI/env (legacy env token allowed).
-#[allow(dead_code)] // public helper; api uses resolve_authenticator_with_legacy
-pub fn resolve_authenticator(
-    tokens_file: Option<&Path>,
-    tokens_file_env: Option<&str>,
-) -> Result<Authenticator, AuthError> {
-    resolve_authenticator_with_legacy(tokens_file, tokens_file_env, true)
-}
-
-pub fn resolve_authenticator_with_legacy(
-    tokens_file: Option<&Path>,
-    tokens_file_env: Option<&str>,
-    allow_legacy_env_token: bool,
-) -> Result<Authenticator, AuthError> {
-    let path = tokens_file
-        .map(Path::to_path_buf)
-        .or_else(|| tokens_file_env.map(PathBuf::from));
-    if let Some(path) = path {
-        return Authenticator::from_tokens_file(path);
-    }
-    if !allow_legacy_env_token {
-        // Policy disabled the legacy env token; reject regardless of whether one
-        // is present so the operator gets a consistent, actionable error.
-        return Err(AuthError::LegacyEnvTokenDisabled);
-    }
-    let token = std::env::var("OMAKURE_API_TOKEN").map_err(|_| AuthError::MissingAuth)?;
-    validate_legacy_token(&token)?;
-    Ok(Authenticator::legacy(token.trim()))
-}
-
-pub fn validate_legacy_token(token: &str) -> Result<(), AuthError> {
-    let trimmed = token.trim();
-    if trimmed.is_empty() {
-        return Err(AuthError::MissingAuth);
-    }
-    let lower = trimmed.to_ascii_lowercase();
-    let known_defaults = [
-        "changeme",
-        "change-me",
-        "default",
-        "password",
-        "secret",
-        "token",
-        "omakure",
-    ];
-    if trimmed.len() < 32 || known_defaults.contains(&lower.as_str()) {
-        return Err(AuthError::InvalidLegacyToken);
-    }
-    Ok(())
+/// Resolve the authenticator from the configured tokens file.
+pub fn resolve_authenticator(tokens_file: Option<&Path>) -> Result<Authenticator, AuthError> {
+    Authenticator::from_tokens_file(tokens_file.ok_or(AuthError::MissingAuth)?)
 }
 
 #[derive(Debug, Clone)]
@@ -637,6 +462,53 @@ pub fn test_token_plaintext(id: &str) -> String {
     selector_token_plaintext(id)
 }
 
+/// The shared test credential in `tests/fixtures/test_api_token.toml`.
+#[cfg(test)]
+pub(crate) mod test_credential {
+    use super::{format_toml_entry, Authenticator};
+    use serde::Deserialize;
+    use std::sync::OnceLock;
+
+    #[derive(Deserialize)]
+    struct Credential {
+        id: String,
+        token: String,
+        hash: String,
+    }
+
+    fn credential() -> &'static Credential {
+        static CREDENTIAL: OnceLock<Credential> = OnceLock::new();
+        CREDENTIAL.get_or_init(|| {
+            toml::from_str(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/test_api_token.toml"
+            )))
+            .expect("parse test credential fixture")
+        })
+    }
+
+    pub(crate) fn token() -> &'static str {
+        &credential().token
+    }
+
+    /// An authenticator whose only token is the test credential with `scopes`.
+    pub(crate) fn authenticator(scopes: &[&str]) -> Authenticator {
+        let credential = credential();
+        let scopes: Vec<String> = scopes.iter().map(|scope| scope.to_string()).collect();
+        let dir = tempfile::TempDir::new().expect("tokens tempdir");
+        let path = dir.path().join("tokens.toml");
+        std::fs::write(
+            &path,
+            format!(
+                "version = 1\n{}",
+                format_toml_entry(&credential.id, &credential.hash, &scopes)
+            ),
+        )
+        .expect("write test tokens file");
+        Authenticator::from_tokens_file(path).expect("load test tokens file")
+    }
+}
+
 pub fn hash_token(plaintext: &str) -> Result<String, AuthError> {
     let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, None)
         .map_err(|e| AuthError::Parse(e.to_string()))?;
@@ -659,7 +531,6 @@ pub fn format_toml_entry(id: &str, hash: &str, scopes: &[String]) -> String {
     }
     out.push_str("]\n");
     out.push_str("enabled = true\n");
-    out.push_str("legacy_compatible = false\n");
     out
 }
 
@@ -1126,7 +997,6 @@ enabled = true
                 hash: generated.hash.clone(),
                 scopes: vec!["runs:read".into()],
                 enabled: true,
-                legacy_compatible: false,
             })
             .collect::<Vec<_>>();
         tokens.push(TokenRecord {
@@ -1134,7 +1004,6 @@ enabled = true
             hash: generated.hash.clone(),
             scopes: generated.scopes.clone(),
             enabled: true,
-            legacy_compatible: false,
         });
 
         ARGON2_VERIFY_COUNT.with(|count| count.set(0));
@@ -1147,8 +1016,8 @@ enabled = true
         assert!(authenticate_against_file(&tokens, &unknown).is_none());
         ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
 
-        let legacy_guess = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
-        assert!(authenticate_against_file(&tokens, &legacy_guess).is_none());
+        let selectorless = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
+        assert!(authenticate_against_file(&tokens, &selectorless).is_none());
         ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
     }
 
@@ -1158,138 +1027,17 @@ enabled = true
         let hash = hash_token(&plaintext).unwrap();
         let tokens = (0..MAX_TOKENS_PER_FILE)
             .map(|index| TokenRecord {
-                id: format!("legacy-{index}"),
+                id: format!("configured-{index}"),
                 hash: hash.clone(),
                 scopes: vec!["runs:read".into()],
                 enabled: true,
-                legacy_compatible: true,
             })
             .collect::<Vec<_>>();
 
-        // Not the token_selector shape and not the pre-upgrade legacy shape
-        // (no TOKEN_PREFIX at all) — must never trigger Argon2 work.
+        // No TOKEN_PREFIX at all — must never trigger Argon2 work.
         ARGON2_VERIFY_COUNT.with(|count| count.set(0));
-        assert!(authenticate_against_file(&tokens, "invalid legacy bearer").is_none());
+        assert!(authenticate_against_file(&tokens, "invalid bearer").is_none());
         ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
-    }
-
-    #[test]
-    fn pre_upgrade_legacy_shaped_token_still_authenticates() {
-        // Tokens minted before the token_selector upgrade (1726c8c) are bare
-        // `TOKEN_PREFIX + 64 hex chars`, with no embedded id. Deploying the
-        // selector upgrade must not lock out tokens already distributed under
-        // the old format.
-        let legacy_plaintext = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
-        let hash = hash_token(&legacy_plaintext).unwrap();
-        let other_hash = hash_token(&test_token_plaintext("other")).unwrap();
-        // Keep this compatibility test focused on the legacy shape. The
-        // selector tests cover the maximum file size; scanning 64 Argon2
-        // hashes here makes the suite needlessly expensive on slow hosts.
-        let mut tokens = (0..1)
-            .map(|index| TokenRecord {
-                id: format!("other-{index}"),
-                hash: other_hash.clone(),
-                scopes: vec!["runs:read".into()],
-                enabled: true,
-                legacy_compatible: false,
-            })
-            .collect::<Vec<_>>();
-        tokens.push(TokenRecord {
-            id: "legacy-holder".into(),
-            hash,
-            scopes: vec!["runs:read".into()],
-            enabled: true,
-            legacy_compatible: true,
-        });
-
-        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
-        let ctx = authenticate_against_file(&tokens, &legacy_plaintext).unwrap();
-        assert_eq!(ctx.token_id, "legacy-holder");
-        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 1));
-
-        // A legacy-shaped guess that matches no hash is rejected, not panicked.
-        let wrong = format!("{TOKEN_PREFIX}{}", "cd".repeat(PLAINTEXT_BYTES));
-        assert!(authenticate_against_file(&tokens, &wrong).is_none());
-    }
-
-    #[test]
-    fn legacy_compatibility_metadata_bounds_hashing_and_preserves_old_files() {
-        let generated = generate_token("modern", &["runs:read".into()]).unwrap();
-        let guess = format!("{TOKEN_PREFIX}{}", "ff".repeat(PLAINTEXT_BYTES));
-        let records = parse_tokens_toml(&generated.tokens_file_entry).unwrap();
-        assert!(!records[0].legacy_compatible);
-        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
-        assert!(authenticate_against_file(&records, &guess).is_none());
-        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
-        assert!(authenticate_against_file(&records, &generated.token).is_some());
-
-        let old = format!(
-            "[[tokens]]\nid = \"old\"\nhash = {:?}\nscopes = [\"runs:read\"]\n",
-            generated.hash
-        );
-        let mixed = format!("{}{old}", generated.tokens_file_entry);
-        let records = parse_tokens_toml(&mixed).unwrap();
-        assert!(records[1].legacy_compatible);
-        ARGON2_VERIFY_COUNT.with(|count| count.set(0));
-        assert!(authenticate_against_file(&records, &guess).is_none());
-        ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 1));
-
-        for disabled in [
-            format!("allow_legacy_tokens = false\n{mixed}"),
-            format!("{mixed}legacy_compatible = false\n"),
-            format!("{mixed}enabled = false\n"),
-        ] {
-            let records = parse_tokens_toml(&disabled).unwrap();
-            ARGON2_VERIFY_COUNT.with(|count| count.set(0));
-            assert!(authenticate_against_file(&records, &guess).is_none());
-            ARGON2_VERIFY_COUNT.with(|count| assert_eq!(count.get(), 0));
-        }
-        assert!(parse_tokens_toml(&format!("allow_legacy_tokens = \"no\"\n{old}")).is_err());
-        assert!(parse_tokens_toml(&format!("{old}legacy_compatible = 1\n")).is_err());
-    }
-
-    #[test]
-    fn legacy_admission_is_shared_across_clones_and_reload() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("tokens.toml");
-        fs::write(&path, "version = 1\n").unwrap();
-        let auth = Authenticator::from_tokens_file(path).unwrap();
-        let guess = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
-        let permit = auth.admit_legacy_verification(&guess).unwrap().unwrap();
-        let clone = auth.clone();
-        auth.reload().unwrap();
-        assert!(clone.admit_legacy_verification(&guess).is_err());
-        assert!(clone
-            .admit_legacy_verification(&test_token_plaintext("modern"))
-            .unwrap()
-            .is_none());
-        drop(permit);
-        assert!(clone.admit_legacy_verification(&guess).is_ok());
-        assert!(Authenticator::legacy(&guess)
-            .admit_legacy_verification(&guess)
-            .unwrap()
-            .is_none());
-    }
-
-    #[test]
-    fn old_credentials_survive_upgrade_until_explicit_reload_opt_out() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("tokens.toml");
-        let plaintext = format!("{TOKEN_PREFIX}{}", "ab".repeat(PLAINTEXT_BYTES));
-        let hash = hash_token(&plaintext).unwrap();
-        let old = format!("[[tokens]]\nid = \"old\"\nhash = {hash:?}\nscopes = [\"runs:read\"]\n");
-        fs::write(&path, &old).unwrap();
-        let auth = Authenticator::from_tokens_file(&path).unwrap();
-        assert_eq!(auth.authenticate(&plaintext).unwrap().token_id, "old");
-        fs::write(&path, format!("allow_legacy_tokens = false\n{old}")).unwrap();
-        auth.reload().unwrap();
-        assert!(auth.authenticate(&plaintext).is_none());
-        fs::write(&path, format!("{old}legacy_compatible = true\n")).unwrap();
-        auth.reload().unwrap();
-        assert!(auth.authenticate(&plaintext).is_some());
-        fs::write(&path, format!("{old}legacy_compatible = \"invalid\"\n")).unwrap();
-        assert!(auth.reload().is_err());
-        assert!(auth.authenticate(&plaintext).is_some());
     }
 
     #[test]
@@ -1359,18 +1107,6 @@ enabled = true
         assert!(ctx.has_scope("batteries:sync"));
         assert!(ctx.has_scope("batteries:install"));
         assert!(ctx.has_scope("batteries:remove"));
-    }
-
-    #[test]
-    fn legacy_authenticator_uses_legacy_id_and_wildcard() {
-        let token = "0123456789abcdef0123456789abcdef";
-        let auth = Authenticator::legacy(token);
-        let ctx = auth.authenticate(token).unwrap();
-        assert_eq!(ctx.token_id, LEGACY_TOKEN_ID);
-        assert!(ctx.has_scope("anything"));
-        assert!(auth
-            .authenticate("wrong-token-value-that-is-long-enough!!")
-            .is_none());
     }
 
     #[test]
@@ -1484,17 +1220,6 @@ enabled = true
         let ok = auth.status();
         assert_eq!(ok.last_reload_ok, Some(true));
         assert!(ok.last_reload_error.is_none());
-    }
-
-    #[test]
-    fn legacy_status_reports_mode_without_token_material() {
-        let token = "0123456789abcdef0123456789abcdef";
-        let auth = Authenticator::legacy(token);
-        let status = auth.status();
-        assert_eq!(status.mode, "legacy");
-        assert_eq!(status.token_count, 1);
-        let serialized = serde_json::to_string(&status).unwrap();
-        assert!(!serialized.contains(token));
     }
 
     /// Existing token stores must be replaced in place on Windows rather than
@@ -1674,18 +1399,5 @@ enabled = true
         assert!(matches!(err, AuthError::DuplicateId(_)));
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
         assert_eq!(load_tokens_file(&path).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn constant_time_eq_is_length_independent() {
-        assert!(!constant_time_eq(b"short", b"a-much-longer-value"));
-        assert!(constant_time_eq(b"same-bytes", b"same-bytes"));
-    }
-
-    #[test]
-    fn validate_legacy_token_rejects_short_and_defaults() {
-        assert!(validate_legacy_token("short").is_err());
-        assert!(validate_legacy_token("changeme").is_err());
-        assert!(validate_legacy_token("0123456789abcdef0123456789abcdef").is_ok());
     }
 }

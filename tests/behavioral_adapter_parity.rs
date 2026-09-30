@@ -20,8 +20,6 @@ use std::path::Path;
 use std::process::Output;
 use std::time::Duration;
 
-pub const API_TOKEN: &str = "behavioral-parity-token-000000000000000000000000";
-
 pub struct BehavioralContext {
     pub workspace: support::TestWorkspace,
     pub repository: support::TestWorkspace,
@@ -33,14 +31,10 @@ impl BehavioralContext {
     pub fn new(label: &str, capabilities: &[&str]) -> Self {
         let workspace = support::TestWorkspace::new(label);
         let repository = support::TestWorkspace::new(&format!("{label}_repo"));
-        let mut args = Vec::with_capacity(capabilities.len() * 2);
-        for capability in capabilities {
-            args.extend(["--capability", *capability]);
-        }
         let server = support::HttpServer::start_with_args(
             workspace.path(),
-            API_TOKEN,
-            &args,
+            capabilities,
+            &[],
             &[],
             Duration::from_secs(10),
         );
@@ -73,7 +67,6 @@ impl BehavioralContext {
             &config_arg,
             "init",
         ])
-        .env("OMAKURE_API_TOKEN", API_TOKEN)
         .env("OMAKURE_NODE_TEST_MODE", "1")
         .env("OMAKURE_NODE_STATE_DIR", &state_arg)
         .env("OMAKURE_NODE_CONFIG", &config_arg);
@@ -105,15 +98,11 @@ impl BehavioralContext {
                 ))
                 .unwrap_or_else(|| envelope.to_string())
         );
-        let mut args = Vec::with_capacity(capabilities.len() * 2);
-        for capability in capabilities {
-            args.extend(["--capability", *capability]);
-        }
         let server = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             support::HttpServer::start_node_service(
                 workspace.path(),
-                API_TOKEN,
-                &args,
+                capabilities,
+                &[],
                 &[],
                 Duration::from_secs(10),
             )
@@ -178,7 +167,7 @@ impl BehavioralContext {
             .arg("--scripts-dir")
             .arg(self.workspace.path())
             .args(args)
-            .env("OMAKURE_API_TOKEN", API_TOKEN);
+            .env("OMAKURE_API_TOKEN", support::api_token());
         for (key, value) in envs {
             command.env(key, value);
         }

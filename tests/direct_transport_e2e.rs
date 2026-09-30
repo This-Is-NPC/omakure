@@ -16,7 +16,6 @@ use omakure::direct_transport::{
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 
-const TOKEN: &str = "direct-transport-e2e-token-with-enough-entropy-00001";
 const HANDSHAKE_IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn node_args(workspace: &Path) -> (String, String) {
@@ -40,7 +39,7 @@ fn run_node(workspace: &Path, args: &[String]) -> Output {
         .arg(config)
         .args(args)
         .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN);
+        .env("OMAKURE_API_TOKEN", support::api_token());
     command.output().expect("run node command")
 }
 
@@ -181,15 +180,13 @@ fn wait_until_direct_accepts(endpoint: &str) {
 fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpServer {
     let server = support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{direct_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
@@ -674,15 +671,13 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
     let target_port = free_port();
     let target_server = support::HttpServer::start_node_service(
         target.path(),
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{target_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
@@ -731,15 +726,13 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
     support::assert_terminated(exit);
     let target_server = support::HttpServer::start_node_service(
         target.path(),
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{target_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
@@ -831,7 +824,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
     let first_port = free_port();
     let first_server = support::HttpServer::start_node_service(
         first.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -845,7 +838,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
     let second_port = free_port();
     let second_server = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -898,7 +891,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
 
     let restarted = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -933,15 +926,13 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
     let target_port = free_port();
     let target_server = support::HttpServer::start_node_service(
         target.path(),
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{target_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
@@ -949,7 +940,7 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
     let candidate_port = free_port();
     let candidate_server = support::HttpServer::start_node_service(
         candidate.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -1063,27 +1054,15 @@ fn direct_probe_names_the_standing_session_and_still_reports_a_dead_endpoint() {
 
     let first_server = support::HttpServer::start_node_service(
         first.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
     let second_server = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -1155,27 +1134,15 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
 
     let first_server = support::HttpServer::start_node_service(
         first.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
     let second_server = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -1196,14 +1163,8 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
     support::assert_terminated(exit);
     let restarted = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -1466,14 +1427,8 @@ const RECONNECT_BUDGET: Duration = Duration::from_secs(45);
 fn start_peer_service(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     )

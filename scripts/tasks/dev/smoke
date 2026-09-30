@@ -14,15 +14,18 @@ LOG="${WORKSPACE}/.omakure/dev-node.log"
 mkdir -p "$WORKSPACE/.omakure/dev-node-state"
 chmod 700 "$WORKSPACE/.omakure/dev-node-state"
 
-TOKEN="$(openssl rand -hex 32)"
-export OMAKURE_API_TOKEN="$TOKEN"
+TOKENS_FILE="$WORKSPACE/.omakure/dev-node-tokens.toml"
+rm -f "$TOKENS_FILE"
+TOKEN="$("$BIN" --json token generate --id dev-smoke --scope '*' --append "$TOKENS_FILE" --confirmed |
+  sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+[[ -n "$TOKEN" ]] || { printf 'dev/smoke: token generation failed\n' >&2; exit 1; }
 READY_URL="http://127.0.0.1:${PORT}/v1/ready"
 HEALTH_URL="http://127.0.0.1:${PORT}/v1/health"
 
 OMAKURE_NODE_TEST_MODE=1 "$BIN" node --node-state-dir "$WORKSPACE/.omakure/dev-node-state" \
   --node-config "$WORKSPACE/.omakure/dev-node.toml" serve \
   --bind "127.0.0.1:${PORT}" --workers 0 --no-scheduler \
-  --capability all >"$LOG" 2>&1 &
+  --tokens-file "$TOKENS_FILE" >"$LOG" 2>&1 &
 NODE_PID=$!
 
 cleanup() {

@@ -142,7 +142,7 @@ Every endpoint except `/v1/health` and `/v1/ready` requires:
 Authorization: Bearer <token>
 ```
 
-### Multi-token file (preferred)
+### Multi-token file
 
 ```bash
 omakure token generate --id ci-deployer \
@@ -162,7 +162,6 @@ id = "ci-deployer"
 hash = "$argon2id$v=19$m=65536,t=3,p=1$..."
 scopes = ["runs:enqueue", "runs:read", "scripts:read"]
 enabled = true
-legacy_compatible = false
 ```
 
 Rules:
@@ -177,45 +176,19 @@ Rules:
 - Generate with `omakure token generate` (prefix `omk_live_`). Optional
   `--append PATH --confirmed` appends the TOML entry.
 
-Tokens generated before the `token_selector` optimization (bare
-`omk_live_<64 hex>`, with no embedded id) still authenticate: verification
-falls back to checking only enabled, legacy-compatible hashes for that shape. New tokens
-from `omakure token generate` embed the id
-(`omk_live_<hex id>_<64 hex>`) and require only one Argon2id verification.
-Regenerate and redistribute old-format tokens when convenient for the faster
-path; there is no forced cutover. Newly generated entries set
-`legacy_compatible = false` and never participate in selectorless scans.
-Unmarked existing entries default to `true`: hashes cannot reveal whether
-their plaintext carries a selector, so changing this default would silently
-invalidate pre-upgrade credentials. For existing selector tokens, add
-`legacy_compatible = false` to their records. Set top-level
-`allow_legacy_tokens = false` (before any `[[tokens]]`) once no old-format
-credentials remain; this disables all selectorless verification without
-changing selector authentication. Reload these changes with `SIGHUP`.
+Tokens embed their id (`omk_live_<hex id>_<64 hex>`), so each bearer costs
+one Argon2id verification against the matching record. Bearers without that
+selector are rejected with `401`. Verifications share the
+`auth.max_concurrent_verifications` budget; excess requests receive `503`.
+Use an upstream rate limiter for untrusted networks.
 
-Only one selectorless file-token scan may run at a time, bounded by the
-64-record file limit and sharing the existing total hashing budget. Excess
-scans receive `503` before consuming a shared verification slot. The default
-two-slot budget leaves one slot available for selector tokens; configuring
-`auth.max_concurrent_verifications = 1` deliberately serializes both formats,
-so modern requests can receive `503` while a legacy scan runs. Modern-token
-floods can still exhaust the shared budget: use an upstream rate limiter for
-untrusted networks. Argon2 costs are unchanged. Legacy environment-token mode
-uses its existing constant-time comparison and is not subject to this scan gate.
+`omakure api` and `omakure node serve` require a tokens file and refuse to
+start without one. `OMAKURE_API_TOKEN` is only read as a client credential by
+CLI commands that call a running local service.
 
+### Scope matching
 
-### Legacy single token
-
-Token source: `OMAKURE_API_TOKEN` when no tokens file is configured.
-
-- Internal token id is `legacy` with scopes `*`; route access still uses
-  process-wide `--capability`.
-- Reject empty, short (< 32 bytes), or known-default tokens.
-- Constant-time compare of the presented legacy token.
-
-### Scope matching and legacy capabilities
-
-Multi-token bearer scopes use these matching rules:
+Bearer scopes use these matching rules:
 
 - `*` satisfies every required scope.
 - `env:read`/`envs:read`, `env:write`/`envs:write`,
@@ -227,34 +200,11 @@ Multi-token bearer scopes use these matching rules:
 - `config:read` covers `doctor:read` and `workspace:read`; `scripts:read`
   covers `search:read`.
 
-Legacy `--capability` values are normalized into broad route-capability
-classes before checks. Thus `env:read`/`envs:read`, `env:write`/`envs:write`,
-`env:activate`/`envs:activate`, and `env:use`/`envs:use` are aliases;
-`doctor:read` and `workspace:read` (the `config:read` class), and
-`search:read` (the `scripts:read` class), and run/Battery action spellings
-map to the same classes as their canonical capabilities. Unlike file scopes,
-these legacy action spellings
-`runs:enqueue`, `runs:cancel`, `runs:dead-letter`, `batteries:add`,
-`batteries:sync`, `batteries:install`, and `batteries:remove` therefore grant
-their entire `runs:write` or `batteries:write` class. `--capability` is ignored
-when `--tokens-file` is set.
-
-Legacy `--capability` is repeatable and accepts:
-`config:read`, `scripts:read`, `env:read`, `envs:read`, `env:write`,
-`envs:write`, `env:activate`, `envs:activate`, `env:use`, `envs:use`,
-`secrets:use`, `secrets:read-metadata`, `credentials:use`, `runs:read`,
-`runs:write`, `runs:enqueue`, `runs:cancel`, `runs:dead-letter`,
-`batteries:read`, `batteries:write`, `batteries:add`, `batteries:sync`,
-`batteries:install`, `batteries:remove`, `admin:status`, `node:read`,
-`node:write`, `trust:write`, `enrollment:read`, `enrollment:write`,
-`discovery:read`, `doctor:read`, `workspace:read`, `search:read`, and
-`all`.
-
-Legacy secret access is a separate allow-list. Repeat `--secret-ref` with
+Secret access is a separate allow-list. Repeat `--secret-ref` with
 `secret://provider/key` or `secret://provider/*`; an empty list denies
-provider refs. `--capability all` grants route capabilities but does not
-bypass this list, so unrestricted file/provider refs require
-`--secret-ref '*'`. That wildcard does not grant process-environment refs:
+provider refs. A `*` scope grants every route but does not bypass this list,
+so unrestricted file/provider refs require `--secret-ref '*'`. That wildcard
+does not grant process-environment refs:
 enumerate each exact `secret://env/NAME` (the `secret://env:*` spelling
 normalizes to that provider form, while `--secret-ref 'secret://env/*'` is
 ignored).
@@ -353,7 +303,7 @@ expose token IDs, paths, or secrets.
 Optional readiness gates are configured by `omakure node serve`; their
 deployment semantics are defined in the [deployment guide](deployment.md).
 
-Authenticated operator status (scope `admin:status`, or legacy `*`):
+Authenticated operator status (scope `admin:status` or `*`):
 
 ```http
 GET /v1/admin/status

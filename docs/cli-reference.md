@@ -14,12 +14,11 @@ Run the internal HTTP management API
 
 - `--allow-non-loopback` — Explicitly allow the HTTP API to bind to non-loopback addresses (values: `false`, `true`)
 - `--bind BIND` — Address to bind the HTTP API server to (default: `127.0.0.1:7878`)
-- `--capability CAPABILITIES` — API capability to grant in legacy single-token mode (`OMAKURE_API_TOKEN`). Repeatable. Ignored when `--tokens-file` is set. Supported: config:read, scripts:read, env:read / envs:read, env:write / envs:write, env:activate / envs:activate, env:use / envs:use, secrets:use, secrets:read-metadata, credentials:use, runs:read, runs:write / runs:enqueue, batteries:read, batteries:write, admin:status, all. Node management uses narrow node:read, node:write, and trust:write capabilities. `all` grants every route capability but does not bypass `--secret-ref` (pass `--secret-ref '*'` for unrestricted refs)
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
 - `--policy POLICY` — Deploy-only policy.toml (route groups + auth/node-service defaults). Overrides `OMAKURE_POLICY_FILE`. Separate from workspace omakure.toml
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override
 - `--secret-ref SECRET_REFS` — Allowed secret provider ref for secrets:use / credentials:use, e.g. secret://prod/token or secret://prod/*; repeatable. Empty denies provider refs
-- `--tokens-file TOKENS_FILE` — Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. When set, process-wide `--capability` is ignored; scopes come from each token
+- `--tokens-file TOKENS_FILE` — Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. Required unless the deploy policy sets `auth.tokens_file`
 
 ## `omakure battery`
 
@@ -849,7 +848,6 @@ Run the machine-owned HTTP node service with optional workers and scheduler
 - `--allow-non-loopback-direct` — Explicitly allow the direct transport to bind to non-loopback addresses (values: `false`, `true`)
 - `--bind BIND` — Address to bind the HTTP API server to; defaults to node.toml `api.bind`
 - `--bootstrap-token-file BOOTSTRAP_TOKEN_FILE` — Node-local one-time bootstrap token file for the signed-bundle API
-- `--capability CAPABILITIES` — API capability to grant in legacy single-token mode. Repeatable
 - `--direct-bind DIRECT_BIND` — Optional direct transport listener address
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
 - `--no-scheduler` — Disable the in-process schedule scanner (default: `false`) (values: `false`, `true`)

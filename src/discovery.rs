@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use subtle::ConstantTimeEq;
 use thiserror::Error;
 
 pub const BEACON_MAGIC: &[u8; 4] = b"OMKB";
@@ -236,7 +237,7 @@ impl Beacon {
         }
         if let Some(secret) = secret {
             let proof = self.discovery_proof.ok_or(DiscoveryError::SecretMismatch)?;
-            if !constant_time_eq(&proof, &hmac_sha256(secret, &self.proof_input())) {
+            if !bool::from(proof.ct_eq(&hmac_sha256(secret, &self.proof_input()))) {
                 return Err(DiscoveryError::SecretMismatch);
             }
         } else if self.discovery_proof.is_some() {
@@ -915,17 +916,6 @@ fn hmac_sha256(secret: &[u8], message: &[u8]) -> [u8; 32] {
     outer_input.extend_from_slice(&outer);
     outer_input.extend_from_slice(&inner_hash);
     Sha256::digest(outer_input).into()
-}
-
-fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
-    left.len() == right.len()
-        && left
-            .iter()
-            .zip(right)
-            .fold(0_u8, |difference, (left, right)| {
-                difference | (left ^ right)
-            })
-            == 0
 }
 
 #[cfg(test)]

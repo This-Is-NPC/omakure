@@ -176,7 +176,7 @@ src/
 ├── error.rs                 schema and environment application errors
 ├── util/                    shared filesystem, process, and encoding helpers
 ├── app_meta.rs              package version constant
-├── cli_http_parity.rs       CLI/HTTP parity manifest and observable comparator
+├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog.rs     versioned operation metadata catalog
 ├── runs/                    SQLite state machine and structured traces
 ├── run_executor.rs          shared child lifecycle and redaction

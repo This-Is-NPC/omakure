@@ -9,7 +9,7 @@ must be updated in the same change.
 | ID | Requirement | Source |
 |---|---|---|
 | FR-001 | No-argument invocation prints CLI help; JSON mode returns one `invalid_argument` envelope. | `src/main.rs`, `tests/cli_no_subcommand.rs` |
-| FR-002 | Global `--scripts-dir` and environment overrides resolve one workspace root; positional paths are rejected. | `src/main.rs`, `src/cli/args.rs`, `tests/cli_surface_e2e.rs` |
+| FR-002 | Global `--scripts-dir` and environment overrides resolve one workspace root; positional paths are rejected. | `src/main.rs`, `src/cli/args/`, `tests/cli_surface_e2e.rs` |
 | FR-003 | Recursive script listing supports `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`, nested `.omakureignore`, and repeatable AND tag filters. | `src/adapters/workspace_repository.rs`, `src/runtime.rs`, `src/cli/list.rs` |
 | FR-004 | Embedded PascalCase schemas parse and validate fields, outputs, queue declarations, secret fields, and schedules. | `src/domain/schema.rs`, `src/domain/parsing.rs` |
 | FR-005 | `describe` returns a complete parsed schema and resolved path; malformed schemas and missing scripts have stable errors. | `src/cli/describe.rs`, `src/operations/core.rs` |
@@ -26,10 +26,10 @@ must be updated in the same change.
 | FR-016 | Linux systemd user lifecycle operations install, uninstall, and report the per-workspace scheduler service. | `src/cli/serve_autostart.rs`, `src/cli/serve.rs` |
 | FR-017 | Batteries can be registered, synced, inspected, listed, installed with validation/provenance, and removed; installation is Unix-only and may be initiated locally by the CLI or authenticated HTTP, never by a peer or Cue; cached content is untrusted. | `src/cli/battery.rs`, `src/operations/battery/` |
 | FR-018 | `doctor`, `config`, `completion`, `update`, and `uninstall` provide local diagnostics, integration, lifecycle, and release operations. | `src/cli/doctor.rs`, `src/cli/config.rs`, `src/main.rs` |
-| FR-019 | `help-ai` derives a machine-readable command and data-shape inventory from clap metadata. | `src/cli/help_ai.rs`, `src/cli/args.rs` |
-| FR-020 | CLI JSON uses `{ ok, data, error, schema_version }` and stable error codes. | `src/cli/json.rs`, `src/cli/args.rs` |
+| FR-019 | `help-ai` derives a machine-readable command and data-shape inventory from clap metadata. | `src/cli/help_ai.rs`, `src/cli/args/` |
+| FR-020 | CLI JSON uses `{ ok, data, error, schema_version }` and stable error codes. | `src/cli/json.rs`, `src/cli/args/` |
 | FR-021 | `api` exposes authenticated management routes for config, diagnostics, workspace, scripts, search, runs, queues, environments, Batteries, and secret metadata. | `src/cli/api/`, `src/operations/*.rs` |
-| FR-022 | `node serve` validates machine state, initializes one identity and empty trust registry when absent, then composes HTTP, optional workers, and optional scheduler with coordinated shutdown and readiness gates. | `src/cli/node_service.rs`, `src/operations/node/`, `src/cli/args.rs` |
+| FR-022 | `node serve` validates machine state, initializes one identity and empty trust registry when absent, then composes HTTP, optional workers, and optional scheduler with coordinated shutdown and readiness gates. | `src/cli/node_service.rs`, `src/operations/node/`, `src/cli/args/` |
 | FR-023 | Health and readiness are unauthenticated; other HTTP routes require scoped bearer tokens from a tokens file. | `src/auth.rs`, `src/cli/api/`, `src/cli/node_service.rs` |
 | FR-024 | Deploy policy controls route groups, auth modes, body limits, script limits, environment use, secret use, and node-service scheduler/worker defaults. | `src/policy.rs`, `src/cli/api/`, `src/cli/node_service.rs` |
 | FR-025 | Direct transport provides authenticated encrypted sessions with bounded framing, static peer validation, trust authorization, replay protection, revocation handling, and redacted audit outcomes. | `src/direct_transport/`, `src/direct_service/`, `src/node_transport.rs` |
@@ -70,7 +70,7 @@ must be updated in the same change.
 | BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor.rs` |
 | BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery/`, `src/cli/api/` |
 | BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api/`, `src/policy.rs` |
-| BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args.rs`, `src/main.rs`, `tests/packaging_smoke.rs` |
+| BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args/`, `src/main.rs`, `tests/packaging_smoke.rs` |
 | BR-010 | Machine identity and trust are independent of script workspaces; normal update, replacement, restart, and uninstall preserve node state, while `node reset --confirmed` removes it and creates no replacement until the next service start. | `src/node/`, `src/node_identity.rs`, `src/operations/node/`, `src/cli/node.rs` |
 | BR-011 | Direct transport never grants trust or authorization by handshake alone; only explicit enrollment/trust operations may mutate active peer state, and malformed, oversized, downgraded, spoofed, wrong-target, replayed, expired, or revoked inputs fail closed. | `src/direct_service/`, `src/node_registry/`, `tests/direct_transport_contract.rs` |
 | BR-012 | Remote management may select among code a node already has and can never introduce more: a Cue carries no script content, Battery installation is a Unix-only local act that authenticated HTTP may initiate but peers and Cues may not, and a Cue-origin run has an explicit deny-all secret policy while a script declaring secret fields is refused at the gate rather than run without them. | `src/remote_cue.rs`, `src/operations/core.rs`, `docs/internal/remote-cue-contract.md` |

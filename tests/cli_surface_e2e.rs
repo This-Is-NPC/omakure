@@ -17,7 +17,7 @@ use std::time::Instant;
 // `command_surface_inventory_maps_all_current_commands` is a DRIFT TRIPWIRE,
 // not a proof of behavioral coverage. It mechanically asserts that this
 // inventory equals the clap command set (`omakure --help`), so a command
-// added to `src/cli/args.rs` without an inventory entry fails the suite. The
+// added to `src/cli/args/` without an inventory entry fails the suite. The
 // `Covered("path")` string is a human-authored pointer to where the command is
 // exercised — it is NOT asserted to reference a test that actually invokes the
 // command. A command can therefore be "listed but unexercised" if someone adds
@@ -251,7 +251,7 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
     },
     CommandCoverage {
         command: "node reset",
-        coverage: Coverage::Covered("src/cli/args.rs + node lifecycle tests"),
+        coverage: Coverage::Covered("src/cli/args/tests/node.rs + node lifecycle tests"),
     },
     CommandCoverage {
         command: "node revoke",
@@ -312,7 +312,7 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
 #[test]
 fn command_surface_inventory_maps_all_current_commands() {
     // Derive top-level + nested subcommands from clap `--help` so inventory
-    // drift against `src/cli/args.rs` fails this suite.
+    // drift against `src/cli/args/` fails this suite.
     let clap_top = clap_top_level_commands();
     let mut inventory_top: Vec<&str> = TOP_LEVEL_COVERAGE.iter().map(|e| e.command).collect();
     inventory_top.sort_unstable();

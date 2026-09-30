@@ -143,7 +143,7 @@ src/
 ├── lib.rs                   crate surface shared by the binaries and tests
 ├── bin/                     cli-reference, usage-kdl, usage-docs, operation-catalog generators
 ├── cli/                     command adapters and JSON output
-│   ├── args.rs              clap command tree and long-form help
+│   ├── args/                clap command tree and long-form help
 │   ├── api/                 authenticated Axum management server (boot, router,
 │   │                        bearer auth, audit, and one module per route group)
 │   ├── node_service.rs      HTTP + workers + scheduler lifecycle

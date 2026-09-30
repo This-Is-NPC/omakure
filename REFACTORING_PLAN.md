@@ -108,14 +108,14 @@ Validação: `check:full`.
 
 Eliminar cópias antes de dividir os módulos, para não multiplicar o trabalho.
 
-- [ ] Criar `src/cli/emit.rs` com `emit_error` e `emit_operation_error`;
+- [x] Criar `src/cli/emit.rs` com `emit_error` e `emit_operation_error`;
       substituir as 9 e 5 cópias nos módulos da CLI.
-- [ ] Criar `src/util/hex.rs` (ou `crate::encoding`) com `hex` e `decode_hex`;
+- [x] Criar `src/util/hex.rs` (ou `crate::encoding`) com `hex` e `decode_hex`;
       substituir as 7 e 4 cópias.
-- [ ] Centralizar `logical_relative_path` (5 cópias) em `operations/path.rs`.
-- [ ] Unificar `write_atomic*` (battery e node), `constant_time_eq` (auth e
+- [x] Centralizar `logical_relative_path` (5 cópias) em `operations/path.rs`.
+- [x] Unificar `write_atomic*` (battery e node), `constant_time_eq` (auth e
       discovery) e `parse_duration_*` (queue e history).
-- [ ] Transformar `util.rs` em `util/mod.rs` com submódulos coesos
+- [x] Transformar `util.rs` em `util/mod.rs` com submódulos coesos
       (`exec`, `fs`, `hex`, `time`).
 
 Validação: `check:fast`.

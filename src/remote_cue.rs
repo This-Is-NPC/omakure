@@ -1044,6 +1044,7 @@ pub fn derive_run_id(cue_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::configured_node_context;
 
     fn authorization(
         role: PeerRole,
@@ -1703,7 +1704,7 @@ mod tests {
         crate::node_identity::NodeIdentity,
         crate::node_registry::NodeRegistry,
     ) {
-        let context = crate::test_support::configured_node_context(root);
+        let context = configured_node_context(root);
         let identity =
             crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
         let registry =

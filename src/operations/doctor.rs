@@ -147,6 +147,7 @@ fn workspace_path(label: &str, path: &Path) -> WorkspacePathCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use std::fs;
     use tempfile::TempDir;
 
@@ -184,7 +185,7 @@ mod tests {
     #[test]
     fn doctor_report_contains_workspace_and_schema_sections() {
         let tmp = TempDir::new().unwrap();
-        let workspace = crate::test_support::workspace_in(&tmp);
+        let workspace = workspace_in(&tmp);
 
         let report = doctor_report(&workspace).unwrap();
 

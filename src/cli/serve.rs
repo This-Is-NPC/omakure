@@ -794,6 +794,7 @@ fn log_line(path: &Path, level: &str, message: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use tempfile::TempDir;
 
     fn write_script(dir: &Path, name: &str, schedule: Option<&str>) -> PathBuf {
@@ -839,7 +840,7 @@ mod tests {
     #[test]
     fn tick_enqueues_scheduled_run_on_first_fire() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         // Use a schedule that fires every minute; reference starts before now
         // so the very first tick will always be due.
         write_script(tmp.path(), "scheduled.sh", Some("* * * * *"));
@@ -872,7 +873,7 @@ mod tests {
     #[cfg(unix)]
     fn scheduler_rejects_reserved_metadata_aliases() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         let cache = ws.root().join(".omakure/batteries/cache");
         fs::create_dir_all(&cache).unwrap();
         let cached = write_script(&cache, "cached.sh", Some("* * * * *"));
@@ -885,7 +886,7 @@ mod tests {
     #[test]
     fn tick_skips_disabled_schedule() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         // Write schedule with Enabled=false manually.
         let json =
             r#"{ "Name":"s", "Fields":[], "Schedule": { "Cron": "* * * * *", "Enabled": false } }"#;
@@ -902,7 +903,7 @@ mod tests {
     #[test]
     fn concurrent_ticks_enqueue_one_scheduled_run() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         write_script(tmp.path(), "concurrent.sh", Some("* * * * *"));
         let now = Utc::now();
         let barrier = Arc::new(std::sync::Barrier::new(3));
@@ -941,7 +942,7 @@ mod tests {
     #[test]
     fn tick_logs_malformed_schema_and_continues() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         fs::write(
             tmp.path().join("broken.sh"),
             "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {not-json}\n# OMAKURE_SCHEMA_END\n",
@@ -958,7 +959,7 @@ mod tests {
     #[test]
     fn tick_skips_when_previous_run_still_in_flight() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         let script = write_script(tmp.path(), "s.sh", Some("* * * * *"));
         let fired = scheduler_tick(&ws, Utc::now()).unwrap();
         assert_eq!(fired, 1);
@@ -972,7 +973,7 @@ mod tests {
     #[test]
     fn tick_persists_secret_ref_default_not_plaintext() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         std::env::set_var("OMAKURE_CRON_SECRET_REF", "cron_plaintext_value");
         let json = r#"{ "Name":"s", "Fields":[{"Name":"TOKEN","Type":"secret","Arg":"--token","Default":"secret://env/OMAKURE_CRON_SECRET_REF"}], "Schedule": { "Cron": "* * * * *", "Enabled": true } }"#;
         let script = format!(
@@ -1009,7 +1010,7 @@ mod tests {
     #[test]
     fn tick_skips_fire_on_plaintext_secret_default() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         let json = r#"{ "Name":"s", "Fields":[{"Name":"TOKEN","Type":"secret","Arg":"--token","Default":"plaintext_secret_default"}], "Schedule": { "Cron": "* * * * *", "Enabled": true } }"#;
         let script = format!(
             "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {json}\n# OMAKURE_SCHEMA_END\n"
@@ -1041,7 +1042,7 @@ mod tests {
     #[test]
     fn acquire_lock_rejects_when_live_pid_present() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         // Write our own PID — it is by definition alive.
         fs::write(pid_file(&ws), std::process::id().to_string()).unwrap();
         let err = acquire_lock(&ws).unwrap_err();
@@ -1052,7 +1053,7 @@ mod tests {
     #[test]
     fn acquire_lock_reclaims_stale_pid() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         // A PID that is effectively guaranteed not to exist.
         fs::write(pid_file(&ws), "999999999").unwrap();
         acquire_lock(&ws).expect("stale PID should be reclaimed");
@@ -1063,7 +1064,7 @@ mod tests {
     #[test]
     fn windows_acquire_lock_reclaims_dead_pid_with_event_identity() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         fs::write(
             pid_file(&ws),
             "4294967295\nLocal\\OmakureServeStop-00000000000000000000000000000000\n",
@@ -1079,7 +1080,7 @@ mod tests {
     #[test]
     fn windows_malformed_or_partial_pid_files_are_preserved() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         let path = pid_file(&ws);
 
         for contents in [
@@ -1101,7 +1102,7 @@ mod tests {
     #[test]
     fn windows_release_does_not_delete_a_replacement_identity() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         let old = WindowsPidFile {
             pid: 100,
             stop_event: "Local\\OmakureServeStop-00000000000000000000000000000001".to_string(),
@@ -1125,7 +1126,7 @@ mod tests {
     #[test]
     fn windows_release_deletes_only_the_published_identity() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         let identity = WindowsPidFile {
             pid: 300,
             stop_event: "Local\\OmakureServeStop-00000000000000000000000000000003".to_string(),
@@ -1145,7 +1146,7 @@ mod tests {
     #[test]
     fn windows_pid_publication_is_complete_and_exclusive() {
         let tmp = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&tmp);
+        let ws = workspace_in(&tmp);
         let identity = WindowsPidFile {
             pid: 400,
             stop_event: "Local\\OmakureServeStop-00000000000000000000000000000004".to_string(),

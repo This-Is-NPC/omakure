@@ -671,6 +671,7 @@ fn io_error_string(message: String) -> OperationError {
 mod tests {
     use super::*;
     use crate::runs::{RunCompletion, RunState};
+    use crate::test_support::workspace_in;
     use tempfile::TempDir;
 
     #[test]
@@ -731,7 +732,7 @@ mod tests {
     #[test]
     fn reserved_metadata_is_not_an_executable_subject() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         for script in [
             ".omakure/batteries/cache/uninstalled/job.sh",
             ".history/job.sh",
@@ -770,7 +771,7 @@ mod tests {
     fn metadata_aliases_are_rejected_but_subject_aliases_are_allowed() {
         use std::os::unix::fs::symlink;
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.root(), ".omakure/batteries/cache/job.sh", &[]);
         write_script(ws.root(), "installed/job.sh", &[]);
         symlink(
@@ -806,7 +807,7 @@ mod tests {
     #[test]
     fn a_cue_run_stores_an_explicit_deny_all_secret_policy() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
         let row =
@@ -825,7 +826,7 @@ mod tests {
     #[test]
     fn a_cue_run_is_recorded_as_cue_originated() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
         let row =
@@ -839,7 +840,7 @@ mod tests {
     #[test]
     fn the_same_cue_derived_run_id_cannot_be_enqueued_twice() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
         assert!(enqueue_cue_run(&ws, cue_request(), "authorized-hash").is_ok());
@@ -853,7 +854,7 @@ mod tests {
     #[test]
     fn the_manual_enqueue_path_still_records_its_own_policy() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
         let row = enqueue_run_with_access(
@@ -895,7 +896,7 @@ mod tests {
     #[test]
     fn workspace_summary_returns_operation_ready_paths() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
 
         let summary = workspace_summary(&ws).unwrap();
 
@@ -907,7 +908,7 @@ mod tests {
     #[test]
     fn list_scripts_filters_by_tags_and_preserves_schema_errors() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &["ops"]);
         write_script(ws.scripts_root(), "other.sh", &["misc"]);
         std::fs::write(ws.scripts_root().join("broken.sh"), "#!/usr/bin/env bash\n").unwrap();
@@ -950,7 +951,7 @@ mod tests {
     #[test]
     fn describe_script_returns_schema_payload() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &["ops"]);
 
         let desc = describe_script(
@@ -969,7 +970,7 @@ mod tests {
     fn script_resolution_rejects_absolute_paths_outside_workspace() {
         let dir = TempDir::new().unwrap();
         let outside = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(outside.path(), "outside.sh", &[]);
 
         let err = enqueue_run(
@@ -1001,7 +1002,7 @@ mod tests {
     fn script_resolution_rejects_missing_absolute_paths_outside_workspace() {
         let dir = TempDir::new().unwrap();
         let outside = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
 
         let err = describe_script(
             &ws,
@@ -1020,7 +1021,7 @@ mod tests {
     #[test]
     fn script_resolution_accepts_confined_absolute_paths() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "deploy.sh", &[]);
 
         let path = ws.scripts_root().join("deploy.sh");
@@ -1087,7 +1088,7 @@ mod tests {
     #[test]
     fn script_resolution_rejects_parent_traversal() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
 
         let err = describe_script(
             &ws,
@@ -1107,7 +1108,7 @@ mod tests {
 
         let dir = TempDir::new().unwrap();
         let outside = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(outside.path(), "outside.sh", &[]);
         symlink(
             outside.path().join("outside.sh"),
@@ -1129,7 +1130,7 @@ mod tests {
     #[test]
     fn enqueue_list_show_cancel_and_stats_share_runs_state_machine() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "job.sh", &[]);
 
         let row = enqueue_run(
@@ -1187,7 +1188,7 @@ mod tests {
     #[test]
     fn dead_letter_requires_existing_failed_run() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
         write_script(ws.scripts_root(), "job.sh", &[]);
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -1240,7 +1241,7 @@ mod tests {
     #[test]
     fn list_traces_reports_missing_run_as_not_found() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
 
         let err = list_traces(
             &ws,
@@ -1258,7 +1259,7 @@ mod tests {
     #[test]
     fn invalid_state_filter_is_operation_error() {
         let dir = TempDir::new().unwrap();
-        let ws = crate::test_support::workspace_in(&dir);
+        let ws = workspace_in(&dir);
 
         let err = list_runs(
             &ws,

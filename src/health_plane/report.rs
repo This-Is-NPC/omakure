@@ -731,6 +731,7 @@ mod tests {
     use super::*;
     use crate::health_plane::model::{HealthKind, SignalKind};
     use crate::health_plane::schema;
+    use crate::test_support::opaque_id_hex;
 
     const TARGET: &str = "omk1_0000000000000000000000000000000000000000000000000000000000000001";
     const MESSAGE_ID: &str = "00000000000000000000000000000001";
@@ -751,10 +752,14 @@ mod tests {
         }
 
         fn terminal_runs(&self, limit: usize) -> Vec<RunFact> {
-            let mut runs = self.terminal.lock().expect("terminal runs").clone();
-            runs.truncate(limit);
-            runs
+            newest_runs(&self.terminal, limit)
         }
+    }
+
+    fn newest_runs(terminal: &Mutex<Vec<RunFact>>, limit: usize) -> Vec<RunFact> {
+        let mut runs = terminal.lock().expect("terminal runs").clone();
+        runs.truncate(limit);
+        runs
     }
 
     fn sample_profile() -> ProfileFacts {
@@ -830,9 +835,7 @@ mod tests {
         }
 
         fn terminal_runs(&self, limit: usize) -> Vec<RunFact> {
-            let mut runs = self.terminal.lock().expect("terminal runs").clone();
-            runs.truncate(limit);
-            runs
+            newest_runs(&self.terminal, limit)
         }
     }
 
@@ -1378,7 +1381,7 @@ mod tests {
         assert!(reporter.run_signals().is_empty());
         for index in 0..(SIGNAL_OUTBOX_CAPACITY as usize + 40) {
             shared.push(run_fact(
-                &crate::test_support::opaque_id_hex(index as u64),
+                &opaque_id_hex(index as u64),
                 "deploy",
                 1_700_000_000 + index as i64,
             ));

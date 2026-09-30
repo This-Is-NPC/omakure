@@ -518,6 +518,7 @@ fn queue_error_code(err: &OperationError) -> &'static str {
 mod tests {
     use super::*;
     use crate::runs::{enqueue, EnqueueOptions, RunState};
+    use crate::test_support::scratch_workspace;
     use std::fs;
 
     fn make_completion(stdout: &str, stderr: &str, exit: Option<i32>, ok: bool) -> RunCompletion {
@@ -562,7 +563,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn add_success_enqueues_row_with_timeout() {
-        let ws = crate::test_support::scratch_workspace("add_success");
+        let ws = scratch_workspace("add_success");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
 
         add(
@@ -600,7 +601,7 @@ mod tests {
 
     #[test]
     fn add_invalid_timeout_returns_error() {
-        let ws = crate::test_support::scratch_workspace("add_bad_timeout");
+        let ws = scratch_workspace("add_bad_timeout");
         let err = add(
             &ws,
             QueueAddArgs {
@@ -626,7 +627,7 @@ mod tests {
 
     #[test]
     fn cancel_missing_run_returns_not_found() {
-        let ws = crate::test_support::scratch_workspace("cancel_missing");
+        let ws = scratch_workspace("cancel_missing");
         let err = cancel(
             &ws,
             QueueCancelArgs {
@@ -644,7 +645,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn cancel_terminal_row_returns_invalid_argument() {
-        let ws = crate::test_support::scratch_workspace("cancel_terminal");
+        let ws = scratch_workspace("cancel_terminal");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -679,7 +680,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn dead_letter_failed_row_promotes_state() {
-        let ws = crate::test_support::scratch_workspace("dead_letter_failed");
+        let ws = scratch_workspace("dead_letter_failed");
         let script = crate::test_support::write_bash_script(&ws, "boom.sh", "exit 1");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -732,7 +733,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn dead_letter_completed_row_returns_invalid_argument() {
-        let ws = crate::test_support::scratch_workspace("dead_letter_completed");
+        let ws = scratch_workspace("dead_letter_completed");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -767,7 +768,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_actor_filter_claims_only_matching_jobs() {
-        let ws = crate::test_support::scratch_workspace("actor_filter");
+        let ws = scratch_workspace("actor_filter");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let ai = enqueue(
@@ -814,7 +815,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_drains_one_queued_job_then_exits_with_once() {
-        let ws = crate::test_support::scratch_workspace("once_drain");
+        let ws = scratch_workspace("once_drain");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
@@ -853,7 +854,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_injects_active_env_into_script() {
-        let ws = crate::test_support::scratch_workspace("inject_env");
+        let ws = scratch_workspace("inject_env");
         let envs = ws.envs_dir();
         fs::write(envs.join("dev.conf"), "INJECTED_VAR=queue_injected_9").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
@@ -898,7 +899,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_fails_queued_run_when_stored_env_disappears_before_execution() {
-        let ws = crate::test_support::scratch_workspace("queued_env_missing");
+        let ws = scratch_workspace("queued_env_missing");
         let marker = ws.root().join("should_not_exist");
         let script = crate::test_support::write_bash_script(
             &ws,
@@ -946,7 +947,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_resolves_secret_from_active_env_and_assembles_arg() {
-        let ws = crate::test_support::scratch_workspace("secret_arg");
+        let ws = scratch_workspace("secret_arg");
         let envs = ws.envs_dir();
         fs::write(envs.join("dev.conf"), "TOKEN=worker_secret_value").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
@@ -992,7 +993,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_uses_queued_env_metadata_instead_of_later_active_env() {
-        let ws = crate::test_support::scratch_workspace("queued_env_metadata");
+        let ws = scratch_workspace("queued_env_metadata");
         let envs = ws.envs_dir();
         fs::write(envs.join("prod.conf"), "TOKEN=prod_secret_value").unwrap();
         fs::write(envs.join("dev.conf"), "TOKEN=dev_secret_value").unwrap();
@@ -1040,7 +1041,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_denies_secret_ref_added_to_env_after_enqueue() {
-        let ws = crate::test_support::scratch_workspace("queued_env_ref_toctou");
+        let ws = scratch_workspace("queued_env_ref_toctou");
         let envs = ws.envs_dir();
         fs::write(envs.join("prod.conf"), "TOKEN=initial_plaintext").unwrap();
         fs::write(envs.join("evil.conf"), "token=evil_secret").unwrap();
@@ -1090,7 +1091,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_fails_provider_ref_run_when_secret_policy_is_missing() {
-        let ws = crate::test_support::scratch_workspace("missing_secret_policy");
+        let ws = scratch_workspace("missing_secret_policy");
         let envs = ws.envs_dir();
         fs::write(envs.join("prod.conf"), "TOKEN=policy_secret").unwrap();
         let marker = ws.root().join("policy_missing_marker");
@@ -1144,7 +1145,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_timeout_marks_row_timed_out() {
-        let ws = crate::test_support::scratch_workspace("once_timeout");
+        let ws = scratch_workspace("once_timeout");
         let script = crate::test_support::write_bash_script(&ws, "sleep.sh", "sleep 5");
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
@@ -1191,7 +1192,7 @@ mod tests {
         let omakure_bin = locate_omakure_binary();
         let Some(bin) = omakure_bin else { return };
 
-        let ws = crate::test_support::scratch_workspace("e2e_trace");
+        let ws = scratch_workspace("e2e_trace");
         let script_body = format!(
             "{} trace 'first' --level info\nsleep 0.2\n{} trace 'second' --level warn --data '{{\"k\":1}}'",
             bin.display(),
@@ -1251,7 +1252,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_concurrency_two_drains_two_jobs_in_parallel() {
-        let ws = crate::test_support::scratch_workspace("once_two");
+        let ws = scratch_workspace("once_two");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let r1 = enqueue(
@@ -1302,7 +1303,7 @@ mod tests {
 
     #[test]
     fn stats_prints_total_and_state_breakdown() {
-        let ws = crate::test_support::scratch_workspace("stats_human");
+        let ws = scratch_workspace("stats_human");
         // Stats works on an empty queue too.
         stats(&ws, false).unwrap();
         stats(&ws, true).unwrap();
@@ -1312,7 +1313,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn cancel_queued_run_prints_cancelled_line() {
-        let ws = crate::test_support::scratch_workspace("cancel_queued");
+        let ws = scratch_workspace("cancel_queued");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         let row = runs::enqueue(
@@ -1344,7 +1345,7 @@ mod tests {
 
     #[test]
     fn dead_letter_missing_run_returns_not_found() {
-        let ws = crate::test_support::scratch_workspace("dl_missing");
+        let ws = scratch_workspace("dl_missing");
         let err = dead_letter(
             &ws,
             QueueDeadLetterArgs {
@@ -1360,7 +1361,7 @@ mod tests {
 
     #[test]
     fn run_dispatches_subcommands() {
-        let ws = crate::test_support::scratch_workspace("run_dispatch");
+        let ws = scratch_workspace("run_dispatch");
         run(
             ws.root().to_path_buf(),
             QueueArgs {
@@ -1383,7 +1384,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn worker_with_concurrency_and_once_drains_queue() {
-        let ws = crate::test_support::scratch_workspace("worker_dispatch");
+        let ws = scratch_workspace("worker_dispatch");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo done");
         let conn = runs::open(&ws).unwrap();
         for _ in 0..2 {

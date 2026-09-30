@@ -627,6 +627,7 @@ mod tests {
     use super::*;
     use crate::adapters::environments::resolve_run_env;
     use crate::runs::EnqueueOptions;
+    use crate::test_support::scratch_workspace;
     use std::fs;
 
     #[cfg(unix)]
@@ -670,7 +671,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn a_cue_run_refuses_a_script_that_changed_after_it_was_authorized() {
-        let ws = crate::test_support::scratch_workspace("cue_swapped_script");
+        let ws = scratch_workspace("cue_swapped_script");
         let script = crate::test_support::write_bash_script(&ws, "deploy.sh", "echo authorized");
         let authorized = crate::remote_cue::content_hash(&script).unwrap();
         let conn = runs::open(&ws).unwrap();
@@ -720,7 +721,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn a_cue_run_with_no_recorded_hash_does_not_execute() {
-        let ws = crate::test_support::scratch_workspace("cue_missing_hash");
+        let ws = scratch_workspace("cue_missing_hash");
         let script = crate::test_support::write_bash_script(&ws, "deploy.sh", "echo unconstrained");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -755,7 +756,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn a_manual_run_is_unaffected_by_the_authorized_content_check() {
-        let ws = crate::test_support::scratch_workspace("manual_unaffected");
+        let ws = scratch_workspace("manual_unaffected");
         let script = crate::test_support::write_bash_script(&ws, "local.sh", "echo local");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -785,7 +786,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn execute_completes_simple_script() {
-        let ws = crate::test_support::scratch_workspace("complete_simple");
+        let ws = scratch_workspace("complete_simple");
         let script = crate::test_support::write_bash_script(&ws, "ok.sh", "echo hello");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -811,7 +812,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn execute_injects_omakure_scripts_dir_env_var() {
-        let ws = crate::test_support::scratch_workspace("scripts_dir_env");
+        let ws = scratch_workspace("scripts_dir_env");
         let script =
             crate::test_support::write_bash_script(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
         let conn = runs::open(&ws).unwrap();
@@ -845,7 +846,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn execute_injects_omakure_bin_env_var() {
-        let ws = crate::test_support::scratch_workspace("omakure_bin_env");
+        let ws = scratch_workspace("omakure_bin_env");
         let script = crate::test_support::write_bash_script(&ws, "echobin.sh", "echo $OMAKURE_BIN");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -877,7 +878,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn execute_uses_redaction_file_instead_of_plaintext_secret_env() {
-        let ws = crate::test_support::scratch_workspace("redaction_file_env");
+        let ws = scratch_workspace("redaction_file_env");
         let script = crate::test_support::write_bash_script(
             &ws,
             "redact-env.sh",
@@ -926,7 +927,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[test]
     #[cfg(unix)]
     fn execute_injects_omakure_run_id_env_var() {
-        let ws = crate::test_support::scratch_workspace("env_var");
+        let ws = scratch_workspace("env_var");
         let script =
             crate::test_support::write_bash_script(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
         let conn = runs::open(&ws).unwrap();
@@ -960,7 +961,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
         // Precedence spec §1 layer 4: reserved vars are pushed AFTER
         // extra_env, so a user attempt to override OMAKURE_RUN_ID via the
         // injected env must lose (non-overridable).
-        let ws = crate::test_support::scratch_workspace("reserved_wins");
+        let ws = scratch_workspace("reserved_wins");
         let script =
             crate::test_support::write_bash_script(&ws, "echoid.sh", "echo $OMAKURE_RUN_ID");
         let conn = runs::open(&ws).unwrap();
@@ -1000,7 +1001,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
         // Precedence spec §1 layer 4: OMAKURE_SCRIPTS_DIR is reserved just
         // like OMAKURE_RUN_ID and must be the final value observed by the
         // child, even if extra_env tries to hijack it.
-        let ws = crate::test_support::scratch_workspace("reserved_scripts_dir_wins");
+        let ws = scratch_workspace("reserved_scripts_dir_wins");
         let script =
             crate::test_support::write_bash_script(&ws, "echodir.sh", "echo $OMAKURE_SCRIPTS_DIR");
         let conn = runs::open(&ws).unwrap();
@@ -1036,7 +1037,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
         // resolve_run_env has expanded user layers, so references to them in
         // active env files expand as undefined. The reserved var itself is
         // still injected afterward and visible to the child.
-        let ws = crate::test_support::scratch_workspace("reserved_not_expandable");
+        let ws = scratch_workspace("reserved_not_expandable");
         let envs = ws.envs_dir();
         fs::create_dir_all(envs).unwrap();
         fs::write(envs.join("dev.conf"), "PLAIN=$OMAKURE_RUN_ID\n").unwrap();
@@ -1072,7 +1073,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[test]
     #[cfg(unix)]
     fn execute_failed_script_marked_failed() {
-        let ws = crate::test_support::scratch_workspace("failed");
+        let ws = scratch_workspace("failed");
         let script = crate::test_support::write_bash_script(&ws, "bad.sh", "exit 7");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -1096,7 +1097,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[test]
     #[cfg(unix)]
     fn execute_timeout_kills_long_script() {
-        let ws = crate::test_support::scratch_workspace("timeout");
+        let ws = scratch_workspace("timeout");
         let script = crate::test_support::write_bash_script(&ws, "sleep.sh", "sleep 5");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(
@@ -1121,7 +1122,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
 
     #[test]
     fn execute_returns_errored_when_script_missing() {
-        let ws = crate::test_support::scratch_workspace("missing_script");
+        let ws = scratch_workspace("missing_script");
         let conn = runs::open(&ws).unwrap();
         // Enqueue a row pointing at a path that does not exist.
         let bogus = ws.root().join("does_not_exist.sh");
@@ -1152,7 +1153,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[test]
     #[cfg(unix)]
     fn execute_returns_errored_for_unsupported_extension() {
-        let ws = crate::test_support::scratch_workspace("unsupported_ext");
+        let ws = scratch_workspace("unsupported_ext");
         let script = ws.root().join("plain.txt");
         fs::write(&script, "not a script").unwrap();
         let conn = runs::open(&ws).unwrap();
@@ -1177,7 +1178,7 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     #[test]
     #[cfg(unix)]
     fn execute_fails_when_required_field_missing() {
-        let ws = crate::test_support::scratch_workspace("missing_required");
+        let ws = scratch_workspace("missing_required");
         let script = crate::test_support::write_bash_script(
             &ws,
             "needs.sh",
@@ -1216,7 +1217,7 @@ echo done"#,
     #[test]
     #[cfg(unix)]
     fn check_required_fields_passes_when_arg_present() {
-        let ws = crate::test_support::scratch_workspace("required_present");
+        let ws = scratch_workspace("required_present");
         let script = ws.root().join("ok.sh");
         let body = "#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {\"Name\": \"x\", \"Fields\": [{\"Name\": \"name\", \"Type\": \"string\", \"Order\": 1, \"Required\": true}]}\n# OMAKURE_SCHEMA_END\necho done\n";
         fs::write(&script, body).unwrap();
@@ -1240,7 +1241,7 @@ echo done"#,
     #[test]
     #[cfg(unix)]
     fn execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output() {
-        let ws = crate::test_support::scratch_workspace("secret_ref_runtime");
+        let ws = scratch_workspace("secret_ref_runtime");
         fs::write(
             ws.envs_dir().join("prod.conf"),
             "TOKEN=from_file_provider\n",
@@ -1286,7 +1287,7 @@ if [ "$1" = "--token=from_file_provider" ]; then echo "matched from_file_provide
     #[test]
     #[cfg(unix)]
     fn execute_external_cancel_kills_running_script() {
-        let ws = crate::test_support::scratch_workspace("cancel");
+        let ws = scratch_workspace("cancel");
         let script = crate::test_support::write_bash_script(&ws, "sleep.sh", "sleep 10");
         let conn = runs::open(&ws).unwrap();
         let row = runs::start_inline(

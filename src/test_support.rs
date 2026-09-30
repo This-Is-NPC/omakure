@@ -96,3 +96,26 @@ pub(crate) fn peer_identity(seed: u32) -> (String, String, [u8; 32]) {
 pub(crate) fn opaque_id_hex(seed: u64) -> String {
     format!("{seed:032x}")
 }
+
+/// The two-script set the baseline tests sign and publish.
+pub(crate) fn baseline_scripts() -> Vec<(String, Vec<u8>)> {
+    vec![
+        ("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec()),
+        ("audit.py".to_string(), b"print('audit')\n".to_vec()),
+    ]
+}
+
+/// Run `git` in `cwd`, failing the test with its stderr unless it succeeds.
+pub(crate) fn run_git(args: &[&str], cwd: &Path) {
+    let output = std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

@@ -3152,26 +3152,12 @@ echo ok
             .unwrap()
     }
 
-    fn run_git(args: &[&str], cwd: &std::path::Path) {
-        let output = Command::new("git")
-            .args(args)
-            .current_dir(cwd)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "git {:?} failed: {}",
-            args,
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
     fn invalid_manifest_repo() -> TempDir {
         let repo = TempDir::new().unwrap();
-        run_git(&["init", "-b", "main"], repo.path());
+        crate::test_support::run_git(&["init", "-b", "main"], repo.path());
         std::fs::write(repo.path().join("omakure-battery.toml"), "not = [valid").unwrap();
-        run_git(&["add", "."], repo.path());
-        run_git(
+        crate::test_support::run_git(&["add", "."], repo.path());
+        crate::test_support::run_git(
             &[
                 "-c",
                 "user.email=test@example.invalid",
@@ -3190,10 +3176,10 @@ echo ok
         let paths = battery_ops::BatteryPaths::for_workspace(workspace);
         let cache = paths.cache_path_for(name);
         std::fs::create_dir_all(&cache).unwrap();
-        run_git(&["init", "-b", "main"], &cache);
+        crate::test_support::run_git(&["init", "-b", "main"], &cache);
         std::fs::write(cache.join("omakure-battery.toml"), "not = [valid").unwrap();
-        run_git(&["add", "."], &cache);
-        run_git(
+        crate::test_support::run_git(&["add", "."], &cache);
+        crate::test_support::run_git(
             &[
                 "-c",
                 "user.email=test@example.invalid",

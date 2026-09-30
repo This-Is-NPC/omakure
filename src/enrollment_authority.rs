@@ -221,6 +221,7 @@ fn read_authority_key(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::configured_node_context;
 
     /// Creating twice must refuse rather than rotate.
     ///
@@ -230,7 +231,7 @@ mod tests {
     #[test]
     fn an_authority_key_is_never_silently_replaced() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
 
         let first = EnrollmentAuthority::create(&context).expect("create the authority");
         let before = first.public_key();
@@ -252,7 +253,7 @@ mod tests {
     #[test]
     fn the_key_id_is_a_function_of_the_public_key() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let authority = EnrollmentAuthority::create(&context).expect("create");
 
         let reloaded = EnrollmentAuthority::load_existing(&context).expect("load");
@@ -261,7 +262,7 @@ mod tests {
         // A different key must produce a different id, or the id identifies
         // nothing.
         let other_dir = tempfile::tempdir().expect("tempdir");
-        let other_context = crate::test_support::configured_node_context(other_dir.path());
+        let other_context = configured_node_context(other_dir.path());
         let other = EnrollmentAuthority::create(&other_context).expect("create");
         assert_ne!(
             authority.key_id(),
@@ -274,7 +275,7 @@ mod tests {
     #[test]
     fn loading_without_a_key_refuses_instead_of_creating_one() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
         assert!(EnrollmentAuthority::load_existing(&context).is_err());
@@ -291,7 +292,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         EnrollmentAuthority::create(&context).expect("create");
         assert!(EnrollmentAuthority::load_existing(&context).is_ok());
 
@@ -321,11 +322,11 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
         let decoy_dir = tempfile::tempdir().expect("tempdir");
-        let decoy_context = crate::test_support::configured_node_context(decoy_dir.path());
+        let decoy_context = configured_node_context(decoy_dir.path());
         let decoy = EnrollmentAuthority::create(&decoy_context).expect("a real key elsewhere");
         let elsewhere = decoy_context.authority_key_path();
         std::fs::set_permissions(&elsewhere, std::fs::Permissions::from_mode(0o600)).expect("0600");
@@ -351,7 +352,7 @@ mod tests {
     #[test]
     fn the_amended_state_allow_list_admits_the_key_and_nothing_else() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
         EnrollmentAuthority::create(&context).expect("create");
 
@@ -374,7 +375,7 @@ mod tests {
     #[test]
     fn a_bundle_cannot_name_one_node_as_both_sides() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let authority = EnrollmentAuthority::create(&context).expect("create");
         let node = format!("omk1_{}", "a".repeat(64));
 

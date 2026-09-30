@@ -716,13 +716,14 @@ fn parse_hex_array<const N: usize>(value: &str) -> Result<[u8; N], EnrollmentErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::node_context;
 
     use crate::node_identity::NodeIdentity;
     use tempfile::TempDir;
 
     fn identity() -> (TempDir, NodeIdentity) {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         (temp, identity)
     }
@@ -782,13 +783,13 @@ mod tests {
     #[test]
     fn signed_bundle_is_canonical_and_binds_authority_audience_and_certificate() {
         let manager_temp = TempDir::new().unwrap();
-        let manager_context = crate::test_support::node_context(manager_temp.path());
+        let manager_context = node_context(manager_temp.path());
         let manager = NodeIdentity::load_or_initialize(&manager_context).unwrap();
         let manager_transport =
             crate::node_transport::LocalTransport::provision_new(&manager_context, &manager)
                 .unwrap();
         let target_temp = TempDir::new().unwrap();
-        let target_context = crate::test_support::node_context(target_temp.path());
+        let target_context = node_context(target_temp.path());
         let target = NodeIdentity::load_or_initialize(&target_context).unwrap();
         let authority_private = [2_u8; 32];
         let authority_key = SigningKey::from_slice(&authority_private).unwrap();

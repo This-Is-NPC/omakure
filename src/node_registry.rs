@@ -4288,6 +4288,7 @@ mod tests {
     use super::*;
     use crate::node::{NodePathOverrides, NodePlatform};
     use crate::node_identity::NodeIdentity;
+    use crate::test_support::node_context;
     use std::fs;
     use std::sync::Arc;
     use std::thread;
@@ -4296,7 +4297,7 @@ mod tests {
     #[test]
     fn cue_rate_limit_is_durable_and_allows_the_frozen_burst() {
         let temp = TempDir::new().unwrap();
-        let node_context = crate::test_support::node_context(temp.path());
+        let node_context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
         let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
         let peer = identity.public_status().node_id.clone();
@@ -4318,7 +4319,7 @@ mod tests {
     #[test]
     fn cue_audit_persists_correlation_and_leaves_plain_rows_null() {
         let temp = TempDir::new().unwrap();
-        let node_context = crate::test_support::node_context(temp.path());
+        let node_context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
         let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
         let cue_id = "0123456789abcdef0123456789abcdef";
@@ -4394,7 +4395,7 @@ mod tests {
     #[test]
     fn open_health_observational_tolerates_vanished_sqlite_sidecars() {
         let temp = TempDir::new().unwrap();
-        let node_context = crate::test_support::node_context(temp.path());
+        let node_context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
         let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
         drop(registry);
@@ -4477,7 +4478,7 @@ mod tests {
     #[test]
     fn a_baseline_publisher_is_refused_conductor_authority_on_every_path() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         crate::baseline_publisher::BaselinePublisher::create(&context, &registry).unwrap();
@@ -4560,7 +4561,7 @@ mod tests {
     #[test]
     fn a_conductor_is_refused_a_publisher_key_and_keeps_none() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let performer = registry
@@ -4589,7 +4590,7 @@ mod tests {
     #[test]
     fn a_publisher_may_still_record_the_conductor_it_answers_to() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         crate::baseline_publisher::BaselinePublisher::create(&context, &registry).unwrap();
@@ -4607,7 +4608,7 @@ mod tests {
     #[test]
     fn a_performer_blocks_publishing_until_it_is_revoked() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let performer = registry
@@ -4637,7 +4638,7 @@ mod tests {
     #[test]
     fn initializes_reopens_and_keeps_runs_path_separate() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         assert!(registry.path().ends_with("node.sqlite"));
@@ -4662,7 +4663,7 @@ mod tests {
     #[test]
     fn full_transition_graph_and_revocation_precedence() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let peer = registry
@@ -4711,7 +4712,7 @@ mod tests {
     #[test]
     fn rejects_self_duplicates_invalid_capabilities_and_bad_transitions() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let mut self_registration = registration(&identity, 5);
@@ -4745,7 +4746,7 @@ mod tests {
     #[test]
     fn transaction_failure_does_not_leave_partial_peer_or_audit() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let peer = registry
@@ -4764,7 +4765,7 @@ mod tests {
     #[test]
     fn observational_registry_reads_succeed_while_writer_is_reserved() {
         let temp = TempDir::new().unwrap();
-        let node_context = crate::test_support::node_context(temp.path());
+        let node_context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
         let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
         registry
@@ -4821,7 +4822,7 @@ mod tests {
     #[test]
     fn a_connection_opens_through_a_briefly_held_exclusive_lock() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let path = context.database_path();
@@ -4847,7 +4848,7 @@ mod tests {
     #[test]
     fn concurrent_register_operations_are_serialized() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = Arc::new(NodeRegistry::open(&context, identity.public_status()).unwrap());
         let registrations = (2..18)
@@ -4875,7 +4876,7 @@ mod tests {
         assert_eq!(MAX_ENROLLMENT_CLEANUP_ROWS, 10_000);
 
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let _registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let mut connection = Connection::open(context.database_path()).unwrap();
@@ -4908,7 +4909,7 @@ mod tests {
     #[test]
     fn older_schema_versions_fail_closed_without_mutation() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         drop(NodeRegistry::open(&context, identity.public_status()).unwrap());
         let connection = Connection::open(context.database_path()).unwrap();
@@ -4938,7 +4939,7 @@ mod tests {
     #[test]
     fn future_schema_corruption_and_metadata_downgrade_fail_closed() {
         let temp = TempDir::new().unwrap();
-        let ctx = crate::test_support::node_context(temp.path());
+        let ctx = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&ctx).unwrap();
         let database = ctx.database_path();
         let connection = Connection::open(&database).unwrap();
@@ -4962,7 +4963,7 @@ mod tests {
         assert!(!ctx.database_path().exists());
 
         let temp = TempDir::new().unwrap();
-        let context2 = crate::test_support::node_context(temp.path());
+        let context2 = node_context(temp.path());
         let identity2 = NodeIdentity::load_or_initialize(&context2).unwrap();
         let connection = Connection::open(context2.database_path()).unwrap();
 
@@ -4981,7 +4982,7 @@ mod tests {
     #[test]
     fn open_existing_succeeds_after_clean_close_without_sidecars() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         {
             let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
@@ -5012,7 +5013,7 @@ mod tests {
     #[test]
     fn open_existing_rejects_corrupt_index() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         NodeRegistry::open(&context, identity.public_status()).unwrap();
 

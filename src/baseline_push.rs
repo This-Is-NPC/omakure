@@ -615,6 +615,7 @@ impl<'a> BaselineSession<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::baseline_scripts;
     use k256::schnorr::SigningKey;
     use sha2::{Digest, Sha256};
 
@@ -635,13 +636,6 @@ mod tests {
                 revoked: false,
             },
         )
-    }
-
-    fn scripts() -> Vec<(String, Vec<u8>)> {
-        vec![
-            ("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec()),
-            ("audit.py".to_string(), b"print('audit')\n".to_vec()),
-        ]
     }
 
     fn signed(scalar: u8, bodies: &[(String, Vec<u8>)]) -> SignedBaselineManifest {
@@ -747,7 +741,7 @@ mod tests {
     /// untrusted publisher's baseline, and vice versa.
     #[test]
     fn a_baseline_from_a_publisher_this_node_does_not_name_is_refused() {
-        let bodies = scripts();
+        let bodies = baseline_scripts();
         let manifest = signed(3, &bodies);
         let push = push_for(&manifest, &bodies);
 
@@ -786,7 +780,7 @@ mod tests {
     /// The set is what was signed, so one wrong script voids all of it.
     #[test]
     fn a_script_that_does_not_match_its_recorded_hash_voids_the_whole_push() {
-        let bodies = scripts();
+        let bodies = baseline_scripts();
         let manifest = signed(3, &bodies);
         let mut push = push_for(&manifest, &bodies);
 
@@ -816,7 +810,7 @@ mod tests {
     /// facts, not against anything the message asserts about itself.
     #[test]
     fn a_baseline_for_another_organization_or_outside_its_window_is_refused() {
-        let bodies = scripts();
+        let bodies = baseline_scripts();
         let push = push_for(&signed(3, &bodies), &bodies);
 
         assert_eq!(

@@ -400,6 +400,7 @@ mod tests {
     use super::*;
     #[cfg(debug_assertions)]
     use crate::domain::NodeConfig;
+    use crate::test_support::node_context;
 
     #[cfg(debug_assertions)]
     use k256::schnorr::{signature::hazmat::PrehashVerifier, VerifyingKey};
@@ -481,7 +482,7 @@ mod tests {
     #[test]
     fn imported_odd_y_scalar_is_normalized_once_and_reopens_stably() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         let scalar =
             hex::decode("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140")
                 .unwrap();
@@ -504,7 +505,7 @@ mod tests {
     #[test]
     fn first_initialization_is_single_file_and_reopens_stably() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         let first = NodeIdentity::load_or_initialize(&context).unwrap();
         let first_status = first.public_status().clone();
         let reopened = NodeIdentity::load_or_initialize(&context).unwrap();
@@ -520,7 +521,7 @@ mod tests {
     #[test]
     fn concurrent_first_initialization_converges_on_one_identity() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = Arc::new(crate::test_support::node_context(tmp.path()));
+        let context = Arc::new(node_context(tmp.path()));
         let threads: Vec<_> = (0..16)
             .map(|_| {
                 let context = Arc::clone(&context);
@@ -551,7 +552,7 @@ mod tests {
         ];
         for bytes in cases {
             let tmp = tempfile::TempDir::new().unwrap();
-            let context = crate::test_support::node_context(tmp.path());
+            let context = node_context(tmp.path());
             context.ensure_state_directory().unwrap();
             fs::write(context.identity_path(), &bytes).unwrap();
             #[cfg(unix)]
@@ -569,7 +570,7 @@ mod tests {
     #[test]
     fn identity_pub_is_an_unsupported_extra_not_mismatch_state() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         context.ensure_state_directory().unwrap();
         fs::write(context.state_dir().join("identity.pub"), b"unsupported").unwrap();
         assert!(NodeIdentity::load_or_initialize(&context).is_err());
@@ -581,7 +582,7 @@ mod tests {
     fn insecure_permissions_and_symlinks_fail_closed() {
         use std::os::unix::fs::{symlink, PermissionsExt};
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         context.ensure_state_directory().unwrap();
         fs::write(context.identity_path(), [1u8; 32]).unwrap();
         fs::set_permissions(context.identity_path(), fs::Permissions::from_mode(0o644)).unwrap();
@@ -597,7 +598,7 @@ mod tests {
     #[test]
     fn interrupted_temps_and_write_failures_are_handled_without_replacement() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         context.ensure_state_directory().unwrap();
         let stale = context.state_dir().join(".identity.key.tmp-stale");
         fs::write(&stale, [7u8; 32]).unwrap();
@@ -611,7 +612,7 @@ mod tests {
     #[test]
     fn typed_direct_signing_verifies_without_double_hashing() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let direct = DirectEnvelopePrehash::from_canonical_bytes(br#"{"a":1}"#);
         let direct_signature = identity.sign_direct_envelope(direct).unwrap();
@@ -629,7 +630,7 @@ mod tests {
     #[test]
     fn public_surfaces_contain_no_private_material() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let private = fs::read(context.identity_path()).unwrap();
         fs::write(
@@ -662,7 +663,7 @@ mod tests {
     #[test]
     fn existing_database_without_identity_fails_closed() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let context = crate::test_support::node_context(tmp.path());
+        let context = node_context(tmp.path());
         context.ensure_state_directory().unwrap();
         fs::write(context.database_path(), b"database placeholder").unwrap();
         assert!(NodeIdentity::load_or_initialize(&context).is_err());

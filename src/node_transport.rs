@@ -162,13 +162,14 @@ fn regular_file_exists(path: &std::path::Path) -> Result<bool, NodeTransportErro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::node_context;
 
     use tempfile::TempDir;
 
     #[test]
     fn load_existing_never_reprovisions_deleted_transport_state() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let provisioned = LocalTransport::provision_new(&context, &identity).unwrap();
         let certificate = provisioned.certificate().clone();
@@ -188,7 +189,7 @@ mod tests {
     #[test]
     fn provision_new_refuses_to_replace_existing_transport_state() {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         LocalTransport::provision_new(&context, &identity).unwrap();
         assert!(matches!(

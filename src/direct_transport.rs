@@ -1468,11 +1468,12 @@ pub fn authorize_peer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::node_context;
 
     use tempfile::TempDir;
 
     fn identity(temp: &TempDir) -> NodeIdentity {
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         NodeIdentity::load_or_initialize(&context).unwrap()
     }
 

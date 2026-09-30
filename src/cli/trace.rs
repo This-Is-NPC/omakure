@@ -90,6 +90,7 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
 mod tests {
     use super::*;
     use crate::runs::{enqueue, EnqueueOptions};
+    use crate::test_support::scratch_workspace;
 
     #[test]
     fn invalid_level_rejected_at_validation() {
@@ -102,7 +103,7 @@ mod tests {
 
     #[test]
     fn insert_trace_writes_row() {
-        let ws = crate::test_support::scratch_workspace("trace_writes");
+        let ws = scratch_workspace("trace_writes");
         let mut conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,
@@ -130,7 +131,7 @@ mod tests {
 
     #[test]
     fn trace_redacts_runtime_secret_values() {
-        let ws = crate::test_support::scratch_workspace("trace_redacts");
+        let ws = scratch_workspace("trace_redacts");
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,

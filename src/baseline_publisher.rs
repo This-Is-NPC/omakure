@@ -215,6 +215,7 @@ fn read_publisher_key(
 mod tests {
     use super::*;
     use crate::baseline::{BaselinePublisherKey, SignedBaselineManifest};
+    use crate::test_support::{baseline_scripts, configured_node_context};
 
     const ISSUED_AT: u64 = 1_800_000_000;
     const EXPIRES_AT: u64 = 1_800_003_600;
@@ -231,18 +232,11 @@ mod tests {
         .expect("registry")
     }
 
-    fn scripts() -> Vec<(String, Vec<u8>)> {
-        vec![
-            ("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec()),
-            ("audit.py".to_string(), b"print('audit')\n".to_vec()),
-        ]
-    }
-
     /// Creating twice must refuse rather than rotate.
     #[test]
     fn a_publisher_key_is_never_silently_replaced() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
 
         let first =
             BaselinePublisher::create(&context, &registry(&context)).expect("create the publisher");
@@ -265,7 +259,7 @@ mod tests {
     #[test]
     fn the_key_id_is_a_function_of_the_public_key() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let publisher = BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
         assert_eq!(
@@ -276,7 +270,7 @@ mod tests {
         );
 
         let other_dir = tempfile::tempdir().expect("tempdir");
-        let other_context = crate::test_support::configured_node_context(other_dir.path());
+        let other_context = configured_node_context(other_dir.path());
         assert_ne!(
             publisher.key_id(),
             BaselinePublisher::create(&other_context, &registry(&other_context))
@@ -291,7 +285,7 @@ mod tests {
     #[test]
     fn a_publisher_key_is_not_the_enrollment_authority_key() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
 
         let authority =
             crate::enrollment_authority::EnrollmentAuthority::create(&context).expect("authority");
@@ -314,7 +308,7 @@ mod tests {
     #[test]
     fn loading_without_a_key_refuses_instead_of_creating_one() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
         assert!(BaselinePublisher::load_existing(&context).is_err());
@@ -331,7 +325,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         BaselinePublisher::create(&context, &registry(&context)).expect("create");
         assert!(BaselinePublisher::load_existing(&context).is_ok());
 
@@ -358,11 +352,11 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
         let decoy_dir = tempfile::tempdir().expect("tempdir");
-        let decoy_context = crate::test_support::configured_node_context(decoy_dir.path());
+        let decoy_context = configured_node_context(decoy_dir.path());
         let decoy = BaselinePublisher::create(&decoy_context, &registry(&decoy_context))
             .expect("a real key elsewhere");
         let elsewhere = decoy_context.publisher_key_path();
@@ -389,7 +383,7 @@ mod tests {
     #[test]
     fn the_amended_state_allow_list_admits_the_key_and_nothing_else() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
         BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
@@ -415,11 +409,16 @@ mod tests {
     #[test]
     fn a_published_baseline_verifies_under_this_publishers_own_record() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = crate::test_support::configured_node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let publisher = BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
         let encoded = publisher
-            .publish("acme".to_string(), &scripts(), ISSUED_AT, EXPIRES_AT)
+            .publish(
+                "acme".to_string(),
+                &baseline_scripts(),
+                ISSUED_AT,
+                EXPIRES_AT,
+            )
             .expect("publish");
         let manifest = SignedBaselineManifest::decode(&encoded).expect("decode");
 
@@ -437,7 +436,7 @@ mod tests {
 
         let other_dir = tempfile::tempdir().expect("tempdir");
         let other = {
-            let other_context = crate::test_support::configured_node_context(other_dir.path());
+            let other_context = configured_node_context(other_dir.path());
             let other_registry = registry(&other_context);
             BaselinePublisher::create(&other_context, &other_registry)
         }

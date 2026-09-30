@@ -1833,6 +1833,7 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::scratch_workspace;
 
     fn enqueue_opts() -> EnqueueOptions {
         EnqueueOptions {
@@ -1868,7 +1869,7 @@ mod tests {
 
     #[test]
     fn open_creates_db_with_state_column() {
-        let ws = crate::test_support::scratch_workspace("open_creates");
+        let ws = scratch_workspace("open_creates");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let loaded = get_run(&conn, &row.run_id).unwrap().unwrap();
@@ -1878,7 +1879,7 @@ mod tests {
 
     #[test]
     fn enqueue_rolls_back_row_when_metadata_write_fails() {
-        let ws = crate::test_support::scratch_workspace("enqueue_metadata_atomic");
+        let ws = scratch_workspace("enqueue_metadata_atomic");
         let conn = open(&ws).expect("open");
         conn.execute_batch(
             "CREATE TRIGGER reject_run_secret_refs
@@ -1905,7 +1906,7 @@ mod tests {
 
     #[test]
     fn open_idempotent_on_new_schema() {
-        let ws = crate::test_support::scratch_workspace("open_idempotent");
+        let ws = scratch_workspace("open_idempotent");
         let _ = open(&ws).expect("first open");
         let conn = open(&ws).expect("second open");
         let rows = query_runs(&conn, &RunFilters::default()).unwrap();
@@ -1949,7 +1950,7 @@ mod tests {
 
     #[test]
     fn enqueue_then_claim_then_complete_happy_path() {
-        let ws = crate::test_support::scratch_workspace("happy_path");
+        let ws = scratch_workspace("happy_path");
         let mut conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &["--foo".into()], enqueue_opts()).unwrap();
         assert_eq!(row.state, RunState::Queued);
@@ -1988,7 +1989,7 @@ mod tests {
     /// licence to cancel what this node's owner started.
     #[test]
     fn revoking_a_peer_cancels_its_cue_runs_and_nothing_else() {
-        let ws = crate::test_support::scratch_workspace("cue_revocation_cancels");
+        let ws = scratch_workspace("cue_revocation_cancels");
         let conn = open(&ws).expect("open");
         let peer = "omk1_peer";
 
@@ -2068,7 +2069,7 @@ mod tests {
 
     #[test]
     fn cue_revocation_failure_is_atomic_and_is_not_reported_as_cleanup_success() {
-        let ws = crate::test_support::scratch_workspace("cue_revocation_fault");
+        let ws = scratch_workspace("cue_revocation_fault");
         let conn = open(&ws).expect("open");
         let peer = "omk1_peer";
         let running = enqueue(
@@ -2121,7 +2122,7 @@ mod tests {
     /// hands the row back and the script runs a second time.
     #[test]
     fn a_crashed_cue_run_is_never_reclaimed_by_a_worker() {
-        let ws = crate::test_support::scratch_workspace("cue_no_lease_steal");
+        let ws = scratch_workspace("cue_no_lease_steal");
         let conn = open(&ws).expect("open");
 
         let row = enqueue(
@@ -2165,7 +2166,7 @@ mod tests {
     /// with each other.
     #[test]
     fn a_crashed_cue_run_recovers_terminal_with_its_effect_seen_exactly_once() {
-        let ws = crate::test_support::scratch_workspace("cue_recovery");
+        let ws = scratch_workspace("cue_recovery");
         let effects = ws.root().join("effects.log");
 
         // One "execution": the claim, then the side effect.
@@ -2239,7 +2240,7 @@ mod tests {
     /// nor an ordinary crashed job the worker is entitled to retry.
     #[test]
     fn recovery_touches_only_abandoned_cue_runs() {
-        let ws = crate::test_support::scratch_workspace("cue_recovery_scope");
+        let ws = scratch_workspace("cue_recovery_scope");
         let conn = open(&ws).expect("open");
 
         // A live Cue run, lease still valid.
@@ -2284,7 +2285,7 @@ mod tests {
     /// exclusion above is narrow rather than a blanket change to the worker.
     #[test]
     fn a_crashed_queued_run_is_still_reclaimed() {
-        let ws = crate::test_support::scratch_workspace("queued_lease_steal");
+        let ws = scratch_workspace("queued_lease_steal");
         let conn = open(&ws).expect("open");
 
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
@@ -2308,7 +2309,7 @@ mod tests {
 
     #[test]
     fn fail_transitions_running_to_failed() {
-        let ws = crate::test_support::scratch_workspace("fail_path");
+        let ws = scratch_workspace("fail_path");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let _ = claim_next(&conn, "w", &ClaimFilters::default())
@@ -2323,7 +2324,7 @@ mod tests {
 
     #[test]
     fn complete_rejects_queued_row() {
-        let ws = crate::test_support::scratch_workspace("complete_rejects");
+        let ws = scratch_workspace("complete_rejects");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let err = complete(&conn, &row.run_id, ok_completion()).unwrap_err();
@@ -2333,7 +2334,7 @@ mod tests {
 
     #[test]
     fn cancel_queued_transitions_to_cancelled_immediately() {
-        let ws = crate::test_support::scratch_workspace("cancel_queued");
+        let ws = scratch_workspace("cancel_queued");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let after = cancel(&conn, &row.run_id, Some("ux".into()), None).unwrap();
@@ -2344,7 +2345,7 @@ mod tests {
 
     #[test]
     fn cancel_running_transitions_to_cancelled() {
-        let ws = crate::test_support::scratch_workspace("cancel_running");
+        let ws = scratch_workspace("cancel_running");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let _ = claim_next(&conn, "w", &ClaimFilters::default())
@@ -2358,7 +2359,7 @@ mod tests {
 
     #[test]
     fn cancel_terminal_returns_error() {
-        let ws = crate::test_support::scratch_workspace("cancel_terminal");
+        let ws = scratch_workspace("cancel_terminal");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let _ = claim_next(&conn, "w", &ClaimFilters::default())
@@ -2372,7 +2373,7 @@ mod tests {
 
     #[test]
     fn dead_letter_only_succeeds_on_failed_or_timed_out() {
-        let ws = crate::test_support::scratch_workspace("dead_letter_paths");
+        let ws = scratch_workspace("dead_letter_paths");
         let conn = open(&ws).expect("open");
 
         // failed -> dead_letter ok
@@ -2406,7 +2407,7 @@ mod tests {
 
     #[test]
     fn claim_next_returns_none_when_empty() {
-        let ws = crate::test_support::scratch_workspace("claim_empty");
+        let ws = scratch_workspace("claim_empty");
         let conn = open(&ws).expect("open");
         assert!(claim_next(&conn, "w", &ClaimFilters::default())
             .unwrap()
@@ -2416,7 +2417,7 @@ mod tests {
 
     #[test]
     fn claim_next_can_exclude_cues_for_context_free_workers() {
-        let ws = crate::test_support::scratch_workspace("claim_excludes_cues");
+        let ws = scratch_workspace("claim_excludes_cues");
         let conn = open(&ws).expect("open");
         let cue = enqueue(
             &conn,
@@ -2452,7 +2453,7 @@ mod tests {
 
     #[test]
     fn claim_next_allows_only_one_running_cue_per_actor() {
-        let ws = crate::test_support::scratch_workspace("claim_cue_actor_bound");
+        let ws = scratch_workspace("claim_cue_actor_bound");
         let conn = open(&ws).expect("open");
         let peer = "omk1_peer";
         let first = enqueue(
@@ -2520,7 +2521,7 @@ mod tests {
 
     #[test]
     fn claim_next_orders_by_priority_then_enqueued_at() {
-        let ws = crate::test_support::scratch_workspace("claim_order");
+        let ws = scratch_workspace("claim_order");
         let conn = open(&ws).expect("open");
         let low = enqueue(
             &conn,
@@ -2557,7 +2558,7 @@ mod tests {
 
     #[test]
     fn claim_next_reclaims_expired_lease() {
-        let ws = crate::test_support::scratch_workspace("claim_reclaim");
+        let ws = scratch_workspace("claim_reclaim");
         let conn = open(&ws).expect("open");
         // Insert a row directly in `running` with an already-expired lease.
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
@@ -2577,7 +2578,7 @@ mod tests {
 
     #[test]
     fn claim_next_does_not_reclaim_fresh_lease() {
-        let ws = crate::test_support::scratch_workspace("claim_no_steal");
+        let ws = scratch_workspace("claim_no_steal");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         // Claim once with worker A, leaving a fresh lease in the future.
@@ -2594,7 +2595,7 @@ mod tests {
 
     #[test]
     fn claim_next_actor_filter() {
-        let ws = crate::test_support::scratch_workspace("claim_actor");
+        let ws = scratch_workspace("claim_actor");
         let conn = open(&ws).expect("open");
         enqueue(
             &conn,
@@ -2636,7 +2637,7 @@ mod tests {
 
     #[test]
     fn heartbeat_extends_lease_for_owner() {
-        let ws = crate::test_support::scratch_workspace("hb_owner");
+        let ws = scratch_workspace("hb_owner");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         claim_next(&conn, "owner", &ClaimFilters::default()).unwrap();
@@ -2659,7 +2660,7 @@ mod tests {
 
     #[test]
     fn heartbeat_returns_cancelled_when_external_cancel() {
-        let ws = crate::test_support::scratch_workspace("hb_cancel");
+        let ws = scratch_workspace("hb_cancel");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         claim_next(&conn, "owner", &ClaimFilters::default()).unwrap();
@@ -2675,7 +2676,7 @@ mod tests {
 
     #[test]
     fn run_filters_default_returns_terminal_only() {
-        let ws = crate::test_support::scratch_workspace("filters_default");
+        let ws = scratch_workspace("filters_default");
         let conn = open(&ws).expect("open");
         // Enqueue two rows; claim the FIRST and complete it. The second
         // stays queued, so RunFilters::default() (terminal-only) returns
@@ -2695,7 +2696,7 @@ mod tests {
 
     #[test]
     fn run_filters_all_returns_every_state() {
-        let ws = crate::test_support::scratch_workspace("filters_all");
+        let ws = scratch_workspace("filters_all");
         let conn = open(&ws).expect("open");
         enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(2));
@@ -2715,7 +2716,7 @@ mod tests {
 
     #[test]
     fn run_filters_state_specific_running() {
-        let ws = crate::test_support::scratch_workspace("filters_running");
+        let ws = scratch_workspace("filters_running");
         let conn = open(&ws).expect("open");
         enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         enqueue(&conn, "/x/b.sh", &[], enqueue_opts()).unwrap();
@@ -2736,7 +2737,7 @@ mod tests {
 
     #[test]
     fn scheduled_queries_cover_missing_overlap_completion_errors_and_concurrency() {
-        let ws = crate::test_support::scratch_workspace("scheduled_queries");
+        let ws = scratch_workspace("scheduled_queries");
         let conn = open(&ws).expect("open");
         let schedule_id = "/scripts/job.sh@*/5 * * * * *";
 
@@ -2810,7 +2811,7 @@ mod tests {
 
     #[test]
     fn stats_counts_per_state_and_actor() {
-        let ws = crate::test_support::scratch_workspace("stats");
+        let ws = scratch_workspace("stats");
         let conn = open(&ws).expect("open");
         enqueue(
             &conn,
@@ -2854,7 +2855,7 @@ mod tests {
 
     #[test]
     fn claim_next_under_concurrency_no_duplicates() {
-        let ws = crate::test_support::scratch_workspace("concurrency");
+        let ws = scratch_workspace("concurrency");
         let conn = open(&ws).expect("open");
         // Seed N queued jobs.
         const N: usize = 20;
@@ -2895,7 +2896,7 @@ mod tests {
 
     #[test]
     fn insert_trace_assigns_monotonic_sequence() {
-        let ws = crate::test_support::scratch_workspace("trace_sequence");
+        let ws = scratch_workspace("trace_sequence");
         let mut conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let t1 = insert_trace(&mut conn, &row.run_id, TraceLevel::Info, "first", None).unwrap();
@@ -2907,7 +2908,7 @@ mod tests {
 
     #[test]
     fn insert_trace_unknown_run_returns_not_found() {
-        let ws = crate::test_support::scratch_workspace("trace_unknown");
+        let ws = scratch_workspace("trace_unknown");
         let mut conn = open(&ws).expect("open");
         let err = insert_trace(&mut conn, "missing", TraceLevel::Info, "x", None).unwrap_err();
         assert!(err.starts_with("not_found"));
@@ -2916,7 +2917,7 @@ mod tests {
 
     #[test]
     fn insert_trace_under_concurrency_no_duplicates() {
-        let ws = crate::test_support::scratch_workspace("trace_concurrent");
+        let ws = scratch_workspace("trace_concurrent");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         drop(conn);
@@ -2963,7 +2964,7 @@ mod tests {
 
     #[test]
     fn insert_trace_retries_after_busy_timeout_without_duplicates() {
-        let ws = crate::test_support::scratch_workspace("trace_busy_retry");
+        let ws = scratch_workspace("trace_busy_retry");
         let mut conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         let db_path = runs_db_path(&ws);
@@ -2990,7 +2991,7 @@ mod tests {
 
     #[test]
     fn query_traces_filters_by_level_min() {
-        let ws = crate::test_support::scratch_workspace("trace_level");
+        let ws = scratch_workspace("trace_level");
         let mut conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         insert_trace(&mut conn, &row.run_id, TraceLevel::Debug, "d", None).unwrap();
@@ -3007,7 +3008,7 @@ mod tests {
 
     #[test]
     fn query_traces_filters_by_since_sequence() {
-        let ws = crate::test_support::scratch_workspace("trace_since");
+        let ws = scratch_workspace("trace_since");
         let mut conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         for i in 0..5 {
@@ -3028,7 +3029,7 @@ mod tests {
 
     #[test]
     fn query_traces_unknown_run_returns_not_found() {
-        let ws = crate::test_support::scratch_workspace("trace_q_unknown");
+        let ws = scratch_workspace("trace_q_unknown");
         let conn = open(&ws).expect("open");
         let err = query_traces(&conn, "missing", None, None).unwrap_err();
         assert!(err.starts_with("not_found"));
@@ -3037,7 +3038,7 @@ mod tests {
 
     #[test]
     fn delete_run_cascades_to_traces() {
-        let ws = crate::test_support::scratch_workspace("trace_cascade");
+        let ws = scratch_workspace("trace_cascade");
         let mut conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
         insert_trace(&mut conn, &row.run_id, TraceLevel::Info, "x", None).unwrap();
@@ -3080,7 +3081,7 @@ mod tests {
 
     #[test]
     fn get_run_returns_none_for_unknown_id() {
-        let ws = crate::test_support::scratch_workspace("unknown_id");
+        let ws = scratch_workspace("unknown_id");
         let conn = open(&ws).expect("open");
         assert!(get_run(&conn, "missing").unwrap().is_none());
         let _ = fs::remove_dir_all(ws.root());
@@ -3107,7 +3108,7 @@ mod tests {
 
     #[test]
     fn query_runs_applies_all_filters() {
-        let ws = crate::test_support::scratch_workspace("query_filters");
+        let ws = scratch_workspace("query_filters");
         let conn = open(&ws).expect("open");
         let now = unix_millis();
 
@@ -3181,7 +3182,7 @@ mod tests {
 
     #[test]
     fn claim_next_honours_script_filter() {
-        let ws = crate::test_support::scratch_workspace("claim_script");
+        let ws = scratch_workspace("claim_script");
         let conn = open(&ws).expect("open");
         enqueue(&conn, "/scripts/alpha.sh", &[], enqueue_opts()).unwrap();
         enqueue(&conn, "/scripts/beta.sh", &[], enqueue_opts()).unwrap();
@@ -3203,7 +3204,7 @@ mod tests {
 
     #[test]
     fn dead_letter_preserves_existing_reason_when_no_new() {
-        let ws = crate::test_support::scratch_workspace("dl_keep_reason");
+        let ws = scratch_workspace("dl_keep_reason");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/scripts/x.sh", &[], enqueue_opts()).unwrap();
         claim_next(&conn, "w1", &ClaimFilters::default()).unwrap();
@@ -3224,7 +3225,7 @@ mod tests {
 
     #[test]
     fn row_to_run_rejects_invalid_state_string() {
-        let ws = crate::test_support::scratch_workspace("invalid_state_row");
+        let ws = scratch_workspace("invalid_state_row");
         let conn = open(&ws).expect("open");
         let row = enqueue(&conn, "/scripts/x.sh", &[], enqueue_opts()).unwrap();
         // Tamper with the state column to a value RunState::from_str rejects.

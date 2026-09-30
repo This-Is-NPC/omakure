@@ -805,6 +805,7 @@ fn version_token(banner: &str) -> String {
 mod tests {
     use super::*;
     use crate::health_plane::model::SignalKind;
+    use crate::test_support::workspace_in;
 
     /// A wedged interpreter must not hold the Profile open.
     ///
@@ -904,7 +905,7 @@ mod tests {
         use sha2::{Digest, Sha256};
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let open = || crate::test_support::workspace_in(&dir);
+        let open = || workspace_in(&dir);
         // The observation is cached to a bounded window, so each stage builds a
         // fresh fact source: this test is about what a Performer reports, not
         // about how long it reuses an answer.

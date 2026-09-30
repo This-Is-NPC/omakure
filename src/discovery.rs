@@ -921,12 +921,13 @@ fn hmac_sha256(secret: &[u8], message: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::node_context;
 
     use tempfile::TempDir;
 
     fn test_identity() -> (TempDir, NodeIdentity) {
         let temp = TempDir::new().unwrap();
-        let context = crate::test_support::node_context(temp.path());
+        let context = node_context(temp.path());
         let config = crate::domain::NodeConfig::default();
         context.initialize(&config).unwrap();
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();

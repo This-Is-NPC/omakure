@@ -587,6 +587,7 @@ mod tests {
     use super::*;
     use crate::baseline::SignedBaselineManifest;
     use crate::baseline::FUTURE_SKEW_SECONDS;
+    use crate::test_support::{baseline_scripts, workspace_in};
     use k256::schnorr::SigningKey;
     use sha2::{Digest, Sha256};
 
@@ -610,13 +611,6 @@ mod tests {
         .expect("sign")
         .bind(bodies.to_vec())
         .expect("bind")
-    }
-
-    fn set() -> Vec<(String, Vec<u8>)> {
-        vec![
-            ("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec()),
-            ("audit.py".to_string(), b"print('audit')\n".to_vec()),
-        ]
     }
 
     /// The next version of the same set: same paths, different bytes.
@@ -649,8 +643,8 @@ mod tests {
     #[test]
     fn a_verified_baseline_installs_every_script_and_records_the_set() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        let baseline = verified(&set());
+        let workspace = workspace_in(&dir);
+        let baseline = verified(&baseline_scripts());
 
         let record = install_baseline(&workspace, &baseline, 1_800_000_100).expect("install");
 
@@ -690,9 +684,9 @@ mod tests {
     #[test]
     fn the_observed_identity_follows_the_scripts_and_not_the_record() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        let record =
-            install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
+        let workspace = workspace_in(&dir);
+        let record = install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100)
+            .expect("install");
 
         assert_eq!(
             observed_baseline_id(&workspace, &record),
@@ -744,9 +738,9 @@ mod tests {
     #[test]
     fn a_file_no_baseline_entry_names_does_not_change_the_identity() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        let record =
-            install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
+        let workspace = workspace_in(&dir);
+        let record = install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100)
+            .expect("install");
 
         std::fs::write(
             workspace.scripts_root().join("unlisted.sh"),
@@ -765,10 +759,10 @@ mod tests {
     #[test]
     fn a_node_that_can_read_none_of_its_set_cannot_read_as_in_sync() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        let record =
-            install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
-        for (path, _) in set() {
+        let workspace = workspace_in(&dir);
+        let record = install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100)
+            .expect("install");
+        for (path, _) in baseline_scripts() {
             std::fs::remove_file(workspace.scripts_root().join(&path)).expect("remove");
         }
 
@@ -790,7 +784,7 @@ mod tests {
     #[test]
     fn installing_over_an_existing_script_replaces_its_bytes() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
+        let workspace = workspace_in(&dir);
         std::fs::create_dir_all(workspace.scripts_root().join("ops")).expect("mkdir");
         std::fs::write(
             workspace.scripts_root().join("ops/deploy.sh"),
@@ -798,7 +792,8 @@ mod tests {
         )
         .expect("seed");
 
-        install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
+        install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100)
+            .expect("install");
 
         assert_eq!(
             std::fs::read(workspace.scripts_root().join("ops/deploy.sh")).expect("read"),
@@ -823,7 +818,7 @@ mod tests {
     #[cfg(unix)]
     fn one_unwritable_script_leaves_the_workspace_exactly_as_it_was() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
+        let workspace = workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("audit.py"),
             b"print('the old one')\n",
@@ -832,7 +827,7 @@ mod tests {
         std::fs::create_dir_all(workspace.scripts_root().join("ops/deploy.sh"))
             .expect("obstruct the second script");
 
-        install_baseline(&workspace, &verified(&set()), 1_800_000_100)
+        install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100)
             .expect_err("a script that cannot be written must fail the whole set");
 
         assert_eq!(
@@ -851,8 +846,9 @@ mod tests {
     #[test]
     fn a_rollback_restores_the_previous_set_and_the_node_reads_as_in_sync() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        let first = install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
+        let workspace = workspace_in(&dir);
+        let first = install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100)
+            .expect("first");
         let second =
             install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
         assert_ne!(first.baseline_id, second.baseline_id);
@@ -868,7 +864,7 @@ mod tests {
             restored.baseline_id, first.baseline_id,
             "rollback restores the version before the current one"
         );
-        for (path, body) in set() {
+        for (path, body) in baseline_scripts() {
             assert_eq!(
                 std::fs::read(workspace.scripts_root().join(&path)).expect("read"),
                 body,
@@ -900,8 +896,8 @@ mod tests {
     #[test]
     fn a_rollback_under_a_revoked_publisher_is_refused_and_changes_nothing() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
+        let workspace = workspace_in(&dir);
+        install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100).expect("first");
         let second =
             install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
 
@@ -946,8 +942,8 @@ mod tests {
     #[test]
     fn a_tampered_retained_set_cannot_be_rolled_back_into_place() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
+        let workspace = workspace_in(&dir);
+        install_baseline(&workspace, &verified(&baseline_scripts()), 1_800_000_100).expect("first");
         install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
 
         let path = retained_previous_path(&workspace);
@@ -968,8 +964,13 @@ mod tests {
     #[test]
     fn a_rollback_survives_the_manifests_expiry_but_not_a_window_that_never_opened() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
-        install_baseline(&workspace, &verified(&set()), ISSUED_AT as i64 + 100).expect("first");
+        let workspace = workspace_in(&dir);
+        install_baseline(
+            &workspace,
+            &verified(&baseline_scripts()),
+            ISSUED_AT as i64 + 100,
+        )
+        .expect("first");
         install_baseline(&workspace, &verified(&next_set()), ISSUED_AT as i64 + 200)
             .expect("second");
 
@@ -1006,7 +1007,7 @@ mod tests {
     #[test]
     fn the_install_confines_paths_itself_rather_than_trusting_the_manifest() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = crate::test_support::workspace_in(&dir);
+        let workspace = workspace_in(&dir);
 
         assert!(
             install_verified_script(

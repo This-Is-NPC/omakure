@@ -153,6 +153,7 @@ pub fn env_override_names() -> [&'static str; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use std::fs;
     use std::sync::{Mutex, OnceLock};
 
@@ -170,7 +171,7 @@ mod tests {
     #[test]
     fn config_summary_serializes_full_contract() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let workspace = crate::test_support::workspace_in(&tmp);
+        let workspace = workspace_in(&tmp);
 
         let payload = config_summary(&workspace).unwrap();
 
@@ -186,7 +187,7 @@ mod tests {
     #[test]
     fn redacted_config_summary_masks_all_active_env_values() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let workspace = crate::test_support::workspace_in(&tmp);
+        let workspace = workspace_in(&tmp);
         write_active_env(workspace.envs_dir(), "dev.conf", "HOST=localhost\n");
 
         let payload = redacted_config_summary(&workspace).unwrap();

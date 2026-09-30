@@ -562,12 +562,13 @@ fn secret_error_message(err: SecretResolveError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use crate::workspace::Workspace;
     use std::fs;
     use tempfile::TempDir;
 
     fn script_with_secret(tmp: &TempDir) -> (Workspace, std::path::PathBuf) {
-        let workspace = crate::test_support::workspace_in(tmp);
+        let workspace = workspace_in(tmp);
         let script = tmp.path().join("secret.sh");
         fs::write(
             &script,
@@ -900,7 +901,7 @@ mod tests {
     #[test]
     fn list_secret_metadata_never_includes_values() {
         let tmp = TempDir::new().unwrap();
-        let workspace = crate::test_support::workspace_in(&tmp);
+        let workspace = workspace_in(&tmp);
         fs::write(
             workspace.envs_dir().join("prod.conf"),
             "TOKEN=super-secret-token-value\nOTHER=also-secret\n",
@@ -924,7 +925,7 @@ mod tests {
     #[test]
     fn list_secret_metadata_respects_ref_acl_without_use_scope() {
         let tmp = TempDir::new().unwrap();
-        let workspace = crate::test_support::workspace_in(&tmp);
+        let workspace = workspace_in(&tmp);
         fs::write(
             workspace.envs_dir().join("prod.conf"),
             "TOKEN=secret-a\nOTHER=secret-b\n",

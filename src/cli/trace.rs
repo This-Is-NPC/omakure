@@ -167,8 +167,10 @@ mod tests {
         .unwrap();
         drop(conn);
 
+        let redaction_file = ws.root().join("redact.json");
+        std::fs::write(&redaction_file, r#"["trace_secret_value"]"#).unwrap();
         std::env::set_var("OMAKURE_RUN_ID", &row.run_id);
-        std::env::set_var("OMAKURE_REDACT_SECRETS", r#"["trace_secret_value"]"#);
+        std::env::set_var("OMAKURE_REDACT_SECRETS_FILE", &redaction_file);
         run(
             ws.root().to_path_buf(),
             TraceArgs {
@@ -180,7 +182,7 @@ mod tests {
         )
         .unwrap();
         std::env::remove_var("OMAKURE_RUN_ID");
-        std::env::remove_var("OMAKURE_REDACT_SECRETS");
+        std::env::remove_var("OMAKURE_REDACT_SECRETS_FILE");
 
         let conn = runs::open(&ws).unwrap();
         let traces = runs::query_traces(&conn, &row.run_id, None, None).unwrap();

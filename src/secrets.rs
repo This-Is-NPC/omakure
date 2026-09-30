@@ -6,7 +6,6 @@ use std::collections::HashSet;
 use std::path::Path;
 
 pub const REDACTED: &str = "<redacted>";
-pub const REDACT_ENV: &str = "OMAKURE_REDACT_SECRETS";
 pub const REDACT_FILE_ENV: &str = "OMAKURE_REDACT_SECRETS_FILE";
 
 #[derive(Debug, Clone, Default)]
@@ -94,8 +93,7 @@ impl SecretAccess {
     {
         // Drop an `env` provider-wildcard: the whole point of the env gate is
         // that env vars are enumerated per exact key. A `secret://env/*` entry
-        // (also the normalized form of `secret://env:*`) would otherwise match
-        // every env ref through the provider-wildcard branch and re-grant blanket
+        // would otherwise match every env ref through the provider-wildcard branch and re-grant blanket
         // process-env access, defeating the wildcard hardening.
         let allowed_refs = env_refs
             .into_iter()
@@ -239,7 +237,8 @@ pub fn resolve_args_with_access(
                 Some(value) => {
                     resolved = Some(ResolvedSecretValue {
                         value,
-                        provider_ref: canonical_secret_ref(&candidate),
+                        provider_ref: SecretRef::parse(&candidate)
+                            .map(|secret_ref| secret_ref.canonical()),
                     });
                     break;
                 }
@@ -352,15 +351,9 @@ pub fn secrets_env_value(secrets: &[String]) -> Option<String> {
 }
 
 pub fn secrets_from_env() -> Vec<String> {
-    if let Ok(path) = std::env::var(REDACT_FILE_ENV) {
-        if let Ok(value) = std::fs::read_to_string(path) {
-            if let Ok(secrets) = serde_json::from_str::<Vec<String>>(&value) {
-                return secrets;
-            }
-        }
-    }
-    std::env::var(REDACT_ENV)
+    std::env::var(REDACT_FILE_ENV)
         .ok()
+        .and_then(|path| std::fs::read_to_string(path).ok())
         .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
         .unwrap_or_default()
 }
@@ -434,13 +427,6 @@ fn resolve_secret_ref(
     value: &str,
     access: &SecretAccess,
 ) -> Result<Option<String>, SecretResolveError> {
-    if let Some(name) = value.strip_prefix("secret://env:") {
-        let secret_ref = SecretRef {
-            provider: "env".to_string(),
-            key: name.to_string(),
-        };
-        return resolve_env_secret(&secret_ref, access);
-    }
     let Some(secret_ref) = SecretRef::parse(value) else {
         if value.starts_with("secret://") {
             return Err(SecretResolveError::InvalidRef);
@@ -456,14 +442,7 @@ fn resolve_secret_ref(
 
 /// Check whether `access` permits resolving `value` without fetching the secret.
 pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), String> {
-    let secret_ref = if let Some(name) = value.strip_prefix("secret://env:") {
-        SecretRef {
-            provider: "env".to_string(),
-            key: name.to_string(),
-        }
-    } else {
-        SecretRef::parse(value).ok_or_else(|| "invalid secret ref".to_string())?
-    };
+    let secret_ref = SecretRef::parse(value).ok_or_else(|| "invalid secret ref".to_string())?;
     access.can_use(&secret_ref).map_err(secret_error_message)
 }
 
@@ -545,36 +524,6 @@ pub fn list_secret_metadata(workspace: &Workspace, access: &SecretAccess) -> Vec
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out.dedup_by(|a, b| a.id == b.id);
     out
-}
-
-/// Normalize an accepted secret-ref spelling to its canonical
-/// `secret://provider/key` form so persisted `provider_refs` (a run's stored
-/// allow-list) always match what [`SecretAccess::can_use`] compares against.
-/// Returns `None` for plaintext literals (non-refs). Without this, the colon
-/// form `secret://env:NAME` would be persisted verbatim yet compared against
-/// the canonical `secret://env/NAME`, denying the queued run at worker
-/// re-resolution.
-/// Canonicalize an operator-supplied `--secret-ref` so the stored ACL matches
-/// what [`SecretAccess`] compares against at resolution time. The `*` wildcard
-/// passes through; the colon spellings `secret://env:NAME` and `secret://env:*`
-/// normalize to the slash forms `secret://env/NAME` / `secret://env/*`.
-/// Unrecognized values are returned unchanged (fail-closed — a malformed ref
-/// simply matches nothing). Without this, `--secret-ref secret://env:NAME`
-/// would be stored verbatim yet compared against the canonical
-/// `secret://env/NAME`, silently granting nothing.
-pub fn canonicalize_operator_secret_ref(value: &str) -> String {
-    let trimmed = value.trim();
-    canonical_secret_ref(trimmed).unwrap_or_else(|| trimmed.to_string())
-}
-
-fn canonical_secret_ref(value: &str) -> Option<String> {
-    if let Some(name) = value.strip_prefix("secret://env:") {
-        if name.is_empty() {
-            return None;
-        }
-        return Some(format!("secret://env/{name}"));
-    }
-    SecretRef::parse(value).map(|secret_ref| secret_ref.canonical())
 }
 
 fn resolve_env_secret(
@@ -659,29 +608,6 @@ mod tests {
     }
 
     #[test]
-    fn canonicalize_operator_secret_ref_normalizes_colon_and_preserves_wildcards() {
-        assert_eq!(canonicalize_operator_secret_ref("*"), "*");
-        assert_eq!(
-            canonicalize_operator_secret_ref("secret://env:NAME"),
-            "secret://env/NAME"
-        );
-        assert_eq!(
-            canonicalize_operator_secret_ref("secret://env:*"),
-            "secret://env/*"
-        );
-        assert_eq!(
-            canonicalize_operator_secret_ref("secret://env/NAME"),
-            "secret://env/NAME"
-        );
-        assert_eq!(
-            canonicalize_operator_secret_ref("secret://prod/token"),
-            "secret://prod/token"
-        );
-        // Malformed values pass through unchanged (fail-closed, matches nothing).
-        assert_eq!(canonicalize_operator_secret_ref("garbage"), "garbage");
-    }
-
-    #[test]
     fn env_provider_resolves_allowed_ref() {
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
@@ -746,54 +672,6 @@ mod tests {
         // An empty value must not enter the redaction list.
         assert!(resolved.secrets.is_empty());
         std::env::remove_var("OMAKURE_TEST_EMPTY_SECRET");
-    }
-
-    #[test]
-    fn colon_form_env_ref_persists_canonical_and_reconstructs_under_stored_acl() {
-        let tmp = TempDir::new().unwrap();
-        let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_COLON_REF", "colon_value");
-
-        // Enqueue-time resolution (allow-all) collects the provider_ref that is
-        // stored as the run's allow-list.
-        let enqueue = resolve_args_with_access(
-            &workspace,
-            &script,
-            &[
-                "--token".into(),
-                "secret://env:OMAKURE_TEST_COLON_REF".into(),
-            ],
-            &[],
-            &[],
-            &SecretAccess::allow_all(),
-        )
-        .unwrap();
-
-        // Regression: colon form must be normalized to canonical slash form so
-        // the stored allow-list matches what `can_use` compares against.
-        assert_eq!(
-            enqueue.persisted_args,
-            vec!["--token", "secret://env/OMAKURE_TEST_COLON_REF"]
-        );
-        assert_eq!(
-            enqueue.provider_refs,
-            vec!["secret://env/OMAKURE_TEST_COLON_REF"]
-        );
-
-        // Worker re-resolution using ONLY the stored allow-list must succeed
-        // (previously denied: ACL held `env:NAME` but compared `env/NAME`).
-        let access = SecretAccess::new(["secrets:use"], enqueue.provider_refs.clone());
-        let reresolved = resolve_args_with_access(
-            &workspace,
-            &script,
-            &enqueue.persisted_args,
-            &[],
-            &[],
-            &access,
-        )
-        .unwrap();
-        assert_eq!(reresolved.execution_args, vec!["--token", "colon_value"]);
-        std::env::remove_var("OMAKURE_TEST_COLON_REF");
     }
 
     #[test]

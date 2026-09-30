@@ -66,15 +66,14 @@ secret-field args reject plaintext values because queued workers cannot
 reconstruct them without storing the plaintext. If the supplied value is a `secret://...`
 reference, Omakure resolves it before execution and stores the provider
 reference rather than the resolved plaintext. Supported reference forms are
-`secret://env/NAME`, legacy `secret://env:NAME`, and `secret://provider/key`;
+`secret://env/NAME` and `secret://provider/key`;
 non-`env` providers read `<workspace>/.omakure/envs/<provider>.conf` and resolve
 `key` from that file.
 
 During execution, Omakure writes resolved plaintext secrets to a short-lived
 0600 redaction file and injects only `OMAKURE_REDACT_SECRETS_FILE` into the
 child. `omakure trace` reads that file so script-emitted trace messages are
-redacted before persistence; `OMAKURE_REDACT_SECRETS` is retained only as a
-legacy trace fallback. Run output redaction removes secret values from captured
+redacted before persistence. Run output redaction removes secret values from captured
 stdout/stderr in plain, JSON-escaped, slash-escaped, and URL-encoded forms.
 Environment values and direct secret values are not persisted as separate
 records in `runs.sqlite`; residual OS exposure remains for explicit process

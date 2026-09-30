@@ -238,14 +238,8 @@ pub(crate) struct ApiPolicy {
 
 impl ApiPolicy {
     fn from_secret_refs(refs: &[String]) -> Self {
-        // Normalize operator ref spellings (e.g. `secret://env:NAME`) to the
-        // canonical form the ACL is compared against, so the colon form is not
-        // silently dropped.
         Self {
-            allowed_secret_refs: refs
-                .iter()
-                .map(|r| crate::secrets::canonicalize_operator_secret_ref(r))
-                .collect(),
+            allowed_secret_refs: refs.iter().map(|r| r.trim().to_string()).collect(),
         }
     }
 

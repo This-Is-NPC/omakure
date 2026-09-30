@@ -205,8 +205,7 @@ Secret access is a separate allow-list. Repeat `--secret-ref` with
 provider refs. A `*` scope grants every route but does not bypass this list,
 so unrestricted file/provider refs require `--secret-ref '*'`. That wildcard
 does not grant process-environment refs:
-enumerate each exact `secret://env/NAME` (the `secret://env:*` spelling
-normalizes to that provider form, while `--secret-ref 'secret://env/*'` is
+enumerate each exact `secret://env/NAME` (`--secret-ref 'secret://env/*'` is
 ignored).
 Secret-backed run fields/arguments require `secrets:use` and a matching ref;
 private HTTPS Battery `token_ref` additionally requires `credentials:use` and

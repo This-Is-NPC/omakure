@@ -189,7 +189,7 @@ src/
 ├── redaction.rs             output and trace redaction
 ├── node.rs                  node paths, platform rules, and state validation
 ├── node_identity.rs         BIP-340 machine identity and node ID derivation
-├── node_registry.rs         node-owned trust and delivery persistence boundary
+├── node_registry/           node-owned trust and delivery persistence boundary
 │   └── health.rs            Health Plane reads and receive-order application
 ├── direct_transport.rs      Noise framing, certificates, envelopes, and replay limits
 ├── direct_service/          production direct listener, peer admission, and outboxes

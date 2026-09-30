@@ -20,7 +20,7 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 #   src/enrollment_authority.rs       tempfile::tempdir + set_mode/set_permissions in test fixtures only
 #   src/node.rs                       TempDir::new + fs::set_permissions in test fixtures only
 #   src/node_identity.rs              TempDir::new + fs::set_permissions in test fixtures only
-#   src/node_registry.rs              TempDir::new + fs::set_permissions in test fixtures only
+#   src/node_registry/tests/open.rs   TempDir::new + fs::set_permissions in test fixtures only
 #   src/operations/node.rs            TempDir::new + fs::set_permissions in test fixtures only
 #   src/util/fs.rs                    canonical set_executable_permissions
 #   src/cli/init.rs                   init chmods the created script; TempDir tokens are test fixtures
@@ -57,7 +57,7 @@ is_allowlisted_tempdir_permissions() {
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
-        src/node_registry.rs)
+        src/node_registry/tests/open.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;

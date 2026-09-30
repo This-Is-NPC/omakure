@@ -615,7 +615,7 @@ local operator/authority operation must perform the atomic trust mutation.
 `node.sqlite` remains the sole node-owned trust store and is separate from
 `.history/runs.sqlite`. The current registry proves that both
 `PRAGMA user_version` and the `metadata.schema_version` row are active schema
-markers in `src/node_registry.rs`: `initialize_database` sets and validates the
+markers in `src/node_registry/`: `initialize_database` sets and validates the
 pragma, while `create_schema` and `validate_schema` require the metadata row.
 Version 1 therefore has both markers and a v2 migration must update both
 atomically. It must not mutate version-1 rows in place or create a second

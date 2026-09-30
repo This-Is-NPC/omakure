@@ -6,10 +6,9 @@
 //! second database, a generic repository, an event bus, a metric store, or a
 //! historical query engine.
 
-use super::{
-    decode_hex, lifecycle_trust_events_in, validate_node_id, AuditEvent, NodeRegistry, PeerRole,
-    PeerState, RegistryError,
-};
+use super::audit::lifecycle_trust_events_in;
+use super::fields::{decode_hex, validate_node_id};
+use super::{AuditEvent, NodeRegistry, PeerRole, PeerState, RegistryError};
 use crate::health_plane::bounds::{
     AUDIT_RETENTION_SECONDS, AUDIT_ROW_BYTES, MAX_AUDIT_ROWS, MAX_CONDUCTORS_PER_PERFORMER,
     MAX_MESSAGES_PER_PEER_PER_MINUTE, MAX_PERFORMERS_PER_CONDUCTOR, MAX_PROFILES_PER_PEER_PER_HOUR,
@@ -2259,7 +2258,7 @@ mod tests {
         let fixture = fixture();
         let node_id = performer(&fixture.registry);
         let mut writer = Connection::open(fixture.registry.path()).unwrap();
-        super::super::configure_connection(&mut writer).unwrap();
+        super::super::open::configure_connection(&mut writer).unwrap();
         let writer_transaction = writer
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .unwrap();
@@ -2292,7 +2291,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(marker, "8");
-        for (object_type, name) in super::super::HEALTH_PLANE_OBJECTS {
+        for (object_type, name) in super::super::validate::HEALTH_PLANE_OBJECTS {
             let present: i64 = connection
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = ?1 AND name = ?2",

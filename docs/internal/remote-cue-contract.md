@@ -160,7 +160,7 @@ Gate A is load-bearing: `allow_remote_cues` defaults to `false`, and a node that
 has never opted in refuses every Cue regardless of how trusted the sender is.
 
 `remote-run` ships in all three hand-duplicated capability copies (`src/health_plane/bounds.rs:23`,
-`src/node_registry.rs:70`, `src/enrollment.rs:47`).
+`src/node_registry/`, `src/enrollment.rs:47`).
 
 ### Gate E: what may run is declared, not inferred
 

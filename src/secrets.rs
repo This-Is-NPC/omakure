@@ -567,8 +567,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn script_with_secret(tmp: &TempDir) -> (Workspace, std::path::PathBuf) {
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = crate::test_support::workspace_in(tmp);
         let script = tmp.path().join("secret.sh");
         fs::write(
             &script,
@@ -901,8 +900,7 @@ mod tests {
     #[test]
     fn list_secret_metadata_never_includes_values() {
         let tmp = TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = crate::test_support::workspace_in(&tmp);
         fs::write(
             workspace.envs_dir().join("prod.conf"),
             "TOKEN=super-secret-token-value\nOTHER=also-secret\n",
@@ -926,8 +924,7 @@ mod tests {
     #[test]
     fn list_secret_metadata_respects_ref_acl_without_use_scope() {
         let tmp = TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = crate::test_support::workspace_in(&tmp);
         fs::write(
             workspace.envs_dir().join("prod.conf"),
             "TOKEN=secret-a\nOTHER=secret-b\n",

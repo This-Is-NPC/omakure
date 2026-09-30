@@ -593,12 +593,6 @@ mod tests {
     const ISSUED_AT: u64 = 1_800_000_000;
     const EXPIRES_AT: u64 = 1_800_003_600;
 
-    fn workspace(dir: &tempfile::TempDir) -> Workspace {
-        let workspace = Workspace::new(dir.path().to_path_buf());
-        workspace.ensure_layout().expect("layout");
-        workspace
-    }
-
     fn verified(bodies: &[(String, Vec<u8>)]) -> VerifiedBaseline {
         let signing_key = SigningKey::from_slice(&[7u8; 32]).expect("scalar");
         let mut public_key = [0u8; 32];
@@ -655,7 +649,7 @@ mod tests {
     #[test]
     fn a_verified_baseline_installs_every_script_and_records_the_set() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let baseline = verified(&set());
 
         let record = install_baseline(&workspace, &baseline, 1_800_000_100).expect("install");
@@ -696,7 +690,7 @@ mod tests {
     #[test]
     fn the_observed_identity_follows_the_scripts_and_not_the_record() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let record =
             install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
 
@@ -750,7 +744,7 @@ mod tests {
     #[test]
     fn a_file_no_baseline_entry_names_does_not_change_the_identity() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let record =
             install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
 
@@ -771,7 +765,7 @@ mod tests {
     #[test]
     fn a_node_that_can_read_none_of_its_set_cannot_read_as_in_sync() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let record =
             install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("install");
         for (path, _) in set() {
@@ -796,7 +790,7 @@ mod tests {
     #[test]
     fn installing_over_an_existing_script_replaces_its_bytes() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::create_dir_all(workspace.scripts_root().join("ops")).expect("mkdir");
         std::fs::write(
             workspace.scripts_root().join("ops/deploy.sh"),
@@ -829,7 +823,7 @@ mod tests {
     #[cfg(unix)]
     fn one_unwritable_script_leaves_the_workspace_exactly_as_it_was() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("audit.py"),
             b"print('the old one')\n",
@@ -857,7 +851,7 @@ mod tests {
     #[test]
     fn a_rollback_restores_the_previous_set_and_the_node_reads_as_in_sync() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let first = install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
         let second =
             install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
@@ -906,7 +900,7 @@ mod tests {
     #[test]
     fn a_rollback_under_a_revoked_publisher_is_refused_and_changes_nothing() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
         let second =
             install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
@@ -952,7 +946,7 @@ mod tests {
     #[test]
     fn a_tampered_retained_set_cannot_be_rolled_back_into_place() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         install_baseline(&workspace, &verified(&set()), 1_800_000_100).expect("first");
         install_baseline(&workspace, &verified(&next_set()), 1_800_000_200).expect("second");
 
@@ -974,7 +968,7 @@ mod tests {
     #[test]
     fn a_rollback_survives_the_manifests_expiry_but_not_a_window_that_never_opened() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         install_baseline(&workspace, &verified(&set()), ISSUED_AT as i64 + 100).expect("first");
         install_baseline(&workspace, &verified(&next_set()), ISSUED_AT as i64 + 200)
             .expect("second");
@@ -1012,7 +1006,7 @@ mod tests {
     #[test]
     fn the_install_confines_paths_itself_rather_than_trusting_the_manifest() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = workspace(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         assert!(
             install_verified_script(

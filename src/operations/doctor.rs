@@ -184,8 +184,7 @@ mod tests {
     #[test]
     fn doctor_report_contains_workspace_and_schema_sections() {
         let tmp = TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = crate::test_support::workspace_in(&tmp);
 
         let report = doctor_report(&workspace).unwrap();
 

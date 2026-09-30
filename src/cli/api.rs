@@ -3071,12 +3071,6 @@ mod tests {
         serde_json::from_slice(&body).unwrap()
     }
 
-    fn workspace_in(dir: &TempDir) -> Workspace {
-        let workspace = Workspace::new(dir.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
-        workspace
-    }
-
     fn write_script(root: &std::path::Path, name: &str) {
         if let Some(parent) = root.join(name).parent() {
             std::fs::create_dir_all(parent).unwrap();
@@ -3360,7 +3354,7 @@ echo ok
     #[tokio::test]
     async fn health_works_without_token() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let response = router(workspace)
             .oneshot(
                 Request::builder()
@@ -3381,7 +3375,7 @@ echo ok
     #[tokio::test]
     async fn ready_works_without_token_when_no_gate() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let response = router(workspace)
             .oneshot(
                 Request::builder()
@@ -3404,7 +3398,7 @@ echo ok
     #[tokio::test]
     async fn ready_returns_503_when_gate_not_ready() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let gate = ReadinessGate::new(true, false, true, false);
         let app = router_with_policy(
             test_credential::authenticator(&["*"]),
@@ -3433,7 +3427,7 @@ echo ok
     #[tokio::test]
     async fn admin_status_requires_scope_and_exposes_reload_without_secrets() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let admin_plain = auth::test_token_plaintext("ops-admin");
         let admin_hash = auth::hash_token(&admin_plain).unwrap();
         let reader_plain = auth::test_token_plaintext("reader");
@@ -3519,7 +3513,7 @@ enabled = true
     #[tokio::test]
     async fn authenticated_mutating_request_emits_audit_with_token_id_redacted_auth() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let plaintext = auth::test_token_plaintext("ci-enqueue");
         let hash = auth::hash_token(&plaintext).unwrap();
@@ -3601,7 +3595,7 @@ enabled = true
     #[tokio::test]
     async fn rejected_enqueue_audit_keeps_safe_run_id_without_request_secrets() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_secret_script(workspace.scripts_root(), "secret.sh", None);
         let mut deploy = DeployPolicy::default();
         deploy.runs.allow_secret_fields = false;
@@ -3638,7 +3632,7 @@ enabled = true
     #[tokio::test]
     async fn unauthorized_request_emits_audit_without_token_id() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let sink = AuditCapture::install().await;
         let app = router(workspace);
         let response = app
@@ -3682,7 +3676,7 @@ enabled = true
     #[tokio::test]
     async fn ready_remains_minimal_without_token_ids_after_admin_exists() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let gate = ReadinessGate::new(false, false, false, false);
         let app = router_with_policy(
             test_credential::authenticator(&["*"]),
@@ -3712,7 +3706,7 @@ enabled = true
     #[tokio::test]
     async fn protected_route_rejects_missing_token() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let response = router(workspace)
             .oneshot(
                 Request::builder()
@@ -3733,7 +3727,7 @@ enabled = true
     #[tokio::test]
     async fn protected_route_rejects_invalid_token() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let response = router(workspace)
             .oneshot(
                 Request::builder()
@@ -3752,7 +3746,7 @@ enabled = true
     #[tokio::test]
     async fn protected_route_accepts_valid_token() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let response = router(workspace)
             .oneshot(authed_request("/v1/unknown"))
             .await
@@ -3766,7 +3760,7 @@ enabled = true
     #[tokio::test]
     async fn tokens_file_unknown_token_is_401_missing_scope_is_403() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
         let plaintext = auth::test_token_plaintext("reader");
@@ -3840,7 +3834,7 @@ enabled = true
     #[tokio::test]
     async fn tokens_file_env_scope_alias_envs_read() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let plaintext = auth::test_token_plaintext("env-reader");
         let hash = auth::hash_token(&plaintext).unwrap();
         let path = dir.path().join("tokens.toml");
@@ -3880,7 +3874,7 @@ enabled = true
     #[tokio::test]
     async fn read_endpoints_require_explicit_read_capabilities() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let app = router_with_policy(
             test_credential::authenticator(&["runs:write"]),
@@ -3911,7 +3905,7 @@ enabled = true
     #[tokio::test]
     async fn discovery_status_requires_its_explicit_scope_and_redacts_addresses() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let denied = router_with_policy(
             test_credential::authenticator(&["node:read"]),
             workspace.clone_for_executor(),
@@ -3946,7 +3940,7 @@ enabled = true
     async fn health_plane_router_gates_reads_on_node_read_capability() {
         let registry = shared_test_health_registry();
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let deploy = DeployPolicy::default();
         let denied = router_with_health_plane(
             test_credential::authenticator(&["node:write"]),
@@ -3980,7 +3974,7 @@ enabled = true
     #[tokio::test]
     async fn read_endpoints_accept_matching_read_capabilities() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let app = router_with_policy(
             test_credential::authenticator(&[
@@ -4014,7 +4008,7 @@ enabled = true
     #[tokio::test]
     async fn workspace_endpoint_returns_summary() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_request("/v1/workspace"))
@@ -4030,7 +4024,7 @@ enabled = true
     #[tokio::test]
     async fn config_endpoint_returns_full_masked_config() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(workspace.envs_dir().join("dev.conf"), "HOST=localhost\n").unwrap();
         std::fs::write(workspace.envs_active_path(), "dev.conf\n").unwrap();
 
@@ -4052,7 +4046,7 @@ enabled = true
     #[tokio::test]
     async fn doctor_endpoint_returns_structured_report() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
         let response = router(workspace)
@@ -4071,7 +4065,7 @@ enabled = true
     #[tokio::test]
     async fn scripts_and_schema_endpoints_return_operation_data() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
         let app = router(workspace);
@@ -4105,7 +4099,7 @@ enabled = true
     #[tokio::test]
     async fn search_endpoint_returns_operation_data() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "deploy.sh");
         let response = router(workspace)
             .oneshot(authed_request("/v1/search?q=deploy&tag=ops"))
@@ -4121,7 +4115,7 @@ enabled = true
     #[tokio::test]
     async fn search_endpoint_refreshes_changes() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let root = workspace.scripts_root().to_path_buf();
         let app = router(workspace);
         let empty = app
@@ -4171,7 +4165,7 @@ enabled = true
     #[tokio::test]
     async fn search_endpoint_requires_query() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_request("/v1/search"))
@@ -4186,7 +4180,7 @@ enabled = true
     #[tokio::test]
     async fn search_endpoint_rejects_empty_and_oversized_query() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let app = router(workspace);
 
         let empty = app
@@ -4207,7 +4201,7 @@ enabled = true
     #[tokio::test]
     async fn search_endpoint_rejects_excessive_tags() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let app = router(workspace);
 
         let too_many_tags = (0..=MAX_SEARCH_TAGS)
@@ -4236,7 +4230,7 @@ enabled = true
     #[tokio::test]
     async fn script_routes_support_nested_paths() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "tools/job.sh");
         std::fs::write(
             workspace.scripts_root().join("tools/secret.sh"),
@@ -4280,7 +4274,7 @@ echo ok
     #[tokio::test]
     async fn tree_and_content_endpoints_return_safe_browsing_data() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "tools/job.sh");
 
         let app = router(workspace);
@@ -4319,7 +4313,7 @@ echo ok
     #[tokio::test]
     async fn content_endpoint_rejects_path_traversal() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/../secret.sh/content"))
@@ -4334,7 +4328,7 @@ echo ok
     #[tokio::test]
     async fn content_endpoint_rejects_absolute_encoded_path() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/%2Ftmp%2Fsecret.sh/content"))
@@ -4349,7 +4343,7 @@ echo ok
     #[tokio::test]
     async fn tree_and_content_endpoints_reject_metadata_paths() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let app = router(workspace);
 
         for uri in [
@@ -4370,7 +4364,7 @@ echo ok
     #[tokio::test]
     async fn content_endpoint_error_hides_local_paths() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let root = workspace.root().display().to_string();
 
         let response = router(workspace)
@@ -4386,7 +4380,7 @@ echo ok
     #[tokio::test]
     async fn content_endpoint_maps_unsupported_script_to_415() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(workspace.scripts_root().join("note.txt"), "hello\n").unwrap();
 
         let response = router(workspace)
@@ -4414,7 +4408,7 @@ echo ok
     #[tokio::test]
     async fn scripts_query_percent_decodes_values() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
         let response = router(workspace)
@@ -4430,7 +4424,7 @@ echo ok
     #[tokio::test]
     async fn scripts_endpoint_maps_missing_script_to_404() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_request("/v1/scripts/missing.sh"))
@@ -4445,7 +4439,7 @@ echo ok
     #[tokio::test]
     async fn env_endpoints_round_trip_and_redact_values() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let app = router(workspace.clone_for_executor());
 
         let create = app
@@ -4524,7 +4518,7 @@ echo ok
     #[tokio::test]
     async fn env_endpoints_replace_patch_and_reject_conf_route_names() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let app = router(workspace);
 
         let replace = app
@@ -4571,7 +4565,7 @@ echo ok
     #[tokio::test]
     async fn env_endpoints_require_specific_policy_capabilities() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         env_ops::create_env(
             &workspace,
             "prod",
@@ -4616,7 +4610,7 @@ echo ok
     #[tokio::test]
     async fn runs_and_queue_stats_endpoints_return_operation_data() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let conn = runs::open(&workspace).unwrap();
         runs::enqueue(
@@ -4683,7 +4677,7 @@ echo ok
     #[tokio::test]
     async fn runs_endpoint_maps_invalid_query_to_400() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_request("/v1/runs?state=bad"))
@@ -4698,7 +4692,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_requires_auth() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(
@@ -4720,7 +4714,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_returns_queued_run() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
 
         let response = router(workspace)
@@ -4742,7 +4736,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_endpoint_redacts_secret_args_in_response_and_storage() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("secret.sh"),
             r#"#!/usr/bin/env bash
@@ -4782,7 +4776,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_rejects_plaintext_secret_arg_values() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("secret.sh"),
             r#"#!/usr/bin/env bash
@@ -4811,7 +4805,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_accepts_env_and_rejects_non_reconstructable_secret_fields() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("secret.sh"),
             r#"#!/usr/bin/env bash
@@ -4872,7 +4866,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_enforces_secret_provider_acl() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("secret.sh"),
             r#"#!/usr/bin/env bash
@@ -4914,7 +4908,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_env_and_secret_fields_require_policy_capabilities() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         std::fs::write(
             workspace.envs_dir().join("prod.conf"),
@@ -4959,7 +4953,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_secret_fields_policy_denies_all_provider_entry_points() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_secret_script(workspace.scripts_root(), "secret.sh", None);
         write_secret_script(
             workspace.scripts_root(),
@@ -5014,7 +5008,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_implicit_secret_default_requires_secret_capability() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_secret_script(
             workspace.scripts_root(),
             "secret-default.sh",
@@ -5046,7 +5040,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_implicit_active_env_secret_requires_env_capability() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_secret_script(workspace.scripts_root(), "secret-env.sh", None);
         std::fs::write(
             workspace.envs_dir().join("prod.conf"),
@@ -5080,7 +5074,7 @@ echo ok
     #[tokio::test]
     async fn mutating_run_routes_require_run_write_capability() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let conn = runs::open(&workspace).unwrap();
         runs::enqueue(
             &conn,
@@ -5117,7 +5111,7 @@ echo ok
         // Fire more concurrent requests than the bounded auth budget. Requests
         // either authenticate or fail fast; none may queue indefinitely.
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let app = router(workspace);
         let mut handles = Vec::new();
         for _ in 0..24 {
@@ -5143,7 +5137,7 @@ echo ok
     #[tokio::test]
     async fn mutating_battery_routes_require_battery_write_capability() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         battery_ops::add_battery(
             &workspace,
             battery_ops::AddBatteryRequest {
@@ -5182,7 +5176,7 @@ echo ok
     #[tokio::test]
     async fn enqueue_run_maps_invalid_script_to_404() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_json_request(
@@ -5201,7 +5195,7 @@ echo ok
     async fn enqueue_run_rejects_outside_workspace_script() {
         let dir = TempDir::new().unwrap();
         let outside = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(outside.path(), "outside.sh");
 
         let outside_script = outside.path().join("outside.sh").display().to_string();
@@ -5220,7 +5214,7 @@ echo ok
     #[tokio::test]
     async fn malformed_json_returns_envelope() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_json_request("/v1/runs", r#"{"#))
@@ -5236,7 +5230,7 @@ echo ok
     #[tokio::test]
     async fn oversized_json_returns_envelope() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let body = format!(r#"{{"script":"{}"}}"#, "x".repeat(BODY_LIMIT_BYTES + 1));
 
         let response = router(workspace)
@@ -5252,7 +5246,7 @@ echo ok
     #[tokio::test]
     async fn cancel_run_success_and_missing_run() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let conn = runs::open(&workspace).unwrap();
         runs::enqueue(
@@ -5304,7 +5298,7 @@ echo ok
     #[tokio::test]
     async fn cancel_run_maps_invalid_transition_to_conflict() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let conn = runs::open(&workspace).unwrap();
         let row = runs::start_inline(
@@ -5359,7 +5353,7 @@ echo ok
     #[tokio::test]
     async fn dead_letter_run_success_and_invalid_transition() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let conn = runs::open(&workspace).unwrap();
         let failed = runs::start_inline(
@@ -5454,7 +5448,7 @@ echo ok
     #[tokio::test]
     async fn battery_add_with_token_ref_stores_auth_metadata_only() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.envs_dir().join("prod.conf"),
             "GIT_TOKEN=never-persist-this-plaintext-token\n",
@@ -5503,7 +5497,7 @@ echo ok
     #[tokio::test]
     async fn battery_add_token_ref_denied_without_credentials_use() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let mut deploy = DeployPolicy::default();
         deploy.sources.allow_private_https_batteries = true;
         let app = router_with_deploy(
@@ -5525,7 +5519,7 @@ echo ok
     #[tokio::test]
     async fn private_https_sync_denied_without_credentials_use() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.envs_dir().join("creds.conf"),
             "git_token=sync-secret-value\n",
@@ -5565,7 +5559,7 @@ echo ok
     #[tokio::test]
     async fn secrets_metadata_endpoint_redacts_values() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let secret_value = "metadata-must-not-leak-this-value";
         std::fs::write(
             workspace.envs_dir().join("prod.conf"),
@@ -5596,7 +5590,7 @@ echo ok
     #[tokio::test]
     async fn secrets_metadata_requires_scope_and_policy_flag() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let mut deploy = DeployPolicy::default();
         deploy.secrets.metadata_endpoint = false;
         let disabled = router_with_deploy(
@@ -5625,7 +5619,7 @@ echo ok
     #[tokio::test]
     async fn battery_endpoints_require_auth() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(
@@ -5644,7 +5638,7 @@ echo ok
     #[tokio::test]
     async fn battery_add_and_list_use_operations() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let app = router(workspace);
         let add = app
@@ -5669,7 +5663,7 @@ echo ok
     #[tokio::test]
     async fn battery_add_rejects_plaintext_http_git_url() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_json_request(
@@ -5687,7 +5681,7 @@ echo ok
     #[tokio::test]
     async fn battery_add_rejects_local_git_url() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_json_request(
@@ -5705,7 +5699,7 @@ echo ok
     #[tokio::test]
     async fn battery_sync_invalid_manifest_maps_to_400() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         register_invalid_https_battery_cache(&workspace, "bad");
 
         let response = router(workspace)
@@ -5722,7 +5716,7 @@ echo ok
     async fn battery_http_operations_reject_existing_non_https_sources() {
         let repo = invalid_manifest_repo();
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         battery_ops::add_battery(
             &workspace,
             battery_ops::AddBatteryRequest {
@@ -5751,7 +5745,7 @@ echo ok
     #[tokio::test]
     async fn battery_missing_and_unsynced_errors_are_stable() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         battery_ops::add_battery(
             &workspace,
             battery_ops::AddBatteryRequest {
@@ -5800,7 +5794,7 @@ echo ok
     #[tokio::test]
     async fn battery_sync_missing_maps_to_404() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let response = router(workspace)
             .oneshot(authed_json_request("/v1/batteries/missing/sync", r#"{}"#))
@@ -5815,7 +5809,7 @@ echo ok
     #[tokio::test]
     async fn battery_remove_supports_cache_flag() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         battery_ops::add_battery(
             &workspace,
             battery_ops::AddBatteryRequest {
@@ -5863,7 +5857,7 @@ echo ok
     #[tokio::test]
     async fn deploy_policy_writes_false_forbids_writes_even_with_wildcard_token() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         write_script(workspace.scripts_root(), "job.sh");
         let mut deploy = DeployPolicy::default();
         deploy.routes.writes = false;
@@ -5900,7 +5894,7 @@ echo ok
     #[tokio::test]
     async fn deploy_policy_battery_false_forbids_all_battery_routes() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         let mut deploy = DeployPolicy::default();
         deploy.routes.battery = false;
         let app = router_with_deploy(

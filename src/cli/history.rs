@@ -389,7 +389,6 @@ mod tests {
     use super::*;
     use crate::runs::{self, RunState};
     use std::collections::HashMap;
-    use tempfile::TempDir;
 
     fn sample_row() -> RunRow {
         RunRow {
@@ -418,14 +417,6 @@ mod tests {
             parent_run_id: Some("parent-1".into()),
             omakure_version: "test".into(),
         }
-    }
-
-    fn temp_workspace() -> Workspace {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.keep();
-        let workspace = Workspace::new(root);
-        workspace.ensure_layout().unwrap();
-        workspace
     }
 
     #[test]
@@ -561,7 +552,7 @@ mod tests {
 
     #[test]
     fn list_rejects_invalid_since_before_opening_db() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let err = list(
             &workspace,
             HistoryListArgs {
@@ -584,7 +575,7 @@ mod tests {
 
     #[test]
     fn tail_follow_returns_not_implemented_error() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let err = tail(
             &workspace,
             HistoryTailArgs {
@@ -617,7 +608,7 @@ mod tests {
 
     #[test]
     fn run_dispatches_to_subcommands() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let _id = enqueue_one(&workspace);
 
         let scripts_dir = workspace.root().to_path_buf();
@@ -664,7 +655,7 @@ mod tests {
 
     #[test]
     fn list_human_format_prints_runs_and_no_runs() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         // No rows yet — prints "(no runs)".
         list(
             &workspace,
@@ -704,7 +695,7 @@ mod tests {
 
     #[test]
     fn list_with_success_failure_filters() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let _id = enqueue_one(&workspace);
         list(
             &workspace,
@@ -742,7 +733,7 @@ mod tests {
 
     #[test]
     fn list_rejects_invalid_until_value() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let err = list(
             &workspace,
             HistoryListArgs {
@@ -764,7 +755,7 @@ mod tests {
 
     #[test]
     fn list_rejects_invalid_state_value() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let err = list(
             &workspace,
             HistoryListArgs {
@@ -786,7 +777,7 @@ mod tests {
 
     #[test]
     fn show_returns_not_found_for_unknown_id() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let err = show(
             &workspace,
             HistoryShowArgs {
@@ -800,7 +791,7 @@ mod tests {
 
     #[test]
     fn show_human_and_json_formats_succeed() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let id = enqueue_one(&workspace);
         show(&workspace, HistoryShowArgs { run_id: id.clone() }, false).unwrap();
         show(&workspace, HistoryShowArgs { run_id: id }, true).unwrap();
@@ -808,7 +799,7 @@ mod tests {
 
     #[test]
     fn stats_human_and_json() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let _id = enqueue_one(&workspace);
         stats(&workspace, false).unwrap();
         stats(&workspace, true).unwrap();
@@ -816,7 +807,7 @@ mod tests {
 
     #[test]
     fn traces_for_unknown_run_returns_not_found() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let err = traces(
             &workspace,
             HistoryTracesArgs {
@@ -832,7 +823,7 @@ mod tests {
 
     #[test]
     fn traces_returns_empty_for_existing_run() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let id = enqueue_one(&workspace);
         traces(
             &workspace,
@@ -858,7 +849,7 @@ mod tests {
 
     #[test]
     fn traces_rejects_invalid_level_before_opening_db() {
-        let workspace = temp_workspace();
+        let workspace = crate::test_support::scratch_workspace("history");
         let err = traces(
             &workspace,
             HistoryTracesArgs {

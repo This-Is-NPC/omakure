@@ -231,12 +231,6 @@ mod tests {
         path
     }
 
-    fn make_workspace(tmp: &TempDir) -> Workspace {
-        let ws = Workspace::new(tmp.path().to_path_buf());
-        ws.ensure_layout().unwrap();
-        ws
-    }
-
     fn inline_row(workspace: &Workspace, script: &Path) -> crate::runs::RunRow {
         let conn = runs::open(workspace).unwrap();
         runs::start_inline(
@@ -331,7 +325,7 @@ mod tests {
     #[test]
     fn test_check_required_fields_without_schema_is_permissive() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let script = tmp.path().join("plain.sh");
         write_file(&script, "#!/usr/bin/env bash\necho hi\n");
 
@@ -341,7 +335,7 @@ mod tests {
     #[test]
     fn test_check_required_fields_accepts_default_and_override_flags() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let script = write_schema_script(
             &tmp,
             "deploy.sh",
@@ -361,7 +355,7 @@ mod tests {
     #[test]
     fn test_check_required_fields_returns_missing_field_and_message() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let script = write_schema_script(
             &tmp,
             "deploy.sh",
@@ -378,7 +372,7 @@ mod tests {
     #[test]
     fn test_finalize_run_completed_updates_row() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let script = write_schema_script(&tmp, "ok.sh", r#"{"Name":"Ok","Fields":[]}"#, "true");
         let row = inline_row(&ws, &script);
         let result = ExecutionResult {
@@ -402,7 +396,7 @@ mod tests {
     #[test]
     fn test_finalize_run_failed_and_timed_out_update_row() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let fail_script =
             write_schema_script(&tmp, "fail.sh", r#"{"Name":"Fail","Fields":[]}"#, "false");
         let fail_row = runs::start_inline(
@@ -469,7 +463,7 @@ mod tests {
     #[test]
     fn test_finalize_run_cancelled_records_output() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let script = write_schema_script(
             &tmp,
             "cancel.sh",
@@ -539,7 +533,7 @@ mod tests {
         )
         .unwrap();
 
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let conn = runs::open(&ws).unwrap();
         let row = runs::get_run(&conn, "rid-run-ok").unwrap().unwrap();
         assert_eq!(row.state, RunState::Completed);
@@ -571,7 +565,7 @@ mod tests {
         )
         .unwrap();
 
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let conn = runs::open(&ws).unwrap();
         let row = runs::get_run(&conn, "rid-run-json").unwrap().unwrap();
         assert_eq!(row.state, RunState::Completed);
@@ -605,7 +599,7 @@ mod tests {
     #[cfg(unix)]
     fn test_run_injects_active_env_into_script_and_persists_output() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let envs = ws.envs_dir();
         fs::write(envs.join("dev.conf"), "INJECTED_VAR=cli_injected_42").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
@@ -655,7 +649,7 @@ mod tests {
     #[cfg(unix)]
     fn test_injected_secret_not_persisted_to_storage() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let envs = ws.envs_dir();
         fs::write(
             envs.join("dev.conf"),
@@ -711,7 +705,7 @@ mod tests {
     #[cfg(unix)]
     fn test_run_env_file_var_reaches_script() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let env_file = tmp.path().join("run.env");
         fs::write(&env_file, "FROM_FILE=file_value_99").unwrap();
 
@@ -755,7 +749,7 @@ mod tests {
     #[cfg(unix)]
     fn test_run_env_file_overrides_active_env() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let envs = ws.envs_dir();
         fs::write(envs.join("dev.conf"), "SHARED=from_active").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
@@ -806,7 +800,7 @@ mod tests {
     #[cfg(unix)]
     fn test_run_resolves_secret_from_env_file_arg_and_redacts_persistence() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let envs = ws.envs_dir();
         fs::write(envs.join("dev.conf"), "TOKEN=from_active").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
@@ -850,7 +844,7 @@ mod tests {
     #[cfg(unix)]
     fn test_run_direct_secret_arg_wins_and_is_redacted() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let envs = ws.envs_dir();
         fs::write(envs.join("dev.conf"), "TOKEN=from_active").unwrap();
         fs::write(envs.join("active"), "dev.conf\n").unwrap();
@@ -891,7 +885,7 @@ mod tests {
     #[cfg(unix)]
     fn test_run_secret_option_supplies_direct_secret_and_redacts() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
 
         let script = write_schema_script(
             &tmp,
@@ -929,7 +923,7 @@ mod tests {
     #[cfg(unix)]
     fn test_run_secret_ref_arg_resolves_file_provider_and_redacts() {
         let tmp = TempDir::new().unwrap();
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         fs::write(
             ws.envs_dir().join("prod.conf"),
             "TOKEN=from_file_provider\n",
@@ -999,7 +993,7 @@ mod tests {
 
         let err = result.unwrap_err();
         assert!(err.to_string().contains("required field `TOKEN`"));
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let conn = runs::open(&ws).unwrap();
         assert!(runs::get_run(&conn, "rid-missing-secret")
             .unwrap()
@@ -1036,7 +1030,7 @@ mod tests {
             "error should name the missing env-file path, got: {}",
             err
         );
-        let ws = make_workspace(&tmp);
+        let ws = crate::test_support::workspace_in(&tmp);
         let conn = runs::open(&ws).unwrap();
         assert!(runs::get_run(&conn, "rid-missing-envfile")
             .unwrap()

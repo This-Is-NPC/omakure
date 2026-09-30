@@ -91,20 +91,6 @@ mod tests {
     use super::*;
     use crate::runs::{enqueue, EnqueueOptions};
 
-    fn make_workspace(label: &str) -> Workspace {
-        let dir = std::env::temp_dir().join(format!(
-            "omakure_trace_test_{}_{}_{}",
-            label,
-            std::process::id(),
-            crate::util::time::unix_millis()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let ws = Workspace::new(dir);
-        ws.ensure_layout().unwrap();
-        ws
-    }
-
     #[test]
     fn invalid_level_rejected_at_validation() {
         // Test the level parsing in isolation since the full run() path
@@ -116,7 +102,7 @@ mod tests {
 
     #[test]
     fn insert_trace_writes_row() {
-        let ws = make_workspace("trace_writes");
+        let ws = crate::test_support::scratch_workspace("trace_writes");
         let mut conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,
@@ -144,7 +130,7 @@ mod tests {
 
     #[test]
     fn trace_redacts_runtime_secret_values() {
-        let ws = make_workspace("trace_redacts");
+        let ws = crate::test_support::scratch_workspace("trace_redacts");
         let conn = runs::open(&ws).unwrap();
         let row = enqueue(
             &conn,

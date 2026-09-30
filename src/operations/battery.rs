@@ -3583,7 +3583,7 @@ path = "scripts/other.sh"
     #[test]
     fn manifest_name_must_match_registered_battery_name() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let paths = BatteryPaths::for_workspace(&ws);
         let cache = paths.cache_path_for("azure");
         write_manifest_and_script(&cache);
@@ -3617,7 +3617,7 @@ path = "scripts/list.sh"
     #[test]
     fn ignored_untracked_manifest_script_is_rejected() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let paths = BatteryPaths::for_workspace(&ws);
         let cache = paths.cache_path_for("azure");
         fs::create_dir_all(cache.join("scripts")).unwrap();
@@ -4005,12 +4005,6 @@ tags = ["azure"]
         .unwrap();
     }
 
-    fn workspace_in(dir: &TempDir) -> Workspace {
-        let ws = Workspace::new(dir.path().to_path_buf());
-        ws.ensure_layout().unwrap();
-        ws
-    }
-
     fn synced_registry_with_commit(commit: impl Into<String>) -> BatteryRegistry {
         BatteryRegistry {
             version: REGISTRY_VERSION,
@@ -4066,7 +4060,7 @@ tags = ["azure"]
     #[test]
     fn list_batteries_returns_registry_summaries() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let paths = BatteryPaths::for_workspace(&ws);
         write_registry(
             &paths.registry_path,
@@ -4083,7 +4077,7 @@ tags = ["azure"]
     #[test]
     fn inspect_battery_loads_and_validates_manifest() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
 
         let response = inspect_battery(
@@ -4102,7 +4096,7 @@ tags = ["azure"]
     #[test]
     fn inspect_missing_battery_returns_not_found() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
 
         let err = inspect_battery(
             &ws,
@@ -4118,7 +4112,7 @@ tags = ["azure"]
     #[test]
     fn inspect_unsynced_battery_returns_not_synced() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let paths = BatteryPaths::for_workspace(&ws);
         let mut registry = synced_registry_with_commit("0123456789abcdef0123456789abcdef01234567");
         registry.batteries[0].resolved_commit = None;
@@ -4138,7 +4132,7 @@ tags = ["azure"]
     #[test]
     fn inspect_rejects_cache_with_mismatched_head() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let paths = BatteryPaths::for_workspace(&ws);
         let cache = paths.cache_path_for("azure");
         write_manifest_and_script(&cache);
@@ -4163,7 +4157,7 @@ tags = ["azure"]
     #[test]
     fn inspect_rejects_dirty_or_untracked_cache() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let cache = write_synced_cache_and_registry(&ws);
         fs::write(cache.join("untracked.txt"), "dirty").unwrap();
 
@@ -4181,7 +4175,7 @@ tags = ["azure"]
     #[test]
     fn inspect_rejects_unsafe_local_git_config() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let cache = write_synced_cache_and_registry(&ws);
         run_test_git(&["config", "credential.helper", "!/bin/false"], &cache);
 
@@ -4199,7 +4193,7 @@ tags = ["azure"]
     #[test]
     fn inspect_rejects_local_git_include_without_evaluating_it() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let cache = write_synced_cache_and_registry(&ws);
         fs::write(
             cache.join(".git/config"),
@@ -4227,7 +4221,7 @@ tags = ["azure"]
     #[test]
     fn inspect_rejects_worktree_git_config() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let cache = write_synced_cache_and_registry(&ws);
         fs::write(
             cache.join(".git/config.worktree"),
@@ -4251,7 +4245,7 @@ tags = ["azure"]
     #[test]
     fn inspect_rejects_worktree_config_extension() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let cache = write_synced_cache_and_registry(&ws);
         fs::write(
             cache.join(".git/config"),
@@ -4279,7 +4273,7 @@ tags = ["azure"]
     #[test]
     fn inspect_rejects_core_worktree_config() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let cache = write_synced_cache_and_registry(&ws);
         fs::write(
             cache.join(".git/config"),
@@ -4306,7 +4300,7 @@ tags = ["azure"]
     #[test]
     fn list_battery_scripts_maps_valid_manifest_scripts() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
 
         let scripts = list_battery_scripts(
@@ -4325,7 +4319,7 @@ tags = ["azure"]
     #[test]
     fn add_battery_stores_token_ref_auth_without_plaintext() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let plaintext = "super-secret-battery-token-value";
         std::env::set_var("OMAKURE_BATTERY_TOKEN_TEST", plaintext);
 
@@ -4359,7 +4353,7 @@ tags = ["azure"]
     #[test]
     fn add_battery_rejects_token_ref_on_non_https() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let repo = create_battery_repo();
         let err = add_battery(
             &ws,
@@ -4377,7 +4371,7 @@ tags = ["azure"]
     #[test]
     fn prepare_git_askpass_writes_0600_files_and_redacts_token() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let plaintext = "askpass-redact-me-token-xyz";
         std::env::set_var("OMAKURE_ASKPASS_TOKEN", plaintext);
         let auth = BatteryAuth {
@@ -4426,7 +4420,7 @@ tags = ["azure"]
     #[test]
     fn prepare_git_askpass_uses_distinct_directories_per_call() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         std::env::set_var("OMAKURE_ASKPASS_DISTINCT", "tok-a");
         let auth = BatteryAuth {
             method: BatteryAuthMethod::HttpsTokenRef,
@@ -4558,7 +4552,7 @@ tags = ["azure"]
     #[test]
     fn git_command_with_askpass_sets_git_askpass_env() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         std::env::set_var("OMAKURE_ASKPASS_ENV", "tok");
         let auth = BatteryAuth {
             method: BatteryAuthMethod::HttpsTokenRef,
@@ -4605,7 +4599,7 @@ tags = ["azure"]
     #[test]
     fn git_askpass_refuses_credentials_for_another_host() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         std::env::set_var("OMAKURE_ASKPASS_HOST", "host-bound-token");
         let auth = BatteryAuth {
             method: BatteryAuthMethod::HttpsTokenRef,
@@ -4644,7 +4638,7 @@ tags = ["azure"]
     #[test]
     fn add_battery_records_unsynced_entry_and_rejects_duplicates() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let request = AddBatteryRequest {
             name: "azure".into(),
             git_url: "https://example.invalid/azure.git".into(),
@@ -4663,7 +4657,7 @@ tags = ["azure"]
     #[test]
     fn add_battery_rejects_invalid_names() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
 
         let err = add_battery(
             &ws,
@@ -4717,7 +4711,7 @@ tags = ["azure"]
     fn sync_battery_is_idempotent_on_repeated_prepare_and_sync() {
         let repo = create_battery_repo();
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         add_battery(
             &ws,
             AddBatteryRequest {
@@ -4757,7 +4751,7 @@ tags = ["azure"]
         let repo_one = create_battery_repo();
         let repo_two = create_battery_repo();
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         add_battery(
             &ws,
             AddBatteryRequest {
@@ -4811,7 +4805,7 @@ tags = ["azure"]
         use std::os::unix::fs::symlink;
 
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let paths = BatteryPaths::for_workspace(&ws);
         fs::create_dir_all(paths.cache_root.parent().unwrap()).unwrap();
         let outside = dir.path().join("outside-cache");
@@ -4829,7 +4823,7 @@ tags = ["azure"]
         use std::os::unix::fs::symlink;
 
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let paths = BatteryPaths::for_workspace(&ws);
         fs::create_dir_all(&paths.cache_root).unwrap();
         let outside = dir.path().join("outside-cache-entry");
@@ -4847,7 +4841,7 @@ tags = ["azure"]
         use std::os::unix::fs::symlink;
 
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         fs::remove_dir_all(ws.omakure_dir()).unwrap();
         let outside = dir.path().join("outside-omakure");
         fs::create_dir_all(&outside).unwrap();
@@ -4866,7 +4860,7 @@ tags = ["azure"]
     #[test]
     fn install_battery_script_refuses_overwrite_without_force_and_writes_provenance() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
 
         let response = install_battery_script(
@@ -4900,7 +4894,7 @@ tags = ["azure"]
 
         for (source_mode, installed_mode) in [(0o775, 0o755), (0o644, 0o644), (0o700, 0o700)] {
             let dir = TempDir::new().unwrap();
-            let ws = workspace_in(&dir);
+            let ws = crate::test_support::workspace_in(&dir);
             let paths = BatteryPaths::for_workspace(&ws);
             let cache = paths.cache_path_for("azure");
             write_manifest_and_script(&cache);
@@ -4947,7 +4941,7 @@ tags = ["azure"]
     #[cfg(unix)]
     fn install_battery_script_does_not_clobber_existing_predictable_temp_sibling() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
         let old_tmp = ws.scripts_root().join("scripts/list.omakure-install-tmp");
         fs::create_dir_all(old_tmp.parent().unwrap()).unwrap();
@@ -4972,7 +4966,7 @@ tags = ["azure"]
         use std::os::unix::fs::symlink;
 
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
         let real = dir.path().join("real-scripts");
         fs::create_dir_all(&real).unwrap();
@@ -4997,7 +4991,7 @@ tags = ["azure"]
         use std::os::unix::fs::symlink;
 
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
         let paths = BatteryPaths::for_workspace(&ws);
         fs::create_dir_all(paths.installed_root.parent().unwrap()).unwrap();
@@ -5023,7 +5017,7 @@ tags = ["azure"]
     #[cfg(unix)]
     fn install_rolls_back_script_when_provenance_write_fails() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
         let paths = BatteryPaths::for_workspace(&ws);
         let provenance_file = paths
@@ -5050,7 +5044,7 @@ tags = ["azure"]
     #[cfg(unix)]
     fn force_install_restores_existing_script_when_provenance_write_fails() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
         let target = ws.scripts_root().join("scripts/list.sh");
         fs::create_dir_all(target.parent().unwrap()).unwrap();
@@ -5080,7 +5074,7 @@ tags = ["azure"]
     #[cfg(unix)]
     fn force_install_does_not_clobber_existing_backup_sibling() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
         let target = ws.scripts_root().join("scripts/list.sh");
         fs::create_dir_all(target.parent().unwrap()).unwrap();
@@ -5108,7 +5102,7 @@ tags = ["azure"]
     #[cfg(unix)]
     fn install_battery_script_force_overwrites_existing_target() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         write_synced_cache_and_registry(&ws);
         let target = ws.scripts_root().join("scripts/list.sh");
         fs::create_dir_all(target.parent().unwrap()).unwrap();
@@ -5132,7 +5126,7 @@ tags = ["azure"]
     #[test]
     fn remove_battery_unregisters_and_optionally_removes_cache() {
         let dir = TempDir::new().unwrap();
-        let ws = workspace_in(&dir);
+        let ws = crate::test_support::workspace_in(&dir);
         let cache = write_synced_cache_and_registry(&ws);
 
         let response = remove_battery(

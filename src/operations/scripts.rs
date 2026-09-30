@@ -253,16 +253,10 @@ mod tests {
         crate::policy::ScriptsPolicy::default().tree_entry_limit
     }
 
-    fn workspace_in(dir: &TempDir) -> Workspace {
-        let workspace = Workspace::new(dir.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
-        workspace
-    }
-
     #[test]
     fn list_tree_honors_nested_omakureignore() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::create_dir_all(workspace.scripts_root().join("scripts/hidden")).unwrap();
         std::fs::write(
             workspace.scripts_root().join("scripts/.omakureignore"),
@@ -296,7 +290,7 @@ mod tests {
     #[test]
     fn read_script_content_rejects_parent_traversal() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let err = read_script_content(
             &workspace,
@@ -313,7 +307,7 @@ mod tests {
     #[test]
     fn read_script_content_rejects_absolute_paths_before_trimming() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         let err = read_script_content(
             &workspace,
@@ -330,7 +324,7 @@ mod tests {
     #[test]
     fn list_tree_rejects_too_many_entries() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         for idx in 0..=tree_entry_limit() {
             std::fs::write(
                 workspace.scripts_root().join(format!("script-{idx}.sh")),
@@ -352,7 +346,7 @@ mod tests {
     #[test]
     fn tree_and_content_reject_hidden_metadata_paths() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
 
         for path in [".omakure", ".history", ".git"] {
             let tree_err = list_tree(
@@ -380,7 +374,7 @@ mod tests {
     #[test]
     fn read_script_content_rejects_oversized_scripts() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("big.sh"),
             vec![b'a'; max_content_bytes() as usize + 1],
@@ -402,7 +396,7 @@ mod tests {
     #[test]
     fn read_script_content_rejects_binary_and_invalid_utf8() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("binary.sh"),
             b"#!/bin/sh\n\0\n",
@@ -438,7 +432,7 @@ mod tests {
 
         let dir = TempDir::new().unwrap();
         let outside = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(outside.path().join("outside.sh"), "#!/bin/sh\n").unwrap();
         symlink(
             outside.path().join("outside.sh"),
@@ -461,7 +455,7 @@ mod tests {
     #[test]
     fn windows_relative_fixtures_resolve_and_render_with_slashes() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::create_dir_all(workspace.scripts_root().join("tools")).unwrap();
         let script = workspace.scripts_root().join("tools/deploy.sh");
         std::fs::write(&script, "#!/bin/sh\necho ok\n").unwrap();
@@ -499,7 +493,7 @@ mod tests {
     #[test]
     fn read_script_content_returns_text_script() {
         let dir = TempDir::new().unwrap();
-        let workspace = workspace_in(&dir);
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("ok.sh"),
             "#!/bin/sh\necho ok\n",

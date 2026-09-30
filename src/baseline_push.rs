@@ -1769,8 +1769,7 @@ mod delivery_tests {
     #[test]
     fn publishing_more_than_one_push_can_carry_is_refused_at_signing_time() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let workspace = Workspace::new(dir.path().to_path_buf());
-        workspace.ensure_layout().expect("layout");
+        let workspace = crate::test_support::workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("huge.sh"),
             vec![b'x'; crate::baseline_push::MAX_PUSH_SCRIPT_BYTES + 1],

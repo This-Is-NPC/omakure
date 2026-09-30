@@ -300,10 +300,7 @@ fn wildcard_match(pattern: &str, value: &str) -> bool {
 
 fn should_skip_dir(path: &Path) -> bool {
     let name = path.file_name().and_then(|name| name.to_str());
-    if matches!(name, Some(".history") | Some(".git") | Some(".omakure")) {
-        return true;
-    }
-    false
+    name.is_some_and(|name| crate::workspace::RESERVED_DIR_NAMES.contains(&name))
 }
 
 fn entry_name(path: &Path) -> String {

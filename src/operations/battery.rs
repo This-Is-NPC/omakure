@@ -1432,10 +1432,10 @@ fn run_git_capture_with_policy(
                 "git command is missing an isolated working directory",
             )
         })?;
-    let git_config = match cache_path
-        .ancestors()
-        .find(|path| path.file_name().is_some_and(|name| name == ".omakure"))
-    {
+    let git_config = match cache_path.ancestors().find(|path| {
+        path.file_name()
+            .is_some_and(|name| name == crate::workspace::METADATA_DIR)
+    }) {
         Some(dir) => prepare_git_config_in(dir)?,
         None => PathBuf::from(".omakure/git-empty-config"),
     };

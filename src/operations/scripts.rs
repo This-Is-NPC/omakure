@@ -236,7 +236,7 @@ fn is_hidden_metadata_component(component: Component<'_>) -> bool {
     matches!(
         component,
         Component::Normal(name)
-            if name == ".omakure" || name == ".history" || name == ".git"
+            if crate::workspace::RESERVED_DIR_NAMES.iter().any(|reserved| name == *reserved)
     )
 }
 

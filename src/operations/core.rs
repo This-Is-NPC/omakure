@@ -607,7 +607,7 @@ pub(crate) fn canonical_script_path(path: &Path, scripts_root: &Path) -> Operati
 fn has_reserved_component(path: &Path) -> bool {
     path.components().any(|component| {
         matches!(component, Component::Normal(name) if name.to_str().is_some_and(|name| {
-            [".omakure", ".history", ".git"].iter().any(|reserved| name.eq_ignore_ascii_case(reserved))
+            crate::workspace::RESERVED_DIR_NAMES.iter().any(|reserved| name.eq_ignore_ascii_case(reserved))
         }))
     })
 }

@@ -27,7 +27,7 @@ use crate::health_plane::report::{
 use crate::health_plane::{BaselineStatus, FleetNode, HealthPlane};
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
-use crate::node_registry::{NodeRegistry, PeerRole, PeerState};
+use crate::node_registry::{NodeRegistry, PeerState};
 use crate::operations::node::{map_identity_error, map_registry_error, registry_error};
 use crate::operations::OperationResult;
 use crate::runs::{self, RunState, RunStateSet};
@@ -148,7 +148,7 @@ fn collect_active_fleet_nodes(
         }
         nodes.push(FleetNode {
             node_id: authorization.node_id,
-            role: role_name(authorization.role).to_string(),
+            role: authorization.role.as_str().to_string(),
             capabilities: authorization.capabilities,
             trust_state: "active".to_string(),
             presence: Presence::derive(None, observed_at),
@@ -355,14 +355,6 @@ fn reduce_to_newest(entries: &mut Vec<SignalEntry>, limit: usize) {
             .then_with(|| right.signal.signal_id.cmp(&left.signal.signal_id))
     });
     entries.truncate(limit);
-}
-
-/// The stable wire name of a trusted peer role.
-fn role_name(role: PeerRole) -> &'static str {
-    match role {
-        PeerRole::Conductor => "conductor",
-        PeerRole::Performer => "performer",
-    }
 }
 
 /// Open the observational registry for one-shot CLI reads.

@@ -20,7 +20,7 @@ use crate::node_registry::health::{
     HealthApplyRequest, HealthAuditEvent, HealthAuthorization, HealthFleetPeer, HealthOutboxEntry,
     HealthPruneReport,
 };
-use crate::node_registry::{NodeRegistry, PeerRole, PeerState, RegistryError};
+use crate::node_registry::{NodeRegistry, PeerState, RegistryError};
 use bounds::{PROCESSING_BUDGET_MILLIS, SIGNATURE_BYTES};
 use model::{
     HealthCode, HealthDecision, HealthKind, Presence, ProfileSnapshot, PulseSnapshot, RunFact,
@@ -396,7 +396,7 @@ impl<'registry> HealthPlane<'registry> {
                 node_id: peer.state.node_id,
                 trust_state: peer
                     .authorization
-                    .map(|authorization| peer_state_name(authorization.state).to_string())
+                    .map(|authorization| authorization.state.as_str().to_string())
                     .unwrap_or_else(|| "unknown".to_string()),
                 cursor: peer.state.cursor,
                 stored: peer.state.stored_signals,
@@ -612,7 +612,7 @@ impl<'registry> HealthPlane<'registry> {
         let authorized = match self.registry.health_authorization(message.sender)? {
             Some(authorization) => {
                 authorization.state == PeerState::Active
-                    && role_code(authorization.role) == kind.required_role()
+                    && authorization.role.code() == kind.required_role()
             }
             None => false,
         };
@@ -657,26 +657,19 @@ impl<'registry> HealthPlane<'registry> {
     }
 }
 
-fn role_code(role: PeerRole) -> i64 {
-    match role {
-        PeerRole::Conductor => bounds::ROLE_CONDUCTOR,
-        PeerRole::Performer => bounds::ROLE_PERFORMER,
-    }
-}
-
 /// Render one fleet-status row from the snapshot it was read in.
 fn project(peer: HealthFleetPeer, now: i64) -> FleetNode {
     let snapshot = peer.snapshot;
     let (trust_state, capabilities) = match peer.authorization {
         Some(authorization) => (
-            peer_state_name(authorization.state).to_string(),
+            authorization.state.as_str().to_string(),
             authorization.capabilities,
         ),
         None => ("unknown".to_string(), Vec::new()),
     };
     FleetNode {
         node_id: snapshot.state.node_id.clone(),
-        role: peer_role_name(snapshot.state.role).to_string(),
+        role: snapshot.state.role.as_str().to_string(),
         capabilities,
         trust_state,
         presence: Presence::derive(snapshot.state.last_pulse_at, now),
@@ -691,28 +684,12 @@ fn project(peer: HealthFleetPeer, now: i64) -> FleetNode {
     }
 }
 
-fn peer_role_name(role: PeerRole) -> &'static str {
-    match role {
-        PeerRole::Conductor => "conductor",
-        PeerRole::Performer => "performer",
-    }
-}
-
-fn peer_state_name(state: PeerState) -> &'static str {
-    match state {
-        PeerState::Pending => "pending",
-        PeerState::Active => "active",
-        PeerState::Suspended => "suspended",
-        PeerState::Revoked => "revoked",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
     use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
-    use crate::node_registry::{PeerRegistration, PeerSource};
+    use crate::node_registry::{PeerRegistration, PeerRole, PeerSource};
     use crate::util::hex;
     use bounds::{
         MAX_AGE_SECONDS, MAX_CANONICAL_PROFILE, MAX_FUTURE_SKEW_SECONDS, PRESENCE_ONLINE_SECONDS,

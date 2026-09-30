@@ -360,6 +360,15 @@ pub enum EnrollmentRole {
 }
 
 impl EnrollmentRole {
+    /// Parse the operator-facing role name.
+    pub fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "conductor" => Some(Self::Conductor),
+            "performer" => Some(Self::Performer),
+            _ => None,
+        }
+    }
+
     pub fn from_u8(value: u8) -> Result<Self, EnrollmentError> {
         match value {
             1 => Ok(Self::Conductor),

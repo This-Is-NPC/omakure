@@ -811,13 +811,10 @@ fn health_authorization_from_row(
         PeerState::Pending
     };
     let role = match role {
-        Some(1) => PeerRole::Conductor,
-        Some(2) | None => PeerRole::Performer,
-        Some(other) => {
-            return Err(RegistryError::InvalidSchema(format!(
-                "unknown trusted peer role {other}"
-            )))
-        }
+        None => PeerRole::Performer,
+        Some(code) => PeerRole::from_code(code).ok_or_else(|| {
+            RegistryError::InvalidSchema(format!("unknown trusted peer role {code}"))
+        })?,
     };
     let capabilities = match capabilities {
         Some(raw) => {
@@ -877,10 +874,7 @@ fn evaluate(
     }
 
     // Step 8: role and the single-Conductor bound.
-    let stored_role = match authorization.role {
-        PeerRole::Conductor => 1,
-        PeerRole::Performer => 2,
-    };
+    let stored_role = authorization.role.code();
     if stored_role != kind.required_role() {
         return Ok(HealthDecision::Rejected(HealthCode::WrongRole));
     }
@@ -1769,14 +1763,10 @@ fn health_peer_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<HealthPeerR
     let updated_at: i64 = row.get(8)?;
     let stored_signals: i64 = row.get(9)?;
     let held_signals: i64 = row.get(10)?;
-    let role = match role {
-        1 => PeerRole::Conductor,
-        2 => PeerRole::Performer,
-        other => {
-            return Ok(Err(RegistryError::Corrupt(format!(
-                "health peer has unknown role {other}"
-            ))))
-        }
+    let Some(role) = PeerRole::from_code(role) else {
+        return Ok(Err(RegistryError::Corrupt(format!(
+            "health peer has unknown role {role}"
+        ))));
     };
     Ok(Ok(HealthPeerState {
         node_id,

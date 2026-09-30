@@ -7,7 +7,8 @@
 
 use crate::direct_transport::TransportCertificate;
 use crate::domain::is_node_id;
-use crate::enrollment::{self, ManualEnrollmentRequest, SignedEnrollmentBundle};
+use crate::enrollment::{self, EnrollmentRole, ManualEnrollmentRequest, SignedEnrollmentBundle};
+use crate::health_plane::bounds::{ROLE_CONDUCTOR, ROLE_PERFORMER};
 use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
 use crate::util::hex;
@@ -146,20 +147,45 @@ pub enum PeerRole {
 }
 
 impl PeerRole {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Conductor => "conductor",
             Self::Performer => "performer",
         }
     }
 
+    pub fn from_wire(value: &str) -> Option<Self> {
+        EnrollmentRole::from_wire(value).map(Self::from)
+    }
+
     fn parse(value: &str) -> Result<Self, RegistryError> {
-        match value {
-            "conductor" => Ok(Self::Conductor),
-            "performer" => Ok(Self::Performer),
-            _ => Err(RegistryError::InvalidSchema(format!(
-                "unknown peer role {value:?}"
-            ))),
+        Self::from_wire(value)
+            .ok_or_else(|| RegistryError::InvalidSchema(format!("unknown peer role {value:?}")))
+    }
+
+    /// The integer stored in `trusted_peers.role` and required by Health
+    /// Plane frames.
+    pub const fn code(self) -> i64 {
+        match self {
+            Self::Conductor => ROLE_CONDUCTOR,
+            Self::Performer => ROLE_PERFORMER,
+        }
+    }
+
+    pub fn from_code(code: i64) -> Option<Self> {
+        match code {
+            ROLE_CONDUCTOR => Some(Self::Conductor),
+            ROLE_PERFORMER => Some(Self::Performer),
+            _ => None,
+        }
+    }
+}
+
+impl From<EnrollmentRole> for PeerRole {
+    fn from(role: EnrollmentRole) -> Self {
+        match role {
+            EnrollmentRole::Conductor => Self::Conductor,
+            EnrollmentRole::Performer => Self::Performer,
         }
     }
 }
@@ -173,7 +199,7 @@ pub enum PeerState {
 }
 
 impl PeerState {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Pending => "pending",
             Self::Active => "active",
@@ -209,7 +235,7 @@ pub enum PeerSource {
 }
 
 impl PeerSource {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Manual => "manual",
             Self::Bundle => "bundle",
@@ -980,10 +1006,7 @@ impl NodeRegistry {
             return Err(RegistryError::SelfTrust);
         }
         validate_actor_reason(actor, reason)?;
-        let role = match bundle.role {
-            crate::enrollment::EnrollmentRole::Conductor => PeerRole::Conductor,
-            crate::enrollment::EnrollmentRole::Performer => PeerRole::Performer,
-        };
+        let role = PeerRole::from(bundle.role);
         let registration = PeerRegistration {
             node_id: bundle.subject_node_id.clone(),
             public_key: hex::encode(bundle.subject_xonly.as_slice()),
@@ -3884,10 +3907,7 @@ fn insert_v2_trust_projection(
          VALUES (?1, ?2, ?3, 'active', ?4, ?4)",
         params![
             registration.node_id,
-            match registration.role {
-                PeerRole::Conductor => 1,
-                PeerRole::Performer => 2,
-            },
+            registration.role.code(),
             capabilities_json(&registration.capabilities)?.as_bytes(),
             now,
         ],
@@ -3986,10 +4006,7 @@ fn registration_from_manual(
     actor: &str,
     reason: &str,
 ) -> Result<PeerRegistration, RegistryError> {
-    let role = match request.role {
-        crate::enrollment::EnrollmentRole::Conductor => PeerRole::Conductor,
-        crate::enrollment::EnrollmentRole::Performer => PeerRole::Performer,
-    };
+    let role = PeerRole::from(request.role);
     Ok(PeerRegistration {
         node_id: request.proposer_node_id.clone(),
         public_key: request.public_key_hex(),
@@ -4034,7 +4051,7 @@ fn project_v2_transition(
                  ON CONFLICT(node_id) DO UPDATE SET state = 'active', updated_at = excluded.updated_at",
                 params![
                     current.node_id,
-                    match current.role { PeerRole::Conductor => 1, PeerRole::Performer => 2 },
+                    current.role.code(),
                     capabilities_json(&current.capabilities)?.as_bytes(),
                     now,
                 ],

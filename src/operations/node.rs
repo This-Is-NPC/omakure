@@ -601,15 +601,14 @@ pub fn issue_enrollment_bundle(
             "audience node ID is invalid",
         ));
     }
-    let role = match request.role.as_str() {
-        "conductor" => crate::enrollment::EnrollmentRole::Conductor,
-        "performer" => crate::enrollment::EnrollmentRole::Performer,
-        other => {
-            return Err(OperationError::new(
-                OperationErrorCode::InvalidInput,
-                format!("role `{other}` is invalid; expected conductor or performer"),
-            ))
-        }
+    let Some(role) = EnrollmentRole::from_wire(&request.role) else {
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            format!(
+                "role `{}` is invalid; expected conductor or performer",
+                request.role
+            ),
+        ));
     };
     if request.lifetime_seconds == 0
         || request.lifetime_seconds > crate::enrollment::BUNDLE_MAX_LIFETIME_SECONDS
@@ -1603,59 +1602,34 @@ fn public_peer(peer: PeerRecord) -> PublicPeer {
     PublicPeer {
         node_id: peer.node_id,
         public_key: peer.public_key,
-        role: role_string(peer.role),
-        state: state_string(peer.state),
+        role: peer.role.as_str().to_string(),
+        state: peer.state.as_str().to_string(),
         capabilities: peer.capabilities,
         added_at: peer.added_at,
         updated_at: peer.updated_at,
         last_seen: peer.last_seen,
-        source: source_string(peer.source),
+        source: peer.source.as_str().to_string(),
         cleanup_pending: false,
         cleanup_error: None,
     }
 }
 
 fn parse_role(value: &str) -> OperationResult<PeerRole> {
-    match value {
-        "conductor" => Ok(PeerRole::Conductor),
-        "performer" => Ok(PeerRole::Performer),
-        _ => Err(OperationError::new(
+    PeerRole::from_wire(value).ok_or_else(|| {
+        OperationError::new(
             OperationErrorCode::InvalidInput,
             "role must be conductor or performer",
-        )),
-    }
+        )
+    })
 }
 
 fn parse_enrollment_role(value: &str) -> OperationResult<EnrollmentRole> {
-    match value {
-        "conductor" => Ok(EnrollmentRole::Conductor),
-        "performer" => Ok(EnrollmentRole::Performer),
-        _ => Err(OperationError::new(
+    EnrollmentRole::from_wire(value).ok_or_else(|| {
+        OperationError::new(
             OperationErrorCode::EnrollmentInvalid,
             "role must be conductor or performer",
-        )),
-    }
-}
-
-fn role_string(role: PeerRole) -> String {
-    match role {
-        PeerRole::Conductor => "conductor",
-        PeerRole::Performer => "performer",
-    }
-    .to_string()
-}
-
-fn state_string(state: PeerState) -> String {
-    state.to_string()
-}
-
-fn source_string(source: PeerSource) -> String {
-    match source {
-        PeerSource::Manual => "manual",
-        PeerSource::Bundle => "bundle",
-        PeerSource::Recovery => "recovery",
-    }
-    .to_string()
+        )
+    })
 }
 
 fn require_confirmation(confirmed: bool) -> OperationResult<()> {

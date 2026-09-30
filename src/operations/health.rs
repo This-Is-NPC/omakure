@@ -366,7 +366,7 @@ pub(crate) fn open_observational_registry(context: &NodeContext) -> OperationRes
         .validate_existing_state_contents()
         .map_err(crate::operations::node::map_node_error)?;
     if !state_present {
-        return Err(registry_error("node state is not initialized"));
+        return Err(registry_error(crate::node::STATE_NOT_INITIALIZED));
     }
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
     NodeRegistry::open_health_observational(context, identity.public_status())

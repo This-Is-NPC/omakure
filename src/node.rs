@@ -81,7 +81,7 @@ impl NodeLayout {
     /// 0600 discipline, but a *separate* key: reusing the identity would mean
     /// compromising one node hands over the right to enrol the whole fleet.
     pub fn authority_key_path(&self) -> PathBuf {
-        self.state_dir.join("authority.key")
+        self.state_dir.join(AUTHORITY_KEY_FILE)
     }
 
     /// Where the baseline-publisher signing key lives, when this node holds
@@ -90,23 +90,23 @@ impl NodeLayout {
     /// the key that ships that machine code have different blast radii, and
     /// folding them together would choose the larger one for everybody.
     pub fn publisher_key_path(&self) -> PathBuf {
-        self.state_dir.join("publisher.key")
+        self.state_dir.join(PUBLISHER_KEY_FILE)
     }
 
     pub fn identity_path(&self) -> PathBuf {
-        self.state_dir.join("identity.key")
+        self.state_dir.join(IDENTITY_KEY_FILE)
     }
 
     pub fn database_path(&self) -> PathBuf {
-        self.state_dir.join("node.sqlite")
+        self.state_dir.join(DATABASE_FILE)
     }
 
     pub fn transport_key_path(&self) -> PathBuf {
-        self.state_dir.join("transport.key")
+        self.state_dir.join(TRANSPORT_KEY_FILE)
     }
 
     pub fn transport_certificate_path(&self) -> PathBuf {
-        self.state_dir.join("transport.cert")
+        self.state_dir.join(TRANSPORT_CERTIFICATE_FILE)
     }
 }
 
@@ -143,6 +143,23 @@ pub struct NodeInitialization {
     pub state_dir_created: bool,
     pub config_created: bool,
 }
+
+/// Files a node keeps in its private state directory. The allow-list in
+/// `validate_existing_state_contents` admits exactly these, plus the SQLite
+/// write-ahead companions of [`DATABASE_FILE`].
+pub const IDENTITY_KEY_FILE: &str = "identity.key";
+pub const AUTHORITY_KEY_FILE: &str = "authority.key";
+pub const PUBLISHER_KEY_FILE: &str = "publisher.key";
+pub const DATABASE_FILE: &str = "node.sqlite";
+pub const TRANSPORT_KEY_FILE: &str = "transport.key";
+pub const TRANSPORT_CERTIFICATE_FILE: &str = "transport.cert";
+pub const IDENTITY_LOCK_FILE: &str = ".identity.lock";
+pub const LIFECYCLE_LOCK_FILE: &str = ".node.lifecycle.lock";
+/// A public-key file beside the identity, which the identity state refuses.
+pub const IDENTITY_PUBLIC_FILE: &str = "identity.pub";
+
+/// Why an operation that needs existing node state refused to create it.
+pub const STATE_NOT_INITIALIZED: &str = "node state is not initialized";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeContext {
@@ -599,25 +616,25 @@ impl NodeContext {
             }
             let allowed = matches!(
                 name.as_ref(),
-                "identity.key"
+                IDENTITY_KEY_FILE
                     // The enrollment-authority signing key, on a node that
                     // issues fleet membership. Added to this closed list
                     // deliberately: the list is a security control, and a new
                     // entry is an amendment to it, not a convenience.
-                    | "authority.key"
+                    | AUTHORITY_KEY_FILE
                     // The baseline-publisher signing key, on a node that ships
                     // code to the fleet. Second amendment to this closed list,
                     // held to the same standard as the first: the list is the
                     // control, and every entry is a decision to admit one more
                     // file to the node's private state.
-                    | "publisher.key"
-                    | "node.sqlite"
+                    | PUBLISHER_KEY_FILE
+                    | DATABASE_FILE
                     | "node.sqlite-wal"
                     | "node.sqlite-shm"
-                    | "transport.key"
-                    | "transport.cert"
-                    | ".identity.lock"
-                    | ".node.lifecycle.lock"
+                    | TRANSPORT_KEY_FILE
+                    | TRANSPORT_CERTIFICATE_FILE
+                    | IDENTITY_LOCK_FILE
+                    | LIFECYCLE_LOCK_FILE
                     | "node.toml"
             ) || name
                 .strip_prefix(".cue-execution-")
@@ -889,7 +906,7 @@ pub(crate) struct NodeLifecycleLock {
 impl NodeLifecycleLock {
     fn acquire(context: &NodeContext, nonblocking: bool) -> Result<Self, NodeError> {
         let state_was_present = prepare_lifecycle_state(context)?;
-        let path = context.state_dir().join(".node.lifecycle.lock");
+        let path = context.state_dir().join(LIFECYCLE_LOCK_FILE);
         let file = open_lifecycle_lock(context, &path, nonblocking)?;
         let file = lock_lifecycle_file(file, nonblocking)?;
         Ok(Self {

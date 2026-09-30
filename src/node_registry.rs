@@ -416,7 +416,7 @@ impl NodeRegistry {
     ) -> Result<Self, RegistryError> {
         if !context.validate_existing_state_directory()? {
             return Err(RegistryError::NotFound(
-                "node state is not initialized".to_string(),
+                crate::node::STATE_NOT_INITIALIZED.to_string(),
             ));
         }
         let path = context.database_path();

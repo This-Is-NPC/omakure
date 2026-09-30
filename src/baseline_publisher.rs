@@ -112,7 +112,7 @@ impl BaselinePublisher {
     pub fn load_existing(context: &NodeContext) -> Result<Self, PublisherError> {
         if !context.validate_existing_state_directory()? {
             return Err(PublisherError::State(
-                "node state is not initialized".to_string(),
+                crate::node::STATE_NOT_INITIALIZED.to_string(),
             ));
         }
         let path = context.publisher_key_path();

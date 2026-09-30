@@ -2,6 +2,8 @@ use crate::domain::{NodeConfig, NodeConfigError};
 use crate::enrollment::{self, EnrollmentError, EnrollmentRole, ManualEnrollmentRequest};
 use crate::node::{
     NodeContext, NodeError, NodePathOverrides, PrivateFileCommitStatus, PrivateTokenLease,
+    DATABASE_FILE, IDENTITY_KEY_FILE, IDENTITY_PUBLIC_FILE, TRANSPORT_CERTIFICATE_FILE,
+    TRANSPORT_KEY_FILE,
 };
 use crate::node_identity::{NodeIdentity, NodeIdentityError};
 use crate::node_registry::{
@@ -213,8 +215,8 @@ pub(crate) fn initialize_node_locked(
     let _state_contents_present = context
         .validate_existing_state_contents()
         .map_err(map_node_error)?;
-    let identity_was_present = path_is_present(&context.identity_path(), "identity.key")?;
-    let registry_was_present = path_is_present(&context.database_path(), "node.sqlite")?;
+    let identity_was_present = path_is_present(&context.identity_path(), IDENTITY_KEY_FILE)?;
+    let registry_was_present = path_is_present(&context.database_path(), DATABASE_FILE)?;
     if state_was_present
         && (identity_was_present || registry_was_present)
         && read_node_config(context)?.is_none()
@@ -226,9 +228,11 @@ pub(crate) fn initialize_node_locked(
         .load_or_initialize_identity()
         .map_err(map_identity_error)?;
     let transport_key_was_present =
-        path_is_present(&context.transport_key_path(), "transport.key")?;
-    let transport_certificate_was_present =
-        path_is_present(&context.transport_certificate_path(), "transport.cert")?;
+        path_is_present(&context.transport_key_path(), TRANSPORT_KEY_FILE)?;
+    let transport_certificate_was_present = path_is_present(
+        &context.transport_certificate_path(),
+        TRANSPORT_CERTIFICATE_FILE,
+    )?;
     let first_machine_creation = !identity_was_present
         && !registry_was_present
         && !transport_key_was_present
@@ -281,10 +285,10 @@ pub fn public_node_status(context: &NodeContext) -> OperationResult<NodeStatus> 
         });
     }
 
-    let identity_present = path_is_present(&context.identity_path(), "identity.key")?;
-    let registry_present = path_is_present(&context.database_path(), "node.sqlite")?;
-    let public_companion = context.state_dir().join("identity.pub");
-    if path_is_present(&public_companion, "identity.pub")? {
+    let identity_present = path_is_present(&context.identity_path(), IDENTITY_KEY_FILE)?;
+    let registry_present = path_is_present(&context.database_path(), DATABASE_FILE)?;
+    let public_companion = context.state_dir().join(IDENTITY_PUBLIC_FILE);
+    if path_is_present(&public_companion, IDENTITY_PUBLIC_FILE)? {
         return Err(registry_error("unsupported identity state extra"));
     }
     if identity_present != registry_present {
@@ -357,8 +361,8 @@ pub fn reset_node(context: &NodeContext, confirmed: bool) -> OperationResult<Nod
             identity_removed: false,
         });
     }
-    let had_identity = path_is_present(&context.identity_path(), "identity.key")?;
-    let had_registry = path_is_present(&context.database_path(), "node.sqlite")?;
+    let had_identity = path_is_present(&context.identity_path(), IDENTITY_KEY_FILE)?;
+    let had_registry = path_is_present(&context.database_path(), DATABASE_FILE)?;
     let removed = NodeIdentity::execute_factory_reset(context).map_err(map_identity_error)?;
     Ok(NodeResetResult {
         state_removed: removed,
@@ -734,8 +738,8 @@ fn apply_signed_bundle_with_actor(
     let state_ready = context
         .validate_existing_state_contents()
         .map_err(map_node_error)?;
-    let identity_ready = path_is_present(&context.identity_path(), "identity.key")?;
-    let registry_ready = path_is_present(&context.database_path(), "node.sqlite")?;
+    let identity_ready = path_is_present(&context.identity_path(), IDENTITY_KEY_FILE)?;
+    let registry_ready = path_is_present(&context.database_path(), DATABASE_FILE)?;
     if !state_ready || !identity_ready || !registry_ready {
         let _ = initialize_node_nonblocking(context, &config)?;
     }

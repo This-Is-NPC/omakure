@@ -1,5 +1,8 @@
 use crate::domain::NODE_ID_PREFIX;
-use crate::node::{write_new_file_atomically, NodeContext, NodeError};
+use crate::node::{
+    write_new_file_atomically, NodeContext, NodeError, DATABASE_FILE, IDENTITY_KEY_FILE,
+    IDENTITY_LOCK_FILE, IDENTITY_PUBLIC_FILE, LIFECYCLE_LOCK_FILE, STATE_NOT_INITIALIZED,
+};
 use crate::node_registry::RegistryError;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
@@ -94,13 +97,11 @@ impl NodeIdentity {
     /// status inspection.
     pub fn load_existing(context: &NodeContext) -> Result<Self, NodeIdentityError> {
         if !context.validate_existing_state_directory()? {
-            return Err(NodeIdentityError::State(
-                "node state is not initialized".to_string(),
-            ));
+            return Err(NodeIdentityError::State(STATE_NOT_INITIALIZED.to_string()));
         }
         reject_public_companion(context.state_dir())?;
         let identity_path = context.identity_path();
-        if !inspect_existing_state_file(&identity_path, "identity.key")? {
+        if !inspect_existing_state_file(&identity_path, IDENTITY_KEY_FILE)? {
             return Err(NodeIdentityError::State(
                 "node identity is not initialized".to_string(),
             ));
@@ -127,8 +128,8 @@ impl NodeIdentity {
 
         let identity_path = context.identity_path();
         reject_public_companion(context.state_dir())?;
-        let identity_exists = inspect_existing_state_file(&identity_path, "identity.key")?;
-        let database_exists = inspect_existing_state_file(&context.database_path(), "node.sqlite")?;
+        let identity_exists = inspect_existing_state_file(&identity_path, IDENTITY_KEY_FILE)?;
+        let database_exists = inspect_existing_state_file(&context.database_path(), DATABASE_FILE)?;
         if !identity_exists && database_exists {
             return Err(NodeIdentityError::State(
                 "node state is missing its private identity".to_string(),
@@ -248,7 +249,7 @@ impl NodeIdentity {
         }
         for path in paths.iter().filter(|path| {
             path.file_name()
-                .map(|name| name != ".identity.lock" && name != ".node.lifecycle.lock")
+                .map(|name| name != IDENTITY_LOCK_FILE && name != LIFECYCLE_LOCK_FILE)
                 .unwrap_or(false)
         }) {
             fs::remove_file(path)?;
@@ -326,7 +327,7 @@ fn inspect_existing_state_file(path: &Path, label: &str) -> Result<bool, NodeIde
 }
 
 fn reject_public_companion(state_dir: &Path) -> Result<(), NodeIdentityError> {
-    let path = state_dir.join("identity.pub");
+    let path = state_dir.join(IDENTITY_PUBLIC_FILE);
     match fs::symlink_metadata(path) {
         Ok(_) => Err(NodeIdentityError::State(
             "identity.pub is an unsupported identity-state extra".to_string(),
@@ -363,7 +364,7 @@ struct IdentityLock {
 
 impl IdentityLock {
     fn acquire(context: &NodeContext) -> Result<Self, NodeIdentityError> {
-        let path = context.state_dir().join(".identity.lock");
+        let path = context.state_dir().join(IDENTITY_LOCK_FILE);
         let mut options = fs::OpenOptions::new();
         options.read(true).write(true).create(true);
         #[cfg(unix)]

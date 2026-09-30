@@ -3,6 +3,9 @@
 use std::fs;
 use std::path::Path;
 
+/// The Usage spec `usage-kdl` writes and `usage-docs` renders from.
+pub const KDL_PATH: &str = "docs/usage/omakure.kdl";
+
 /// LF line endings, no trailing whitespace, and exactly one final newline, so
 /// generated artifacts do not depend on the host that rendered them.
 pub fn normalize(value: &str) -> String {

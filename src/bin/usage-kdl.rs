@@ -11,12 +11,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::env;
 use std::fs;
-use usage_artifacts::{compare_file, normalize, write_file};
+use usage_artifacts::{compare_file, normalize, write_file, KDL_PATH};
 
 #[path = "usage_artifacts/mod.rs"]
 mod usage_artifacts;
 
-const KDL_PATH: &str = "docs/usage/omakure.kdl";
 const EVIDENCE_PATH: &str = "docs/usage/fidelity.json";
 const OVERLAY_PATH: &str = "docs/usage/overlay.json";
 const ALLOWLIST_PATH: &str = "docs/usage/fidelity-allowlist.json";

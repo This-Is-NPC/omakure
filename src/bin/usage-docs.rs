@@ -5,7 +5,7 @@
 
 use omakure::cli_http_parity::current_cli_ids;
 use std::{collections::BTreeSet, env, fs};
-use usage_artifacts::{compare_file, normalize, write_file};
+use usage_artifacts::{compare_file, normalize, write_file, KDL_PATH};
 use usage_docs::{
     docs::{manpage::ManpageRenderer, markdown::MarkdownRenderer},
     spec::cmd::SpecExample,
@@ -15,7 +15,6 @@ use usage_docs::{
 #[path = "usage_artifacts/mod.rs"]
 mod usage_artifacts;
 
-const KDL_PATH: &str = "docs/usage/omakure.kdl";
 const MARKDOWN_PATH: &str = "docs/usage/omakure.md";
 const MANPAGE_PATH: &str = "docs/usage/omakure.1";
 const REGENERATE: &str = "scripts/tasks/usage-docs --write";

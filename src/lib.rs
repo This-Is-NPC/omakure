@@ -24,6 +24,7 @@ mod error;
 pub mod health_plane;
 pub mod node;
 pub mod node_identity;
+mod node_key;
 pub mod node_registry;
 pub mod node_transport;
 /// The canonical versioned operation metadata catalog.

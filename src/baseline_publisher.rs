@@ -15,15 +15,9 @@
 //! cannot redirect it, and never returned by any read path.
 
 use crate::node::{NodeContext, NodeError};
-use k256::elliptic_curve::Generate;
+use crate::node_key::{HeldKey, KeyFileError};
 use k256::schnorr::SigningKey;
-use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Read;
-use std::path::Path;
-
-/// The bytes of the publisher scalar.
-const PUBLISHER_PRIVATE_BYTES: usize = 32;
 
 /// Domain separator for the publisher key id.
 ///
@@ -66,6 +60,23 @@ impl From<NodeError> for PublisherError {
     }
 }
 
+impl From<KeyFileError> for PublisherError {
+    fn from(error: KeyFileError) -> Self {
+        match error {
+            KeyFileError::State(detail) => Self::State(detail),
+            KeyFileError::Node(error) => error.into(),
+            KeyFileError::Io(error) => Self::Io(error),
+            KeyFileError::InvalidKey => Self::InvalidKey,
+        }
+    }
+}
+
+const PUBLISHER_KEY: HeldKey = HeldKey {
+    label: "baseline publisher",
+    article: "a",
+    scalar: "publisher",
+};
+
 /// The baseline publisher this node holds, if it holds one.
 pub struct BaselinePublisher {
     signing_key: SigningKey,
@@ -91,15 +102,8 @@ impl BaselinePublisher {
         context: &NodeContext,
         registry: &crate::node_registry::NodeRegistry,
     ) -> Result<Self, PublisherError> {
-        context.ensure_state_directory()?;
         let path = context.publisher_key_path();
-        if fs::symlink_metadata(&path).is_ok() {
-            return Err(PublisherError::State(
-                "this node already holds a baseline publisher key".to_string(),
-            ));
-        }
-        let signing_key = SigningKey::generate();
-        crate::node::write_new_file_atomically(&path, signing_key.to_bytes().as_ref(), 0o600)?;
+        let signing_key = PUBLISHER_KEY.generate(context, &path)?;
         if let Err(error) = registry.reject_conductor_authority() {
             let _ = fs::remove_file(&path);
             return Err(PublisherError::State(error.to_string()));
@@ -110,39 +114,13 @@ impl BaselinePublisher {
 
     /// Load the publisher key, without creating anything.
     pub fn load_existing(context: &NodeContext) -> Result<Self, PublisherError> {
-        if !context.validate_existing_state_directory()? {
-            return Err(PublisherError::State(
-                crate::node::STATE_NOT_INITIALIZED.to_string(),
-            ));
-        }
-        let path = context.publisher_key_path();
-        let metadata = fs::symlink_metadata(&path).map_err(|_| {
-            PublisherError::State("this node holds no baseline publisher key".to_string())
-        })?;
-        if !metadata.file_type().is_file() {
-            return Err(PublisherError::State(
-                "the baseline publisher key is not a regular file".to_string(),
-            ));
-        }
-        context.validate_private_file(&path)?;
-        let bytes = read_publisher_key(context, &path)?;
-        let signing_key = SigningKey::from_slice(&bytes).map_err(|_| PublisherError::InvalidKey)?;
-        // The same normalization check the identity and the authority make: a
-        // scalar that was not stored even-Y normalized would sign under a
-        // different public key than the one the fleet records.
-        if signing_key.to_bytes().as_slice() != bytes.as_slice() {
-            return Err(PublisherError::State(
-                "the persisted publisher scalar is not even-Y normalized".to_string(),
-            ));
-        }
+        let signing_key = PUBLISHER_KEY.load(context, &context.publisher_key_path())?;
         Ok(Self { signing_key })
     }
 
     /// The x-only public key, as a receiver's recorded publisher carries it.
     pub fn public_key(&self) -> [u8; crate::baseline::PUBLISHER_KEY_BYTES] {
-        let mut key = [0u8; crate::baseline::PUBLISHER_KEY_BYTES];
-        key.copy_from_slice(self.signing_key.verifying_key().to_bytes().as_slice());
-        key
+        crate::node_key::public_key(&self.signing_key)
     }
 
     /// The stable id a manifest carries and a receiver's publisher record
@@ -151,10 +129,7 @@ impl BaselinePublisher {
     /// Derived from the public key rather than stored, so the two can never
     /// disagree and there is no second piece of state to keep in step.
     pub fn key_id(&self) -> [u8; crate::baseline::PUBLISHER_ID_BYTES] {
-        let digest = Sha256::digest([PUBLISHER_ID_DOMAIN, &self.public_key()[..]].concat());
-        let mut id = [0u8; crate::baseline::PUBLISHER_ID_BYTES];
-        id.copy_from_slice(&digest[..crate::baseline::PUBLISHER_ID_BYTES]);
-        id
+        crate::node_key::key_id(PUBLISHER_ID_DOMAIN, &self.signing_key)
     }
 
     /// Sign one baseline over the script bodies themselves.
@@ -179,25 +154,6 @@ impl BaselinePublisher {
         .map(|manifest| manifest.encode())
         .map_err(|error| PublisherError::Signing(error.to_string()))
     }
-}
-
-/// Read the scalar without following a symlink, re-validating owner and mode.
-fn read_publisher_key(
-    context: &NodeContext,
-    path: &Path,
-) -> Result<[u8; PUBLISHER_PRIVATE_BYTES], PublisherError> {
-    let mut options = crate::util::fs::no_follow_open_options();
-    options.read(true);
-    let mut file = options.open(path)?;
-    if !file.metadata()?.file_type().is_file() {
-        return Err(PublisherError::State(
-            "the baseline publisher key has an unexpected file type".to_string(),
-        ));
-    }
-    context.validate_private_file(path)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    bytes.try_into().map_err(|_| PublisherError::InvalidKey)
 }
 
 #[cfg(test)]

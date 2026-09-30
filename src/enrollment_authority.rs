@@ -20,15 +20,8 @@
 //! path.
 
 use crate::node::{NodeContext, NodeError};
-use k256::elliptic_curve::Generate;
+use crate::node_key::{HeldKey, KeyFileError};
 use k256::schnorr::SigningKey;
-use sha2::{Digest, Sha256};
-use std::fs;
-use std::io::Read;
-use std::path::Path;
-
-/// The bytes of the authority scalar.
-const AUTHORITY_PRIVATE_BYTES: usize = 32;
 
 /// Domain separator for the authority key id.
 ///
@@ -70,6 +63,23 @@ impl From<NodeError> for AuthorityError {
     }
 }
 
+impl From<KeyFileError> for AuthorityError {
+    fn from(error: KeyFileError) -> Self {
+        match error {
+            KeyFileError::State(detail) => Self::State(detail),
+            KeyFileError::Node(error) => error.into(),
+            KeyFileError::Io(error) => Self::Io(error),
+            KeyFileError::InvalidKey => Self::InvalidKey,
+        }
+    }
+}
+
+const AUTHORITY_KEY: HeldKey = HeldKey {
+    label: "enrollment authority",
+    article: "an",
+    scalar: "authority",
+};
+
 /// The enrollment authority this node holds, if it holds one.
 pub struct EnrollmentAuthority {
     signing_key: SigningKey,
@@ -83,54 +93,21 @@ impl EnrollmentAuthority {
     /// across every machine in the fleet — that is a fleet-wide event, not a
     /// side effect of running a command twice.
     pub fn create(context: &NodeContext) -> Result<Self, AuthorityError> {
-        context.ensure_state_directory()?;
         let path = context.authority_key_path();
-        if fs::symlink_metadata(&path).is_ok() {
-            return Err(AuthorityError::State(
-                "this node already holds an enrollment authority key".to_string(),
-            ));
-        }
-        let signing_key = SigningKey::generate();
-        crate::node::write_new_file_atomically(&path, signing_key.to_bytes().as_ref(), 0o600)?;
+        let signing_key = AUTHORITY_KEY.generate(context, &path)?;
         context.validate_private_file(&path)?;
         Ok(Self { signing_key })
     }
 
     /// Load the authority key, without creating anything.
     pub fn load_existing(context: &NodeContext) -> Result<Self, AuthorityError> {
-        if !context.validate_existing_state_directory()? {
-            return Err(AuthorityError::State(
-                crate::node::STATE_NOT_INITIALIZED.to_string(),
-            ));
-        }
-        let path = context.authority_key_path();
-        let metadata = fs::symlink_metadata(&path).map_err(|_| {
-            AuthorityError::State("this node holds no enrollment authority key".to_string())
-        })?;
-        if !metadata.file_type().is_file() {
-            return Err(AuthorityError::State(
-                "the enrollment authority key is not a regular file".to_string(),
-            ));
-        }
-        context.validate_private_file(&path)?;
-        let bytes = read_authority_key(context, &path)?;
-        let signing_key = SigningKey::from_slice(&bytes).map_err(|_| AuthorityError::InvalidKey)?;
-        // The same normalization check the identity makes: a scalar that was
-        // not stored even-Y normalized would sign under a different public key
-        // than the one published in `trust.authorities`.
-        if signing_key.to_bytes().as_slice() != bytes.as_slice() {
-            return Err(AuthorityError::State(
-                "the persisted authority scalar is not even-Y normalized".to_string(),
-            ));
-        }
+        let signing_key = AUTHORITY_KEY.load(context, &context.authority_key_path())?;
         Ok(Self { signing_key })
     }
 
     /// The x-only public key, as `trust.authorities[].public_key` carries it.
     pub fn public_key(&self) -> [u8; 32] {
-        let mut key = [0u8; 32];
-        key.copy_from_slice(self.signing_key.verifying_key().to_bytes().as_slice());
-        key
+        crate::node_key::public_key(&self.signing_key)
     }
 
     /// The stable id a bundle carries and `trust.authorities[].key_id` names.
@@ -138,10 +115,7 @@ impl EnrollmentAuthority {
     /// Derived from the public key rather than stored, so the two can never
     /// disagree and there is no second piece of state to keep in step.
     pub fn key_id(&self) -> [u8; crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES] {
-        let digest = Sha256::digest([AUTHORITY_ID_DOMAIN, &self.public_key()[..]].concat());
-        let mut id = [0u8; crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES];
-        id.copy_from_slice(&digest[..crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES]);
-        id
+        crate::node_key::key_id(AUTHORITY_ID_DOMAIN, &self.signing_key)
     }
 
     /// Mint one bundle. The signing itself is the shipped, tested construction;
@@ -186,25 +160,6 @@ impl EnrollmentAuthority {
         .map(|bundle| bundle.encode())
         .map_err(|error| AuthorityError::Signing(format!("{error:?}")))
     }
-}
-
-/// Read the scalar without following a symlink, re-validating owner and mode.
-fn read_authority_key(
-    context: &NodeContext,
-    path: &Path,
-) -> Result<[u8; AUTHORITY_PRIVATE_BYTES], AuthorityError> {
-    let mut options = crate::util::fs::no_follow_open_options();
-    options.read(true);
-    let mut file = options.open(path)?;
-    if !file.metadata()?.file_type().is_file() {
-        return Err(AuthorityError::State(
-            "the enrollment authority key has an unexpected file type".to_string(),
-        ));
-    }
-    context.validate_private_file(path)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    bytes.try_into().map_err(|_| AuthorityError::InvalidKey)
 }
 
 #[cfg(test)]

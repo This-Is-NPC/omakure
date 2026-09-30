@@ -3,6 +3,7 @@ use crate::node::{
     write_new_file_atomically, NodeContext, NodeError, DATABASE_FILE, IDENTITY_KEY_FILE,
     IDENTITY_LOCK_FILE, IDENTITY_PUBLIC_FILE, LIFECYCLE_LOCK_FILE, STATE_NOT_INITIALIZED,
 };
+use crate::node_key::{KeyFileError, PRIVATE_KEY_BYTES};
 use crate::node_registry::RegistryError;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
@@ -10,11 +11,10 @@ use fs2::FileExt;
 use k256::elliptic_curve::Generate;
 use k256::schnorr::{signature::hazmat::PrehashSigner, Signature, SigningKey};
 use std::fs;
-use std::io::{self, Read};
+use std::io;
 use std::path::Path;
 use thiserror::Error;
 
-const IDENTITY_PRIVATE_BYTES: usize = 32;
 const NODE_ID_DOMAIN: &[u8] = b"omakure/node-id/v1\0";
 
 #[derive(Debug, Error)]
@@ -31,6 +31,17 @@ pub enum NodeIdentityError {
     Signing,
     #[error("node trust registry error: {0}")]
     Registry(#[from] RegistryError),
+}
+
+impl From<KeyFileError> for NodeIdentityError {
+    fn from(error: KeyFileError) -> Self {
+        match error {
+            KeyFileError::State(detail) => Self::State(detail),
+            KeyFileError::Node(error) => Self::Node(error),
+            KeyFileError::Io(error) => Self::Io(error),
+            KeyFileError::InvalidKey => Self::InvalidKey,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -285,19 +296,12 @@ pub(crate) fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
 fn read_private_key(
     context: &NodeContext,
     path: &Path,
-) -> Result<[u8; IDENTITY_PRIVATE_BYTES], NodeIdentityError> {
-    let mut options = crate::util::fs::no_follow_open_options();
-    options.read(true);
-    let mut file = options.open(path)?;
-    if !file.metadata()?.file_type().is_file() {
-        return Err(NodeIdentityError::State(
-            "identity state has an unexpected file type".to_string(),
-        ));
-    }
-    context.validate_private_file(path)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    bytes.try_into().map_err(|_| NodeIdentityError::InvalidKey)
+) -> Result<[u8; PRIVATE_KEY_BYTES], NodeIdentityError> {
+    Ok(crate::node_key::read_private_key(
+        context,
+        path,
+        "identity state has an unexpected file type",
+    )?)
 }
 
 fn inspect_existing_state_file(path: &Path, label: &str) -> Result<bool, NodeIdentityError> {
@@ -496,7 +500,7 @@ mod tests {
         assert_eq!(&first_status, reopened.public_status());
         assert_eq!(
             fs::read(context.identity_path()).unwrap().len(),
-            IDENTITY_PRIVATE_BYTES
+            PRIVATE_KEY_BYTES
         );
         assert!(!context.state_dir().join("identity.pub").exists());
     }

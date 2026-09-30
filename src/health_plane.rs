@@ -687,7 +687,7 @@ fn project(peer: HealthFleetPeer, now: i64) -> FleetNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+
     use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
     use crate::node_registry::{PeerRegistration, PeerRole, PeerSource};
     use crate::util::hex;
@@ -760,18 +760,7 @@ mod tests {
 
     fn fixture() -> Fixture {
         let temp = TempDir::new().unwrap();
-        let context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let trust = |seed: u32, role: PeerRole, capabilities: &[&str]| {

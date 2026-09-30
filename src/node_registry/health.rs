@@ -2079,7 +2079,7 @@ mod tests {
         MAX_STORED_SIGNAL_BYTES, STORAGE_CEILING_BYTES, WORST_CASE_BYTES_PER_PERFORMER,
     };
     use crate::health_plane::model::{HealthBody, HealthPayload};
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+    use crate::node::NodeContext;
     use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
     use crate::node_registry::{PeerRegistration, PeerSource, SCHEMA_VERSION};
     use rusqlite::{Connection, TransactionBehavior};
@@ -2096,18 +2096,7 @@ mod tests {
 
     fn fixture() -> Fixture {
         let temp = TempDir::new().unwrap();
-        let context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         Fixture {

@@ -1468,22 +1468,11 @@ pub fn authorize_peer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+
     use tempfile::TempDir;
 
     fn identity(temp: &TempDir) -> NodeIdentity {
-        let context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let context = crate::test_support::node_context(temp.path());
         NodeIdentity::load_or_initialize(&context).unwrap()
     }
 

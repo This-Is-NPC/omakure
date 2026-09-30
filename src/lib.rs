@@ -52,6 +52,8 @@ mod runtime;
 pub use runtime::{LUA_HOST_ARG, LUA_HOST_FAILURE_EXIT};
 mod search_index;
 pub mod secrets;
+#[cfg(test)]
+mod test_support;
 mod use_cases;
 mod util;
 #[doc(hidden)]

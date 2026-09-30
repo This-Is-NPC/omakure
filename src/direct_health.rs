@@ -777,7 +777,7 @@ mod tests {
     use crate::health_plane::model::RunFact;
     use crate::health_plane::model::RunnerFact;
     use crate::health_plane::report::{HealthFactsSource, ProfileFacts, PulseFacts};
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+
     use crate::node_registry::{PeerRegistration, PeerSource};
     use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
     use std::sync::Mutex as StdMutex;
@@ -929,34 +929,12 @@ mod tests {
 
     fn fixture() -> Fixture {
         let temp = TempDir::new().unwrap();
-        let context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let conductor_root = temp.path().join("conductor");
         std::fs::create_dir_all(&conductor_root).unwrap();
-        let conductor_context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(conductor_root.join("state")),
-                Some(conductor_root.join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let conductor_context = crate::test_support::node_context(&conductor_root);
         let conductor_identity = NodeIdentity::import(&conductor_context, &scalar(11)).unwrap();
         let trust = |seed: u32, role: PeerRole, capabilities: &[&str]| {
             let (node_id, public_key, xonly) = peer_identity(seed);

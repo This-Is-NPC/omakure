@@ -1795,21 +1795,6 @@ mod tests {
 
     static TOKEN_FAULT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
-    fn context(temp: &TempDir) -> NodeContext {
-        NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap()
-    }
-
     fn fail_enrollment_audits(context: &NodeContext, enabled: bool) {
         let connection = Connection::open(context.database_path()).unwrap();
         if enabled {
@@ -1881,9 +1866,9 @@ mod tests {
         bundle_byte: u8,
     ) -> SignedBundleFixture {
         let target_temp = TempDir::new().unwrap();
-        let target = context(&target_temp);
+        let target = crate::test_support::node_context(target_temp.path());
         let manager_temp = TempDir::new().unwrap();
-        let manager_context = context(&manager_temp);
+        let manager_context = crate::test_support::node_context(manager_temp.path());
         let authority_signing_key =
             k256::schnorr::SigningKey::from_slice(&authority_private).unwrap();
         let token = "t".repeat(32);
@@ -1961,7 +1946,7 @@ mod tests {
     #[test]
     fn status_is_observational_and_mutations_require_evidence() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         let before = public_node_status(&context).unwrap();
         assert!(!before.initialized);
         assert!(!context.state_dir().exists());
@@ -1988,7 +1973,7 @@ mod tests {
     #[test]
     fn a_trust_conflict_says_whether_the_peer_is_already_trusted_or_revoked() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let identity = NodeIdentity::load_existing(&context).unwrap();
         let request = peer_request(&identity);
@@ -2045,7 +2030,7 @@ mod tests {
     #[test]
     fn a_refused_node_path_says_which_path_and_why() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         context.ensure_state_directory().expect("state dir");
 
         // A directory where a file belongs: `UnexpectedFileType`, which used
@@ -2081,7 +2066,7 @@ mod tests {
     #[test]
     fn initialization_does_not_recreate_deleted_transport_state() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         fs::remove_file(context.transport_key_path()).unwrap();
         fs::remove_file(context.transport_certificate_path()).unwrap();
@@ -2115,7 +2100,7 @@ mod tests {
     #[test]
     fn a_stray_state_entry_is_not_reported_as_a_lifecycle_conflict() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         let mut config = crate::domain::NodeConfig::default();
         config.trust.enrollment = "signed-bundle".to_string();
         config.organization.id = "stray-diagnosis".to_string();
@@ -2184,7 +2169,7 @@ mod tests {
     #[test]
     fn manual_import_update_and_revoke_are_public_and_replay_safe() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let identity = NodeIdentity::load_existing(&context).unwrap();
         let request = peer_request(&identity);
@@ -2244,7 +2229,7 @@ mod tests {
     #[test]
     fn revocation_succeeds_with_pending_cleanup_when_runs_storage_is_unavailable() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let identity = NodeIdentity::load_existing(&context).unwrap();
         let request = peer_request(&identity);
@@ -2280,7 +2265,7 @@ mod tests {
     #[test]
     fn revoked_cue_cleanup_reconciles_after_runs_storage_returns() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let identity = NodeIdentity::load_existing(&context).unwrap();
         let request = peer_request(&identity);
@@ -2338,8 +2323,8 @@ mod tests {
     fn manual_enrollment_stages_requires_code_and_promotes_atomically() {
         let target_temp = TempDir::new().unwrap();
         let candidate_temp = TempDir::new().unwrap();
-        let target = context(&target_temp);
-        let candidate = context(&candidate_temp);
+        let target = crate::test_support::node_context(target_temp.path());
+        let candidate = crate::test_support::node_context(candidate_temp.path());
         let mut target_config = NodeConfig::default();
         target_config.trust.enrollment = "manual".into();
         initialize_node(&target, &target_config).unwrap();
@@ -2420,8 +2405,8 @@ mod tests {
     fn manual_enrollment_rejection_audit_failure_is_atomic() {
         let target_temp = TempDir::new().unwrap();
         let candidate_temp = TempDir::new().unwrap();
-        let target = context(&target_temp);
-        let candidate = context(&candidate_temp);
+        let target = crate::test_support::node_context(target_temp.path());
+        let candidate = crate::test_support::node_context(candidate_temp.path());
         let mut target_config = NodeConfig::default();
         target_config.trust.enrollment = "manual".into();
         initialize_node(&target, &target_config).unwrap();
@@ -2467,7 +2452,7 @@ mod tests {
     #[test]
     fn status_fails_closed_on_corrupt_registry_without_replacing_identity() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let private_before = std::fs::read(context.identity_path()).unwrap();
         std::fs::write(context.database_path(), b"not a sqlite database").unwrap();
@@ -2483,7 +2468,7 @@ mod tests {
     #[test]
     fn status_redacts_malformed_config_values() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let secret = "relay-user-super-secret-value";
         let malformed = NodeConfig::default()
@@ -2505,7 +2490,7 @@ mod tests {
     #[test]
     fn status_rejects_oversized_config_before_parsing() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         std::fs::write(
             context.config_path(),
@@ -2528,7 +2513,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         std::fs::set_permissions(
             context.config_path(),
@@ -2557,7 +2542,7 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
 
         let outside = temp.path().join("outside.toml");
@@ -2614,7 +2599,7 @@ mod tests {
         use std::thread;
 
         let temp = TempDir::new().unwrap();
-        let context = Arc::new(context(&temp));
+        let context = Arc::new(crate::test_support::node_context(temp.path()));
         let barrier = Arc::new(Barrier::new(8));
         let handles = (0..8)
             .map(|_| {
@@ -2642,7 +2627,7 @@ mod tests {
     #[test]
     fn factory_reset_requires_confirmation_and_removes_identity_and_trust_only() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let identity_before = NodeIdentity::load_existing(&context)
             .unwrap()
@@ -2677,7 +2662,7 @@ mod tests {
         use std::thread;
 
         let temp = TempDir::new().unwrap();
-        let context = Arc::new(context(&temp));
+        let context = Arc::new(crate::test_support::node_context(temp.path()));
         initialize_node(&context, &NodeConfig::default()).unwrap();
         let barrier = Arc::new(Barrier::new(2));
         let reset_context = Arc::clone(&context);
@@ -2718,7 +2703,7 @@ mod tests {
             .unwrap();
         set_private_token_fault(PrivateTokenFault::None);
         let target_temp = TempDir::new().unwrap();
-        let target = context(&target_temp);
+        let target = crate::test_support::node_context(target_temp.path());
         let authority_private = [2_u8; 32];
         let authority_signing_key =
             k256::schnorr::SigningKey::from_slice(&authority_private).unwrap();
@@ -2737,7 +2722,7 @@ mod tests {
         }];
 
         let manager_temp = TempDir::new().unwrap();
-        let manager_context = context(&manager_temp);
+        let manager_context = crate::test_support::node_context(manager_temp.path());
         let manager = NodeIdentity::load_or_initialize(&manager_context).unwrap();
         let manager_transport = LocalTransport::provision_new(&manager_context, &manager).unwrap();
         initialize_node(&target, &config).unwrap();
@@ -2950,7 +2935,7 @@ mod tests {
             .unwrap();
         set_private_token_fault(PrivateTokenFault::None);
         let target_temp = TempDir::new().unwrap();
-        let target = context(&target_temp);
+        let target = crate::test_support::node_context(target_temp.path());
         let authority_private = [3_u8; 32];
         let authority = k256::schnorr::SigningKey::from_slice(&authority_private).unwrap();
         let token = "t".repeat(32);
@@ -2970,8 +2955,8 @@ mod tests {
 
         let manager_a_temp = TempDir::new().unwrap();
         let manager_b_temp = TempDir::new().unwrap();
-        let manager_a_context = context(&manager_a_temp);
-        let manager_b_context = context(&manager_b_temp);
+        let manager_a_context = crate::test_support::node_context(manager_a_temp.path());
+        let manager_b_context = crate::test_support::node_context(manager_b_temp.path());
         let manager_a = NodeIdentity::load_or_initialize(&manager_a_context).unwrap();
         let manager_b = NodeIdentity::load_or_initialize(&manager_b_context).unwrap();
         let transport_a = LocalTransport::provision_new(&manager_a_context, &manager_a).unwrap();

@@ -1703,17 +1703,7 @@ mod tests {
         crate::node_identity::NodeIdentity,
         crate::node_registry::NodeRegistry,
     ) {
-        let config = root.join("node.toml");
-        std::fs::write(&config, "version = 1\n").expect("write config");
-        let context = crate::node::NodeContext::resolve_for(
-            crate::node::NodePlatform::current(),
-            crate::node::NodePathOverrides::new(Some(root.join("state")), Some(config)),
-            true,
-            None,
-            None,
-            None,
-        )
-        .expect("resolve node context");
+        let context = crate::test_support::configured_node_context(root);
         let identity =
             crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
         let registry =

@@ -3730,25 +3730,6 @@ mod tests {
 
     static RESOLVER_TEST_LOCK: Mutex<()> = Mutex::new(());
 
-    /// A node context rooted in a temporary directory, for the tests that only
-    /// need `ConnectionState` to *have* one.
-    fn test_node_context(temp: &tempfile::TempDir) -> NodeContext {
-        node_context_under(temp.path())
-    }
-
-    fn node_context_under(root: &std::path::Path) -> NodeContext {
-        use crate::node::{NodePathOverrides, NodePlatform};
-        NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(Some(root.join("state")), Some(root.join("node.toml"))),
-            true,
-            None,
-            None,
-            None,
-        )
-        .expect("resolve the node context")
-    }
-
     fn test_identity_status(node_id: &str) -> crate::node_identity::NodeIdentityStatus {
         crate::node_identity::NodeIdentityStatus {
             public_key_hex: "00".repeat(32),
@@ -3805,7 +3786,7 @@ mod tests {
     #[test]
     fn a_local_cue_enqueue_failure_is_visible_in_transport_status() {
         let temp = tempfile::tempdir().expect("node root");
-        let context = test_node_context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).expect("initialize identity");
         let state = ConnectionState::new(
             context,
@@ -3911,7 +3892,7 @@ mod tests {
     fn test_peer_identity(
         temp: &tempfile::TempDir,
     ) -> (crate::node_identity::NodeIdentity, String, [u8; 32]) {
-        let context = node_context_under(temp.path());
+        let context = crate::test_support::node_context(temp.path());
         let identity = crate::node_identity::NodeIdentity::load_or_initialize(&context)
             .expect("peer identity");
         let (node_id, mut key) = {
@@ -4166,23 +4147,8 @@ mod tests {
     #[test]
     fn a_local_failure_before_the_first_write_opens_no_connection() {
         let _test_lock = RESOLVER_TEST_LOCK.lock().unwrap();
-        use crate::node::{NodePathOverrides, NodePlatform};
-        use tempfile::TempDir;
 
-        fn context_for(temp: &TempDir) -> NodeContext {
-            NodeContext::resolve_for(
-                NodePlatform::current(),
-                NodePathOverrides::new(
-                    Some(temp.path().join("state")),
-                    Some(temp.path().join("node.toml")),
-                ),
-                true,
-                None,
-                None,
-                None,
-            )
-            .expect("resolve the node context")
-        }
+        use tempfile::TempDir;
 
         fn fresh_state(context: &NodeContext) -> Arc<ConnectionState> {
             Arc::new(ConnectionState {
@@ -4237,7 +4203,7 @@ mod tests {
 
         // Step 1: no admission budget left for a dial.
         let temp = TempDir::new().expect("temporary node root");
-        let context = context_for(&temp);
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
         LocalTransport::provision_new(&context, &identity).expect("provision transport material");
         let state = fresh_state(&context);
@@ -4260,7 +4226,7 @@ mod tests {
 
         // Step 2: this node's identity is not on disk.
         let temp = TempDir::new().expect("temporary node root");
-        let context = context_for(&temp);
+        let context = crate::test_support::node_context(temp.path());
         assert!(
             NodeIdentity::load_existing(&context).is_err(),
             "this case must fail on the identity load"
@@ -4275,7 +4241,7 @@ mod tests {
 
         // Step 3: the transport key has gone away.
         let temp = TempDir::new().expect("temporary node root");
-        let context = context_for(&temp);
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
         LocalTransport::provision_new(&context, &identity).expect("provision transport material");
         std::fs::remove_file(context.transport_key_path()).expect("remove the transport key");
@@ -4295,7 +4261,7 @@ mod tests {
 
         // Step 4: the registry will not open.
         let temp = TempDir::new().expect("temporary node root");
-        let context = context_for(&temp);
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
         LocalTransport::provision_new(&context, &identity).expect("provision transport material");
         // A directory where the registry file belongs. Docker creates exactly
@@ -4622,7 +4588,7 @@ mod tests {
         let temp = tempfile::TempDir::new().expect("temporary node root");
         let state = Arc::new(ConnectionState {
             local_node_id: "local-peer".to_string(),
-            context: test_node_context(&temp),
+            context: crate::test_support::node_context(temp.path()),
             identity_status: test_identity_status("local-peer"),
             expected,
             stop: Arc::new(AtomicBool::new(false)),
@@ -4695,22 +4661,11 @@ mod tests {
     #[test]
     fn repeated_direct_service_start_stop_does_not_accumulate_resolver_workers() {
         let _test_lock = RESOLVER_TEST_LOCK.lock().unwrap();
-        use crate::node::{NodePathOverrides, NodePlatform};
+
         use tempfile::TempDir;
 
         let temp = TempDir::new().unwrap();
-        let context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let context = crate::test_support::node_context(temp.path());
         NodeIdentity::load_or_initialize(&context).unwrap();
         let baseline_workers = ACTIVE_RESOLVER_WORKERS.load(Ordering::SeqCst);
         let baseline_tasks = ACTIVE_RESOLVER_TASKS.load(Ordering::SeqCst);
@@ -4756,7 +4711,7 @@ mod tests {
     fn revoked_peer_with_a_standing_session(
         temp: &tempfile::TempDir,
     ) -> (Arc<ConnectionState>, String, (TcpStream, TcpStream)) {
-        let context = test_node_context(temp);
+        let context = crate::test_support::node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).expect("initialize the identity");
         LocalTransport::provision_new(&context, &identity).expect("provision transport material");
         let registry =
@@ -4765,8 +4720,9 @@ mod tests {
         // A real second identity, because the registry validates the key.
         let peer_root = temp.path().join("peer");
         std::fs::create_dir_all(&peer_root).expect("peer root");
-        let peer_identity = NodeIdentity::load_or_initialize(&node_context_under(&peer_root))
-            .expect("initialize the peer identity");
+        let peer_identity =
+            NodeIdentity::load_or_initialize(&crate::test_support::node_context(&peer_root))
+                .expect("initialize the peer identity");
         let peer_node_id = peer_identity.public_status().node_id.clone();
         registry
             .import_manual_peer_with_transport(
@@ -4933,11 +4889,12 @@ mod tests {
         let (state, _peer_node_id, _sockets) = revoked_peer_with_a_standing_session(&temp);
         let stranger_root = temp.path().join("stranger");
         std::fs::create_dir_all(&stranger_root).expect("stranger root");
-        let stranger = NodeIdentity::load_or_initialize(&node_context_under(&stranger_root))
-            .expect("initialize a stranger identity")
-            .public_status()
-            .node_id
-            .clone();
+        let stranger =
+            NodeIdentity::load_or_initialize(&crate::test_support::node_context(&stranger_root))
+                .expect("initialize a stranger identity")
+                .public_status()
+                .node_id
+                .clone();
         let dispatcher = CueDispatcher { state };
         let error = dispatcher
             .dispatch(
@@ -4968,7 +4925,7 @@ mod tests {
             let temp = tempfile::TempDir::new().expect("node root");
             let state = ConnectionState {
                 local_node_id: local_node_id.to_string(),
-                context: test_node_context(&temp),
+                context: crate::test_support::node_context(temp.path()),
                 identity_status: test_identity_status(local_node_id),
                 expected: HashSet::new(),
                 stop: Arc::new(AtomicBool::new(false)),
@@ -5012,7 +4969,7 @@ mod tests {
     #[test]
     fn pending_outboxes_are_fifo_and_empty_after_drain() {
         let temp = tempfile::tempdir().expect("temporary node root");
-        let context = test_node_context(&temp);
+        let context = crate::test_support::node_context(temp.path());
         let (cue_reply, _cue_answers) = std::sync::mpsc::sync_channel(1);
         let (baseline_reply, _baseline_answers) = std::sync::mpsc::sync_channel(1);
         let state = ConnectionState {

@@ -2972,25 +2972,14 @@ pub(crate) fn validate_bind(
 #[cfg(test)]
 fn shared_test_health_registry() -> Arc<NodeRegistry> {
     use crate::domain::NodeConfig;
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+
     use std::sync::OnceLock;
 
     static REGISTRY: OnceLock<Arc<NodeRegistry>> = OnceLock::new();
     REGISTRY
         .get_or_init(|| {
             let temp = Box::leak(Box::new(tempfile::TempDir::new().expect("tempdir")));
-            let context = NodeContext::resolve_for(
-                NodePlatform::current(),
-                NodePathOverrides::new(
-                    Some(temp.path().join("state")),
-                    Some(temp.path().join("node.toml")),
-                ),
-                true,
-                None,
-                None,
-                None,
-            )
-            .expect("node context");
+            let context = crate::test_support::node_context(temp.path());
             node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
                 .expect("initialize node");
             Arc::new(

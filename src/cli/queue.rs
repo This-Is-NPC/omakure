@@ -49,7 +49,7 @@ pub fn run(scripts_dir: PathBuf, args: QueueArgs, json_output: bool) -> Result<(
 fn add(workspace: &Workspace, opts: QueueAddArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     let timeout_ms = match opts.timeout.as_deref() {
         None => None,
-        Some(s) => match parse_duration_ms(s) {
+        Some(s) => match parse_humantime_duration_ms(s) {
             Ok(ms) => Some(ms),
             Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
         },
@@ -493,7 +493,7 @@ fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn parse_duration_ms(s: &str) -> Result<i64, String> {
+fn parse_humantime_duration_ms(s: &str) -> Result<i64, String> {
     let trimmed = s.trim();
     let dur = humantime::parse_duration(trimmed)
         .map_err(|err| format!("invalid duration `{}`: {}", trimmed, err))?;
@@ -582,14 +582,14 @@ mod tests {
 
     #[test]
     fn parse_duration_ms_recognizes_humantime_units() {
-        assert_eq!(parse_duration_ms("30s").unwrap(), 30_000);
-        assert_eq!(parse_duration_ms("30m").unwrap(), 1_800_000);
-        assert_eq!(parse_duration_ms("1h").unwrap(), 3_600_000);
+        assert_eq!(parse_humantime_duration_ms("30s").unwrap(), 30_000);
+        assert_eq!(parse_humantime_duration_ms("30m").unwrap(), 1_800_000);
+        assert_eq!(parse_humantime_duration_ms("1h").unwrap(), 3_600_000);
     }
 
     #[test]
     fn parse_duration_ms_rejects_garbage() {
-        assert!(parse_duration_ms("not a duration").is_err());
+        assert!(parse_humantime_duration_ms("not a duration").is_err());
     }
 
     #[test]

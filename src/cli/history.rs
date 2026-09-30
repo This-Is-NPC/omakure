@@ -103,12 +103,12 @@ fn list(
     };
 
     let now = crate::util::time::unix_millis();
-    let since_ms = match opts.since.as_deref().map(parse_duration_to_ms) {
+    let since_ms = match opts.since.as_deref().map(parse_compact_duration_ms) {
         Some(Ok(d)) => Some(now - d),
         Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
         None => None,
     };
-    let until_ms = match opts.until.as_deref().map(parse_duration_to_ms) {
+    let until_ms = match opts.until.as_deref().map(parse_compact_duration_ms) {
         Some(Ok(d)) => Some(now - d),
         Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
         None => None,
@@ -360,9 +360,9 @@ fn history_error_code(err: &OperationError) -> &'static str {
     }
 }
 
-/// Parse a relative-duration string like `30s`, `15m`, `2h`, `7d` into
-/// milliseconds. Returns an error message string on parse failure.
-pub fn parse_duration_to_ms(s: &str) -> Result<i64, String> {
+/// Parse a single `<integer><s|m|h|d>` window such as `30s` or `7d` into
+/// milliseconds; compound humantime spellings are refused.
+fn parse_compact_duration_ms(s: &str) -> Result<i64, String> {
     let s = s.trim();
     if s.is_empty() {
         return Err("empty duration".into());
@@ -429,19 +429,22 @@ mod tests {
     }
 
     #[test]
-    fn parse_duration_seconds_minutes_hours_days() {
-        assert_eq!(parse_duration_to_ms("30s").unwrap(), 30_000);
-        assert_eq!(parse_duration_to_ms("15m").unwrap(), 900_000);
-        assert_eq!(parse_duration_to_ms("2h").unwrap(), 7_200_000);
-        assert_eq!(parse_duration_to_ms("7d").unwrap(), 7 * 24 * 3_600 * 1_000);
+    fn parse_compact_duration_seconds_minutes_hours_days() {
+        assert_eq!(parse_compact_duration_ms("30s").unwrap(), 30_000);
+        assert_eq!(parse_compact_duration_ms("15m").unwrap(), 900_000);
+        assert_eq!(parse_compact_duration_ms("2h").unwrap(), 7_200_000);
+        assert_eq!(
+            parse_compact_duration_ms("7d").unwrap(),
+            7 * 24 * 3_600 * 1_000
+        );
     }
 
     #[test]
-    fn parse_duration_rejects_garbage() {
-        assert!(parse_duration_to_ms("").is_err());
-        assert!(parse_duration_to_ms("abc").is_err());
-        assert!(parse_duration_to_ms("10x").is_err());
-        assert!(parse_duration_to_ms("h").is_err());
+    fn parse_compact_duration_rejects_garbage() {
+        assert!(parse_compact_duration_ms("").is_err());
+        assert!(parse_compact_duration_ms("abc").is_err());
+        assert!(parse_compact_duration_ms("10x").is_err());
+        assert!(parse_compact_duration_ms("h").is_err());
     }
 
     #[test]

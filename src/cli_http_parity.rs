@@ -5,6 +5,7 @@
 //! accidental overlaps impossible.  Markdown is rendered from the manifest;
 //! it is never a second source of truth.
 
+use crate::cli::inventory::normalize_generated_text;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -1115,10 +1116,6 @@ pub fn check_docs_freshness(manifest: &Manifest, docs: &str) -> Result<(), Manif
         }
     }
     Ok(())
-}
-
-fn normalize_generated_text(text: &str) -> String {
-    text.replace("\r\n", "\n")
 }
 
 #[cfg(test)]

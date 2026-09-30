@@ -5,7 +5,8 @@
 //! operation's ownership plane, remote safety, effect, adapters, and static
 //! platform support.
 
-use crate::cli_http_parity::{self, Manifest as ParityManifest, ParityClass, SurfaceInventory};
+use crate::cli::inventory::normalize_generated_text;
+use crate::cli_http_parity::{self, Manifest as ParityManifest, ParityClass};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -320,13 +321,7 @@ pub fn checked_catalog() -> Result<Catalog, CatalogError> {
 }
 
 pub fn validate_current() -> Result<Catalog, CatalogError> {
-    let parity = cli_http_parity::checked_manifest()
-        .map_err(|error| CatalogError::Parse(error.to_string()))?;
-    parity
-        .validate(SurfaceInventory {
-            cli_ids: &cli_http_parity::current_cli_ids(),
-            http_ids: &cli_http_parity::current_http_ids(),
-        })
+    let parity = cli_http_parity::validate_current()
         .map_err(|error| CatalogError::Parse(error.to_string()))?;
     let catalog = checked_catalog()?;
     catalog.validate(&parity)?;
@@ -855,10 +850,6 @@ pub fn check_support_matrix_freshness(
         ));
     }
     Ok(())
-}
-
-fn normalize_generated_text(text: &str) -> String {
-    text.replace("\r\n", "\n")
 }
 
 #[cfg(test)]

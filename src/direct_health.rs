@@ -724,6 +724,7 @@ fn fresh_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::hex;
 
     #[test]
     fn the_transport_failure_mapping_matches_the_frozen_table() {
@@ -920,7 +921,7 @@ mod tests {
             .as_slice()
             .try_into()
             .unwrap();
-        let public_key = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+        let public_key = hex::encode(&xonly);
         (
             crate::node_identity::node_id_for_x_only_public_key(&xonly),
             public_key,
@@ -1045,13 +1046,7 @@ mod tests {
         let kind = envelope_kind_hint(encoded).expect("kind hint").to_string();
         let nonce = crate::direct_transport::envelope_nonce(encoded).expect("nonce");
         let local = fixture.identity.public_status();
-        let key: [u8; 32] = (0..32)
-            .map(|index| {
-                u8::from_str_radix(&local.public_key_hex[index * 2..index * 2 + 2], 16).unwrap()
-            })
-            .collect::<Vec<u8>>()
-            .try_into()
-            .unwrap();
+        let key: [u8; 32] = hex::decode_array(&local.public_key_hex).unwrap();
         verify_envelope(encoded, &local.node_id, &key, &kind, &SESSION_ID, &nonce)
             .expect("emitted envelope must satisfy the frozen verifier");
         let view = envelope_view(encoded).expect("view");

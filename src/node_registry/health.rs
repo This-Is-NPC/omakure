@@ -23,6 +23,7 @@ use crate::health_plane::model::{
     HealthBody, HealthCode, HealthDecision, HealthKind, HealthPayload, ProfileSnapshot,
     PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalKind, SignalRecord,
 };
+use crate::util::hex;
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 
 const MAX_HEALTH_READ_ROWS: usize = 4_096;
@@ -2066,7 +2067,7 @@ fn signal_from_row(row: &StoredSignalRow) -> Result<SignalRecord, RegistryError>
         occurred_at: row.3,
         run,
         sequence: row.1.max(0) as u64,
-        signal_id: row.0.iter().map(|byte| format!("{byte:02x}")).collect(),
+        signal_id: hex::encode(&row.0),
         subject: row.4.clone(),
     })
 }
@@ -2140,7 +2141,7 @@ mod tests {
     fn peer_identity(seed: u32) -> (String, String) {
         let key = k256::schnorr::SigningKey::from_slice(&scalar(seed)).unwrap();
         let xonly = key.verifying_key().to_bytes();
-        let public_key = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+        let public_key = hex::encode(&xonly);
         (node_id_for_x_only_public_key(&xonly), public_key)
     }
 

@@ -6,6 +6,7 @@
 use crate::domain::DiscoverySettings;
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
+use crate::util::hex;
 use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -107,7 +108,7 @@ impl Beacon {
             return Err(DiscoveryError::InvalidBeacon);
         }
         validate_secret(secret)?;
-        let identity_key = hex_decode(&identity.public_status().public_key_hex)
+        let identity_key = hex::decode(&identity.public_status().public_key_hex)
             .ok_or(DiscoveryError::IdentityMismatch)?;
         let identity_xonly: [u8; IDENTITY_BYTES] = identity_key
             .try_into()
@@ -903,23 +904,7 @@ fn node_id_for_key(key: &[u8; IDENTITY_BYTES]) -> String {
     input.extend_from_slice(b"omakure/node-id/v1\0");
     input.extend_from_slice(key);
     let digest = Sha256::digest(input);
-    format!(
-        "omk1_{}",
-        digest
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    )
-}
-
-fn hex_decode(value: &str) -> Option<Vec<u8>> {
-    if !value.len().is_multiple_of(2) {
-        return None;
-    }
-    (0..value.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&value[index..index + 2], 16).ok())
-        .collect()
+    format!("omk1_{}", hex::encode(&digest))
 }
 
 fn hmac_sha256(secret: &[u8], message: &[u8]) -> [u8; 32] {

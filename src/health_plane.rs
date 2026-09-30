@@ -720,6 +720,7 @@ mod tests {
     use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
     use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentity};
     use crate::node_registry::{PeerRegistration, PeerSource};
+    use crate::util::hex;
     use bounds::{
         MAX_AGE_SECONDS, MAX_CANONICAL_PROFILE, MAX_FUTURE_SKEW_SECONDS, PRESENCE_ONLINE_SECONDS,
         PRESENCE_STALE_SECONDS,
@@ -783,7 +784,7 @@ mod tests {
     fn peer_identity(seed: u32) -> (String, String) {
         let key = k256::schnorr::SigningKey::from_slice(&scalar(seed)).unwrap();
         let xonly = key.verifying_key().to_bytes();
-        let public_key = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+        let public_key = hex::encode(&xonly);
         (node_id_for_x_only_public_key(&xonly), public_key)
     }
 

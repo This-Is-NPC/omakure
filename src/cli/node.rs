@@ -5,6 +5,7 @@ use crate::domain::NodeConfig;
 use crate::node::{NodeContext, NodeError, NodePathOverrides};
 use crate::operations::node as node_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
+use crate::util::hex;
 use std::error::Error;
 use std::fs;
 use std::io::Read;
@@ -142,8 +143,8 @@ fn dispatch_baseline(
                 )?;
             Ok(serde_json::json!({
                 "created": true,
-                "key_id": hex_of(&publisher.key_id()),
-                "public_key": hex_of(&publisher.public_key()),
+                "key_id": hex::encode(&publisher.key_id()),
+                "public_key": hex::encode(&publisher.public_key()),
             }))
         }
         NodeBaselineCommand::Publish(publish) => {
@@ -228,18 +229,14 @@ fn push_baseline_via_service(
         "/v1/node/baselines",
         &serde_json::json!({
             "peer_node_id": args.peer_node_id,
-            "manifest": hex_of(manifest),
-            "scripts": bodies.iter().map(|body| hex_of(body)).collect::<Vec<_>>(),
+            "manifest": hex::encode(manifest),
+            "scripts": bodies.iter().map(|body| hex::encode(body)).collect::<Vec<_>>(),
             "wait_seconds": args.wait_seconds,
         }),
         crate::direct_service::dispatch_client_timeout(std::time::Duration::from_secs(u64::from(
             args.wait_seconds,
         ))),
     )
-}
-
-fn hex_of(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn unix_now() -> u64 {

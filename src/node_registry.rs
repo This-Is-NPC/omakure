@@ -9,6 +9,7 @@ use crate::direct_transport::TransportCertificate;
 use crate::enrollment::{self, ManualEnrollmentRequest, SignedEnrollmentBundle};
 use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
+use crate::util::hex;
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{
     params, Connection, ErrorCode, OpenFlags, OptionalExtension, Row, Transaction,
@@ -3745,13 +3746,8 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, RegistryError> {
             "hex value has odd length".to_string(),
         ));
     }
-    (0..value.len())
-        .step_by(2)
-        .map(|index| {
-            u8::from_str_radix(&value[index..index + 2], 16)
-                .map_err(|_| RegistryError::InvalidInput("invalid hexadecimal value".to_string()))
-        })
-        .collect()
+    hex::decode(value)
+        .ok_or_else(|| RegistryError::InvalidInput("invalid hexadecimal value".to_string()))
 }
 
 fn validate_capabilities(capabilities: &[String]) -> Result<(), RegistryError> {
@@ -4454,18 +4450,9 @@ mod tests {
 
     fn registration(identity: &NodeIdentity, scalar: u8) -> PeerRegistration {
         let key = k256::schnorr::SigningKey::from_slice(&[scalar; 32]).unwrap();
-        let public_key = key.verifying_key().to_bytes();
-        let public_key = public_key
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        let node_id = node_id_for_x_only_public_key(
-            &public_key
-                .as_bytes()
-                .chunks(2)
-                .map(|chunk| u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap())
-                .collect::<Vec<_>>(),
-        );
+        let x_only = key.verifying_key().to_bytes();
+        let public_key = hex::encode(&x_only);
+        let node_id = node_id_for_x_only_public_key(&x_only);
         assert_ne!(node_id, identity.public_status().node_id);
         PeerRegistration {
             node_id,

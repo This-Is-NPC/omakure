@@ -8,6 +8,7 @@ use crate::node_registry::{
     NodeRegistry, PeerRecord, PeerRegistration, PeerRole, PeerSource, PeerState, RegistryError,
 };
 use crate::node_transport::LocalTransport;
+use crate::util::hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -401,27 +402,16 @@ pub fn import_manual_trust(
 }
 
 fn decode_transport_certificate(value: &str) -> OperationResult<Vec<u8>> {
-    if value.len() != crate::direct_transport::MAX_CERTIFICATE_BYTES * 2
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
-        return Err(OperationError::new(
+    let invalid = || {
+        OperationError::new(
             OperationErrorCode::InvalidInput,
             "transport certificate must be lowercase hexadecimal bytes",
-        ));
+        )
+    };
+    if value.len() != crate::direct_transport::MAX_CERTIFICATE_BYTES * 2 || !hex::is_lower(value) {
+        return Err(invalid());
     }
-    let bytes: Vec<u8> = (0..value.len())
-        .step_by(2)
-        .map(|index| {
-            u8::from_str_radix(&value[index..index + 2], 16).map_err(|_| {
-                OperationError::new(
-                    OperationErrorCode::InvalidInput,
-                    "transport certificate is not valid hexadecimal",
-                )
-            })
-        })
-        .collect::<OperationResult<Vec<_>>>()?;
+    let bytes = hex::decode(value).ok_or_else(invalid)?;
     crate::direct_transport::TransportCertificate::from_bytes(&bytes).map_err(|error| {
         OperationError::new(
             OperationErrorCode::InvalidInput,
@@ -679,7 +669,7 @@ pub fn issue_enrollment_bundle(
         .map_err(map_authority_error)?;
 
     Ok(IssuedBundle {
-        bundle_hex: hash_hex(&bundle),
+        bundle_hex: hex::encode(&bundle),
         audience_node_id: request.audience_node_id,
         subject_node_id,
         authority: public_authority(&authority),
@@ -692,8 +682,8 @@ fn public_authority(
     authority: &crate::enrollment_authority::EnrollmentAuthority,
 ) -> PublicAuthority {
     PublicAuthority {
-        key_id: hash_hex(&authority.key_id()),
-        public_key: hash_hex(&authority.public_key()),
+        key_id: hex::encode(&authority.key_id()),
+        public_key: hex::encode(&authority.public_key()),
     }
 }
 
@@ -823,7 +813,7 @@ fn apply_signed_bundle_with_actor(
             .trust
             .authorities
             .iter()
-            .find(|authority| authority.key_id == hash_hex(&bundle.authority_key_id))
+            .find(|authority| authority.key_id == hex::encode(&bundle.authority_key_id))
             .ok_or_else(|| {
                 OperationError::new(
                     OperationErrorCode::EnrollmentInvalid,
@@ -886,12 +876,12 @@ fn apply_signed_bundle_with_actor(
         })?;
         let token_hash = enrollment::hash_bootstrap_token(request.bootstrap_token.as_bytes());
         let nonce_hash = enrollment::hash_bootstrap_nonce(&nonce);
-        if hash_hex(&token_hash)
+        if hex::encode(&token_hash)
             .as_bytes()
             .ct_eq(config.trust.bootstrap_token_hash.as_bytes())
             .unwrap_u8()
             != 1
-            || hash_hex(&nonce_hash)
+            || hex::encode(&nonce_hash)
                 .as_bytes()
                 .ct_eq(config.trust.bootstrap_nonce_hash.as_bytes())
                 .unwrap_u8()
@@ -1331,27 +1321,16 @@ fn decode_request(value: &str) -> OperationResult<Vec<u8>> {
             "manual enrollment request bytes are invalid",
         ));
     }
-    if !value.len().is_multiple_of(2)
-        || value
-            .bytes()
-            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
-    {
-        return Err(OperationError::new(
+    let not_lowercase_hex = || {
+        OperationError::new(
             OperationErrorCode::EnrollmentInvalid,
             "manual enrollment request bytes must be lowercase hexadecimal",
-        ));
+        )
+    };
+    if !hex::is_lower(value) {
+        return Err(not_lowercase_hex());
     }
-    (0..value.len())
-        .step_by(2)
-        .map(|index| {
-            u8::from_str_radix(&value[index..index + 2], 16).map_err(|_| {
-                OperationError::new(
-                    OperationErrorCode::EnrollmentInvalid,
-                    "manual enrollment request bytes are invalid",
-                )
-            })
-        })
-        .collect()
+    hex::decode(value).ok_or_else(not_lowercase_hex)
 }
 
 fn decode_bundle(value: &str) -> OperationResult<Vec<u8>> {
@@ -1362,10 +1341,6 @@ fn decode_bundle(value: &str) -> OperationResult<Vec<u8>> {
         ));
     }
     decode_fixed_hex(value, value.len() / 2, "signed enrollment bundle")
-}
-
-fn hash_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn decode_fixed_hex(value: &str, bytes: usize, label: &str) -> OperationResult<Vec<u8>> {
@@ -1957,11 +1932,11 @@ mod tests {
         config.organization.id = "omakure".into();
         config.trust.enrollment = "signed-bundle".into();
         config.trust.bootstrap_token_hash =
-            hash_hex(&enrollment::hash_bootstrap_token(token.as_bytes()));
-        config.trust.bootstrap_nonce_hash = hash_hex(&enrollment::hash_bootstrap_nonce(&nonce));
+            hex::encode(&enrollment::hash_bootstrap_token(token.as_bytes()));
+        config.trust.bootstrap_nonce_hash = hex::encode(&enrollment::hash_bootstrap_nonce(&nonce));
         config.trust.authorities = vec![crate::domain::EnrollmentAuthority {
-            key_id: hash_hex(&[8; 16]),
-            public_key: hash_hex(&authority_signing_key.verifying_key().to_bytes()),
+            key_id: hex::encode(&[8; 16]),
+            public_key: hex::encode(&authority_signing_key.verifying_key().to_bytes()),
             revoked: false,
         }];
         initialize_node(&target, &config).unwrap();
@@ -1993,9 +1968,9 @@ mod tests {
         SignedBundleFixture {
             target,
             request: SignedBundleApplyRequest {
-                bundle_hex: hash_hex(&bundle.encode()),
+                bundle_hex: hex::encode(&bundle.encode()),
                 bootstrap_token: token,
-                bootstrap_nonce: hash_hex(&nonce),
+                bootstrap_nonce: hex::encode(&nonce),
                 bootstrap_token_path: Some(token_path.clone()),
             },
             token_path,
@@ -2007,12 +1982,7 @@ mod tests {
 
     fn peer_request(identity: &NodeIdentity) -> ManualTrustRequest {
         let key = k256::schnorr::SigningKey::from_slice(&[3; 32]).unwrap();
-        let public_key = key
-            .verifying_key()
-            .to_bytes()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        let public_key = hex::encode(&key.verifying_key().to_bytes());
         let node_id =
             crate::node_identity::node_id_for_x_only_public_key(&key.verifying_key().to_bytes());
         assert_ne!(node_id, identity.public_status().node_id);
@@ -2428,12 +2398,7 @@ mod tests {
             300,
         )
         .unwrap();
-        let certificate_hex = candidate_transport
-            .certificate()
-            .as_bytes()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        let certificate_hex = hex::encode(candidate_transport.certificate().as_bytes());
 
         fail_enrollment_audits(&target, true);
         let stage_error = stage_manual_enrollment(
@@ -2461,10 +2426,7 @@ mod tests {
             ManualEnrollmentApprovalRequest {
                 request_hex: offer.request_hex(),
                 transport_certificate: certificate_hex.clone(),
-                code: [0u8; enrollment::CODE_BYTES]
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect(),
+                code: hex::encode(&[0u8; enrollment::CODE_BYTES]),
                 actor: "operator".into(),
                 reason: "wrong code".into(),
                 confirmed: true,
@@ -2481,11 +2443,7 @@ mod tests {
             ManualEnrollmentApprovalRequest {
                 request_hex: offer.request_hex(),
                 transport_certificate: certificate_hex,
-                code: offer
-                    .code
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect(),
+                code: hex::encode(&offer.code),
                 actor: "operator".into(),
                 reason: "approved manually".into(),
                 confirmed: true,
@@ -2810,11 +2768,11 @@ mod tests {
         config.organization.id = "omakure".into();
         config.trust.enrollment = "signed-bundle".into();
         config.trust.bootstrap_token_hash =
-            hash_hex(&enrollment::hash_bootstrap_token(token.as_bytes()));
-        config.trust.bootstrap_nonce_hash = hash_hex(&enrollment::hash_bootstrap_nonce(&nonce));
+            hex::encode(&enrollment::hash_bootstrap_token(token.as_bytes()));
+        config.trust.bootstrap_nonce_hash = hex::encode(&enrollment::hash_bootstrap_nonce(&nonce));
         config.trust.authorities = vec![crate::domain::EnrollmentAuthority {
-            key_id: hash_hex(&[8; 16]),
-            public_key: hash_hex(&authority_signing_key.verifying_key().to_bytes()),
+            key_id: hex::encode(&[8; 16]),
+            public_key: hex::encode(&authority_signing_key.verifying_key().to_bytes()),
             revoked: false,
         }];
 
@@ -2845,9 +2803,9 @@ mod tests {
         )
         .unwrap();
         let request = SignedBundleApplyRequest {
-            bundle_hex: hash_hex(&bundle.encode()),
+            bundle_hex: hex::encode(&bundle.encode()),
             bootstrap_token: token.clone(),
-            bootstrap_nonce: hash_hex(&nonce),
+            bootstrap_nonce: hex::encode(&nonce),
             bootstrap_token_path: Some(target_temp.path().join("bootstrap.token")),
         };
         fs::write(
@@ -3041,11 +2999,11 @@ mod tests {
         config.organization.id = "omakure".into();
         config.trust.enrollment = "signed-bundle".into();
         config.trust.bootstrap_token_hash =
-            hash_hex(&enrollment::hash_bootstrap_token(token.as_bytes()));
-        config.trust.bootstrap_nonce_hash = hash_hex(&enrollment::hash_bootstrap_nonce(&nonce));
+            hex::encode(&enrollment::hash_bootstrap_token(token.as_bytes()));
+        config.trust.bootstrap_nonce_hash = hex::encode(&enrollment::hash_bootstrap_nonce(&nonce));
         config.trust.authorities = vec![crate::domain::EnrollmentAuthority {
-            key_id: hash_hex(&[8; 16]),
-            public_key: hash_hex(&authority.verifying_key().to_bytes()),
+            key_id: hex::encode(&[8; 16]),
+            public_key: hex::encode(&authority.verifying_key().to_bytes()),
             revoked: false,
         }];
         initialize_node(&target, &config).unwrap();
@@ -3087,15 +3045,15 @@ mod tests {
             };
         let requests = [
             SignedBundleApplyRequest {
-                bundle_hex: hash_hex(&make_bundle([13; 16], &manager_a, &transport_a).encode()),
+                bundle_hex: hex::encode(&make_bundle([13; 16], &manager_a, &transport_a).encode()),
                 bootstrap_token: token.clone(),
-                bootstrap_nonce: hash_hex(&nonce),
+                bootstrap_nonce: hex::encode(&nonce),
                 bootstrap_token_path: None,
             },
             SignedBundleApplyRequest {
-                bundle_hex: hash_hex(&make_bundle([14; 16], &manager_b, &transport_b).encode()),
+                bundle_hex: hex::encode(&make_bundle([14; 16], &manager_b, &transport_b).encode()),
                 bootstrap_token: token,
-                bootstrap_nonce: hash_hex(&nonce),
+                bootstrap_nonce: hex::encode(&nonce),
                 bootstrap_token_path: None,
             },
         ];

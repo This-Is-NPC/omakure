@@ -87,14 +87,12 @@ impl Drop for UpdateStaging {
 
 #[cfg(windows)]
 fn update_staging_in(parent: &Path) -> io::Result<UpdateStaging> {
+    use crate::util::hex;
     use rand::RngCore;
     for _ in 0..16 {
         let mut bytes = [0u8; 16];
         rand::rngs::OsRng.fill_bytes(&mut bytes);
-        let suffix = bytes
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        let suffix = hex::encode(&bytes);
         let path = parent.join(format!(".omakure-update-{suffix}"));
         match create_private_windows_directory(&path) {
             Ok(()) => return Ok(UpdateStaging { path, keep: false }),

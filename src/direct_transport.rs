@@ -6,6 +6,7 @@
 
 use crate::node_identity::{Bip340Signature, DirectEnvelopePrehash, NodeIdentity};
 use crate::node_registry::PeerState;
+use crate::util::hex;
 use curve25519_dalek::{constants::X25519_BASEPOINT, montgomery::MontgomeryPoint};
 use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
 use rand::rngs::OsRng;
@@ -393,7 +394,7 @@ impl fmt::Debug for TransportCertificate {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TransportCertificate")
-            .field("identity_key", &hex(&self.bytes[8..40]))
+            .field("identity_key", &hex::encode(&self.bytes[8..40]))
             .field("node_id", &String::from_utf8_lossy(&self.bytes[40..109]))
             .field("transport_key", &"<redacted-public-key>")
             .field("key_epoch", &self.key_epoch())
@@ -418,7 +419,7 @@ impl TransportCertificate {
             return Err(TransportError::Expired);
         }
         let status = identity.public_status();
-        let key = decode_hex(&status.public_key_hex).ok_or(TransportError::IdentityMismatch)?;
+        let key = hex::decode(&status.public_key_hex).ok_or(TransportError::IdentityMismatch)?;
         let mut body = Vec::with_capacity(CERTIFICATE_BODY_BYTES);
         body.extend_from_slice(CERT_MAGIC);
         body.extend_from_slice(&[1, 1]);
@@ -731,7 +732,7 @@ impl fmt::Debug for TransportSession {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TransportSession")
-            .field("session_id", &hex(&self.session_id))
+            .field("session_id", &hex::encode(&self.session_id))
             .field("send_sequence", &self.send_sequence)
             .field("receive_sequence", &self.receive_sequence)
             .field("closed", &self.closed)
@@ -1026,7 +1027,7 @@ pub fn sign_manual_request(
         return Err(TransportError::MessageTooLarge);
     }
     let mut payload = serde_json::Map::new();
-    payload.insert("request".into(), Value::from(hex(request)));
+    payload.insert("request".into(), Value::from(hex::encode(request)));
     sign_envelope(
         identity,
         "manual_request",
@@ -1050,8 +1051,8 @@ pub fn sign_manual_ack(
     payload.insert("accepted".into(), Value::from(accepted));
     match (accepted, reciprocal_request, reciprocal_code) {
         (true, Some(request), Some(code)) => {
-            payload.insert("request".into(), Value::from(hex(request)));
-            payload.insert("code".into(), Value::from(hex(code)));
+            payload.insert("request".into(), Value::from(hex::encode(request)));
+            payload.insert("code".into(), Value::from(hex::encode(code)));
         }
         (false, None, None) => {}
         _ => return Err(TransportError::InvalidFrame),
@@ -1109,8 +1110,8 @@ pub fn verify_envelope(
     {
         return Err(TransportError::IdentityMismatch);
     }
-    let expected_session = hex(expected_session_id);
-    let expected_nonce = hex(expected_nonce);
+    let expected_session = hex::encode(expected_session_id);
+    let expected_nonce = hex::encode(expected_nonce);
     if object.get("session_id").and_then(Value::as_str) != Some(expected_session.as_str())
         || object.get("nonce").and_then(Value::as_str) != Some(expected_nonce.as_str())
     {
@@ -1308,7 +1309,7 @@ pub fn enrollment_request_bytes(encoded: &[u8]) -> Result<Vec<u8>, TransportErro
     if request.len() > crate::enrollment::MAX_REQUEST_BYTES * 2 {
         return Err(TransportError::MessageTooLarge);
     }
-    decode_hex(request).ok_or(TransportError::InvalidFrame)
+    hex::decode(request).ok_or(TransportError::InvalidFrame)
 }
 
 pub fn enrollment_ack_accepted(encoded: &[u8]) -> Result<bool, TransportError> {
@@ -1334,7 +1335,7 @@ pub fn enrollment_ack_accepted(encoded: &[u8]) -> Result<bool, TransportError> {
             .get("code")
             .and_then(Value::as_str)
             .ok_or(TransportError::InvalidFrame)?;
-        if decode_hex(request).is_none() || decode_hex(code).is_none() {
+        if hex::decode(request).is_none() || hex::decode(code).is_none() {
             return Err(TransportError::InvalidFrame);
         }
     } else if payload.len() != 1 {
@@ -1359,12 +1360,12 @@ pub fn enrollment_ack_offer(encoded: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Transp
     let request = payload
         .get("request")
         .and_then(Value::as_str)
-        .and_then(decode_hex)
+        .and_then(hex::decode)
         .ok_or(TransportError::InvalidFrame)?;
     let code = payload
         .get("code")
         .and_then(Value::as_str)
-        .and_then(decode_hex)
+        .and_then(hex::decode)
         .ok_or(TransportError::InvalidFrame)?;
     if request.len() > crate::enrollment::MAX_REQUEST_BYTES
         || code.len() != crate::enrollment::CODE_BYTES
@@ -1383,7 +1384,7 @@ pub fn envelope_nonce(encoded: &[u8]) -> Result<[u8; 16], TransportError> {
     let nonce = value
         .get("nonce")
         .and_then(Value::as_str)
-        .and_then(decode_hex)
+        .and_then(hex::decode)
         .ok_or(TransportError::InvalidFrame)?;
     nonce.try_into().map_err(|_| TransportError::InvalidFrame)
 }
@@ -1399,13 +1400,13 @@ fn sign_envelope(
     let mut object = serde_json::Map::new();
     object.insert("created_at".into(), Value::from(now));
     object.insert("kind".into(), Value::from(kind));
-    object.insert("nonce".into(), Value::from(hex(&nonce)));
+    object.insert("nonce".into(), Value::from(hex::encode(&nonce)));
     object.insert("payload".into(), payload);
     object.insert(
         "sender".into(),
         Value::from(identity.public_status().node_id.clone()),
     );
-    object.insert("session_id".into(), Value::from(hex(session_id)));
+    object.insert("session_id".into(), Value::from(hex::encode(session_id)));
     object.insert("version".into(), Value::from(1u8));
     let canonical = canonical_json(&Value::Object(object));
     let prehash = DirectEnvelopePrehash::from_canonical_bytes(&canonical);
@@ -1445,26 +1446,6 @@ fn domain_hash(domain: &[u8], body: &[u8]) -> [u8; 32] {
     digest.update(domain);
     digest.update(body);
     digest.finalize().into()
-}
-
-fn decode_hex(value: &str) -> Option<Vec<u8>> {
-    if !value.len().is_multiple_of(2) {
-        return None;
-    }
-    (0..value.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&value[index..index + 2], 16).ok())
-        .collect()
-}
-
-fn hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(HEX[(byte >> 4) as usize] as char);
-        output.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    output
 }
 
 fn canonical_json(value: &Value) -> Vec<u8> {
@@ -1962,11 +1943,6 @@ mod tests {
     }
 
     fn identity_key(identity: &NodeIdentity) -> [u8; 32] {
-        let bytes = identity.public_status().public_key_hex.as_bytes();
-        let mut key = [0u8; 32];
-        for (index, chunk) in bytes.chunks_exact(2).enumerate() {
-            key[index] = u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap();
-        }
-        key
+        hex::decode_array(&identity.public_status().public_key_hex).unwrap()
     }
 }

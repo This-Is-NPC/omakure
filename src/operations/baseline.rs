@@ -25,6 +25,7 @@
 use crate::baseline::{BaselineError, VerifiedBaseline};
 use crate::operations::battery::{install_verified_script, InstallState};
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
+use crate::util::hex;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -99,7 +100,7 @@ pub fn observed_baseline_id(workspace: &Workspace, record: &InstalledBaseline) -
     // record is a file on disk and an operator can reorder it.
     entries.sort_by(|left, right| left.path.cmp(&right.path));
     crate::baseline::derive_baseline_id(&entries)
-        .map(|id| hex(&id))
+        .map(|id| hex::encode(&id))
         .unwrap_or_default()
 }
 
@@ -259,8 +260,8 @@ pub fn install_baseline(
     }
 
     let record = InstalledBaseline {
-        baseline_id: hex(&baseline_id),
-        publisher_key_id: hex(&baseline.manifest().publisher_key_id),
+        baseline_id: hex::encode(&baseline_id),
+        publisher_key_id: hex::encode(&baseline.manifest().publisher_key_id),
         organization: baseline.manifest().organization.clone(),
         entries: baseline
             .scripts()
@@ -434,10 +435,6 @@ fn map_baseline_error(error: BaselineError) -> OperationError {
     OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 /// What `node baseline publish` reports about the artefact it just signed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PublishedBaseline {
@@ -527,8 +524,8 @@ pub fn publish_baseline(
     })?;
 
     Ok(PublishedBaseline {
-        baseline_id: hex(&baseline_id),
-        publisher_key_id: hex(&manifest.publisher_key_id),
+        baseline_id: hex::encode(&baseline_id),
+        publisher_key_id: hex::encode(&manifest.publisher_key_id),
         organization: manifest.organization.clone(),
         entries: manifest
             .entries
@@ -788,7 +785,9 @@ mod tests {
         );
         assert_eq!(
             observed,
-            hex(&crate::baseline::derive_baseline_id(&[]).expect("the empty set has a name")),
+            hex::encode(
+                &crate::baseline::derive_baseline_id(&[]).expect("the empty set has a name")
+            ),
             "the answer is the name of the empty set, which no signable baseline can equal"
         );
     }
@@ -962,7 +961,7 @@ mod tests {
             serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("parse");
         // A valid script body, hexed exactly as the retained format expects,
         // that the signed manifest simply does not name the hash of.
-        retained.push["scripts"][0] = serde_json::json!(hex(b"echo something else\n"));
+        retained.push["scripts"][0] = serde_json::json!(hex::encode(b"echo something else\n"));
         std::fs::write(&path, serde_json::to_vec(&retained).expect("serialize")).expect("write");
 
         let refused = rollback_baseline(&workspace, &policy(false), true, 1_800_000_300)

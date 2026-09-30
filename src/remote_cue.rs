@@ -16,6 +16,7 @@
 use crate::node_registry::health::HealthAuthorization;
 use crate::node_registry::{PeerRole, PeerState};
 use crate::ports::ScriptRepository;
+use crate::util::hex;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::collections::VecDeque;
@@ -463,13 +464,7 @@ pub fn content_hash(path: &std::path::Path) -> Option<String> {
     let bytes = std::fs::read(path).ok()?;
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
-    Some(
-        hasher
-            .finalize()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect(),
-    )
+    Some(hex::encode(&hasher.finalize()))
 }
 
 /// UTC Unix seconds, for the second validity check at the accept transition.
@@ -1056,7 +1051,7 @@ pub fn derive_run_id(cue_id: &str) -> String {
     hasher.update(b"omakure/cue-run-id/v1\0");
     hasher.update(cue_id.as_bytes());
     let digest = hasher.finalize();
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+    hex::encode(&digest)
 }
 
 #[cfg(test)]
@@ -1435,10 +1430,7 @@ mod tests {
     #[test]
     fn the_run_id_is_domain_separated() {
         use sha2::{Digest, Sha256};
-        let undomained: String = Sha256::digest(b"0123456789abcdef0123456789abcdef")
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
+        let undomained: String = hex::encode(&Sha256::digest(b"0123456789abcdef0123456789abcdef"));
         assert_ne!(
             derive_run_id("0123456789abcdef0123456789abcdef"),
             undomained

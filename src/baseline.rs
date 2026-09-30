@@ -24,6 +24,7 @@
 //!
 //! [`baseline_id`]: SignedBaselineManifest::baseline_id
 
+use crate::util::hex;
 use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
@@ -110,10 +111,13 @@ impl fmt::Debug for SignedBaselineManifest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SignedBaselineManifest")
-            .field("publisher_key_id", &hex(&self.publisher_key_id))
+            .field("publisher_key_id", &hex::encode(&self.publisher_key_id))
             .field("organization", &self.organization)
             .field("entries", &self.entries.len())
-            .field("baseline_id", &self.baseline_id().map(|id| hex(&id)).ok())
+            .field(
+                "baseline_id",
+                &self.baseline_id().map(|id| hex::encode(&id)).ok(),
+            )
             .field("issued_at", &self.issued_at)
             .field("expires_at", &self.expires_at)
             .field("publisher_signature", &"<redacted>")
@@ -454,10 +458,6 @@ fn hash_domain(bytes: &[u8], domain: &[u8]) -> [u8; 32] {
     digest.update(domain);
     digest.update(bytes);
     digest.finalize().into()
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 struct Cursor<'a> {

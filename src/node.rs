@@ -1,6 +1,7 @@
 use crate::domain::{NodeConfig, NodeConfigError};
 use crate::node_identity::NodeIdentityStatus;
 use crate::node_registry::{NodeRegistry, RegistryError};
+use crate::util::hex;
 use fs2::FileExt;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -1134,10 +1135,7 @@ fn private_token_tombstone_path(path: &Path) -> Result<PathBuf, NodeError> {
         .to_string_lossy();
     let mut random = [0_u8; 16];
     OsRng.fill_bytes(&mut random);
-    let suffix = random
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let suffix = hex::encode(&random);
     Ok(parent.join(format!(
         "{PRIVATE_TOKEN_TOMBSTONE_PREFIX}{suffix}-{file_name}"
     )))
@@ -1258,10 +1256,7 @@ pub(crate) fn write_atomic_new(
         .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
     let mut random = [0u8; 8];
     OsRng.fill_bytes(&mut random);
-    let suffix = random
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let suffix = hex::encode(&random);
     let temp = parent.join(format!(
         ".{}.tmp-{}-{suffix}",
         path.file_name().unwrap().to_string_lossy(),

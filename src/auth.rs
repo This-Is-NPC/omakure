@@ -1,6 +1,7 @@
 //! Multi-token bearer auth: `--tokens-file` / `OMAKURE_TOKENS_FILE` TOML with
 //! per-token Argon2id hashes and scopes.
 
+use crate::util::hex;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
 use rand::rngs::OsRng;
@@ -336,12 +337,7 @@ fn token_selector(presented: &str) -> Option<String> {
     {
         return None;
     }
-    let mut bytes = Vec::with_capacity(encoded_id.len() / 2);
-    for pair in encoded_id.as_bytes().chunks_exact(2) {
-        let pair = std::str::from_utf8(pair).ok()?;
-        bytes.push(u8::from_str_radix(pair, 16).ok()?);
-    }
-    String::from_utf8(bytes).ok()
+    String::from_utf8(hex::decode(encoded_id)?).ok()
 }
 
 fn verify_argon2(phc: &str, presented: &str) -> bool {
@@ -447,13 +443,9 @@ fn selector_token_plaintext(id: &str) -> String {
     let mut encoded =
         String::with_capacity(TOKEN_PREFIX.len() + id.len() * 2 + 1 + bytes.len() * 2);
     encoded.push_str(TOKEN_PREFIX);
-    for b in id.as_bytes() {
-        encoded.push_str(&format!("{b:02x}"));
-    }
+    encoded.push_str(&hex::encode(id.as_bytes()));
     encoded.push('_');
-    for b in bytes {
-        encoded.push_str(&format!("{b:02x}"));
-    }
+    encoded.push_str(&hex::encode(&bytes));
     encoded
 }
 
@@ -602,7 +594,7 @@ fn write_staged_token_file(path: &Path, staged: &str) -> Result<PathBuf, AuthErr
     // cannot pre-plant a file/symlink at a guessable tmp name).
     let mut tmp_rand = [0u8; 8];
     OsRng.fill_bytes(&mut tmp_rand);
-    let tmp_rand: String = tmp_rand.iter().map(|b| format!("{b:02x}")).collect();
+    let tmp_rand: String = hex::encode(&tmp_rand);
     let tmp = parent.join(format!(
         ".{}.tmp-{}-{}",
         path.file_name()

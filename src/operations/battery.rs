@@ -1,6 +1,7 @@
 use crate::domain::{extract_schema_block, parse_schema};
 use crate::runtime::{script_kind, ScriptKind};
 use crate::secrets::{self, SecretAccess};
+use crate::util::hex;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -640,8 +641,9 @@ pub fn install_battery_script(
             )
         })?;
         let installed_root = installed_root_for_workspace(workspace)?;
-        let provenance_rel = PathBuf::from(sanitize_file_component(&request.battery_name))
-            .join(format!("{}.json", hex_encode(request.script_id.as_bytes())));
+        let provenance_rel = PathBuf::from(sanitize_file_component(&request.battery_name)).join(
+            format!("{}.json", hex::encode(request.script_id.as_bytes())),
+        );
         let provenance_path = installed_root.join(&provenance_rel);
         if let Some(parent) = provenance_path.parent() {
             reject_symlink_components(&installed_root, &provenance_rel, false)?;
@@ -3080,16 +3082,6 @@ fn replace_existing_windows(tmp: &Path, destination: &Path) -> io::Result<()> {
     }
 }
 
-fn hex_encode(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
-}
-
 fn validate_script_schema_from_file(path: &Path, file: &mut File) -> OperationResult<()> {
     let prefixes = match script_kind(path) {
         Some(ScriptKind::Bash) => vec!["#"],
@@ -4977,8 +4969,8 @@ tags = ["azure"]
     #[test]
     fn provenance_paths_do_not_collide_for_sanitized_script_ids() {
         assert_ne!(
-            hex_encode(b"a.b"),
-            hex_encode(b"a_b"),
+            hex::encode(b"a.b"),
+            hex::encode(b"a_b"),
             "hex encoding must preserve distinct script ids"
         );
     }
@@ -5069,7 +5061,7 @@ tags = ["azure"]
         let provenance_file = paths
             .installed_root
             .join("azure")
-            .join(format!("{}.json", hex_encode(b"azure.list")));
+            .join(format!("{}.json", hex::encode(b"azure.list")));
         fs::create_dir_all(&provenance_file).unwrap();
 
         let err = install_battery_script(
@@ -5099,7 +5091,7 @@ tags = ["azure"]
         let provenance_file = paths
             .installed_root
             .join("azure")
-            .join(format!("{}.json", hex_encode(b"azure.list")));
+            .join(format!("{}.json", hex::encode(b"azure.list")));
         fs::create_dir_all(&provenance_file).unwrap();
 
         let err = install_battery_script(

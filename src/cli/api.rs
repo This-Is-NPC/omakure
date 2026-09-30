@@ -14,6 +14,7 @@ use crate::operations::search as search_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::policy::{self, DeployPolicy};
 use crate::ports::ScriptRepository;
+use crate::util::hex;
 use crate::workspace::Workspace;
 use axum::body::{to_bytes, Body};
 use axum::extract::{Path as AxumPath, RawQuery, State};
@@ -1532,12 +1533,10 @@ async fn node_baseline_rollback_handler(
 
 /// Decode lowercase hex, refusing upper case so one artefact has one spelling.
 fn decode_lower_hex(value: &str) -> Option<Vec<u8>> {
-    if !value.len().is_multiple_of(2) || value.bytes().any(|byte| byte.is_ascii_uppercase()) {
+    if value.bytes().any(|byte| byte.is_ascii_uppercase()) {
         return None;
     }
-    (0..value.len() / 2)
-        .map(|index| u8::from_str_radix(value.get(index * 2..index * 2 + 2)?, 16).ok())
-        .collect()
+    hex::decode(value)
 }
 
 async fn node_revoke_handler(

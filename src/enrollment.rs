@@ -6,6 +6,7 @@
 
 use crate::direct_transport::validate_x25519_public;
 use crate::node_identity::NodeIdentity;
+use crate::util::hex;
 use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
@@ -104,8 +105,8 @@ impl fmt::Debug for SignedEnrollmentBundle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SignedEnrollmentBundle")
-            .field("bundle_id", &hex(&self.bundle_id))
-            .field("authority_key_id", &hex(&self.authority_key_id))
+            .field("bundle_id", &hex::encode(&self.bundle_id))
+            .field("authority_key_id", &hex::encode(&self.authority_key_id))
             .field("organization", &self.organization)
             .field("audience_node_id", &self.audience_node_id)
             .field("subject_node_id", &self.subject_node_id)
@@ -393,8 +394,8 @@ impl fmt::Debug for ManualEnrollmentRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ManualEnrollmentRequest")
-            .field("request_id", &hex(&self.request_id))
-            .field("pairing_id", &hex(&self.pairing_id))
+            .field("request_id", &hex::encode(&self.request_id))
+            .field("pairing_id", &hex::encode(&self.pairing_id))
             .field("proposer_node_id", &self.proposer_node_id)
             .field("proposer_xonly", &"<redacted-public-key>")
             .field("proposer_transport_x25519", &"<redacted-public-key>")
@@ -416,21 +417,21 @@ pub struct ManualEnrollmentOffer {
 
 impl ManualEnrollmentOffer {
     pub fn request_hex(&self) -> String {
-        hex(&self.request.encode())
+        hex::encode(&self.request.encode())
     }
 
     pub fn code_hex(&self) -> String {
-        hex(&self.code)
+        hex::encode(&self.code)
     }
 }
 
 impl ManualEnrollmentRequest {
     pub fn pairing_id_hex(&self) -> String {
-        hex(&self.pairing_id)
+        hex::encode(&self.pairing_id)
     }
 
     pub fn request_id_hex(&self) -> String {
-        hex(&self.request_id)
+        hex::encode(&self.request_id)
     }
 
     pub fn create(
@@ -508,7 +509,7 @@ impl ManualEnrollmentRequest {
             pairing_id,
             request_id,
             proposer_node_id: identity.public_status().node_id.clone(),
-            proposer_xonly: decode_hex::<IDENTITY_KEY_BYTES>(
+            proposer_xonly: parse_hex_array::<IDENTITY_KEY_BYTES>(
                 &identity.public_status().public_key_hex,
             )
             .map_err(|_| EnrollmentError::IdentityMismatch)?,
@@ -616,7 +617,7 @@ impl ManualEnrollmentRequest {
     }
 
     pub fn public_key_hex(&self) -> String {
-        hex(&self.proposer_xonly)
+        hex::encode(&self.proposer_xonly)
     }
 
     fn unsigned_bytes(&self) -> Result<Vec<u8>, EnrollmentError> {
@@ -682,23 +683,14 @@ pub fn now_seconds() -> u64 {
 }
 
 pub fn parse_hex(value: &str, expected_bytes: usize) -> Result<Vec<u8>, EnrollmentError> {
-    if value.len() != expected_bytes * 2
-        || value
-            .bytes()
-            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
-    {
+    if value.len() != expected_bytes * 2 || !hex::is_lower(value) {
         return Err(EnrollmentError::Invalid);
     }
-    (0..value.len())
-        .step_by(2)
-        .map(|index| {
-            u8::from_str_radix(&value[index..index + 2], 16).map_err(|_| EnrollmentError::Invalid)
-        })
-        .collect()
+    hex::decode(value).ok_or(EnrollmentError::Invalid)
 }
 
 pub fn hex_bytes(bytes: &[u8]) -> String {
-    hex(bytes)
+    hex::encode(bytes)
 }
 
 pub fn validate_capabilities(capabilities: &[String]) -> Result<(), EnrollmentError> {
@@ -733,11 +725,7 @@ fn hash_domain(bytes: &[u8], domain: &[u8]) -> [u8; 32] {
     digest.finalize().into()
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn decode_hex<const N: usize>(value: &str) -> Result<[u8; N], EnrollmentError> {
+fn parse_hex_array<const N: usize>(value: &str) -> Result<[u8; N], EnrollmentError> {
     parse_hex(value, N)?
         .try_into()
         .map_err(|_| EnrollmentError::Invalid)
@@ -838,7 +826,7 @@ mod tests {
     fn code_hash_matches_public_vector() {
         let code: Vec<u8> = (0..16).collect();
         assert_eq!(
-            hex(&hash_code(&code)),
+            hex::encode(&hash_code(&code)),
             "e9380fb38041d9a4cb70fbca9631da6d796fea839738fbd6e7015d829ccd54f7"
         );
     }
@@ -928,7 +916,7 @@ mod tests {
             "omakure".to_string(),
             target.public_status().node_id.clone(),
             manager.public_status().node_id.clone(),
-            decode_hex(&manager.public_status().public_key_hex).unwrap(),
+            parse_hex_array(&manager.public_status().public_key_hex).unwrap(),
             *manager_transport.certificate().transport_public(),
             *manager_transport.certificate().as_bytes(),
             EnrollmentRole::Conductor,

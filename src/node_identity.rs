@@ -1,5 +1,6 @@
 use crate::node::{write_atomic_new, NodeContext, NodeError};
 use crate::node_registry::RegistryError;
+use crate::util::hex;
 use fs2::FileExt;
 use k256::elliptic_curve::Generate;
 use k256::schnorr::{signature::hazmat::PrehashSigner, Signature, SigningKey};
@@ -257,7 +258,7 @@ impl NodeContext {
 
 fn status_for_key(signing_key: &SigningKey) -> NodeIdentityStatus {
     let x_only_public_key = signing_key.verifying_key().to_bytes();
-    let public_key_hex = encode_hex(x_only_public_key.as_ref());
+    let public_key_hex = hex::encode(x_only_public_key.as_ref());
     let node_id = node_id_for_x_only_public_key(x_only_public_key.as_ref());
     NodeIdentityStatus {
         public_key_hex,
@@ -268,7 +269,7 @@ fn status_for_key(signing_key: &SigningKey) -> NodeIdentityStatus {
 pub(crate) fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
     format!(
         "{NODE_ID_PREFIX}{}",
-        encode_hex(&sha256_domain(NODE_ID_DOMAIN, public_key))
+        hex::encode(&sha256_domain(NODE_ID_DOMAIN, public_key))
     )
 }
 
@@ -393,16 +394,6 @@ impl Drop for IdentityLock {
     }
 }
 
-fn encode_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(HEX[(byte >> 4) as usize] as char);
-        output.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    output
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,13 +451,6 @@ mod tests {
         toml::from_str(include_str!("../tests/fixtures/node_identity_vectors.toml")).unwrap()
     }
 
-    fn decode_hex(value: &str) -> Vec<u8> {
-        (0..value.len())
-            .step_by(2)
-            .map(|index| u8::from_str_radix(&value[index..index + 2], 16).unwrap())
-            .collect()
-    }
-
     #[test]
     fn corrected_vectors_match_normalized_scalar_x_only_key_and_node_id() {
         let fixture = vectors();
@@ -494,9 +478,9 @@ mod tests {
         assert_eq!(fixture.vectors.len(), 3);
         for vector in fixture.vectors {
             let signing_key =
-                SigningKey::from_slice(&decode_hex(&vector.input_scalar_hex)).unwrap();
+                SigningKey::from_slice(&hex::decode(&vector.input_scalar_hex).unwrap()).unwrap();
             assert_eq!(
-                encode_hex(signing_key.to_bytes().as_ref()),
+                hex::encode(signing_key.to_bytes().as_ref()),
                 vector.normalized_private_key_hex
             );
             let status = status_for_key(&signing_key);
@@ -510,7 +494,9 @@ mod tests {
     fn imported_odd_y_scalar_is_normalized_once_and_reopens_stably() {
         let tmp = tempfile::TempDir::new().unwrap();
         let context = test_context(tmp.path());
-        let scalar = decode_hex("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140");
+        let scalar =
+            hex::decode("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140")
+                .unwrap();
         let imported = NodeIdentity::import(&context, &scalar).unwrap();
         let status = imported.public_status().clone();
         assert_eq!(
@@ -572,7 +558,8 @@ mod tests {
             vec![0u8; 31],
             vec![0u8; 32],
             vec![0xffu8; 32],
-            decode_hex("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"),
+            hex::decode("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140")
+                .unwrap(),
         ];
         for bytes in cases {
             let tmp = tempfile::TempDir::new().unwrap();
@@ -640,9 +627,10 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let direct = DirectEnvelopePrehash::from_canonical_bytes(br#"{"a":1}"#);
         let direct_signature = identity.sign_direct_envelope(direct).unwrap();
-        let verifying_key =
-            VerifyingKey::from_slice(&decode_hex(&identity.public_status().public_key_hex))
-                .unwrap();
+        let verifying_key = VerifyingKey::from_slice(
+            &hex::decode(&identity.public_status().public_key_hex).unwrap(),
+        )
+        .unwrap();
         let direct_signature = Signature::from_slice(&direct_signature.to_bytes()).unwrap();
         verifying_key
             .verify_prehash(direct.as_bytes(), &direct_signature)

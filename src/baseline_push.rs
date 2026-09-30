@@ -35,6 +35,7 @@ use crate::baseline::{
 };
 use crate::node_registry::health::HealthAuthorization;
 use crate::node_registry::{PeerRole, PeerState};
+use crate::util::hex;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
@@ -182,8 +183,8 @@ pub fn read_policy(context: &crate::node::NodeContext) -> BaselinePolicy {
         // operator believes is on for every *other* publisher, and validation
         // already refuses to load a config containing one.
         let (Some(key_id), Some(public_key)) = (
-            parse_fixed::<PUBLISHER_ID_BYTES>(&entry.key_id),
-            parse_fixed::<PUBLISHER_KEY_BYTES>(&entry.public_key),
+            hex::decode_array::<PUBLISHER_ID_BYTES>(&entry.key_id),
+            hex::decode_array::<PUBLISHER_KEY_BYTES>(&entry.public_key),
         ) else {
             continue;
         };
@@ -198,17 +199,6 @@ pub fn read_policy(context: &crate::node::NodeContext) -> BaselinePolicy {
         publishers,
         organization: config.organization.id,
     }
-}
-
-fn parse_fixed<const N: usize>(value: &str) -> Option<[u8; N]> {
-    if value.len() != N * 2 {
-        return None;
-    }
-    let mut bytes = [0u8; N];
-    for (index, slot) in bytes.iter_mut().enumerate() {
-        *slot = u8::from_str_radix(value.get(index * 2..index * 2 + 2)?, 16).ok()?;
-    }
-    Some(bytes)
 }
 
 /// The gate decision. `Accepted` means the set is installed.
@@ -306,8 +296,8 @@ impl BaselinePush {
     pub fn encode(manifest: &[u8], bodies: &[Vec<u8>]) -> serde_json::Value {
         serde_json::json!({
             "version": 1,
-            "manifest": hex(manifest),
-            "scripts": bodies.iter().map(|body| hex(body)).collect::<Vec<_>>(),
+            "manifest": hex::encode(manifest),
+            "scripts": bodies.iter().map(|body| hex::encode(body)).collect::<Vec<_>>(),
         })
     }
 
@@ -328,7 +318,7 @@ impl BaselinePush {
         if manifest_hex.len() > MAX_MANIFEST_BYTES * 2 {
             return Err(BaselineCode::TooLarge);
         }
-        let manifest = decode_hex(manifest_hex).ok_or(BaselineCode::InvalidMessage)?;
+        let manifest = hex::decode(manifest_hex).ok_or(BaselineCode::InvalidMessage)?;
         let entries = object
             .get("scripts")
             .and_then(serde_json::Value::as_array)
@@ -346,7 +336,7 @@ impl BaselinePush {
             if total > MAX_PUSH_SCRIPT_BYTES {
                 return Err(BaselineCode::TooLarge);
             }
-            bodies.push(decode_hex(body_hex).ok_or(BaselineCode::InvalidMessage)?);
+            bodies.push(hex::decode(body_hex).ok_or(BaselineCode::InvalidMessage)?);
         }
         Ok(Self { manifest, bodies })
     }
@@ -382,19 +372,6 @@ pub fn verify_push(
         .zip(push.bodies.iter().cloned())
         .collect();
     manifest.bind(scripts).map_err(map_error)
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn decode_hex(value: &str) -> Option<Vec<u8>> {
-    if !value.len().is_multiple_of(2) {
-        return None;
-    }
-    (0..value.len() / 2)
-        .map(|index| u8::from_str_radix(value.get(index * 2..index * 2 + 2)?, 16).ok())
-        .collect()
 }
 
 /// The receive-side baseline session.
@@ -611,7 +588,7 @@ impl<'a> BaselineSession<'a> {
         OsRng.fill_bytes(&mut nonce);
         let mut payload = serde_json::json!({
             "version": 1,
-            "baseline_id": hex(baseline_id),
+            "baseline_id": hex::encode(baseline_id),
             "accepted": code.is_none(),
         });
         if let Some(code) = code {
@@ -761,7 +738,7 @@ mod tests {
         let oversized = serde_json::json!({
             "version": 1,
             "manifest": "00",
-            "scripts": [hex(&vec![b'x'; MAX_PUSH_SCRIPT_BYTES + 1])],
+            "scripts": [hex::encode(&vec![b'x'; MAX_PUSH_SCRIPT_BYTES + 1])],
         });
         assert_eq!(BaselinePush::parse(&oversized), Err(BaselineCode::TooLarge));
     }
@@ -1103,6 +1080,7 @@ mod delivery_tests {
     use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
     use crate::node_identity::NodeIdentity;
     use crate::node_registry::{NodeRegistry, PeerRole};
+    use crate::util::hex;
     use crate::workspace::Workspace;
     use std::path::Path;
 
@@ -1280,18 +1258,8 @@ mod delivery_tests {
         let mut nonce = [0u8; 16];
         nonce[0] = 7;
         let conductor_status = conductor_identity.public_status();
-        let mut conductor_key = [0u8; 32];
-        conductor_key.copy_from_slice(
-            &(0..32)
-                .map(|index| {
-                    u8::from_str_radix(
-                        &conductor_status.public_key_hex[index * 2..index * 2 + 2],
-                        16,
-                    )
-                    .expect("hex")
-                })
-                .collect::<Vec<_>>(),
-        );
+        let conductor_key: [u8; 32] =
+            hex::decode_array(&conductor_status.public_key_hex).expect("hex");
 
         let envelope = crate::direct_transport::sign_baseline_envelope(
             conductor_identity,
@@ -1403,18 +1371,8 @@ mod delivery_tests {
         let session_id = [42u8; 32];
         let mut nonce = [0u8; 16];
         nonce[0] = 7;
-        let mut conductor_key = [0u8; 32];
-        conductor_key.copy_from_slice(
-            &(0..32)
-                .map(|index| {
-                    u8::from_str_radix(
-                        &conductor_status.public_key_hex[index * 2..index * 2 + 2],
-                        16,
-                    )
-                    .expect("hex")
-                })
-                .collect::<Vec<_>>(),
-        );
+        let conductor_key: [u8; 32] =
+            hex::decode_array(&conductor_status.public_key_hex).expect("hex");
         let envelope = crate::direct_transport::sign_baseline_envelope(
             &conductor_identity,
             crate::baseline_push::KIND_PUSH,

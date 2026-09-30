@@ -10,6 +10,7 @@ use crate::direct_transport::{
 };
 use crate::node::{write_atomic_new, NodeContext, NodeError};
 use crate::node_identity::NodeIdentity;
+use crate::util::hex;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::fs;
@@ -126,7 +127,7 @@ impl LocalTransport {
         }
         let status = identity.public_status();
         if certificate.node_id() != status.node_id
-            || hex(certificate.identity_key()) != status.public_key_hex
+            || hex::encode(certificate.identity_key()) != status.public_key_hex
         {
             return Err(NodeTransportError::State(
                 "transport certificate does not match node identity".to_string(),
@@ -144,10 +145,6 @@ fn random_certificate_id() -> [u8; 16] {
     let mut id = [0u8; 16];
     OsRng.fill_bytes(&mut id);
     id
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn regular_file_exists(path: &std::path::Path) -> Result<bool, NodeTransportError> {

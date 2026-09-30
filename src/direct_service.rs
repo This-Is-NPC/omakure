@@ -13,6 +13,7 @@ use crate::node_identity::NodeIdentity;
 use crate::node_registry::{NodeRegistry, PeerState, RegistryError, TransportPeer};
 use crate::node_transport::{LocalTransport, NodeTransportError};
 use crate::remote_cue::{CueCode, CueOutcome};
+use crate::util::hex;
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::TokioResolver;
@@ -1600,7 +1601,7 @@ fn connect_and_hold(
         return Err(TransportError::IdentityMismatch.into());
     }
     let trusted = registry
-        .transport_peer(remote.node_id(), &hex(remote.identity_key()))
+        .transport_peer(remote.node_id(), &hex::encode(remote.identity_key()))
         .map_err(|_| TransportError::Internal)?;
     if let Err(error) = authorize_peer(
         &remote,
@@ -2093,7 +2094,7 @@ impl BaselineDispatcher {
         // set that was actually sent.
         let baseline_id = parsed
             .baseline_id()
-            .map(|id| id.iter().map(|byte| format!("{byte:02x}")).collect())
+            .map(|id| hex::encode(&id))
             .map_err(|_| TransportError::InvalidFrame)?;
         if bodies.len() != parsed.entries.len() {
             return Err(TransportError::InvalidFrame.into());
@@ -2671,7 +2672,7 @@ pub fn probe(
         )?;
         return Err(TransportError::IdentityMismatch.into());
     }
-    let peer = registry.transport_peer(remote.node_id(), &hex(remote.identity_key()))?;
+    let peer = registry.transport_peer(remote.node_id(), &hex::encode(remote.identity_key()))?;
     if let Err(error) = authorize_peer(
         &remote,
         peer.as_ref().map(peer_authorization),
@@ -2765,7 +2766,7 @@ pub fn dispatch_cue(
     if remote.node_id() != expected_node_id {
         return Err(TransportError::IdentityMismatch.into());
     }
-    let trusted = registry.transport_peer(remote.node_id(), &hex(remote.identity_key()))?;
+    let trusted = registry.transport_peer(remote.node_id(), &hex::encode(remote.identity_key()))?;
     authorize_peer(
         &remote,
         trusted.as_ref().map(peer_authorization),
@@ -3181,7 +3182,8 @@ fn serve_connection(
             .cloned()
             .ok_or(TransportError::HandshakeFailed)?;
         remote_node_id = Some(remote.node_id().to_string());
-        let peer = registry.transport_peer(remote.node_id(), &hex(remote.identity_key()))?;
+        let peer =
+            registry.transport_peer(remote.node_id(), &hex::encode(remote.identity_key()))?;
         // A revoked identity is not an enrollment candidate.
         //
         // `authenticated_untrusted` is the enrollment-only channel for a peer
@@ -3608,19 +3610,9 @@ fn resolve_cue_id(cue_id: Option<&str>) -> Result<String, DirectServiceError> {
         None => {
             let mut cue_id_bytes = [0u8; 16];
             OsRng.fill_bytes(&mut cue_id_bytes);
-            Ok(hex(&cue_id_bytes))
+            Ok(hex::encode(&cue_id_bytes))
         }
     }
-}
-
-fn hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(HEX[(byte >> 4) as usize] as char);
-        output.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    output
 }
 
 #[cfg(test)]
@@ -3932,11 +3924,8 @@ mod tests {
             .expect("peer identity");
         let (node_id, mut key) = {
             let status = identity.public_status();
-            let mut key = [0u8; 32];
-            for (index, slot) in key.iter_mut().enumerate() {
-                *slot = u8::from_str_radix(&status.public_key_hex[index * 2..index * 2 + 2], 16)
-                    .expect("the identity key is lowercase hex");
-            }
+            let key: [u8; 32] = hex::decode_array(&status.public_key_hex)
+                .expect("the identity key is lowercase hex");
             (status.node_id.clone(), key)
         };
         let _ = &mut key;

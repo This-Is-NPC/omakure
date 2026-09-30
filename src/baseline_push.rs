@@ -1225,15 +1225,18 @@ mod delivery_tests {
     /// Record the sender as an active Conductor holding `baseline-push`.
     fn trust_conductor(registry: &NodeRegistry, node_id: &str, public_key: &str, capability: &str) {
         registry
-            .import_manual_peer(crate::node_registry::PeerRegistration {
-                node_id: node_id.to_string(),
-                public_key: public_key.to_string(),
-                role: PeerRole::Conductor,
-                capabilities: vec![capability.to_string()],
-                source: crate::node_registry::PeerSource::Manual,
-                actor: "test".to_string(),
-                reason: "baseline delivery test".to_string(),
-            })
+            .import_manual_peer_with_transport(
+                crate::node_registry::PeerRegistration {
+                    node_id: node_id.to_string(),
+                    public_key: public_key.to_string(),
+                    role: PeerRole::Conductor,
+                    capabilities: vec![capability.to_string()],
+                    source: crate::node_registry::PeerSource::Manual,
+                    actor: "test".to_string(),
+                    reason: "baseline delivery test".to_string(),
+                },
+                None,
+            )
             .expect("record the conductor");
     }
 

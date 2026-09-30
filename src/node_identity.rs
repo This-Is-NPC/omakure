@@ -26,8 +26,6 @@ pub enum NodeIdentityError {
     InvalidKey,
     #[error("BIP-340 signing failed")]
     Signing,
-    #[error("prehash must be exactly 32 bytes")]
-    InvalidPrehash,
     #[error("node trust registry error: {0}")]
     Registry(#[from] RegistryError),
 }
@@ -46,24 +44,6 @@ impl DirectEnvelopePrehash {
     /// Hash already RFC 8785-canonicalized envelope bytes with the direct domain.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Self {
         Self(sha256_domain(DIRECT_ENVELOPE_DOMAIN, bytes))
-    }
-
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EventId([u8; 32]);
-
-impl EventId {
-    /// Construct an event id that was computed by the NIP-01 serializer.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, NodeIdentityError> {
-        Ok(Self(
-            bytes
-                .try_into()
-                .map_err(|_| NodeIdentityError::InvalidPrehash)?,
-        ))
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
@@ -92,20 +72,7 @@ impl Bip340Signature {
 pub struct NodeIdentity {
     signing_key: SigningKey,
     status: NodeIdentityStatus,
-    context: NodeContext,
 }
-
-pub struct RotationPreparation {
-    identity: NodeIdentity,
-}
-
-impl RotationPreparation {
-    pub fn status(&self) -> &NodeIdentityStatus {
-        &self.identity.status
-    }
-}
-
-pub struct ResetPreparation;
 
 impl NodeIdentity {
     pub fn load_or_initialize(context: &NodeContext) -> Result<Self, NodeIdentityError> {
@@ -144,7 +111,7 @@ impl NodeIdentity {
                 "persisted identity scalar is not even-Y normalized".to_string(),
             ));
         }
-        Ok(Self::from_signing_key(context, signing_key))
+        Ok(Self::from_signing_key(signing_key))
     }
 
     fn load_or_initialize_with(
@@ -196,7 +163,7 @@ impl NodeIdentity {
             signing_key
         };
 
-        let identity = Self::from_signing_key(context, signing_key);
+        let identity = Self::from_signing_key(signing_key);
         if created_identity {
             context.open_trust_registry_for_initialization(identity.public_status())?;
         } else {
@@ -205,12 +172,11 @@ impl NodeIdentity {
         Ok(identity)
     }
 
-    fn from_signing_key(context: &NodeContext, signing_key: SigningKey) -> Self {
+    fn from_signing_key(signing_key: SigningKey) -> Self {
         let status = status_for_key(&signing_key);
         Self {
             signing_key,
             status,
-            context: context.clone(),
         }
     }
 
@@ -224,11 +190,6 @@ impl NodeIdentity {
         prehash: DirectEnvelopePrehash,
     ) -> Result<Bip340Signature, NodeIdentityError> {
         self.sign_prehash(&prehash.0)
-    }
-
-    /// Sign an explicit 32-byte NIP-01 event id without hashing it again.
-    pub fn sign_event_id(&self, event_id: EventId) -> Result<Bip340Signature, NodeIdentityError> {
-        self.sign_prehash(&event_id.0)
     }
 
     pub(crate) fn sign_transport_certificate(
@@ -255,41 +216,6 @@ impl NodeIdentity {
             .sign_prehash(prehash)
             .map_err(|_| NodeIdentityError::Signing)?;
         Ok(Bip340Signature(signature.to_bytes()))
-    }
-
-    pub fn prepare_rotation(&self) -> RotationPreparation {
-        RotationPreparation {
-            identity: Self::from_signing_key(&self.context, SigningKey::generate()),
-        }
-    }
-
-    pub fn prepare_reset(&self) -> ResetPreparation {
-        ResetPreparation
-    }
-
-    pub fn execute_reset(
-        context: &NodeContext,
-        _preparation: ResetPreparation,
-    ) -> Result<(), NodeIdentityError> {
-        context.ensure_state_directory()?;
-        let _lock = IdentityLock::acquire(context)?;
-        let path = context.identity_path();
-        match fs::symlink_metadata(&path) {
-            Ok(metadata)
-                if metadata.file_type().is_symlink() || !metadata.file_type().is_file() =>
-            {
-                Err(NodeIdentityError::State(
-                    "identity state has an unexpected file type".to_string(),
-                ))
-            }
-            Ok(_) => {
-                context.validate_private_file(&path)?;
-                fs::remove_file(path)?;
-                Ok(())
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(error.into()),
-        }
     }
 
     /// Remove the complete validated node-owned state for an explicit factory
@@ -708,26 +634,19 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[test]
-    fn typed_direct_and_event_signing_verify_without_double_hashing() {
+    fn typed_direct_signing_verifies_without_double_hashing() {
         let tmp = tempfile::TempDir::new().unwrap();
         let context = test_context(tmp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let direct = DirectEnvelopePrehash::from_canonical_bytes(br#"{"a":1}"#);
         let direct_signature = identity.sign_direct_envelope(direct).unwrap();
-        let event_id = EventId::from_bytes(&[7u8; 32]).unwrap();
-        let event_signature = identity.sign_event_id(event_id).unwrap();
         let verifying_key =
             VerifyingKey::from_slice(&decode_hex(&identity.public_status().public_key_hex))
                 .unwrap();
         let direct_signature = Signature::from_slice(&direct_signature.to_bytes()).unwrap();
-        let event_signature = Signature::from_slice(&event_signature.to_bytes()).unwrap();
         verifying_key
             .verify_prehash(direct.as_bytes(), &direct_signature)
             .unwrap();
-        verifying_key
-            .verify_prehash(event_id.as_bytes(), &event_signature)
-            .unwrap();
-        assert_ne!(direct_signature.to_bytes(), event_signature.to_bytes());
     }
 
     #[cfg(debug_assertions)]
@@ -765,21 +684,6 @@ mod tests {
             .chars()
             .all(|character| character.is_ascii_hexdigit() && !character.is_ascii_uppercase()));
         assert!(!format!("{:?}", identity.public_status()).contains("private"));
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    fn rotation_and_reset_are_explicit_hooks() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let context = test_context(tmp.path());
-        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
-        let current = identity.public_status().clone();
-        let rotation = identity.prepare_rotation();
-        assert_ne!(rotation.status(), &current);
-        let reset = identity.prepare_reset();
-        assert!(context.identity_path().is_file());
-        NodeIdentity::execute_reset(&context, reset).unwrap();
-        assert!(!context.identity_path().exists());
     }
 
     #[cfg(debug_assertions)]

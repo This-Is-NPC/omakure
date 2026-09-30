@@ -806,15 +806,18 @@ mod tests {
         let trust = |seed: u32, role: PeerRole, capabilities: &[&str]| {
             let (node_id, public_key) = peer_identity(seed);
             registry
-                .import_manual_peer(PeerRegistration {
-                    node_id: node_id.clone(),
-                    public_key,
-                    role,
-                    capabilities: capabilities.iter().map(|entry| entry.to_string()).collect(),
-                    source: PeerSource::Manual,
-                    actor: "health-plane-tests".to_string(),
-                    reason: "health plane operations test peer".to_string(),
-                })
+                .import_manual_peer_with_transport(
+                    PeerRegistration {
+                        node_id: node_id.clone(),
+                        public_key,
+                        role,
+                        capabilities: capabilities.iter().map(|entry| entry.to_string()).collect(),
+                        source: PeerSource::Manual,
+                        actor: "health-plane-tests".to_string(),
+                        reason: "health plane operations test peer".to_string(),
+                    },
+                    None,
+                )
                 .unwrap();
             node_id
         };

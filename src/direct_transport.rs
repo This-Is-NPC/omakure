@@ -900,10 +900,6 @@ impl TransportSession {
         Ok(frame)
     }
 
-    pub fn is_closed(&self) -> bool {
-        self.closed
-    }
-
     #[cfg(test)]
     fn inject_write_fault(&mut self, fault: WriteFault) {
         self.write_fault = Some(fault);
@@ -1799,7 +1795,7 @@ mod tests {
 
         let frame = refuser.write_error(ProtocolErrorCode::Revoked).unwrap();
         assert!(
-            refuser.is_closed(),
+            refuser.closed,
             "a session that has stated a refusal must not go on talking"
         );
         let message = refused.read(&frame).unwrap();
@@ -1867,7 +1863,7 @@ mod tests {
             assert_eq!(sender.send_sequence, 0);
             assert_eq!(sender.sent_messages, 0);
             assert_eq!(sender.sent_bytes, 0);
-            assert_eq!(sender.is_closed(), attempt == 2);
+            assert_eq!(sender.closed, attempt == 2);
         }
     }
 
@@ -1930,7 +1926,7 @@ mod tests {
                 sender.write(ENVELOPE_KIND, b"fault"),
                 Err(TransportError::Internal)
             );
-            assert_eq!(sender.is_closed(), attempt == 2);
+            assert_eq!(sender.closed, attempt == 2);
         }
         assert_eq!(sender.send_sequence, before_sequence);
         assert_eq!(sender.sent_messages, REKEY_MESSAGES - 1);

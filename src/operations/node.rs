@@ -1746,9 +1746,7 @@ pub(crate) fn map_identity_error(error: NodeIdentityError) -> OperationError {
         NodeIdentityError::InvalidKey | NodeIdentityError::State(_) => {
             registry_error("node identity state is invalid or insecure")
         }
-        NodeIdentityError::Io(_)
-        | NodeIdentityError::Signing
-        | NodeIdentityError::InvalidPrehash => {
+        NodeIdentityError::Io(_) | NodeIdentityError::Signing => {
             OperationError::new(OperationErrorCode::IoFailed, error.to_string())
         }
     }

@@ -650,13 +650,6 @@ impl NodeRegistry {
 
     /// Insert only a pending peer.  Observation, discovery, endpoints, and
     /// matching identifiers have no API that can insert active trust.
-    pub fn register_pending(
-        &self,
-        registration: PeerRegistration,
-    ) -> Result<PeerRecord, RegistryError> {
-        self.register_pending_with_transport(registration, None)
-    }
-
     pub fn register_pending_with_transport(
         &self,
         registration: PeerRegistration,
@@ -1298,13 +1291,6 @@ impl NodeRegistry {
     /// operation is intentionally separate from observation/pending
     /// registration and records the approval evidence in the same transaction
     /// as the peer row.
-    pub fn import_manual_peer(
-        &self,
-        registration: PeerRegistration,
-    ) -> Result<PeerRecord, RegistryError> {
-        self.import_manual_peer_with_transport(registration, None)
-    }
-
     pub fn import_manual_peer_with_transport(
         &self,
         registration: PeerRegistration,
@@ -1363,26 +1349,6 @@ impl NodeRegistry {
         })
     }
 
-    /// Explicitly authorize a pending or suspended peer.  The actor and
-    /// reason are mandatory evidence; there is no implicit activation path.
-    pub fn activate_peer(
-        &self,
-        node_id: &str,
-        actor: &str,
-        reason: &str,
-    ) -> Result<PeerRecord, RegistryError> {
-        self.transition_peer(node_id, PeerState::Active, actor, reason)
-    }
-
-    pub fn suspend_peer(
-        &self,
-        node_id: &str,
-        actor: &str,
-        reason: &str,
-    ) -> Result<PeerRecord, RegistryError> {
-        self.transition_peer(node_id, PeerState::Suspended, actor, reason)
-    }
-
     /// Revoke a peer and retain its identity forever in `revocations`.
     pub fn revoke_peer(
         &self,
@@ -1393,6 +1359,8 @@ impl NodeRegistry {
         self.transition_peer(node_id, PeerState::Revoked, actor, reason)
     }
 
+    /// Explicitly move a peer to `target`.  The actor and reason are mandatory
+    /// evidence; there is no implicit activation path.
     pub fn transition_peer(
         &self,
         node_id: &str,
@@ -1423,7 +1391,7 @@ impl NodeRegistry {
             )?;
             project_v2_transition(&transaction, &current, target, timestamp_seconds(&now)?)?;
             if target == PeerState::Revoked {
-                insert_revocation(&transaction, &current, &now, reason, None)?;
+                insert_revocation(&transaction, &current, &now, reason)?;
             }
             record_audit(
                 &transaction,
@@ -1499,88 +1467,6 @@ impl NodeRegistry {
             )?;
             let peer = load_peer(&transaction, node_id)?
                 .ok_or_else(|| RegistryError::Corrupt("updated peer disappeared".to_string()))?;
-            transaction.commit()?;
-            Ok(peer)
-        })
-    }
-
-    /// Record a key replacement atomically.  The replacement remains pending;
-    /// activation is a separate explicit trust decision.
-    pub fn replace_peer(
-        &self,
-        old_node_id: &str,
-        replacement: PeerRegistration,
-    ) -> Result<PeerRecord, RegistryError> {
-        validate_node_id(old_node_id)?;
-        validate_registration(&replacement, &self.local_node_id, &self.local_public_key)?;
-        let now = now_timestamp();
-        self.with_mutating_connection(|connection| {
-            let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let old = load_peer(&transaction, old_node_id)?
-                .ok_or_else(|| RegistryError::NotFound(old_node_id.to_string()))?;
-            if old.state == PeerState::Revoked {
-                return Err(RegistryError::InvalidTransition {
-                    from: old.state,
-                    to: PeerState::Revoked,
-                });
-            }
-            if old_node_id == replacement.node_id {
-                return Err(RegistryError::Duplicate(old_node_id.to_string()));
-            }
-            reject_retained_revocation(
-                &transaction,
-                &replacement.node_id,
-                &replacement.public_key,
-            )?;
-            if peer_exists(&transaction, &replacement.node_id)?
-                || public_key_exists(&transaction, &replacement.public_key)?
-            {
-                return Err(RegistryError::Duplicate(replacement.node_id.clone()));
-            }
-            self.reject_publisher_conflict(replacement.role)?;
-            transaction.execute(
-                "INSERT INTO peers (node_id, public_key, role, state, capabilities_json, added_at, updated_at, last_seen, source)
-                 VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?5, NULL, ?6)",
-                params![
-                    replacement.node_id,
-                    replacement.public_key,
-                    replacement.role.as_str(),
-                    capabilities_json(&replacement.capabilities)?,
-                    now,
-                    replacement.source.as_str(),
-                ],
-            )?;
-            transaction.execute(
-                "UPDATE peers SET state = 'revoked', updated_at = ?1 WHERE node_id = ?2",
-                params![now, old_node_id],
-            )?;
-            project_v2_replacement(
-                &transaction,
-                &old,
-                &replacement,
-                timestamp_seconds(&now)?,
-            )?;
-            insert_revocation(
-                &transaction,
-                &old,
-                &now,
-                &replacement.reason,
-                Some(&replacement.node_id),
-            )?;
-            record_audit(
-                &transaction,
-                AuditInput {
-                    event_type: "peer_replaced",
-                    node_id: old_node_id,
-                    from_state: Some(old.state),
-                    to_state: Some(PeerState::Revoked),
-                    actor: &replacement.actor,
-                    reason: &replacement.reason,
-                    occurred_at: &now,
-                },
-            )?;
-            let peer = load_peer(&transaction, &replacement.node_id)?
-                .ok_or_else(|| RegistryError::Corrupt("replacement peer disappeared".to_string()))?;
             transaction.commit()?;
             Ok(peer)
         })
@@ -4011,22 +3897,12 @@ fn insert_revocation(
     peer: &PeerRecord,
     revoked_at: &str,
     reason: &str,
-    replacement_node_id: Option<&str>,
 ) -> Result<(), RegistryError> {
     validate_bounded_text("reason", reason, MAX_REASON_BYTES)?;
-    if let Some(replacement) = replacement_node_id {
-        validate_node_id(replacement)?;
-    }
     transaction.execute(
         "INSERT INTO revocations (node_id, public_key, revoked_at, reason, replacement_node_id)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![
-            peer.node_id,
-            peer.public_key,
-            revoked_at,
-            reason,
-            replacement_node_id
-        ],
+         VALUES (?1, ?2, ?3, ?4, NULL)",
+        params![peer.node_id, peer.public_key, revoked_at, reason],
     )?;
     Ok(())
 }
@@ -4236,16 +4112,6 @@ fn project_v2_transition(
         PeerState::Pending => {}
     }
     Ok(())
-}
-
-fn project_v2_replacement(
-    transaction: &Transaction<'_>,
-    old: &PeerRecord,
-    replacement: &PeerRegistration,
-    now: i64,
-) -> Result<(), RegistryError> {
-    project_v2_transition(transaction, old, PeerState::Revoked, now)?;
-    insert_v2_identity_projection(transaction, replacement, now, "authenticated_untrusted")
 }
 
 struct AuditInput<'a> {
@@ -4661,11 +4527,11 @@ mod tests {
         crate::baseline_publisher::BaselinePublisher::create(&context, &registry).unwrap();
 
         assert!(matches!(
-            registry.register_pending(registration(&identity, 3)),
+            registry.register_pending_with_transport(registration(&identity, 3), None),
             Err(RegistryError::PublisherConductorConflict)
         ));
         assert!(matches!(
-            registry.import_manual_peer(registration(&identity, 4)),
+            registry.import_manual_peer_with_transport(registration(&identity, 4), None),
             Err(RegistryError::PublisherConductorConflict)
         ));
 
@@ -4723,18 +4589,6 @@ mod tests {
             Err(RegistryError::PublisherConductorConflict)
         ));
 
-        // `replace_peer` needs something to replace, and only a Conductor can
-        // be there while a publisher key is held.
-        let mut conductor = registration(&identity, 6);
-        conductor.role = PeerRole::Conductor;
-        registry.register_pending(conductor.clone()).unwrap();
-        let mut successor = registration(&identity, 7);
-        successor.role = PeerRole::Performer;
-        assert!(matches!(
-            registry.replace_peer(&conductor.node_id, successor),
-            Err(RegistryError::PublisherConductorConflict)
-        ));
-
         assert!(
             registry
                 .peers()
@@ -4754,7 +4608,7 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let performer = registry
-            .register_pending(registration(&identity, 3))
+            .register_pending_with_transport(registration(&identity, 3), None)
             .unwrap();
         assert_eq!(performer.role, PeerRole::Performer);
 
@@ -4786,7 +4640,9 @@ mod tests {
 
         let mut conductor = registration(&identity, 3);
         conductor.role = PeerRole::Conductor;
-        let peer = registry.import_manual_peer(conductor).unwrap();
+        let peer = registry
+            .import_manual_peer_with_transport(conductor, None)
+            .unwrap();
         assert_eq!(peer.state, PeerState::Active);
     }
 
@@ -4799,11 +4655,16 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let performer = registry
-            .register_pending(registration(&identity, 3))
+            .register_pending_with_transport(registration(&identity, 3), None)
             .unwrap();
 
         registry
-            .suspend_peer(&performer.node_id, "operator", "paused")
+            .transition_peer(
+                &performer.node_id,
+                PeerState::Suspended,
+                "operator",
+                "paused",
+            )
             .unwrap();
         assert!(
             crate::baseline_publisher::BaselinePublisher::create(&context, &registry).is_err(),
@@ -4849,27 +4710,29 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let peer = registry
-            .register_pending(registration(&identity, 3))
+            .register_pending_with_transport(registration(&identity, 3), None)
             .unwrap();
         assert_eq!(peer.state, PeerState::Pending);
-        assert!(registry.activate_peer(&peer.node_id, "", "reason").is_err());
+        assert!(registry
+            .transition_peer(&peer.node_id, PeerState::Active, "", "reason")
+            .is_err());
         assert_eq!(
             registry
-                .activate_peer(&peer.node_id, "operator", "approve")
+                .transition_peer(&peer.node_id, PeerState::Active, "operator", "approve")
                 .unwrap()
                 .state,
             PeerState::Active
         );
         assert_eq!(
             registry
-                .suspend_peer(&peer.node_id, "operator", "pause")
+                .transition_peer(&peer.node_id, PeerState::Suspended, "operator", "pause")
                 .unwrap()
                 .state,
             PeerState::Suspended
         );
         assert_eq!(
             registry
-                .activate_peer(&peer.node_id, "operator", "resume")
+                .transition_peer(&peer.node_id, PeerState::Active, "operator", "resume")
                 .unwrap()
                 .state,
             PeerState::Active
@@ -4882,7 +4745,7 @@ mod tests {
             PeerState::Revoked
         );
         assert!(matches!(
-            registry.activate_peer(&peer.node_id, "operator", "resurrect"),
+            registry.transition_peer(&peer.node_id, PeerState::Active, "operator", "resurrect"),
             Err(RegistryError::Revoked(_))
         ));
         assert_eq!(registry.revocations().unwrap().len(), 1);
@@ -4899,26 +4762,28 @@ mod tests {
         self_registration.node_id = identity.public_status().node_id.clone();
         self_registration.public_key = identity.public_status().public_key_hex.clone();
         assert!(matches!(
-            registry.register_pending(self_registration),
+            registry.register_pending_with_transport(self_registration, None),
             Err(RegistryError::SelfTrust)
         ));
         let peer = registry
-            .register_pending(registration(&identity, 7))
+            .register_pending_with_transport(registration(&identity, 7), None)
             .unwrap();
         assert!(matches!(
-            registry.register_pending(registration(&identity, 7)),
+            registry.register_pending_with_transport(registration(&identity, 7), None),
             Err(RegistryError::Duplicate(_))
         ));
         assert!(registry
-            .suspend_peer(&peer.node_id, "operator", "bad")
+            .transition_peer(&peer.node_id, PeerState::Suspended, "operator", "bad")
             .is_ok());
         assert!(matches!(
-            registry.suspend_peer(&peer.node_id, "operator", "again"),
+            registry.transition_peer(&peer.node_id, PeerState::Suspended, "operator", "again"),
             Err(RegistryError::InvalidTransition { .. })
         ));
         let mut unsupported = registration(&identity, 9);
         unsupported.capabilities = vec!["not-supported".to_string()];
-        assert!(registry.register_pending(unsupported).is_err());
+        assert!(registry
+            .register_pending_with_transport(unsupported, None)
+            .is_err());
     }
 
     #[test]
@@ -4928,10 +4793,10 @@ mod tests {
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         let peer = registry
-            .register_pending(registration(&identity, 11))
+            .register_pending_with_transport(registration(&identity, 11), None)
             .unwrap();
         assert!(registry
-            .activate_peer(&peer.node_id, "operator", " ")
+            .transition_peer(&peer.node_id, PeerState::Active, "operator", " ")
             .is_err());
         assert_eq!(
             registry.peer(&peer.node_id).unwrap().unwrap().state,
@@ -5036,7 +4901,7 @@ mod tests {
             .zip(registrations)
             .map(|(_, registration)| {
                 let registry = Arc::clone(&registry);
-                thread::spawn(move || registry.register_pending(registration))
+                thread::spawn(move || registry.register_pending_with_transport(registration, None))
             })
             .collect::<Vec<_>>();
         for thread in threads {

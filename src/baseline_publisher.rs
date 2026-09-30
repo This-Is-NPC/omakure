@@ -138,12 +138,6 @@ impl BaselinePublisher {
         Ok(Self { signing_key })
     }
 
-    /// Whether this node holds a publisher key at all.
-    pub fn is_present(context: &NodeContext) -> bool {
-        fs::symlink_metadata(context.publisher_key_path())
-            .is_ok_and(|metadata| metadata.file_type().is_file())
-    }
-
     /// The x-only public key, as a receiver's recorded publisher carries it.
     pub fn public_key(&self) -> [u8; crate::baseline::PUBLISHER_KEY_BYTES] {
         let mut key = [0u8; crate::baseline::PUBLISHER_KEY_BYTES];
@@ -338,7 +332,6 @@ mod tests {
         let context = node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
-        assert!(!BaselinePublisher::is_present(&context));
         assert!(BaselinePublisher::load_existing(&context).is_err());
         assert!(
             !context.publisher_key_path().exists(),

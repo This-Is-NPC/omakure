@@ -4788,15 +4788,18 @@ mod tests {
             .expect("initialize the peer identity");
         let peer_node_id = peer_identity.public_status().node_id.clone();
         registry
-            .import_manual_peer(crate::node_registry::PeerRegistration {
-                node_id: peer_node_id.clone(),
-                public_key: peer_identity.public_status().public_key_hex.clone(),
-                role: crate::node_registry::PeerRole::Performer,
-                capabilities: vec!["notifications".to_string(), "remote-run".to_string()],
-                source: crate::node_registry::PeerSource::Manual,
-                actor: "test".to_string(),
-                reason: "trusted for this test".to_string(),
-            })
+            .import_manual_peer_with_transport(
+                crate::node_registry::PeerRegistration {
+                    node_id: peer_node_id.clone(),
+                    public_key: peer_identity.public_status().public_key_hex.clone(),
+                    role: crate::node_registry::PeerRole::Performer,
+                    capabilities: vec!["notifications".to_string(), "remote-run".to_string()],
+                    source: crate::node_registry::PeerSource::Manual,
+                    actor: "test".to_string(),
+                    reason: "trusted for this test".to_string(),
+                },
+                None,
+            )
             .expect("trust the peer");
 
         let state = ConnectionState::new(

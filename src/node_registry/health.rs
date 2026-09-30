@@ -252,7 +252,8 @@ impl NodeRegistry {
     }
 
     /// The durable Health Plane state for every tracked peer.
-    pub fn health_peer_states(&self) -> Result<Vec<HealthPeerState>, RegistryError> {
+    #[cfg(test)]
+    pub(crate) fn health_peer_states(&self) -> Result<Vec<HealthPeerState>, RegistryError> {
         self.with_connection(|connection| peer_states_in(connection))
     }
 
@@ -2146,15 +2147,18 @@ mod tests {
     fn trust(registry: &NodeRegistry, seed: u32, role: PeerRole, capabilities: &[&str]) -> String {
         let (node_id, public_key) = peer_identity(seed);
         registry
-            .import_manual_peer(PeerRegistration {
-                node_id: node_id.clone(),
-                public_key,
-                role,
-                capabilities: capabilities.iter().map(|entry| entry.to_string()).collect(),
-                source: PeerSource::Manual,
-                actor: "health-plane-tests".to_string(),
-                reason: "health plane storage test peer".to_string(),
-            })
+            .import_manual_peer_with_transport(
+                PeerRegistration {
+                    node_id: node_id.clone(),
+                    public_key,
+                    role,
+                    capabilities: capabilities.iter().map(|entry| entry.to_string()).collect(),
+                    source: PeerSource::Manual,
+                    actor: "health-plane-tests".to_string(),
+                    reason: "health plane storage test peer".to_string(),
+                },
+                None,
+            )
             .unwrap();
         node_id
     }

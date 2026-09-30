@@ -126,12 +126,6 @@ impl EnrollmentAuthority {
         Ok(Self { signing_key })
     }
 
-    /// Whether this node holds an authority key at all.
-    pub fn is_present(context: &NodeContext) -> bool {
-        fs::symlink_metadata(context.authority_key_path())
-            .is_ok_and(|metadata| metadata.file_type().is_file())
-    }
-
     /// The x-only public key, as `trust.authorities[].public_key` carries it.
     pub fn public_key(&self) -> [u8; 32] {
         let mut key = [0u8; 32];
@@ -298,7 +292,6 @@ mod tests {
         let context = node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
-        assert!(!EnrollmentAuthority::is_present(&context));
         assert!(EnrollmentAuthority::load_existing(&context).is_err());
         assert!(
             !context.authority_key_path().exists(),

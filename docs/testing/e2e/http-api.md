@@ -5,7 +5,7 @@
 ## Source
 
 - `tests/http_api_e2e.rs`
-- Router declarations and route markers: `src/cli/api.rs`
+- Router declarations and route markers: `src/cli/api/router.rs`
 
 ## Run
 

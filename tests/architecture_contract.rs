@@ -406,17 +406,19 @@ fn production_architecture_boundaries_are_clean() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = root.join("src");
 
-    let api = src.join("cli/api.rs");
-    let api_source = fs::read_to_string(&api).expect("read HTTP adapter");
-    let api_contract = parse_contract(Rule::Http, "src/cli/api.rs", &api_source);
-    assert!(
-        api_contract
-            .findings
-            .iter()
-            .all(|finding| { !matches!(finding.rule, "ARCH-HTTP-CLI" | "ARCH-HTTP-SQLITE") }),
-        "HTTP boundary violations: {:?}",
-        api_contract.findings
-    );
+    for path in source_files(&src.join("cli/api")) {
+        let display = path.strip_prefix(root).unwrap().display().to_string();
+        let source = fs::read_to_string(&path).expect("read HTTP adapter");
+        let contract = parse_contract(Rule::Http, &display, &source);
+        assert!(
+            contract
+                .findings
+                .iter()
+                .all(|finding| { !matches!(finding.rule, "ARCH-HTTP-CLI" | "ARCH-HTTP-SQLITE") }),
+            "HTTP boundary violations in {display}: {:?}",
+            contract.findings
+        );
+    }
 
     for path in source_files(&src.join("domain")) {
         let display = path.strip_prefix(root).unwrap().display().to_string();

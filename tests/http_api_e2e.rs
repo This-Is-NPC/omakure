@@ -16,13 +16,13 @@ enum RouteCoverage {
     Excluded(&'static str),
 }
 
-/// Inventory of every `(method, route)` declared by `src/cli/api.rs` router.
+/// Inventory of every `(method, route)` declared by `src/cli/api/router.rs`.
 /// Coverage notes stay here; the route list itself is parsed from
-/// `HTTP_ROUTE_INVENTORY` markers in `src/cli/api.rs`.
+/// `HTTP_ROUTE_INVENTORY` markers in `src/cli/api/router.rs`.
 ///
 /// Coverage-guarantee boundary: this is a DRIFT TRIPWIRE. The keys are asserted
 /// to equal `HTTP_ROUTE_INVENTORY` (and that inventory is asserted equal to the
-/// router's `.route(...)` registrations in `src/cli/api.rs`), so a route added
+/// router's `.route(...)` registrations in `src/cli/api/router.rs`), so a route added
 /// to the router without an inventory entry fails the suite. The
 /// `Covered("test_name")` note is a human-authored pointer — it is NOT asserted
 /// to reference a test that actually calls the route. A route can be "listed
@@ -260,7 +260,7 @@ fn http_route_inventory_maps_all_current_router_entries() {
         .collect();
     assert_eq!(
         notes, from_source,
-        "HTTP_ROUTE_COVERAGE_NOTES must match HTTP_ROUTE_INVENTORY in src/cli/api.rs"
+        "HTTP_ROUTE_COVERAGE_NOTES must match HTTP_ROUTE_INVENTORY in src/cli/api/router.rs"
     );
     assert!(HTTP_ROUTE_COVERAGE_NOTES
         .iter()
@@ -270,8 +270,8 @@ fn http_route_inventory_maps_all_current_router_entries() {
 }
 
 fn parse_http_route_inventory_from_source() -> Vec<(&'static str, &'static str)> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli/api.rs");
-    let source = fs::read_to_string(&path).expect("read src/cli/api.rs");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli/api/router.rs");
+    let source = fs::read_to_string(&path).expect("read src/cli/api/router.rs");
     let start = source
         .find("// OMAKURE_HTTP_ROUTE_INVENTORY_START")
         .expect("inventory start marker");

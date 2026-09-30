@@ -329,11 +329,11 @@ fn named_result_data(value: &Value) -> Value {
 }
 fn stable_health(value: &Value) -> Value {
     let data = &value["data"];
-    json!({"local_node_id": data["local_node_id"], "enabled": data["enabled"], "nodes": data["nodes"], "presence": data["presence"], "baselines": data["baselines"]})
+    json!({"local_node_id": data["local_node_id"], "nodes": data["nodes"], "presence": data["presence"], "baselines": data["baselines"]})
 }
 fn stable_signals(value: &Value) -> Value {
     let data = &value["data"];
-    json!({"local_node_id": data["local_node_id"], "enabled": data["enabled"], "gap": data["gap"], "limit": data["limit"], "retention_seconds": data["retention_seconds"], "cursors": data["cursors"], "signals": data["signals"]})
+    json!({"local_node_id": data["local_node_id"], "gap": data["gap"], "limit": data["limit"], "retention_seconds": data["retention_seconds"], "cursors": data["cursors"], "signals": data["signals"]})
 }
 fn projected(value: &Value, data: Value) -> Value {
     json!({"ok": value["ok"], "data": data})

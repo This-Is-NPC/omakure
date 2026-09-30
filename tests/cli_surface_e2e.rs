@@ -928,7 +928,6 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     );
     assert_success(&health);
     let health_body = json(&health);
-    assert_eq!(health_body["data"]["enabled"], true);
     assert_eq!(health_body["data"]["presence"]["unknown"], 1);
     assert_eq!(health_body["data"]["presence"]["total"], 1);
     assert_eq!(health_body["data"]["nodes"].as_array().unwrap().len(), 1);
@@ -968,7 +967,6 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     );
     assert_success(&signals);
     let signals_body = json(&signals)["data"].clone();
-    assert_eq!(signals_body["enabled"], true);
     assert_eq!(signals_body["gap"], false);
     assert_eq!(signals_body["limit"], 64);
     assert_eq!(signals_body["retention_seconds"], 604_800);

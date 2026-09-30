@@ -72,8 +72,6 @@ const MAX_VERSION_BANNER_BYTES: usize = 256;
 /// shows them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FleetStatusReport {
-    /// Always `true`: Health Plane storage is part of every node registry.
-    pub enabled: bool,
     /// The reporting node's own canonical node ID.
     pub local_node_id: String,
     /// The UTC Unix second the presence projection was derived at.
@@ -206,7 +204,6 @@ pub fn fleet_status(registry: &NodeRegistry) -> OperationResult<FleetStatusRepor
     let nodes = collect_active_fleet_nodes(&plane, registry, observed_at, nodes)?;
     let (presence, baselines) = tally_fleet_counts(&nodes);
     Ok(FleetStatusReport {
-        enabled: true,
         local_node_id: registry.local_node_id().to_string(),
         observed_at,
         presence,
@@ -251,8 +248,6 @@ pub struct SignalCursor {
 /// engine.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SignalFeedReport {
-    /// Always `true`: Health Plane storage is part of every node registry.
-    pub enabled: bool,
     /// The reading node's own canonical node ID.
     pub local_node_id: String,
     /// The UTC Unix second the feed was derived at.
@@ -334,7 +329,6 @@ pub fn signal_feed(registry: &NodeRegistry) -> OperationResult<SignalFeedReport>
     }
     reduce_to_newest(&mut entries, limit);
     Ok(SignalFeedReport {
-        enabled: true,
         local_node_id: registry.local_node_id().to_string(),
         observed_at,
         retention_seconds: SIGNAL_RETENTION_SECONDS,

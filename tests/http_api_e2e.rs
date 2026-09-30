@@ -1339,7 +1339,6 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     let health = health_server.get("/v1/node/health");
     assert_eq!(health.status, 200, "body: {}", health.safe_body());
     let body = health.json();
-    assert_eq!(body["data"]["enabled"], true);
     assert_eq!(body["data"]["presence"]["unknown"], 1);
     assert_eq!(body["data"]["presence"]["online"], 0);
     assert_eq!(body["data"]["nodes"].as_array().unwrap().len(), 1);
@@ -1369,7 +1368,6 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     let signals = health_server.get("/v1/node/signals");
     assert_eq!(signals.status, 200, "body: {}", signals.safe_body());
     let feed = signals.json();
-    assert_eq!(feed["data"]["enabled"], true);
     assert_eq!(feed["data"]["gap"], false);
     assert_eq!(feed["data"]["limit"], 64);
     assert_eq!(feed["data"]["retention_seconds"], 604_800);

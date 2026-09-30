@@ -825,7 +825,6 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     // Before the Performer ever runs, both trusted peers are visible with the
     // frozen `unknown` presence and no Profile or Pulse.
     let cold = fleet_status_http(&conductor_server);
-    assert_eq!(cold["enabled"], true);
     assert_eq!(cold["presence"]["unknown"], 2);
     assert_eq!(cold["presence"]["online"], 0);
     for node_id in [&performer_id, &bystander_id] {
@@ -871,7 +870,6 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     // 2. Both shipped adapters render one operation, so they agree exactly.
     let via_cli = fleet_status_cli(conductor.path());
     assert_eq!(via_cli["local_node_id"], conductor_id);
-    assert_eq!(via_cli["enabled"], true);
     for node_id in [&performer_id, &bystander_id] {
         let http_row = node_row(&online, node_id).expect("http row");
         let cli_row = node_row(&via_cli, node_id).expect("cli row");
@@ -1469,7 +1467,6 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
     // Conductor, so both are already visible as `enrolled` Signals before any
     // node reports anything at all.
     let cold = signal_feed_http(&conductor_server);
-    assert_eq!(cold["enabled"], true);
     assert_eq!(cold["gap"], false);
     let enrolled = signals_from(&cold, "local", "enrolled");
     assert_eq!(enrolled.len(), 2, "one activation per Performer: {cold}");

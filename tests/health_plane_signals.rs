@@ -1373,7 +1373,6 @@ fn the_signal_read_surface_is_bounded_newest_first_and_carries_no_private_field(
     drop(registry);
 
     let feed = assert_success(&run_node(&node.workspace, &["signals".to_string()]));
-    assert_eq!(feed["enabled"], true);
     assert_eq!(feed["local_node_id"], node.local_node_id);
     assert_eq!(feed["retention_seconds"], SIGNAL_RETENTION_SECONDS);
     assert_eq!(feed["limit"], SIGNAL_INBOX_CAPACITY);

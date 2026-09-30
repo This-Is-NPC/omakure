@@ -192,7 +192,7 @@ src/
 ├── node_registry.rs         node-owned trust and delivery persistence boundary
 │   └── health.rs            Health Plane reads and receive-order application
 ├── direct_transport.rs      Noise framing, certificates, envelopes, and replay limits
-├── direct_service.rs        production direct listener, peer admission, and outboxes
+├── direct_service/          production direct listener, peer admission, and outboxes
 ├── direct_health.rs         Health Plane carriage over an established direct session
 ├── health_plane/            protocol-neutral Health Plane domain and operations
 │   ├── model.rs             Profile, Pulse, and the closed Signal kinds

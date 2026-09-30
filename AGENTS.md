@@ -91,7 +91,7 @@ src/
 └── fleet planes:
     ├── node.rs, node_identity.rs, node_transport.rs  # node state and identity
     ├── node_registry.rs (+ health.rs)    # node.sqlite trust/health persistence
-    ├── direct_transport.rs, direct_service.rs  # Noise transport and listener
+    ├── direct_transport.rs, direct_service/  # Noise transport and listener
     ├── discovery.rs                      # trust-neutral LAN discovery
     ├── enrollment.rs, enrollment_authority.rs  # manual/signed enrollment
     ├── health_plane/, direct_health.rs   # Health Plane domain and carriage

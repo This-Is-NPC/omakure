@@ -524,7 +524,7 @@ assert_no_log_leakage() {
 #
 # This is shipped transport behaviour, not a workaround: `DirectService`'s
 # static-peer dialer stops after the frozen `MAX_RETRY_ATTEMPTS` consecutive
-# connection failures (`src/direct_service.rs`), so a Performer that outlived a
+# connection failures (`src/direct_service/dial.rs`), so a Performer that outlived a
 # Conductor outage longer than its frozen 1/2/4-second backoff needs an explicit
 # restart to dial again. The existing transport certification restarts peers for
 # the same reason. Every step below is bounded.

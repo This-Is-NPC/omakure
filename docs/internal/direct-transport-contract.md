@@ -870,7 +870,7 @@ RFC test inputs and are explicitly not production secrets. The test
 certificate/frame bytes.
 
 The pinned pure-Rust `snow` crate is a production dependency. The shipped
-listener and outbound dialer live in `src/direct_service.rs`; contract vectors,
+listener and outbound dialer live in `src/direct_service/`; contract vectors,
 direct transport end-to-end tests, and the bounded Linux certification exercise
 the same Noise handshake, framing, and authenticated session path used by
 `node serve`.

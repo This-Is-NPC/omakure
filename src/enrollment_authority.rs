@@ -107,7 +107,7 @@ impl EnrollmentAuthority {
 
     /// The x-only public key, as `trust.authorities[].public_key` carries it.
     pub fn public_key(&self) -> [u8; 32] {
-        crate::node_key::public_key(&self.signing_key)
+        crate::node_key::xonly_public_key(&self.signing_key)
     }
 
     /// The stable id a bundle carries and `trust.authorities[].key_id` names.
@@ -115,7 +115,7 @@ impl EnrollmentAuthority {
     /// Derived from the public key rather than stored, so the two can never
     /// disagree and there is no second piece of state to keep in step.
     pub fn key_id(&self) -> [u8; crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES] {
-        crate::node_key::key_id(AUTHORITY_ID_DOMAIN, &self.signing_key)
+        crate::node_key::derive_key_id(AUTHORITY_ID_DOMAIN, &self.signing_key)
     }
 
     /// Mint one bundle. The signing itself is the shipped, tested construction;

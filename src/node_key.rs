@@ -116,7 +116,7 @@ impl HeldKey {
 }
 
 /// The x-only public key of `signing_key`.
-pub fn public_key(signing_key: &SigningKey) -> [u8; 32] {
+pub fn xonly_public_key(signing_key: &SigningKey) -> [u8; 32] {
     let mut key = [0u8; 32];
     key.copy_from_slice(signing_key.verifying_key().to_bytes().as_slice());
     key
@@ -124,8 +124,8 @@ pub fn public_key(signing_key: &SigningKey) -> [u8; 32] {
 
 /// The stable id of `signing_key` under `domain`, derived from the public key
 /// rather than stored so the two can never disagree.
-pub fn key_id<const N: usize>(domain: &[u8], signing_key: &SigningKey) -> [u8; N] {
-    let digest = Sha256::digest([domain, &public_key(signing_key)[..]].concat());
+pub fn derive_key_id<const N: usize>(domain: &[u8], signing_key: &SigningKey) -> [u8; N] {
+    let digest = Sha256::digest([domain, &xonly_public_key(signing_key)[..]].concat());
     let mut id = [0u8; N];
     id.copy_from_slice(&digest[..N]);
     id

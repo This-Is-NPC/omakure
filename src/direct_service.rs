@@ -420,7 +420,7 @@ impl ConnectionState {
     }
 
     /// Whether a live session with this peer exists to carry an instruction.
-    fn has_session(&self, peer_node_id: &str) -> bool {
+    fn holds_session(&self, peer_node_id: &str) -> bool {
         self.active
             .lock()
             .map(|active| active.contains_key(peer_node_id))
@@ -2048,7 +2048,7 @@ impl CueDispatcher {
 
     /// Whether a live session with this peer exists to carry a Cue.
     pub fn has_session(&self, peer_node_id: &str) -> bool {
-        self.state.has_session(peer_node_id)
+        self.state.holds_session(peer_node_id)
     }
 }
 
@@ -2129,7 +2129,7 @@ impl BaselineDispatcher {
 
     /// Whether a live session with this peer exists to carry a baseline.
     pub fn has_session(&self, peer_node_id: &str) -> bool {
-        self.state.has_session(peer_node_id)
+        self.state.holds_session(peer_node_id)
     }
 }
 

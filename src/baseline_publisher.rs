@@ -120,7 +120,7 @@ impl BaselinePublisher {
 
     /// The x-only public key, as a receiver's recorded publisher carries it.
     pub fn public_key(&self) -> [u8; crate::baseline::PUBLISHER_KEY_BYTES] {
-        crate::node_key::public_key(&self.signing_key)
+        crate::node_key::xonly_public_key(&self.signing_key)
     }
 
     /// The stable id a manifest carries and a receiver's publisher record
@@ -129,7 +129,7 @@ impl BaselinePublisher {
     /// Derived from the public key rather than stored, so the two can never
     /// disagree and there is no second piece of state to keep in step.
     pub fn key_id(&self) -> [u8; crate::baseline::PUBLISHER_ID_BYTES] {
-        crate::node_key::key_id(PUBLISHER_ID_DOMAIN, &self.signing_key)
+        crate::node_key::derive_key_id(PUBLISHER_ID_DOMAIN, &self.signing_key)
     }
 
     /// Sign one baseline over the script bodies themselves.

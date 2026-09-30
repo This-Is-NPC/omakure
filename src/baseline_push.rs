@@ -1020,30 +1020,11 @@ mod tests {
             std::fs::set_permissions(&config, std::fs::Permissions::from_mode(mode))
                 .expect("chmod");
         }
-        let context = crate::node::NodeContext::resolve_for(
-            crate::node::NodePlatform::current(),
-            crate::node::NodePathOverrides::new(Some(dir.path().join("state")), Some(config)),
-            true,
-            None,
-            None,
-            None,
-        )
-        .expect("context");
-        read_policy(&context)
+        read_policy(&crate::test_support::node_context(dir.path()))
     }
 
     fn test_identity(dir: &tempfile::TempDir) -> crate::node_identity::NodeIdentity {
-        let config = dir.path().join("node.toml");
-        std::fs::write(&config, "version = 1\n").expect("write config");
-        let context = crate::node::NodeContext::resolve_for(
-            crate::node::NodePlatform::current(),
-            crate::node::NodePathOverrides::new(Some(dir.path().join("state")), Some(config)),
-            true,
-            None,
-            None,
-            None,
-        )
-        .expect("context");
+        let context = crate::test_support::configured_node_context(dir.path());
         crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity")
     }
 }
@@ -1068,7 +1049,7 @@ mod delivery_tests {
     use crate::baseline_push::{
         BaselineCode, BaselineOutcome, BaselinePolicy, BaselinePush, BaselineSession,
     };
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+    use crate::node::NodeContext;
     use crate::node_identity::NodeIdentity;
     use crate::node_registry::{NodeRegistry, PeerRole};
     use crate::util::hex;
@@ -1089,17 +1070,7 @@ mod delivery_tests {
     impl Performer {
         fn new() -> Self {
             let dir = tempfile::tempdir().expect("tempdir");
-            let config = dir.path().join("node.toml");
-            std::fs::write(&config, "version = 1\n").expect("write config");
-            let context = NodeContext::resolve_for(
-                NodePlatform::current(),
-                NodePathOverrides::new(Some(dir.path().join("state")), Some(config)),
-                true,
-                None,
-                None,
-                None,
-            )
-            .expect("resolve node context");
+            let context = crate::test_support::configured_node_context(dir.path());
             let workspace = Workspace::new(dir.path().join("scripts"));
             workspace.ensure_layout().expect("workspace layout");
             Self {
@@ -1768,17 +1739,7 @@ mod delivery_tests {
         .expect("write");
 
         let key_dir = tempfile::tempdir().expect("tempdir");
-        let config = key_dir.path().join("node.toml");
-        std::fs::write(&config, "version = 1\n").expect("write config");
-        let context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(Some(key_dir.path().join("state")), Some(config)),
-            true,
-            None,
-            None,
-            None,
-        )
-        .expect("context");
+        let context = crate::test_support::configured_node_context(key_dir.path());
         let identity = NodeIdentity::load_or_initialize(&context).expect("identity");
         let registry = NodeRegistry::open_for_initialization(&context, identity.public_status())
             .expect("registry");

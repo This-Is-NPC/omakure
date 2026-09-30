@@ -1,6 +1,7 @@
 //! Domain layer - core types and validation logic.
 
 mod node_config;
+mod node_id;
 mod parsing;
 mod schedule;
 mod schema;
@@ -9,6 +10,7 @@ pub use node_config::{
     parse_node_config, DiscoverySettings, EnrollmentAuthority, NodeConfig, NodeConfigError,
     TrustedBaselinePublisher,
 };
+pub use node_id::{is_node_id, NODE_ID_BYTES, NODE_ID_PREFIX};
 pub use parsing::{extract_schema_block, parse_schema};
 pub use schedule::{next_fire_after, parse_cron};
 #[allow(unused_imports)]

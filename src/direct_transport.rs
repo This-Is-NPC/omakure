@@ -4,6 +4,7 @@
 //! deliberately does not own sockets, threads, or SQLite.  The node service
 //! adapter is responsible for those effects.
 
+use crate::domain::is_node_id;
 use crate::node_identity::{Bip340Signature, DirectEnvelopePrehash, NodeIdentity};
 use crate::node_registry::PeerState;
 use crate::util::hex;
@@ -1431,14 +1432,6 @@ fn parse_certificate_payload(payload: &[u8]) -> Result<TransportCertificate, Tra
         return Err(TransportError::HandshakeFailed);
     }
     TransportCertificate::from_bytes(&payload[1..])
-}
-
-fn is_node_id(value: &str) -> bool {
-    value.len() == 69
-        && value.starts_with("omk1_")
-        && value[5..]
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn domain_hash(domain: &[u8], body: &[u8]) -> [u8; 32] {

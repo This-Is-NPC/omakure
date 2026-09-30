@@ -6,6 +6,7 @@
 //! with an actor and reason recorded in the append-only audit log.
 
 use crate::direct_transport::TransportCertificate;
+use crate::domain::is_node_id;
 use crate::enrollment::{self, ManualEnrollmentRequest, SignedEnrollmentBundle};
 use crate::node::NodeContext;
 use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
@@ -59,7 +60,6 @@ const MAX_REASON_BYTES: usize = 1024;
 const MAX_CAPABILITIES: usize = 32;
 const MAX_CAPABILITY_BYTES: usize = 64;
 const MAX_CAPABILITIES_JSON_BYTES: usize = 4096;
-const NODE_ID_BYTES: usize = 69;
 const PUBLIC_KEY_BYTES: usize = 64;
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
@@ -3727,12 +3727,7 @@ fn validate_public_key(value: &str) -> Result<(), RegistryError> {
 }
 
 fn validate_node_id(value: &str) -> Result<(), RegistryError> {
-    if value.len() != NODE_ID_BYTES
-        || !value.starts_with("omk1_")
-        || value[5..]
-            .bytes()
-            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
-    {
+    if !is_node_id(value) {
         return Err(RegistryError::InvalidInput(
             "node ID must be omk1_ followed by 64 lowercase hexadecimal characters".to_string(),
         ));

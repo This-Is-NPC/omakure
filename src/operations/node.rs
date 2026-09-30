@@ -595,12 +595,7 @@ pub fn issue_enrollment_bundle(
 ) -> OperationResult<IssuedBundle> {
     // The same shape the registry and config accept, checked here so a
     // malformed audience fails at the verb rather than inside the signer.
-    let audience_is_shaped = request.audience_node_id.len() == crate::enrollment::NODE_ID_BYTES
-        && request.audience_node_id.starts_with("omk1_")
-        && request.audience_node_id[5..]
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
-    if !audience_is_shaped {
+    if !crate::domain::is_node_id(&request.audience_node_id) {
         return Err(OperationError::new(
             OperationErrorCode::InvalidInput,
             "audience node ID is invalid",

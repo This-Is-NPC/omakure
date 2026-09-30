@@ -4,6 +4,7 @@
 //! never opens a trust/session registry and never authorizes a peer.
 
 use crate::domain::DiscoverySettings;
+use crate::domain::{is_node_id, NODE_ID_BYTES};
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
@@ -42,7 +43,6 @@ pub const FUTURE_SKEW_SECONDS: u64 = 5;
 const PROOF_FLAG: u16 = 1;
 const HEADER_BYTES: usize = 8;
 const UNSIGNED_BYTES: usize = 151;
-const NODE_ID_BYTES: usize = 69;
 const IDENTITY_BYTES: usize = 32;
 const BEACON_ID_BYTES: usize = 16;
 const PROOF_BYTES: usize = 32;
@@ -181,7 +181,7 @@ impl Beacon {
         let node_id = std::str::from_utf8(node_id_bytes)
             .map_err(|_| DiscoveryError::InvalidBeacon)?
             .to_string();
-        if !valid_node_id(&node_id) {
+        if !is_node_id(&node_id) {
             return Err(DiscoveryError::InvalidBeacon);
         }
         let identity_xonly: [u8; IDENTITY_BYTES] = bytes[cursor..cursor + IDENTITY_BYTES]
@@ -241,7 +241,8 @@ impl Beacon {
         } else if self.discovery_proof.is_some() {
             return Err(DiscoveryError::SecretMismatch);
         }
-        let expected_node_id = node_id_for_key(&self.identity_xonly);
+        let expected_node_id =
+            crate::node_identity::node_id_for_x_only_public_key(&self.identity_xonly);
         if self.node_id != expected_node_id {
             return Err(DiscoveryError::IdentityMismatch);
         }
@@ -256,7 +257,7 @@ impl Beacon {
     }
 
     fn validate_shape(&self) -> Result<(), DiscoveryError> {
-        if !valid_node_id(&self.node_id)
+        if !is_node_id(&self.node_id)
             || self.direct_port == 0
             || self.expires_at <= self.issued_at
             || self.expires_at - self.issued_at > BEACON_LIFETIME_SECONDS
@@ -266,7 +267,8 @@ impl Beacon {
         {
             return Err(DiscoveryError::InvalidBeacon);
         }
-        if node_id_for_key(&self.identity_xonly) != self.node_id {
+        if crate::node_identity::node_id_for_x_only_public_key(&self.identity_xonly) != self.node_id
+        {
             return Err(DiscoveryError::IdentityMismatch);
         }
         Ok(())
@@ -889,22 +891,6 @@ fn read_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, DiscoveryError> {
             .try_into()
             .map_err(|_| DiscoveryError::InvalidBeacon)?,
     ))
-}
-
-fn valid_node_id(value: &str) -> bool {
-    value.len() == NODE_ID_BYTES
-        && value.starts_with("omk1_")
-        && value[5..]
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
-
-fn node_id_for_key(key: &[u8; IDENTITY_BYTES]) -> String {
-    let mut input = Vec::with_capacity(18 + IDENTITY_BYTES);
-    input.extend_from_slice(b"omakure/node-id/v1\0");
-    input.extend_from_slice(key);
-    let digest = Sha256::digest(input);
-    format!("omk1_{}", hex::encode(&digest))
 }
 
 fn hmac_sha256(secret: &[u8], message: &[u8]) -> [u8; 32] {

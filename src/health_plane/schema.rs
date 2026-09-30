@@ -10,13 +10,14 @@ use super::bounds::{
     MAX_CAPABILITY_BYTES, MAX_CAPABILITY_COUNT, MAX_DISPLAY_NAME_BYTES, MAX_DISTRO_ID_BYTES,
     MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES, MAX_JSON_DEPTH,
     MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES,
-    MAX_STRING_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, NODE_ID_BYTES,
-    OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES,
+    MAX_STRING_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, OPAQUE_ID_HEX_CHARS,
+    RUNTIME_NAMES,
 };
 use super::model::{
     AckBody, ErrorBody, HealthBody, HealthCode, HealthKind, HealthPayload, ProfileSnapshot,
     PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalKind, SignalRecord,
 };
+use crate::domain::is_node_id;
 use serde_json::{Map, Value};
 
 const RUN_STATES: [&str; 5] = [
@@ -190,10 +191,7 @@ fn node_id_field(value: Option<&Value>) -> Result<String, HealthCode> {
     let text = value
         .and_then(Value::as_str)
         .ok_or(HealthCode::InvalidMessage)?;
-    if text.len() != NODE_ID_BYTES
-        || !text.starts_with("omk1_")
-        || !text[5..].bytes().all(is_lower_hex)
-    {
+    if !is_node_id(text) {
         return Err(HealthCode::InvalidMessage);
     }
     Ok(text.to_string())

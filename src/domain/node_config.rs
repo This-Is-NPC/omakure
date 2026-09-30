@@ -1,3 +1,4 @@
+use super::node_id::is_node_id;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -577,14 +578,6 @@ fn validate_host_port(value: &str, allow_bracketed_ipv6: bool) -> Result<(), &'s
         return Err("invalid host");
     }
     Ok(())
-}
-
-fn is_node_id(value: &str) -> bool {
-    value.len() == 69
-        && value.starts_with("omk1_")
-        && value[5..]
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn validate_secret_ref(value: &str) -> Result<(), NodeConfigError> {

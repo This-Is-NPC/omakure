@@ -1,3 +1,4 @@
+use crate::domain::NODE_ID_PREFIX;
 use crate::node::{write_atomic_new, NodeContext, NodeError};
 use crate::node_registry::RegistryError;
 use crate::util::hex;
@@ -11,7 +12,6 @@ use std::path::Path;
 use thiserror::Error;
 
 const IDENTITY_PRIVATE_BYTES: usize = 32;
-const NODE_ID_PREFIX: &str = "omk1_";
 const NODE_ID_DOMAIN: &[u8] = b"omakure/node-id/v1\0";
 const DIRECT_ENVELOPE_DOMAIN: &[u8] = b"omakure/direct-envelope/v1\0";
 

@@ -15,6 +15,7 @@ pub mod model;
 pub mod report;
 pub mod schema;
 
+use crate::domain::is_node_id;
 use crate::node_registry::health::{
     HealthApplyRequest, HealthAuditEvent, HealthAuthorization, HealthFleetPeer, HealthOutboxEntry,
     HealthPruneReport,
@@ -654,14 +655,6 @@ impl<'registry> HealthPlane<'registry> {
             now,
         )
     }
-}
-
-fn is_node_id(value: &str) -> bool {
-    value.len() == bounds::NODE_ID_BYTES
-        && value.starts_with("omk1_")
-        && value[5..]
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn role_code(role: PeerRole) -> i64 {

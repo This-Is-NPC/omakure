@@ -5,6 +5,7 @@
 //! or reinterpret the signed record.
 
 use crate::direct_transport::validate_x25519_public;
+use crate::domain::{is_node_id, NODE_ID_BYTES};
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
 use k256::schnorr::{
@@ -26,7 +27,6 @@ pub const MAX_CAPABILITY_BYTES: usize = 64;
 pub const FUTURE_SKEW_SECONDS: u64 = 300;
 pub const MAX_LIFETIME_SECONDS: u64 = 30 * 24 * 60 * 60;
 pub const REPLAY_RETENTION_SECONDS: u64 = 24 * 60 * 60;
-pub const NODE_ID_BYTES: usize = 69;
 pub const IDENTITY_KEY_BYTES: usize = 32;
 pub const TRANSPORT_KEY_BYTES: usize = 32;
 pub const REQUEST_ID_BYTES: usize = 16;
@@ -316,12 +316,7 @@ impl SignedEnrollmentBundle {
             return Err(EnrollmentError::Invalid);
         }
         for node_id in [&self.audience_node_id, &self.subject_node_id] {
-            if node_id.len() != NODE_ID_BYTES
-                || !node_id.starts_with("omk1_")
-                || !node_id[5..]
-                    .bytes()
-                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-            {
+            if !is_node_id(node_id) {
                 return Err(EnrollmentError::IdentityMismatch);
             }
         }
@@ -650,11 +645,7 @@ impl ManualEnrollmentRequest {
         if self.pairing_id == [0; PAIRING_ID_BYTES] {
             return Err(EnrollmentError::Invalid);
         }
-        if self.proposer_node_id.len() != NODE_ID_BYTES
-            || !self.proposer_node_id.starts_with("omk1_")
-            || !self.proposer_node_id[5..]
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        if !is_node_id(&self.proposer_node_id)
             || crate::node_identity::node_id_for_x_only_public_key(&self.proposer_xonly)
                 != self.proposer_node_id
         {

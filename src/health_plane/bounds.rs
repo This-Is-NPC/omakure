@@ -66,7 +66,7 @@ pub const MAX_PAYLOAD_FIELDS: usize = 64;
 pub const MAX_ARRAY_LENGTH: usize = 32;
 pub const MAX_STRING_BYTES: usize = 128;
 pub const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-pub const NODE_ID_BYTES: usize = 69;
+pub use crate::domain::NODE_ID_BYTES;
 pub const OPAQUE_ID_HEX_CHARS: usize = 32;
 
 // Field bounds.

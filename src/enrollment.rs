@@ -6,6 +6,7 @@
 
 use crate::direct_transport::validate_x25519_public;
 use crate::domain::{is_node_id, NODE_ID_BYTES};
+use crate::domain::{MAX_CAPABILITIES, MAX_CAPABILITY_BYTES};
 use crate::node_identity::NodeIdentity;
 use crate::util::bytes::ByteReader;
 use crate::util::digest::sha256_domain;
@@ -22,8 +23,6 @@ use thiserror::Error;
 
 pub const VERSION: u8 = 2;
 pub const MAX_REQUEST_BYTES: usize = 2_048;
-pub const MAX_CAPABILITIES: usize = 32;
-pub const MAX_CAPABILITY_BYTES: usize = 64;
 pub const FUTURE_SKEW_SECONDS: u64 = 300;
 pub const MAX_LIFETIME_SECONDS: u64 = 30 * 24 * 60 * 60;
 pub const REPLAY_RETENTION_SECONDS: u64 = 24 * 60 * 60;
@@ -674,24 +673,7 @@ pub fn parse_hex(value: &str, expected_bytes: usize) -> Result<Vec<u8>, Enrollme
 }
 
 pub fn validate_capabilities(capabilities: &[String]) -> Result<(), EnrollmentError> {
-    if capabilities.len() > MAX_CAPABILITIES {
-        return Err(EnrollmentError::Invalid);
-    }
-    let mut previous = None;
-    for capability in capabilities {
-        if capability.is_empty()
-            || capability.len() > MAX_CAPABILITY_BYTES
-            || capability.bytes().any(|byte| {
-                !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte))
-            })
-            || !crate::domain::CAPABILITY_ALLOWLIST.contains(&capability.as_str())
-            || previous.is_some_and(|previous: &str| previous >= capability.as_str())
-        {
-            return Err(EnrollmentError::Invalid);
-        }
-        previous = Some(capability.as_str());
-    }
-    Ok(())
+    crate::domain::check_capability_list(capabilities).map_err(|_| EnrollmentError::Invalid)
 }
 
 pub fn hash_code(code: &[u8]) -> [u8; 32] {

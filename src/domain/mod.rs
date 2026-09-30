@@ -8,8 +8,9 @@ mod schedule;
 mod schema;
 
 pub use capability::{
-    CAPABILITY_ALLOWLIST, CAPABILITY_BASELINE_PUSH, CAPABILITY_INVENTORY_HEALTH,
-    CAPABILITY_NOTIFICATIONS, CAPABILITY_REMOTE_RUN,
+    check_capability_list, CapabilityListError, CAPABILITY_ALLOWLIST, CAPABILITY_BASELINE_PUSH,
+    CAPABILITY_INVENTORY_HEALTH, CAPABILITY_NOTIFICATIONS, CAPABILITY_REMOTE_RUN, MAX_CAPABILITIES,
+    MAX_CAPABILITY_BYTES,
 };
 pub use node_config::{
     parse_node_config, DiscoverySettings, EnrollmentAuthority, NodeConfig, NodeConfigError,

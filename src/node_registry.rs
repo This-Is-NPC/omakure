@@ -42,9 +42,8 @@ static WRITE_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const MAX_ACTOR_BYTES: usize = 256;
 const MAX_REASON_BYTES: usize = 1024;
-const MAX_CAPABILITIES: usize = 32;
-const MAX_CAPABILITY_BYTES: usize = 64;
 const MAX_CAPABILITIES_JSON_BYTES: usize = 4096;
+const TOO_MANY_CAPABILITIES: &str = "too many peer capabilities";
 const PUBLIC_KEY_BYTES: usize = 64;
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 const MAX_TRANSPORT_AUDIT_ROWS: i64 = 1_000_000;
@@ -3731,31 +3730,16 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, RegistryError> {
 }
 
 fn validate_capabilities(capabilities: &[String]) -> Result<(), RegistryError> {
-    if capabilities.len() > MAX_CAPABILITIES {
-        return Err(RegistryError::InvalidInput(
-            "too many peer capabilities".to_string(),
-        ));
-    }
-    let mut previous: Option<&str> = None;
-    for capability in capabilities {
-        if capability.is_empty()
-            || capability.len() > MAX_CAPABILITY_BYTES
-            || capability.bytes().any(|byte| {
-                !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte))
-            })
-            || !crate::domain::CAPABILITY_ALLOWLIST.contains(&capability.as_str())
-        {
-            return Err(RegistryError::InvalidInput(format!(
-                "unsupported or invalid capability {capability:?}"
-            )));
-        }
-        if previous.is_some_and(|value| value >= capability.as_str()) {
-            return Err(RegistryError::InvalidInput(
-                "capabilities must be sorted and unique".to_string(),
-            ));
-        }
-        previous = Some(capability);
-    }
+    use crate::domain::CapabilityListError;
+    crate::domain::check_capability_list(capabilities).map_err(|error| {
+        RegistryError::InvalidInput(match error {
+            CapabilityListError::TooMany => TOO_MANY_CAPABILITIES.to_string(),
+            CapabilityListError::Unsupported(capability) => {
+                format!("unsupported or invalid capability {capability:?}")
+            }
+            CapabilityListError::Unsorted => "capabilities must be sorted and unique".to_string(),
+        })
+    })?;
     let json = capabilities_json(capabilities)?;
     if json.len() > MAX_CAPABILITIES_JSON_BYTES {
         return Err(RegistryError::InvalidInput(
@@ -3772,9 +3756,9 @@ fn capabilities_json(capabilities: &[String]) -> Result<String, RegistryError> {
 }
 
 fn validate_capabilities_without_json(capabilities: &[String]) -> Result<(), RegistryError> {
-    if capabilities.len() > MAX_CAPABILITIES {
+    if capabilities.len() > crate::domain::MAX_CAPABILITIES {
         return Err(RegistryError::InvalidInput(
-            "too many peer capabilities".to_string(),
+            TOO_MANY_CAPABILITIES.to_string(),
         ));
     }
     Ok(())

@@ -6,12 +6,11 @@
 //! can never silently persist sensitive data.
 
 use super::bounds::{
-    BASELINE_ID_HEX_CHARS, CAPABILITY_ALLOWLIST, MAX_AGENT_VERSION_BYTES, MAX_ARRAY_LENGTH,
-    MAX_CAPABILITY_BYTES, MAX_CAPABILITY_COUNT, MAX_DISPLAY_NAME_BYTES, MAX_DISTRO_ID_BYTES,
-    MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES, MAX_JSON_DEPTH,
-    MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES,
-    MAX_STRING_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, OPAQUE_ID_HEX_CHARS,
-    RUNTIME_NAMES,
+    BASELINE_ID_HEX_CHARS, MAX_AGENT_VERSION_BYTES, MAX_ARRAY_LENGTH, MAX_DISPLAY_NAME_BYTES,
+    MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES,
+    MAX_JSON_DEPTH, MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER,
+    MAX_SCRIPT_BYTES, MAX_STRING_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE,
+    OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES,
 };
 use super::model::{
     AckBody, ErrorBody, HealthBody, HealthCode, HealthKind, HealthPayload, ProfileSnapshot,
@@ -358,22 +357,12 @@ fn validate_profile(object: &Map<String, Value>) -> Result<ProfileSnapshot, Heal
         .get("capabilities")
         .and_then(Value::as_array)
         .ok_or(HealthCode::InvalidMessage)?;
-    if entries.len() > MAX_CAPABILITY_COUNT {
-        return Err(HealthCode::InvalidMessage);
-    }
-    let mut capabilities = Vec::with_capacity(entries.len());
-    let mut previous = "";
-    for entry in entries {
-        let text = entry.as_str().ok_or(HealthCode::InvalidMessage)?;
-        if text.len() > MAX_CAPABILITY_BYTES
-            || !CAPABILITY_ALLOWLIST.contains(&text)
-            || text <= previous
-        {
-            return Err(HealthCode::InvalidMessage);
-        }
-        previous = text;
-        capabilities.push(text.to_string());
-    }
+    let capabilities = entries
+        .iter()
+        .map(|entry| entry.as_str().ok_or(HealthCode::InvalidMessage))
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::domain::check_capability_list(&capabilities).map_err(|_| HealthCode::InvalidMessage)?;
+    let capabilities: Vec<String> = capabilities.into_iter().map(str::to_string).collect();
     let display_name = object
         .get("display_name")
         .and_then(Value::as_str)

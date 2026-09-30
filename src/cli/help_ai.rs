@@ -47,7 +47,6 @@ pub struct FlagInfo {
     pub action: String,
     pub global: bool,
     pub hidden: bool,
-    pub deprecated: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,7 +57,6 @@ pub struct SubcommandInfo {
     pub aliases: Vec<String>,
     pub hidden_aliases: Vec<String>,
     pub hidden: bool,
-    pub deprecated: bool,
     pub flags: Vec<FlagInfo>,
     pub subcommands: Vec<SubcommandInfo>,
 }
@@ -248,7 +246,6 @@ fn flag_info(option: &InventoryOption) -> FlagInfo {
         action: option.action.clone(),
         global: option.global,
         hidden: option.hidden,
-        deprecated: option.deprecated,
     }
 }
 
@@ -268,7 +265,6 @@ fn collect_nested(
                 aliases: entry.aliases.clone(),
                 hidden_aliases: entry.hidden_aliases.clone(),
                 hidden: entry.hidden,
-                deprecated: entry.deprecated,
                 flags: collect_flags(entry),
                 subcommands: collect_nested(entry, by_id),
             })

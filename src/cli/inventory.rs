@@ -21,10 +21,6 @@ pub(crate) struct InventoryCommand {
     pub(crate) aliases: Vec<String>,
     pub(crate) hidden_aliases: Vec<String>,
     pub(crate) hidden: bool,
-    /// Clap 4 has no command-level deprecation bit; this remains explicit so
-    /// the schema can represent it if the parser gains one without changing
-    /// consumers.
-    pub(crate) deprecated: bool,
     pub(crate) options: Vec<InventoryOption>,
     /// Canonical IDs of direct child commands, in deterministic order.
     pub(crate) subcommands: Vec<String>,
@@ -50,9 +46,6 @@ pub(crate) struct InventoryOption {
     pub(crate) action: String,
     pub(crate) global: bool,
     pub(crate) hidden: bool,
-    /// Clap 4 has no argument-level deprecation bit; see
-    /// [`InventoryCommand::deprecated`].
-    pub(crate) deprecated: bool,
 }
 
 /// One constrained value accepted by an option's value parser.
@@ -119,7 +112,6 @@ fn collect_commands(
             aliases,
             hidden_aliases,
             hidden: child.is_hide_set(),
-            deprecated: false,
             options,
             subcommands,
         });
@@ -220,7 +212,6 @@ fn inventory_option(argument: &clap::Arg) -> InventoryOption {
         action: format!("{:?}", argument.get_action()),
         global: argument.is_global_set(),
         hidden: argument.is_hide_set(),
-        deprecated: false,
     }
 }
 
@@ -269,13 +260,8 @@ fn render_command_details(output: &mut String, command: &InventoryCommand) {
     render_aliases(output, command);
     let _ = writeln!(
         output,
-        "- **Visibility:** {}{}",
-        if command.hidden { "hidden" } else { "visible" },
-        if command.deprecated {
-            ", deprecated"
-        } else {
-            ""
-        }
+        "- **Visibility:** {}",
+        if command.hidden { "hidden" } else { "visible" }
     );
 }
 

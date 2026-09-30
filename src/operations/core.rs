@@ -293,7 +293,9 @@ pub fn enqueue_run_with_access(
         secret_access,
     )
     .map_err(|(field, message)| {
-        let code = if message.contains("secrets:use") || message.contains("not allowed") {
+        let code = if message.contains(crate::secrets::SECRETS_USE_SCOPE)
+            || message.contains("not allowed")
+        {
             OperationErrorCode::Forbidden
         } else {
             OperationErrorCode::InvalidInput

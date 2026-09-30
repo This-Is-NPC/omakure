@@ -252,25 +252,19 @@ impl ApiPolicy {
     }
 
     fn secret_access(&self, auth: &AuthContext) -> crate::secrets::SecretAccess {
-        let mut scopes = Vec::new();
-        if auth.has_scope("secrets:use") {
-            scopes.push("secrets:use");
-        }
-        if auth.has_scope("credentials:use") {
-            scopes.push("credentials:use");
-        }
-        if auth.has_scope("secrets:read-metadata") {
-            scopes.push("secrets:read-metadata");
-        }
+        let scopes = crate::secrets::SECRET_SCOPES
+            .into_iter()
+            .filter(|scope| auth.has_scope(scope))
+            .collect();
         self.access_with_scopes(scopes)
     }
 
     /// Secret ACL for Battery HTTPS token_ref (requires credentials:use).
     fn battery_credential_access(&self, auth: &AuthContext) -> crate::secrets::SecretAccess {
-        if !auth.has_scope("credentials:use") {
+        if !auth.has_scope(crate::secrets::CREDENTIALS_USE_SCOPE) {
             return crate::secrets::SecretAccess::new(Vec::<&str>::new(), Vec::<String>::new());
         }
-        self.access_with_scopes(vec!["credentials:use"])
+        self.access_with_scopes(vec![crate::secrets::CREDENTIALS_USE_SCOPE])
     }
 
     fn access_with_scopes(&self, scopes: Vec<&str>) -> crate::secrets::SecretAccess {
@@ -295,9 +289,9 @@ impl ApiCapability {
             Self::EnvWrite => "envs:write",
             Self::EnvActivate => "envs:activate",
             Self::EnvUse => "envs:use",
-            Self::SecretProviderUse => "secrets:use",
-            Self::SecretsReadMetadata => "secrets:read-metadata",
-            Self::CredentialsUse => "credentials:use",
+            Self::SecretProviderUse => crate::secrets::SECRETS_USE_SCOPE,
+            Self::SecretsReadMetadata => crate::secrets::SECRETS_READ_METADATA_SCOPE,
+            Self::CredentialsUse => crate::secrets::CREDENTIALS_USE_SCOPE,
             Self::RunRead => "runs:read",
             Self::BatteryRead => "batteries:read",
             Self::NodeRead => "node:read",

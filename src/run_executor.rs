@@ -475,7 +475,10 @@ fn secret_access_for_row(
     {
         Ok(crate::secrets::SecretAccess::allow_all())
     } else {
-        Ok(crate::secrets::SecretAccess::new(["secrets:use"], refs))
+        Ok(crate::secrets::SecretAccess::new(
+            [crate::secrets::SECRETS_USE_SCOPE],
+            refs,
+        ))
     }
 }
 

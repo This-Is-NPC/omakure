@@ -8,6 +8,19 @@ use std::path::Path;
 pub const REDACTED: &str = "<redacted>";
 pub const REDACT_FILE_ENV: &str = "OMAKURE_REDACT_SECRETS_FILE";
 
+/// Scope that lets a run resolve secret values.
+pub const SECRETS_USE_SCOPE: &str = "secrets:use";
+/// Scope that lets Battery credentials resolve secret values.
+pub const CREDENTIALS_USE_SCOPE: &str = "credentials:use";
+/// Scope that lets a caller list secret metadata without resolving values.
+pub const SECRETS_READ_METADATA_SCOPE: &str = "secrets:read-metadata";
+/// Every scope that participates in a secret ACL.
+pub const SECRET_SCOPES: [&str; 3] = [
+    SECRETS_USE_SCOPE,
+    CREDENTIALS_USE_SCOPE,
+    SECRETS_READ_METADATA_SCOPE,
+];
+
 #[derive(Debug, Clone, Default)]
 pub struct ResolvedArgs {
     pub execution_args: Vec<String>,
@@ -118,14 +131,16 @@ impl SecretAccess {
         if self.allow_all && !self.env_gated(secret_ref) {
             return Ok(());
         }
-        let may_use =
-            self.scopes.contains("secrets:use") || self.scopes.contains("credentials:use");
-        if !may_use {
+        if !self.has_use_scope() {
             return Err(SecretResolveError::Denied(
                 "secrets:use or credentials:use scope is required".to_string(),
             ));
         }
         self.ref_allowed(secret_ref)
+    }
+
+    fn has_use_scope(&self) -> bool {
+        self.scopes.contains(SECRETS_USE_SCOPE) || self.scopes.contains(CREDENTIALS_USE_SCOPE)
     }
 
     /// Metadata listing accepts `secrets:read-metadata` (or use scopes) + ref ACL.
@@ -134,10 +149,7 @@ impl SecretAccess {
         if self.allow_all && !self.env_gated(secret_ref) {
             return Ok(());
         }
-        let may_list = self.scopes.contains("secrets:read-metadata")
-            || self.scopes.contains("secrets:use")
-            || self.scopes.contains("credentials:use");
-        if !may_list {
+        if !self.scopes.contains(SECRETS_READ_METADATA_SCOPE) && !self.has_use_scope() {
             return Err(SecretResolveError::Denied(
                 "secrets:read-metadata scope is required".to_string(),
             ));

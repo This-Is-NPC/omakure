@@ -54,28 +54,28 @@ Ao final da branch:
 
 Baixo risco, remove ruído antes das mudanças grandes.
 
-- [ ] Apagar os diretórios vazios `src/adapters/tui/` e
+- [x] Apagar os diretórios vazios `src/adapters/tui/` e
       `scripts/tasks/__pycache__/`.
-- [ ] Adicionar `__pycache__/` e `*.pyc` ao `.gitignore`.
-- [ ] Confirmar que `dirs` não é usado (`rg 'dirs::' src`) e removê-lo do
+- [x] Adicionar `__pycache__/` e `*.pyc` ao `.gitignore`.
+- [x] Confirmar que `dirs` não é usado (`rg 'dirs::' src`) e removê-lo do
       `Cargo.toml`; atualizar as listas de dependências nas docs.
-- [ ] Revisar os 8 `#[allow(dead_code)]` (`search_index.rs:27,121`,
+- [x] Revisar os 8 `#[allow(dead_code)]` (`search_index.rs:27,121`,
       `cli/queue.rs:526`, `cli/api.rs:714,904`, `auth.rs:540`, `runs.rs:108`,
       `ports/environment.rs:7`): remover o código morto ou justificar.
-- [ ] `AGENTS.md`:
-  - [ ] Corrigir `mise run dev:smoke` para `mise run dev` (ou renomear a task
+- [x] `AGENTS.md`:
+  - [x] Corrigir `mise run dev:smoke` para `mise run dev` (ou renomear a task
         para `dev:smoke` no `mise.toml`, escolhendo um nome e removendo o
         duplicado `scripts/tasks/dev/smoke` vs `scripts/tasks/atomic/dev-smoke`).
-  - [ ] Substituir a árvore de arquitetura parcial por um resumo dos planos
+  - [x] Substituir a árvore de arquitetura parcial por um resumo dos planos
         da frota (node registry, direct transport, health plane, remote cue,
         baseline, enrollment, discovery) com ponteiro para
         `docs/internal/architecture.md` como fonte canônica.
-  - [ ] Atualizar a lista de dependências mantidas (`k256`, `snow`,
+  - [x] Atualizar a lista de dependências mantidas (`k256`, `snow`,
         `hickory-resolver`, `curve25519-dalek`, `serde_jcs`, `tempfile`,
         `libc`, `windows-sys`; remover `dirs`).
-- [ ] `docs/internal/architecture.md`: completar a tabela de stack com as
+- [x] `docs/internal/architecture.md`: completar a tabela de stack com as
       dependências faltantes.
-- [ ] Corrigir o título em português `## Referência` no `README.md`/docs para
+- [x] Corrigir o título em português `## Referência` no `README.md`/docs para
       manter o idioma consistente.
 
 Validação: `check:fast`.

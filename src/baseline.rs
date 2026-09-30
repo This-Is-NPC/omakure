@@ -24,12 +24,12 @@
 //!
 //! [`baseline_id`]: SignedBaselineManifest::baseline_id
 
+use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
 };
-use sha2::{Digest, Sha256};
 use std::fmt;
 use thiserror::Error;
 
@@ -161,7 +161,7 @@ impl SignedBaselineManifest {
             expires_at,
             publisher_signature: [0; SIGNATURE_BYTES],
         };
-        let digest = hash_domain(&manifest.unsigned_bytes()?, DOMAIN);
+        let digest = sha256_domain(DOMAIN, &manifest.unsigned_bytes()?);
         manifest.publisher_signature = signing_key
             .sign_prehash(&digest)
             .map_err(|_| BaselineError::Invalid)?
@@ -252,7 +252,7 @@ impl SignedBaselineManifest {
             .map_err(|_| BaselineError::PublisherUnknown)?;
         let signature =
             Signature::from_slice(&self.publisher_signature).map_err(|_| BaselineError::Invalid)?;
-        let digest = hash_domain(&self.unsigned_bytes()?, DOMAIN);
+        let digest = sha256_domain(DOMAIN, &self.unsigned_bytes()?);
         key.verify_prehash(&digest, &signature)
             .map_err(|_| BaselineError::SignatureMismatch)
     }
@@ -386,7 +386,7 @@ impl VerifiedBaseline {
 pub fn derive_baseline_id(
     entries: &[BaselineEntry],
 ) -> Result<[u8; BASELINE_ID_BYTES], BaselineError> {
-    Ok(hash_domain(&entry_bytes(entries)?, BASELINE_ID_DOMAIN))
+    Ok(sha256_domain(BASELINE_ID_DOMAIN, &entry_bytes(entries)?))
 }
 
 /// The recorded hash of one script body.
@@ -396,7 +396,7 @@ pub fn derive_baseline_id(
 /// is deliberate: this is not `sha256sum` output, and anything that later
 /// re-checks a script on disk has to call this, not reimplement it.
 pub fn hash_script(body: &[u8]) -> [u8; SCRIPT_HASH_BYTES] {
-    hash_domain(body, b"omakure/baseline-script/v1\0")
+    sha256_domain(b"omakure/baseline-script/v1\0", body)
 }
 
 /// The canonical bytes of the entry list, shared by the signature preimage and
@@ -451,13 +451,6 @@ fn validate_entry_path(path: &str) -> Result<(), BaselineError> {
         return Err(BaselineError::Invalid);
     }
     Ok(())
-}
-
-fn hash_domain(bytes: &[u8], domain: &[u8]) -> [u8; 32] {
-    let mut digest = Sha256::new();
-    digest.update(domain);
-    digest.update(bytes);
-    digest.finalize().into()
 }
 
 struct Cursor<'a> {
@@ -521,6 +514,7 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
 
     const ISSUED_AT: u64 = 1_800_000_000;
     const EXPIRES_AT: u64 = 1_800_003_600;

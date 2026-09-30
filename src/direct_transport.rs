@@ -7,13 +7,13 @@
 use crate::domain::is_node_id;
 use crate::node_identity::{Bip340Signature, DirectEnvelopePrehash, NodeIdentity};
 use crate::node_registry::PeerState;
+use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use curve25519_dalek::{constants::X25519_BASEPOINT, montgomery::MontgomeryPoint};
 use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use snow::{params::NoiseParams, Builder, HandshakeState, TransportState};
 use std::cmp::Ordering;
 use std::fmt;
@@ -471,7 +471,7 @@ impl TransportCertificate {
             .map_err(|_| TransportError::IdentityMismatch)?;
         let signature =
             Signature::try_from(&bytes[181..]).map_err(|_| TransportError::HandshakeFailed)?;
-        let digest = domain_hash(CERTIFICATE_DOMAIN, &bytes[..CERTIFICATE_BODY_BYTES]);
+        let digest = sha256_domain(CERTIFICATE_DOMAIN, &bytes[..CERTIFICATE_BODY_BYTES]);
         verifying_key
             .verify_prehash(&digest, &signature)
             .map_err(|_| TransportError::HandshakeFailed)?;
@@ -1120,7 +1120,7 @@ pub fn verify_envelope(
     }
     let key = VerifyingKey::from_bytes(expected_identity_key.into())
         .map_err(|_| TransportError::IdentityMismatch)?;
-    let digest = domain_hash(DIRECT_ENVELOPE_DOMAIN, canonical);
+    let digest = sha256_domain(DIRECT_ENVELOPE_DOMAIN, canonical);
     key.verify_prehash(&digest, &signature)
         .map_err(|_| TransportError::HandshakeFailed)
 }
@@ -1432,13 +1432,6 @@ fn parse_certificate_payload(payload: &[u8]) -> Result<TransportCertificate, Tra
         return Err(TransportError::HandshakeFailed);
     }
     TransportCertificate::from_bytes(&payload[1..])
-}
-
-fn domain_hash(domain: &[u8], body: &[u8]) -> [u8; 32] {
-    let mut digest = Sha256::new();
-    digest.update(domain);
-    digest.update(body);
-    digest.finalize().into()
 }
 
 fn canonical_json(value: &Value) -> Vec<u8> {

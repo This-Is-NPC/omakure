@@ -7,6 +7,7 @@
 use crate::direct_transport::validate_x25519_public;
 use crate::domain::{is_node_id, NODE_ID_BYTES};
 use crate::node_identity::NodeIdentity;
+use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
@@ -14,7 +15,6 @@ use k256::schnorr::{
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
-use sha2::{Digest, Sha256};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
@@ -156,7 +156,7 @@ impl SignedEnrollmentBundle {
             expires_at,
             authority_signature: [0; SIGNATURE_BYTES],
         };
-        let digest = hash_domain(&bundle.unsigned_bytes()?, BUNDLE_DOMAIN);
+        let digest = sha256_domain(BUNDLE_DOMAIN, &bundle.unsigned_bytes()?);
         bundle.authority_signature = signing_key
             .sign_prehash(&digest)
             .map_err(|_| EnrollmentError::IdentityMismatch)?
@@ -257,7 +257,7 @@ impl SignedEnrollmentBundle {
             .map_err(|_| EnrollmentError::AuthorityUnknown)?;
         let signature = Signature::from_slice(&self.authority_signature)
             .map_err(|_| EnrollmentError::Invalid)?;
-        let digest = hash_domain(&self.unsigned_bytes()?, BUNDLE_DOMAIN);
+        let digest = sha256_domain(BUNDLE_DOMAIN, &self.unsigned_bytes()?);
         key.verify_prehash(&digest, &signature)
             .map_err(|_| EnrollmentError::IdentityMismatch)
     }
@@ -346,11 +346,11 @@ impl SignedEnrollmentBundle {
 }
 
 pub fn hash_bootstrap_token(token: &[u8]) -> [u8; 32] {
-    hash_domain(token, b"omakure/bootstrap-token/v1\0")
+    sha256_domain(b"omakure/bootstrap-token/v1\0", token)
 }
 
 pub fn hash_bootstrap_nonce(nonce: &[u8]) -> [u8; 32] {
-    hash_domain(nonce, b"omakure/bootstrap-nonce/v1\0")
+    sha256_domain(b"omakure/bootstrap-nonce/v1\0", nonce)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -593,7 +593,7 @@ impl ManualEnrollmentRequest {
         }
         let key = VerifyingKey::from_slice(&self.proposer_xonly)
             .map_err(|_| EnrollmentError::IdentityMismatch)?;
-        let digest = hash_domain(&self.unsigned_bytes()?, DOMAIN);
+        let digest = sha256_domain(DOMAIN, &self.unsigned_bytes()?);
         let signature =
             Signature::from_slice(&self.signature).map_err(|_| EnrollmentError::Invalid)?;
         key.verify_prehash(&digest, &signature)
@@ -702,14 +702,7 @@ pub fn validate_capabilities(capabilities: &[String]) -> Result<(), EnrollmentEr
 }
 
 pub fn hash_code(code: &[u8]) -> [u8; 32] {
-    hash_domain(code, DOMAIN)
-}
-
-fn hash_domain(bytes: &[u8], domain: &[u8]) -> [u8; 32] {
-    let mut digest = Sha256::new();
-    digest.update(domain);
-    digest.update(bytes);
-    digest.finalize().into()
+    sha256_domain(DOMAIN, code)
 }
 
 fn parse_hex_array<const N: usize>(value: &str) -> Result<[u8; N], EnrollmentError> {

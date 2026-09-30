@@ -1043,12 +1043,10 @@ fn classify_enqueue_error(error: crate::operations::OperationError) -> CueEnqueu
 /// The domain separator is what stops a cue id being replayable as a preimage
 /// in any other construction that hashes ids.
 pub fn derive_run_id(cue_id: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(b"omakure/cue-run-id/v1\0");
-    hasher.update(cue_id.as_bytes());
-    let digest = hasher.finalize();
-    hex::encode(&digest)
+    hex::encode(&crate::util::digest::sha256_domain(
+        b"omakure/cue-run-id/v1\0",
+        cue_id.as_bytes(),
+    ))
 }
 
 #[cfg(test)]

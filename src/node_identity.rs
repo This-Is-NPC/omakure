@@ -1,11 +1,11 @@
 use crate::domain::NODE_ID_PREFIX;
 use crate::node::{write_atomic_new, NodeContext, NodeError};
 use crate::node_registry::RegistryError;
+use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use fs2::FileExt;
 use k256::elliptic_curve::Generate;
 use k256::schnorr::{signature::hazmat::PrehashSigner, Signature, SigningKey};
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
@@ -13,7 +13,6 @@ use thiserror::Error;
 
 const IDENTITY_PRIVATE_BYTES: usize = 32;
 const NODE_ID_DOMAIN: &[u8] = b"omakure/node-id/v1\0";
-const DIRECT_ENVELOPE_DOMAIN: &[u8] = b"omakure/direct-envelope/v1\0";
 
 #[derive(Debug, Error)]
 pub enum NodeIdentityError {
@@ -44,7 +43,10 @@ pub struct DirectEnvelopePrehash([u8; 32]);
 impl DirectEnvelopePrehash {
     /// Hash already RFC 8785-canonicalized envelope bytes with the direct domain.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Self {
-        Self(sha256_domain(DIRECT_ENVELOPE_DOMAIN, bytes))
+        Self(sha256_domain(
+            crate::direct_transport::DIRECT_ENVELOPE_DOMAIN,
+            bytes,
+        ))
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
@@ -197,11 +199,17 @@ impl NodeIdentity {
         &self,
         body: &[u8],
     ) -> Result<Bip340Signature, NodeIdentityError> {
-        self.sign_prehash(&sha256_domain(b"omakure/transport-cert/v1\0", body))
+        self.sign_prehash(&sha256_domain(
+            crate::direct_transport::CERTIFICATE_DOMAIN,
+            body,
+        ))
     }
 
     pub(crate) fn sign_discovery(&self, body: &[u8]) -> Result<Bip340Signature, NodeIdentityError> {
-        self.sign_prehash(&sha256_domain(b"omakure/lan-beacon/v1\0", body))
+        self.sign_prehash(&sha256_domain(
+            crate::discovery::BEACON_SIGNATURE_DOMAIN,
+            body,
+        ))
     }
 
     pub(crate) fn sign_enrollment(
@@ -271,13 +279,6 @@ pub(crate) fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
         "{NODE_ID_PREFIX}{}",
         hex::encode(&sha256_domain(NODE_ID_DOMAIN, public_key))
     )
-}
-
-fn sha256_domain(domain: &[u8], bytes: &[u8]) -> [u8; 32] {
-    let mut digest = Sha256::new();
-    digest.update(domain);
-    digest.update(bytes);
-    digest.finalize().into()
 }
 
 fn read_private_key(

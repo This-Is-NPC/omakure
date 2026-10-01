@@ -482,25 +482,22 @@ pub(super) async fn node_cue_handler(
         Ok(body) => body,
         Err(error) => return operation_error_response(error),
     };
-    let prepared = match cue_ops::prepare_service_dispatch(
-        state.cues.clone(),
-        cue_ops::CueServiceRequest {
-            peer_node_id: body.peer_node_id,
-            script: body.script,
-            reason: body.reason,
-            wait_seconds: body.wait_seconds,
-            cue_id: body.cue_id,
-        },
-    ) {
-        Ok(prepared) => prepared,
-        Err(error) => return operation_error_response(error),
-    };
-    // The dispatch blocks on the session thread, so it must not hold a runtime
-    // worker for its whole budget.
     let result = run_bounded_with_join(
         "cue dispatch",
         state.blocking_operation_gate,
-        move || cue_ops::dispatch_prepared_service(prepared),
+        move || {
+            let prepared = cue_ops::prepare_service_dispatch(
+                state.cues,
+                cue_ops::CueServiceRequest {
+                    peer_node_id: body.peer_node_id,
+                    script: body.script,
+                    reason: body.reason,
+                    wait_seconds: body.wait_seconds,
+                    cue_id: body.cue_id,
+                },
+            )?;
+            cue_ops::dispatch_prepared_service(prepared)
+        },
         |_| OperationError::new(OperationErrorCode::IoFailed, "cue dispatch task failed"),
     )
     .await
@@ -528,24 +525,21 @@ pub(super) async fn node_baseline_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    let prepared = match baseline_ops::prepare_service_push(
-        state.baselines.clone(),
-        baseline_ops::BaselineServiceRequest {
-            peer_node_id: body.peer_node_id,
-            manifest: body.manifest,
-            scripts: body.scripts,
-            wait_seconds: body.wait_seconds,
-        },
-    ) {
-        Ok(prepared) => prepared,
-        Err(error) => return operation_error_response(error),
-    };
-    // The push blocks on the session thread, so it must not hold a runtime
-    // worker for its whole budget.
     let result = run_bounded_with_join(
         "baseline push",
         state.blocking_operation_gate,
-        move || baseline_ops::push_prepared_service(prepared),
+        move || {
+            let prepared = baseline_ops::prepare_service_push(
+                state.baselines,
+                baseline_ops::BaselineServiceRequest {
+                    peer_node_id: body.peer_node_id,
+                    manifest: body.manifest,
+                    scripts: body.scripts,
+                    wait_seconds: body.wait_seconds,
+                },
+            )?;
+            baseline_ops::push_prepared_service(prepared)
+        },
         |_| OperationError::new(OperationErrorCode::IoFailed, "baseline push task failed"),
     )
     .await

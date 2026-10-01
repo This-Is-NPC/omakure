@@ -110,6 +110,11 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          shared-key: build-${{ matrix.target }}
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
       - name: Install musl toolchain
         if: endsWith(matrix.target, '-unknown-linux-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -176,6 +181,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - name: Install certification inspection tools
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run bounded canonical gate

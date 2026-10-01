@@ -69,6 +69,11 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          shared-key: build-${{ matrix.target }}
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
       - name: Install musl toolchain
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -90,6 +95,7 @@ jobs:
         with:
           toolchain: 1.97.1
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2.9.2
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo fmt --check
       # The certification gates are ~1,400 lines of bash and ~240 of YAML that
@@ -126,6 +132,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - name: Check generated Usage artifacts and reviewed losses
         run: cargo run --quiet --locked --features usage-generator --bin usage-kdl -- --check
       - name: Check generated Usage documentation
@@ -144,6 +151,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          cache-targets: false
       - name: Run authoritative local coverage gate
         env:
           COVERAGE_TOOL_ROOT: ${{ runner.temp }}/cargo-llvm-cov
@@ -228,6 +238,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - run: cargo test --test packaging_smoke --locked
 
   docker-smoke:
@@ -247,6 +258,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - name: Install certification inspection tools
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run bounded canonical gate
@@ -285,6 +297,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - name: Install certification inspection tools
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run the bounded Health Plane gate

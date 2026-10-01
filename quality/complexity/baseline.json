@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "e9eefe7c3fa3ae359fef8271da9618d9753675258b1730eb816ef01cad00189d",
+  "canonical_sha256": "fc6147ad2bd49ad0b87f7e899a5cfc0541aa60d24a38cd0deb1b787f57841eb4",
   "config_identity": "no-config",
   "files": [
     {
@@ -68321,8 +68321,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 41,
-      "cyclomatic": 38,
+      "cognitive": 8,
+      "cyclomatic": 10,
       "derived": {
         "identity": "crate::node_registry::health::evaluate::evaluate",
         "macro_expansion": "not_measured",
@@ -68336,8 +68336,8 @@
       "name": "evaluate",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 41,
-        "cyclomatic": 38,
+        "cognitive": 8,
+        "cyclomatic": 10,
         "kind": "function",
         "line": 14,
         "name": "evaluate"
@@ -85562,26 +85562,26 @@
       "cognitive": 3,
       "cyclomatic": 13,
       "derived": {
-        "identity": "crate::operations::node::errors::map_direct_enrollment_error",
+        "identity": "crate::operations::node::errors::map_direct_service_error",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/errors.rs",
-        "signature": "pub(super) fn map_direct_enrollment_error( error: crate::direct_service::DirectServiceError, ) -> OperationError",
+        "signature": "pub(crate) fn map_direct_service_error( error: crate::direct_service::DirectServiceError, ) -> OperationError",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::errors::map_direct_enrollment_error",
+      "identity": "crate::operations::node::errors::map_direct_service_error",
       "kind": "function",
       "line": 25,
-      "name": "map_direct_enrollment_error",
+      "name": "map_direct_service_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 13,
         "kind": "function",
         "line": 25,
-        "name": "map_direct_enrollment_error"
+        "name": "map_direct_service_error"
       },
       "path": "src/operations/node/errors.rs",
-      "signature": "pub(super) fn map_direct_enrollment_error( error: crate::direct_service::DirectServiceError, ) -> OperationError",
+      "signature": "pub(crate) fn map_direct_service_error( error: crate::direct_service::DirectServiceError, ) -> OperationError",
       "source_class": "handwritten"
     },
     {

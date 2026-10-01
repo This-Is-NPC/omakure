@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "c96a2854ab6e728ccb899a134d279d99156f8f2e798e1aceefe3cba508aa7097",
+  "canonical_sha256": "768b39f3dfb4de4c8ee5b487bb3fa8d757ef23d7c1114874605712ac904d1b8e",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -88588,8 +88588,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 34,
-      "cyclomatic": 47,
+      "cognitive": 3,
+      "cyclomatic": 8,
       "derived": {
         "identity": "crate::policy::allows",
         "macro_expansion": "not_measured",
@@ -88599,18 +88599,148 @@
       },
       "identity": "crate::policy::allows",
       "kind": "method",
-      "line": 361,
+      "line": 358,
       "name": "allows",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 34,
-        "cyclomatic": 47,
+        "cognitive": 3,
+        "cyclomatic": 8,
         "kind": "method",
-        "line": 361,
+        "line": 358,
         "name": "allows"
       },
       "path": "src/policy.rs",
       "signature": "pub fn allows(&self, method: &str, path: &str) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::policy::allows_node_route",
+        "macro_expansion": "not_measured",
+        "path": "src/policy.rs",
+        "signature": "fn allows_node_route(&self, path: &str, is_write: bool) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::policy::allows_node_route",
+      "kind": "method",
+      "line": 370,
+      "name": "allows_node_route",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 9,
+        "kind": "method",
+        "line": 370,
+        "name": "allows_node_route"
+      },
+      "path": "src/policy.rs",
+      "signature": "fn allows_node_route(&self, path: &str, is_write: bool) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::policy::allows_battery_route",
+        "macro_expansion": "not_measured",
+        "path": "src/policy.rs",
+        "signature": "fn allows_battery_route(&self, method: &str, path: &str, is_battery: bool) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::policy::allows_battery_route",
+      "kind": "method",
+      "line": 378,
+      "name": "allows_battery_route",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 6,
+        "kind": "method",
+        "line": 378,
+        "name": "allows_battery_route"
+      },
+      "path": "src/policy.rs",
+      "signature": "fn allows_battery_route(&self, method: &str, path: &str, is_battery: bool) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::policy::allows_run_route",
+        "macro_expansion": "not_measured",
+        "path": "src/policy.rs",
+        "signature": "fn allows_run_route(&self, method: &str, path: &str) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::policy::allows_run_route",
+      "kind": "method",
+      "line": 387,
+      "name": "allows_run_route",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 9,
+        "kind": "method",
+        "line": 387,
+        "name": "allows_run_route"
+      },
+      "path": "src/policy.rs",
+      "signature": "fn allows_run_route(&self, method: &str, path: &str) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 8,
+      "derived": {
+        "identity": "crate::policy::allows_other_route",
+        "macro_expansion": "not_measured",
+        "path": "src/policy.rs",
+        "signature": "fn allows_other_route(&self, path: &str) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::policy::allows_other_route",
+      "kind": "method",
+      "line": 395,
+      "name": "allows_other_route",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 8,
+        "kind": "method",
+        "line": 395,
+        "name": "allows_other_route"
+      },
+      "path": "src/policy.rs",
+      "signature": "fn allows_other_route(&self, path: &str) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::policy::allows_read_route",
+        "macro_expansion": "not_measured",
+        "path": "src/policy.rs",
+        "signature": "fn allows_read_route(&self, path: &str, is_write: bool, is_battery: bool) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::policy::allows_read_route",
+      "kind": "method",
+      "line": 405,
+      "name": "allows_read_route",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 405,
+        "name": "allows_read_route"
+      },
+      "path": "src/policy.rs",
+      "signature": "fn allows_read_route(&self, path: &str, is_write: bool, is_battery: bool) -> bool",
       "source_class": "handwritten"
     },
     {

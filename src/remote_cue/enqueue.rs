@@ -1,6 +1,5 @@
 use super::codes::CueCode;
-use super::gates::{GateDecision, LocalAuthority, evaluate_gates};
-use super::session::{CueOutcome, CueSession};
+use super::session::CueSession;
 use crate::util::hex;
 
 /// The result of trying to turn an accepted Cue into a durable run.
@@ -32,82 +31,10 @@ impl std::fmt::Display for CueEnqueueError {
 }
 
 impl<'a> CueSession<'a> {
-    /// Decide one Cue, optionally identified so a retransmission on this
-    /// session is answered from the first decision rather than re-evaluated.
-    ///
-    /// Re-evaluating would not be unsafe -- the gates are pure over local state
-    /// and would reach the same answer -- but it would write a second audit row
-    /// for one instruction, which makes the trail harder to read for no gain.
-    pub fn decide(&mut self, cue_id: Option<&str>) -> CueOutcome {
-        if let Some(cue_id) = cue_id {
-            self.prune_cue_state(crate::util::time::unix_seconds() as i64);
-            if self
-                .cue_records
-                .iter()
-                .any(|record| record.cue_id == cue_id)
-            {
-                let _ =
-                    self.registry
-                        .record_transport_audit(crate::node_registry::TransportAudit {
-                            event_type: "cue_rejected",
-                            node_id: &self.remote_node_id,
-                            session_id: None,
-                            direction: None,
-                            byte_count: 0,
-                            outcome: "rejected",
-                            error_code: Some(CueCode::Duplicate.code()),
-                            cue: None,
-                        });
-                return CueOutcome::Repeat;
-            }
-            self.remember_cue(cue_id, crate::util::time::unix_seconds() as i64);
-        }
-
-        let authority = LocalAuthority {
-            remote_cues_enabled: self.remote_cues_enabled,
-            declared_scripts: self.declared_scripts.clone(),
-            declared_batteries: self.declared_batteries.clone(),
-            authorization: self
-                .registry
-                .health_authorization(&self.remote_node_id)
-                .ok()
-                .flatten(),
-        };
-
-        let decision = evaluate_gates(&authority);
-        let (outcome, code) = match decision {
-            GateDecision::Accepted => ("accepted", None),
-            GateDecision::Rejected(code) => ("rejected", Some(code)),
-        };
-
-        // Audit every decision, including acceptance. A remote instruction that
-        // left no trace would undermine the transport audit trail used to explain
-        // each outcome.
-        let _ = self
-            .registry
-            .record_transport_audit(crate::node_registry::TransportAudit {
-                event_type: if code.is_some() {
-                    "cue_rejected"
-                } else {
-                    "cue_accepted"
-                },
-                node_id: &self.remote_node_id,
-                session_id: None,
-                direction: None,
-                byte_count: 0,
-                outcome,
-                error_code: code.map(CueCode::code),
-                cue: None,
-            });
-
-        CueOutcome::Decided(decision)
-    }
-
     /// Turn an accepted decision into one run.
     ///
-    /// Separated from `decide` so the security boundary and the act of running
-    /// stay reviewable apart: everything above answers "may this happen", and
-    /// only this answers "make it happen".
+    /// Called after `handle_envelope` authorizes the script and verifies its
+    /// content hash at the accept transition.
     ///
     /// The run id is supplied by the caller and derived from the cue id, so the
     /// primary key refuses a second insert. Only that uniqueness failure is a

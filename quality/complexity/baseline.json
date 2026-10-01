@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "6959c605f801b97386b2c461672662db211d4ef9a4307d827148933cdf2281a1",
+  "canonical_sha256": "1597cbca03b330970f49e1c2e5aef9402e3edbbf35f9714ee7f719611e41b1a5",
   "config_identity": "no-config",
   "files": [
     {
@@ -4268,8 +4268,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 10,
-        "cyclomatic": 18
+        "cognitive": 4,
+        "cyclomatic": 11
       },
       "path": "src/remote_cue/enqueue.rs",
       "source_class": "handwritten"
@@ -4310,7 +4310,7 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 24,
+        "cognitive": 22,
         "cyclomatic": 50
       },
       "path": "src/remote_cue/session.rs",
@@ -41264,22 +41264,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@334#3",
+        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@336#3",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/listener.rs",
         "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@334#3",
+      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@336#3",
       "kind": "closure",
-      "line": 334,
+      "line": 336,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 334,
+        "line": 336,
         "name": "<closure>"
       },
       "path": "src/direct_service/listener.rs",
@@ -41290,22 +41290,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@346#4",
+        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@348#4",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/listener.rs",
         "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@346#4",
+      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@348#4",
       "kind": "closure",
-      "line": 346,
+      "line": 348,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 346,
+        "line": 348,
         "name": "<closure>"
       },
       "path": "src/direct_service/listener.rs",
@@ -41324,14 +41324,14 @@
       },
       "identity": "crate::direct_service::dial::dialer_loop",
       "kind": "function",
-      "line": 29,
+      "line": 28,
       "name": "dialer_loop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 29,
+        "line": 28,
         "name": "dialer_loop"
       },
       "path": "src/direct_service/dial.rs",
@@ -41350,14 +41350,14 @@
       },
       "identity": "crate::direct_service::dial::dialer_loop::<closure>",
       "kind": "closure",
-      "line": 51,
+      "line": 50,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 51,
+        "line": 50,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41376,14 +41376,14 @@
       },
       "identity": "crate::direct_service::dial::is_fatal_connection_error",
       "kind": "function",
-      "line": 76,
+      "line": 75,
       "name": "is_fatal_connection_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 76,
+        "line": 75,
         "name": "is_fatal_connection_error"
       },
       "path": "src/direct_service/dial.rs",
@@ -41402,14 +41402,14 @@
       },
       "identity": "crate::direct_service::dial::retry_backoff",
       "kind": "function",
-      "line": 92,
+      "line": 91,
       "name": "retry_backoff",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 92,
+        "line": 91,
         "name": "retry_backoff"
       },
       "path": "src/direct_service/dial.rs",
@@ -41428,14 +41428,14 @@
       },
       "identity": "crate::direct_service::dial::retry_backoff::<closure>",
       "kind": "closure",
-      "line": 95,
+      "line": 94,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 95,
+        "line": 94,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41446,22 +41446,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::retry_backoff::<closure>@96#2",
+        "identity": "crate::direct_service::dial::retry_backoff::<closure>@95#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".and_then(|factor| RETRY_BACKOFF[0].checked_mul(factor))",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::retry_backoff::<closure>@96#2",
+      "identity": "crate::direct_service::dial::retry_backoff::<closure>@95#2",
       "kind": "closure",
-      "line": 96,
+      "line": 95,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 96,
+        "line": 95,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41480,14 +41480,14 @@
       },
       "identity": "crate::direct_service::dial::retry_jitter",
       "kind": "function",
-      "line": 101,
+      "line": 100,
       "name": "retry_jitter",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 101,
+        "line": 100,
         "name": "retry_jitter"
       },
       "path": "src/direct_service/dial.rs",
@@ -41506,14 +41506,14 @@
       },
       "identity": "crate::direct_service::dial::sleep_or_stop",
       "kind": "function",
-      "line": 105,
+      "line": 106,
       "name": "sleep_or_stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 105,
+        "line": 106,
         "name": "sleep_or_stop"
       },
       "path": "src/direct_service/dial.rs",
@@ -41532,14 +41532,14 @@
       },
       "identity": "crate::direct_service::dial::connect_and_hold",
       "kind": "function",
-      "line": 114,
+      "line": 115,
       "name": "connect_and_hold",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 114,
+        "line": 115,
         "name": "connect_and_hold"
       },
       "path": "src/direct_service/dial.rs",
@@ -41558,14 +41558,14 @@
       },
       "identity": "crate::direct_service::dial::connect_and_hold::<closure>",
       "kind": "closure",
-      "line": 157,
+      "line": 158,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 157,
+        "line": 158,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41576,22 +41576,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@159#2",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@160#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": "LocalTransport::load_existing(context, &identity).map_err(|_| TransportError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@159#2",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@160#2",
       "kind": "closure",
-      "line": 159,
+      "line": 160,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 159,
+        "line": 160,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41602,22 +41602,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@161#3",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@162#3",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".map_err(|_| TransportError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@161#3",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@162#3",
       "kind": "closure",
-      "line": 161,
+      "line": 162,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 161,
+        "line": 162,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41628,22 +41628,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@164#4",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@165#4",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".map_err(|_| TransportError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@164#4",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@165#4",
       "kind": "closure",
-      "line": 164,
+      "line": 165,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 164,
+        "line": 165,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41654,22 +41654,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@189#5",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@190#5",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".map_err(|_| TransportError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@189#5",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@190#5",
       "kind": "closure",
-      "line": 189,
+      "line": 190,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 189,
+        "line": 190,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41680,22 +41680,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@253#6",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@255#6",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".map_err(|_| TransportError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@253#6",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@255#6",
       "kind": "closure",
-      "line": 253,
+      "line": 255,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 253,
+        "line": 255,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41706,22 +41706,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@272#7",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@276#7",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@272#7",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@276#7",
       "kind": "closure",
-      "line": 272,
+      "line": 276,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 272,
+        "line": 276,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41732,22 +41732,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@284#8",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@288#8",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@284#8",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@288#8",
       "kind": "closure",
-      "line": 284,
+      "line": 288,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 284,
+        "line": 288,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41766,14 +41766,14 @@
       },
       "identity": "crate::direct_service::dial::probe",
       "kind": "function",
-      "line": 302,
+      "line": 306,
       "name": "probe",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 302,
+        "line": 306,
         "name": "probe"
       },
       "path": "src/direct_service/dial.rs",
@@ -41792,14 +41792,14 @@
       },
       "identity": "crate::direct_service::dial::probe::<closure>",
       "kind": "closure",
-      "line": 312,
+      "line": 316,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 312,
+        "line": 316,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -94806,14 +94806,14 @@
       },
       "identity": "crate::remote_cue::enqueue::stable_name",
       "kind": "method",
-      "line": 19,
+      "line": 18,
       "name": "stable_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 19,
+        "line": 18,
         "name": "stable_name"
       },
       "path": "src/remote_cue/enqueue.rs",
@@ -94832,590 +94832,18 @@
       },
       "identity": "crate::remote_cue::enqueue::fmt",
       "kind": "method",
-      "line": 29,
+      "line": 28,
       "name": "fmt",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 29,
+        "line": 28,
         "name": "fmt"
       },
       "path": "src/remote_cue/enqueue.rs",
       "signature": "fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::remote_cue::session::read_policy",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::read_policy",
-      "kind": "function",
-      "line": 92,
-      "name": "read_policy",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 92,
-        "name": "read_policy"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::new",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "pub fn new( registry: &'a crate::node_registry::NodeRegistry, identity: &'a crate::node_identity::NodeIdentity, remote_node_id: &str, remote_identity_key: [u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::new",
-      "kind": "method",
-      "line": 114,
-      "name": "new",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 114,
-        "name": "new"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "pub fn new( registry: &'a crate::node_registry::NodeRegistry, identity: &'a crate::node_identity::NodeIdentity, remote_node_id: &str, remote_identity_key: [u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 13,
-      "cyclomatic": 19,
-      "derived": {
-        "identity": "crate::remote_cue::session::handle_envelope",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "pub fn handle_envelope(&mut self, encoded: &[u8], now: i64) -> CueOutcome",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::handle_envelope",
-      "kind": "method",
-      "line": 147,
-      "name": "handle_envelope",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 13,
-        "cyclomatic": 19,
-        "kind": "method",
-        "line": 147,
-        "name": "handle_envelope"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "pub fn handle_envelope(&mut self, encoded: &[u8], now: i64) -> CueOutcome",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::handle_envelope::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "let verified = crate::direct_transport::envelope_nonce(encoded).and_then(|nonce| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::handle_envelope::<closure>",
-      "kind": "closure",
-      "line": 166,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 166,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "let verified = crate::direct_transport::envelope_nonce(encoded).and_then(|nonce| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::handle_envelope::<closure>@195#2",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": ".find(|record| record.cue_id == dispatch.cue_id)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::handle_envelope::<closure>@195#2",
-      "kind": "closure",
-      "line": 195,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 195,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": ".find(|record| record.cue_id == dispatch.cue_id)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::remote_cue::session::authorize_script",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "fn authorize_script(&self, script: &str) -> Result<ScriptBinding, CueCode>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::authorize_script",
-      "kind": "method",
-      "line": 293,
-      "name": "authorize_script",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "method",
-        "line": 293,
-        "name": "authorize_script"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "fn authorize_script(&self, script: &str) -> Result<ScriptBinding, CueCode>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::authorize_script::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": ".map_err(|_| CueCode::ScriptUnresolvable)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::authorize_script::<closure>",
-      "kind": "closure",
-      "line": 300,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 300,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": ".map_err(|_| CueCode::ScriptUnresolvable)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::authority",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "fn authority(&self) -> LocalAuthority",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::authority",
-      "kind": "method",
-      "line": 327,
-      "name": "authority",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 327,
-        "name": "authority"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "fn authority(&self) -> LocalAuthority",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::audit",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "fn audit( &self, event: &str, outcome: &str, code: Option<CueCode>, dispatch: Option<&CueDispatch>, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::audit",
-      "kind": "method",
-      "line": 340,
-      "name": "audit",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 340,
-        "name": "audit"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "fn audit( &self, event: &str, outcome: &str, code: Option<CueCode>, dispatch: Option<&CueDispatch>, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::audit::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "let metadata = dispatch.filter(|_| code.is_none_or(CueCode::is_reportable));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::audit::<closure>",
-      "kind": "closure",
-      "line": 347,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 347,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "let metadata = dispatch.filter(|_| code.is_none_or(CueCode::is_reportable));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::audit::<closure>@356#2",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "metadata.map(|dispatch| dispatch.cue_id.as_str()),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::audit::<closure>@356#2",
-      "kind": "closure",
-      "line": 356,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 356,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "metadata.map(|dispatch| dispatch.cue_id.as_str()),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::audit::<closure>@357#3",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "metadata.map(|dispatch| dispatch.script.as_str()),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::audit::<closure>@357#3",
-      "kind": "closure",
-      "line": 357,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 357,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "metadata.map(|dispatch| dispatch.script.as_str()),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::audit::<closure>@358#4",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "metadata.map(|dispatch| dispatch.reason.as_str()),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::audit::<closure>@358#4",
-      "kind": "closure",
-      "line": 358,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 358,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "metadata.map(|dispatch| dispatch.reason.as_str()),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 4,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::remote_cue::session::refuse",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "fn refuse(&mut self, dispatch: Option<&CueDispatch>, code: CueCode, now: i64) -> CueOutcome",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::refuse",
-      "kind": "method",
-      "line": 364,
-      "name": "refuse",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 4,
-        "kind": "method",
-        "line": 364,
-        "name": "refuse"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "fn refuse(&mut self, dispatch: Option<&CueDispatch>, code: CueCode, now: i64) -> CueOutcome",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::remote_cue::session::prune_cue_state",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "pub(super) fn prune_cue_state(&mut self, now: i64)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::prune_cue_state",
-      "kind": "method",
-      "line": 378,
-      "name": "prune_cue_state",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "method",
-        "line": 378,
-        "name": "prune_cue_state"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "pub(super) fn prune_cue_state(&mut self, now: i64)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::prune_cue_state::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "self.cue_records.retain(|record| record.decided_at >= floor);",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::prune_cue_state::<closure>",
-      "kind": "closure",
-      "line": 380,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 380,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "self.cue_records.retain(|record| record.decided_at >= floor);",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::remote_cue::session::remember_cue",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "pub(super) fn remember_cue(&mut self, cue_id: &str, now: i64)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::remember_cue",
-      "kind": "method",
-      "line": 386,
-      "name": "remember_cue",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "method",
-        "line": 386,
-        "name": "remember_cue"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "pub(super) fn remember_cue(&mut self, cue_id: &str, now: i64)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::remote_cue::session::queue_reply",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "fn queue_reply(&mut self, cue_id: &str, code: Option<CueCode>, now: i64)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::queue_reply",
-      "kind": "method",
-      "line": 397,
-      "name": "queue_reply",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "method",
-        "line": 397,
-        "name": "queue_reply"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "fn queue_reply(&mut self, cue_id: &str, code: Option<CueCode>, now: i64)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::queue_reply::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": ".map(|envelope| envelope.encoded());",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::queue_reply::<closure>",
-      "kind": "closure",
-      "line": 423,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 423,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": ".map(|envelope| envelope.encoded());",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::session::take_reply",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/session.rs",
-        "signature": "pub fn take_reply(&mut self) -> Option<Vec<u8>>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::session::take_reply",
-      "kind": "method",
-      "line": 427,
-      "name": "take_reply",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 427,
-        "name": "take_reply"
-      },
-      "path": "src/remote_cue/session.rs",
-      "signature": "pub fn take_reply(&mut self) -> Option<Vec<u8>>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 6,
-      "cyclomatic": 6,
-      "derived": {
-        "identity": "crate::remote_cue::enqueue::decide",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/enqueue.rs",
-        "signature": "pub fn decide(&mut self, cue_id: Option<&str>) -> CueOutcome",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::enqueue::decide",
-      "kind": "method",
-      "line": 41,
-      "name": "decide",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 6,
-        "kind": "method",
-        "line": 41,
-        "name": "decide"
-      },
-      "path": "src/remote_cue/enqueue.rs",
-      "signature": "pub fn decide(&mut self, cue_id: Option<&str>) -> CueOutcome",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::remote_cue::enqueue::decide::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/enqueue.rs",
-        "signature": ".any(|record| record.cue_id == cue_id)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::enqueue::decide::<closure>",
-      "kind": "closure",
-      "line": 47,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 47,
-        "name": "<closure>"
-      },
-      "path": "src/remote_cue/enqueue.rs",
-      "signature": ".any(|record| record.cue_id == cue_id)",
       "source_class": "handwritten"
     },
     {
@@ -95430,14 +94858,14 @@
       },
       "identity": "crate::remote_cue::enqueue::enqueue_accepted",
       "kind": "method",
-      "line": 109,
+      "line": 42,
       "name": "enqueue_accepted",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 109,
+        "line": 42,
         "name": "enqueue_accepted"
       },
       "path": "src/remote_cue/enqueue.rs",
@@ -95456,14 +94884,14 @@
       },
       "identity": "crate::remote_cue::enqueue::enqueue_accepted::<closure>",
       "kind": "closure",
-      "line": 138,
+      "line": 71,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 138,
+        "line": 71,
         "name": "<closure>"
       },
       "path": "src/remote_cue/enqueue.rs",
@@ -95482,14 +94910,14 @@
       },
       "identity": "crate::remote_cue::enqueue::classify_enqueue_error",
       "kind": "function",
-      "line": 143,
+      "line": 76,
       "name": "classify_enqueue_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 143,
+        "line": 76,
         "name": "classify_enqueue_error"
       },
       "path": "src/remote_cue/enqueue.rs",
@@ -95508,18 +94936,590 @@
       },
       "identity": "crate::remote_cue::enqueue::derive_run_id",
       "kind": "function",
-      "line": 163,
+      "line": 96,
       "name": "derive_run_id",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 163,
+        "line": 96,
         "name": "derive_run_id"
       },
       "path": "src/remote_cue/enqueue.rs",
       "signature": "pub fn derive_run_id(cue_id: &str) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::remote_cue::session::read_policy",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::read_policy",
+      "kind": "function",
+      "line": 91,
+      "name": "read_policy",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 91,
+        "name": "read_policy"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::new",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "pub fn new( registry: &'a crate::node_registry::NodeRegistry, identity: &'a crate::node_identity::NodeIdentity, peer: CuePeer<'_>, policy: CuePolicy, workspace: Option<crate::workspace::Workspace>, ) -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::new",
+      "kind": "method",
+      "line": 112,
+      "name": "new",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 112,
+        "name": "new"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "pub fn new( registry: &'a crate::node_registry::NodeRegistry, identity: &'a crate::node_identity::NodeIdentity, peer: CuePeer<'_>, policy: CuePolicy, workspace: Option<crate::workspace::Workspace>, ) -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 13,
+      "cyclomatic": 19,
+      "derived": {
+        "identity": "crate::remote_cue::session::handle_envelope",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "pub fn handle_envelope(&mut self, encoded: &[u8], now: i64) -> CueOutcome",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::handle_envelope",
+      "kind": "method",
+      "line": 141,
+      "name": "handle_envelope",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 13,
+        "cyclomatic": 19,
+        "kind": "method",
+        "line": 141,
+        "name": "handle_envelope"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "pub fn handle_envelope(&mut self, encoded: &[u8], now: i64) -> CueOutcome",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::handle_envelope::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "let verified = crate::direct_transport::envelope_nonce(encoded).and_then(|nonce| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::handle_envelope::<closure>",
+      "kind": "closure",
+      "line": 160,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 160,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "let verified = crate::direct_transport::envelope_nonce(encoded).and_then(|nonce| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::handle_envelope::<closure>@189#2",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": ".find(|record| record.cue_id == dispatch.cue_id)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::handle_envelope::<closure>@189#2",
+      "kind": "closure",
+      "line": 189,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 189,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": ".find(|record| record.cue_id == dispatch.cue_id)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::remote_cue::session::authorize_script",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "fn authorize_script(&self, script: &str) -> Result<ScriptBinding, CueCode>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::authorize_script",
+      "kind": "method",
+      "line": 287,
+      "name": "authorize_script",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 287,
+        "name": "authorize_script"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "fn authorize_script(&self, script: &str) -> Result<ScriptBinding, CueCode>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::authorize_script::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": ".map_err(|_| CueCode::ScriptUnresolvable)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::authorize_script::<closure>",
+      "kind": "closure",
+      "line": 294,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 294,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": ".map_err(|_| CueCode::ScriptUnresolvable)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::authorize_script::<closure>@302#2",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": ".map_err(|_| CueCode::ScriptUnresolvable)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::authorize_script::<closure>@302#2",
+      "kind": "closure",
+      "line": 302,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 302,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": ".map_err(|_| CueCode::ScriptUnresolvable)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::authority",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "fn authority(&self) -> LocalAuthority",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::authority",
+      "kind": "method",
+      "line": 312,
+      "name": "authority",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 312,
+        "name": "authority"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "fn authority(&self) -> LocalAuthority",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::audit",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "fn audit( &self, event: &str, outcome: &str, code: Option<CueCode>, dispatch: Option<&CueDispatch>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::audit",
+      "kind": "method",
+      "line": 325,
+      "name": "audit",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 325,
+        "name": "audit"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "fn audit( &self, event: &str, outcome: &str, code: Option<CueCode>, dispatch: Option<&CueDispatch>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::audit::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "let metadata = dispatch.filter(|_| code.is_none_or(CueCode::is_reportable));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::audit::<closure>",
+      "kind": "closure",
+      "line": 332,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 332,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "let metadata = dispatch.filter(|_| code.is_none_or(CueCode::is_reportable));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::audit::<closure>@344#2",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "id: metadata.map(|dispatch| dispatch.cue_id.as_str()),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::audit::<closure>@344#2",
+      "kind": "closure",
+      "line": 344,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 344,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "id: metadata.map(|dispatch| dispatch.cue_id.as_str()),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::audit::<closure>@345#3",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "script: metadata.map(|dispatch| dispatch.script.as_str()),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::audit::<closure>@345#3",
+      "kind": "closure",
+      "line": 345,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 345,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "script: metadata.map(|dispatch| dispatch.script.as_str()),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::audit::<closure>@346#4",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "reason: metadata.map(|dispatch| dispatch.reason.as_str()),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::audit::<closure>@346#4",
+      "kind": "closure",
+      "line": 346,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 346,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "reason: metadata.map(|dispatch| dispatch.reason.as_str()),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::remote_cue::session::refuse",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "fn refuse(&mut self, dispatch: Option<&CueDispatch>, code: CueCode, now: i64) -> CueOutcome",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::refuse",
+      "kind": "method",
+      "line": 353,
+      "name": "refuse",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 353,
+        "name": "refuse"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "fn refuse(&mut self, dispatch: Option<&CueDispatch>, code: CueCode, now: i64) -> CueOutcome",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::refuse::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "if let Some(dispatch) = dispatch.filter(|_| code.is_reportable()) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::refuse::<closure>",
+      "kind": "closure",
+      "line": 355,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 355,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "if let Some(dispatch) = dispatch.filter(|_| code.is_reportable()) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::remote_cue::session::prune_cue_state",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "pub(super) fn prune_cue_state(&mut self, now: i64)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::prune_cue_state",
+      "kind": "method",
+      "line": 365,
+      "name": "prune_cue_state",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 365,
+        "name": "prune_cue_state"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "pub(super) fn prune_cue_state(&mut self, now: i64)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::prune_cue_state::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "self.cue_records.retain(|record| record.decided_at >= floor);",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::prune_cue_state::<closure>",
+      "kind": "closure",
+      "line": 367,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 367,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "self.cue_records.retain(|record| record.decided_at >= floor);",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::remote_cue::session::remember_cue",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "pub(super) fn remember_cue(&mut self, cue_id: &str, now: i64)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::remember_cue",
+      "kind": "method",
+      "line": 373,
+      "name": "remember_cue",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 373,
+        "name": "remember_cue"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "pub(super) fn remember_cue(&mut self, cue_id: &str, now: i64)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::remote_cue::session::queue_reply",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "fn queue_reply(&mut self, cue_id: &str, code: Option<CueCode>, now: i64)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::queue_reply",
+      "kind": "method",
+      "line": 384,
+      "name": "queue_reply",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 384,
+        "name": "queue_reply"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "fn queue_reply(&mut self, cue_id: &str, code: Option<CueCode>, now: i64)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::queue_reply::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": ".map(|envelope| envelope.encoded());",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::queue_reply::<closure>",
+      "kind": "closure",
+      "line": 410,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 410,
+        "name": "<closure>"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": ".map(|envelope| envelope.encoded());",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::session::take_reply",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/session.rs",
+        "signature": "pub fn take_reply(&mut self) -> Option<Vec<u8>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::session::take_reply",
+      "kind": "method",
+      "line": 414,
+      "name": "take_reply",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 414,
+        "name": "take_reply"
+      },
+      "path": "src/remote_cue/session.rs",
+      "signature": "pub fn take_reply(&mut self) -> Option<Vec<u8>>",
       "source_class": "handwritten"
     },
     {
@@ -96722,32 +96722,6 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::remote_cue::tests::resolution::a_swapped_script_no_longer_matches_what_the_gate_authorized",
-        "macro_expansion": "not_measured",
-        "path": "src/remote_cue/tests/resolution.rs",
-        "signature": "fn a_swapped_script_no_longer_matches_what_the_gate_authorized()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::remote_cue::tests::resolution::a_swapped_script_no_longer_matches_what_the_gate_authorized",
-      "kind": "function",
-      "line": 149,
-      "name": "a_swapped_script_no_longer_matches_what_the_gate_authorized",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 149,
-        "name": "a_swapped_script_no_longer_matches_what_the_gate_authorized"
-      },
-      "path": "src/remote_cue/tests/resolution.rs",
-      "signature": "fn a_swapped_script_no_longer_matches_what_the_gate_authorized()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
         "identity": "crate::remote_cue::tests::session::identity_and_registry",
         "macro_expansion": "not_measured",
         "path": "src/remote_cue/tests/session.rs",
@@ -96834,14 +96808,14 @@
       },
       "identity": "crate::remote_cue::tests::session::the_same_cue_id_on_a_restarted_session_does_not_enqueue_a_second_run",
       "kind": "function",
-      "line": 95,
+      "line": 88,
       "name": "the_same_cue_id_on_a_restarted_session_does_not_enqueue_a_second_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 95,
+        "line": 88,
         "name": "the_same_cue_id_on_a_restarted_session_does_not_enqueue_a_second_run"
       },
       "path": "src/remote_cue/tests/session.rs",
@@ -96860,14 +96834,14 @@
       },
       "identity": "crate::remote_cue::tests::session::the_same_cue_id_on_a_restarted_session_does_not_enqueue_a_second_run::<closure>",
       "kind": "closure",
-      "line": 153,
+      "line": 145,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 153,
+        "line": 145,
         "name": "<closure>"
       },
       "path": "src/remote_cue/tests/session.rs",
@@ -96886,14 +96860,14 @@
       },
       "identity": "crate::remote_cue::tests::session::the_same_cue_id_on_one_session_is_a_duplicate_after_the_first_enqueue",
       "kind": "function",
-      "line": 162,
+      "line": 154,
       "name": "the_same_cue_id_on_one_session_is_a_duplicate_after_the_first_enqueue",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 162,
+        "line": 154,
         "name": "the_same_cue_id_on_one_session_is_a_duplicate_after_the_first_enqueue"
       },
       "path": "src/remote_cue/tests/session.rs",
@@ -96912,14 +96886,14 @@
       },
       "identity": "crate::remote_cue::tests::session::a_unique_cue_id_creates_a_distinct_durable_run",
       "kind": "function",
-      "line": 183,
+      "line": 175,
       "name": "a_unique_cue_id_creates_a_distinct_durable_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 183,
+        "line": 175,
         "name": "a_unique_cue_id_creates_a_distinct_durable_run"
       },
       "path": "src/remote_cue/tests/session.rs",
@@ -96938,14 +96912,14 @@
       },
       "identity": "crate::remote_cue::tests::session::a_non_duplicate_enqueue_failure_keeps_its_stable_operation_error",
       "kind": "function",
-      "line": 227,
+      "line": 220,
       "name": "a_non_duplicate_enqueue_failure_keeps_its_stable_operation_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 227,
+        "line": 220,
         "name": "a_non_duplicate_enqueue_failure_keeps_its_stable_operation_error"
       },
       "path": "src/remote_cue/tests/session.rs",
@@ -96964,18 +96938,44 @@
       },
       "identity": "crate::remote_cue::tests::session::only_the_run_id_uniqueness_error_is_a_duplicate",
       "kind": "function",
-      "line": 254,
+      "line": 247,
       "name": "only_the_run_id_uniqueness_error_is_a_duplicate",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 254,
+        "line": 247,
         "name": "only_the_run_id_uniqueness_error_is_a_duplicate"
       },
       "path": "src/remote_cue/tests/session.rs",
       "signature": "fn only_the_run_id_uniqueness_error_is_a_duplicate()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::remote_cue::tests::resolution::a_swapped_script_no_longer_matches_what_the_gate_authorized",
+        "macro_expansion": "not_measured",
+        "path": "src/remote_cue/tests/resolution.rs",
+        "signature": "fn a_swapped_script_no_longer_matches_what_the_gate_authorized()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::remote_cue::tests::resolution::a_swapped_script_no_longer_matches_what_the_gate_authorized",
+      "kind": "function",
+      "line": 149,
+      "name": "a_swapped_script_no_longer_matches_what_the_gate_authorized",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 149,
+        "name": "a_swapped_script_no_longer_matches_what_the_gate_authorized"
+      },
+      "path": "src/remote_cue/tests/resolution.rs",
+      "signature": "fn a_swapped_script_no_longer_matches_what_the_gate_authorized()",
       "source_class": "handwritten"
     },
     {

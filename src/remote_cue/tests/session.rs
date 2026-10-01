@@ -65,9 +65,11 @@ fn cue_session<'a>(
     CueSession::new(
         registry,
         identity,
-        "omk1_0000000000000000000000000000000000000000000000000000000000000000",
-        [3u8; 32],
-        session_id,
+        CuePeer {
+            node_id: "omk1_0000000000000000000000000000000000000000000000000000000000000000",
+            identity_key: [3u8; 32],
+            session_id,
+        },
         CuePolicy {
             enabled: true,
             declared_scripts: vec!["deploy.sh".to_string()],
@@ -80,17 +82,8 @@ fn cue_session<'a>(
 /// The same Cue arriving after the node session is restarted must not run a
 /// second time.
 ///
-/// `a_new_session_does_not_inherit_the_seen_set` establishes that the
-/// in-session guard dies with the connection, and `seen_cue_ids` above says
-/// durable at-most-once is `runs.run_id`. Nothing exercised the sentence.
-/// The unit test on `enqueue_cue_run` proves SQLite refuses a repeated run
-/// id; it does not prove `CueSession` derives that id from the cue id,
-/// reaches the insert, or reports the refusal as `Duplicate` rather than as
-/// something that reads like a fault in the script.
-///
-/// This is the only shape in which the primary key is the sole guard: a
-/// Conductor whose session drops mid-Cue and redispatches is exactly the
-/// duplicate the in-session set cannot see.
+/// A new session has an empty in-memory Cue cache. The run primary key still
+/// refuses a second insert for the run id derived from this Cue id.
 #[test]
 fn the_same_cue_id_on_a_restarted_session_does_not_enqueue_a_second_run() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -118,8 +111,7 @@ fn the_same_cue_id_on_a_restarted_session_does_not_enqueue_a_second_run() {
     drop(identity);
     let (identity, registry) = identity_and_registry(dir.path());
 
-    // A different session id, so `seen_cue_ids` is empty and cannot be the
-    // thing that refuses this.
+    // A different session id starts with an empty in-memory Cue cache.
     let second = cue_session(
         &registry,
         &identity,

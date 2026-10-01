@@ -36,9 +36,7 @@ pub struct CueSession<'a> {
     /// workspace has nothing to run, and should say so rather than pretend.
     pub(super) workspace: Option<crate::workspace::Workspace>,
     pub(super) remote_node_id: String,
-    pub(super) remote_cues_enabled: bool,
-    pub(super) declared_scripts: Vec<String>,
-    pub(super) declared_batteries: Vec<String>,
+    policy: CuePolicy,
     /// Bounded live-session decisions. Durable at-most-once remains the run
     /// primary key; this cache exists to replay a reportable ACK without
     /// re-evaluating gates or leaking a refusal after a duplicate.
@@ -69,17 +67,19 @@ pub enum CueOutcome {
     EnqueueFailed(CueEnqueueError),
 }
 
-/// Read `trust.allow_remote_cues` from this node's own configuration.
-///
-/// Read per session rather than cached at service start, so turning Cues off
-/// takes effect on the next session instead of requiring a restart. Any failure
-/// to read is `false`: a node that cannot prove it opted in has not opted in.
 /// What this node has declared about remote execution.
 #[derive(Debug, Clone, Default)]
 pub struct CuePolicy {
     pub enabled: bool,
     pub declared_scripts: Vec<String>,
     pub declared_batteries: Vec<String>,
+}
+
+/// Peer facts established by the authenticated transport session.
+pub struct CuePeer<'a> {
+    pub node_id: &'a str,
+    pub identity_key: [u8; 32],
+    pub session_id: [u8; 32],
 }
 
 /// Read the declared remote-execution policy from this node's own config.
@@ -109,26 +109,21 @@ pub fn read_policy(context: &crate::node::NodeContext) -> CuePolicy {
 }
 
 impl<'a> CueSession<'a> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         registry: &'a crate::node_registry::NodeRegistry,
         identity: &'a crate::node_identity::NodeIdentity,
-        remote_node_id: &str,
-        remote_identity_key: [u8; 32],
-        session_id: [u8; 32],
+        peer: CuePeer<'_>,
         policy: CuePolicy,
         workspace: Option<crate::workspace::Workspace>,
     ) -> Self {
         Self {
             registry,
             identity,
-            remote_identity_key,
-            session_id,
+            remote_identity_key: peer.identity_key,
+            session_id: peer.session_id,
             workspace,
-            remote_node_id: remote_node_id.to_string(),
-            remote_cues_enabled: policy.enabled,
-            declared_scripts: policy.declared_scripts,
-            declared_batteries: policy.declared_batteries,
+            remote_node_id: peer.node_id.to_string(),
+            policy,
             cue_records: VecDeque::new(),
             pending_reply: None,
         }
@@ -301,16 +296,7 @@ impl<'a> CueSession<'a> {
         if !is_regular_file(resolved) {
             return Err(CueCode::ScriptUnresolvable);
         }
-        is_declared_or_from_declared_battery(
-            script,
-            resolved,
-            &CuePolicy {
-                enabled: self.remote_cues_enabled,
-                declared_scripts: self.declared_scripts.clone(),
-                declared_batteries: self.declared_batteries.clone(),
-            },
-            workspace,
-        )?;
+        is_declared_or_from_declared_battery(script, resolved, &self.policy, workspace)?;
         let schema = repo
             .read_schema(resolved)
             .map_err(|_| CueCode::ScriptUnresolvable)?;
@@ -325,9 +311,9 @@ impl<'a> CueSession<'a> {
 
     fn authority(&self) -> LocalAuthority {
         LocalAuthority {
-            remote_cues_enabled: self.remote_cues_enabled,
-            declared_scripts: self.declared_scripts.clone(),
-            declared_batteries: self.declared_batteries.clone(),
+            remote_cues_enabled: self.policy.enabled,
+            declared_scripts: self.policy.declared_scripts.clone(),
+            declared_batteries: self.policy.declared_batteries.clone(),
             authorization: self
                 .registry
                 .health_authorization(&self.remote_node_id)

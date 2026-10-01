@@ -264,9 +264,11 @@ pub(super) fn connect_and_hold(
     let cue = crate::remote_cue::CueSession::new(
         &registry,
         &identity,
-        remote.node_id(),
-        *remote.identity_key(),
-        session_id,
+        crate::remote_cue::CuePeer {
+            node_id: remote.node_id(),
+            identity_key: *remote.identity_key(),
+            session_id,
+        },
         crate::remote_cue::read_policy(context),
         state
             .workspace_root

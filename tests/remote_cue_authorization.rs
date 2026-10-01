@@ -1,15 +1,6 @@
-//! The seam where a Cue enters, and the guarantee that it stays a seam.
-//!
-//! `hold_session` dispatches every decrypted application envelope to the Health
-//! Plane first, and today anything without the `health_` prefix falls through
-//! `HealthOutcome::NotHealth` and is silently discarded. The Cue branch is being
-//! added at exactly that point, so these characterise the boundary *before* it
-//! moves: the Health Plane must not claim Cue traffic, and must keep its own
-//! behaviour unchanged when Cue traffic arrives.
-//!
-//! Without this, a mistake in the Cue branch that quietly made the Health Plane
-//! start or stop handling something would be caught only by the multi-node e2e,
-//! and only if it happened to exercise the same shape.
+//! A decrypted application envelope reaches the Health Plane before the Cue
+//! plane. These tests keep ownership of Cue traffic with the Cue plane and
+//! exercise duplicate handling through signed dispatch envelopes.
 
 use omakure::direct_health::{HealthOutcome, HealthSession};
 use omakure::direct_transport::{CUE_KIND_PREFIX, sign_cue_envelope, sign_health_envelope};
@@ -78,8 +69,7 @@ fn the_health_plane_does_not_claim_cue_traffic() {
 
 /// Anything that is neither plane must still be discarded, not answered.
 ///
-/// Adding a Cue branch must not turn the dispatcher into something that replies
-/// to unknown traffic, which would make it a probe oracle.
+/// Unknown traffic must not make the Health Plane reply.
 #[test]
 fn unknown_kinds_are_still_not_claimed_by_the_health_plane() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -122,15 +112,23 @@ fn unknown_kinds_are_still_not_claimed_by_the_health_plane() {
 // In-session duplicate handling
 // ---------------------------------------------------------------------------
 
-use omakure::remote_cue::{CueCode, CueOutcome, CuePolicy, CueSession, GateDecision};
+use omakure::remote_cue::{CueCode, CueOutcome, CuePeer, CuePolicy, CueSession, GateDecision};
 
 fn session_over<'a>(registry: &'a NodeRegistry, identity: &'a NodeIdentity) -> CueSession<'a> {
     CueSession::new(
         registry,
         identity,
-        "omk1_0000000000000000000000000000000000000000000000000000000000000000",
-        [3u8; 32],
-        [7u8; 32],
+        CuePeer {
+            node_id: &identity.public_status().node_id,
+            identity_key: omakure::enrollment::parse_hex(
+                &identity.public_status().public_key_hex,
+                32,
+            )
+            .expect("identity key")
+            .try_into()
+            .expect("32-byte identity key"),
+            session_id: [7u8; 32],
+        },
         CuePolicy {
             enabled: true,
             declared_scripts: vec!["deploy.sh".to_string()],
@@ -140,6 +138,36 @@ fn session_over<'a>(registry: &'a NodeRegistry, identity: &'a NodeIdentity) -> C
     )
 }
 
+fn signed_cue(identity: &NodeIdentity, cue_id: &str, now: i64) -> Vec<u8> {
+    sign_cue_envelope(
+        identity,
+        "cue_dispatch",
+        &[7u8; 32],
+        [9u8; 16],
+        json!({
+            "version": 1,
+            "cue_id": cue_id,
+            "script": "deploy.sh",
+            "not_before": now,
+            "expires_at": now + 300,
+            "reason": "test",
+        }),
+        u64::try_from(now).expect("positive timestamp"),
+    )
+    .expect("signed Cue")
+    .encoded()
+}
+
+fn now_seconds() -> i64 {
+    i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_secs(),
+    )
+    .expect("Unix timestamp")
+}
+
 /// A retransmission on a live connection is the realistic duplicate, and it is
 /// answered from the first decision rather than re-evaluated.
 #[test]
@@ -147,9 +175,11 @@ fn a_repeated_cue_id_on_one_session_is_decided_once() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (identity, registry) = identity_and_registry(dir.path());
     let mut session = session_over(&registry, &identity);
+    let now = now_seconds();
+    let encoded = signed_cue(&identity, "0123456789abcdef0123456789abcdef", now);
 
-    let first = session.decide(Some("0123456789abcdef0123456789abcdef"));
-    let second = session.decide(Some("0123456789abcdef0123456789abcdef"));
+    let first = session.handle_envelope(&encoded, now);
+    let second = session.handle_envelope(&encoded, now);
 
     // The peer is unknown to this registry, so the trust gate refuses. What
     // matters here is that the *first* call reached a decision at all and the
@@ -171,14 +201,21 @@ fn different_cue_ids_are_decided_separately() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (identity, registry) = identity_and_registry(dir.path());
     let mut session = session_over(&registry, &identity);
+    let now = now_seconds();
 
     assert!(matches!(
-        session.decide(Some("0123456789abcdef0123456789abcdef")),
+        session.handle_envelope(
+            &signed_cue(&identity, "0123456789abcdef0123456789abcdef", now),
+            now,
+        ),
         CueOutcome::Decided(_)
     ));
     assert!(
         matches!(
-            session.decide(Some("fedcba9876543210fedcba9876543210")),
+            session.handle_envelope(
+                &signed_cue(&identity, "fedcba9876543210fedcba9876543210", now),
+                now,
+            ),
             CueOutcome::Decided(_)
         ),
         "a different cue id is a different instruction and must be decided"
@@ -190,10 +227,12 @@ fn different_cue_ids_are_decided_separately() {
 fn a_new_session_does_not_inherit_the_seen_set() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (identity, registry) = identity_and_registry(dir.path());
+    let now = now_seconds();
+    let encoded = signed_cue(&identity, "0123456789abcdef0123456789abcdef", now);
 
     let mut first = session_over(&registry, &identity);
     assert!(matches!(
-        first.decide(Some("0123456789abcdef0123456789abcdef")),
+        first.handle_envelope(&encoded, now),
         CueOutcome::Decided(_)
     ));
     drop(first);
@@ -202,7 +241,7 @@ fn a_new_session_does_not_inherit_the_seen_set() {
     // run row, whose primary key is derived from the cue id.
     let mut second = session_over(&registry, &identity);
     assert_eq!(
-        second.decide(Some("0123456789abcdef0123456789abcdef")),
+        second.handle_envelope(&encoded, now),
         CueOutcome::Decided(GateDecision::Rejected(CueCode::NotActiveConductor)),
         "the guard is per session and does not pretend to be durable"
     );

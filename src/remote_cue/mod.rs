@@ -33,7 +33,7 @@ pub use gates::{
     evaluate_gates, is_declared, is_declared_or_from_declared_battery, is_regular_file,
     is_well_formed_cue_id, is_well_formed_script_name, resolve_in_listing, within_validity_window,
 };
-pub use session::{CueOutcome, CuePolicy, CueSession, read_policy};
+pub use session::{CueOutcome, CuePeer, CuePolicy, CueSession, read_policy};
 
 /// The frozen maximum lifetime of a Cue, in seconds.
 pub const MAX_LIFETIME_SECONDS: i64 = 300;

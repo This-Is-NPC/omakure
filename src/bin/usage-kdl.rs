@@ -181,13 +181,7 @@ struct Overlay {
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     match args.as_slice() {
-        [] => {
-            if let Err(error) = write_artifacts(&generate_artifacts()) {
-                eprintln!("usage-kdl write failed: {error}");
-                std::process::exit(1);
-            }
-        }
-        [arg] if arg == "--write" => {
+        args if args.is_empty() || matches!(args, [arg] if arg == "--write") => {
             if let Err(error) = write_artifacts(&generate_artifacts()) {
                 eprintln!("usage-kdl write failed: {error}");
                 std::process::exit(1);

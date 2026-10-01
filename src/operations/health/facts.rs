@@ -89,10 +89,11 @@ impl NodeHealthFacts {
     /// moment it is certainly not.
     fn cached_baseline(&self) -> BaselineFacts {
         let mut cache = self.baseline.lock().expect("baseline observation cache");
-        if let Some((observed_at, facts)) = cache.as_ref() {
-            if observed_at.elapsed() < BASELINE_OBSERVE_TTL {
-                return facts.clone();
-            }
+        if let Some((_, facts)) = cache
+            .as_ref()
+            .filter(|(observed_at, _)| observed_at.elapsed() < BASELINE_OBSERVE_TTL)
+        {
+            return facts.clone();
         }
         let facts = match crate::operations::baseline::installed_baseline(&self.workspace) {
             Some(record) => BaselineFacts {
@@ -110,10 +111,11 @@ impl NodeHealthFacts {
 
     fn cached_runtimes(&self) -> Vec<RuntimeFact> {
         let mut cache = self.runtimes.lock().expect("runtime probe cache");
-        if let Some((probed_at, runtimes)) = cache.as_ref() {
-            if probed_at.elapsed() < RUNTIME_PROBE_TTL {
-                return runtimes.clone();
-            }
+        if let Some((_, runtimes)) = cache
+            .as_ref()
+            .filter(|(probed_at, _)| probed_at.elapsed() < RUNTIME_PROBE_TTL)
+        {
+            return runtimes.clone();
         }
         let runtimes = probe_runtimes();
         *cache = Some((Instant::now(), runtimes.clone()));

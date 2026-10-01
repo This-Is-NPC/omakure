@@ -109,24 +109,58 @@ pub(super) struct WindowsLock {
 }
 
 #[cfg(windows)]
-pub(super) fn read_windows_pid_file(path: &Path) -> Result<WindowsPidFile, String> {
-    let contents =
-        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+#[derive(Debug, thiserror::Error)]
+pub(super) enum WindowsPidFileError {
+    #[error("read {}: {source}", path.display())]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{} is empty", path.display())]
+    Empty { path: PathBuf },
+    #[error("invalid PID in {}: {source}", path.display())]
+    InvalidPid {
+        path: PathBuf,
+        #[source]
+        source: std::num::ParseIntError,
+    },
+    #[error("{} has no stop-event identity", path.display())]
+    MissingStopEvent { path: PathBuf },
+    #[error("invalid stop-event identity in {}", path.display())]
+    InvalidStopEvent { path: PathBuf },
+}
+
+#[cfg(windows)]
+pub(super) fn read_windows_pid_file(path: &Path) -> Result<WindowsPidFile, WindowsPidFileError> {
+    let contents = fs::read_to_string(path).map_err(|source| WindowsPidFileError::Read {
+        path: path.to_path_buf(),
+        source,
+    })?;
     let mut lines = contents.lines();
     let pid = lines
         .next()
-        .ok_or_else(|| format!("{} is empty", path.display()))?
+        .ok_or_else(|| WindowsPidFileError::Empty {
+            path: path.to_path_buf(),
+        })?
         .trim()
         .parse::<u32>()
-        .map_err(|error| format!("invalid PID in {}: {error}", path.display()))?;
+        .map_err(|source| WindowsPidFileError::InvalidPid {
+            path: path.to_path_buf(),
+            source,
+        })?;
     let stop_event = lines
         .next()
         .map(str::trim)
         .filter(|name| !name.is_empty())
-        .ok_or_else(|| format!("{} has no stop-event identity", path.display()))?
+        .ok_or_else(|| WindowsPidFileError::MissingStopEvent {
+            path: path.to_path_buf(),
+        })?
         .to_string();
     if !serve_windows::is_stop_event_name(&stop_event) {
-        return Err(format!("invalid stop-event identity in {}", path.display()));
+        return Err(WindowsPidFileError::InvalidStopEvent {
+            path: path.to_path_buf(),
+        });
     }
     Ok(WindowsPidFile { pid, stop_event })
 }
@@ -175,7 +209,7 @@ pub(super) fn publish_windows_pid_file(
 pub(super) fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, String> {
     let path = pid_file(workspace);
     if path.exists() {
-        let existing = read_windows_pid_file(&path)?;
+        let existing = read_windows_pid_file(&path).map_err(|error| error.to_string())?;
         match serve_windows::probe_process(existing.pid) {
             ProcessProbe::Live(_process) => {
                 match serve_windows::open_stop_event(&existing.stop_event) {

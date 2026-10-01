@@ -2,7 +2,9 @@
 use super::lifecycle::LockError;
 use super::lifecycle::{acquire_lock, pid_file, release_lock};
 #[cfg(windows)]
-use super::lifecycle::{publish_windows_pid_file, read_windows_pid_file, WindowsPidFile};
+use super::lifecycle::{
+    publish_windows_pid_file, read_windows_pid_file, WindowsPidFile, WindowsPidFileError,
+};
 use super::logging::log_file;
 use super::scheduler::{build_args_from_defaults, scheduler_tick, SchedulerTickError};
 use crate::runs::{self, RunStore, RunTrigger};
@@ -291,19 +293,49 @@ fn windows_malformed_or_partial_pid_files_are_preserved() {
     let ws = workspace_in(&tmp);
     let path = pid_file(&ws);
 
-    for contents in [
-        "",
-        "1234\n",
-        "not-a-pid\nLocal\\OmakureServeStop-00000000000000000000000000000000\n",
-        "1234\nnot-an-event\n",
+    for (contents, expected) in [
+        ("", format!("{} is empty", path.display())),
+        (
+            "1234\n",
+            format!("{} has no stop-event identity", path.display()),
+        ),
+        (
+            "not-a-pid\nLocal\\OmakureServeStop-00000000000000000000000000000000\n",
+            format!(
+                "invalid PID in {}: invalid digit found in string",
+                path.display()
+            ),
+        ),
+        (
+            "1234\nnot-an-event\n",
+            format!("invalid stop-event identity in {}", path.display()),
+        ),
     ] {
         fs::write(&path, contents).unwrap();
-        assert!(
-            acquire_lock(&ws).is_err(),
-            "invalid PID file must not be accepted: {contents:?}"
+        assert_eq!(
+            read_windows_pid_file(&path).unwrap_err().to_string(),
+            expected
         );
+        assert!(acquire_lock(&ws).is_err());
         assert_eq!(fs::read_to_string(&path).unwrap(), contents);
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_pid_file_read_error_keeps_path_and_source() {
+    let tmp = TempDir::new().unwrap();
+    let ws = workspace_in(&tmp);
+    let path = pid_file(&ws);
+    let error = read_windows_pid_file(&path).unwrap_err();
+    assert!(matches!(
+        &error,
+        WindowsPidFileError::Read { path: failed_path, source }
+            if failed_path == &path && source.kind() == std::io::ErrorKind::NotFound
+    ));
+    assert!(error
+        .to_string()
+        .starts_with(&format!("read {}: ", path.display())));
 }
 
 #[cfg(windows)]

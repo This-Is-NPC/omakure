@@ -22,7 +22,7 @@ pub(super) fn map_enrollment_error(error: EnrollmentError) -> OperationError {
     OperationError::new(code, error.to_string())
 }
 
-pub(super) fn map_direct_enrollment_error(
+pub(crate) fn map_direct_service_error(
     error: crate::direct_service::DirectServiceError,
 ) -> OperationError {
     let code = match error {

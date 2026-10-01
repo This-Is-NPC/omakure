@@ -82,7 +82,7 @@ fn dispatch_cue(
             "outcome_seen": outcome.outcome_seen,
         })
     })
-    .map_err(map_direct_error)
+    .map_err(node_ops::map_direct_service_error)
 }
 
 /// Ask the running service to send it over the session it already holds.
@@ -278,7 +278,7 @@ fn dispatch_direct_probe(
             ),
         ));
     }
-    Err(map_direct_error(error))
+    Err(node_ops::map_direct_service_error(error))
 }
 
 /// Whether the peer accepted the connection and then dropped it without
@@ -558,48 +558,6 @@ fn read_bounded_file(path: &std::path::Path, max_bytes: usize) -> std::io::Resul
         ));
     }
     Ok(contents)
-}
-
-fn map_direct_error(error: crate::direct_service::DirectServiceError) -> OperationError {
-    let code = match &error {
-        crate::direct_service::DirectServiceError::Protocol(error) => match error.code() {
-            crate::direct_transport::ProtocolErrorCode::UnsupportedVersion => {
-                OperationErrorCode::TransportUnsupportedVersion
-            }
-            crate::direct_transport::ProtocolErrorCode::InvalidFrame => {
-                OperationErrorCode::TransportInvalidFrame
-            }
-            crate::direct_transport::ProtocolErrorCode::MessageTooLarge => {
-                OperationErrorCode::TransportMessageTooLarge
-            }
-            crate::direct_transport::ProtocolErrorCode::HandshakeFailed => {
-                OperationErrorCode::TransportHandshakeFailed
-            }
-            crate::direct_transport::ProtocolErrorCode::IdentityMismatch => {
-                OperationErrorCode::TransportIdentityMismatch
-            }
-            crate::direct_transport::ProtocolErrorCode::NotEnrolled => {
-                OperationErrorCode::TransportNotEnrolled
-            }
-            crate::direct_transport::ProtocolErrorCode::Revoked => {
-                OperationErrorCode::TransportRevoked
-            }
-            crate::direct_transport::ProtocolErrorCode::Expired => {
-                OperationErrorCode::TransportExpired
-            }
-            crate::direct_transport::ProtocolErrorCode::Replay => {
-                OperationErrorCode::TransportReplay
-            }
-            crate::direct_transport::ProtocolErrorCode::RateLimited => {
-                OperationErrorCode::TransportRateLimited
-            }
-            crate::direct_transport::ProtocolErrorCode::Internal => {
-                OperationErrorCode::TransportInternal
-            }
-        },
-        _ => OperationErrorCode::TransportInternal,
-    };
-    OperationError::new(code, error.to_string())
 }
 
 fn emit_result<T: serde::Serialize>(

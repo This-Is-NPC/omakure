@@ -1,6 +1,6 @@
 use super::super::{OperationError, OperationErrorCode, OperationResult};
 use super::errors::{
-    map_direct_enrollment_error, map_enrollment_error, map_identity_error, map_registry_error,
+    map_direct_service_error, map_enrollment_error, map_identity_error, map_registry_error,
     registry_error,
 };
 use super::status::{open_initialized_registry, read_node_config};
@@ -181,7 +181,7 @@ pub fn request_manual_enrollment(
         context,
         &offer.request.encode(),
     )
-    .map_err(map_direct_enrollment_error)?;
+    .map_err(map_direct_service_error)?;
     if reciprocal.is_none() {
         return Err(OperationError::new(
             OperationErrorCode::EnrollmentDenied,

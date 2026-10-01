@@ -1,16 +1,19 @@
 use super::audit::{record_audit, AuditInput};
 use super::error::RegistryError;
+#[cfg(test)]
+use super::fields::validate_registration;
 use super::fields::{
     capabilities_json, decode_hex, now_timestamp, timestamp_seconds, validate_actor_reason,
     validate_bounded_text, validate_capabilities, validate_node_id, validate_public_key,
-    validate_registration, validate_timestamp,
+    validate_timestamp,
 };
-use super::projection::{
-    insert_v2_identity_projection, insert_v2_pending_transport_projection, project_v2_transition,
-};
+use super::projection::project_v2_transition;
+#[cfg(test)]
+use super::projection::{insert_v2_identity_projection, insert_v2_pending_transport_projection};
+#[cfg(test)]
+use super::types::PeerRegistration;
 use super::types::{
-    PeerCounts, PeerRecord, PeerRegistration, PeerRole, PeerSource, PeerState, RevocationRecord,
-    TransportPeer,
+    PeerCounts, PeerRecord, PeerRole, PeerSource, PeerState, RevocationRecord, TransportPeer,
 };
 use super::validate::sqlite_validation_error;
 use super::{NodeRegistry, MAX_REASON_BYTES};
@@ -73,6 +76,7 @@ impl NodeRegistry {
 
     /// Insert only a pending peer.  Observation, discovery, endpoints, and
     /// matching identifiers have no API that can insert active trust.
+    #[cfg(test)]
     pub fn register_pending_with_transport(
         &self,
         registration: PeerRegistration,

@@ -154,24 +154,6 @@ pub(super) fn health_peer_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<
     }))
 }
 
-pub(super) fn read_profile(
-    transaction: &Transaction<'_>,
-    node_id: &str,
-    now: i64,
-) -> Result<Option<ProfileSnapshot>, RegistryError> {
-    let (profile, corrupt) = read_profile_observational(transaction, node_id)?;
-    if corrupt.is_some() {
-        quarantine_row(
-            transaction,
-            "health_profiles",
-            node_id,
-            HealthKind::Profile,
-            now,
-        )?;
-    }
-    Ok(profile)
-}
-
 pub(super) fn read_profile_observational(
     transaction: &Transaction<'_>,
     node_id: &str,
@@ -232,24 +214,6 @@ pub(super) fn read_profile_observational(
     ))
 }
 
-pub(super) fn read_pulse(
-    transaction: &Transaction<'_>,
-    node_id: &str,
-    now: i64,
-) -> Result<Option<PulseSnapshot>, RegistryError> {
-    let (pulse, corrupt) = read_pulse_observational(transaction, node_id)?;
-    if corrupt.is_some() {
-        quarantine_row(
-            transaction,
-            "health_pulses",
-            node_id,
-            HealthKind::Pulse,
-            now,
-        )?;
-    }
-    Ok(pulse)
-}
-
 pub(super) fn read_pulse_observational(
     transaction: &Transaction<'_>,
     node_id: &str,
@@ -303,36 +267,6 @@ pub(super) fn read_pulse_observational(
         }),
         None,
     ))
-}
-
-fn quarantine_row(
-    transaction: &Transaction<'_>,
-    table: &str,
-    node_id: &str,
-    kind: HealthKind,
-    now: i64,
-) -> Result<(), RegistryError> {
-    let statement = match table {
-        "health_profiles" => "DELETE FROM health_profiles WHERE node_id = ?1",
-        "health_pulses" => "DELETE FROM health_pulses WHERE node_id = ?1",
-        other => {
-            return Err(RegistryError::Corrupt(format!(
-                "unknown health table {other:?}"
-            )))
-        }
-    };
-    transaction.execute(statement, params![node_id])?;
-    record_health_audit_tx(
-        transaction,
-        "corrupt_row",
-        node_id,
-        kind.wire(),
-        0,
-        "rejected",
-        Some(HealthCode::CorruptState.code()),
-        now,
-    )?;
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

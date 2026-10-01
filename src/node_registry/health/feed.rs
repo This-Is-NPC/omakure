@@ -4,8 +4,8 @@ use super::super::{NodeRegistry, RegistryError};
 use super::audit::record_health_audit_tx;
 use super::rows::{
     active_trust_predicate, authorization_in, cleanup_corrupt_health_rows, health_peer_from_row,
-    load_peer_state, read_profile, read_profile_observational, read_pulse,
-    read_pulse_observational, signal_from_row, CorruptHealthIdentity, CorruptHealthRow,
+    load_peer_state, read_profile_observational, read_pulse_observational, signal_from_row,
+    CorruptHealthIdentity, CorruptHealthRow,
 };
 use super::types::{
     HealthFeedPeer, HealthFeedSignal, HealthFleetPeer, HealthPeerSnapshot, HealthPeerState,
@@ -122,35 +122,6 @@ impl NodeRegistry {
             peers,
             signals,
             lifecycle,
-        })
-    }
-
-    /// The current Profile and Pulse snapshots for one peer.
-    ///
-    /// A single row that fails its integrity check is deleted, audited with
-    /// `health_corrupt_state` (1115), and reported as absent.
-    pub fn health_peer_snapshot(
-        &self,
-        node_id: &str,
-        now: i64,
-    ) -> Result<Option<HealthPeerSnapshot>, RegistryError> {
-        validate_node_id(node_id)?;
-        self.with_mutating_connection(|connection| {
-            let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let state = load_peer_state(&transaction, node_id)?;
-            let Some(state) = state else {
-                transaction.commit()?;
-                return Ok(None);
-            };
-            let profile = read_profile(&transaction, node_id, now)?;
-            let pulse = read_pulse(&transaction, node_id, now)?;
-            transaction.commit()?;
-            Ok(Some(HealthPeerSnapshot {
-                state,
-                profile,
-                pulse,
-            }))
         })
     }
 

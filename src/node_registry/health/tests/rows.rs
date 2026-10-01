@@ -30,11 +30,7 @@ fn a_corrupt_health_row_is_quarantined_and_audited_without_disabling_the_peer() 
         .unwrap();
     assert!(fleet.snapshot.profile.is_none());
 
-    let snapshot = fixture
-        .registry
-        .health_peer_snapshot(&node_id, BASE_NOW + 10)
-        .unwrap()
-        .unwrap();
+    let snapshot = fleet.snapshot;
     assert!(snapshot.profile.is_none(), "the corrupt row is quarantined");
     assert!(snapshot.pulse.is_some(), "the healthy row still reads");
     let audit = fixture.registry.health_audit_events(10).unwrap();

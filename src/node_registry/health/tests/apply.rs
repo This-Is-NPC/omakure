@@ -83,9 +83,10 @@ fn profile_and_pulse_keep_exactly_one_latest_row_per_peer() {
     }
     let snapshot = fixture
         .registry
-        .health_peer_snapshot(&node_id, BASE_NOW + 30)
+        .health_node_snapshot(&node_id, BASE_NOW + 30)
         .unwrap()
-        .unwrap();
+        .unwrap()
+        .snapshot;
     assert_eq!(snapshot.profile.unwrap().profile_revision, 2);
     assert_eq!(snapshot.pulse.unwrap().sequence, 2);
     assert_eq!(snapshot.state.last_pulse_at, Some(BASE_NOW + 30));
@@ -134,9 +135,10 @@ fn duplicates_replays_and_regressions_are_rejected_without_mutation() {
     );
     let snapshot = fixture
         .registry
-        .health_peer_snapshot(&node_id, BASE_NOW + 3)
+        .health_node_snapshot(&node_id, BASE_NOW + 3)
         .unwrap()
-        .unwrap();
+        .unwrap()
+        .snapshot;
     assert_eq!(snapshot.profile.unwrap().profile_revision, 2);
 
     apply(

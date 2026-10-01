@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "766df4cfd0f0d67f4762abfd0d1d85fcf21dd2274bbcdccb2f1a269fe0f260eb",
+  "canonical_sha256": "163d6cfa0e559138bec265098fb531da87cf7120b23c728ad9a8ec81316b219b",
   "config_identity": "no-config",
   "files": [
     {
@@ -33850,14 +33850,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::stop",
       "kind": "function",
-      "line": 253,
+      "line": 252,
       "name": "stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 9,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 253,
+        "line": 252,
         "name": "stop"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33868,22 +33868,22 @@
       "cognitive": 7,
       "cyclomatic": 12,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::stop@301#2",
+        "identity": "crate::cli::serve::lifecycle::stop@300#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": "fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>>",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::stop@301#2",
+      "identity": "crate::cli::serve::lifecycle::stop@300#2",
       "kind": "function",
-      "line": 301,
+      "line": 300,
       "name": "stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 301,
+        "line": 300,
         "name": "stop"
       },
       "path": "src/cli/serve/lifecycle.rs",

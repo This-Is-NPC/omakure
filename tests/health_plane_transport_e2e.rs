@@ -18,6 +18,11 @@
 //!   boundary seconds. No test sleeps for ten minutes and no window is
 //!   approximated.
 
+#[path = "support/message_id.rs"]
+mod fixture_ids;
+
+use fixture_ids::repeated_hex_16 as message_id;
+
 pub mod support;
 
 use omakure::direct_transport::{
@@ -334,10 +339,6 @@ fn production_session_within_admission_window(
         );
         std::thread::sleep(ADMISSION_RETRY_INTERVAL.min(remaining));
     }
-}
-
-fn message_id(seed: u8) -> String {
-    omakure::hex::encode(&[seed; 16])
 }
 
 fn profile_payload(target: &str, seed: u8, revision: u64) -> Value {

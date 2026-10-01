@@ -11,6 +11,11 @@
 //! buffer, the rate windows, and the 7-day retention - is exercised at its
 //! exact frozen boundary second.
 
+#[path = "support/health_messages.rs"]
+mod health_messages;
+
+use health_messages::signal_payload;
+
 #[path = "support/health_ids.rs"]
 mod health_ids;
 pub mod support;
@@ -205,34 +210,6 @@ fn revoke_peer(node: &Node, node_id: &str) {
             "--confirmed".to_string(),
         ],
     ));
-}
-
-fn signal_payload(
-    target: &str,
-    message_seed: u64,
-    sequence: u64,
-    signal_seed: u64,
-    occurred_at: i64,
-) -> Value {
-    json!({
-        "health_version": 1,
-        "message_id": hex16(message_seed),
-        "signal": {
-            "kind": "run-completed",
-            "occurred_at": occurred_at,
-            "run": {
-                "exit_code": 0,
-                "finished_at": occurred_at,
-                "run_id": hex16(signal_seed + 900_000),
-                "script": "deploy",
-                "state": "completed"
-            },
-            "sequence": sequence,
-            "signal_id": hex16(signal_seed),
-            "subject": Value::Null
-        },
-        "target": target,
-    })
 }
 
 fn ack_payload(target: &str, message_seed: u64, acked: &str, cursor: u64) -> Value {

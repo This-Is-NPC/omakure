@@ -13,6 +13,17 @@
 //! `verify_envelope`, which proves the Health Plane is carriable without any
 //! change to the frozen identity construction.
 
+#[path = "support/message_id.rs"]
+mod fixture_ids;
+
+use fixture_ids::repeated_hex_16 as message_id;
+use fixture_ids::repeated_hex_16 as nonce_hex;
+
+#[path = "support/canonical_json.rs"]
+mod canonical_json;
+
+use canonical_json::canonical;
+
 use k256::schnorr::{SigningKey, signature::hazmat::PrehashSigner};
 use omakure::direct_transport::{TransportError, envelope_nonce, verify_envelope};
 use serde_json::{Map, Value, json};
@@ -287,10 +298,6 @@ impl Kind {
 // Frozen construction helpers
 // ---------------------------------------------------------------------------
 
-fn canonical(value: &Value) -> Vec<u8> {
-    serde_jcs::to_vec(value).expect("canonical JSON")
-}
-
 fn signing_key(scalar_hex: &str) -> SigningKey {
     SigningKey::from_slice(&omakure::hex::decode(scalar_hex).expect("valid hexadecimal fixture"))
         .expect("test scalar")
@@ -353,14 +360,6 @@ fn encode(canonical_bytes: &[u8], signature: &[u8]) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 // Reference message builders
 // ---------------------------------------------------------------------------
-
-fn nonce_hex(seed: u8) -> String {
-    omakure::hex::encode(&[seed; 16])
-}
-
-fn message_id(seed: u8) -> String {
-    omakure::hex::encode(&[seed; 16])
-}
 
 fn performer_id() -> String {
     node_id(PERFORMER_SCALAR_HEX)

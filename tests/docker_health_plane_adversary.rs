@@ -18,6 +18,11 @@
 //! Run with:
 //! `cargo test --test docker_health_plane_adversary -- --ignored --nocapture`
 
+#[path = "support/message_id.rs"]
+mod fixture_ids;
+
+use fixture_ids::repeated_hex_16 as message_id;
+
 #[path = "support/docker_health_node.rs"]
 mod docker_health_node;
 #[path = "support/frame.rs"]
@@ -450,10 +455,6 @@ fn production_session(state_dir: &Path) -> (TcpStream, TransportSession, NodeIde
 
 fn decode_key(hex: &str) -> [u8; 32] {
     omakure::hex::decode_array::<32>(hex).expect("expected a 32-byte hexadecimal key")
-}
-
-fn message_id(seed: u8) -> String {
-    omakure::hex::encode(&[seed; 16])
 }
 
 /// What one live exchange observed on the session.

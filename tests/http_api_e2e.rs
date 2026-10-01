@@ -3,9 +3,8 @@ pub mod support;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
-use std::process::Output;
 use std::time::Duration;
-use support::assert_success;
+use support::{assert_no_plaintext, assert_success};
 
 const SECRET_DEFAULT: &str = "http-schema-secret-default-plain-value";
 const QUEUE_SECRET: &str = "http-queue-secret-provider-plain-value";
@@ -1884,11 +1883,6 @@ fn tokens_file_mode_enforces_per_token_scopes() {
         "OMAKURE_TOKENS_FILE must not apply once --tokens-file is set; body: {}",
         harness.safe_body()
     );
-}
-
-fn assert_no_plaintext(output: &Output, secret: &str) {
-    support::assert_no_secret_leak(&output.stdout, secret.as_bytes());
-    support::assert_no_secret_leak(&output.stderr, secret.as_bytes());
 }
 
 fn assert_error_contains(envelope: &Value, needle: &str) {

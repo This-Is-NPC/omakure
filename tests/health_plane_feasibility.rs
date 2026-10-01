@@ -15,6 +15,11 @@
 //! These assertions provide regression coverage for the production listener and
 //! transport compatibility that the shipped Health Plane relies on.
 
+#[path = "support/canonical_json.rs"]
+mod canonical_json;
+
+use canonical_json::canonical;
+
 pub mod support;
 
 use omakure::direct_transport::{
@@ -114,10 +119,6 @@ fn trust_row(workspace: &Path, node_id: &str) -> Option<TrustRow> {
 // ---------------------------------------------------------------------------
 // Health Plane message construction, mirroring the frozen envelope exactly.
 // ---------------------------------------------------------------------------
-
-fn canonical(value: &Value) -> Vec<u8> {
-    serde_jcs::to_vec(value).expect("canonical JSON")
-}
 
 fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
     let message_id = omakure::hex::encode(&[seed; 16]);

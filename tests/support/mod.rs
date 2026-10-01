@@ -325,6 +325,11 @@ pub fn assert_redacted(text: &str, secret: &str) {
     assert_no_secret_leak(text.as_bytes(), secret.as_bytes());
 }
 
+pub fn assert_no_plaintext(output: &Output, secret: &str) {
+    assert_no_secret_leak(&output.stdout, secret.as_bytes());
+    assert_no_secret_leak(&output.stderr, secret.as_bytes());
+}
+
 pub fn assert_no_secret_leak(haystack: &[u8], secret: &[u8]) {
     if secret.is_empty() {
         return;

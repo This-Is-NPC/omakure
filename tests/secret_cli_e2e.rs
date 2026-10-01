@@ -3,8 +3,7 @@ pub mod support;
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use std::process::Output;
-use support::assert_success;
+use support::{assert_no_plaintext, assert_success};
 
 const RUN_SECRET: &str = "run-secret-cli-e2e-plain-value";
 const ENV_TOKEN: &str = "env-token-cli-e2e-plain-value";
@@ -219,11 +218,6 @@ fi
     )
     .expect("write secret script");
     support::set_executable(&script);
-}
-
-fn assert_no_plaintext(output: &Output, secret: &str) {
-    support::assert_no_secret_leak(&output.stdout, secret.as_bytes());
-    support::assert_no_secret_leak(&output.stderr, secret.as_bytes());
 }
 
 fn assert_redacted_run_row(row: &Value, secret: &str) {

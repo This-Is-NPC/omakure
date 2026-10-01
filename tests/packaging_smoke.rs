@@ -4,6 +4,11 @@
 //! (including fixed uid/gid volume ownership) runs in the Linux CI Docker job.
 //! CI does not require a Docker daemon for this test.
 
+#[path = "support/text.rs"]
+mod text;
+
+use text::normalize_line_endings;
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,10 +19,6 @@ use std::os::unix::fs::PermissionsExt;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn normalize_line_endings(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn read(rel: &str) -> String {

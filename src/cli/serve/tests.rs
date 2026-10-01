@@ -2,8 +2,8 @@
 use super::lifecycle::LockError;
 #[cfg(windows)]
 use super::lifecycle::{
-    WindowsPidFile, WindowsPidFileError, WindowsPidPublicationError, publish_windows_pid_file,
-    read_windows_pid_file,
+    WindowsLockError, WindowsPidFile, WindowsPidFileError, WindowsPidPublicationError,
+    publish_windows_pid_file, read_windows_pid_file,
 };
 use super::lifecycle::{acquire_lock, pid_file, release_lock};
 use super::logging::log_file;
@@ -294,6 +294,34 @@ fn windows_acquire_lock_reclaims_dead_pid_with_event_identity() {
 
 #[cfg(windows)]
 #[test]
+fn windows_acquire_lock_preserves_live_identity_and_typed_error() {
+    let tmp = TempDir::new().unwrap();
+    let ws = workspace_in(&tmp);
+    let path = pid_file(&ws);
+    let (stop_event, _event) = crate::cli::serve_windows::create_stop_event().unwrap();
+    let identity = WindowsPidFile {
+        pid: std::process::id(),
+        stop_event,
+    };
+    fs::write(
+        &path,
+        format!("{}\n{}\n", identity.pid, identity.stop_event),
+    )
+    .unwrap();
+
+    let error = acquire_lock(&ws)
+        .err()
+        .expect("live daemon must retain lock");
+    assert!(matches!(
+        error,
+        WindowsLockError::AlreadyRunning { pid, path: lock_path }
+            if pid == identity.pid && lock_path == path
+    ));
+    assert_eq!(read_windows_pid_file(&path).unwrap(), identity);
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_malformed_or_partial_pid_files_are_preserved() {
     let tmp = TempDir::new().unwrap();
     let ws = workspace_in(&tmp);
@@ -322,7 +350,9 @@ fn windows_malformed_or_partial_pid_files_are_preserved() {
             read_windows_pid_file(&path).unwrap_err().to_string(),
             expected
         );
-        assert!(acquire_lock(&ws).is_err());
+        let error = acquire_lock(&ws).err().expect("invalid PID file must fail");
+        assert!(matches!(&error, WindowsLockError::PidFile(_)));
+        assert_eq!(error.to_string(), expected);
         assert_eq!(fs::read_to_string(&path).unwrap(), contents);
     }
 }

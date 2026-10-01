@@ -111,26 +111,39 @@ pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
     }
 }
 
-pub(crate) fn create_stop_event() -> Result<(String, StopEvent), String> {
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CreateStopEventError {
+    #[error("CreateEventW failed with Windows error {code}")]
+    Create { code: u32 },
+    #[error("CreateEventW generated an existing event identity")]
+    IdentityCollision,
+}
+
+pub(crate) fn create_stop_event() -> Result<(String, StopEvent), CreateStopEventError> {
     let name = format!("{STOP_EVENT_PREFIX}{:032x}", rand::random::<u128>());
     let wide_name = wide_str(&name);
     let handle = unsafe { CreateEventW(std::ptr::null(), 1, 0, wide_name.as_ptr()) };
     if handle.is_null() {
-        return Err(last_error("CreateEventW"));
+        return Err(CreateStopEventError::Create {
+            code: unsafe { GetLastError() },
+        });
     }
     let already_exists = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
     let event = StopEvent {
         handle: owned(handle),
     };
     if already_exists {
-        return Err("CreateEventW generated an existing event identity".to_string());
+        return Err(CreateStopEventError::IdentityCollision);
     }
     Ok((name, event))
 }
 
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum OpenEventError {
+    #[error("the daemon stop event no longer exists")]
     NotFound,
-    Indeterminate(String),
+    #[error("OpenEventW failed with Windows error {code}")]
+    Indeterminate { code: u32 },
 }
 
 pub(crate) fn open_stop_event(name: &str) -> Result<StopEvent, OpenEventError> {
@@ -141,9 +154,7 @@ pub(crate) fn open_stop_event(name: &str) -> Result<StopEvent, OpenEventError> {
         if error == ERROR_FILE_NOT_FOUND {
             Err(OpenEventError::NotFound)
         } else {
-            Err(OpenEventError::Indeterminate(format!(
-                "OpenEventW failed with Windows error {error}"
-            )))
+            Err(OpenEventError::Indeterminate { code: error })
         }
     } else {
         Ok(StopEvent {
@@ -152,13 +163,20 @@ pub(crate) fn open_stop_event(name: &str) -> Result<StopEvent, OpenEventError> {
     }
 }
 
-pub(crate) fn signal_stop(name: &str) -> Result<(), String> {
-    let event = open_stop_event(name).map_err(|error| match error {
-        OpenEventError::NotFound => "the daemon stop event no longer exists".to_string(),
-        OpenEventError::Indeterminate(error) => error,
-    })?;
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SignalStopError {
+    #[error(transparent)]
+    Open(#[from] OpenEventError),
+    #[error("SetEvent failed with Windows error {code}")]
+    Set { code: u32 },
+}
+
+pub(crate) fn signal_stop(name: &str) -> Result<(), SignalStopError> {
+    let event = open_stop_event(name)?;
     if unsafe { SetEvent(event.handle.as_raw_handle()) } == 0 {
-        return Err(last_error("SetEvent"));
+        return Err(SignalStopError::Set {
+            code: unsafe { GetLastError() },
+        });
     }
     Ok(())
 }
@@ -180,11 +198,6 @@ pub(crate) fn publish_exclusive(
 #[derive(Debug, thiserror::Error)]
 #[error("MoveFileExW failed with Windows error {0}")]
 pub(crate) struct PublishExclusiveError(u32);
-
-fn last_error(operation: &str) -> String {
-    let error = unsafe { GetLastError() };
-    format!("{operation} failed with Windows error {error}")
-}
 
 #[cfg(test)]
 mod tests {
@@ -216,6 +229,30 @@ mod tests {
         assert_eq!(
             WaitError::UnexpectedStatus { status: 7 }.to_string(),
             "WaitForSingleObject returned unexpected status 7"
+        );
+    }
+
+    #[test]
+    fn stop_event_errors_keep_native_codes_and_existing_messages() {
+        assert_eq!(
+            CreateStopEventError::Create { code: 5 }.to_string(),
+            "CreateEventW failed with Windows error 5"
+        );
+        assert_eq!(
+            CreateStopEventError::IdentityCollision.to_string(),
+            "CreateEventW generated an existing event identity"
+        );
+        assert_eq!(
+            SignalStopError::from(OpenEventError::NotFound).to_string(),
+            "the daemon stop event no longer exists"
+        );
+        assert_eq!(
+            SignalStopError::from(OpenEventError::Indeterminate { code: 6 }).to_string(),
+            "OpenEventW failed with Windows error 6"
+        );
+        assert_eq!(
+            SignalStopError::Set { code: 7 }.to_string(),
+            "SetEvent failed with Windows error 7"
         );
     }
 

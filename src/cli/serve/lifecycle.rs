@@ -5,7 +5,9 @@ use crate::cli::args::ServeArgs;
 use crate::cli::emit::exit_with_error;
 use crate::cli::json::{self, codes};
 #[cfg(windows)]
-use crate::cli::serve_windows::{self, OpenEventError, ProcessProbe, StopEvent};
+use crate::cli::serve_windows::{
+    self, CreateStopEventError, OpenEventError, ProcessProbe, ProcessProbeError, StopEvent,
+};
 use crate::workspace::Workspace;
 use serde_json::json;
 use std::error::Error;
@@ -238,46 +240,75 @@ pub(super) enum WindowsPidPublicationError {
 }
 
 #[cfg(windows)]
-pub(super) fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, String> {
+#[derive(Debug, thiserror::Error)]
+pub(super) enum WindowsLockError {
+    #[error(transparent)]
+    PidFile(#[from] WindowsPidFileError),
+    #[error("daemon already running (pid {pid}, lock file {})", path.display())]
+    AlreadyRunning { pid: u32, path: PathBuf },
+    #[error(
+        "daemon pid {pid} is live but its stop event is unavailable; refusing to reclaim {}",
+        path.display()
+    )]
+    StopEventUnavailable { pid: u32, path: PathBuf },
+    #[error("cannot verify daemon pid {pid}: {source}; refusing to reclaim {}", path.display())]
+    CannotVerifyStopEvent {
+        pid: u32,
+        path: PathBuf,
+        #[source]
+        source: OpenEventError,
+    },
+    #[error("cannot determine whether daemon pid {pid} is live: {source}; refusing to reclaim {}", path.display())]
+    CannotDetermineProcess {
+        pid: u32,
+        path: PathBuf,
+        #[source]
+        source: ProcessProbeError,
+    },
+    #[error(transparent)]
+    CreateStopEvent(#[from] CreateStopEventError),
+    #[error(transparent)]
+    Publish(#[from] WindowsPidPublicationError),
+}
+
+#[cfg(windows)]
+pub(super) fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, WindowsLockError> {
     let path = pid_file(workspace);
     if path.exists() {
-        let existing = read_windows_pid_file(&path).map_err(|error| error.to_string())?;
+        let existing = read_windows_pid_file(&path)?;
         match serve_windows::probe_process(existing.pid) {
             ProcessProbe::Live(_process) => {
                 match serve_windows::open_stop_event(&existing.stop_event) {
                     Ok(_event) => {
-                        return Err(format!(
-                            "daemon already running (pid {}, lock file {})",
-                            existing.pid,
-                            path.display()
-                        ));
+                        return Err(WindowsLockError::AlreadyRunning {
+                            pid: existing.pid,
+                            path,
+                        });
                     }
                     Err(OpenEventError::NotFound) => {
-                        return Err(format!(
-                            "daemon pid {} is live but its stop event is unavailable; \
-                             refusing to reclaim {}",
-                            existing.pid,
-                            path.display()
-                        ));
+                        return Err(WindowsLockError::StopEventUnavailable {
+                            pid: existing.pid,
+                            path,
+                        });
                     }
-                    Err(OpenEventError::Indeterminate(error)) => {
-                        return Err(format!(
-                            "cannot verify daemon pid {}: {error}; refusing to reclaim {}",
-                            existing.pid,
-                            path.display()
-                        ));
+                    Err(source) => {
+                        return Err(WindowsLockError::CannotVerifyStopEvent {
+                            pid: existing.pid,
+                            path,
+                            source,
+                        });
                     }
                 }
             }
             ProcessProbe::Dead => {
                 remove_windows_pid_file_if_current(&path, &existing);
             }
-            ProcessProbe::Indeterminate(error) => {
-                return Err(format!(
-                    "cannot determine whether daemon pid {} is live: {error}; refusing to reclaim {}",
-                    existing.pid,
-                    path.display()
-                ));
+            ProcessProbe::Indeterminate(source) => {
+                return Err(WindowsLockError::CannotDetermineProcess {
+                    pid: existing.pid,
+                    path,
+                    source,
+                });
             }
         }
     }
@@ -287,7 +318,7 @@ pub(super) fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, String>
         pid: std::process::id(),
         stop_event: stop_event_name,
     };
-    publish_windows_pid_file(&path, &identity).map_err(|error| error.to_string())?;
+    publish_windows_pid_file(&path, &identity)?;
     Ok(WindowsLock {
         identity,
         stop_event,
@@ -529,7 +560,7 @@ fn run_foreground(
     let lock = match acquire_lock(&workspace) {
         Ok(lock) => lock,
         Err(err) => {
-            exit_with_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
+            exit_with_error(json_output, codes::DAEMON_ALREADY_RUNNING, err.to_string());
         }
     };
     #[cfg(windows)]

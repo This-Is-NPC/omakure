@@ -1,5 +1,17 @@
 use super::*;
 
+fn file_backed_askpass_auth(workspace: &Workspace, token: &str) -> BatteryAuth {
+    fs::write(
+        workspace.envs_dir().join("askpass.conf"),
+        format!("TOKEN={token}\n"),
+    )
+    .unwrap();
+    BatteryAuth {
+        method: BatteryAuthMethod::HttpsTokenRef,
+        token_ref: "secret://askpass/token".into(),
+    }
+}
+
 #[test]
 fn git_http_pinning_probe_retries_after_transient_failure() {
     let cache = std::sync::Mutex::new(None);
@@ -414,11 +426,7 @@ fn prepare_git_askpass_writes_0600_files_and_redacts_token() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);
     let plaintext = "askpass-redact-me-token-xyz";
-    std::env::set_var("OMAKURE_ASKPASS_TOKEN", plaintext);
-    let auth = BatteryAuth {
-        method: BatteryAuthMethod::HttpsTokenRef,
-        token_ref: "secret://env/OMAKURE_ASKPASS_TOKEN".into(),
-    };
+    let auth = file_backed_askpass_auth(&ws, plaintext);
     let guard = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
         .unwrap()
         .expect("askpass");
@@ -462,11 +470,7 @@ fn prepare_git_askpass_writes_0600_files_and_redacts_token() {
 fn prepare_git_askpass_uses_distinct_directories_per_call() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);
-    std::env::set_var("OMAKURE_ASKPASS_DISTINCT", "tok-a");
-    let auth = BatteryAuth {
-        method: BatteryAuthMethod::HttpsTokenRef,
-        token_ref: "secret://env/OMAKURE_ASKPASS_DISTINCT".into(),
-    };
+    let auth = file_backed_askpass_auth(&ws, "tok-a");
     let a = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
         .unwrap()
         .unwrap();
@@ -476,18 +480,13 @@ fn prepare_git_askpass_uses_distinct_directories_per_call() {
     assert_ne!(a.script_path.parent(), b.script_path.parent());
     assert!(a.script_path.parent().unwrap().exists());
     assert!(b.script_path.parent().unwrap().exists());
-    std::env::remove_var("OMAKURE_ASKPASS_DISTINCT");
 }
 
 #[test]
 fn git_command_with_askpass_sets_git_askpass_env() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);
-    std::env::set_var("OMAKURE_ASKPASS_ENV", "tok");
-    let auth = BatteryAuth {
-        method: BatteryAuthMethod::HttpsTokenRef,
-        token_ref: "secret://env/OMAKURE_ASKPASS_ENV".into(),
-    };
+    let auth = file_backed_askpass_auth(&ws, "tok");
     let guard = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
         .unwrap()
         .unwrap();
@@ -522,7 +521,6 @@ fn git_command_with_askpass_sets_git_askpass_env() {
         *k == "OMAKURE_GIT_AUTHORITY" && v.map(|v| v == "git.example.test").unwrap_or(false)
     }));
     drop(guard);
-    std::env::remove_var("OMAKURE_ASKPASS_ENV");
 }
 
 #[cfg(unix)]
@@ -530,11 +528,7 @@ fn git_command_with_askpass_sets_git_askpass_env() {
 fn git_askpass_refuses_credentials_for_another_host() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);
-    std::env::set_var("OMAKURE_ASKPASS_HOST", "host-bound-token");
-    let auth = BatteryAuth {
-        method: BatteryAuthMethod::HttpsTokenRef,
-        token_ref: "secret://env/OMAKURE_ASKPASS_HOST".into(),
-    };
+    let auth = file_backed_askpass_auth(&ws, "host-bound-token");
     let guard = prepare_git_askpass(&ws, Some(&auth), &SecretAccess::allow_all())
         .unwrap()
         .unwrap();
@@ -561,5 +555,4 @@ fn git_askpass_refuses_credentials_for_another_host() {
     assert!(!suffix_denied.status.success());
     assert!(suffix_denied.stdout.is_empty());
     drop(guard);
-    std::env::remove_var("OMAKURE_ASKPASS_HOST");
 }

@@ -1,12 +1,11 @@
 //! `omakure node serve` — HTTP API + optional in-process workers + scheduler.
 //!
-//! Composes existing `api::serve_http`, `queue::worker_loop`, and
+//! Composes existing `api::serve_http`, `operations::worker::worker_loop`, and
 //! `serve::scheduler_tick` under one cancel flag. Shutdown order:
 //! stop accepting HTTP → stop scheduling → stop claiming → drain/join workers.
 
 use crate::cli::api::{self, ReadinessGate};
 use crate::cli::args::{ApiArgs, NodeServeArgs};
-use crate::cli::queue;
 use crate::cli::serve;
 use crate::workspace::Workspace;
 use chrono::Utc;
@@ -197,7 +196,7 @@ fn spawn_workers(
             let lifecycle = Arc::clone(&worker_lifecycle);
             handles.push(thread::spawn(move || {
                 run_tracked_loop(lifecycle, || {
-                    queue::worker_loop_with_context(
+                    crate::operations::worker::worker_loop_with_context(
                         ws,
                         worker_id,
                         flag,
@@ -319,7 +318,7 @@ pub fn run(
     }
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    queue::install_signal_handlers(Arc::clone(&cancel_flag));
+    crate::adapters::signals::install_signal_handlers(Arc::clone(&cancel_flag));
 
     let mut direct_service = if direct_bind.is_some() || !static_peers.is_empty() {
         Some(crate::direct_service::DirectService::start(

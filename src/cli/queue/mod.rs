@@ -22,7 +22,6 @@ use std::path::PathBuf;
 
 use producers::{add, cancel, dead_letter, stats};
 use worker::worker;
-pub(crate) use worker::{install_signal_handlers, worker_loop, worker_loop_with_context};
 
 pub fn run(scripts_dir: PathBuf, args: QueueArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     let workspace = Workspace::new(scripts_dir);

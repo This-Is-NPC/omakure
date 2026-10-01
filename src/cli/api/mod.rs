@@ -36,7 +36,7 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
     workspace.ensure_layout()?;
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    crate::cli::queue::install_signal_handlers(Arc::clone(&cancel_flag));
+    crate::adapters::signals::install_signal_handlers(Arc::clone(&cancel_flag));
     auth::install_sighup_reload(boot.auth.clone());
 
     let auth_verification_gate = auth_verification_gate(&boot.deploy);

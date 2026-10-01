@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "4a60895848c2554b1686296837335a4cdce55c14ed6f7bd6e8c270d4a1b7cbce",
+  "canonical_sha256": "779130087219dfc3b9709157088294c9f87a28b6d0fd38204a0b602eccd0a56e",
   "config_identity": "no-config",
   "files": [
     {
@@ -128,6 +128,20 @@
         "cyclomatic": 14
       },
       "path": "src/adapters/script_runner.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 1
+      },
+      "path": "src/adapters/signals.rs",
       "source_class": "handwritten"
     },
     {
@@ -1212,12 +1226,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 14,
+        "invocations": 3,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 36,
-        "cyclomatic": 46
+        "cognitive": 4,
+        "cyclomatic": 5
       },
       "path": "src/cli/queue/worker.rs",
       "source_class": "handwritten"
@@ -4132,6 +4146,20 @@
         "cyclomatic": 13
       },
       "path": "src/operations/search.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 11,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 32,
+        "cyclomatic": 40
+      },
+      "path": "src/operations/worker.rs",
       "source_class": "handwritten"
     },
     {
@@ -7972,6 +8000,32 @@
       },
       "path": "src/adapters/script_runner.rs",
       "signature": "fn test_build_command_resolves_python_against_injected_path()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::signals::install_signal_handlers",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/signals.rs",
+        "signature": "pub(crate) fn install_signal_handlers(flag: Arc<AtomicBool>)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::signals::install_signal_handlers",
+      "kind": "function",
+      "line": 4,
+      "name": "install_signal_handlers",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 4,
+        "name": "install_signal_handlers"
+      },
+      "path": "src/adapters/signals.rs",
+      "signature": "pub(crate) fn install_signal_handlers(flag: Arc<AtomicBool>)",
       "source_class": "handwritten"
     },
     {
@@ -30777,370 +30831,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::cli::queue::worker::worker",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "pub(super) fn worker( workspace: &Workspace, opts: QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::worker",
-      "kind": "function",
-      "line": 18,
-      "name": "worker",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 18,
-        "name": "worker"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "pub(super) fn worker( workspace: &Workspace, opts: QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::worker::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "handles.push(thread::spawn(move || {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::worker::<closure>",
-      "kind": "closure",
-      "line": 36,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 36,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "handles.push(thread::spawn(move || {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::install_signal_handlers",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "pub(crate) fn install_signal_handlers(flag: Arc<AtomicBool>)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::install_signal_handlers",
-      "kind": "function",
-      "line": 59,
-      "name": "install_signal_handlers",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 59,
-        "name": "install_signal_handlers"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "pub(crate) fn install_signal_handlers(flag: Arc<AtomicBool>)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::worker_loop",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "pub(crate) fn worker_loop( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::worker_loop",
-      "kind": "function",
-      "line": 67,
-      "name": "worker_loop",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 67,
-        "name": "worker_loop"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "pub(crate) fn worker_loop( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::worker_loop_with_context",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "pub(crate) fn worker_loop_with_context( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, context: crate::node::NodeContext, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::worker_loop_with_context",
-      "kind": "function",
-      "line": 90,
-      "name": "worker_loop_with_context",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 90,
-        "name": "worker_loop_with_context"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "pub(crate) fn worker_loop_with_context( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, context: crate::node::NodeContext, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 17,
-      "cyclomatic": 12,
-      "derived": {
-        "identity": "crate::cli::queue::worker::worker_loop_inner",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "fn worker_loop_inner( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, trust_context: Option<crate::node::NodeContext>, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::worker_loop_inner",
-      "kind": "function",
-      "line": 110,
-      "name": "worker_loop_inner",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 17,
-        "cyclomatic": 12,
-        "kind": "function",
-        "line": 110,
-        "name": "worker_loop_inner"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "fn worker_loop_inner( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, trust_context: Option<crate::node::NodeContext>, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 5,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::cli::queue::worker::execute_and_finalize",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "fn execute_and_finalize( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, trust_context: Option<&crate::node::NodeContext>, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::execute_and_finalize",
-      "kind": "function",
-      "line": 185,
-      "name": "execute_and_finalize",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 5,
-        "kind": "function",
-        "line": 185,
-        "name": "execute_and_finalize"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "fn execute_and_finalize( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, trust_context: Option<&crate::node::NodeContext>, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 7,
-      "cyclomatic": 12,
-      "derived": {
-        "identity": "crate::cli::queue::worker::execute_and_finalize_inner",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "fn execute_and_finalize_inner( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::execute_and_finalize_inner",
-      "kind": "function",
-      "line": 210,
-      "name": "execute_and_finalize_inner",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 7,
-        "cyclomatic": 12,
-        "kind": "function",
-        "line": 210,
-        "name": "execute_and_finalize_inner"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "fn execute_and_finalize_inner( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::execute_and_finalize_inner::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": ".and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::execute_and_finalize_inner::<closure>",
-      "kind": "closure",
-      "line": 222,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 222,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": ".and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 3,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cue_worker_preflight",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), CuePreflightError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cue_worker_preflight",
-      "kind": "function",
-      "line": 302,
-      "name": "cue_worker_preflight",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 302,
-        "name": "cue_worker_preflight"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), CuePreflightError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": ".map_err(|_| CuePreflightError::ScriptNotDeclared)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>",
-      "kind": "closure",
-      "line": 343,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 343,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": ".map_err(|_| CuePreflightError::ScriptNotDeclared)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cancel_without_execution",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "fn cancel_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cancel_without_execution",
-      "kind": "function",
-      "line": 347,
-      "name": "cancel_without_execution",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 347,
-        "name": "cancel_without_execution"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "fn cancel_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::fail_without_execution",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::fail_without_execution",
-      "kind": "function",
-      "line": 358,
-      "name": "fail_without_execution",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 358,
-        "name": "fail_without_execution"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
-      "kind": "function",
-      "line": 384,
-      "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 384,
-        "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender()",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -31866,6 +31556,58 @@
       },
       "path": "src/cli/queue/tests.rs",
       "signature": "fn worker_with_concurrency_and_once_drains_queue()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::cli::queue::worker::worker",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/worker.rs",
+        "signature": "pub(super) fn worker( workspace: &Workspace, opts: QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::worker::worker",
+      "kind": "function",
+      "line": 12,
+      "name": "worker",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 12,
+        "name": "worker"
+      },
+      "path": "src/cli/queue/worker.rs",
+      "signature": "pub(super) fn worker( workspace: &Workspace, opts: QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::queue::worker::worker::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/worker.rs",
+        "signature": "handles.push(thread::spawn(move || {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::worker::worker::<closure>",
+      "kind": "closure",
+      "line": 30,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 30,
+        "name": "<closure>"
+      },
+      "path": "src/cli/queue/worker.rs",
+      "signature": "handles.push(thread::spawn(move || {",
       "source_class": "handwritten"
     },
     {
@@ -90834,6 +90576,292 @@
       },
       "path": "src/operations/search.rs",
       "signature": "fn search_scripts_empty_query_returns_indexed_scripts()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::worker_loop",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "pub(crate) fn worker_loop( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::worker_loop",
+      "kind": "function",
+      "line": 16,
+      "name": "worker_loop",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 16,
+        "name": "worker_loop"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "pub(crate) fn worker_loop( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::worker_loop_with_context",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "pub(crate) fn worker_loop_with_context( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, context: crate::node::NodeContext, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::worker_loop_with_context",
+      "kind": "function",
+      "line": 39,
+      "name": "worker_loop_with_context",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 39,
+        "name": "worker_loop_with_context"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "pub(crate) fn worker_loop_with_context( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, context: crate::node::NodeContext, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 17,
+      "cyclomatic": 12,
+      "derived": {
+        "identity": "crate::operations::worker::worker_loop_inner",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn worker_loop_inner( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, trust_context: Option<crate::node::NodeContext>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::worker_loop_inner",
+      "kind": "function",
+      "line": 59,
+      "name": "worker_loop_inner",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 17,
+        "cyclomatic": 12,
+        "kind": "function",
+        "line": 59,
+        "name": "worker_loop_inner"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn worker_loop_inner( workspace: Workspace, worker_id: String, cancel_flag: Arc<AtomicBool>, actor_filter: Option<String>, script_filter: Option<String>, once: bool, trust_context: Option<crate::node::NodeContext>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::operations::worker::execute_and_finalize",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn execute_and_finalize( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, trust_context: Option<&crate::node::NodeContext>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::execute_and_finalize",
+      "kind": "function",
+      "line": 134,
+      "name": "execute_and_finalize",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 134,
+        "name": "execute_and_finalize"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn execute_and_finalize( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, trust_context: Option<&crate::node::NodeContext>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 12,
+      "derived": {
+        "identity": "crate::operations::worker::execute_and_finalize_inner",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn execute_and_finalize_inner( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::execute_and_finalize_inner",
+      "kind": "function",
+      "line": 159,
+      "name": "execute_and_finalize_inner",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 12,
+        "kind": "function",
+        "line": 159,
+        "name": "execute_and_finalize_inner"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn execute_and_finalize_inner( workspace: &Workspace, row: &RunRow, cancel_flag: Arc<AtomicBool>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::execute_and_finalize_inner::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": ".and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::execute_and_finalize_inner::<closure>",
+      "kind": "closure",
+      "line": 171,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 171,
+        "name": "<closure>"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": ".and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::operations::worker::cue_worker_preflight",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), CuePreflightError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::cue_worker_preflight",
+      "kind": "function",
+      "line": 251,
+      "name": "cue_worker_preflight",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 251,
+        "name": "cue_worker_preflight"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), CuePreflightError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::cue_worker_preflight::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": ".map_err(|_| CuePreflightError::ScriptNotDeclared)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::cue_worker_preflight::<closure>",
+      "kind": "closure",
+      "line": 292,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 292,
+        "name": "<closure>"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": ".map_err(|_| CuePreflightError::ScriptNotDeclared)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::cancel_without_execution",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn cancel_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::cancel_without_execution",
+      "kind": "function",
+      "line": 296,
+      "name": "cancel_without_execution",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 296,
+        "name": "cancel_without_execution"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn cancel_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::fail_without_execution",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::fail_without_execution",
+      "kind": "function",
+      "line": 307,
+      "name": "fail_without_execution",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 307,
+        "name": "fail_without_execution"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
+      "kind": "function",
+      "line": 333,
+      "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 333,
+        "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender()",
       "source_class": "handwritten"
     },
     {

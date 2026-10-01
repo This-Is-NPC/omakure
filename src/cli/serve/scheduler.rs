@@ -29,7 +29,7 @@ pub(super) fn run_scheduler(
     #[cfg(windows)] stop_event: StopEvent,
 ) -> Result<(), Box<dyn Error>> {
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    crate::cli::queue::install_signal_handlers(Arc::clone(&cancel_flag));
+    crate::adapters::signals::install_signal_handlers(Arc::clone(&cancel_flag));
 
     let log_path = log_file(&workspace);
     log_line(
@@ -45,7 +45,7 @@ pub(super) fn run_scheduler(
             let flag = Arc::clone(&cancel_flag);
             let worker_id = format!("serve-worker:{}-t{}", std::process::id(), thread_idx);
             worker_handles.push(thread::spawn(move || {
-                crate::cli::queue::worker_loop(ws, worker_id, flag, None, None, false);
+                crate::operations::worker::worker_loop(ws, worker_id, flag, None, None, false);
             }));
         }
     }

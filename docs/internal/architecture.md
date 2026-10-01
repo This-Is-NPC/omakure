@@ -170,9 +170,11 @@ src/
 │   ├── battery/             sync, inspect, install, and provenance
 │   ├── node/                node status, trust, enrollment, and discovery
 │   ├── health.rs            fleet-status and Signal-feed projections
-│   └── baseline.rs          baseline push, status, and rollback
+│   ├── baseline.rs          baseline push, status, and rollback
+│   └── worker.rs            queue claiming, Cue preflight, and run finalization
 ├── adapters/                filesystem, process, environment, and checks
-│   └── git.rs               isolated Git process execution and bounded probes
+│   ├── git.rs               isolated Git process execution and bounded probes
+│   └── signals.rs           process shutdown signal registration
 ├── ports/                   repository and environment interfaces
 ├── use_cases/               environment service over the environment port
 ├── error.rs                 schema and environment application errors

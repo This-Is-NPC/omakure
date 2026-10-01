@@ -1,6 +1,7 @@
 use super::producers::{parse_humantime_duration_ms, QueueDurationError};
 use super::*;
 use crate::cli::args::{QueueAddArgs, QueueCancelArgs, QueueDeadLetterArgs, QueueWorkerArgs};
+use crate::operations::worker::worker_loop;
 use crate::runs::{self, enqueue, EnqueueOptions, RunCompletion, RunState};
 use crate::test_support::scratch_workspace;
 use std::fs;
@@ -343,7 +344,7 @@ fn worker_drains_one_queued_job_then_exits_with_once() {
     let _ = fs::remove_dir_all(ws.root());
 }
 
-// CALL SITE: queue worker (cli/queue.rs `execute_and_finalize`). The
+// CALL SITE: queue worker (`operations::worker::execute_and_finalize`). The
 // active managed env must reach the worker-spawned script; the injected
 // var must appear in the persisted run record's stdout.
 #[test]

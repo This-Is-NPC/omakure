@@ -62,13 +62,6 @@ impl ContractVisitor {
             && Self::starts_with(path, &["crate", "cli"])
             && !Self::starts_with(path, &["crate", "cli", "args"])
             && !Self::starts_with(path, &["crate", "cli", "json"])
-            && path
-                != [
-                    "crate".to_string(),
-                    "cli".to_string(),
-                    "queue".to_string(),
-                    "install_signal_handlers".to_string(),
-                ]
         {
             self.record(
                 "ARCH-HTTP-CLI",
@@ -467,8 +460,8 @@ fn production_architecture_boundaries_are_clean() {
 
     let worker = parse_contract(
         Rule::Executor,
-        "src/cli/queue/worker.rs",
-        &fs::read_to_string(src.join("cli/queue/worker.rs")).unwrap(),
+        "src/operations/worker.rs",
+        &fs::read_to_string(src.join("operations/worker.rs")).unwrap(),
     );
     assert!(worker
         .findings

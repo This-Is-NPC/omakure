@@ -9,6 +9,7 @@ pub mod node;
 pub(crate) mod path;
 pub mod scripts;
 pub mod search;
+pub(crate) mod worker;
 
 use serde::Serialize;
 use std::fmt;

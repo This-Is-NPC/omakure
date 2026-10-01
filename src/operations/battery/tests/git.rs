@@ -1,4 +1,41 @@
 use super::*;
+use crate::operations::battery::git::{run_git_capture_with_context, run_git_with_context};
+
+#[cfg(unix)]
+#[test]
+fn git_execution_preserves_spawn_and_exit_errors() {
+    let context = GitExecContext {
+        policy: GitTransportPolicy::Default,
+        askpass: None,
+        http_pin: None,
+        global_config: None,
+    };
+    let missing = GitCommandSpec {
+        program: "/nonexistent/omakure-git".into(),
+        args: vec![],
+    };
+    let spawn = run_git_with_context(missing, &context).unwrap_err();
+    assert_eq!(spawn.code, OperationErrorCode::GitFailed);
+    assert!(spawn.message.starts_with("failed to spawn git: "));
+
+    let dir = crate::util::exec::generated_executable_tempdir().unwrap();
+    let shim = dir.path().join("git-failure");
+    crate::util::exec::write_generated_executable(
+        &shim,
+        b"#!/bin/sh\nprintf 'git failed\\n' >&2\nexit 7\n",
+    )
+    .unwrap();
+    let failed = GitCommandSpec {
+        program: shim.to_string_lossy().into_owned(),
+        args: vec![],
+    };
+    let run = run_git_with_context(failed.clone(), &context).unwrap_err();
+    assert_eq!(run.code, OperationErrorCode::GitFailed);
+    assert_eq!(run.message, "git failed");
+    let capture = run_git_capture_with_context(failed, &context).unwrap_err();
+    assert_eq!(capture.code, OperationErrorCode::GitFailed);
+    assert_eq!(capture.message, "git failed");
+}
 
 fn file_backed_askpass_auth(workspace: &Workspace, token: &str) -> BatteryAuth {
     fs::write(

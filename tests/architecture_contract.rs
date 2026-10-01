@@ -3,7 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use syn::visit::{self, Visit};
-use syn::{ExprCall, ExprPath, ImplItemFn, ItemFn, ItemUse, Lit, Path as SynPath, UseTree};
+use syn::{
+    ExprCall, ExprMethodCall, ExprPath, ImplItemFn, ItemFn, ItemUse, Lit, Path as SynPath, UseTree,
+};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 enum Rule {
     #[default]
@@ -14,6 +16,7 @@ enum Rule {
     Domain,
     RunsSql,
     Executor,
+    GitProcess,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -180,6 +183,17 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if self.rule == Rule::GitProcess {
+            if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
+                let segments = Self::path_segments(path);
+                if segments.ends_with(&["Command".into(), "new".into()]) {
+                    self.record(
+                        "ARCH-GIT-PROCESS",
+                        "Git subprocesses belong in adapters/git",
+                    );
+                }
+            }
+        }
         if self.rule == Rule::Executor {
             if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
                 let Some(name) = path
@@ -217,6 +231,21 @@ impl<'ast> Visit<'ast> for ContractVisitor {
             }
         }
         visit::visit_expr_call(self, node);
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        if self.rule == Rule::GitProcess
+            && matches!(
+                node.method.to_string().as_str(),
+                "spawn" | "output" | "status"
+            )
+        {
+            self.record(
+                "ARCH-GIT-PROCESS",
+                "Git subprocesses belong in adapters/git",
+            );
+        }
+        visit::visit_expr_method_call(self, node);
     }
 }
 
@@ -429,6 +458,18 @@ fn production_architecture_boundaries_are_clean() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = root.join("src");
 
+    let battery_git = fs::read_to_string(src.join("operations/battery/git.rs")).unwrap();
+    let git_process = parse_contract(
+        Rule::GitProcess,
+        "src/operations/battery/git.rs",
+        &battery_git,
+    );
+    assert!(
+        git_process.findings.is_empty(),
+        "Git process calls must stay in adapters/git: {:?}",
+        git_process.findings
+    );
+
     for path in source_files(&src.join("cli/api")) {
         let display = path.strip_prefix(root).unwrap().display().to_string();
         let source = fs::read_to_string(&path).expect("read HTTP adapter");
@@ -625,4 +666,17 @@ fn run_operations_reject_direct_storage_handles() {
         assert_eq!(contract.findings.len(), 1);
         assert_eq!(contract.findings[0].rule, "ARCH-RUN-STORE-BOUNDARY");
     }
+}
+
+#[test]
+fn battery_git_operations_reject_process_execution() {
+    let contract = parse_contract(
+        Rule::GitProcess,
+        "fixture:battery_git.rs",
+        "fn run() { let _ = std::process::Command::new(\"git\").output(); }",
+    );
+    assert!(contract
+        .findings
+        .iter()
+        .any(|finding| finding.rule == "ARCH-GIT-PROCESS"));
 }

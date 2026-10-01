@@ -19,14 +19,24 @@ pub(crate) enum GitProbeError {
     Timeout(Duration),
 }
 
+pub(crate) enum GitRunError {
+    Spawn(io::Error),
+    Failed(Vec<u8>),
+}
+
 pub(crate) struct GitProbeOutput {
     pub status: std::process::ExitStatus,
     pub stdout: String,
     pub stderr: Vec<u8>,
 }
 
-pub(crate) fn run(process: &GitProcess<'_>) -> io::Result<Output> {
-    command(process).output()
+pub(crate) fn run_checked(process: &GitProcess<'_>) -> Result<Output, GitRunError> {
+    let output = command(process).output().map_err(GitRunError::Spawn)?;
+    if output.status.success() {
+        Ok(output)
+    } else {
+        Err(GitRunError::Failed(output.stderr))
+    }
 }
 
 pub(crate) fn run_with_timeout(

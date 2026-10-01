@@ -4,7 +4,7 @@ use super::git_url::{redacted_git_url, url_contains_credentials};
 use super::path_safety::reject_symlink_components;
 use super::sync::resolve_battery_token;
 use super::types::{BatteryAuth, BatteryAuthMethod};
-use crate::adapters::git::{self as git_adapter, GitProbeError, GitProcess};
+use crate::adapters::git::{self as git_adapter, GitProbeError, GitProcess, GitRunError};
 use crate::secrets::SecretAccess;
 use crate::workspace::Workspace;
 use std::fs;
@@ -167,23 +167,20 @@ pub(super) fn run_git_with_context(
     ctx: &GitExecContext<'_>,
 ) -> OperationResult<()> {
     let pin = ctx.http_pin.map(GitHttpPin::curlopt_resolve);
-    let output = git_adapter::run(&git_process(&spec, ctx, pin.as_deref())).map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::GitFailed,
-            format!("failed to spawn git: {err}"),
-        )
-    })?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(OperationError::new(
-            OperationErrorCode::GitFailed,
-            sanitize_git_output(
-                &String::from_utf8_lossy(&output.stderr),
-                ctx.askpass.map(|a| a.token.as_str()),
-            ),
-        ))
-    }
+    git_adapter::run_checked(&git_process(&spec, ctx, pin.as_deref()))
+        .map_err(|error| map_git_run_error(error, ctx))?;
+    Ok(())
+}
+
+fn map_git_run_error(error: GitRunError, ctx: &GitExecContext<'_>) -> OperationError {
+    let message = match error {
+        GitRunError::Spawn(err) => format!("failed to spawn git: {err}"),
+        GitRunError::Failed(stderr) => sanitize_git_output(
+            &String::from_utf8_lossy(&stderr),
+            ctx.askpass.map(|guard| guard.token.as_str()),
+        ),
+    };
+    OperationError::new(OperationErrorCode::GitFailed, message)
 }
 
 pub(super) fn run_git_capture(spec: GitCommandSpec) -> OperationResult<String> {
@@ -228,27 +225,13 @@ pub(super) fn run_git_capture_with_context(
     ctx: &GitExecContext<'_>,
 ) -> OperationResult<String> {
     let pin = ctx.http_pin.map(GitHttpPin::curlopt_resolve);
-    let output = git_adapter::run(&git_process(&spec, ctx, pin.as_deref())).map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::GitFailed,
-            format!("failed to spawn git: {err}"),
-        )
-    })?;
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        Ok(redact_token_in_text(
-            &stdout,
-            ctx.askpass.map(|a| a.token.as_str()),
-        ))
-    } else {
-        Err(OperationError::new(
-            OperationErrorCode::GitFailed,
-            sanitize_git_output(
-                &String::from_utf8_lossy(&output.stderr),
-                ctx.askpass.map(|a| a.token.as_str()),
-            ),
-        ))
-    }
+    let output = git_adapter::run_checked(&git_process(&spec, ctx, pin.as_deref()))
+        .map_err(|error| map_git_run_error(error, ctx))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    Ok(redact_token_in_text(
+        &stdout,
+        ctx.askpass.map(|a| a.token.as_str()),
+    ))
 }
 
 /// Whether the installed `git` supports `http.curloptResolve`. This depends

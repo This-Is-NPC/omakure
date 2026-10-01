@@ -81,3 +81,58 @@ fn cue_audit_persists_correlation_and_leaves_plain_rows_null() {
         .unwrap();
     assert_eq!(plain_nulls, (None, None, None));
 }
+
+#[test]
+fn transport_audit_validation_keeps_cue_precedence_and_metadata_errors() {
+    let temp = TempDir::new().unwrap();
+    let node_context = node_context(temp.path());
+    let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
+    let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
+    let node_id = identity.public_status().node_id.clone();
+
+    let invalid_event = registry
+        .record_transport_audit("", &node_id, None, Some(2), 0, "rejected", None)
+        .unwrap_err();
+    assert_eq!(
+        invalid_event.to_string(),
+        "node registry input is invalid: transport event type is empty, oversized, or contains control characters"
+    );
+
+    let incomplete_cue = registry
+        .record_cue_transport_audit(
+            "",
+            &node_id,
+            None,
+            Some(2),
+            0,
+            "rejected",
+            None,
+            Some("bad"),
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(
+        incomplete_cue.to_string(),
+        "node registry input is invalid: Cue audit correlation must be complete"
+    );
+
+    let invalid_direction = registry
+        .record_cue_transport_audit(
+            "cue_rejected",
+            &node_id,
+            None,
+            Some(2),
+            0,
+            "rejected",
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(
+        invalid_direction.to_string(),
+        "node registry input is invalid: transport audit metadata is invalid"
+    );
+}

@@ -11,6 +11,26 @@ use crate::util::hex;
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction, TransactionBehavior};
 
+fn validate_transport_audit_metadata(
+    event_type: &str,
+    node_id: &str,
+    outcome: &str,
+    direction: Option<u8>,
+    error_code: Option<u16>,
+) -> Result<(), RegistryError> {
+    validate_bounded_text("transport event type", event_type, 64)?;
+    validate_node_id(node_id)?;
+    validate_bounded_text("transport outcome", outcome, 32)?;
+    if !matches!(direction, None | Some(0) | Some(1))
+        || error_code.is_some_and(|code| !(1000..=1999).contains(&code))
+    {
+        return Err(RegistryError::InvalidInput(
+            "transport audit metadata is invalid".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 impl NodeRegistry {
     pub fn audit_events(&self) -> Result<Vec<AuditEvent>, RegistryError> {
         self.with_connection(|connection| {
@@ -55,23 +75,7 @@ impl NodeRegistry {
         outcome: &str,
         error_code: Option<u16>,
     ) -> Result<(), RegistryError> {
-        validate_bounded_text("transport event type", event_type, 64)?;
-        validate_node_id(node_id)?;
-        validate_bounded_text("transport outcome", outcome, 32)?;
-        if let Some(session_id) = session_id {
-            if session_id.len() != 32 {
-                return Err(RegistryError::InvalidInput(
-                    "transport session ID must be 32 bytes".to_string(),
-                ));
-            }
-        }
-        if !matches!(direction, None | Some(0) | Some(1))
-            || error_code.is_some_and(|code| !(1000..=1999).contains(&code))
-        {
-            return Err(RegistryError::InvalidInput(
-                "transport audit metadata is invalid".to_string(),
-            ));
-        }
+        validate_transport_audit_metadata(event_type, node_id, outcome, direction, error_code)?;
         let now = chrono::Utc::now().timestamp();
         self.with_mutating_connection(|connection| {
             let transaction =
@@ -137,23 +141,7 @@ impl NodeRegistry {
             validate_bounded_text("Cue audit script", cue_script.unwrap_or_default(), 64)?;
             validate_bounded_text("Cue audit reason", cue_reason.unwrap_or_default(), 128)?;
         }
-        validate_bounded_text("transport event type", event_type, 64)?;
-        validate_node_id(node_id)?;
-        validate_bounded_text("transport outcome", outcome, 32)?;
-        if let Some(session_id) = session_id {
-            if session_id.len() != 32 {
-                return Err(RegistryError::InvalidInput(
-                    "transport session ID must be 32 bytes".to_string(),
-                ));
-            }
-        }
-        if !matches!(direction, None | Some(0) | Some(1))
-            || error_code.is_some_and(|code| !(1000..=1999).contains(&code))
-        {
-            return Err(RegistryError::InvalidInput(
-                "transport audit metadata is invalid".to_string(),
-            ));
-        }
+        validate_transport_audit_metadata(event_type, node_id, outcome, direction, error_code)?;
         let now = chrono::Utc::now().timestamp();
         self.with_mutating_connection(|connection| {
             let transaction =

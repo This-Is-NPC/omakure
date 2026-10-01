@@ -114,7 +114,7 @@ verify workspace paths or host runtimes.
 |---|---|---|
 | Language | Rust 2021 | Portable application and CLI |
 | CLI | clap 4.5, clap_complete 4.5 | Commands, help, and completions |
-| Serialization | serde, serde_json, toml 0.8, serde_urlencoded 0.7 | Schemas, envelopes, config, policy, HTTP query strings |
+| Serialization | serde, serde_json, toml 1.1, serde_urlencoded 0.7 | Schemas, envelopes, config, policy, HTTP query strings |
 | Canonical JSON | serde_jcs 0.2 | RFC 8785 bytes for signed envelopes and Health reports |
 | HTTP | axum 0.8, tokio 1, tower 0.5 | Authenticated management API |
 | Storage | rusqlite 0.31, bundled SQLite | Runs, queue state, traces, search index, node registry |

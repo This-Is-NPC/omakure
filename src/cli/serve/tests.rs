@@ -198,34 +198,6 @@ fn tick_skips_when_previous_run_still_in_flight() {
 }
 
 #[test]
-fn tick_persists_secret_ref_default_not_plaintext() {
-    let tmp = TempDir::new().unwrap();
-    let ws = workspace_in(&tmp);
-    std::env::set_var("OMAKURE_CRON_SECRET_REF", "cron_plaintext_value");
-    let json = r#"{ "Name":"s", "Fields":[{"Name":"TOKEN","Type":"secret","Arg":"--token","Default":"secret://env/OMAKURE_CRON_SECRET_REF"}], "Schedule": { "Cron": "* * * * *", "Enabled": true } }"#;
-    let script =
-        format!("#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {json}\n# OMAKURE_SCHEMA_END\n");
-    fs::write(tmp.path().join("sched.sh"), script).unwrap();
-
-    let fired = scheduler_tick(&ws, Utc::now()).unwrap();
-    assert_eq!(fired, 1);
-
-    let rows = all_runs(&ws);
-    assert_eq!(rows.len(), 1);
-    // Regression (audit #1936 finding 1): the cron path must persist the
-    // secret:// ref, never the resolved plaintext, into args_json at rest.
-    assert!(rows[0]
-        .args_json
-        .contains("secret://env/OMAKURE_CRON_SECRET_REF"));
-    assert!(
-        !rows[0].args_json.contains("cron_plaintext_value"),
-        "scheduler leaked resolved secret plaintext into args_json: {}",
-        rows[0].args_json
-    );
-    std::env::remove_var("OMAKURE_CRON_SECRET_REF");
-}
-
-#[test]
 fn tick_skips_fire_on_plaintext_secret_default() {
     let tmp = TempDir::new().unwrap();
     let ws = workspace_in(&tmp);

@@ -763,6 +763,38 @@ fn serve_stop_refuses_a_live_unrelated_pid_and_preserves_the_file() {
     let _ = unrelated.wait();
 }
 
+#[test]
+fn serve_persists_secret_ref_default_without_plaintext() {
+    let workspace = support::TestWorkspace::new("serve_secret_ref");
+    let schema = r#"{"Name":"scheduled_secret","Fields":[{"Name":"TOKEN","Type":"secret","Arg":"--token","Default":"secret://env/OMAKURE_CRON_SECRET_REF"}],"Schedule":{"Cron":"* * * * *","Enabled":true}}"#;
+    let script = workspace.path().join("scheduled.sh");
+    fs::write(
+        &script,
+        format!("#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {schema}\n# OMAKURE_SCHEMA_END\n"),
+    )
+    .expect("write scheduled script");
+    support::set_executable(&script);
+
+    let served = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &["serve", "--once", "--no-worker"],
+        &[("OMAKURE_CRON_SECRET_REF", "cron_plaintext_value")],
+    );
+    assert_success(&served);
+
+    let history = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "history", "list", "--state", "queued"],
+    );
+    assert_success(&history);
+    let payload = json(&history);
+    let rows = payload["data"].as_array().expect("queued scheduled runs");
+    assert_eq!(rows.len(), 1);
+    let args = rows[0]["args_json"].as_str().expect("persisted run args");
+    assert!(args.contains("secret://env/OMAKURE_CRON_SECRET_REF"));
+    assert!(!args.contains("cron_plaintext_value"));
+}
+
 /// `node baseline` end to end at the CLI: a key, a signed manifest, and a push
 /// that has nowhere to go.
 ///

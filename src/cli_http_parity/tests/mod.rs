@@ -108,21 +108,6 @@ fn generated_docs_are_deterministic() {
     check_docs_freshness(&manifest, &render_markdown(&manifest)).unwrap();
 }
 #[test]
-fn checked_manifest_is_exhaustive() {
-    let manifest = super::checked_manifest().unwrap();
-    let cli_ids = super::current_cli_ids();
-    let http_ids = super::current_http_ids();
-    manifest
-        .validate(SurfaceInventory {
-            cli_ids: &cli_ids,
-            http_ids: &http_ids,
-        })
-        .unwrap();
-    assert_eq!(cli_ids.len(), 65);
-    assert_eq!(http_ids.len(), 53);
-}
-
-#[test]
 fn freshness_rejects_changed_docs() {
     let manifest = super::checked_manifest().unwrap();
     assert!(super::check_docs_freshness(&manifest, "stale").is_err());
@@ -177,9 +162,7 @@ fn rejects_duplicate_docs_anchors() {
 }
 
 #[test]
-fn current_inventories_have_expected_size() {
-    // Keep the source and router inventories observable to focused tests.
-    assert_eq!(super::current_cli_ids().len(), 65);
+fn current_http_inventory_has_expected_size() {
     assert_eq!(super::current_http_ids().len(), 53);
 }
 #[test]
@@ -354,9 +337,7 @@ fn comparison_schema() -> ObservableSchema {
 }
 
 #[test]
-fn validate_current_and_route_normalization_cover_live_contract() {
-    let manifest = validate_current().unwrap();
-    assert_eq!(manifest.entries.len(), 72);
+fn route_normalization_covers_live_contract() {
     assert_eq!(
         http_ids(&[
             (" get ", "v1/tree/{*path}/"),

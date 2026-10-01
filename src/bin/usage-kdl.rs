@@ -6,7 +6,8 @@
 
 use clap::CommandFactory;
 use omakure::cli::args::Cli;
-use omakure::cli_http_parity::{checked_manifest, current_cli_ids};
+use omakure::cli::command_metadata::current_cli_ids;
+use omakure::cli_http_parity::checked_manifest;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::env;

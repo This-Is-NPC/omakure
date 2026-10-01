@@ -1,6 +1,7 @@
 pub mod api;
 pub mod args;
 pub mod battery;
+pub mod command_metadata;
 pub mod config;
 pub mod describe;
 pub mod doctor;

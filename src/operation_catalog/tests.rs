@@ -144,7 +144,7 @@ fn invalid_platform_reason_is_rejected() {
 }
 #[test]
 fn current_catalog_and_support_matrix_are_fresh() {
-    let catalog = validate_current().unwrap();
+    let catalog = checked_catalog().unwrap();
     let matrix_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(SUPPORT_MATRIX_PATH);
     let matrix = std::fs::read_to_string(&matrix_path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", matrix_path.display()));
@@ -154,7 +154,7 @@ fn current_catalog_and_support_matrix_are_fresh() {
 }
 #[test]
 fn generated_freshness_accepts_crlf_without_masking_drift() {
-    let catalog = validate_current().unwrap();
+    let catalog = checked_catalog().unwrap();
     let generated = render_support_matrix(&catalog);
     let crlf = generated.replace('\n', "\r\n");
 

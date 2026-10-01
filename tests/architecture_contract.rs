@@ -725,7 +725,7 @@ fn node_delivery_contract_rejects_direct_protocol_calls() {
 #[test]
 fn shared_catalogs_do_not_depend_on_cli_adapters() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for module in ["cli_http_parity", "operation_catalog"] {
+    for module in ["inventory", "cli_http_parity", "operation_catalog"] {
         for path in source_files(&root.join("src").join(module)) {
             let display = path.strip_prefix(root).unwrap().display().to_string();
             let source = fs::read_to_string(&path).expect("read catalog source");

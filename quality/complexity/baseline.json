@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "b23b94f0cf5a8cc0fc4227a35a4ea77d182c8595889f777119e8f9edc90d55f4",
+  "canonical_sha256": "c71f454e960d007092d89766c903af81bc91c17942309407556c5446df5409b0",
   "config_identity": "no-config",
   "files": [
     {
@@ -1006,6 +1006,20 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
+        "cognitive": 0,
+        "cyclomatic": 16
+      },
+      "path": "src/cli/command_metadata/tests.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 24,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
         "cognitive": 10,
         "cyclomatic": 17
       },
@@ -1525,7 +1539,7 @@
       },
       "native": {
         "cognitive": 0,
-        "cyclomatic": 6
+        "cyclomatic": 3
       },
       "path": "src/cli_http_parity/mod.rs",
       "source_class": "handwritten"
@@ -1576,12 +1590,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 72,
+        "invocations": 68,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 3,
-        "cyclomatic": 25
+        "cyclomatic": 24
       },
       "path": "src/cli_http_parity/tests/mod.rs",
       "source_class": "handwritten"
@@ -4726,12 +4740,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 39,
+        "invocations": 20,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 26,
-        "cyclomatic": 64
+        "cyclomatic": 52
       },
       "path": "src/inventory/command.rs",
       "source_class": "handwritten"
@@ -109321,23 +109335,23 @@
         "identity": "crate::inventory::command::command_inventory",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
-        "signature": "pub(crate) fn command_inventory() -> Vec<InventoryCommand>",
+        "signature": "pub(crate) fn command_inventory(root: &clap::Command) -> Vec<InventoryCommand>",
         "source_class": "handwritten"
       },
       "identity": "crate::inventory::command::command_inventory",
       "kind": "function",
-      "line": 65,
+      "line": 63,
       "name": "command_inventory",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 65,
+        "line": 63,
         "name": "command_inventory"
       },
       "path": "src/inventory/command.rs",
-      "signature": "pub(crate) fn command_inventory() -> Vec<InventoryCommand>",
+      "signature": "pub(crate) fn command_inventory(root: &clap::Command) -> Vec<InventoryCommand>",
       "source_class": "handwritten"
     },
     {
@@ -109352,14 +109366,14 @@
       },
       "identity": "crate::inventory::command::command_inventory::<closure>",
       "kind": "closure",
-      "line": 69,
+      "line": 66,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 69,
+        "line": 66,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109370,22 +109384,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::command_inventory::<closure>@75#2",
+        "identity": "crate::inventory::command::command_inventory::<closure>@72#2",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
         "signature": "entries.sort_by(|a, b| a.id.cmp(&b.id));",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::command_inventory::<closure>@75#2",
+      "identity": "crate::inventory::command::command_inventory::<closure>@72#2",
       "kind": "closure",
-      "line": 75,
+      "line": 72,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 75,
+        "line": 72,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109404,14 +109418,14 @@
       },
       "identity": "crate::inventory::command::collect_commands",
       "kind": "function",
-      "line": 79,
+      "line": 76,
       "name": "collect_commands",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 79,
+        "line": 76,
         "name": "collect_commands"
       },
       "path": "src/inventory/command.rs",
@@ -109430,14 +109444,14 @@
       },
       "identity": "crate::inventory::command::collect_commands::<closure>",
       "kind": "closure",
-      "line": 90,
+      "line": 87,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 90,
+        "line": 87,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109456,14 +109470,14 @@
       },
       "identity": "crate::inventory::command::option_sort_key",
       "kind": "function",
-      "line": 124,
+      "line": 121,
       "name": "option_sort_key",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 124,
+        "line": 121,
         "name": "option_sort_key"
       },
       "path": "src/inventory/command.rs",
@@ -109482,14 +109496,14 @@
       },
       "identity": "crate::inventory::command::inventory_option",
       "kind": "function",
-      "line": 132,
+      "line": 129,
       "name": "inventory_option",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 132,
+        "line": 129,
         "name": "inventory_option"
       },
       "path": "src/inventory/command.rs",
@@ -109508,14 +109522,14 @@
       },
       "identity": "crate::inventory::command::inventory_option::<closure>",
       "kind": "closure",
-      "line": 151,
+      "line": 148,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 151,
+        "line": 148,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109526,22 +109540,22 @@
       "cognitive": 2,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::inventory::command::inventory_option::<closure>@152#2",
+        "identity": "crate::inventory::command::inventory_option::<closure>@149#2",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
         "signature": ".unwrap_or_else(|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_option::<closure>@152#2",
+      "identity": "crate::inventory::command::inventory_option::<closure>@149#2",
       "kind": "closure",
-      "line": 152,
+      "line": 149,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 152,
+        "line": 149,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109552,22 +109566,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_option::<closure>@165#3",
+        "identity": "crate::inventory::command::inventory_option::<closure>@162#3",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
         "signature": ".map(|value| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_option::<closure>@165#3",
+      "identity": "crate::inventory::command::inventory_option::<closure>@162#3",
       "kind": "closure",
-      "line": 165,
+      "line": 162,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 165,
+        "line": 162,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109578,22 +109592,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_option::<closure>@183#4",
+        "identity": "crate::inventory::command::inventory_option::<closure>@180#4",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
         "signature": "possible_values.sort_by(|a, b| a.name.cmp(&b.name));",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_option::<closure>@183#4",
+      "identity": "crate::inventory::command::inventory_option::<closure>@180#4",
       "kind": "closure",
-      "line": 183,
+      "line": 180,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 183,
+        "line": 180,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109604,22 +109618,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_option::<closure>@201#5",
+        "identity": "crate::inventory::command::inventory_option::<closure>@198#5",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
         "signature": ".map(|value| value.to_string_lossy().into_owned())",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_option::<closure>@201#5",
+      "identity": "crate::inventory::command::inventory_option::<closure>@198#5",
       "kind": "closure",
-      "line": 201,
+      "line": 198,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 201,
+        "line": 198,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109638,14 +109652,14 @@
       },
       "identity": "crate::inventory::command::normalize_generated_text",
       "kind": "function",
-      "line": 220,
+      "line": 217,
       "name": "normalize_generated_text",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 220,
+        "line": 217,
         "name": "normalize_generated_text"
       },
       "path": "src/inventory/command.rs",
@@ -109659,23 +109673,23 @@
         "identity": "crate::inventory::command::render_cli_reference",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
-        "signature": "pub fn render_cli_reference() -> String",
+        "signature": "pub(crate) fn render_cli_reference(commands: &[InventoryCommand]) -> String",
         "source_class": "handwritten"
       },
       "identity": "crate::inventory::command::render_cli_reference",
       "kind": "function",
-      "line": 226,
+      "line": 223,
       "name": "render_cli_reference",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 226,
+        "line": 223,
         "name": "render_cli_reference"
       },
       "path": "src/inventory/command.rs",
-      "signature": "pub fn render_cli_reference() -> String",
+      "signature": "pub(crate) fn render_cli_reference(commands: &[InventoryCommand]) -> String",
       "source_class": "handwritten"
     },
     {
@@ -109690,14 +109704,14 @@
       },
       "identity": "crate::inventory::command::reference_header",
       "kind": "function",
-      "line": 235,
+      "line": 232,
       "name": "reference_header",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 235,
+        "line": 232,
         "name": "reference_header"
       },
       "path": "src/inventory/command.rs",
@@ -109716,14 +109730,14 @@
       },
       "identity": "crate::inventory::command::render_command",
       "kind": "function",
-      "line": 243,
+      "line": 240,
       "name": "render_command",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 243,
+        "line": 240,
         "name": "render_command"
       },
       "path": "src/inventory/command.rs",
@@ -109742,14 +109756,14 @@
       },
       "identity": "crate::inventory::command::render_command_details",
       "kind": "function",
-      "line": 253,
+      "line": 250,
       "name": "render_command_details",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 253,
+        "line": 250,
         "name": "render_command_details"
       },
       "path": "src/inventory/command.rs",
@@ -109768,14 +109782,14 @@
       },
       "identity": "crate::inventory::command::render_aliases",
       "kind": "function",
-      "line": 268,
+      "line": 265,
       "name": "render_aliases",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 268,
+        "line": 265,
         "name": "render_aliases"
       },
       "path": "src/inventory/command.rs",
@@ -109794,14 +109808,14 @@
       },
       "identity": "crate::inventory::command::render_options",
       "kind": "function",
-      "line": 283,
+      "line": 280,
       "name": "render_options",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 283,
+        "line": 280,
         "name": "render_options"
       },
       "path": "src/inventory/command.rs",
@@ -109820,14 +109834,14 @@
       },
       "identity": "crate::inventory::command::render_options::<closure>",
       "kind": "closure",
-      "line": 284,
+      "line": 281,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 284,
+        "line": 281,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109838,22 +109852,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::render_options::<closure>@288#2",
+        "identity": "crate::inventory::command::render_options::<closure>@285#2",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
         "signature": "for option in command.options.iter().filter(|option| !option.hidden) {",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::render_options::<closure>@288#2",
+      "identity": "crate::inventory::command::render_options::<closure>@285#2",
       "kind": "closure",
-      "line": 288,
+      "line": 285,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 288,
+        "line": 285,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109872,14 +109886,14 @@
       },
       "identity": "crate::inventory::command::render_option",
       "kind": "function",
-      "line": 293,
+      "line": 290,
       "name": "render_option",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 293,
+        "line": 290,
         "name": "render_option"
       },
       "path": "src/inventory/command.rs",
@@ -109898,14 +109912,14 @@
       },
       "identity": "crate::inventory::command::render_option::<closure>",
       "kind": "closure",
-      "line": 315,
+      "line": 312,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 315,
+        "line": 312,
         "name": "<closure>"
       },
       "path": "src/inventory/command.rs",
@@ -109924,14 +109938,14 @@
       },
       "identity": "crate::inventory::command::render_subcommands",
       "kind": "function",
-      "line": 323,
+      "line": 320,
       "name": "render_subcommands",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 323,
+        "line": 320,
         "name": "render_subcommands"
       },
       "path": "src/inventory/command.rs",
@@ -109950,14 +109964,14 @@
       },
       "identity": "crate::inventory::command::option_syntax",
       "kind": "function",
-      "line": 335,
+      "line": 332,
       "name": "option_syntax",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 335,
+        "line": 332,
         "name": "option_syntax"
       },
       "path": "src/inventory/command.rs",
@@ -109976,14 +109990,14 @@
       },
       "identity": "crate::inventory::command::anchor",
       "kind": "function",
-      "line": 372,
+      "line": 369,
       "name": "anchor",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 372,
+        "line": 369,
         "name": "anchor"
       },
       "path": "src/inventory/command.rs",
@@ -109994,25 +110008,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths",
+        "identity": "crate::cli::command_metadata::tests::inventory_is_sorted_and_has_stable_full_paths",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "fn inventory_is_sorted_and_has_stable_full_paths()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths",
+      "identity": "crate::cli::command_metadata::tests::inventory_is_sorted_and_has_stable_full_paths",
       "kind": "function",
-      "line": 381,
+      "line": 5,
       "name": "inventory_is_sorted_and_has_stable_full_paths",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 381,
+        "line": 5,
         "name": "inventory_is_sorted_and_has_stable_full_paths"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "fn inventory_is_sorted_and_has_stable_full_paths()",
       "source_class": "handwritten"
     },
@@ -110020,25 +110034,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths::<closure>",
+        "identity": "crate::cli::command_metadata::tests::inventory_is_sorted_and_has_stable_full_paths::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "let ids: Vec<&str> = inventory.iter().map(|entry| entry.id.as_str()).collect();",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths::<closure>",
+      "identity": "crate::cli::command_metadata::tests::inventory_is_sorted_and_has_stable_full_paths::<closure>",
       "kind": "closure",
-      "line": 384,
+      "line": 8,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 384,
+        "line": 8,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "let ids: Vec<&str> = inventory.iter().map(|entry| entry.id.as_str()).collect();",
       "source_class": "handwritten"
     },
@@ -110046,25 +110060,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "fn inventory_carries_defaults_constraints_aliases_and_hidden_metadata()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
       "kind": "function",
-      "line": 395,
+      "line": 19,
       "name": "inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 395,
+        "line": 19,
         "name": "inventory_carries_defaults_constraints_aliases_and_hidden_metadata"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "fn inventory_carries_defaults_constraints_aliases_and_hidden_metadata()",
       "source_class": "handwritten"
     },
@@ -110072,25 +110086,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": ".find(|entry| entry.id == \"queue add\")",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>",
       "kind": "closure",
-      "line": 399,
+      "line": 23,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 399,
+        "line": 23,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": ".find(|entry| entry.id == \"queue add\")",
       "source_class": "handwritten"
     },
@@ -110098,25 +110112,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@404#2",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@28#2",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": ".find(|option| option.long.as_deref() == Some(\"actor\"))",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@404#2",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@28#2",
       "kind": "closure",
-      "line": 404,
+      "line": 28,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 404,
+        "line": 28,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": ".find(|option| option.long.as_deref() == Some(\"actor\"))",
       "source_class": "handwritten"
     },
@@ -110124,25 +110138,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@412#3",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@36#3",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": ".find(|entry| entry.id == \"node authority issue\")",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@412#3",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@36#3",
       "kind": "closure",
-      "line": 412,
+      "line": 36,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 412,
+        "line": 36,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": ".find(|entry| entry.id == \"node authority issue\")",
       "source_class": "handwritten"
     },
@@ -110150,25 +110164,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@417#4",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@41#4",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": ".find(|option| option.long.as_deref() == Some(\"role\"))",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@417#4",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@41#4",
       "kind": "closure",
-      "line": 417,
+      "line": 41,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 417,
+        "line": 41,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": ".find(|option| option.long.as_deref() == Some(\"role\"))",
       "source_class": "handwritten"
     },
@@ -110176,25 +110190,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@431#5",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@55#5",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": ".find(|entry| entry.id == \"queue worker\")",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@431#5",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@55#5",
       "kind": "closure",
-      "line": 431,
+      "line": 55,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 431,
+        "line": 55,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": ".find(|entry| entry.id == \"queue worker\")",
       "source_class": "handwritten"
     },
@@ -110202,25 +110216,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@436#6",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@60#6",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": ".find(|option| option.long.as_deref() == Some(\"once\"))",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@436#6",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@60#6",
       "kind": "closure",
-      "line": 436,
+      "line": 60,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 436,
+        "line": 60,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": ".find(|option| option.long.as_deref() == Some(\"once\"))",
       "source_class": "handwritten"
     },
@@ -110228,25 +110242,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@440#7",
+        "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@64#7",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "let doctor = inventory.iter().find(|entry| entry.id == \"doctor\").unwrap();",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@440#7",
+      "identity": "crate::cli::command_metadata::tests::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@64#7",
       "kind": "closure",
-      "line": 440,
+      "line": 64,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 440,
+        "line": 64,
         "name": "<closure>"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "let doctor = inventory.iter().find(|entry| entry.id == \"doctor\").unwrap();",
       "source_class": "handwritten"
     },
@@ -110254,25 +110268,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::reference_links_match_command_heading_slugs",
+        "identity": "crate::cli::command_metadata::tests::reference_links_match_command_heading_slugs",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "fn reference_links_match_command_heading_slugs()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::reference_links_match_command_heading_slugs",
+      "identity": "crate::cli::command_metadata::tests::reference_links_match_command_heading_slugs",
       "kind": "function",
-      "line": 445,
+      "line": 69,
       "name": "reference_links_match_command_heading_slugs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 445,
+        "line": 69,
         "name": "reference_links_match_command_heading_slugs"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "fn reference_links_match_command_heading_slugs()",
       "source_class": "handwritten"
     },
@@ -110280,25 +110294,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::reference_omits_hidden_options",
+        "identity": "crate::cli::command_metadata::tests::reference_omits_hidden_options",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "fn reference_omits_hidden_options()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::reference_omits_hidden_options",
+      "identity": "crate::cli::command_metadata::tests::reference_omits_hidden_options",
       "kind": "function",
-      "line": 452,
+      "line": 76,
       "name": "reference_omits_hidden_options",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 452,
+        "line": 76,
         "name": "reference_omits_hidden_options"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "fn reference_omits_hidden_options()",
       "source_class": "handwritten"
     },
@@ -110306,51 +110320,51 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::inventory::command::every_reference_subcommand_link_resolves",
+        "identity": "crate::inventory::command::nested_reference_links_match_command_headings",
         "macro_expansion": "not_measured",
         "path": "src/inventory/command.rs",
-        "signature": "fn every_reference_subcommand_link_resolves()",
+        "signature": "fn nested_reference_links_match_command_headings()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::every_reference_subcommand_link_resolves",
+      "identity": "crate::inventory::command::nested_reference_links_match_command_headings",
       "kind": "function",
-      "line": 458,
-      "name": "every_reference_subcommand_link_resolves",
+      "line": 379,
+      "name": "nested_reference_links_match_command_headings",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 458,
-        "name": "every_reference_subcommand_link_resolves"
+        "line": 379,
+        "name": "nested_reference_links_match_command_headings"
       },
       "path": "src/inventory/command.rs",
-      "signature": "fn every_reference_subcommand_link_resolves()",
+      "signature": "fn nested_reference_links_match_command_headings()",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::generated_reference_freshness_treats_crlf_checkout_as_lf",
+        "identity": "crate::cli::command_metadata::tests::generated_reference_freshness_treats_crlf_checkout_as_lf",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "fn generated_reference_freshness_treats_crlf_checkout_as_lf()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::generated_reference_freshness_treats_crlf_checkout_as_lf",
+      "identity": "crate::cli::command_metadata::tests::generated_reference_freshness_treats_crlf_checkout_as_lf",
       "kind": "function",
-      "line": 471,
+      "line": 82,
       "name": "generated_reference_freshness_treats_crlf_checkout_as_lf",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 471,
+        "line": 82,
         "name": "generated_reference_freshness_treats_crlf_checkout_as_lf"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "fn generated_reference_freshness_treats_crlf_checkout_as_lf()",
       "source_class": "handwritten"
     },
@@ -110358,25 +110372,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::two_reference_generations_are_identical",
+        "identity": "crate::cli::command_metadata::tests::two_reference_generations_are_identical",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "fn two_reference_generations_are_identical()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::two_reference_generations_are_identical",
+      "identity": "crate::cli::command_metadata::tests::two_reference_generations_are_identical",
       "kind": "function",
-      "line": 479,
+      "line": 90,
       "name": "two_reference_generations_are_identical",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 479,
+        "line": 90,
         "name": "two_reference_generations_are_identical"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "fn two_reference_generations_are_identical()",
       "source_class": "handwritten"
     },
@@ -110384,25 +110398,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::inventory::command::two_inventory_builds_are_equal",
+        "identity": "crate::cli::command_metadata::tests::two_inventory_builds_are_equal",
         "macro_expansion": "not_measured",
-        "path": "src/inventory/command.rs",
+        "path": "src/cli/command_metadata/tests.rs",
         "signature": "fn two_inventory_builds_are_equal()",
         "source_class": "handwritten"
       },
-      "identity": "crate::inventory::command::two_inventory_builds_are_equal",
+      "identity": "crate::cli::command_metadata::tests::two_inventory_builds_are_equal",
       "kind": "function",
-      "line": 484,
+      "line": 95,
       "name": "two_inventory_builds_are_equal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 484,
+        "line": 95,
         "name": "two_inventory_builds_are_equal"
       },
-      "path": "src/inventory/command.rs",
+      "path": "src/cli/command_metadata/tests.rs",
       "signature": "fn two_inventory_builds_are_equal()",
       "source_class": "handwritten"
     },

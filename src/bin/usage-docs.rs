@@ -3,7 +3,7 @@
 //! Clap remains authoritative for parsing, help, and completions. This binary consumes the
 //! checked-in Usage document and delegates rendering to the pinned Usage APIs.
 
-use omakure::cli_http_parity::current_cli_ids;
+use omakure::cli::command_metadata::current_cli_ids;
 use std::{collections::BTreeSet, env, fs};
 use usage_artifacts::{KDL_PATH, compare_file, normalize, write_file};
 use usage_docs::{

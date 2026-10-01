@@ -6,8 +6,9 @@ pub fn checked_catalog() -> Result<Catalog, CatalogError> {
     Catalog::parse_toml(include_str!("../../fixtures/operation-catalog.toml"))
 }
 
-pub fn validate_current() -> Result<Catalog, CatalogError> {
-    let parity = cli_http_parity::validate_current()
+/// Validate catalog bindings against the current parity manifest and supplied CLI IDs.
+pub fn validate_current(cli_ids: &[String]) -> Result<Catalog, CatalogError> {
+    let parity = cli_http_parity::validate_current(cli_ids)
         .map_err(|error| CatalogError::Parse(error.to_string()))?;
     let catalog = checked_catalog()?;
     catalog.validate(&parity)?;

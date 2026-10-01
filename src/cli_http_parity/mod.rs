@@ -30,25 +30,16 @@ pub fn checked_manifest() -> Result<Manifest, ManifestError> {
     Manifest::parse_toml(include_str!("../../fixtures/cli-http-parity.toml"))
 }
 
-pub fn current_cli_ids() -> Vec<String> {
-    crate::inventory::command_inventory()
-        .into_iter()
-        .filter(|command| command.subcommands.is_empty())
-        .map(|command| command.id)
-        .collect()
-}
-
 /// Current HTTP IDs supplied by the shared route inventory.
 pub fn current_http_ids() -> Vec<String> {
     http_ids(crate::inventory::HTTP_ROUTE_INVENTORY)
 }
-/// Validate the checked-in manifest against both live structural inventories.
-pub fn validate_current() -> Result<Manifest, ManifestError> {
+/// Validate the checked-in manifest against supplied CLI IDs and current HTTP routes.
+pub fn validate_current(cli_ids: &[String]) -> Result<Manifest, ManifestError> {
     let manifest = checked_manifest()?;
-    let cli_ids = current_cli_ids();
     let http_ids = current_http_ids();
     manifest.validate(SurfaceInventory {
-        cli_ids: &cli_ids,
+        cli_ids,
         http_ids: &http_ids,
     })?;
     Ok(manifest)

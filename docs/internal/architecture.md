@@ -149,6 +149,7 @@ src/
 ├── bin/                     cli-reference, usage-kdl, usage-docs, operation-catalog generators
 ├── cli/                     command adapters and JSON output
 │   ├── args/                clap command tree and long-form help
+│   ├── command_metadata.rs   live Clap-tree inventory and reference projections
 │   ├── api/                 authenticated Axum management server (boot, router,
 │   │                        bearer auth, bounded blocking work, audit, and route groups)
 │   ├── node_service.rs      HTTP + workers + scheduler lifecycle
@@ -185,7 +186,7 @@ src/
 ├── error.rs                 schema and environment application errors
 ├── util/                    shared filesystem, process, path, encoding, and OS entropy helpers
 ├── app_meta.rs              package version constant
-├── inventory/               Clap-derived command inventory, CLI reference, and HTTP routes
+├── inventory/               pure Clap-tree inventory conversion, CLI reference rendering, and HTTP routes
 ├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog/       versioned metadata, validation, rendering, and tests
 ├── runs/                    SQLite state machine, opaque run store, and traces

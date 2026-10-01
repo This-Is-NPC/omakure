@@ -3,8 +3,7 @@ use super::battery::default_actor;
 use super::bearer::{require_capability, require_scope};
 use super::query::{query_bool, query_i64, query_pairs, query_value, query_values};
 use super::respond::{
-    attach_audit_run_id, operation_error_response, operation_response,
-    operation_response_with_run_id, parse_json_body,
+    attach_audit_run_id, operation_error_response, operation_response_with_run_id, parse_json_body,
 };
 use super::state::{ApiCapability, ApiState};
 use crate::auth::AuthContext;
@@ -16,6 +15,7 @@ use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
 use axum::Extension;
 use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,6 +32,17 @@ async fn run_blocking<T: Send + 'static>(
     })
     .await
     .map_err(|_| OperationError::new(OperationErrorCode::IoFailed, "run operation failed"))
+}
+
+async fn run_operation_response<T: Serialize + Send + 'static>(
+    gate: Arc<tokio::sync::Semaphore>,
+    run_id: Option<String>,
+    task: impl FnOnce() -> OperationResult<T> + Send + 'static,
+) -> Response {
+    let result = run_blocking(gate, task)
+        .await
+        .and_then(std::convert::identity);
+    operation_response_with_run_id(result, run_id)
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,10 +82,10 @@ pub(super) async fn list_runs_handler(
         Err(err) => return operation_error_response(err),
     };
     let gate = Arc::clone(&state.run_operation_gate);
-    match run_blocking(gate, move || core::list_runs(&state.workspace, request)).await {
-        Ok(result) => operation_response(result),
-        Err(err) => operation_error_response(err),
-    }
+    run_operation_response(gate, None, move || {
+        core::list_runs(&state.workspace, request)
+    })
+    .await
 }
 
 pub(super) async fn show_run_handler(
@@ -85,10 +96,11 @@ pub(super) async fn show_run_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
-    operation_response(core::show_run(
-        &state.workspace,
-        core::ShowRunRequest { run_id },
-    ))
+    let gate = Arc::clone(&state.run_operation_gate);
+    run_operation_response(gate, None, move || {
+        core::show_run(&state.workspace, core::ShowRunRequest { run_id })
+    })
+    .await
 }
 
 pub(super) async fn list_traces_handler(
@@ -100,8 +112,15 @@ pub(super) async fn list_traces_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
-    let request = list_traces_request(run_id, raw_query.as_deref());
-    operation_response(request.and_then(|request| core::list_traces(&state.workspace, request)))
+    let request = match list_traces_request(run_id, raw_query.as_deref()) {
+        Ok(request) => request,
+        Err(err) => return operation_error_response(err),
+    };
+    let gate = Arc::clone(&state.run_operation_gate);
+    run_operation_response(gate, None, move || {
+        core::list_traces(&state.workspace, request)
+    })
+    .await
 }
 
 pub(super) async fn queue_stats_handler(
@@ -111,7 +130,8 @@ pub(super) async fn queue_stats_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
-    operation_response(core::queue_stats(&state.workspace))
+    let gate = Arc::clone(&state.run_operation_gate);
+    run_operation_response(gate, None, move || core::queue_stats(&state.workspace)).await
 }
 
 pub(super) async fn enqueue_run_handler(
@@ -323,14 +343,18 @@ pub(super) async fn cancel_run_handler(
             Ok(body) => body,
             Err(err) => return operation_error_response(err),
         };
-    let result = core::cancel_run(
-        &state.workspace,
-        core::CancelRunRequest {
-            run_id: run_id.clone(),
-            reason: body.reason,
-        },
-    );
-    operation_response_with_run_id(result, Some(run_id))
+    let gate = Arc::clone(&state.run_operation_gate);
+    let audit_run_id = run_id.clone();
+    run_operation_response(gate, Some(audit_run_id), move || {
+        core::cancel_run(
+            &state.workspace,
+            core::CancelRunRequest {
+                run_id,
+                reason: body.reason,
+            },
+        )
+    })
+    .await
 }
 
 pub(super) async fn dead_letter_run_handler(
@@ -347,14 +371,18 @@ pub(super) async fn dead_letter_run_handler(
             Ok(body) => body,
             Err(err) => return operation_error_response(err),
         };
-    let result = core::dead_letter_run(
-        &state.workspace,
-        core::DeadLetterRunRequest {
-            run_id: run_id.clone(),
-            reason: body.reason,
-        },
-    );
-    operation_response_with_run_id(result, Some(run_id))
+    let gate = Arc::clone(&state.run_operation_gate);
+    let audit_run_id = run_id.clone();
+    run_operation_response(gate, Some(audit_run_id), move || {
+        core::dead_letter_run(
+            &state.workspace,
+            core::DeadLetterRunRequest {
+                run_id,
+                reason: body.reason,
+            },
+        )
+    })
+    .await
 }
 
 fn list_runs_request(raw_query: Option<&str>) -> OperationResult<core::ListRunsRequest> {

@@ -132,7 +132,9 @@ fn scheduled_queries_cover_missing_overlap_completion_errors_and_concurrency() {
 
     let broken = Connection::open_in_memory().expect("in-memory connection");
     let last_error = last_scheduled_fire_ms(&broken, schedule_id).unwrap_err();
-    assert!(last_error.contains("Query last scheduled fire failed"));
+    assert!(last_error
+        .to_string()
+        .contains("Query last scheduled fire failed"));
     let live_error = has_live_scheduled_run(&broken, schedule_id).unwrap_err();
     assert!(live_error
         .to_string()
@@ -283,7 +285,46 @@ fn row_to_run_rejects_invalid_state_string() {
         },
     )
     .unwrap_err();
-    assert!(err.contains("invalid run state") || err.contains("Row query_runs failed"));
+    assert!(
+        err.to_string().contains("invalid run state")
+            || err.to_string().contains("Row query_runs failed")
+    );
 
     let _ = fs::remove_dir_all(ws.root());
+}
+
+#[test]
+fn missing_run_table_preserves_query_error_sources_and_text() {
+    let conn = Connection::open_in_memory().unwrap();
+    let cases = [
+        (
+            get_run(&conn, "missing").unwrap_err(),
+            "Prepare get_run failed",
+        ),
+        (
+            last_scheduled_fire_ms(&conn, "schedule").unwrap_err(),
+            "Query last scheduled fire failed",
+        ),
+        (
+            query_runs(&conn, &RunFilters::default()).unwrap_err(),
+            "Prepare query_runs failed",
+        ),
+        (stats(&conn).unwrap_err(), "Prepare state stats failed"),
+    ];
+    for (error, operation) in cases {
+        match &error {
+            RunsError::Sqlite {
+                operation: actual,
+                source,
+            } => {
+                assert_eq!(*actual, operation);
+                assert_eq!(source.to_string(), "no such table: runs");
+            }
+            other => panic!("expected SQLite error, got {other:?}"),
+        }
+        assert_eq!(
+            error.to_string(),
+            format!("{operation}: no such table: runs")
+        );
+    }
 }

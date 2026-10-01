@@ -1,8 +1,13 @@
 use super::query::{get_run, RunRow};
 use super::state::{RunState, RunTrigger};
+use super::RunsError;
 use super::HEARTBEAT_MS;
 use crate::util::time::unix_millis;
 use rusqlite::{params, Connection, OptionalExtension};
+
+fn query_error_text(error: RunsError) -> String {
+    error.to_string()
+}
 
 /// Filters used by [`claim_next`] to scope a worker to a subset of jobs.
 #[derive(Debug, Clone, Default)]
@@ -105,7 +110,7 @@ pub fn claim_next(
     };
 
     match claimed_id {
-        Some(id) => get_run(conn, &id),
+        Some(id) => get_run(conn, &id).map_err(query_error_text),
         None => Ok(None),
     }
 }
@@ -132,7 +137,7 @@ pub fn heartbeat(
         .map_err(|err| format!("Heartbeat failed: {}", err))?;
     if updated == 0 {
         // Either the row was reclaimed/cancelled, or terminated already.
-        let row = get_run(conn, run_id)?;
+        let row = get_run(conn, run_id).map_err(query_error_text)?;
         return Ok(row.map(|r| r.state));
     }
     Ok(Some(RunState::Running))
@@ -158,7 +163,9 @@ fn finalize(
     let now = unix_millis();
     // Look up the row first so we can compute duration_ms relative to its
     // started_at and reject illegal transitions.
-    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)
+        .map_err(query_error_text)?
+        .ok_or_else(|| format!("run not found: {}", run_id))?;
     if !matches!(row.state, RunState::Running) {
         return Err(format!(
             "illegal transition: cannot move {} -> {}; row must be in 'running'",
@@ -315,7 +322,9 @@ pub fn cancel(
     reason: Option<String>,
     completion: Option<RunCompletion>,
 ) -> Result<RunRow, String> {
-    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)
+        .map_err(query_error_text)?
+        .ok_or_else(|| format!("run not found: {}", run_id))?;
     let now = unix_millis();
     match row.state {
         RunState::Queued => {
@@ -365,7 +374,9 @@ pub fn cancel(
             ));
         }
     }
-    get_run(conn, run_id)?.ok_or_else(|| format!("run not found after cancel: {}", run_id))
+    get_run(conn, run_id)
+        .map_err(query_error_text)?
+        .ok_or_else(|| format!("run not found after cancel: {}", run_id))
 }
 
 /// Mark a `cancelled` row produced by mid-execution cancel as needing
@@ -376,7 +387,9 @@ pub fn record_cancelled_output(
     run_id: &str,
     completion: RunCompletion,
 ) -> Result<(), String> {
-    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)
+        .map_err(query_error_text)?
+        .ok_or_else(|| format!("run not found: {}", run_id))?;
     let now = unix_millis();
     let started = row.started_at.unwrap_or(now);
     let duration_ms = (now - started).max(0);
@@ -407,7 +420,9 @@ pub fn dead_letter(
     run_id: &str,
     reason: Option<String>,
 ) -> Result<RunRow, String> {
-    let row = get_run(conn, run_id)?.ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)
+        .map_err(query_error_text)?
+        .ok_or_else(|| format!("run not found: {}", run_id))?;
     if !matches!(row.state, RunState::Failed | RunState::TimedOut) {
         return Err(format!(
             "cannot promote run in state '{}' to dead_letter; only failed or timed_out rows are eligible",
@@ -425,5 +440,7 @@ pub fn dead_letter(
         params![merged_reason, run_id],
     )
     .map_err(|err| format!("Dead-letter run failed: {}", err))?;
-    get_run(conn, run_id)?.ok_or_else(|| format!("run not found after dead_letter: {}", run_id))
+    get_run(conn, run_id)
+        .map_err(query_error_text)?
+        .ok_or_else(|| format!("run not found after dead_letter: {}", run_id))
 }

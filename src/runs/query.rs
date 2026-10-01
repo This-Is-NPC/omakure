@@ -106,7 +106,7 @@ pub struct RunStats {
 }
 
 /// Fetch one run by id, or `None` if it does not exist.
-pub fn get_run(conn: &Connection, run_id: &str) -> Result<Option<RunRow>, String> {
+pub fn get_run(conn: &Connection, run_id: &str) -> Result<Option<RunRow>, RunsError> {
     let mut stmt = conn
         .prepare(
             "SELECT run_id, script_path, script_name, args_json, actor, reason,
@@ -116,11 +116,17 @@ pub fn get_run(conn: &Connection, run_id: &str) -> Result<Option<RunRow>, String
                     stdout, stderr, error, parent_run_id, omakure_version
              FROM runs WHERE run_id = ?",
         )
-        .map_err(|err| format!("Prepare get_run failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Prepare get_run failed",
+            source,
+        })?;
     let row = stmt
         .query_row([run_id], row_to_run)
         .optional()
-        .map_err(|err| format!("Query get_run failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Query get_run failed",
+            source,
+        })?;
     Ok(row)
 }
 
@@ -130,13 +136,19 @@ pub fn get_run(conn: &Connection, run_id: &str) -> Result<Option<RunRow>, String
 /// Schedule state is intentionally derived from run rows rather than a second
 /// mutable cursor, so a successful enqueue and the scheduler's next scan
 /// cannot disagree about which fire was last recorded.
-pub fn last_scheduled_fire_ms(conn: &Connection, schedule_id: &str) -> Result<Option<i64>, String> {
+pub fn last_scheduled_fire_ms(
+    conn: &Connection,
+    schedule_id: &str,
+) -> Result<Option<i64>, RunsError> {
     conn.query_row(
         "SELECT MAX(enqueued_at) FROM runs WHERE cron_schedule_id = ?",
         [schedule_id],
         |row| row.get::<_, Option<i64>>(0),
     )
-    .map_err(|err| format!("Query last scheduled fire failed: {}", err))
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Query last scheduled fire failed",
+        source,
+    })
 }
 
 /// Return whether a schedule currently has a queued or running row.
@@ -166,7 +178,7 @@ pub fn has_live_scheduled_run(conn: &Connection, schedule_id: &str) -> Result<bo
 /// Query rows matching the supplied filters. In-flight rows are surfaced
 /// first (by `enqueued_at DESC` so the most recently queued / running rows
 /// appear at the top), then terminal rows by `started_at DESC`.
-pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>, String> {
+pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>, RunsError> {
     let mut sql = String::from(
         "SELECT run_id, script_path, script_name, args_json, actor, reason,
                 state, priority, enqueued_at, worker_id, lease_until, timeout_ms,
@@ -227,18 +239,25 @@ pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>
         sql.push_str(&format!(" LIMIT {}", limit));
     }
 
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|err| format!("Prepare query_runs failed: {}", err))?;
+    let mut stmt = conn.prepare(&sql).map_err(|source| RunsError::Sqlite {
+        operation: "Prepare query_runs failed",
+        source,
+    })?;
     let rows = stmt
         .query_map(
             params_from_iter(params.iter().map(|p| p.as_ref())),
             row_to_run,
         )
-        .map_err(|err| format!("Query query_runs failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Query query_runs failed",
+            source,
+        })?;
     let mut out = Vec::new();
     for row in rows {
-        out.push(row.map_err(|err| format!("Row query_runs failed: {}", err))?);
+        out.push(row.map_err(|source| RunsError::Sqlite {
+            operation: "Row query_runs failed",
+            source,
+        })?);
     }
     Ok(out)
 }
@@ -290,21 +309,30 @@ fn row_to_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<RunRow> {
 }
 
 /// Aggregate counts per state and per actor.
-pub fn stats(conn: &Connection) -> Result<RunStats, String> {
+pub fn stats(conn: &Connection) -> Result<RunStats, RunsError> {
     let mut counts_by_state: HashMap<String, i64> = HashMap::new();
     let mut counts_by_actor: HashMap<String, i64> = HashMap::new();
     let mut total: i64 = 0;
 
     let mut state_stmt = conn
         .prepare("SELECT state, COUNT(*) FROM runs GROUP BY state")
-        .map_err(|err| format!("Prepare state stats failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Prepare state stats failed",
+            source,
+        })?;
     let state_rows = state_stmt
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         })
-        .map_err(|err| format!("Query state stats failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Query state stats failed",
+            source,
+        })?;
     for entry in state_rows {
-        let (state, count) = entry.map_err(|err| format!("Read state row: {}", err))?;
+        let (state, count) = entry.map_err(|source| RunsError::Sqlite {
+            operation: "Read state row",
+            source,
+        })?;
         total += count;
         counts_by_state.insert(state, count);
     }
@@ -318,14 +346,23 @@ pub fn stats(conn: &Connection) -> Result<RunStats, String> {
 
     let mut actor_stmt = conn
         .prepare("SELECT actor, COUNT(*) FROM runs GROUP BY actor")
-        .map_err(|err| format!("Prepare actor stats failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Prepare actor stats failed",
+            source,
+        })?;
     let actor_rows = actor_stmt
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         })
-        .map_err(|err| format!("Query actor stats failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Query actor stats failed",
+            source,
+        })?;
     for entry in actor_rows {
-        let (actor, count) = entry.map_err(|err| format!("Read actor row: {}", err))?;
+        let (actor, count) = entry.map_err(|source| RunsError::Sqlite {
+            operation: "Read actor row",
+            source,
+        })?;
         counts_by_actor.insert(actor, count);
     }
 

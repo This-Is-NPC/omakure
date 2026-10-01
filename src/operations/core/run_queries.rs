@@ -20,12 +20,12 @@ pub fn list_runs(workspace: &Workspace, request: ListRunsRequest) -> OperationRe
         states,
     };
     let conn = runs::open(workspace).map_err(io_error_string)?;
-    runs::query_runs(&conn, &filters).map_err(io_error_string)
+    runs::query_runs(&conn, &filters).map_err(io_error_runs)
 }
 
 pub fn show_run(workspace: &Workspace, request: ShowRunRequest) -> OperationResult<RunRow> {
     let conn = runs::open(workspace).map_err(io_error_string)?;
-    match runs::get_run(&conn, &request.run_id).map_err(io_error_string)? {
+    match runs::get_run(&conn, &request.run_id).map_err(io_error_runs)? {
         Some(row) => Ok(row),
         None => Err(OperationError::new(
             OperationErrorCode::NotFound,
@@ -53,7 +53,7 @@ pub fn queue_stats(workspace: &Workspace) -> OperationResult<RunStats> {
 
 pub fn run_stats(workspace: &Workspace) -> OperationResult<RunStats> {
     let conn = runs::open(workspace).map_err(io_error_string)?;
-    runs::stats(&conn).map_err(io_error_string)
+    runs::stats(&conn).map_err(io_error_runs)
 }
 
 pub fn cancel_run(workspace: &Workspace, request: CancelRunRequest) -> OperationResult<RunRow> {
@@ -96,7 +96,7 @@ pub(super) fn resolve_states(
 }
 
 pub(super) fn require_run(conn: &rusqlite::Connection, run_id: &str) -> OperationResult<()> {
-    match runs::get_run(conn, run_id).map_err(io_error_string)? {
+    match runs::get_run(conn, run_id).map_err(io_error_runs)? {
         Some(_) => Ok(()),
         None => Err(OperationError::new(
             OperationErrorCode::NotFound,
@@ -123,6 +123,10 @@ fn map_trace_error(error: RunsError) -> OperationError {
 
 fn invalid_input(message: String) -> OperationError {
     OperationError::new(OperationErrorCode::InvalidInput, message)
+}
+
+fn io_error_runs(error: RunsError) -> OperationError {
+    io_error_string(error.to_string())
 }
 
 pub(super) fn io_error_string(message: String) -> OperationError {

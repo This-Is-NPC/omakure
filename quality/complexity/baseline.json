@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "72e4b0b10ecf517a391cec52e4b886136abc1ccbae71d2dcde2bcbdc4ea36780",
+  "canonical_sha256": "ded79d22ef6d10b2e016992d6f7ccc15d00598c2bf2e8ff7a7d801a227b4b83d",
   "config_identity": "no-config",
   "files": [
     {
@@ -96679,23 +96679,23 @@
         "identity": "crate::runs::query::query_runs",
         "macro_expansion": "not_measured",
         "path": "src/runs/query.rs",
-        "signature": "pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>, String>",
+        "signature": "pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::query::query_runs",
       "kind": "function",
-      "line": 165,
+      "line": 181,
       "name": "query_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 11,
         "kind": "function",
-        "line": 165,
+        "line": 181,
         "name": "query_runs"
       },
       "path": "src/runs/query.rs",
-      "signature": "pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>, String>",
+      "signature": "pub fn query_runs(conn: &Connection, filters: &RunFilters) -> Result<Vec<RunRow>, RunsError>",
       "source_class": "handwritten"
     },
     {

@@ -3,8 +3,12 @@
 //! Run with:
 //! `cargo test --test docker_signed_bundle_e2e -- --ignored --nocapture`
 
+#[path = "support/docker.rs"]
+mod docker;
 #[path = "support/hex.rs"]
 mod hex_support;
+
+use docker::{bounded_command, safe_generation_stderr, safe_stderr};
 
 use k256::schnorr::SigningKey;
 use omakure::enrollment::{self, EnrollmentRole, SignedEnrollmentBundle};
@@ -15,40 +19,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::OnceLock;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tempfile::TempDir;
 
-/// Every Docker call is bounded, so a wedged daemon cannot hang the suite.
-///
-/// Two different budgets, because two different things are being bounded. An
-/// operation on a stack that is already up is fast, and 120s is a generous
-/// ceiling for one. A call carrying `--build` may compile this crate inside the
-/// container from a cold layer cache, which on an ordinary machine does not fit
-/// in two minutes -- and when it did not, `timeout` killed the build and the
-/// test reported `compose up failed`, which reads exactly like the product
-/// refusing to start. One budget for both made a slow machine indistinguishable
-/// from a broken node.
-const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
-const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
-
-fn bounded_command_within(program: &str, budget: &str) -> Command {
-    let mut command = Command::new("timeout");
-    command.args(["--foreground", "--kill-after=10s", budget, program]);
-    command
-}
-
-fn bounded_command(program: &str) -> Command {
-    bounded_command_within(program, COMPOSE_OPERATION_TIMEOUT)
-}
-
-/// The budget a Compose invocation gets, decided by whether it can build.
-fn compose_timeout(args: &[&str]) -> &'static str {
-    if args.contains(&"--build") {
-        COMPOSE_BUILD_TIMEOUT
-    } else {
-        COMPOSE_OPERATION_TIMEOUT
-    }
-}
 const COMPOSE_FILE: &str = "ci/compose/compose.signed-bundle.e2e.yaml";
 
 fn compose_project() -> &'static str {
@@ -252,12 +225,8 @@ impl Drop for ComposeGuard {
 }
 
 fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
-    let mut failures = Vec::new();
-    // `--profile autojoin` is load-bearing: without it `down` leaves the
-    // profile's containers, volumes and network behind, and the leak check
-    // below reports it as a failure -- which is how this was found.
-    let down = compose(
-        guard,
+    docker::cleanup_project(
+        compose_project(),
         &[
             "--profile",
             "autojoin",
@@ -265,66 +234,39 @@ fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
             "--volumes",
             "--remove-orphans",
         ],
-    );
-    if !down.status.success() {
-        failures.push(format!(
-            "compose down status={} stderr={}",
-            down.status,
-            safe_stderr(&down)
-        ));
-    }
-    for resource in ["container", "network", "volume"] {
-        let output = bounded_command("docker")
-            .args([
-                resource,
-                "ls",
-                "-q",
-                "--filter",
-                &format!("label=com.docker.compose.project={}", compose_project()),
-            ])
-            .output();
-        match output {
-            Ok(output) if !output.status.success() => failures.push(format!(
-                "inspect {resource} status={} stderr={}",
-                output.status,
-                safe_stderr(&output)
-            )),
-            Ok(output) if !String::from_utf8_lossy(&output.stdout).trim().is_empty() => {
-                failures.push(format!("project-labeled {resource} remains"));
-            }
-            Ok(_) => {}
-            Err(error) => failures.push(format!("inspect {resource}: {error}")),
-        }
-    }
-    cleanup_result(failures)
-}
-
-fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
-    if failures.is_empty() {
-        Ok(())
-    } else {
-        Err(failures.join("; "))
-    }
+        |args| compose(guard, args),
+    )
 }
 
 #[cfg(test)]
 mod cleanup_tests {
-    use super::{cleanup_result, compose_command, ComposeGuard, COMPOSE_OPERATION_TIMEOUT};
-
-    #[test]
-    fn cleanup_reports_all_failures() {
-        let error = cleanup_result(vec!["down failed".into(), "container remains".into()])
-            .expect_err("cleanup failure should be returned");
-        assert!(error.contains("down failed"));
-        assert!(error.contains("container remains"));
-    }
+    use super::{compose_command, ComposeGuard};
 
     #[test]
     fn compose_paths_are_set_only_on_child_commands() {
         let inherited = std::env::var_os("OMAKURE_SIGNED_AUTHORITY_CONFIG");
         let mut guard = ComposeGuard::prepare();
         guard.finalized = true;
-        let command = compose_command(&guard, COMPOSE_OPERATION_TIMEOUT);
+        let command = compose_command(&guard, &["ps"]);
+        let args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args,
+            [
+                "--foreground",
+                "--kill-after=10s",
+                "120s",
+                "docker",
+                "compose",
+                "-f",
+                super::COMPOSE_FILE,
+                "-p",
+                super::compose_project(),
+                "ps",
+            ]
+        );
         let compose_file = include_str!("../ci/compose/compose.signed-bundle.e2e.yaml");
         assert_eq!(guard.compose_env.len(), 19);
         assert_eq!(command.get_envs().count(), guard.compose_env.len());
@@ -348,40 +290,27 @@ fn cleanup_after_induced_partial_up() {
     guard.finalize();
 }
 
-fn safe_stderr(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).trim().to_string()
-}
-
-fn safe_generation_stderr(output: &Output) -> String {
-    let stderr = safe_stderr(output);
-    let lower = stderr.to_ascii_lowercase();
-    assert!(
-        !lower.contains("bearer ") && !lower.contains("$argon2") && !lower.contains("token ="),
-        "token generation stderr contained sensitive material"
-    );
-    stderr
-}
-
-fn compose_command(guard: &ComposeGuard, budget: &str) -> Command {
-    let mut command = bounded_command_within("docker", budget);
-    command
-        .current_dir(&guard.root)
-        .envs(&guard.compose_env)
-        .args(["compose", "-f", COMPOSE_FILE, "-p", compose_project()]);
-    command
+fn compose_command(guard: &ComposeGuard, args: &[&str]) -> Command {
+    docker::compose_command(
+        &guard.root,
+        |command| {
+            command.envs(&guard.compose_env);
+        },
+        &["-f", COMPOSE_FILE, "-p", compose_project()],
+        args,
+    )
 }
 
 fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
-    compose_command(guard, compose_timeout(args))
-        .args(args)
+    compose_command(guard, args)
         .output()
         .expect("run Docker Compose")
 }
 
 fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
-    compose_command(guard, COMPOSE_OPERATION_TIMEOUT)
-        .args(["exec", "-T", service])
-        .args(args)
+    let mut command_args = vec!["exec", "-T", service];
+    command_args.extend_from_slice(args);
+    compose_command(guard, &command_args)
         .output()
         .expect("run Docker Compose exec")
 }
@@ -402,14 +331,17 @@ fn write_private_token(path: &Path, token: &str) {
 }
 
 fn copy_to_container(guard: &ComposeGuard, service: &str, source: &Path, destination: &str) {
-    let output = compose_command(guard, COMPOSE_OPERATION_TIMEOUT)
-        .args([
+    let destination = format!("{service}:{destination}");
+    let output = compose_command(
+        guard,
+        &[
             "cp",
             source.to_str().expect("UTF-8 test path"),
-            &format!("{service}:{destination}"),
-        ])
-        .output()
-        .expect("copy bundle into container");
+            &destination,
+        ],
+    )
+    .output()
+    .expect("copy bundle into container");
     assert!(output.status.success(), "copy into container failed");
 }
 
@@ -526,18 +458,15 @@ fn status(guard: &ComposeGuard, service: &str) -> Value {
 }
 
 fn wait_for_status(guard: &ComposeGuard) {
-    let deadline = Instant::now() + Duration::from_secs(60);
-    while Instant::now() < deadline {
-        if ["signed-authority", "signed-target-a", "signed-target-b"]
+    if docker::wait_until(Duration::from_secs(60), Duration::from_millis(250), || {
+        ["signed-authority", "signed-target-a", "signed-target-b"]
             .iter()
             .all(|service| {
                 let output = exec(guard, service, &["omakure", "--json", "node", "status"]);
                 output.status.success()
             })
-        {
-            return;
-        }
-        thread::sleep(Duration::from_millis(250));
+    }) {
+        return;
     }
     let ps = compose(guard, &["ps"]);
     let logs = compose(guard, &["logs", "--no-color", "signed-target-a"]);
@@ -560,14 +489,17 @@ fn identity(status: &Value) -> (&str, &str) {
 }
 
 fn copy_certificate(guard: &ComposeGuard, service: &str, destination: &Path) {
-    let output = compose_command(guard, COMPOSE_OPERATION_TIMEOUT)
-        .args([
+    let source = format!("{service}:/var/lib/omakure/transport.cert");
+    let output = compose_command(
+        guard,
+        &[
             "cp",
-            &format!("{service}:/var/lib/omakure/transport.cert"),
+            &source,
             destination.to_str().expect("UTF-8 certificate path"),
-        ])
-        .output()
-        .expect("copy public transport certificate");
+        ],
+    )
+    .output()
+    .expect("copy public transport certificate");
     assert!(output.status.success(), "certificate copy failed");
 }
 
@@ -1294,8 +1226,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
 /// Deliberately the same path the test then uses. A readiness check that took a
 /// different route could go green while the route under test stayed shut.
 fn wait_for_autojoin(guard: &ComposeGuard) {
-    let deadline = Instant::now() + Duration::from_secs(90);
-    while Instant::now() < deadline {
+    if docker::wait_until(Duration::from_secs(90), Duration::from_millis(500), || {
         let output = exec(
             guard,
             "signed-authority",
@@ -1310,10 +1241,9 @@ fn wait_for_autojoin(guard: &ComposeGuard) {
                 "http://signed-autojoin:7878/v1/node/status",
             ],
         );
-        if output.status.success() {
-            return;
-        }
-        thread::sleep(Duration::from_millis(500));
+        output.status.success()
+    }) {
+        return;
     }
     let logs = compose(guard, &["logs", "--no-color", "signed-autojoin"]);
     panic!(

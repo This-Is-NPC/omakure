@@ -17,7 +17,10 @@ mod compose_env;
 use compose_env::ComposeEnv;
 #[path = "support/docker.rs"]
 mod docker;
-use docker::{bounded_command, json_output, output_text, safe_generation_stderr};
+#[path = "support/docker_output.rs"]
+mod docker_output;
+use docker::{bounded_command, safe_generation_stderr};
+use docker_output::{json_output, output_text};
 
 const TARGET_API: &str = "http://127.0.0.1:17878";
 
@@ -184,7 +187,17 @@ impl Drop for ComposeGuard {
 }
 
 fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
-    docker::cleanup_project(&guard.root, &guard.env, compose_project())
+    docker::cleanup_project(
+        compose_project(),
+        &[
+            "-p",
+            compose_project(),
+            "down",
+            "--volumes",
+            "--remove-orphans",
+        ],
+        |args| compose(guard, args),
+    )
 }
 
 #[test]
@@ -198,7 +211,7 @@ fn cleanup_after_induced_partial_up() {
 }
 
 fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
-    docker::compose_command(&guard.root, &guard.env, &[], args)
+    docker::compose_command(&guard.root, |command| guard.env.apply(command), &[], args)
         .output()
         .expect("run docker compose")
 }

@@ -107,9 +107,11 @@ fn signed_bundle_apply_is_target_bound_atomic_and_single_use() {
         token.as_bytes(),
     )
     .unwrap();
-    let mut permissions = fs::metadata(request.bootstrap_token_path.as_ref().unwrap())
+    let permissions = fs::metadata(request.bootstrap_token_path.as_ref().unwrap())
         .unwrap()
         .permissions();
+    #[cfg(unix)]
+    let mut permissions = permissions;
     #[cfg(unix)]
     std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o600);
     fs::set_permissions(request.bootstrap_token_path.as_ref().unwrap(), permissions).unwrap();

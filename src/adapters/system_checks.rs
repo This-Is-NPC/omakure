@@ -297,6 +297,7 @@ pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     type DependencyCheck = fn(&[(String, String)]) -> Result<(), ScriptError>;
 
     #[test]

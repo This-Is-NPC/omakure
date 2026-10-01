@@ -71,6 +71,7 @@ fn a_symlink_is_not_a_regular_file() {
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("real.sh");
     std::fs::write(&target, "#!/usr/bin/env bash\n").unwrap();
+    #[cfg(unix)]
     let link = dir.path().join("link.sh");
     #[cfg(unix)]
     std::os::unix::fs::symlink(&target, &link).unwrap();

@@ -388,9 +388,11 @@ fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
 
 fn write_private_token(path: &Path, token: &str) {
     fs::write(path, token).expect("write bootstrap token");
-    let mut permissions = fs::metadata(path)
+    let permissions = fs::metadata(path)
         .expect("bootstrap token metadata")
         .permissions();
+    #[cfg(unix)]
+    let mut permissions = permissions;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

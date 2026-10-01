@@ -178,12 +178,9 @@ fn resolve_packaging_bash_on_windows() -> Option<PathBuf> {
             return Some(path);
         }
     }
-    for candidate in well_known_git_bash_paths() {
-        if is_windows_packaging_bash(&candidate) {
-            return Some(candidate);
-        }
-    }
-    None
+    well_known_git_bash_paths()
+        .into_iter()
+        .find(|candidate| is_windows_packaging_bash(candidate))
 }
 
 fn decode_command_output(bytes: &[u8]) -> String {

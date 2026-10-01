@@ -4,6 +4,7 @@ use crate::app_meta;
 use crate::operations::OperationErrorCode;
 use crate::runs::{self, EnqueueOptions, RunCompletion, RunState, RunStateSet};
 use crate::test_support::workspace_in;
+#[cfg(unix)]
 use crate::workspace::Workspace;
 use std::path::Path;
 use tempfile::TempDir;

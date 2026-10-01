@@ -63,15 +63,19 @@ fn inline_row(workspace: &Workspace, script: &Path) -> crate::runs::RunRow {
     .unwrap()
 }
 
+#[cfg(unix)]
 mod environment;
 mod lifecycle;
 mod path_and_fields;
+#[cfg(unix)]
 mod secrets;
 
+#[cfg(unix)]
 fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
     !needle.is_empty() && haystack.windows(needle.len()).any(|w| w == needle)
 }
 
+#[cfg(unix)]
 fn read_all_bytes_under(dir: &Path) -> Vec<u8> {
     let mut buf = Vec::new();
     if let Ok(entries) = fs::read_dir(dir) {

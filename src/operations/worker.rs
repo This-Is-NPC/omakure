@@ -358,7 +358,7 @@ fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String) {
     );
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod cue_preflight_tests {
     use super::*;
     use crate::node_identity::NodeIdentity;

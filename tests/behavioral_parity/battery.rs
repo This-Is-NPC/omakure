@@ -537,6 +537,7 @@ fn verify_synced_cache(
     Ok(())
 }
 
+#[cfg(unix)]
 fn verify_installed_script(ctx: &BehavioralContext) -> Result<(), String> {
     let script = ctx.workspace.path().join("scripts/echo.sh");
     require_path(&script);

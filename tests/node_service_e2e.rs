@@ -2,8 +2,10 @@ mod support;
 
 use serde_json::json;
 use std::fs;
+#[cfg(unix)]
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
+#[cfg(unix)]
 use std::process::Command;
 use std::time::Duration;
 

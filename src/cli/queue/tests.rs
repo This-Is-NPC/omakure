@@ -1,14 +1,22 @@
 use super::producers::{parse_humantime_duration_ms, QueueDurationError};
 use super::*;
-use crate::cli::args::{QueueAddArgs, QueueCancelArgs, QueueDeadLetterArgs, QueueWorkerArgs};
+#[cfg(unix)]
+use crate::cli::args::QueueWorkerArgs;
+use crate::cli::args::{QueueAddArgs, QueueCancelArgs, QueueDeadLetterArgs};
+#[cfg(unix)]
 use crate::operations::worker::worker_loop;
+#[cfg(unix)]
 use crate::runs::{self, enqueue, EnqueueOptions, RunCompletion, RunState};
 use crate::test_support::scratch_workspace;
 use std::fs;
+#[cfg(unix)]
 use std::sync::atomic::AtomicBool;
+#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
 use std::thread;
 
+#[cfg(unix)]
 fn make_completion(stdout: &str, stderr: &str, exit: Option<i32>, ok: bool) -> RunCompletion {
     RunCompletion {
         stdout: stdout.to_string(),

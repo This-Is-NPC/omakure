@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(unix)]
 use crate::operations::battery::git::{run_git_capture_with_context, run_git_with_context};
 
 #[cfg(unix)]

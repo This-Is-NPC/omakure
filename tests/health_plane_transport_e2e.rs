@@ -630,11 +630,12 @@ fn trust_snapshot(workspace: &Path) -> String {
 /// holding the shutdown open until its next cadence. Elsewhere the portable
 /// terminate path is used, which still proves the process is reaped.
 fn stop_cleanly(server: &mut Option<support::HttpServer>) {
-    let Some(mut running) = server.take() else {
+    let Some(running) = server.take() else {
         return;
     };
     #[cfg(unix)]
     {
+        let mut running = running;
         let pid = running.child_id();
         // SAFETY: libc::kill is the standard way to signal a child process.
         let rc = unsafe { libc::kill(pid as i32, libc::SIGTERM) };

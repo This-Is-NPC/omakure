@@ -398,6 +398,7 @@ fn a_config_that_cannot_be_read_denies_everything() {
     }
 }
 
+#[cfg(unix)]
 fn valid_config() -> String {
     let mut config = crate::domain::NodeConfig::default();
     config.trust.enrollment = "manual".to_string();

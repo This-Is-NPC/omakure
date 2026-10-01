@@ -1,12 +1,19 @@
 use super::admission::parse_args_json;
+#[cfg(unix)]
 use super::environment::{bash_safe_current_exe, write_redaction_file, RedactionFileError};
 use super::*;
+#[cfg(unix)]
 use crate::adapters::environments::resolve_run_env;
-use crate::runs::{self, EnqueueOptions, RunTrigger};
+#[cfg(unix)]
+use crate::runs::RunTrigger;
+use crate::runs::{self, EnqueueOptions};
 use crate::test_support::scratch_workspace;
 use std::fs;
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::thread;
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 #[cfg(unix)]

@@ -69,6 +69,7 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
+          components: clippy
       - uses: Swatinem/rust-cache@v2.9.2
         with:
           shared-key: build-${{ matrix.target }}
@@ -86,6 +87,12 @@ jobs:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: ./scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"
+      - name: Check Windows all-target Clippy
+        if: matrix.platform == 'windows'
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: cargo clippy --all-targets --locked --target "${{ matrix.target }}" -- -D warnings
 
   lint:
     runs-on: ubuntu-latest

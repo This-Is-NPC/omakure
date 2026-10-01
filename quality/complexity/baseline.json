@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "ded79d22ef6d10b2e016992d6f7ccc15d00598c2bf2e8ff7a7d801a227b4b83d",
+  "canonical_sha256": "ca29c82d01607aa22234fa75be0aa183553e1e362bc17a348c5cb82f01d2b682",
   "config_identity": "no-config",
   "files": [
     {
@@ -3144,12 +3144,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 12,
+        "invocations": 11,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 53,
-        "cyclomatic": 86
+        "cognitive": 48,
+        "cyclomatic": 88
       },
       "path": "src/node_registry/manual_enrollment.rs",
       "source_class": "handwritten"
@@ -4040,7 +4040,7 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 14,
+        "invocations": 21,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
@@ -64173,8 +64173,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 8,
-      "cyclomatic": 8,
+      "cognitive": 2,
+      "cyclomatic": 4,
       "derived": {
         "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment",
         "macro_expansion": "not_measured",
@@ -64184,14 +64184,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment",
       "kind": "method",
-      "line": 39,
+      "line": 54,
       "name": "stage_manual_enrollment",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 8,
-        "cyclomatic": 8,
+        "cognitive": 2,
+        "cyclomatic": 4,
         "kind": "method",
-        "line": 39,
+        "line": 54,
         "name": "stage_manual_enrollment"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64202,22 +64202,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>",
+        "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": ".map_err(|_| RegistryError::InvalidInput(\"transport certificate is invalid\".into()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>",
+      "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>",
       "kind": "closure",
-      "line": 78,
+      "line": 154,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 78,
+        "line": 154,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64228,22 +64228,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@81#2",
+        "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>@166#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": ".map_err(|_| RegistryError::InvalidInput(\"transport certificate is expired\".into()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@81#2",
+      "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>@166#2",
       "kind": "closure",
-      "line": 81,
+      "line": 166,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 81,
+        "line": 166,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64254,22 +64254,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@92#3",
+        "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>@172#3",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@92#3",
+      "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>@172#3",
       "kind": "closure",
-      "line": 92,
+      "line": 172,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 92,
+        "line": 172,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64280,22 +64280,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@94#4",
+        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@82#4",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment expiry is too large\".into()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@94#4",
+      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>@82#4",
       "kind": "closure",
-      "line": 94,
+      "line": 82,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 94,
+        "line": 82,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64306,22 +64306,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>",
+        "identity": "crate::node_registry::manual_enrollment::ensure_pending_transport_key::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": "|row| row.get(0),",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>",
+      "identity": "crate::node_registry::manual_enrollment::ensure_pending_transport_key::<closure>",
       "kind": "closure",
-      "line": 106,
+      "line": 741,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 106,
+        "line": 741,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64332,22 +64332,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>@144#4",
+        "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_identity_available::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": "|row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>@144#4",
+      "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_identity_available::<closure>",
       "kind": "closure",
-      "line": 144,
+      "line": 463,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 144,
+        "line": 463,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64358,22 +64358,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>@261#5",
+        "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": ".ok_or_else(|| RegistryError::Corrupt(\"staged enrollment disappeared\".into()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>@261#5",
+      "identity": "crate::node_registry::manual_enrollment::stage_manual_enrollment::<closure>::<closure>",
       "kind": "closure",
-      "line": 261,
+      "line": 108,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 261,
+        "line": 108,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64462,22 +64462,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@410#2",
+        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@257#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@410#2",
+      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@257#2",
       "kind": "closure",
-      "line": 410,
+      "line": 257,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 410,
+        "line": 257,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64522,14 +64522,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment",
       "kind": "method",
-      "line": 267,
+      "line": 114,
       "name": "approve_manual_enrollment",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 7,
         "kind": "method",
-        "line": 267,
+        "line": 114,
         "name": "approve_manual_enrollment"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64548,14 +64548,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>",
       "kind": "closure",
-      "line": 307,
+      "line": 154,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 307,
+        "line": 154,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64574,14 +64574,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>::<closure>",
       "kind": "closure",
-      "line": 330,
+      "line": 177,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 330,
+        "line": 177,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64592,22 +64592,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>::<closure>@383#2",
+        "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>::<closure>@230#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": ".ok_or_else(|| RegistryError::Corrupt(\"approved enrollment disappeared\".into()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>::<closure>@383#2",
+      "identity": "crate::node_registry::manual_enrollment::approve_manual_enrollment::<closure>::<closure>@230#2",
       "kind": "closure",
-      "line": 383,
+      "line": 230,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 383,
+        "line": 230,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64626,14 +64626,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment",
       "kind": "method",
-      "line": 389,
+      "line": 236,
       "name": "reject_manual_enrollment",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 389,
+        "line": 236,
         "name": "reject_manual_enrollment"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64652,14 +64652,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>",
       "kind": "closure",
-      "line": 401,
+      "line": 248,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 401,
+        "line": 248,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64670,22 +64670,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@413#3",
+        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@260#3",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": "request_id.try_into().map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@413#3",
+      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@260#3",
       "kind": "closure",
-      "line": 413,
+      "line": 260,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 413,
+        "line": 260,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64696,22 +64696,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@416#4",
+        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@263#4",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": "let request_digest: [u8; 32] = request_digest.try_into().map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@416#4",
+      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@263#4",
       "kind": "closure",
-      "line": 416,
+      "line": 263,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 416,
+        "line": 263,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64722,22 +64722,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@454#5",
+        "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@301#5",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/manual_enrollment.rs",
         "signature": ".ok_or_else(|| RegistryError::Corrupt(\"rejected enrollment disappeared\".into()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@454#5",
+      "identity": "crate::node_registry::manual_enrollment::reject_manual_enrollment::<closure>::<closure>@301#5",
       "kind": "closure",
-      "line": 454,
+      "line": 301,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 454,
+        "line": 301,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64756,14 +64756,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::import_manual_peer_with_transport",
       "kind": "method",
-      "line": 464,
+      "line": 311,
       "name": "import_manual_peer_with_transport",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 464,
+        "line": 311,
         "name": "import_manual_peer_with_transport"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -64782,14 +64782,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::import_manual_peer_with_transport::<closure>::<closure>",
       "kind": "closure",
-      "line": 516,
+      "line": 363,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 516,
+        "line": 363,
         "name": "<closure>"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -67553,8 +67553,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 3,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::node_registry::manual_enrollment::registration_from_manual",
         "macro_expansion": "not_measured",
@@ -67564,14 +67564,14 @@
       },
       "identity": "crate::node_registry::manual_enrollment::registration_from_manual",
       "kind": "function",
-      "line": 680,
+      "line": 752,
       "name": "registration_from_manual",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 3,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 680,
+        "line": 752,
         "name": "registration_from_manual"
       },
       "path": "src/node_registry/manual_enrollment.rs",
@@ -88234,14 +88234,14 @@
       },
       "identity": "crate::operations::node::tests::manual_enrollment::manual_enrollment_rejection_audit_failure_is_atomic",
       "kind": "function",
-      "line": 86,
+      "line": 119,
       "name": "manual_enrollment_rejection_audit_failure_is_atomic",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 86,
+        "line": 119,
         "name": "manual_enrollment_rejection_audit_failure_is_atomic"
       },
       "path": "src/operations/node/tests/manual_enrollment.rs",
@@ -106758,6 +106758,370 @@
       },
       "path": "src/cli/node_service.rs",
       "signature": "let watcher = thread::spawn(move || {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::import_manual_peer_with_transport::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "self.with_mutating_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::import_manual_peer_with_transport::<closure>",
+      "kind": "closure",
+      "line": 318,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "closure",
+        "line": 318,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "self.with_mutating_connection(|connection| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_request",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn validate_manual_stage_request( registry: &NodeRegistry, request: &ManualEnrollmentRequest, now: u64, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_request",
+      "kind": "function",
+      "line": 370,
+      "name": "validate_manual_stage_request",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 370,
+        "name": "validate_manual_stage_request"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn validate_manual_stage_request( registry: &NodeRegistry, request: &ManualEnrollmentRequest, now: u64, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_capacity",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn validate_manual_stage_capacity( transaction: &Transaction<'_>, stage: &ManualStageInput<'_>, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_capacity",
+      "kind": "function",
+      "line": 406,
+      "name": "validate_manual_stage_capacity",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 406,
+        "name": "validate_manual_stage_capacity"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn validate_manual_stage_capacity( transaction: &Transaction<'_>, stage: &ManualStageInput<'_>, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_capacity::<closure>@434#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "|row| row.get::<_, i64>(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_capacity::<closure>@434#3",
+      "kind": "closure",
+      "line": 434,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 434,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "|row| row.get::<_, i64>(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_identity_available",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn validate_manual_stage_identity_available( registry: &NodeRegistry, transaction: &Transaction<'_>, stage: &ManualStageInput<'_>, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::validate_manual_stage_identity_available",
+      "kind": "function",
+      "line": 450,
+      "name": "validate_manual_stage_identity_available",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 450,
+        "name": "validate_manual_stage_identity_available"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn validate_manual_stage_identity_available( registry: &NodeRegistry, transaction: &Transaction<'_>, stage: &ManualStageInput<'_>, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::insert_manual_stage",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn insert_manual_stage( transaction: &Transaction<'_>, stage: &ManualStageInput<'_>, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::insert_manual_stage",
+      "kind": "function",
+      "line": 498,
+      "name": "insert_manual_stage",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 498,
+        "name": "insert_manual_stage"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn insert_manual_stage( transaction: &Transaction<'_>, stage: &ManualStageInput<'_>, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::load_staged_manual_enrollment",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn load_staged_manual_enrollment( transaction: &Transaction<'_>, request_id: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::load_staged_manual_enrollment",
+      "kind": "function",
+      "line": 595,
+      "name": "load_staged_manual_enrollment",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 595,
+        "name": "load_staged_manual_enrollment"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn load_staged_manual_enrollment( transaction: &Transaction<'_>, request_id: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::load_staged_manual_enrollment::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "|row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::load_staged_manual_enrollment::<closure>",
+      "kind": "closure",
+      "line": 607,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 607,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "|row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::load_staged_manual_enrollment::<closure>@629#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": ".ok_or_else(|| RegistryError::NotFound(node_id.to_string()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::load_staged_manual_enrollment::<closure>@629#2",
+      "kind": "closure",
+      "line": 629,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 629,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": ".ok_or_else(|| RegistryError::NotFound(node_id.to_string()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::ensure_staged_manual_enrollment_matches",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn ensure_staged_manual_enrollment_matches( staged: &StagedManualEnrollment, request: &ManualEnrollmentRequest, request_bytes: &[u8], request_digest: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::ensure_staged_manual_enrollment_matches",
+      "kind": "function",
+      "line": 632,
+      "name": "ensure_staged_manual_enrollment_matches",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 632,
+        "name": "ensure_staged_manual_enrollment_matches"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn ensure_staged_manual_enrollment_matches( staged: &StagedManualEnrollment, request: &ManualEnrollmentRequest, request_bytes: &[u8], request_digest: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::ensure_staged_request_fields_match",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn ensure_staged_request_fields_match( staged: &StagedManualEnrollment, request: &ManualEnrollmentRequest, request_bytes: &[u8], request_digest: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::ensure_staged_request_fields_match",
+      "kind": "function",
+      "line": 649,
+      "name": "ensure_staged_request_fields_match",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 8,
+        "cyclomatic": 9,
+        "kind": "function",
+        "line": 649,
+        "name": "ensure_staged_request_fields_match"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn ensure_staged_request_fields_match( staged: &StagedManualEnrollment, request: &ManualEnrollmentRequest, request_bytes: &[u8], request_digest: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::ensure_staged_certificate_fields_match",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn ensure_staged_certificate_fields_match( staged: &StagedManualEnrollment, certificate: &TransportCertificate, certificate_digest: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::ensure_staged_certificate_fields_match",
+      "kind": "function",
+      "line": 682,
+      "name": "ensure_staged_certificate_fields_match",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 682,
+        "name": "ensure_staged_certificate_fields_match"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn ensure_staged_certificate_fields_match( staged: &StagedManualEnrollment, certificate: &TransportCertificate, certificate_digest: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::ensure_manual_peer_can_be_approved",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn ensure_manual_peer_can_be_approved( current: &PeerRecord, registration: &PeerRegistration, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::ensure_manual_peer_can_be_approved",
+      "kind": "function",
+      "line": 708,
+      "name": "ensure_manual_peer_can_be_approved",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 708,
+        "name": "ensure_manual_peer_can_be_approved"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn ensure_manual_peer_can_be_approved( current: &PeerRecord, registration: &PeerRegistration, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::manual_enrollment::ensure_pending_transport_key",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/manual_enrollment.rs",
+        "signature": "fn ensure_pending_transport_key( transaction: &Transaction<'_>, node_id: &str, certificate: &TransportCertificate, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::manual_enrollment::ensure_pending_transport_key",
+      "kind": "function",
+      "line": 732,
+      "name": "ensure_pending_transport_key",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 732,
+        "name": "ensure_pending_transport_key"
+      },
+      "path": "src/node_registry/manual_enrollment.rs",
+      "signature": "fn ensure_pending_transport_key( transaction: &Transaction<'_>, node_id: &str, certificate: &TransportCertificate, ) -> Result<(), RegistryError>",
       "source_class": "handwritten"
     }
   ],

@@ -45,6 +45,31 @@ fn manual_enrollment_stages_requires_code_and_promotes_atomically() {
     .unwrap();
     assert_eq!(pending.state, "pending");
     assert_eq!(list_pending_enrollments(&target).unwrap().len(), 1);
+    let replay = stage_manual_enrollment(
+        &target,
+        &offer.request,
+        candidate_transport.certificate().as_bytes(),
+    )
+    .unwrap_err();
+    assert_eq!(replay.code, OperationErrorCode::EnrollmentReplay);
+    assert_eq!(list_pending_enrollments(&target).unwrap().len(), 1);
+    let fresh_offer = ManualEnrollmentRequest::create(
+        &candidate_identity,
+        *candidate_transport.certificate().transport_public(),
+        EnrollmentRole::Performer,
+        vec!["remote-run".into()],
+        crate::util::time::unix_seconds(),
+        300,
+    )
+    .unwrap();
+    let pending_conflict = stage_manual_enrollment(
+        &target,
+        &fresh_offer.request,
+        candidate_transport.certificate().as_bytes(),
+    )
+    .unwrap_err();
+    assert_eq!(pending_conflict.code, OperationErrorCode::EnrollmentReplay);
+    assert_eq!(list_pending_enrollments(&target).unwrap().len(), 1);
 
     fail_enrollment_audits(&target, true);
     let denied = approve_manual_enrollment(
@@ -80,6 +105,14 @@ fn manual_enrollment_stages_requires_code_and_promotes_atomically() {
     assert_eq!(approved.state, "active");
     assert!(list_pending_enrollments(&target).unwrap().is_empty());
     assert_eq!(list_trusted_peers(&target).unwrap()[0].state, "active");
+    let active_conflict = stage_manual_enrollment(
+        &target,
+        &fresh_offer.request,
+        candidate_transport.certificate().as_bytes(),
+    )
+    .unwrap_err();
+    assert_eq!(active_conflict.code, OperationErrorCode::Conflict);
+    assert!(list_pending_enrollments(&target).unwrap().is_empty());
 }
 
 #[test]

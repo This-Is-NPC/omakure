@@ -171,10 +171,13 @@ impl SecretAccess {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum SecretResolveError {
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum SecretResolveError {
+    #[error("{0}")]
     Denied(String),
+    #[error("secret ref not found")]
     NotFound,
+    #[error("invalid secret ref")]
     InvalidRef,
 }
 
@@ -235,7 +238,7 @@ pub fn resolve_args_with_access(
         let mut resolved = None;
         for candidate in candidates.into_iter().flatten() {
             match resolve_secret_ref(workspace, &candidate, access)
-                .map_err(|err| (field.name.clone(), secret_error_message(err)))?
+                .map_err(|err| (field.name.clone(), err.to_string()))?
             {
                 Some(value) => {
                     resolved = Some(ResolvedSecretValue {
@@ -454,9 +457,9 @@ fn resolve_secret_ref(
 }
 
 /// Check whether `access` permits resolving `value` without fetching the secret.
-pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), String> {
-    let secret_ref = SecretRef::parse(value).ok_or_else(|| "invalid secret ref".to_string())?;
-    access.can_use(&secret_ref).map_err(secret_error_message)
+pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), SecretResolveError> {
+    let secret_ref = SecretRef::parse(value).ok_or(SecretResolveError::InvalidRef)?;
+    access.can_use(&secret_ref)
 }
 
 /// Resolve a `secret://…` ref to its plaintext value under `access`.
@@ -468,8 +471,8 @@ pub fn resolve_secret_value(
 ) -> Result<String, String> {
     match resolve_secret_ref(workspace, value, access) {
         Ok(Some(v)) => Ok(v),
-        Ok(None) => Err("secret ref not found".to_string()),
-        Err(err) => Err(secret_error_message(err)),
+        Ok(None) => Err(SecretResolveError::NotFound.to_string()),
+        Err(err) => Err(err.to_string()),
     }
 }
 
@@ -573,14 +576,6 @@ fn valid_provider_name(name: &str) -> bool {
         && Path::new(name).components().count() == 1
 }
 
-fn secret_error_message(err: SecretResolveError) -> String {
-    match err {
-        SecretResolveError::Denied(message) => message,
-        SecretResolveError::NotFound => "secret ref not found".to_string(),
-        SecretResolveError::InvalidRef => "invalid secret ref".to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -672,6 +667,22 @@ mod tests {
             "invalid secret: field name cannot be empty"
         );
         assert!(!err.to_string().contains("raw_secret_value"));
+    }
+
+    #[test]
+    fn check_secret_access_keeps_error_text_and_hides_ref() {
+        let access = SecretAccess::new(["secrets:use"], ["secret://prod/allowed"]);
+        let invalid = check_secret_access("secret://", &access).unwrap_err();
+        assert_eq!(invalid, SecretResolveError::InvalidRef);
+        assert_eq!(invalid.to_string(), "invalid secret ref");
+
+        let denied = check_secret_access("secret://prod/raw_secret_value", &access).unwrap_err();
+        assert_eq!(
+            denied,
+            SecretResolveError::Denied("secret ref is not allowed".into())
+        );
+        assert_eq!(denied.to_string(), "secret ref is not allowed");
+        assert!(!denied.to_string().contains("raw_secret_value"));
     }
 
     #[test]

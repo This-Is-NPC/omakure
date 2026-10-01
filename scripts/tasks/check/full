@@ -24,8 +24,9 @@ for script in \
     scripts/tasks/atomic/clippy \
     scripts/tasks/check/platform/linux-gnu \
     scripts/tasks/atomic/dev-smoke \
-    scripts/tasks/atomic/usage-kdl \
-    scripts/tasks/atomic/usage-docs \
+    scripts/tasks/atomic/run-bounded \
+    scripts/tasks/usage-kdl \
+    scripts/tasks/usage-docs \
     scripts/tasks/atomic/operation-catalog \
     scripts/tasks/atomic/complexity \
     scripts/tasks/atomic/package-artifact \
@@ -62,8 +63,8 @@ printf 'check:full: Linux GNU platform suite\n'
 printf 'check:full: development service smoke\n'
 "$root/scripts/tasks/atomic/dev-smoke"
 printf 'check:full: Usage KDL and docs/catalog checks\n'
-"$root/scripts/tasks/atomic/usage-kdl" --check
-"$root/scripts/tasks/atomic/usage-docs" --check
+"$root/scripts/tasks/atomic/run-bounded" 5m "$root/scripts/tasks/usage-kdl" --check
+"$root/scripts/tasks/atomic/run-bounded" 5m "$root/scripts/tasks/usage-docs" --check
 "$root/scripts/tasks/atomic/operation-catalog" --check
 printf 'check:full: deterministic coverage\n'
 "$root/scripts/tasks/atomic/coverage"

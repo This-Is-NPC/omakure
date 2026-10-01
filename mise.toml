@@ -66,11 +66,11 @@ outputs = ["target/release/omakure"]
 
 [tasks."usage:kdl"]
 description = "Generate or check the pinned Clap-to-Usage KDL compatibility artifacts"
-run = "scripts/tasks/atomic/usage-kdl"
+run = "scripts/tasks/atomic/run-bounded 5m scripts/tasks/usage-kdl"
 
 [tasks."usage:docs"]
 description = "Generate or check deterministic Markdown and roff Usage documentation"
-run = "scripts/tasks/atomic/usage-docs"
+run = "scripts/tasks/atomic/run-bounded 5m scripts/tasks/usage-docs"
 
 [tasks."operation:catalog"]
 description = "Generate or check the operation catalog artifacts"

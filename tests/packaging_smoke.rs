@@ -759,20 +759,36 @@ fn generated_documentation_checks_are_read_only_and_fresh() {
             )
         })
         .collect::<Vec<_>>();
-    for script in [
-        "scripts/tasks/cli-reference",
-        "scripts/tasks/atomic/usage-kdl",
-        "scripts/tasks/atomic/usage-docs",
-        "scripts/tasks/atomic/operation-catalog",
+    for (label, script, args) in [
+        (
+            "cli-reference",
+            "scripts/tasks/cli-reference",
+            &["--check"][..],
+        ),
+        (
+            "usage-kdl",
+            "scripts/tasks/atomic/run-bounded",
+            &["5m", "scripts/tasks/usage-kdl", "--check"][..],
+        ),
+        (
+            "usage-docs",
+            "scripts/tasks/atomic/run-bounded",
+            &["5m", "scripts/tasks/usage-docs", "--check"][..],
+        ),
+        (
+            "operation-catalog",
+            "scripts/tasks/atomic/operation-catalog",
+            &["--check"][..],
+        ),
     ] {
         let output = Command::new(root.join(script))
-            .arg("--check")
+            .args(args)
             .current_dir(&root)
             .output()
-            .unwrap_or_else(|error| panic!("run {script} --check: {error}"));
+            .unwrap_or_else(|error| panic!("run {label} --check: {error}"));
         assert!(
             output.status.success(),
-            "{script} --check failed: {}",
+            "{label} --check failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     }

@@ -8,6 +8,7 @@ use crate::adapters::script_runner::MultiScriptRunner;
 use crate::runs::{self, RunCompletion, RunRow, RunState};
 use crate::secrets::ResolvedArgs;
 use crate::workspace::Workspace;
+use std::io;
 use std::path::PathBuf;
 use std::process::{Child, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -121,16 +122,24 @@ impl HeartbeatWatcher {
     }
 }
 
-fn kill_and_wait(child: &mut Child) -> Result<ExitStatus, String> {
+#[derive(Debug, thiserror::Error)]
+enum ChildWaitError {
+    #[error("wait failed: {0}")]
+    Poll(#[source] io::Error),
+    #[error("{0}")]
+    Reap(#[source] io::Error),
+}
+
+fn kill_and_wait(child: &mut Child) -> Result<ExitStatus, ChildWaitError> {
     let _ = child.kill();
-    child.wait().map_err(|error| error.to_string())
+    child.wait().map_err(ChildWaitError::Reap)
 }
 
 fn wait_for_child(
     child: &mut Child,
     cancelled: &AtomicBool,
     timeout_ms: Option<i64>,
-) -> (Result<ExitStatus, String>, bool) {
+) -> (Result<ExitStatus, ChildWaitError>, bool) {
     let started = Instant::now();
     let timeout = timeout_ms.map(|ms| Duration::from_millis(ms.max(0) as u64));
     loop {
@@ -145,13 +154,13 @@ fn wait_for_child(
                 }
                 thread::sleep(Duration::from_millis(50));
             }
-            Err(error) => return (Err(format!("wait failed: {}", error)), false),
+            Err(error) => return (Err(ChildWaitError::Poll(error)), false),
         }
     }
 }
 
 fn classify_outcome(
-    outcome: Result<ExitStatus, String>,
+    outcome: Result<ExitStatus, ChildWaitError>,
     cancelled: bool,
     timed_out: bool,
     stdout: &str,
@@ -190,7 +199,7 @@ fn classify_outcome(
                 stderr,
                 exit_code: None,
                 success: false,
-                error: Some(crate::secrets::redact_text(&error, secrets)),
+                error: Some(crate::secrets::redact_text(&error.to_string(), secrets)),
             },
         },
     }
@@ -305,4 +314,46 @@ pub fn execute_with_heartbeat_guarded(
         &stderr_text,
         &resolved_args.secrets,
     )
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    fn externally_reaped_child() -> Child {
+        let child = Command::new("/bin/sh")
+            .args(["-c", "exit 0"])
+            .spawn()
+            .unwrap();
+        let mut status = 0;
+        // SAFETY: this process owns the child PID, and status points to valid storage.
+        let reaped = unsafe { libc::waitpid(child.id() as libc::pid_t, &mut status, 0) };
+        assert_eq!(reaped, child.id() as libc::pid_t);
+        child
+    }
+
+    #[test]
+    fn child_wait_errors_preserve_text_and_override_timeout_or_cancellation() {
+        let mut child = externally_reaped_child();
+        let cancelled = AtomicBool::new(false);
+        let (outcome, timed_out) = wait_for_child(&mut child, &cancelled, None);
+        assert!(!timed_out);
+        let error = outcome.unwrap_err();
+        assert!(matches!(error, ChildWaitError::Poll(_)));
+        let expected = error.to_string();
+        assert!(expected.starts_with("wait failed: "));
+        let result = classify_outcome(Err(error), true, true, "", "", &[]);
+        assert_eq!(result.terminal, ExecutionTerminal::Errored);
+        assert_eq!(result.completion.error.as_deref(), Some(expected.as_str()));
+
+        let mut child = externally_reaped_child();
+        let error = kill_and_wait(&mut child).unwrap_err();
+        assert!(matches!(error, ChildWaitError::Reap(_)));
+        let expected = error.to_string();
+        assert!(!expected.starts_with("wait failed: "));
+        let result = classify_outcome(Err(error), true, true, "", "", &[]);
+        assert_eq!(result.terminal, ExecutionTerminal::Errored);
+        assert_eq!(result.completion.error.as_deref(), Some(expected.as_str()));
+    }
 }

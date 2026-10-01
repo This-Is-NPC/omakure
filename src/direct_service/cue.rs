@@ -1,3 +1,4 @@
+use super::ack::verified_ack;
 use super::connection::ConnectionState;
 use super::error::DirectServiceError;
 use super::outbox::dispatch_answer_deadline;
@@ -149,49 +150,24 @@ impl OutboundCue {
         peer_identity_key: &[u8; 32],
         session_id: &[u8; 32],
     ) -> CueAckMatch {
-        if crate::direct_transport::envelope_kind_hint(body) != Some(crate::remote_cue::KIND_ACK) {
-            return CueAckMatch::Other;
-        }
-        let Ok(nonce) = envelope_nonce(body) else {
-            return CueAckMatch::Other;
-        };
-        // Anchored to the identity the handshake established, not to anything
-        // the message says about itself.
-        if verify_envelope(
+        let Some(ack) = verified_ack(
             body,
             peer_node_id,
             peer_identity_key,
-            crate::remote_cue::KIND_ACK,
             session_id,
-            &nonce,
-        )
-        .is_err()
-        {
-            return CueAckMatch::Other;
-        }
-        let Ok(view) = crate::direct_transport::envelope_view(body) else {
+            crate::remote_cue::KIND_ACK,
+            "cue_id",
+            &self.pending.cue_id,
+        ) else {
             return CueAckMatch::Other;
         };
-        let Some(ack) = view.payload.as_object() else {
-            return CueAckMatch::Other;
-        };
-        // An ack for a different Cue is not an answer to this one.
-        if ack.get("cue_id").and_then(serde_json::Value::as_str) != Some(&self.pending.cue_id) {
-            return CueAckMatch::Other;
-        }
-        let accepted = ack
-            .get("accepted")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
+        let accepted = ack.accepted;
         if accepted {
             self.code = Some(0);
             return CueAckMatch::Accepted;
         }
         let code = ack
-            .get("error")
-            .and_then(|error| error.get("code"))
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|code| u16::try_from(code).ok())
+            .error_code
             .unwrap_or_else(|| CueCode::InvalidMessage.code());
         std::mem::replace(&mut self.pending, placeholder_cue()).answer(true, false, code, false);
         CueAckMatch::Refused

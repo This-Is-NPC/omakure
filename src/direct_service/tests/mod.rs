@@ -39,6 +39,38 @@ mod outbox;
 mod resolver;
 mod stream;
 
+struct AckFixtures<'a> {
+    valid: &'a [u8],
+    wrong_kind: &'a [u8],
+    peer_node_id: &'a str,
+    peer_key: &'a [u8; 32],
+    session_id: &'a [u8; 32],
+}
+
+fn assert_unmatched_acks<T: std::fmt::Debug + PartialEq, U>(
+    fixtures: AckFixtures<'_>,
+    expected: T,
+    answers: &std::sync::mpsc::Receiver<U>,
+    mut absorb: impl FnMut(&[u8], &str, &[u8; 32], &[u8; 32]) -> T,
+) {
+    let AckFixtures {
+        valid,
+        wrong_kind,
+        peer_node_id,
+        peer_key,
+        session_id,
+    } = fixtures;
+    for (body, node_id, key, session) in [
+        (wrong_kind, peer_node_id, peer_key, session_id),
+        (valid, "wrong-node", peer_key, session_id),
+        (valid, peer_node_id, &[0u8; 32], session_id),
+        (valid, peer_node_id, peer_key, &[0u8; 32]),
+    ] {
+        assert_eq!(&absorb(body, node_id, key, session), &expected);
+        assert!(answers.try_recv().is_err());
+    }
+}
+
 static RESOLVER_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 fn test_identity_status(node_id: &str) -> crate::node_identity::NodeIdentityStatus {

@@ -194,6 +194,7 @@ src/
 │   └── health/              Health Plane reads and receive-order application
 ├── direct_transport/        Noise framing, certificates, envelopes, and replay limits
 ├── direct_service/          production direct listener, peer admission, and outboxes
+│   └── ack.rs               shared signed ACK verification for Cue and Baseline
 ├── direct_health.rs         Health Plane carriage over an established direct session
 ├── health_plane/            protocol-neutral Health Plane operations
 │   ├── schema.rs            frozen wire schema

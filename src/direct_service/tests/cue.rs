@@ -160,6 +160,37 @@ fn an_ack_for_a_different_cue_is_never_taken_as_this_ones_answer() {
     );
 }
 
+#[test]
+fn cue_ack_rejects_wrong_kind_identity_and_session() {
+    let temp = tempfile::tempdir().expect("workspace");
+    let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+    let session_id = [23u8; 32];
+    let (mut in_flight, answers) = outbound_cue_waiting("cue-mine");
+    let ack = signed_cue_ack(&peer, &session_id, "cue-mine", true);
+    let wrong_kind = crate::direct_transport::sign_cue_envelope(
+        &peer,
+        crate::remote_cue::KIND_DISPATCH,
+        &session_id,
+        [11u8; 16],
+        serde_json::json!({"cue_id": "cue-mine", "accepted": true}),
+        unix_seconds(),
+    )
+    .expect("sign wrong kind")
+    .encoded();
+    assert_unmatched_acks(
+        AckFixtures {
+            valid: &ack,
+            wrong_kind: &wrong_kind,
+            peer_node_id: &peer_node_id,
+            peer_key: &peer_key,
+            session_id: &session_id,
+        },
+        CueAckMatch::Other,
+        &answers,
+        |body, node_id, key, session| in_flight.absorb_ack(body, node_id, key, session),
+    );
+}
+
 /// A Cue must not reach a peer this node has revoked.
 ///
 /// This is the live two-VM failure: `node revoke` on the Conductor, and the

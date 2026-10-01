@@ -148,6 +148,37 @@ fn an_ack_for_a_different_baseline_is_never_taken_as_this_ones_answer() {
     );
 }
 
+#[test]
+fn baseline_ack_rejects_wrong_kind_identity_and_session() {
+    let temp = tempfile::tempdir().expect("workspace");
+    let (peer, peer_node_id, peer_key) = test_peer_identity(&temp);
+    let session_id = [23u8; 32];
+    let (mut in_flight, answers) = outbound_baseline_waiting("111111", Duration::from_secs(60));
+    let ack = signed_baseline_ack(&peer, &session_id, "111111", true);
+    let wrong_kind = crate::direct_transport::sign_baseline_envelope(
+        &peer,
+        crate::baseline_push::KIND_PUSH,
+        &session_id,
+        [11u8; 16],
+        serde_json::json!({"baseline_id": "111111", "accepted": true}),
+        unix_seconds(),
+    )
+    .expect("sign wrong kind")
+    .encoded();
+    assert_unmatched_acks(
+        AckFixtures {
+            valid: &ack,
+            wrong_kind: &wrong_kind,
+            peer_node_id: &peer_node_id,
+            peer_key: &peer_key,
+            session_id: &session_id,
+        },
+        BaselineAckMatch::Other,
+        &answers,
+        |body, node_id, key, session| in_flight.absorb_ack(body, node_id, key, session),
+    );
+}
+
 /// The "one baseline in flight per session" bound is about unanswered bytes
 /// on the wire, not about remembering an id: a slot kept only so a late ack
 /// can be recognized must not hold the next push behind it for the rest of

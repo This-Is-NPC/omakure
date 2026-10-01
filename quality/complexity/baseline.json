@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "0357551588c92668299fd5f5464379424bd8c804cd8add642eac016fa6bea213",
+  "canonical_sha256": "e08739bfef137b6bb4e9d6d1e10d3b8b534a9f3bfe4ac7dedacba8679e860bd9",
   "config_identity": "no-config",
   "files": [
     {
@@ -1660,6 +1660,20 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 2,
+        "cyclomatic": 5
+      },
+      "path": "src/direct_service/ack.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
         "invocations": 2,
         "score_inclusion": "native_source_ast_only"
       },
@@ -1678,8 +1692,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 11,
-        "cyclomatic": 28
+        "cognitive": 8,
+        "cyclomatic": 23
       },
       "path": "src/direct_service/baseline.rs",
       "source_class": "handwritten"
@@ -1706,8 +1720,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 48,
-        "cyclomatic": 59
+        "cognitive": 45,
+        "cyclomatic": 54
       },
       "path": "src/direct_service/cue.rs",
       "source_class": "handwritten"
@@ -1870,12 +1884,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 18,
+        "invocations": 19,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 2,
-        "cyclomatic": 10
+        "cyclomatic": 12
       },
       "path": "src/direct_service/tests/baseline.rs",
       "source_class": "handwritten"
@@ -1898,12 +1912,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 24,
+        "invocations": 25,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 3,
-        "cyclomatic": 12
+        "cyclomatic": 14
       },
       "path": "src/direct_service/tests/cue.rs",
       "source_class": "handwritten"
@@ -1940,12 +1954,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 2,
+        "invocations": 4,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 0,
-        "cyclomatic": 3
+        "cognitive": 1,
+        "cyclomatic": 5
       },
       "path": "src/direct_service/tests/mod.rs",
       "source_class": "handwritten"
@@ -39548,14 +39562,14 @@
       },
       "identity": "crate::direct_service::cue_dispatcher",
       "kind": "method",
-      "line": 97,
+      "line": 98,
       "name": "cue_dispatcher",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 97,
+        "line": 98,
         "name": "cue_dispatcher"
       },
       "path": "src/direct_service/mod.rs",
@@ -39574,14 +39588,14 @@
       },
       "identity": "crate::direct_service::baseline_dispatcher",
       "kind": "method",
-      "line": 103,
+      "line": 104,
       "name": "baseline_dispatcher",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 103,
+        "line": 104,
         "name": "baseline_dispatcher"
       },
       "path": "src/direct_service/mod.rs",
@@ -39600,14 +39614,14 @@
       },
       "identity": "crate::direct_service::start",
       "kind": "method",
-      "line": 109,
+      "line": 110,
       "name": "start",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 109,
+        "line": 110,
         "name": "start"
       },
       "path": "src/direct_service/mod.rs",
@@ -39626,14 +39640,14 @@
       },
       "identity": "crate::direct_service::start::<closure>",
       "kind": "closure",
-      "line": 118,
+      "line": 119,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 118,
+        "line": 119,
         "name": "<closure>"
       },
       "path": "src/direct_service/mod.rs",
@@ -39644,22 +39658,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::start::<closure>@140#2",
+        "identity": "crate::direct_service::start::<closure>@141#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/mod.rs",
         "signature": ".map(|bind| DirectListener::start_with_state(bind, context.clone(), Arc::clone(&state)))",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::start::<closure>@140#2",
+      "identity": "crate::direct_service::start::<closure>@141#2",
       "kind": "closure",
-      "line": 140,
+      "line": 141,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 140,
+        "line": 141,
         "name": "<closure>"
       },
       "path": "src/direct_service/mod.rs",
@@ -39670,22 +39684,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::start::<closure>@153#3",
+        "identity": "crate::direct_service::start::<closure>@154#3",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/mod.rs",
         "signature": "dialer_handles.push(thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::start::<closure>@153#3",
+      "identity": "crate::direct_service::start::<closure>@154#3",
       "kind": "closure",
-      "line": 153,
+      "line": 154,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 153,
+        "line": 154,
         "name": "<closure>"
       },
       "path": "src/direct_service/mod.rs",
@@ -39704,14 +39718,14 @@
       },
       "identity": "crate::direct_service::status",
       "kind": "method",
-      "line": 172,
+      "line": 173,
       "name": "status",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 172,
+        "line": 173,
         "name": "status"
       },
       "path": "src/direct_service/mod.rs",
@@ -39730,14 +39744,14 @@
       },
       "identity": "crate::direct_service::stop",
       "kind": "method",
-      "line": 176,
+      "line": 177,
       "name": "stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 176,
+        "line": 177,
         "name": "stop"
       },
       "path": "src/direct_service/mod.rs",
@@ -39756,14 +39770,14 @@
       },
       "identity": "crate::direct_service::drop",
       "kind": "method",
-      "line": 193,
+      "line": 194,
       "name": "drop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 193,
+        "line": 194,
         "name": "drop"
       },
       "path": "src/direct_service/mod.rs",
@@ -42018,14 +42032,14 @@
       },
       "identity": "crate::direct_service::cue::has_session",
       "kind": "method",
-      "line": 100,
+      "line": 101,
       "name": "has_session",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 100,
+        "line": 101,
         "name": "has_session"
       },
       "path": "src/direct_service/cue.rs",
@@ -42070,14 +42084,14 @@
       },
       "identity": "crate::direct_service::baseline::push_baseline",
       "kind": "method",
-      "line": 66,
+      "line": 67,
       "name": "push_baseline",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 66,
+        "line": 67,
         "name": "push_baseline"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42088,22 +42102,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::baseline::push_baseline::<closure>",
+        "identity": "crate::direct_service::baseline::push_baseline::<closure>@86#3",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/baseline.rs",
         "signature": ".map_err(|_| TransportError::InvalidFrame)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::baseline::push_baseline::<closure>",
+      "identity": "crate::direct_service::baseline::push_baseline::<closure>@86#3",
       "kind": "closure",
-      "line": 78,
+      "line": 86,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 78,
+        "line": 86,
         "name": "<closure>"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42174,14 +42188,14 @@
       },
       "identity": "crate::direct_service::cue::answer",
       "kind": "method",
-      "line": 108,
+      "line": 109,
       "name": "answer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 108,
+        "line": 109,
         "name": "answer"
       },
       "path": "src/direct_service/cue.rs",
@@ -42200,14 +42214,14 @@
       },
       "identity": "crate::direct_service::cue::new",
       "kind": "method",
-      "line": 129,
+      "line": 130,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 129,
+        "line": 130,
         "name": "new"
       },
       "path": "src/direct_service/cue.rs",
@@ -42215,8 +42229,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 5,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::direct_service::cue::absorb_ack",
         "macro_expansion": "not_measured",
@@ -42226,14 +42240,14 @@
       },
       "identity": "crate::direct_service::cue::absorb_ack",
       "kind": "method",
-      "line": 145,
+      "line": 146,
       "name": "absorb_ack",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 5,
+        "cognitive": 1,
+        "cyclomatic": 2,
         "kind": "method",
-        "line": 145,
+        "line": 146,
         "name": "absorb_ack"
       },
       "path": "src/direct_service/cue.rs",
@@ -42247,71 +42261,19 @@
         "identity": "crate::direct_service::cue::absorb_ack::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/cue.rs",
-        "signature": ".and_then(|error| error.get(\"code\"))",
+        "signature": ".unwrap_or_else(|| CueCode::InvalidMessage.code());",
         "source_class": "handwritten"
       },
       "identity": "crate::direct_service::cue::absorb_ack::<closure>",
       "kind": "closure",
-      "line": 192,
+      "line": 171,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 192,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/cue.rs",
-      "signature": ".and_then(|error| error.get(\"code\"))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::cue::absorb_ack::<closure>@194#2",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/cue.rs",
-        "signature": ".and_then(|code| u16::try_from(code).ok())",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::cue::absorb_ack::<closure>@194#2",
-      "kind": "closure",
-      "line": 194,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 194,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/cue.rs",
-      "signature": ".and_then(|code| u16::try_from(code).ok())",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::cue::absorb_ack::<closure>@195#3",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/cue.rs",
-        "signature": ".unwrap_or_else(|| CueCode::InvalidMessage.code());",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::cue::absorb_ack::<closure>@195#3",
-      "kind": "closure",
-      "line": 195,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 195,
+        "line": 171,
         "name": "<closure>"
       },
       "path": "src/direct_service/cue.rs",
@@ -42330,14 +42292,14 @@
       },
       "identity": "crate::direct_service::cue::resolve",
       "kind": "method",
-      "line": 205,
+      "line": 181,
       "name": "resolve",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 205,
+        "line": 181,
         "name": "resolve"
       },
       "path": "src/direct_service/cue.rs",
@@ -42356,14 +42318,14 @@
       },
       "identity": "crate::direct_service::baseline::answer",
       "kind": "method",
-      "line": 123,
+      "line": 124,
       "name": "answer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 123,
+        "line": 124,
         "name": "answer"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42382,14 +42344,14 @@
       },
       "identity": "crate::direct_service::baseline::new",
       "kind": "method",
-      "line": 163,
+      "line": 164,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 163,
+        "line": 164,
         "name": "new"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42408,14 +42370,14 @@
       },
       "identity": "crate::direct_service::baseline::is_answered",
       "kind": "method",
-      "line": 176,
+      "line": 177,
       "name": "is_answered",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 176,
+        "line": 177,
         "name": "is_answered"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42426,22 +42388,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::baseline::absorb_ack::<closure>@231#3",
+        "identity": "crate::direct_service::baseline::absorb_ack::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/baseline.rs",
         "signature": ".unwrap_or_else(|| crate::baseline_push::BaselineCode::InvalidMessage.code())",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::baseline::absorb_ack::<closure>@231#3",
+      "identity": "crate::direct_service::baseline::absorb_ack::<closure>",
       "kind": "closure",
-      "line": 231,
+      "line": 206,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 231,
+        "line": 206,
         "name": "<closure>"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42460,14 +42422,14 @@
       },
       "identity": "crate::direct_service::baseline::expire_if_due",
       "kind": "method",
-      "line": 253,
+      "line": 228,
       "name": "expire_if_due",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 253,
+        "line": 228,
         "name": "expire_if_due"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42486,14 +42448,14 @@
       },
       "identity": "crate::direct_service::baseline::placeholder_baseline",
       "kind": "function",
-      "line": 265,
+      "line": 240,
       "name": "placeholder_baseline",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 265,
+        "line": 240,
         "name": "placeholder_baseline"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42512,14 +42474,14 @@
       },
       "identity": "crate::direct_service::baseline::sign_pending_baseline",
       "kind": "function",
-      "line": 281,
+      "line": 256,
       "name": "sign_pending_baseline",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 281,
+        "line": 256,
         "name": "sign_pending_baseline"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42538,14 +42500,14 @@
       },
       "identity": "crate::direct_service::baseline::sign_pending_baseline::<closure>",
       "kind": "closure",
-      "line": 301,
+      "line": 276,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 301,
+        "line": 276,
         "name": "<closure>"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42556,22 +42518,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::baseline::sign_pending_baseline::<closure>@302#2",
+        "identity": "crate::direct_service::baseline::sign_pending_baseline::<closure>@277#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/baseline.rs",
         "signature": ".map_err(|_| crate::baseline_push::BaselineCode::InvalidMessage.code())",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::baseline::sign_pending_baseline::<closure>@302#2",
+      "identity": "crate::direct_service::baseline::sign_pending_baseline::<closure>@277#2",
       "kind": "closure",
-      "line": 302,
+      "line": 277,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 302,
+        "line": 277,
         "name": "<closure>"
       },
       "path": "src/direct_service/baseline.rs",
@@ -42590,14 +42552,14 @@
       },
       "identity": "crate::direct_service::cue::placeholder_cue",
       "kind": "function",
-      "line": 241,
+      "line": 217,
       "name": "placeholder_cue",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 241,
+        "line": 217,
         "name": "placeholder_cue"
       },
       "path": "src/direct_service/cue.rs",
@@ -42616,14 +42578,14 @@
       },
       "identity": "crate::direct_service::cue::sign_pending_cue",
       "kind": "function",
-      "line": 254,
+      "line": 230,
       "name": "sign_pending_cue",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 254,
+        "line": 230,
         "name": "sign_pending_cue"
       },
       "path": "src/direct_service/cue.rs",
@@ -42642,14 +42604,14 @@
       },
       "identity": "crate::direct_service::cue::dispatch_cue::<closure>",
       "kind": "closure",
-      "line": 433,
+      "line": 409,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 433,
+        "line": 409,
         "name": "<closure>"
       },
       "path": "src/direct_service/cue.rs",
@@ -42668,14 +42630,14 @@
       },
       "identity": "crate::direct_service::cue::await_cue_outcome",
       "kind": "function",
-      "line": 447,
+      "line": 423,
       "name": "await_cue_outcome",
       "native": {
         "analyzer": "cccc",
         "cognitive": 14,
         "cyclomatic": 10,
         "kind": "function",
-        "line": 447,
+        "line": 423,
         "name": "await_cue_outcome"
       },
       "path": "src/direct_service/cue.rs",
@@ -42694,14 +42656,14 @@
       },
       "identity": "crate::direct_service::cue::signal_recorded",
       "kind": "function",
-      "line": 504,
+      "line": 480,
       "name": "signal_recorded",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 504,
+        "line": 480,
         "name": "signal_recorded"
       },
       "path": "src/direct_service/cue.rs",
@@ -42720,14 +42682,14 @@
       },
       "identity": "crate::direct_service::cue::signal_recorded::<closure>",
       "kind": "closure",
-      "line": 514,
+      "line": 490,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 514,
+        "line": 490,
         "name": "<closure>"
       },
       "path": "src/direct_service/cue.rs",
@@ -42746,14 +42708,14 @@
       },
       "identity": "crate::direct_service::cue::signal_recorded::<closure>::<closure>",
       "kind": "closure",
-      "line": 515,
+      "line": 491,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 515,
+        "line": 491,
         "name": "<closure>"
       },
       "path": "src/direct_service/cue.rs",
@@ -42772,14 +42734,14 @@
       },
       "identity": "crate::direct_service::cue::signal_recorded::<closure>::<closure>::<closure>",
       "kind": "closure",
-      "line": 520,
+      "line": 496,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 520,
+        "line": 496,
         "name": "<closure>"
       },
       "path": "src/direct_service/cue.rs",
@@ -42798,14 +42760,14 @@
       },
       "identity": "crate::direct_service::cue::read_cue_ack",
       "kind": "function",
-      "line": 556,
+      "line": 532,
       "name": "read_cue_ack",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 556,
+        "line": 532,
         "name": "read_cue_ack"
       },
       "path": "src/direct_service/cue.rs",
@@ -42824,14 +42786,14 @@
       },
       "identity": "crate::direct_service::cue::read_cue_ack::<closure>",
       "kind": "closure",
-      "line": 604,
+      "line": 580,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 604,
+        "line": 580,
         "name": "<closure>"
       },
       "path": "src/direct_service/cue.rs",
@@ -43240,14 +43202,14 @@
       },
       "identity": "crate::direct_service::tests::test_identity_status",
       "kind": "function",
-      "line": 44,
+      "line": 76,
       "name": "test_identity_status",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 44,
+        "line": 76,
         "name": "test_identity_status"
       },
       "path": "src/direct_service/tests/mod.rs",
@@ -43411,8 +43373,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 2,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::direct_service::tests::test_peer_identity",
         "macro_expansion": "not_measured",
@@ -43422,14 +43384,14 @@
       },
       "identity": "crate::direct_service::tests::test_peer_identity",
       "kind": "function",
-      "line": 53,
+      "line": 85,
       "name": "test_peer_identity",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 53,
+        "line": 85,
         "name": "test_peer_identity"
       },
       "path": "src/direct_service/tests/mod.rs",
@@ -43604,14 +43566,14 @@
       },
       "identity": "crate::direct_service::tests::baseline::a_slot_kept_only_for_correlation_does_not_bar_the_next_push",
       "kind": "function",
-      "line": 156,
+      "line": 187,
       "name": "a_slot_kept_only_for_correlation_does_not_bar_the_next_push",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 156,
+        "line": 187,
         "name": "a_slot_kept_only_for_correlation_does_not_bar_the_next_push"
       },
       "path": "src/direct_service/tests/baseline.rs",
@@ -44332,14 +44294,14 @@
       },
       "identity": "crate::direct_service::tests::revoked_peer_with_a_standing_session",
       "kind": "function",
-      "line": 75,
+      "line": 107,
       "name": "revoked_peer_with_a_standing_session",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 75,
+        "line": 107,
         "name": "revoked_peer_with_a_standing_session"
       },
       "path": "src/direct_service/tests/mod.rs",
@@ -44358,14 +44320,14 @@
       },
       "identity": "crate::direct_service::tests::cue::a_cue_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session",
       "kind": "function",
-      "line": 177,
+      "line": 208,
       "name": "a_cue_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 177,
+        "line": 208,
         "name": "a_cue_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session"
       },
       "path": "src/direct_service/tests/cue.rs",
@@ -44384,14 +44346,14 @@
       },
       "identity": "crate::direct_service::tests::baseline::a_baseline_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session",
       "kind": "function",
-      "line": 180,
+      "line": 211,
       "name": "a_baseline_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 180,
+        "line": 211,
         "name": "a_baseline_is_refused_for_a_peer_this_node_revoked_even_with_a_live_session"
       },
       "path": "src/direct_service/tests/baseline.rs",
@@ -44410,14 +44372,14 @@
       },
       "identity": "crate::direct_service::tests::cue::a_cue_to_an_unknown_peer_is_refused_as_not_enrolled",
       "kind": "function",
-      "line": 221,
+      "line": 252,
       "name": "a_cue_to_an_unknown_peer_is_refused_as_not_enrolled",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 221,
+        "line": 252,
         "name": "a_cue_to_an_unknown_peer_is_refused_as_not_enrolled"
       },
       "path": "src/direct_service/tests/cue.rs",
@@ -105756,6 +105718,396 @@
       },
       "path": "src/workspace.rs",
       "signature": "fn ensure_layout_creates_workspace_metadata()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::direct_service::ack::verified_ack",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/ack.rs",
+        "signature": "pub(super) fn verified_ack( body: &[u8], peer_node_id: &str, peer_identity_key: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::ack::verified_ack",
+      "kind": "function",
+      "line": 9,
+      "name": "verified_ack",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 9,
+        "name": "verified_ack"
+      },
+      "path": "src/direct_service/ack.rs",
+      "signature": "pub(super) fn verified_ack( body: &[u8], peer_node_id: &str, peer_identity_key: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::ack::verified_ack::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/ack.rs",
+        "signature": ".and_then(|error| error.get(\"code\"))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::ack::verified_ack::<closure>",
+      "kind": "closure",
+      "line": 43,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 43,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/ack.rs",
+      "signature": ".and_then(|error| error.get(\"code\"))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::ack::verified_ack::<closure>@45#2",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/ack.rs",
+        "signature": ".and_then(|code| u16::try_from(code).ok()),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::ack::verified_ack::<closure>@45#2",
+      "kind": "closure",
+      "line": 45,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 45,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/ack.rs",
+      "signature": ".and_then(|code| u16::try_from(code).ok()),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::baseline::push_baseline::<closure>@85#2",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/baseline.rs",
+        "signature": ".map(|id| hex::encode(&id))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::baseline::push_baseline::<closure>@85#2",
+      "kind": "closure",
+      "line": 85,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 85,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/baseline.rs",
+      "signature": ".map(|id| hex::encode(&id))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::baseline::has_session",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/baseline.rs",
+        "signature": "pub fn has_session(&self, peer_node_id: &str) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::baseline::has_session",
+      "kind": "method",
+      "line": 116,
+      "name": "has_session",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 116,
+        "name": "has_session"
+      },
+      "path": "src/direct_service/baseline.rs",
+      "signature": "pub fn has_session(&self, peer_node_id: &str) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::direct_service::baseline::absorb_ack",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/baseline.rs",
+        "signature": "pub(super) fn absorb_ack( &mut self, body: &[u8], peer_node_id: &str, peer_identity_key: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::baseline::absorb_ack",
+      "kind": "method",
+      "line": 183,
+      "name": "absorb_ack",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 183,
+        "name": "absorb_ack"
+      },
+      "path": "src/direct_service/baseline.rs",
+      "signature": "pub(super) fn absorb_ack( &mut self, body: &[u8], peer_node_id: &str, peer_identity_key: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::direct_service::cue::dispatch",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/cue.rs",
+        "signature": "pub fn dispatch( &self, peer_node_id: &str, script: &str, reason: &str, wait: Duration, cue_id: Option<&str>, ) -> Result<CueDispatchOutcome, DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::cue::dispatch",
+      "kind": "method",
+      "line": 52,
+      "name": "dispatch",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 6,
+        "kind": "method",
+        "line": 52,
+        "name": "dispatch"
+      },
+      "path": "src/direct_service/cue.rs",
+      "signature": "pub fn dispatch( &self, peer_node_id: &str, script: &str, reason: &str, wait: Duration, cue_id: Option<&str>, ) -> Result<CueDispatchOutcome, DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 9,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::direct_service::cue::dispatch_cue",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/cue.rs",
+        "signature": "pub fn dispatch_cue( endpoint: SocketAddr, expected_node_id: &str, script: &str, reason: &str, wait_seconds: u32, context: &NodeContext, cue_id: Option<&str>, ) -> Result<CueDispatchOutcome, DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::cue::dispatch_cue",
+      "kind": "function",
+      "line": 266,
+      "name": "dispatch_cue",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 9,
+        "cyclomatic": 9,
+        "kind": "function",
+        "line": 266,
+        "name": "dispatch_cue"
+      },
+      "path": "src/direct_service/cue.rs",
+      "signature": "pub fn dispatch_cue( endpoint: SocketAddr, expected_node_id: &str, script: &str, reason: &str, wait_seconds: u32, context: &NodeContext, cue_id: Option<&str>, ) -> Result<CueDispatchOutcome, DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::direct_service::cue::resolve_cue_id",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/cue.rs",
+        "signature": "pub(super) fn resolve_cue_id(cue_id: Option<&str>) -> Result<String, DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::cue::resolve_cue_id",
+      "kind": "function",
+      "line": 589,
+      "name": "resolve_cue_id",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 589,
+        "name": "resolve_cue_id"
+      },
+      "path": "src/direct_service/cue.rs",
+      "signature": "pub(super) fn resolve_cue_id(cue_id: Option<&str>) -> Result<String, DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::tests::baseline::baseline_ack_rejects_wrong_kind_identity_and_session",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/tests/baseline.rs",
+        "signature": "fn baseline_ack_rejects_wrong_kind_identity_and_session()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::tests::baseline::baseline_ack_rejects_wrong_kind_identity_and_session",
+      "kind": "function",
+      "line": 152,
+      "name": "baseline_ack_rejects_wrong_kind_identity_and_session",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 152,
+        "name": "baseline_ack_rejects_wrong_kind_identity_and_session"
+      },
+      "path": "src/direct_service/tests/baseline.rs",
+      "signature": "fn baseline_ack_rejects_wrong_kind_identity_and_session()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::tests::baseline::baseline_ack_rejects_wrong_kind_identity_and_session::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/tests/baseline.rs",
+        "signature": "|body, node_id, key, session| in_flight.absorb_ack(body, node_id, key, session),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::tests::baseline::baseline_ack_rejects_wrong_kind_identity_and_session::<closure>",
+      "kind": "closure",
+      "line": 178,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 178,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/tests/baseline.rs",
+      "signature": "|body, node_id, key, session| in_flight.absorb_ack(body, node_id, key, session),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::tests::cue::resolve_cue_id_honors_a_supplied_idempotency_key",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/tests/cue.rs",
+        "signature": "fn resolve_cue_id_honors_a_supplied_idempotency_key()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::tests::cue::resolve_cue_id_honors_a_supplied_idempotency_key",
+      "kind": "function",
+      "line": 4,
+      "name": "resolve_cue_id_honors_a_supplied_idempotency_key",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 4,
+        "name": "resolve_cue_id_honors_a_supplied_idempotency_key"
+      },
+      "path": "src/direct_service/tests/cue.rs",
+      "signature": "fn resolve_cue_id_honors_a_supplied_idempotency_key()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::tests::cue::cue_ack_rejects_wrong_kind_identity_and_session",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/tests/cue.rs",
+        "signature": "fn cue_ack_rejects_wrong_kind_identity_and_session()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::tests::cue::cue_ack_rejects_wrong_kind_identity_and_session",
+      "kind": "function",
+      "line": 164,
+      "name": "cue_ack_rejects_wrong_kind_identity_and_session",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 164,
+        "name": "cue_ack_rejects_wrong_kind_identity_and_session"
+      },
+      "path": "src/direct_service/tests/cue.rs",
+      "signature": "fn cue_ack_rejects_wrong_kind_identity_and_session()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::tests::cue::cue_ack_rejects_wrong_kind_identity_and_session::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/tests/cue.rs",
+        "signature": "|body, node_id, key, session| in_flight.absorb_ack(body, node_id, key, session),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::tests::cue::cue_ack_rejects_wrong_kind_identity_and_session::<closure>",
+      "kind": "closure",
+      "line": 190,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 190,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/tests/cue.rs",
+      "signature": "|body, node_id, key, session| in_flight.absorb_ack(body, node_id, key, session),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::direct_service::tests::assert_unmatched_acks",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/tests/mod.rs",
+        "signature": "fn assert_unmatched_acks<T: std::fmt::Debug + PartialEq, U>( fixtures: AckFixtures<'_>, expected: T, answers: &std::sync::mpsc::Receiver<U>, mut absorb: impl FnMut(&[u8], &str, &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::tests::assert_unmatched_acks",
+      "kind": "function",
+      "line": 50,
+      "name": "assert_unmatched_acks",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 50,
+        "name": "assert_unmatched_acks"
+      },
+      "path": "src/direct_service/tests/mod.rs",
+      "signature": "fn assert_unmatched_acks<T: std::fmt::Debug + PartialEq, U>( fixtures: AckFixtures<'_>, expected: T, answers: &std::sync::mpsc::Receiver<U>, mut absorb: impl FnMut(&[u8], &str, &[u8",
       "source_class": "handwritten"
     }
   ],

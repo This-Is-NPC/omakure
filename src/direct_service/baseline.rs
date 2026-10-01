@@ -1,7 +1,8 @@
+use super::ack::verified_ack;
 use super::connection::ConnectionState;
 use super::error::DirectServiceError;
 use super::outbox::dispatch_answer_deadline;
-use crate::direct_transport::{envelope_nonce, unix_seconds, verify_envelope, TransportError};
+use crate::direct_transport::{unix_seconds, TransportError};
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
 use rand::rngs::OsRng;
@@ -186,48 +187,22 @@ impl OutboundBaseline {
         peer_identity_key: &[u8; 32],
         session_id: &[u8; 32],
     ) -> BaselineAckMatch {
-        if crate::direct_transport::envelope_kind_hint(body) != Some(crate::baseline_push::KIND_ACK)
-        {
-            return BaselineAckMatch::Other;
-        }
-        let Ok(nonce) = envelope_nonce(body) else {
-            return BaselineAckMatch::Other;
-        };
-        // Anchored to the identity the handshake established, not to anything
-        // the message says about itself.
-        if verify_envelope(
+        let Some(ack) = verified_ack(
             body,
             peer_node_id,
             peer_identity_key,
-            crate::baseline_push::KIND_ACK,
             session_id,
-            &nonce,
-        )
-        .is_err()
-        {
-            return BaselineAckMatch::Other;
-        }
-        let Ok(view) = crate::direct_transport::envelope_view(body) else {
+            crate::baseline_push::KIND_ACK,
+            "baseline_id",
+            &self.baseline_id,
+        ) else {
             return BaselineAckMatch::Other;
         };
-        let Some(ack) = view.payload.as_object() else {
-            return BaselineAckMatch::Other;
-        };
-        // An ack for a different baseline is not an answer to this one.
-        if ack.get("baseline_id").and_then(serde_json::Value::as_str) != Some(&self.baseline_id) {
-            return BaselineAckMatch::Other;
-        }
-        let accepted = ack
-            .get("accepted")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
+        let accepted = ack.accepted;
         let code = if accepted {
             0
         } else {
-            ack.get("error")
-                .and_then(|error| error.get("code"))
-                .and_then(serde_json::Value::as_u64)
-                .and_then(|code| u16::try_from(code).ok())
+            ack.error_code
                 .unwrap_or_else(|| crate::baseline_push::BaselineCode::InvalidMessage.code())
         };
         if self.answered {

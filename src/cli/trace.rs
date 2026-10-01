@@ -38,14 +38,16 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
         }
     };
 
-    if let Some(data) = args.data.as_deref() {
-        if let Err(err) = serde_json::from_str::<serde_json::Value>(data) {
-            return emit_error(
-                json_output,
-                codes::INVALID_ARGUMENT,
-                format!("--data is not valid JSON: {}", err),
-            );
-        }
+    if let Some(Err(err)) = args
+        .data
+        .as_deref()
+        .map(serde_json::from_str::<serde_json::Value>)
+    {
+        return emit_error(
+            json_output,
+            codes::INVALID_ARGUMENT,
+            format!("--data is not valid JSON: {}", err),
+        );
     }
 
     let workspace = Workspace::new(scripts_dir);

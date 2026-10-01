@@ -328,18 +328,17 @@ fn node_api_bind(
     scripts_dir: &std::path::Path,
 ) -> Option<std::net::SocketAddr> {
     let workspace = crate::workspace::Workspace::new(scripts_dir.to_path_buf());
-    if let Ok(recorded) = fs::read_to_string(workspace.service_endpoint_path()) {
-        if let Some(addr) = serde_json::from_str::<serde_json::Value>(&recorded)
-            .ok()
-            .and_then(|value| {
-                value
-                    .get("api_bind")
-                    .and_then(serde_json::Value::as_str)
-                    .and_then(|bind| bind.parse::<std::net::SocketAddr>().ok())
-            })
-        {
-            return Some(addr);
-        }
+    if let Some(addr) = fs::read_to_string(workspace.service_endpoint_path())
+        .ok()
+        .and_then(|recorded| serde_json::from_str::<serde_json::Value>(&recorded).ok())
+        .and_then(|value| {
+            value
+                .get("api_bind")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|bind| bind.parse::<std::net::SocketAddr>().ok())
+        })
+    {
+        return Some(addr);
     }
     let mut file = context.open_public_file().ok()??;
     let mut contents = String::new();

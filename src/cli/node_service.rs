@@ -114,13 +114,11 @@ fn resolve_direct_bind(
         (None, Some(bind)) => Some(bind.parse()?),
         (None, None) => None,
     };
-    if let Some(bind) = bind {
-        if !bind.ip().is_loopback() && !allow_non_loopback {
-            return Err(format!(
-                "refusing to bind direct transport {bind}; pass --allow-non-loopback-direct to opt in"
-            )
-            .into());
-        }
+    if let Some(bind) = bind.filter(|bind| !bind.ip().is_loopback() && !allow_non_loopback) {
+        return Err(format!(
+            "refusing to bind direct transport {bind}; pass --allow-non-loopback-direct to opt in"
+        )
+        .into());
     }
     Ok(bind)
 }

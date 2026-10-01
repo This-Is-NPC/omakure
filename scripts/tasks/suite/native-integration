@@ -14,6 +14,7 @@ targets=(
   cli_battery
   cli_no_subcommand
   cli_reference_contract
+  cli_run_exit_e2e
   cli_surface_e2e
   direct_transport_contract
   direct_transport_e2e

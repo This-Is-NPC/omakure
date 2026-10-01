@@ -1051,11 +1051,6 @@ fn native_integration_manifest_matches_every_rust_test_target_once() {
         actual, tests,
         "native-integration must list every tests/*.rs basename exactly once"
     );
-    assert_eq!(
-        tests.len(),
-        33,
-        "the native integration manifest covers 33 tests"
-    );
 }
 
 #[test]

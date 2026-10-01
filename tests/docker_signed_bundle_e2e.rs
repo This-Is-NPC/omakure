@@ -5,8 +5,6 @@
 
 #[path = "support/docker.rs"]
 mod docker;
-#[path = "support/hex.rs"]
-mod hex_support;
 
 use docker::{bounded_command, safe_generation_stderr, safe_stderr};
 
@@ -55,8 +53,9 @@ impl ComposeGuard {
         let files = TempDir::new().expect("create signed-bundle E2E files");
         let authority_private = [2_u8; 32];
         let authority = SigningKey::from_slice(&authority_private).expect("authority key");
-        let authority_id = hex_support::encode(&[8; 16]);
-        let authority_public = hex_support::encode(authority.verifying_key().to_bytes().as_slice());
+        let authority_id = omakure::hex::encode(&[8; 16]);
+        let authority_public =
+            omakure::hex::encode(authority.verifying_key().to_bytes().as_slice());
         let authority_token = "authority-signed-bundle-token-0123456789".to_string();
         let target_a_token = "target-a-signed-bundle-token-0123456".to_string();
         let target_b_token = "target-b-signed-bundle-token-0123456".to_string();
@@ -428,8 +427,8 @@ bootstrap_nonce_hash = "{}"
 id = "omakure"
 discovery_secret_ref = ""
 "#,
-        hex_support::encode(&enrollment::hash_bootstrap_token(token.as_bytes())),
-        hex_support::encode(&enrollment::hash_bootstrap_nonce(nonce)),
+        omakure::hex::encode(&enrollment::hash_bootstrap_token(token.as_bytes())),
+        omakure::hex::encode(&enrollment::hash_bootstrap_nonce(nonce)),
     )
 }
 
@@ -574,7 +573,7 @@ fn apply(
             "--bootstrap-token-file",
             token_path,
             "--bootstrap-nonce",
-            &hex_support::encode(nonce),
+            &omakure::hex::encode(nonce),
         ],
     )
 }
@@ -880,7 +879,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     let revoked_token = "target-a-revoked-authority-token-0123";
     write_private_token(&files.join("target-a-revoked.bootstrap"), revoked_token);
     let revoked_config = signed_config(
-        &hex_support::encode(&[8; 16]),
+        &omakure::hex::encode(&[8; 16]),
         authority_key,
         revoked_token,
         &[9; 16],
@@ -1123,7 +1122,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
         "/v1/node/enrollment/bundle",
         &serde_json::json!({
             "bundle_hex": bundle_hex,
-            "bootstrap_nonce": hex_support::encode(&guard.autojoin_nonce),
+            "bootstrap_nonce": omakure::hex::encode(&guard.autojoin_nonce),
         }),
     );
     assert_eq!(
@@ -1195,7 +1194,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
             "--data",
             &serde_json::json!({
                 "bundle_hex": bundle_hex,
-                "bootstrap_nonce": hex_support::encode(&guard.autojoin_nonce),
+                "bootstrap_nonce": omakure::hex::encode(&guard.autojoin_nonce),
             })
             .to_string(),
             "http://signed-autojoin:7878/v1/node/enrollment/bundle",

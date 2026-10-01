@@ -1,6 +1,4 @@
 use curve25519_dalek::{constants::X25519_BASEPOINT, montgomery::MontgomeryPoint};
-#[path = "support/hex.rs"]
-mod hex_support;
 
 use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
@@ -49,7 +47,7 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
     );
     assert_eq!(
         fixture["noise_prologue_hex"].as_str(),
-        Some(hex_support::encode(PROLOGUE).as_str())
+        Some(omakure::hex::encode(PROLOGUE).as_str())
     );
 
     let candidates = fixture["candidates"]
@@ -198,10 +196,10 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
     .map(|field| fixture[field].as_str().unwrap())
     .collect::<Vec<_>>();
     for (actual, expected) in actual_messages.iter().zip(expected_messages) {
-        assert_eq!(hex_support::encode(actual), expected);
+        assert_eq!(omakure::hex::encode(actual), expected);
     }
     assert_eq!(
-        hex_support::encode(initiator.get_handshake_hash()),
+        omakure::hex::encode(initiator.get_handshake_hash()),
         fixture["payload_handshake_hash_hex"].as_str().unwrap()
     );
     assert_eq!(
@@ -220,7 +218,7 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
         .write_message(b"public-vector-envelope", &mut ciphertext)
         .unwrap();
     assert_eq!(
-        hex_support::encode(&ciphertext[..length]),
+        omakure::hex::encode(&ciphertext[..length]),
         fixture["payload_data_ciphertext_hex"].as_str().unwrap()
     );
     let mut plaintext = [0_u8; 4096];
@@ -233,7 +231,7 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
         .write_message(b"public-vector-reply", &mut ciphertext)
         .unwrap();
     assert_eq!(
-        hex_support::encode(&ciphertext[..length]),
+        omakure::hex::encode(&ciphertext[..length]),
         fixture["payload_reply_ciphertext_hex"].as_str().unwrap()
     );
 }
@@ -288,7 +286,7 @@ fn canonical_signed_direct_envelope_is_verified_inside_noise() {
         &canonical,
     );
     assert_eq!(
-        hex_support::encode(&signature),
+        omakure::hex::encode(&signature),
         fixture["direct_envelope_signature_hex"].as_str().unwrap()
     );
     verify_bip340(
@@ -373,7 +371,9 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|value| decode_hex(value.as_str().unwrap()))
+        .map(|value| {
+            omakure::hex::decode(value.as_str().unwrap()).expect("valid hexadecimal fixture")
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         prohibited_fixture,
@@ -394,7 +394,7 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
                 assert!(x25519_adapter_check(&probe, &public).is_err())
             }
             "nonzero" => assert_eq!(
-                hex_support::encode(&x25519_adapter_check(&probe, &public).unwrap()),
+                omakure::hex::encode(&x25519_adapter_check(&probe, &public).unwrap()),
                 vector["expected_shared_hex"].as_str().unwrap()
             ),
             other => panic!("unknown X25519 vector result {other}"),
@@ -426,7 +426,7 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
     let production_manual = production_manual_request(&fixture, initiator_vector);
     assert_eq!(production_manual, bytes(&fixture, "manual_request_hex"));
     assert_eq!(
-        hex_support::encode(&production_manual[production_manual.len() - 64..]),
+        omakure::hex::encode(&production_manual[production_manual.len() - 64..]),
         fixture["manual_signature_hex"].as_str().unwrap()
     );
     let parsed_manual = ManualEnrollmentRequest::decode(&production_manual).unwrap();
@@ -540,7 +540,9 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
     assert_eq!(enrollment_model.rotate(), "not_authorized");
     assert_eq!(enrollment_model.revoke(), "not_authorized");
 
-    let authority = decode_hex("0000000000000000000000000000000000000000000000000000000000000002");
+    let authority =
+        omakure::hex::decode("0000000000000000000000000000000000000000000000000000000000000002")
+            .expect("valid hexadecimal fixture");
     let rotation_body = b"omakure/rotation/v1\0old=omk1_old\0new=omk1_new";
     let rotation_signature = sign_bip340(&authority, b"omakure/rotation/v1\0", rotation_body);
     let mut rotation_model = ReferenceContractModel::new();
@@ -650,10 +652,11 @@ fn frame_fixture_vectors_cover_body_lengths_and_header_rejection() {
     let fixture = fixture();
     for case in fixture["frame_cases"].as_array().unwrap() {
         let encoded = if let Some(raw_hex) = case.get("raw_hex") {
-            decode_hex(raw_hex.as_str().unwrap())
+            omakure::hex::decode(raw_hex.as_str().unwrap()).expect("valid hexadecimal fixture")
         } else {
             let mut encoded = Vec::new();
-            let body = decode_hex(case["body_hex"].as_str().unwrap());
+            let body = omakure::hex::decode(case["body_hex"].as_str().unwrap())
+                .expect("valid hexadecimal fixture");
             let length = 4 + body.len();
             encoded.extend_from_slice(&(length as u32).to_be_bytes());
             encoded.extend_from_slice(&[
@@ -958,19 +961,24 @@ fn prohibited_x25519_public_keys() -> [[u8; 32]; 7] {
             1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
         ],
-        decode_hex("e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800")
+        omakure::hex::decode("e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800")
+            .expect("valid hexadecimal fixture")
             .try_into()
             .unwrap(),
-        decode_hex("5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157")
+        omakure::hex::decode("5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157")
+            .expect("valid hexadecimal fixture")
             .try_into()
             .unwrap(),
-        decode_hex("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+        omakure::hex::decode("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+            .expect("valid hexadecimal fixture")
             .try_into()
             .unwrap(),
-        decode_hex("edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+        omakure::hex::decode("edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+            .expect("valid hexadecimal fixture")
             .try_into()
             .unwrap(),
-        decode_hex("eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+        omakure::hex::decode("eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+            .expect("valid hexadecimal fixture")
             .try_into()
             .unwrap(),
     ]
@@ -1238,7 +1246,10 @@ fn verify_signed_manual_request(
     if request[5..21] != bytes(fixture, "manual_pairing_id_hex")[..] {
         return Err("manual_pairing_id");
     }
-    if request[21..37] != decode_hex("00000000000000000000000000000001")[..] {
+    if request[21..37]
+        != omakure::hex::decode("00000000000000000000000000000001")
+            .expect("valid hexadecimal fixture")[..]
+    {
         return Err("manual_request_id");
     }
     let proposer_node_id = std::str::from_utf8(&request[37..106]).map_err(|_| "manual_node_id")?;
@@ -1271,7 +1282,8 @@ fn verify_signed_manual_request(
     let code_hash = Sha256::digest(
         [
             b"omakure/manual-enrollment/v1\0".as_slice(),
-            &decode_hex("000102030405060708090a0b0c0d0e0f"),
+            &omakure::hex::decode("000102030405060708090a0b0c0d0e0f")
+                .expect("valid hexadecimal fixture"),
         ]
         .concat(),
     );
@@ -1289,7 +1301,8 @@ fn verify_signed_manual_request(
 fn signed_bundle(vector: &toml::Value, certificate: &[u8]) -> Vec<u8> {
     let mut body = bundle_body(vector, certificate);
     let signature = sign_bip340(
-        &decode_hex("0000000000000000000000000000000000000000000000000000000000000002"),
+        &omakure::hex::decode("0000000000000000000000000000000000000000000000000000000000000002")
+            .expect("valid hexadecimal fixture"),
         b"omakure/enrollment-bundle/v1\0",
         &body,
     );
@@ -1337,9 +1350,10 @@ fn verify_signed_bundle(vector: &toml::Value, bundle: &[u8]) -> Result<(), &'sta
     if expires_at <= issued_at || expires_at - issued_at > 30 * 24 * 60 * 60 {
         return Err("bundle_validity");
     }
-    let authority = SigningKey::from_slice(&decode_hex(
-        "0000000000000000000000000000000000000000000000000000000000000002",
-    ))
+    let authority = SigningKey::from_slice(
+        &omakure::hex::decode("0000000000000000000000000000000000000000000000000000000000000002")
+            .expect("valid hexadecimal fixture"),
+    )
     .map_err(|_| "authority_key")?;
     verify_bip340(
         &authority.verifying_key().to_bytes(),
@@ -1378,7 +1392,7 @@ fn node_id_from_public(public_key: &[u8]) -> String {
     input.extend_from_slice(public_key);
     format!(
         "omk1_{}",
-        hex_support::encode(Sha256::digest(input).as_slice())
+        omakure::hex::encode(Sha256::digest(input).as_slice())
     )
 }
 
@@ -1674,17 +1688,9 @@ fn adapter_read_encrypted_frame(
 }
 
 fn bytes(value: &toml::Value, field: &str) -> Vec<u8> {
-    decode_hex(value[field].as_str().unwrap())
+    omakure::hex::decode(value[field].as_str().unwrap()).expect("valid hexadecimal fixture")
 }
 
 fn u64_value(value: &toml::Value, field: &str) -> u64 {
     value[field].as_integer().unwrap().try_into().unwrap()
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    assert!(value.len().is_multiple_of(2));
-    (0..value.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&value[index..index + 2], 16).unwrap())
-        .collect()
 }

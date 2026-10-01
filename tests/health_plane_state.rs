@@ -54,12 +54,7 @@ fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
     digest.update(b"omakure/node-id/v1\0");
     digest.update(public_key);
     let hash: [u8; 32] = digest.finalize().into();
-    format!(
-        "omk1_{}",
-        hash.iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    )
+    format!("omk1_{}", omakure::hex::encode(&hash))
 }
 
 struct Node {
@@ -116,7 +111,7 @@ impl Node {
 fn peer_identity(seed: u8) -> (String, String) {
     let key = k256::schnorr::SigningKey::from_slice(&[seed; 32]).expect("test scalar");
     let xonly = key.verifying_key().to_bytes();
-    let public_key = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+    let public_key = omakure::hex::encode(&xonly);
     (node_id_for_x_only_public_key(&xonly), public_key)
 }
 

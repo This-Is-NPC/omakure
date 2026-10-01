@@ -18,8 +18,6 @@
 //!   boundary seconds. No test sleeps for ten minutes and no window is
 //!   approximated.
 
-#[path = "support/hex.rs"]
-mod hex_support;
 mod support;
 
 use omakure::direct_transport::{
@@ -69,7 +67,7 @@ fn trust_peer(
     role: &str,
     capabilities: &[&str],
 ) {
-    let certificate = hex_support::encode(
+    let certificate = omakure::hex::encode(
         &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
             .expect("read peer transport certificate"),
     );
@@ -136,11 +134,7 @@ fn serve(workspace: &Path) -> support::HttpServer {
 
 fn identity_key_bytes(status: &Value) -> [u8; 32] {
     let text = status["identity"]["public_key"].as_str().unwrap();
-    (0..32)
-        .map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).unwrap())
-        .collect::<Vec<u8>>()
-        .try_into()
-        .expect("identity key length")
+    omakure::hex::decode_array::<32>(text).expect("32-byte hexadecimal identity key")
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +411,7 @@ fn production_session_within_admission_window(
 }
 
 fn message_id(seed: u8) -> String {
-    hex_support::encode(&[seed; 16])
+    omakure::hex::encode(&[seed; 16])
 }
 
 fn profile_payload(target: &str, seed: u8, revision: u64) -> Value {

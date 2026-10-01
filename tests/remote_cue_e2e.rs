@@ -9,8 +9,6 @@
 //!
 //! Two real `node serve` processes, real transport, no mocks.
 
-#[path = "support/hex.rs"]
-mod hex_support;
 mod support;
 
 use std::path::Path;
@@ -164,7 +162,7 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
     support::trust_fleet_peer(
         conductor,
@@ -173,7 +171,7 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         "performer",
         &["inventory-health", "notifications", "remote-run"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
     // No static peer on either side, and that is a limitation rather than a
     // preference: a Performer that already holds a session with this Conductor
@@ -385,7 +383,7 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
     support::trust_fleet_peer(
         conductor,
@@ -394,7 +392,7 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         "performer",
         &["inventory-health", "notifications", "remote-run"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
     // Both sides name the other, which is what a managed fleet looks like and
     // what dial ownership requires: `should_initiate` gives the dial to
@@ -502,7 +500,7 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
     support::trust_fleet_peer(
         conductor,
@@ -511,7 +509,7 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
         "performer",
         &["inventory-health", "notifications", "remote-run"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
     // Cues enabled, full trust, full capabilities — and nothing declared.
     configure(performer, performer_port, None, true, &[]);

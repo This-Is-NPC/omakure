@@ -998,16 +998,12 @@ fn node_baseline_push(parent: &BehavioralContext) -> Result<ProbeEvidence, Strin
             "receiver did not retain active CLI peer after baseline push: {cli_peer_state}"
         ));
     }
-    let manifest_hex = fs::read(&manifest)
-        .map_err(|e| e.to_string())?
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
+    let manifest_hex = omakure::hex::encode(&fs::read(&manifest).map_err(|e| e.to_string())?);
     let scripts = ["base-a.sh", "base-b.sh"]
         .iter()
         .map(|name| {
             fs::read(cli.workspace.path().join(name))
-                .map(|bytes| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>())
+                .map(|bytes| omakure::hex::encode(&bytes))
                 .map_err(|e| e.to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;

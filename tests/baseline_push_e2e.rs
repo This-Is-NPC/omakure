@@ -9,8 +9,6 @@
 //!
 //! Two real `node serve` processes, real transport, no mocks.
 
-#[path = "support/hex.rs"]
-mod hex_support;
 mod support;
 
 use serde_json::Value;
@@ -196,7 +194,7 @@ fn stand_up_fleet() -> Fleet {
         "performer",
         &["inventory-health", "notifications"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
     support::trust_fleet_peer(
         performer,
@@ -205,7 +203,7 @@ fn stand_up_fleet() -> Fleet {
         "conductor",
         &["baseline-push", "inventory-health", "notifications"],
         TRUST_AUDIT,
-        hex_support::encode,
+        omakure::hex::encode,
     );
 
     // The Conductor sends the bodies, so it must hold the same bytes the
@@ -350,7 +348,7 @@ fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
         .scripts
         .iter()
         .map(|name| {
-            hex_support::encode(
+            omakure::hex::encode(
                 &std::fs::read(fleet.conductor.path().join(name)).expect("read baseline script"),
             )
         })
@@ -359,7 +357,7 @@ fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
         "/v1/node/baselines",
         &serde_json::json!({
             "peer_node_id": fleet.performer_id,
-            "manifest": hex_support::encode(&std::fs::read(&fleet.manifest).expect("read manifest")),
+            "manifest": omakure::hex::encode(&std::fs::read(&fleet.manifest).expect("read manifest")),
             "scripts": scripts,
             "wait_seconds": 0,
         }),

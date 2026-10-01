@@ -15,8 +15,6 @@
 //! These assertions provide regression coverage for the production listener and
 //! transport compatibility that the shipped Health Plane relies on.
 
-#[path = "support/hex.rs"]
-mod hex_support;
 mod support;
 
 use omakure::direct_transport::{
@@ -119,7 +117,7 @@ fn canonical(value: &Value) -> Vec<u8> {
 }
 
 fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
-    let message_id = hex_support::encode(&[seed; 16]);
+    let message_id = omakure::hex::encode(&[seed; 16]);
     match kind {
         "health_profile" => json!({
             "health_version": 1,
@@ -170,7 +168,7 @@ fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
                 "occurred_at": 0,
                 "run": Value::Null,
                 "sequence": 1,
-                "signal_id": hex_support::encode(&[seed ^ 0xff; 16]),
+                "signal_id": omakure::hex::encode(&[seed ^ 0xff; 16]),
                 "subject": target
             }
         }),
@@ -201,10 +199,10 @@ fn sign_health_envelope(
     let envelope = json!({
         "created_at": now,
         "kind": kind,
-        "nonce": hex_support::encode(&nonce),
+        "nonce": omakure::hex::encode(&nonce),
         "payload": payload,
         "sender": sender,
-        "session_id": hex_support::encode(session.session_id()),
+        "session_id": omakure::hex::encode(session.session_id()),
         "version": 1,
     });
     let canonical_bytes = canonical(&envelope);
@@ -229,7 +227,7 @@ fn trust_peer(
     role: &str,
     capabilities: &[&str],
 ) {
-    let certificate = hex_support::encode(
+    let certificate = omakure::hex::encode(
         &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
             .expect("read peer transport certificate"),
     );
@@ -353,10 +351,7 @@ fn production_session(
 
 fn identity_key_bytes(status: &Value) -> [u8; 32] {
     let text = status["identity"]["public_key"].as_str().unwrap();
-    let bytes: Vec<u8> = (0..text.len() / 2)
-        .map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).unwrap())
-        .collect();
-    bytes.try_into().expect("identity key length")
+    omakure::hex::decode_array::<32>(text).expect("32-byte hexadecimal identity key")
 }
 
 fn audit_totals(workspace: &Path) -> (i64, i64) {
@@ -440,7 +435,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
         performer_id,
         format!(
             "omk1_{}",
-            hex_support::encode(Sha256::digest(derivation).as_slice())
+            omakure::hex::encode(Sha256::digest(derivation).as_slice())
         )
     );
 

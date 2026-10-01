@@ -108,14 +108,8 @@ impl Node {
 
     /// The 32-byte x-only identity key the frozen envelope verifier expects.
     fn identity_key(&self) -> [u8; 32] {
-        (0..32)
-            .map(|index| {
-                u8::from_str_radix(&self.public_key[index * 2..index * 2 + 2], 16)
-                    .expect("identity key hex")
-            })
-            .collect::<Vec<u8>>()
-            .try_into()
-            .expect("identity key length")
+        omakure::hex::decode_array::<32>(&self.public_key)
+            .expect("32-byte hexadecimal identity key")
     }
 
     /// Reopen the shipped registry exactly the way a restart does.
@@ -147,18 +141,13 @@ fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
     digest.update(b"omakure/node-id/v1\0");
     digest.update(public_key);
     let hash: [u8; 32] = digest.finalize().into();
-    format!(
-        "omk1_{}",
-        hash.iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    )
+    format!("omk1_{}", omakure::hex::encode(&hash))
 }
 
 fn peer_identity(seed: u8) -> (String, String) {
     let key = k256::schnorr::SigningKey::from_slice(&[seed; 32]).expect("test scalar");
     let xonly = key.verifying_key().to_bytes();
-    let public_key = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
+    let public_key = omakure::hex::encode(&xonly);
     (node_id_for_x_only_public_key(&xonly), public_key)
 }
 

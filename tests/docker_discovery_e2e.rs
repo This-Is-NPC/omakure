@@ -465,18 +465,6 @@ fn active_registry_counts(path: &Path) -> (i64, i64, i64, i64, i64) {
     )
 }
 
-fn lower_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    value
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|chunk| u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap())
-        .collect()
-}
-
 fn copy_from_container(guard: &ComposeGuard, service: &str, source: &str, destination: &Path) {
     let destination = destination.to_str().expect("temporary path is UTF-8");
     let mut command = bounded_command("docker");
@@ -623,7 +611,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     assert_eq!(pending["data"].as_array().unwrap().len(), 1);
     let pending_node_id = pending["data"][0]["node_id"].as_str().unwrap();
     let request_hex = request["data"]["request_hex"].as_str().unwrap();
-    let request_bytes = decode_hex(request_hex);
+    let request_bytes = omakure::hex::decode(request_hex).expect("decode discovery request hex");
     assert_eq!(request_bytes[4], 2);
     let certificate_dir = TempDir::new().expect("candidate certificate directory");
     let certificate_file = certificate_dir.path().join("transport.cert");
@@ -635,7 +623,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     );
     let approval_body = serde_json::json!({
         "request_hex": request_hex,
-        "transport_certificate": lower_hex(&fs::read(&certificate_file).unwrap()),
+        "transport_certificate": omakure::hex::encode(&fs::read(&certificate_file).unwrap()),
         "code": request["data"]["code"].as_str().unwrap(),
         "actor": "discovery-e2e",
         "reason": "explicit discovery follow-up enrollment",
@@ -660,7 +648,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     );
     let reciprocal_body = serde_json::json!({
         "request_hex": request["data"]["reciprocal_request_hex"].as_str().unwrap(),
-        "transport_certificate": lower_hex(&fs::read(&target_certificate_file).unwrap()),
+        "transport_certificate": omakure::hex::encode(&fs::read(&target_certificate_file).unwrap()),
         "code": request["data"]["reciprocal_code"].as_str().unwrap(),
         "actor": "discovery-e2e",
         "reason": "explicit reciprocal discovery follow-up enrollment",

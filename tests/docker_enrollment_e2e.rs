@@ -300,19 +300,6 @@ fn curl(guard: &ComposeGuard, method: &str, url: &str, body: Option<&str>) -> Va
     serde_json::from_slice(&output.stdout).expect("curl returned JSON")
 }
 
-fn lower_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    assert_eq!(value.len() % 2, 0);
-    value
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|chunk| u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap())
-        .collect()
-}
-
 fn copy_from_container(guard: &ComposeGuard, service: &str, source: &str, destination: &Path) {
     let destination = destination.to_str().expect("temporary path is UTF-8");
     let mut command = bounded_command("docker");
@@ -526,8 +513,10 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let reciprocal_code = request["data"]["reciprocal_code"]
         .as_str()
         .expect("reciprocal code");
-    let request_bytes = decode_hex(request["data"]["request_hex"].as_str().unwrap());
-    let reciprocal_bytes = decode_hex(reciprocal_request);
+    let request_bytes = omakure::hex::decode(request["data"]["request_hex"].as_str().unwrap())
+        .expect("decode enrollment request hex");
+    let reciprocal_bytes =
+        omakure::hex::decode(reciprocal_request).expect("decode reciprocal request hex");
     assert_eq!(request_bytes[4], 2);
     assert_eq!(reciprocal_bytes[4], 2);
     assert_eq!(&request_bytes[5..21], &reciprocal_bytes[5..21]);
@@ -611,7 +600,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         "/var/lib/omakure/transport.cert",
         &certificate_file,
     );
-    let certificate = lower_hex(&fs::read(&certificate_file).unwrap());
+    let certificate = omakure::hex::encode(&fs::read(&certificate_file).unwrap());
     let approval_body = serde_json::json!({
         "request_hex": request["data"]["request_hex"].as_str().unwrap(),
         "transport_certificate": certificate,
@@ -658,7 +647,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         "/var/lib/omakure/transport.cert",
         &target_certificate_file,
     );
-    let target_certificate = lower_hex(&fs::read(&target_certificate_file).unwrap());
+    let target_certificate = omakure::hex::encode(&fs::read(&target_certificate_file).unwrap());
     let candidate_approval_body = serde_json::json!({
         "request_hex": reciprocal_request,
         "transport_certificate": target_certificate,

@@ -53,18 +53,12 @@ fn init(workspace: &Path) -> Value {
 /// Domain-separated SHA-256; getting the separator wrong here would make the
 /// test fail for a reason that has nothing to do with what it is checking.
 fn bootstrap_token_hash(token: &str) -> String {
-    omakure::enrollment::hash_bootstrap_token(token.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    omakure::hex::encode(&omakure::enrollment::hash_bootstrap_token(token.as_bytes()))
 }
 
 fn bootstrap_nonce_hash(nonce_hex: &str) -> String {
     let nonce = omakure::enrollment::parse_hex(nonce_hex, 16).expect("nonce is 16 bytes of hex");
-    omakure::enrollment::hash_bootstrap_nonce(&nonce)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    omakure::hex::encode(&omakure::enrollment::hash_bootstrap_nonce(&nonce))
 }
 
 /// Configure the audience to accept bundles from this authority.

@@ -18,9 +18,6 @@
 //! Run with:
 //! `cargo test --test docker_health_plane_adversary -- --ignored --nocapture`
 
-#[path = "support/hex.rs"]
-mod hex_support;
-
 use omakure::direct_transport::{
     sign_health_envelope, sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
     TransportCertificate, TransportSession, ENVELOPE_KIND,
@@ -488,19 +485,11 @@ fn production_session(state_dir: &Path) -> (TcpStream, TransportSession, NodeIde
 }
 
 fn decode_key(hex: &str) -> [u8; 32] {
-    let bytes: Vec<u8> = (0..hex.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&hex[index..index + 2], 16).expect("hex byte"))
-        .collect();
-    // Same reason the transport key is not read with `try_into().expect(...)`:
-    // the error value is the Vec itself. This one only ever decodes a public
-    // key today, but `decode_key` reads as a generic helper.
-    <[u8; 32]>::try_from(bytes.as_slice())
-        .unwrap_or_else(|_| panic!("expected a 32-byte key, got {} bytes", bytes.len()))
+    omakure::hex::decode_array::<32>(hex).expect("expected a 32-byte hexadecimal key")
 }
 
 fn message_id(seed: u8) -> String {
-    hex_support::encode(&[seed; 16])
+    omakure::hex::encode(&[seed; 16])
 }
 
 /// What one live exchange observed on the session.
@@ -678,12 +667,12 @@ fn signal_payload(
             "run": {
                 "exit_code": 0,
                 "finished_at": occurred_at,
-                "run_id": hex_support::encode(&[signal_seed; 16]),
+                "run_id": omakure::hex::encode(&[signal_seed; 16]),
                 "script": "adversary",
                 "state": "completed"
             },
             "sequence": sequence,
-            "signal_id": hex_support::encode(&[signal_seed; 16]),
+            "signal_id": omakure::hex::encode(&[signal_seed; 16]),
             "subject": null
         }
     })
@@ -1364,10 +1353,10 @@ fn spoofed_envelope(
     let envelope = json!({
         "created_at": created_at,
         "kind": kind,
-        "nonce": hex_support::encode(&nonce),
+        "nonce": omakure::hex::encode(&nonce),
         "payload": payload,
         "sender": sender,
-        "session_id": hex_support::encode(session_id),
+        "session_id": omakure::hex::encode(session_id),
         "version": 1,
     });
     let mut encoded = serde_jcs::to_vec(&envelope).expect("canonicalize the spoofed envelope");

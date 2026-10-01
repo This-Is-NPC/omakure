@@ -54,11 +54,10 @@ fn status_node(workspace: &Path) -> Value {
 }
 
 fn trust_node(workspace: &Path, peer_workspace: &Path, peer: &Value) {
-    let certificate = std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-        .expect("read peer transport certificate")
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let certificate = omakure::hex::encode(
+        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
+            .expect("read peer transport certificate"),
+    );
     let args = vec![
         "trust".to_string(),
         "--node-id".to_string(),
@@ -951,11 +950,10 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
         1
     );
 
-    let certificate = std::fs::read(candidate.path().join(".node-state/transport.cert"))
-        .expect("read candidate transport certificate")
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let certificate = omakure::hex::encode(
+        &std::fs::read(candidate.path().join(".node-state/transport.cert"))
+            .expect("read candidate transport certificate"),
+    );
     let approve = support::run_node_with_lossy_paths(
         target.path(),
         &[

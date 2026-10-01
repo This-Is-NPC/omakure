@@ -2,7 +2,7 @@ use super::lifecycle::{acquire_lock, pid_file, release_lock};
 #[cfg(windows)]
 use super::lifecycle::{publish_windows_pid_file, read_windows_pid_file, WindowsPidFile};
 use super::logging::log_file;
-use super::scheduler::{build_args_from_defaults, scheduler_tick};
+use super::scheduler::{build_args_from_defaults, scheduler_tick, SchedulerTickError};
 use crate::runs::{self, RunStore, RunTrigger};
 use crate::test_support::workspace_in;
 use crate::workspace::Workspace;
@@ -98,7 +98,10 @@ fn tick_reports_run_store_open_failure_without_changing_error_text() {
     fs::write(history, "blocked").unwrap();
 
     let error = scheduler_tick(&workspace, Utc::now()).unwrap_err();
-    assert!(error.starts_with("open runs.sqlite: Create history dir failed: "));
+    assert!(matches!(error, SchedulerTickError::OpenRuns(_)));
+    assert!(error
+        .to_string()
+        .starts_with("open runs.sqlite: Create history dir failed: "));
 }
 
 #[test]

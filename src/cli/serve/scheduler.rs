@@ -7,13 +7,14 @@ use crate::cli::args::ServeArgs;
 use crate::cli::serve_windows::StopEvent;
 use crate::domain::{next_fire_after, parse_cron};
 use crate::ports::ScriptRepository;
-use crate::runs::{EnqueueOptions, RunStore, RunTrigger};
+use crate::runs::{EnqueueOptions, RunStore, RunTrigger, RunsError};
 use crate::secrets;
 use crate::workspace::Workspace;
 use chrono::Utc;
 use cron::Schedule as CronSchedule;
 use std::error::Error;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -21,6 +22,14 @@ use std::thread;
 use std::time::Duration;
 
 const SCAN_INTERVAL: Duration = Duration::from_secs(5);
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SchedulerTickError {
+    #[error("list scripts: {0}")]
+    ListScripts(#[source] io::Error),
+    #[error("open runs.sqlite: {0}")]
+    OpenRuns(#[source] RunsError),
+}
 
 pub(super) fn run_scheduler(
     workspace: Workspace,
@@ -112,10 +121,10 @@ pub(super) fn run_scheduler(
 fn scheduled_subjects(
     workspace: &Workspace,
     repo: &FsWorkspaceRepository,
-) -> Result<Vec<PathBuf>, String> {
+) -> Result<Vec<PathBuf>, SchedulerTickError> {
     let scripts = repo
         .list_scripts_recursive()
-        .map_err(|e| format!("list scripts: {e}"))?;
+        .map_err(SchedulerTickError::ListScripts)?;
     let log_path = log_file(workspace);
     let mut subjects = Vec::new();
     for script in scripts {
@@ -132,10 +141,10 @@ fn scheduled_subjects(
 pub(crate) fn scheduler_tick(
     workspace: &Workspace,
     now: chrono::DateTime<Utc>,
-) -> Result<usize, String> {
+) -> Result<usize, SchedulerTickError> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
     let scripts = scheduled_subjects(workspace, &repo)?;
-    let store = RunStore::open(workspace).map_err(|e| format!("open runs.sqlite: {e}"))?;
+    let store = RunStore::open(workspace).map_err(SchedulerTickError::OpenRuns)?;
     let mut fired = 0usize;
     let log_path = log_file(workspace);
     for script in scripts {

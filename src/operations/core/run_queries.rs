@@ -3,7 +3,7 @@ use super::types::{
 };
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::runs::{
-    self, RunFilters, RunRow, RunState, RunStateSet, RunStats, RunsError, TraceLevel, TraceRow,
+    RunFilters, RunRow, RunState, RunStateSet, RunStats, RunStore, RunsError, TraceLevel, TraceRow,
 };
 use crate::workspace::Workspace;
 use std::str::FromStr;
@@ -19,31 +19,28 @@ pub fn list_runs(workspace: &Workspace, request: ListRunsRequest) -> OperationRe
         limit: request.limit,
         states,
     };
-    let conn = runs::open(workspace).map_err(io_error_runs)?;
-    runs::query_runs(&conn, &filters).map_err(io_error_runs)
+    let store = RunStore::open(workspace).map_err(io_error_runs)?;
+    store.query_runs(&filters).map_err(io_error_runs)
 }
 
 pub fn show_run(workspace: &Workspace, request: ShowRunRequest) -> OperationResult<RunRow> {
-    let conn = runs::open(workspace).map_err(io_error_runs)?;
-    match runs::get_run(&conn, &request.run_id).map_err(io_error_runs)? {
-        Some(row) => Ok(row),
-        None => Err(OperationError::new(
-            OperationErrorCode::NotFound,
-            format!("run not found: {}", request.run_id),
-        )),
-    }
+    let store = RunStore::open(workspace).map_err(io_error_runs)?;
+    store
+        .get_run_required(&request.run_id)
+        .map_err(map_required_run_error)
 }
 
 pub fn list_traces(
     workspace: &Workspace,
     request: ListTracesRequest,
 ) -> OperationResult<Vec<TraceRow>> {
-    let conn = runs::open(workspace).map_err(io_error_runs)?;
+    let store = RunStore::open(workspace).map_err(io_error_runs)?;
     let level = match request.level.as_deref() {
         Some(level) => Some(TraceLevel::from_str(level).map_err(invalid_input)?),
         None => None,
     };
-    runs::query_traces(&conn, &request.run_id, level, request.since_sequence)
+    store
+        .query_traces(&request.run_id, level, request.since_sequence)
         .map_err(map_trace_error)
 }
 
@@ -52,23 +49,31 @@ pub fn queue_stats(workspace: &Workspace) -> OperationResult<RunStats> {
 }
 
 pub fn run_stats(workspace: &Workspace) -> OperationResult<RunStats> {
-    let conn = runs::open(workspace).map_err(io_error_runs)?;
-    runs::stats(&conn).map_err(io_error_runs)
+    let store = RunStore::open(workspace).map_err(io_error_runs)?;
+    store.stats().map_err(io_error_runs)
 }
 
 pub fn cancel_run(workspace: &Workspace, request: CancelRunRequest) -> OperationResult<RunRow> {
-    let conn = runs::open(workspace).map_err(io_error_runs)?;
-    require_run(&conn, &request.run_id)?;
-    runs::cancel(&conn, &request.run_id, request.reason, None).map_err(map_transition_error)
+    let store = RunStore::open(workspace).map_err(io_error_runs)?;
+    store
+        .get_run_required(&request.run_id)
+        .map_err(map_required_run_error)?;
+    store
+        .cancel(&request.run_id, request.reason)
+        .map_err(map_transition_error)
 }
 
 pub fn dead_letter_run(
     workspace: &Workspace,
     request: DeadLetterRunRequest,
 ) -> OperationResult<RunRow> {
-    let conn = runs::open(workspace).map_err(io_error_runs)?;
-    require_run(&conn, &request.run_id)?;
-    runs::dead_letter(&conn, &request.run_id, request.reason).map_err(map_transition_error)
+    let store = RunStore::open(workspace).map_err(io_error_runs)?;
+    store
+        .get_run_required(&request.run_id)
+        .map_err(map_required_run_error)?;
+    store
+        .dead_letter(&request.run_id, request.reason)
+        .map_err(map_transition_error)
 }
 
 pub(super) fn resolve_states(
@@ -95,13 +100,12 @@ pub(super) fn resolve_states(
     Ok(RunStateSet::Terminal.to_states())
 }
 
-pub(super) fn require_run(conn: &rusqlite::Connection, run_id: &str) -> OperationResult<()> {
-    match runs::get_run(conn, run_id).map_err(io_error_runs)? {
-        Some(_) => Ok(()),
-        None => Err(OperationError::new(
-            OperationErrorCode::NotFound,
-            format!("run not found: {run_id}"),
-        )),
+fn map_required_run_error(error: RunsError) -> OperationError {
+    match error {
+        RunsError::RunNotFound(_) => {
+            OperationError::new(OperationErrorCode::NotFound, error.to_string())
+        }
+        other => io_error_runs(other),
     }
 }
 

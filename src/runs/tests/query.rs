@@ -188,6 +188,9 @@ fn get_run_returns_none_for_unknown_id() {
     let ws = scratch_workspace("unknown_id");
     let conn = open(&ws).expect("open");
     assert!(get_run(&conn, "missing").unwrap().is_none());
+    let error = get_run_required(&conn, "missing").unwrap_err();
+    assert!(matches!(&error, RunsError::RunNotFound(id) if id == "missing"));
+    assert_eq!(error.to_string(), "run not found: missing");
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -299,6 +302,10 @@ fn missing_run_table_preserves_query_error_sources_and_text() {
     let cases = [
         (
             get_run(&conn, "missing").unwrap_err(),
+            "Prepare get_run failed",
+        ),
+        (
+            get_run_required(&conn, "missing").unwrap_err(),
             "Prepare get_run failed",
         ),
         (

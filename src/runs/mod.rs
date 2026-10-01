@@ -10,6 +10,7 @@ mod lifecycle;
 mod open;
 mod query;
 mod state;
+mod store;
 mod trace;
 
 pub use enqueue::{
@@ -19,13 +20,16 @@ pub use enqueue::{
 pub use error::RunsError;
 pub use ids::format_run_timestamp;
 pub use lifecycle::{
-    cancel, cancel_cue_runs_for_actor, claim_next, complete, dead_letter, fail, heartbeat,
+    cancel, cancel_cue_runs_for_actor, claim_next, complete, fail, heartbeat,
     record_cancelled_output, recover_abandoned_cue_runs, time_out, ClaimFilters, RunCompletion,
 };
 pub use open::open;
 pub use query::{get_run, last_scheduled_fire_ms, query_runs, stats, RunFilters, RunRow, RunStats};
 pub use state::{RunState, RunStateSet, RunTrigger};
-pub use trace::{insert_trace, query_traces, TraceLevel, TraceRow};
+pub(crate) use store::RunStore;
+#[cfg(test)]
+pub(crate) use trace::query_traces;
+pub use trace::{insert_trace, TraceLevel, TraceRow};
 
 /// Internal heartbeat lease duration in milliseconds (60 s).
 ///

@@ -130,6 +130,11 @@ pub fn get_run(conn: &Connection, run_id: &str) -> Result<Option<RunRow>, RunsEr
     Ok(row)
 }
 
+/// Fetch one run by id, returning a typed error when it does not exist.
+pub(super) fn get_run_required(conn: &Connection, run_id: &str) -> Result<RunRow, RunsError> {
+    get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFound(run_id.to_owned()))
+}
+
 /// Return the most recent enqueue time for a schedule, or `None` when it has
 /// never produced a run.
 ///

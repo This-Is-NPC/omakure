@@ -583,6 +583,40 @@ fn enqueue_list_show_cancel_and_stats_share_runs_state_machine() {
 }
 
 #[test]
+fn missing_run_queries_preserve_not_found_code_and_text() {
+    let dir = TempDir::new().unwrap();
+    let ws = workspace_in(&dir);
+    for error in [
+        show_run(
+            &ws,
+            ShowRunRequest {
+                run_id: "absent".into(),
+            },
+        )
+        .unwrap_err(),
+        cancel_run(
+            &ws,
+            CancelRunRequest {
+                run_id: "absent".into(),
+                reason: None,
+            },
+        )
+        .unwrap_err(),
+        dead_letter_run(
+            &ws,
+            DeadLetterRunRequest {
+                run_id: "absent".into(),
+                reason: None,
+            },
+        )
+        .unwrap_err(),
+    ] {
+        assert_eq!(error.code, OperationErrorCode::NotFound);
+        assert_eq!(error.message, "run not found: absent");
+    }
+}
+
+#[test]
 fn dead_letter_requires_existing_failed_run() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);

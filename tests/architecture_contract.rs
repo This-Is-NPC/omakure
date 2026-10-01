@@ -10,6 +10,7 @@ enum Rule {
     Http,
     HttpNodeDelivery,
     Catalog,
+    CoreRunQueriesStorage,
     Domain,
     RunsSql,
     Executor,
@@ -88,6 +89,16 @@ impl ContractVisitor {
             self.record(
                 "ARCH-HTTP-NODE-DELIVERY",
                 "node delivery handlers must call operations",
+            );
+        }
+        if self.rule == Rule::CoreRunQueriesStorage
+            && (path.first().map(String::as_str) == Some("rusqlite")
+                || Self::starts_with(path, &["runs", "open"])
+                || Self::starts_with(path, &["crate", "runs", "open"]))
+        {
+            self.record(
+                "ARCH-CORE-RUN-QUERIES-STORAGE",
+                "core run queries must use the opaque runs store",
             );
         }
         if self.rule == Rule::Domain
@@ -484,6 +495,20 @@ fn production_architecture_boundaries_are_clean() {
         );
     }
 
+    let run_queries_path = src.join("operations/core/run_queries.rs");
+    let run_queries = fs::read_to_string(&run_queries_path).expect("read core run queries");
+    let contract = parse_contract(
+        Rule::CoreRunQueriesStorage,
+        "src/operations/core/run_queries.rs",
+        &run_queries,
+    );
+    assert!(
+        contract.findings.is_empty(),
+        "core run queries must use the opaque runs store: {:?}",
+        contract.findings
+    );
+    assert!(run_queries.contains("RunStore::open("));
+
     let direct = parse_contract(
         Rule::Executor,
         "src/cli/run/mod.rs",
@@ -564,4 +589,20 @@ fn shared_catalogs_do_not_depend_on_cli_adapters() {
     );
     assert_eq!(contract.findings.len(), 1);
     assert_eq!(contract.findings[0].rule, "ARCH-CATALOG-CLI");
+}
+
+#[test]
+fn core_run_queries_reject_direct_storage_handles() {
+    for source in [
+        "fn require_run(conn: &rusqlite::Connection) {}",
+        "fn open_run_store(workspace: &Workspace) { runs::open(workspace); }",
+    ] {
+        let contract = parse_contract(
+            Rule::CoreRunQueriesStorage,
+            "fixture:run_queries.rs",
+            source,
+        );
+        assert_eq!(contract.findings.len(), 1);
+        assert_eq!(contract.findings[0].rule, "ARCH-CORE-RUN-QUERIES-STORAGE");
+    }
 }

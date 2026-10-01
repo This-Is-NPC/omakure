@@ -183,7 +183,7 @@ src/
 ├── inventory/               Clap-derived command inventory, CLI reference, and HTTP routes
 ├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog/       versioned metadata, validation, rendering, and tests
-├── runs/                    SQLite state machine and structured traces
+├── runs/                    SQLite state machine, opaque run store, and traces
 ├── run_executor/           shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index
 ├── runtime.rs               Script-kind detection and command construction
@@ -219,9 +219,10 @@ src/
 
 - `domain/` is I/O-free. `operations/` owns validation and stable errors;
   CLI and HTTP only parse/render requests and responses.
-- `runs/` is the sole owner of `runs.sqlite`. The state machine allows
-  `queued`, `running`, `completed`, `failed`, `cancelled`, `timed_out`, and
-  `dead_letter` with a closed transition graph.
+- `runs/` is the sole owner of `runs.sqlite`. Core run queries use an opaque
+  `RunStore` handle and map typed run errors at the operation boundary. The
+  state machine allows `queued`, `running`, `completed`, `failed`, `cancelled`,
+  `timed_out`, and `dead_letter` with a closed transition graph.
 - Direct runs, queue workers, and scheduled runs all use
   `run_executor::execute_with_heartbeat`, including cancellation, timeout,
   reserved environment variables, and output redaction.

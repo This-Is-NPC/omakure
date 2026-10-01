@@ -105,8 +105,8 @@ impl NodeContext {
                     .config_path
                     .clone()
             });
-        validate_absolute_path(platform, "state directory", &state_dir, false)?;
-        validate_absolute_path(platform, "config path", &config_path, true)?;
+        validate_absolute_path("state directory", &state_dir)?;
+        validate_absolute_path("config path", &config_path)?;
         if paths_overlap(&state_dir, &config_path) {
             return Err(NodeError::InvalidPath {
                 field: "node paths",

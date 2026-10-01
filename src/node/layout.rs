@@ -15,22 +15,23 @@ pub enum NodePlatform {
     Windows,
 }
 
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+compile_error!("node layout is supported only on Linux, macOS, and Windows");
+
 impl NodePlatform {
+    #[cfg(target_os = "linux")]
     pub fn current() -> Self {
-        #[cfg(target_os = "linux")]
-        {
-            return Self::Linux;
-        }
-        #[cfg(target_os = "macos")]
-        {
-            return Self::MacOs;
-        }
-        #[cfg(target_os = "windows")]
-        {
-            return Self::Windows;
-        }
-        #[allow(unreachable_code)]
         Self::Linux
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn current() -> Self {
+        Self::MacOs
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn current() -> Self {
+        Self::Windows
     }
 }
 
@@ -153,46 +154,29 @@ pub fn default_layout(
     })
 }
 
-pub(super) fn validate_absolute_path(
-    #[cfg(not(windows))] platform: NodePlatform,
-    #[cfg(windows)] _platform: NodePlatform,
-    field: &'static str,
-    path: &Path,
-    is_file: bool,
-) -> Result<(), NodeError> {
+pub(super) fn validate_absolute_path(field: &'static str, path: &Path) -> Result<(), NodeError> {
     if !path.is_absolute() {
         return Err(NodeError::InvalidPath {
             field,
             reason: "path must be absolute".to_string(),
         });
     }
-    if path.components().any(|component| match component {
-        Component::ParentDir | Component::CurDir => true,
-        #[cfg(windows)]
-        Component::Prefix(_) => false,
-        #[cfg(not(windows))]
-        Component::Prefix(_) => platform != NodePlatform::Windows,
-        _ => false,
-    }) {
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+    {
         return Err(NodeError::InvalidPath {
             field,
             reason: "path contains an unsafe component".to_string(),
         });
     }
-    if path.parent().is_none()
-        || !path
-            .components()
-            .any(|component| matches!(component, Component::Normal(_)))
+    if !path
+        .components()
+        .any(|component| matches!(component, Component::Normal(_)))
     {
         return Err(NodeError::InvalidPath {
             field,
             reason: "path is not a usable node path".to_string(),
-        });
-    }
-    if is_file && path.file_name().is_none() {
-        return Err(NodeError::InvalidPath {
-            field,
-            reason: "config path must name a file".to_string(),
         });
     }
     Ok(())

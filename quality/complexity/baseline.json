@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "6a82ceb936a47637737aacea91175e54c4db9f567e0e9009cb6817df4f34881a",
+  "canonical_sha256": "4006fedb3c2fc4c6ee0e2b2dbe9a86820ec1685393e55cd0730f1f94e3ea8d3e",
   "config_identity": "no-config",
   "files": [
     {
@@ -2654,12 +2654,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 1,
+        "invocations": 3,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 10,
-        "cyclomatic": 32
+        "cognitive": 6,
+        "cyclomatic": 28
       },
       "path": "src/node/layout.rs",
       "source_class": "handwritten"
@@ -61396,14 +61396,66 @@
       },
       "identity": "crate::node::layout::current",
       "kind": "method",
-      "line": 19,
+      "line": 23,
       "name": "current",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 19,
+        "line": 23,
+        "name": "current"
+      },
+      "path": "src/node/layout.rs",
+      "signature": "pub fn current() -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::layout::current@28#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": "pub fn current() -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::current@28#2",
+      "kind": "method",
+      "line": 28,
+      "name": "current",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 28,
+        "name": "current"
+      },
+      "path": "src/node/layout.rs",
+      "signature": "pub fn current() -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::layout::current@33#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": "pub fn current() -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::current@33#3",
+      "kind": "method",
+      "line": 33,
+      "name": "current",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 33,
         "name": "current"
       },
       "path": "src/node/layout.rs",
@@ -61422,14 +61474,14 @@
       },
       "identity": "crate::node::layout::new",
       "kind": "method",
-      "line": 44,
+      "line": 45,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 44,
+        "line": 45,
         "name": "new"
       },
       "path": "src/node/layout.rs",
@@ -61448,14 +61500,14 @@
       },
       "identity": "crate::node::layout::config_path",
       "kind": "method",
-      "line": 59,
+      "line": 60,
       "name": "config_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 59,
+        "line": 60,
         "name": "config_path"
       },
       "path": "src/node/layout.rs",
@@ -61474,14 +61526,14 @@
       },
       "identity": "crate::node::layout::state_dir",
       "kind": "method",
-      "line": 63,
+      "line": 64,
       "name": "state_dir",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 63,
+        "line": 64,
         "name": "state_dir"
       },
       "path": "src/node/layout.rs",
@@ -61500,14 +61552,14 @@
       },
       "identity": "crate::node::layout::authority_key_path",
       "kind": "method",
-      "line": 71,
+      "line": 72,
       "name": "authority_key_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 71,
+        "line": 72,
         "name": "authority_key_path"
       },
       "path": "src/node/layout.rs",
@@ -61526,14 +61578,14 @@
       },
       "identity": "crate::node::layout::publisher_key_path",
       "kind": "method",
-      "line": 80,
+      "line": 81,
       "name": "publisher_key_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 80,
+        "line": 81,
         "name": "publisher_key_path"
       },
       "path": "src/node/layout.rs",
@@ -61552,14 +61604,14 @@
       },
       "identity": "crate::node::layout::identity_path",
       "kind": "method",
-      "line": 84,
+      "line": 85,
       "name": "identity_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 84,
+        "line": 85,
         "name": "identity_path"
       },
       "path": "src/node/layout.rs",
@@ -61578,14 +61630,14 @@
       },
       "identity": "crate::node::layout::database_path",
       "kind": "method",
-      "line": 88,
+      "line": 89,
       "name": "database_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 88,
+        "line": 89,
         "name": "database_path"
       },
       "path": "src/node/layout.rs",
@@ -61604,14 +61656,14 @@
       },
       "identity": "crate::node::layout::transport_key_path",
       "kind": "method",
-      "line": 92,
+      "line": 93,
       "name": "transport_key_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 92,
+        "line": 93,
         "name": "transport_key_path"
       },
       "path": "src/node/layout.rs",
@@ -61630,18 +61682,200 @@
       },
       "identity": "crate::node::layout::transport_certificate_path",
       "kind": "method",
-      "line": 96,
+      "line": 97,
       "name": "transport_certificate_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 96,
+        "line": 97,
         "name": "transport_certificate_path"
       },
       "path": "src/node/layout.rs",
       "signature": "pub fn transport_certificate_path(&self) -> PathBuf",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node::layout::default_layout",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": "pub fn default_layout( platform: NodePlatform, windows_program_data: Option<&Path>, ) -> Result<NodeLayout, NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::default_layout",
+      "kind": "function",
+      "line": 127,
+      "name": "default_layout",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 127,
+        "name": "default_layout"
+      },
+      "path": "src/node/layout.rs",
+      "signature": "pub fn default_layout( platform: NodePlatform, windows_program_data: Option<&Path>, ) -> Result<NodeLayout, NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::layout::default_layout::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": ".or_else(|| env::var_os(\"ProgramData\").map(PathBuf::from))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::default_layout::<closure>",
+      "kind": "closure",
+      "line": 143,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 143,
+        "name": "<closure>"
+      },
+      "path": "src/node/layout.rs",
+      "signature": ".or_else(|| env::var_os(\"ProgramData\").map(PathBuf::from))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::layout::default_layout::<closure>@144#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": ".ok_or_else(|| NodeError::InvalidPath {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::default_layout::<closure>@144#2",
+      "kind": "closure",
+      "line": 144,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 144,
+        "name": "<closure>"
+      },
+      "path": "src/node/layout.rs",
+      "signature": ".ok_or_else(|| NodeError::InvalidPath {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node::layout::validate_absolute_path",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": "pub(super) fn validate_absolute_path(field: &'static str, path: &Path) -> Result<(), NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::validate_absolute_path",
+      "kind": "function",
+      "line": 157,
+      "name": "validate_absolute_path",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 157,
+        "name": "validate_absolute_path"
+      },
+      "path": "src/node/layout.rs",
+      "signature": "pub(super) fn validate_absolute_path(field: &'static str, path: &Path) -> Result<(), NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::layout::validate_absolute_path::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": ".any(|component| matches!(component, Component::ParentDir | Component::CurDir))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::validate_absolute_path::<closure>",
+      "kind": "closure",
+      "line": 166,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 166,
+        "name": "<closure>"
+      },
+      "path": "src/node/layout.rs",
+      "signature": ".any(|component| matches!(component, Component::ParentDir | Component::CurDir))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::layout::validate_absolute_path::<closure>@175#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": ".any(|component| matches!(component, Component::Normal(_)))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::validate_absolute_path::<closure>@175#2",
+      "kind": "closure",
+      "line": 175,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 175,
+        "name": "<closure>"
+      },
+      "path": "src/node/layout.rs",
+      "signature": ".any(|component| matches!(component, Component::Normal(_)))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node::layout::paths_overlap",
+        "macro_expansion": "not_measured",
+        "path": "src/node/layout.rs",
+        "signature": "pub(super) fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::layout::paths_overlap",
+      "kind": "function",
+      "line": 185,
+      "name": "paths_overlap",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 185,
+        "name": "paths_overlap"
+      },
+      "path": "src/node/layout.rs",
+      "signature": "pub(super) fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
       "source_class": "handwritten"
     },
     {
@@ -62552,162 +62786,6 @@
       },
       "path": "src/node/lifecycle.rs",
       "signature": "fn drop(&mut self)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::node::layout::default_layout",
-        "macro_expansion": "not_measured",
-        "path": "src/node/layout.rs",
-        "signature": "pub fn default_layout( platform: NodePlatform, windows_program_data: Option<&Path>, ) -> Result<NodeLayout, NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::layout::default_layout",
-      "kind": "function",
-      "line": 126,
-      "name": "default_layout",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 126,
-        "name": "default_layout"
-      },
-      "path": "src/node/layout.rs",
-      "signature": "pub fn default_layout( platform: NodePlatform, windows_program_data: Option<&Path>, ) -> Result<NodeLayout, NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node::layout::default_layout::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node/layout.rs",
-        "signature": ".or_else(|| env::var_os(\"ProgramData\").map(PathBuf::from))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::layout::default_layout::<closure>",
-      "kind": "closure",
-      "line": 142,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 142,
-        "name": "<closure>"
-      },
-      "path": "src/node/layout.rs",
-      "signature": ".or_else(|| env::var_os(\"ProgramData\").map(PathBuf::from))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 6,
-      "cyclomatic": 7,
-      "derived": {
-        "identity": "crate::node::layout::validate_absolute_path",
-        "macro_expansion": "not_measured",
-        "path": "src/node/layout.rs",
-        "signature": "pub(super) fn validate_absolute_path( platform: NodePlatform, field: &'static str, path: &Path, is_file: bool, ) -> Result<(), NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::layout::validate_absolute_path",
-      "kind": "function",
-      "line": 156,
-      "name": "validate_absolute_path",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 7,
-        "kind": "function",
-        "line": 156,
-        "name": "validate_absolute_path"
-      },
-      "path": "src/node/layout.rs",
-      "signature": "pub(super) fn validate_absolute_path( platform: NodePlatform, field: &'static str, path: &Path, is_file: bool, ) -> Result<(), NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::node::layout::validate_absolute_path::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node/layout.rs",
-        "signature": "if path.components().any(|component| match component {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::layout::validate_absolute_path::<closure>",
-      "kind": "closure",
-      "line": 168,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 3,
-        "kind": "closure",
-        "line": 168,
-        "name": "<closure>"
-      },
-      "path": "src/node/layout.rs",
-      "signature": "if path.components().any(|component| match component {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node::layout::validate_absolute_path::<closure>@184#2",
-        "macro_expansion": "not_measured",
-        "path": "src/node/layout.rs",
-        "signature": ".any(|component| matches!(component, Component::Normal(_)))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::layout::validate_absolute_path::<closure>@184#2",
-      "kind": "closure",
-      "line": 184,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 184,
-        "name": "<closure>"
-      },
-      "path": "src/node/layout.rs",
-      "signature": ".any(|component| matches!(component, Component::Normal(_)))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::node::layout::paths_overlap",
-        "macro_expansion": "not_measured",
-        "path": "src/node/layout.rs",
-        "signature": "pub(super) fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::layout::paths_overlap",
-      "kind": "function",
-      "line": 200,
-      "name": "paths_overlap",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 200,
-        "name": "paths_overlap"
-      },
-      "path": "src/node/layout.rs",
-      "signature": "pub(super) fn paths_overlap(state_dir: &Path, config_path: &Path) -> bool",
       "source_class": "handwritten"
     },
     {

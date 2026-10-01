@@ -192,7 +192,7 @@ impl NodeContext {
         &self,
         path: &Path,
     ) -> Result<PrivateTokenLock, NodeError> {
-        validate_absolute_path(self.platform, "private file", path, true)?;
+        validate_absolute_path("private file", path)?;
         ensure_safe_parent(path, self.test_mode)?;
         let parent = path
             .parent()
@@ -228,7 +228,7 @@ impl NodeContext {
         path: &Path,
         max_bytes: usize,
     ) -> Result<Vec<PrivateTokenLease>, NodeError> {
-        validate_absolute_path(self.platform, "private file", path, true)?;
+        validate_absolute_path("private file", path)?;
         ensure_safe_parent(path, self.test_mode)?;
         let parent = path
             .parent()
@@ -263,7 +263,7 @@ impl NodeContext {
         path: &Path,
         max_bytes: usize,
     ) -> Result<OpenedPrivateFile, NodeError> {
-        validate_absolute_path(self.platform, "private file", path, true)?;
+        validate_absolute_path("private file", path)?;
         ensure_safe_parent(path, self.test_mode)?;
         let mut options = crate::util::fs::no_follow_open_options();
         options.read(true);

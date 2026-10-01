@@ -273,6 +273,22 @@ pub fn open_registry_for_baseline(context: &NodeContext) -> OperationResult<Node
     open_initialized_registry(context)
 }
 
+/// Open an existing registry for observational Health Plane reads.
+///
+/// Long-lived HTTP surfaces reuse the process-owned registry instead of
+/// opening another handle for every request.
+pub(crate) fn open_observational_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
+    let state_present = context
+        .validate_existing_state_contents()
+        .map_err(map_node_error)?;
+    if !state_present {
+        return Err(registry_error(crate::node::STATE_NOT_INITIALIZED));
+    }
+    let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
+    NodeRegistry::open_health_observational(context, identity.public_status())
+        .map_err(map_registry_error)
+}
+
 pub(super) fn open_initialized_registry(context: &NodeContext) -> OperationResult<NodeRegistry> {
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
     NodeRegistry::open_existing(context, identity.public_status()).map_err(map_registry_error)

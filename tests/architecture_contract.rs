@@ -18,6 +18,7 @@ enum Rule {
     Executor,
     GitProcess,
     HealthLifecycle,
+    OperationInput,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -77,6 +78,17 @@ impl ContractVisitor {
         }
         if self.rule == Rule::Catalog && Self::starts_with(path, &["crate", "cli"]) {
             self.record("ARCH-CATALOG-CLI", "catalogs must use shared inventories");
+        }
+        if self.rule == Rule::OperationInput
+            && (Self::starts_with(path, &["crate", "cli"])
+                || Self::starts_with(path, &["crate", "node"])
+                || Self::starts_with(path, &["crate", "node_identity"])
+                || matches!(path.first().map(String::as_str), Some("axum" | "clap")))
+        {
+            self.record(
+                "ARCH-OPERATION-INPUT",
+                "core and Health operations must receive protocol-neutral inputs",
+            );
         }
         if self.rule == Rule::HealthLifecycle
             && Self::starts_with(path, &["crate", "node_registry"])
@@ -675,6 +687,32 @@ fn shared_catalogs_do_not_depend_on_cli_adapters() {
     );
     assert_eq!(contract.findings.len(), 1);
     assert_eq!(contract.findings[0].rule, "ARCH-CATALOG-CLI");
+}
+
+#[test]
+fn core_and_health_operations_receive_protocol_neutral_inputs() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for module in ["operations/core", "operations/health"] {
+        for path in source_files(&root.join("src").join(module)) {
+            let display = path.strip_prefix(root).unwrap().display().to_string();
+            let source = fs::read_to_string(&path).expect("read operation source");
+            let contract = parse_contract(Rule::OperationInput, &display, &source);
+            assert!(
+                contract.findings.is_empty(),
+                "operation input boundary violations in {display}: {:?}",
+                contract.findings
+            );
+        }
+    }
+    for import in [
+        "use crate::cli::args::Cli;",
+        "use crate::node::NodeContext;",
+        "use crate::node_identity::NodeIdentity;",
+        "use axum::extract::Query;",
+    ] {
+        let contract = parse_contract(Rule::OperationInput, "fixture:input.rs", import);
+        assert_eq!(contract.findings.len(), 1, "{import}");
+    }
 }
 
 #[test]

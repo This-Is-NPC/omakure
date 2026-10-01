@@ -21,10 +21,7 @@ pub use bundle::{
     SignedBundleApplyRequest, BOOTSTRAP_TOKEN_FILE_ENV,
 };
 pub use discovery::{public_discovery_status, public_discovery_status_with_config, scan_discovery};
-pub(crate) use errors::{
-    map_direct_service_error, map_identity_error, map_node_error, map_registry_error,
-    registry_error,
-};
+pub(crate) use errors::{map_direct_service_error, map_node_error, map_registry_error};
 pub use manual_enrollment::{
     approve_manual_enrollment, list_pending_enrollments, manual_enrollment_enabled,
     reject_manual_enrollment, request_manual_enrollment, stage_manual_enrollment,
@@ -32,6 +29,7 @@ pub use manual_enrollment::{
     ManualEnrollmentResult,
 };
 pub(crate) use status::initialize_node_locked;
+pub(crate) use status::open_observational_registry;
 pub use status::{
     initialize_node, initialize_node_nonblocking, load_node_config, open_registry_for_baseline,
     public_node_status, reset_node, NodeInitializationResult, NodeResetResult, NodeStatus,

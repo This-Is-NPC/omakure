@@ -18,6 +18,26 @@ fn status_is_observational_and_mutations_require_evidence() {
     assert!(list_trusted_peers(&context).unwrap().is_empty());
 }
 
+#[test]
+fn observational_health_registry_requires_existing_valid_node_state() {
+    let temp = TempDir::new().unwrap();
+    let context = node_context(temp.path());
+    let error = open_observational_registry(&context).unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::RegistryInvalid);
+    assert_eq!(error.message, crate::node::STATE_NOT_INITIALIZED);
+    assert!(!context.state_dir().exists());
+
+    initialize_node(&context, &NodeConfig::default()).unwrap();
+    let registry = open_observational_registry(&context).unwrap();
+    assert_eq!(
+        registry.local_node_id(),
+        NodeIdentity::load_existing(&context)
+            .unwrap()
+            .public_status()
+            .node_id
+    );
+}
+
 /// An abort must say what failed, not only that something did.
 ///
 /// These three variants collapsed into one opaque sentence, and it cost a

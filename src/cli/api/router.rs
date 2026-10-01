@@ -364,7 +364,7 @@ pub(super) fn shared_test_health_registry() -> Arc<NodeRegistry> {
             node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
                 .expect("initialize node");
             Arc::new(
-                crate::operations::health::open_observational_registry(&context)
+                crate::operations::node::open_observational_registry(&context)
                     .expect("open observational registry"),
             )
         })

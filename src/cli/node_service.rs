@@ -411,7 +411,7 @@ pub fn run(
     );
     let _endpoint_guard = ServiceEndpointFile(endpoint_path);
 
-    let health_registry = Arc::new(crate::operations::health::open_observational_registry(
+    let health_registry = Arc::new(crate::operations::node::open_observational_registry(
         &context,
     )?);
     let body_limit = boot.deploy.http.body_limit_bytes.max(1);

@@ -130,39 +130,6 @@ fn list_battery_scripts_maps_valid_manifest_scripts() {
 }
 
 #[test]
-fn add_battery_stores_token_ref_auth_without_plaintext() {
-    let dir = TempDir::new().unwrap();
-    let ws = workspace_in(&dir);
-    let plaintext = "super-secret-battery-token-value";
-    std::env::set_var("OMAKURE_BATTERY_TOKEN_TEST", plaintext);
-
-    let summary = add_battery(
-        &ws,
-        AddBatteryRequest {
-            name: "private".into(),
-            git_url: "https://example.invalid/private.git".into(),
-            requested_ref: "main".into(),
-            token_ref: Some("secret://env/OMAKURE_BATTERY_TOKEN_TEST".into()),
-        },
-    )
-    .unwrap();
-
-    assert_eq!(
-        summary.auth.as_ref().map(|a| a.method.clone()),
-        Some(BatteryAuthMethod::HttpsTokenRef)
-    );
-    assert_eq!(
-        summary.auth.as_ref().map(|a| a.token_ref.as_str()),
-        Some("secret://env/OMAKURE_BATTERY_TOKEN_TEST")
-    );
-    let registry_text = fs::read_to_string(BatteryPaths::for_workspace(&ws).registry_path).unwrap();
-    assert!(registry_text.contains("secret://env/OMAKURE_BATTERY_TOKEN_TEST"));
-    assert!(registry_text.contains("https_token_ref"));
-    assert!(!registry_text.contains(plaintext));
-    std::env::remove_var("OMAKURE_BATTERY_TOKEN_TEST");
-}
-
-#[test]
 fn add_battery_rejects_token_ref_on_non_https() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);

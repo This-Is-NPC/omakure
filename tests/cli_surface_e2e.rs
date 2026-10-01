@@ -1593,6 +1593,38 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
 }
 
 #[test]
+fn battery_add_stores_token_ref_without_environment_plaintext() {
+    let workspace = support::TestWorkspace::new("battery_secret_ref");
+    let token_ref = "secret://env/OMAKURE_BATTERY_TOKEN_TEST";
+    let plaintext = "super-secret-battery-token-value";
+    let add = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &[
+            "--json",
+            "battery",
+            "add",
+            "https://example.invalid/private.git",
+            "--name",
+            "private",
+            "--token-ref",
+            token_ref,
+        ],
+        &[("OMAKURE_BATTERY_TOKEN_TEST", plaintext)],
+    );
+    assert_success(&add);
+    let payload = json(&add);
+    let summary = &payload["data"];
+    assert_eq!(summary["auth"]["method"], "https_token_ref");
+    assert_eq!(summary["auth"]["token_ref"], token_ref);
+
+    let registry = fs::read_to_string(workspace.path().join(".omakure/batteries.json"))
+        .expect("read Battery registry");
+    assert!(registry.contains(token_ref));
+    assert!(registry.contains("https_token_ref"));
+    assert!(!registry.contains(plaintext));
+}
+
+#[test]
 fn direct_and_queue_runs_reject_reserved_workspace_scripts() {
     let workspace = support::TestWorkspace::new("cli_reserved_scripts");
     fs::create_dir_all(workspace.path().join(".omakure/batteries/cache")).unwrap();

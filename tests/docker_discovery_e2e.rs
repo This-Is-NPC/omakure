@@ -7,7 +7,7 @@ use rusqlite::Connection;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
@@ -15,6 +15,9 @@ use tempfile::TempDir;
 #[path = "support/compose_env.rs"]
 mod compose_env;
 use compose_env::ComposeEnv;
+#[path = "support/docker.rs"]
+mod docker;
+use docker::{bounded_command, json_output, output_text, safe_generation_stderr};
 
 const TARGET_API: &str = "http://127.0.0.1:17878";
 
@@ -23,38 +26,6 @@ fn compose_project() -> &'static str {
     PROJECT
         .get_or_init(|| format!("omakure-discovery-{}", std::process::id()))
         .as_str()
-}
-
-/// Every Docker call is bounded, so a wedged daemon cannot hang the suite.
-///
-/// Two different budgets, because two different things are being bounded. An
-/// operation on a stack that is already up is fast, and 120s is a generous
-/// ceiling for one. A call carrying `--build` may compile this crate inside the
-/// container from a cold layer cache, which on an ordinary machine does not fit
-/// in two minutes -- and when it did not, `timeout` killed the build and the
-/// test reported `compose up failed`, which reads exactly like the product
-/// refusing to start. One budget for both made a slow machine indistinguishable
-/// from a broken node.
-const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
-const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
-
-fn bounded_command_within(program: &str, budget: &str) -> Command {
-    let mut command = Command::new("timeout");
-    command.args(["--foreground", "--kill-after=10s", budget, program]);
-    command
-}
-
-fn bounded_command(program: &str) -> Command {
-    bounded_command_within(program, COMPOSE_OPERATION_TIMEOUT)
-}
-
-/// The budget a Compose invocation gets, decided by whether it can build.
-fn compose_timeout(args: &[&str]) -> &'static str {
-    if args.contains(&"--build") {
-        COMPOSE_BUILD_TIMEOUT
-    } else {
-        COMPOSE_OPERATION_TIMEOUT
-    }
 }
 
 struct ComposeGuard {
@@ -213,69 +184,7 @@ impl Drop for ComposeGuard {
 }
 
 fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
-    let mut failures = Vec::new();
-    let down = compose(
-        guard,
-        &[
-            "-p",
-            compose_project(),
-            "down",
-            "--volumes",
-            "--remove-orphans",
-        ],
-    );
-    if !down.status.success() {
-        failures.push(format!(
-            "compose down status={} stderr={}",
-            down.status,
-            safe_stderr(&down)
-        ));
-    }
-    for resource in ["container", "network", "volume"] {
-        let output = bounded_command("docker")
-            .args([
-                resource,
-                "ls",
-                "-q",
-                "--filter",
-                &format!("label=com.docker.compose.project={}", compose_project()),
-            ])
-            .output();
-        match output {
-            Ok(output) if !output.status.success() => failures.push(format!(
-                "inspect {resource} status={} stderr={}",
-                output.status,
-                safe_stderr(&output)
-            )),
-            Ok(output) if !String::from_utf8_lossy(&output.stdout).trim().is_empty() => {
-                failures.push(format!("project-labeled {resource} remains"));
-            }
-            Ok(_) => {}
-            Err(error) => failures.push(format!("inspect {resource}: {error}")),
-        }
-    }
-    cleanup_result(failures)
-}
-
-fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
-    if failures.is_empty() {
-        Ok(())
-    } else {
-        Err(failures.join("; "))
-    }
-}
-
-#[cfg(test)]
-mod cleanup_tests {
-    use super::cleanup_result;
-
-    #[test]
-    fn cleanup_reports_all_failures() {
-        let error = cleanup_result(vec!["down failed".into(), "volume remains".into()])
-            .expect_err("cleanup failure should be returned");
-        assert!(error.contains("down failed"));
-        assert!(error.contains("volume remains"));
-    }
+    docker::cleanup_project(&guard.root, &guard.env, compose_project())
 }
 
 #[test]
@@ -288,27 +197,8 @@ fn cleanup_after_induced_partial_up() {
     guard.finalized = true;
 }
 
-fn safe_stderr(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).trim().to_string()
-}
-
-fn safe_generation_stderr(output: &Output) -> String {
-    let stderr = safe_stderr(output);
-    let lower = stderr.to_ascii_lowercase();
-    assert!(
-        !lower.contains("bearer ") && !lower.contains("$argon2") && !lower.contains("token ="),
-        "token generation stderr contained sensitive material"
-    );
-    stderr
-}
-
 fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
-    let mut command = bounded_command_within("docker", compose_timeout(args));
-    guard.env.apply(&mut command);
-    command
-        .current_dir(&guard.root)
-        .args(["compose"])
-        .args(args)
+    docker::compose_command(&guard.root, &guard.env, &[], args)
         .output()
         .expect("run docker compose")
 }
@@ -343,24 +233,6 @@ fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
         .args(args)
         .output()
         .expect("run docker compose exec")
-}
-
-fn output_text(output: &Output) -> String {
-    format!(
-        "stdout={} stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-}
-
-fn json_output(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "expected successful command: {}",
-        output_text(output)
-    );
-    serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|error| panic!("invalid JSON output ({error}): {}", output_text(output)))
 }
 
 fn container_ip(guard: &ComposeGuard, service: &str) -> String {
@@ -433,14 +305,10 @@ fn service_http_ready(guard: &ComposeGuard, service: &str, port: u16) -> bool {
 }
 
 fn wait_for_service_ready(guard: &ComposeGuard, service: &str, port: u16) {
-    let deadline = Instant::now() + Duration::from_secs(60);
-    while Instant::now() < deadline {
-        if service_http_ready(guard, service, port) {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    panic!(
+    assert!(
+        docker::wait_until(Duration::from_secs(60), Duration::from_millis(250), || {
+            service_http_ready(guard, service, port)
+        }),
         "Docker service {service} did not become semantically ready:\n{}",
         compose_diagnostics(guard)
     );

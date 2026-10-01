@@ -265,7 +265,7 @@ fn transaction_failure_does_not_leave_partial_peer_or_audit() {
         .unwrap();
     assert!(
         registry
-            .transition_peer(&peer.node_id, PeerState::Active, "operator", " ")
+            .transition_peer(&peer.node_id, PeerState::Active, "operator", "\0")
             .is_err()
     );
     assert_eq!(

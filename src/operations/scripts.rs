@@ -209,13 +209,14 @@ fn open_script_file(
         })?;
         use std::os::unix::io::AsRawFd;
         let fd_path = PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
-        if let Ok(opened) = fd_path.canonicalize() {
-            if !opened.starts_with(&canonical_root) {
-                return Err(OperationError::new(
-                    OperationErrorCode::UnsafePath,
-                    "path escapes scripts root",
-                ));
-            }
+        if fd_path
+            .canonicalize()
+            .is_ok_and(|opened| !opened.starts_with(&canonical_root))
+        {
+            return Err(OperationError::new(
+                OperationErrorCode::UnsafePath,
+                "path escapes scripts root",
+            ));
         }
     }
     Ok(file)
@@ -454,6 +455,19 @@ mod tests {
         )
         .unwrap_err();
 
+        assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn opened_script_fd_outside_the_workspace_is_rejected() {
+        let dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let outside_path = outside.path().join("outside.sh");
+        std::fs::write(&outside_path, "#!/bin/sh\n").unwrap();
+
+        let err = open_script_file(&outside_path, workspace.scripts_root()).unwrap_err();
         assert_eq!(err.code, OperationErrorCode::UnsafePath);
     }
 

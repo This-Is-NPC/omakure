@@ -229,12 +229,14 @@ pub(crate) fn scheduler_tick(
             )
         }) {
             Ok(resolved) => resolved,
-            Err((field, message)) => {
+            Err(error) => {
                 log_line(
                     &log_path,
                     "ERROR",
                     &format!(
-                        "{schedule_id}: secret field `{field}` not enqueue-safe: {message}; skipping fire"
+                        "{schedule_id}: secret field `{}` not enqueue-safe: {}; skipping fire",
+                        error.field(),
+                        error.message()
                     ),
                 );
                 continue;

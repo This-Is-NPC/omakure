@@ -118,7 +118,7 @@ fn prepare_run_inputs(
         &extra_env,
         &direct_secrets,
     )
-    .map_err(|(field, message)| missing_required_field_error(&field, &message))?;
+    .map_err(|error| missing_required_field_error(error.field(), &error.message()))?;
     // `--json` implies `--no-prompt`: agents must never block on a TTY.
     if options.no_prompt || json_output {
         check_required_fields(workspace, script_path, &resolved_args.persisted_args)

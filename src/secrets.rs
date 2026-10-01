@@ -180,13 +180,63 @@ pub enum SecretResolveError {
     InvalidRef,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecretArgError {
+    Resolution {
+        field: String,
+        source: SecretResolveError,
+    },
+    MissingRequired {
+        field: String,
+        flag: String,
+    },
+    QueuedPlaintext {
+        field: String,
+    },
+}
+
+impl SecretArgError {
+    pub fn field(&self) -> &str {
+        match self {
+            Self::Resolution { field, .. }
+            | Self::MissingRequired { field, .. }
+            | Self::QueuedPlaintext { field } => field,
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            Self::Resolution { source, .. } => source.to_string(),
+            Self::MissingRequired { flag, .. } => {
+                format!("expected `{flag}` on the command line or in the run environment")
+            }
+            Self::QueuedPlaintext { .. } => "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext".to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for SecretArgError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.field(), self.message())
+    }
+}
+
+impl std::error::Error for SecretArgError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Resolution { source, .. } => Some(source),
+            Self::MissingRequired { .. } | Self::QueuedPlaintext { .. } => None,
+        }
+    }
+}
+
 pub fn resolve_args_with_direct_secrets(
     workspace: &Workspace,
     script_path: &Path,
     args: &[String],
     extra_env: &[(String, String)],
     direct_secrets: &[(String, String)],
-) -> Result<ResolvedArgs, (String, String)> {
+) -> Result<ResolvedArgs, SecretArgError> {
     resolve_args_with_access(
         workspace,
         script_path,
@@ -204,7 +254,7 @@ pub fn resolve_args_with_access(
     extra_env: &[(String, String)],
     direct_secrets: &[(String, String)],
     access: &SecretAccess,
-) -> Result<ResolvedArgs, (String, String)> {
+) -> Result<ResolvedArgs, SecretArgError> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
     let schema = match repo.read_schema(script_path) {
         Ok(schema) => schema,
@@ -236,9 +286,12 @@ pub fn resolve_args_with_access(
         ];
         let mut resolved = None;
         for candidate in candidates.into_iter().flatten() {
-            match resolve_secret_ref(workspace, &candidate, access)
-                .map_err(|err| (field.name.clone(), err.to_string()))?
-            {
+            match resolve_secret_ref(workspace, &candidate, access).map_err(|source| {
+                SecretArgError::Resolution {
+                    field: field.name.clone(),
+                    source,
+                }
+            })? {
                 Some(value) => {
                     resolved = Some(ResolvedSecretValue {
                         value,
@@ -253,13 +306,10 @@ pub fn resolve_args_with_access(
 
         let Some(value) = resolved else {
             if field.required.unwrap_or(false) {
-                return Err((
-                    field.name.clone(),
-                    format!(
-                        "expected `{}` on the command line or in the run environment",
-                        flag
-                    ),
-                ));
+                return Err(SecretArgError::MissingRequired {
+                    field: field.name.clone(),
+                    flag,
+                });
             }
             continue;
         };
@@ -302,7 +352,7 @@ pub fn validate_queued_secret_args_reconstructable(
     workspace: &Workspace,
     script_path: &Path,
     args: &[String],
-) -> Result<(), (String, String)> {
+) -> Result<(), SecretArgError> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
     let schema = match repo.read_schema(script_path) {
         Ok(schema) => schema,
@@ -314,10 +364,9 @@ pub fn validate_queued_secret_args_reconstructable(
             .clone()
             .unwrap_or_else(|| format!("--{}", field.name));
         if find_arg_value(args, &flag).is_some_and(|value| !value.starts_with("secret://")) {
-            return Err((
-                field.name.clone(),
-                "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext".to_string(),
-            ));
+            return Err(SecretArgError::QueuedPlaintext {
+                field: field.name.clone(),
+            });
         }
     }
     Ok(())
@@ -631,6 +680,44 @@ mod tests {
     }
 
     #[test]
+    fn secret_argument_errors_keep_field_and_public_message() {
+        let tmp = TempDir::new().unwrap();
+        let (workspace, script) = script_with_secret(&tmp);
+
+        let missing =
+            resolve_args_with_direct_secrets(&workspace, &script, &[], &[], &[]).unwrap_err();
+        assert_eq!(
+            missing,
+            SecretArgError::MissingRequired {
+                field: "TOKEN".into(),
+                flag: "--token".into(),
+            }
+        );
+        assert_eq!(
+            missing.message(),
+            "expected `--token` on the command line or in the run environment"
+        );
+
+        let queued = validate_queued_secret_args_reconstructable(
+            &workspace,
+            &script,
+            &["--token".into(), "SENSITIVE_SECRET_123".into()],
+        )
+        .unwrap_err();
+        assert_eq!(
+            queued,
+            SecretArgError::QueuedPlaintext {
+                field: "TOKEN".into(),
+            }
+        );
+        assert_eq!(
+            queued.message(),
+            "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext"
+        );
+        assert!(!queued.to_string().contains("SENSITIVE_SECRET_123"));
+    }
+
+    #[test]
     fn secret_ref_parser_accepts_generic_secret_uri() {
         let parsed = SecretRef::parse("secret://prod/token").unwrap();
 
@@ -798,9 +885,9 @@ mod tests {
             &no_env,
         )
         .unwrap_err();
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("not allowed"));
-        assert!(!err.1.contains("env_value"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("not allowed"));
+        assert!(!err.message().contains("env_value"));
 
         // Same wildcard resolves a NON-env provider ref (file provider).
         let resolved = resolve_args_with_access(
@@ -849,9 +936,9 @@ mod tests {
             &access,
         )
         .unwrap_err();
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("not allowed"));
-        assert!(!err.1.contains("leaked_value"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("not allowed"));
+        assert!(!err.message().contains("leaked_value"));
     }
 
     #[test]
@@ -906,8 +993,8 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("secret ref not found"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("secret ref not found"));
     }
 
     #[test]
@@ -930,9 +1017,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("secrets:use"));
-        assert!(!err.1.contains("from_file_provider"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("secrets:use"));
+        assert!(!err.message().contains("from_file_provider"));
     }
 
     #[test]
@@ -955,9 +1042,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("not allowed"));
-        assert!(!err.1.contains("from_file_provider"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("not allowed"));
+        assert!(!err.message().contains("from_file_provider"));
     }
 
     #[test]
@@ -975,9 +1062,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("secret ref not found"));
-        assert!(!err.1.contains("secret://prod/missing"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("secret ref not found"));
+        assert!(!err.message().contains("secret://prod/missing"));
     }
 
     #[test]

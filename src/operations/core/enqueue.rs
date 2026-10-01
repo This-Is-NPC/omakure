@@ -34,10 +34,14 @@ pub fn enqueue_run_with_access(
         &canonical,
         &request.args,
     )
-    .map_err(|(field, message)| {
+    .map_err(|error| {
         OperationError::new(
             OperationErrorCode::InvalidInput,
-            format!("required field `{}` is missing: {}", field, message),
+            format!(
+                "required field `{}` is missing: {}",
+                error.field(),
+                error.message()
+            ),
         )
     })?;
     let resolved_args = crate::secrets::resolve_args_with_access(
@@ -48,17 +52,22 @@ pub fn enqueue_run_with_access(
         &request.secret_fields,
         secret_access,
     )
-    .map_err(|(field, message)| {
-        let code = if message.contains(crate::secrets::SECRETS_USE_SCOPE)
-            || message.contains("not allowed")
-        {
+    .map_err(|error| {
+        let message = error.message();
+        let code = if matches!(
+            &error,
+            crate::secrets::SecretArgError::Resolution {
+                source: crate::secrets::SecretResolveError::Denied(_),
+                ..
+            }
+        ) {
             OperationErrorCode::Forbidden
         } else {
             OperationErrorCode::InvalidInput
         };
         OperationError::new(
             code,
-            format!("required field `{}` is missing: {}", field, message),
+            format!("required field `{}` is missing: {}", error.field(), message),
         )
     })?;
     let store = RunStore::open(workspace).map_err(io_error_runs)?;
@@ -129,10 +138,10 @@ pub fn enqueue_cue_run(
         &request.secret_fields,
         &deny_all,
     )
-    .map_err(|(field, message)| {
+    .map_err(|error| {
         OperationError::new(
             OperationErrorCode::InvalidInput,
-            format!("{field}: {message}"),
+            format!("{}: {}", error.field(), error.message()),
         )
     })?;
 

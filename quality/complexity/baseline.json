@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "be847cbf605f565ddaf608cc6dccff45ccf58f5d5d7e54a8355cae58b98a7bf2",
+  "canonical_sha256": "c2a3ef7881c075aed3e2f898d6792e523eec27e4f7a6325e68c360c6c688cce7",
   "config_identity": "no-config",
   "files": [
     {
@@ -4698,12 +4698,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 90,
+        "invocations": 96,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 80,
-        "cyclomatic": 142
+        "cognitive": 83,
+        "cyclomatic": 153
       },
       "path": "src/secrets.rs",
       "source_class": "handwritten"
@@ -32625,7 +32625,7 @@
         "identity": "crate::cli::run::prepare_run_inputs::<closure>@121#3",
         "macro_expansion": "not_measured",
         "path": "src/cli/run/mod.rs",
-        "signature": ".map_err(|(field, message)| missing_required_field_error(&field, &message))?;",
+        "signature": ".map_err(|error| missing_required_field_error(error.field(), &error.message()))?;",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::run::prepare_run_inputs::<closure>@121#3",
@@ -32641,7 +32641,7 @@
         "name": "<closure>"
       },
       "path": "src/cli/run/mod.rs",
-      "signature": ".map_err(|(field, message)| missing_required_field_error(&field, &message))?;",
+      "signature": ".map_err(|error| missing_required_field_error(error.field(), &error.message()))?;",
       "source_class": "handwritten"
     },
     {
@@ -85301,7 +85301,7 @@
         "identity": "crate::operations::core::enqueue::enqueue_run_with_access::<closure>@37#3",
         "macro_expansion": "not_measured",
         "path": "src/operations/core/enqueue.rs",
-        "signature": ".map_err(|(field, message)| {",
+        "signature": ".map_err(|error| {",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::core::enqueue::enqueue_run_with_access::<closure>@37#3",
@@ -85317,7 +85317,7 @@
         "name": "<closure>"
       },
       "path": "src/operations/core/enqueue.rs",
-      "signature": ".map_err(|(field, message)| {",
+      "signature": ".map_err(|error| {",
       "source_class": "handwritten"
     },
     {
@@ -85353,23 +85353,49 @@
         "identity": "crate::operations::core::enqueue::enqueue_cue_run::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/core/enqueue.rs",
-        "signature": ".map_err(|(field, message)| {",
+        "signature": ".map_err(|error| {",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::core::enqueue::enqueue_cue_run::<closure>",
       "kind": "closure",
-      "line": 132,
+      "line": 141,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 132,
+        "line": 141,
         "name": "<closure>"
       },
       "path": "src/operations/core/enqueue.rs",
-      "signature": ".map_err(|(field, message)| {",
+      "signature": ".map_err(|error| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::core::enqueue::enqueue_run_with_access::<closure>@55#4",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/core/enqueue.rs",
+        "signature": ".map_err(|error| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::core::enqueue::enqueue_run_with_access::<closure>@55#4",
+      "kind": "closure",
+      "line": 55,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 55,
+        "name": "<closure>"
+      },
+      "path": "src/operations/core/enqueue.rs",
+      "signature": ".map_err(|error| {",
       "source_class": "handwritten"
     },
     {
@@ -99107,7 +99133,7 @@
         "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>@51#2",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/lifecycle.rs",
-        "signature": ".map_err(|(field, message)| {",
+        "signature": ".map_err(|error| {",
         "source_class": "handwritten"
       },
       "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>@51#2",
@@ -99123,7 +99149,7 @@
         "name": "<closure>"
       },
       "path": "src/run_executor/lifecycle.rs",
-      "signature": ".map_err(|(field, message)| {",
+      "signature": ".map_err(|error| {",
       "source_class": "handwritten"
     },
     {
@@ -107947,49 +107973,49 @@
         "identity": "crate::secrets::resolve_args_with_direct_secrets",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": "pub fn resolve_args_with_direct_secrets( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], ) -> Result<ResolvedArgs, (String, String)>",
+        "signature": "pub fn resolve_args_with_direct_secrets( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], ) -> Result<ResolvedArgs, SecretArgError>",
         "source_class": "handwritten"
       },
       "identity": "crate::secrets::resolve_args_with_direct_secrets",
       "kind": "function",
-      "line": 184,
+      "line": 233,
       "name": "resolve_args_with_direct_secrets",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 184,
+        "line": 233,
         "name": "resolve_args_with_direct_secrets"
       },
       "path": "src/secrets.rs",
-      "signature": "pub fn resolve_args_with_direct_secrets( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], ) -> Result<ResolvedArgs, (String, String)>",
+      "signature": "pub fn resolve_args_with_direct_secrets( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], ) -> Result<ResolvedArgs, SecretArgError>",
       "source_class": "handwritten"
     },
     {
-      "cognitive": 20,
-      "cyclomatic": 13,
+      "cognitive": 17,
+      "cyclomatic": 12,
       "derived": {
         "identity": "crate::secrets::resolve_args_with_access",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": "pub fn resolve_args_with_access( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], access: &SecretAccess, ) -> Result<ResolvedArgs, (String, String)>",
+        "signature": "pub fn resolve_args_with_access( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], access: &SecretAccess, ) -> Result<ResolvedArgs, SecretArgError>",
         "source_class": "handwritten"
       },
       "identity": "crate::secrets::resolve_args_with_access",
       "kind": "function",
-      "line": 201,
+      "line": 250,
       "name": "resolve_args_with_access",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 20,
-        "cyclomatic": 13,
+        "cognitive": 17,
+        "cyclomatic": 12,
         "kind": "function",
-        "line": 201,
+        "line": 250,
         "name": "resolve_args_with_access"
       },
       "path": "src/secrets.rs",
-      "signature": "pub fn resolve_args_with_access( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], access: &SecretAccess, ) -> Result<ResolvedArgs, (String, String)>",
+      "signature": "pub fn resolve_args_with_access( workspace: &Workspace, script_path: &Path, args: &[String], extra_env: &[(String, String)], direct_secrets: &[(String, String)], access: &SecretAccess, ) -> Result<ResolvedArgs, SecretArgError>",
       "source_class": "handwritten"
     },
     {
@@ -108048,26 +108074,26 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::resolve_args_with_access::<closure>@241#3",
+        "identity": "crate::secrets::resolve_args_with_access::<closure>@289#3",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": ".map_err(|err| (field.name.clone(), err.to_string()))?",
+        "signature": "match resolve_secret_ref(workspace, &candidate, access).map_err(|source| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::resolve_args_with_access::<closure>@241#3",
+      "identity": "crate::secrets::resolve_args_with_access::<closure>@289#3",
       "kind": "closure",
-      "line": 241,
+      "line": 289,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 241,
+        "line": 289,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
-      "signature": ".map_err(|err| (field.name.clone(), err.to_string()))?",
+      "signature": "match resolve_secret_ref(workspace, &candidate, access).map_err(|source| {",
       "source_class": "handwritten"
     },
     {
@@ -108149,29 +108175,29 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 7,
-      "cyclomatic": 6,
+      "cognitive": 4,
+      "cyclomatic": 5,
       "derived": {
         "identity": "crate::secrets::validate_queued_secret_args_reconstructable",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": "pub fn validate_queued_secret_args_reconstructable( workspace: &Workspace, script_path: &Path, args: &[String], ) -> Result<(), (String, String)>",
+        "signature": "pub fn validate_queued_secret_args_reconstructable( workspace: &Workspace, script_path: &Path, args: &[String], ) -> Result<(), SecretArgError>",
         "source_class": "handwritten"
       },
       "identity": "crate::secrets::validate_queued_secret_args_reconstructable",
       "kind": "function",
-      "line": 303,
+      "line": 351,
       "name": "validate_queued_secret_args_reconstructable",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 7,
-        "cyclomatic": 6,
+        "cognitive": 4,
+        "cyclomatic": 5,
         "kind": "function",
-        "line": 303,
+        "line": 351,
         "name": "validate_queued_secret_args_reconstructable"
       },
       "path": "src/secrets.rs",
-      "signature": "pub fn validate_queued_secret_args_reconstructable( workspace: &Workspace, script_path: &Path, args: &[String], ) -> Result<(), (String, String)>",
+      "signature": "pub fn validate_queued_secret_args_reconstructable( workspace: &Workspace, script_path: &Path, args: &[String], ) -> Result<(), SecretArgError>",
       "source_class": "handwritten"
     },
     {
@@ -109550,6 +109576,136 @@
       },
       "path": "src/secrets.rs",
       "signature": "fn list_secret_metadata_respects_ref_acl_without_use_scope()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::secrets::field",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "pub fn field(&self) -> &str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::field",
+      "kind": "method",
+      "line": 199,
+      "name": "field",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 199,
+        "name": "field"
+      },
+      "path": "src/secrets.rs",
+      "signature": "pub fn field(&self) -> &str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::fmt",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::fmt",
+      "kind": "method",
+      "line": 219,
+      "name": "fmt",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 219,
+        "name": "fmt"
+      },
+      "path": "src/secrets.rs",
+      "signature": "fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::secrets::message",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "pub fn message(&self) -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::message",
+      "kind": "method",
+      "line": 207,
+      "name": "message",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 207,
+        "name": "message"
+      },
+      "path": "src/secrets.rs",
+      "signature": "pub fn message(&self) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::secret_argument_errors_keep_field_and_public_message",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "fn secret_argument_errors_keep_field_and_public_message()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::secret_argument_errors_keep_field_and_public_message",
+      "kind": "function",
+      "line": 683,
+      "name": "secret_argument_errors_keep_field_and_public_message",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 683,
+        "name": "secret_argument_errors_keep_field_and_public_message"
+      },
+      "path": "src/secrets.rs",
+      "signature": "fn secret_argument_errors_keep_field_and_public_message()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::secrets::source",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "fn source(&self) -> Option<&(dyn std::error::Error + 'static)>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::source",
+      "kind": "method",
+      "line": 225,
+      "name": "source",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 225,
+        "name": "source"
+      },
+      "path": "src/secrets.rs",
+      "signature": "fn source(&self) -> Option<&(dyn std::error::Error + 'static)>",
       "source_class": "handwritten"
     },
     {

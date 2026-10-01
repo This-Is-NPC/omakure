@@ -48,10 +48,14 @@ fn resolve_run_args(
         &[],
         &secret_access,
     )
-    .map_err(|(field, message)| {
+    .map_err(|error| {
         execution_error(
             ExecutionTerminal::Failed,
-            format!("required field `{}` missing: {}", field, message),
+            format!(
+                "required field `{}` missing: {}",
+                error.field(),
+                error.message()
+            ),
         )
     })?;
     crate::operations::core::check_required_fields(

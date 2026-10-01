@@ -93,6 +93,59 @@ pub fn init_node_checked_signal(workspace: &Path) -> Value {
     )
 }
 
+pub fn serve_fleet_node(workspace: &Path) -> HttpServer {
+    HttpServer::start_node_service(
+        workspace,
+        &["node:read", "node:write"],
+        &["--workers", "1", "--no-scheduler"],
+        &[],
+        Duration::from_secs(20),
+    )
+}
+
+pub fn trust_fleet_peer(
+    workspace: &Path,
+    peer_workspace: &Path,
+    peer_status: &Value,
+    role: &str,
+    capabilities: &[&str],
+    audit: (&str, &str),
+    encode_certificate: fn(&[u8]) -> String,
+) {
+    let certificate = encode_certificate(
+        &fs::read(peer_workspace.join(".node-state/transport.cert"))
+            .expect("read peer transport certificate"),
+    );
+    let (actor, reason) = audit;
+    let mut args = vec![
+        "trust".to_string(),
+        "--node-id".to_string(),
+        peer_status["identity"]["node_id"].as_str().unwrap().into(),
+        "--public-key".to_string(),
+        peer_status["identity"]["public_key"]
+            .as_str()
+            .unwrap()
+            .into(),
+        "--transport-certificate".to_string(),
+        certificate,
+        "--role".to_string(),
+        role.to_string(),
+        "--actor".to_string(),
+        actor.to_string(),
+        "--reason".to_string(),
+        reason.to_string(),
+        "--confirmed".to_string(),
+    ];
+    for capability in capabilities {
+        args.push("--capability".to_string());
+        args.push((*capability).to_string());
+    }
+    assert_eq!(
+        assert_node_success_named("trust", &run_node_checked_signal(workspace, &args))["state"],
+        "active"
+    );
+}
+
 fn init_node_with(
     workspace: &Path,
     run: fn(&Path, &[String]) -> Output,

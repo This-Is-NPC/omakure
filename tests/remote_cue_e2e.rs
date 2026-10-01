@@ -13,7 +13,6 @@
 mod hex_support;
 mod support;
 
-use serde_json::Value;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -22,61 +21,7 @@ const CUE_EFFECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The Signal rides the Performer's standing reporting session, which has its
 /// own tick, so this is deliberately looser than the effect timeout.
 const SIGNAL_TIMEOUT: Duration = Duration::from_secs(90);
-
-fn serve(workspace: &Path) -> support::HttpServer {
-    support::HttpServer::start_node_service(
-        workspace,
-        // Dispatching a Cue is a node write, and the same scope that governs
-        // the rest of the node surface governs this.
-        &["node:read", "node:write"],
-        &["--workers", "1", "--no-scheduler"],
-        &[],
-        Duration::from_secs(20),
-    )
-}
-
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = hex_support::encode(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "remote-cue-e2e".to_string(),
-        "--reason".to_string(),
-        "remote cue certification".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    assert_eq!(
-        support::assert_node_success_named(
-            "trust",
-            &support::run_node_checked_signal(workspace, &args)
-        )["state"],
-        "active"
-    );
-}
+const TRUST_AUDIT: (&str, &str) = ("remote-cue-e2e", "remote cue certification");
 
 /// Bind the direct listener, point at the peer, and declare the remote policy.
 ///
@@ -212,19 +157,23 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
 
     // The Performer trusts the Conductor with exactly the two capabilities the
     // gates require, and declares exactly one script as remotely runnable.
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
     // No static peer on either side, and that is a limitation rather than a
     // preference: a Performer that already holds a session with this Conductor
@@ -234,8 +183,8 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
     configure(performer, performer_port, None, true, &["deploy.sh"]);
     configure(conductor, conductor_port, None, false, &[]);
 
-    let _performer_service = serve(performer);
-    let _conductor_service = serve(conductor);
+    let _performer_service = support::serve_fleet_node(performer);
+    let _conductor_service = support::serve_fleet_node(conductor);
 
     assert_eq!(effect_count(&marker), 0, "nothing has run yet");
 
@@ -427,19 +376,23 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
     let marker = performer.join("effects.log");
     write_effect_script(performer, &marker);
 
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
     // Both sides name the other, which is what a managed fleet looks like and
     // what dial ownership requires: `should_initiate` gives the dial to
@@ -460,8 +413,8 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         &["deploy.sh"],
     );
 
-    let _performer_service = serve(performer);
-    let conductor_service = serve(conductor);
+    let _performer_service = support::serve_fleet_node(performer);
+    let conductor_service = support::serve_fleet_node(conductor);
 
     // Wait on the fact, not on a duration. Dispatching before the session is up
     // would fall back to the direct dial and pass for the wrong reason: the Cue
@@ -539,26 +492,30 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
     let marker = performer.join("effects.log");
     write_effect_script(performer, &marker);
 
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
     // Cues enabled, full trust, full capabilities — and nothing declared.
     configure(performer, performer_port, None, true, &[]);
     configure(conductor, conductor_port, None, false, &[]);
 
-    let _performer_service = serve(performer);
-    let _conductor_service = serve(conductor);
+    let _performer_service = support::serve_fleet_node(performer);
+    let _conductor_service = support::serve_fleet_node(conductor);
 
     support::assert_node_success_named(
         "cue",

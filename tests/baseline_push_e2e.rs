@@ -18,59 +18,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 const ORGANIZATION: &str = "baseline-e2e-fleet";
-
-fn serve(workspace: &Path) -> support::HttpServer {
-    support::HttpServer::start_node_service(
-        workspace,
-        &["node:read", "node:write"],
-        &["--workers", "1", "--no-scheduler"],
-        &[],
-        Duration::from_secs(20),
-    )
-}
-
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = hex_support::encode(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "baseline-push-e2e".to_string(),
-        "--reason".to_string(),
-        "baseline delivery certification".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    assert_eq!(
-        support::assert_node_success_named(
-            "trust",
-            &support::run_node_checked_signal(workspace, &args)
-        )["state"],
-        "active"
-    );
-}
+const TRUST_AUDIT: (&str, &str) = ("baseline-push-e2e", "baseline delivery certification");
 
 /// A baseline member. Real content, so the manifest hashes something specific.
 fn write_baseline_script(workspace: &Path, name: &str, marker: &str) {
@@ -241,19 +189,23 @@ fn stand_up_fleet() -> Fleet {
         Some((key_id.as_str(), public_key.as_str())),
     );
 
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["baseline-push", "inventory-health", "notifications"],
+        TRUST_AUDIT,
+        hex_support::encode,
     );
 
     // The Conductor sends the bodies, so it must hold the same bytes the
@@ -298,8 +250,8 @@ fn installed_baseline(fleet: &Fleet) -> Value {
 #[ignore = "spawns two real node services; run explicitly"]
 fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
     let fleet = stand_up_fleet();
-    let performer_service = serve(fleet.performer.path());
-    let conductor_service = serve(fleet.conductor.path());
+    let performer_service = support::serve_fleet_node(fleet.performer.path());
+    let conductor_service = support::serve_fleet_node(fleet.conductor.path());
     assert!(
         support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session with the Performer"
@@ -387,8 +339,8 @@ fn baseline_audit_rows(workspace: &Path) -> Vec<(String, String, Option<i64>)> {
 #[ignore = "spawns two real node services; run explicitly"]
 fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
     let fleet = stand_up_fleet();
-    let performer_service = serve(fleet.performer.path());
-    let conductor_service = serve(fleet.conductor.path());
+    let performer_service = support::serve_fleet_node(fleet.performer.path());
+    let conductor_service = support::serve_fleet_node(fleet.conductor.path());
     assert!(
         support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session with the Performer"

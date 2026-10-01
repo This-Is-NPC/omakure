@@ -13,7 +13,7 @@ use crate::cli::json::{self, codes};
 use crate::operations::core::check_required_fields;
 use crate::operations::core::resolve_script_path;
 use crate::run_executor::{execute_with_heartbeat, ExecutionResult, ExecutionTerminal};
-use crate::runs::{self, EnqueueOptions};
+use crate::runs::{self, EnqueueOptions, RunStore};
 use crate::workspace::Workspace;
 use std::error::Error;
 use std::path::PathBuf;
@@ -41,30 +41,30 @@ pub fn run(
 
     let canonical = std::fs::canonicalize(&script_path).unwrap_or_else(|_| script_path.clone());
     let canonical_str = canonical.to_string_lossy().to_string();
-    let conn = runs::open(&workspace).map_err(|err| -> Box<dyn Error> { err.into() })?;
-    let row = runs::start_inline(
-        &conn,
-        &canonical_str,
-        &resolved_args.persisted_args,
-        &format!("inline:{}", std::process::id()),
-        EnqueueOptions {
-            run_id: options.run_id.clone(),
-            actor: options.actor.clone(),
-            reason: options.reason.clone(),
-            priority: 0,
-            timeout_ms: None,
-            parent_run_id: options.parent_run_id.clone(),
-            cron_schedule_id: None,
-            script_name: None,
-            omakure_version: app_meta::APP_VERSION.to_string(),
-            trigger: crate::runs::RunTrigger::Manual,
-            env_name: None,
-            allowed_secret_refs: None,
-            script_content_hash: None,
-        },
-    )
-    .map_err(|err| -> Box<dyn Error> { err.into() })?;
-    drop(conn);
+    let store = RunStore::open(&workspace).map_err(|err| -> Box<dyn Error> { err.into() })?;
+    let row = store
+        .start_inline(
+            &canonical_str,
+            &resolved_args.persisted_args,
+            &format!("inline:{}", std::process::id()),
+            EnqueueOptions {
+                run_id: options.run_id.clone(),
+                actor: options.actor.clone(),
+                reason: options.reason.clone(),
+                priority: 0,
+                timeout_ms: None,
+                parent_run_id: options.parent_run_id.clone(),
+                cron_schedule_id: None,
+                script_name: None,
+                omakure_version: app_meta::APP_VERSION.to_string(),
+                trigger: crate::runs::RunTrigger::Manual,
+                env_name: None,
+                allowed_secret_refs: None,
+                script_content_hash: None,
+            },
+        )
+        .map_err(|err| -> Box<dyn Error> { err.into() })?;
+    drop(store);
     let mut execution_row = row.clone();
     execution_row.args_json = serde_json::to_string(&resolved_args.execution_args)
         .unwrap_or_else(|_| row.args_json.clone());
@@ -171,20 +171,20 @@ fn finalize_run(
     run_id: &str,
     result: &crate::run_executor::ExecutionResult,
 ) -> Option<runs::RunRow> {
-    let conn = runs::open(workspace).ok()?;
+    let store = RunStore::open(workspace).ok()?;
     let _ = match result.terminal {
-        ExecutionTerminal::Completed => runs::complete(&conn, run_id, result.completion.clone()),
+        ExecutionTerminal::Completed => store.complete(run_id, result.completion.clone()),
         ExecutionTerminal::Failed | ExecutionTerminal::Errored => {
-            runs::fail(&conn, run_id, result.completion.clone())
+            store.fail(run_id, result.completion.clone())
         }
-        ExecutionTerminal::TimedOut => runs::time_out(&conn, run_id, result.completion.clone()),
+        ExecutionTerminal::TimedOut => store.time_out(run_id, result.completion.clone()),
         ExecutionTerminal::Cancelled => {
             // The cancel transition was already recorded by an external
             // caller; just attach the captured output.
-            runs::record_cancelled_output(&conn, run_id, result.completion.clone())
+            store.record_cancelled_output(run_id, result.completion.clone())
         }
     };
-    runs::get_run(&conn, run_id).ok().flatten()
+    store.get_run(run_id).ok().flatten()
 }
 
 #[cfg(test)]

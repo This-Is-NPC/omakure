@@ -37,12 +37,26 @@ impl RunStore {
         super::enqueue_cue(&mut self.connection, script_path, args, options)
     }
 
+    pub(crate) fn start_inline(
+        &self,
+        script_path: &str,
+        args: &[String],
+        worker_id: &str,
+        options: EnqueueOptions,
+    ) -> Result<RunRow, RunsError> {
+        super::start_inline(&self.connection, script_path, args, worker_id, options)
+    }
+
     pub(crate) fn query_runs(&self, filters: &RunFilters) -> Result<Vec<RunRow>, RunsError> {
         query::query_runs(&self.connection, filters)
     }
 
     pub(crate) fn get_run_required(&self, run_id: &str) -> Result<RunRow, RunsError> {
         query::get_run_required(&self.connection, run_id)
+    }
+
+    pub(crate) fn get_run(&self, run_id: &str) -> Result<Option<RunRow>, RunsError> {
+        super::get_run(&self.connection, run_id)
     }
 
     pub(crate) fn query_traces(

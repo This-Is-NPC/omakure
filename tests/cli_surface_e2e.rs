@@ -642,6 +642,54 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
     }
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn serve_status_reports_isolated_systemd_unit_state() {
+    let workspace = support::TestWorkspace::new("serve_status_systemd");
+    let home = tempfile::tempdir().expect("temporary HOME");
+    let shim = omakure::generated_executable_tempdir().expect("executable shim directory");
+    omakure::write_generated_executable(
+        &shim.path().join("systemctl"),
+        b"#!/bin/sh\nif [ \"$#\" -ne 4 ] || [ \"$1\" != \"--user\" ] || [ \"$3\" != \"--quiet\" ] || [ -z \"$4\" ]; then exit 99; fi\ncase \"$4\" in *.service) ;; *) exit 99;; esac\ncase \"$2\" in is-active) exit 0;; is-enabled) exit 1;; *) exit 99;; esac\n",
+    )
+    .expect("write systemctl shim");
+    let home_path = home.path().to_str().expect("UTF-8 HOME path");
+    let shim_path = shim.path().to_str().expect("UTF-8 shim path");
+    let envs = [("HOME", home_path), ("PATH", shim_path)];
+    let status = || {
+        let output = support::workspace_command_with_env::<20>(
+            workspace.path(),
+            &["--json", "serve", "--status"],
+            &envs,
+        );
+        assert_success(&output);
+        json(&output)["data"].clone()
+    };
+
+    let absent = status();
+    let unit_name = absent["unit"].as_str().expect("unit name");
+    let unit_dir = home.path().join(".config/systemd/user");
+    let unit_path = unit_dir.join(unit_name);
+    assert!(
+        unit_name.starts_with("omakure-")
+            && unit_name.ends_with(".service")
+            && !unit_name.contains('/')
+    );
+    assert_eq!(absent["unit_path"], unit_path.to_string_lossy().as_ref());
+    assert_eq!(absent["installed"], false);
+    assert_eq!(absent["active"], false);
+    assert_eq!(absent["enabled"], false);
+
+    fs::create_dir_all(&unit_dir).expect("create isolated systemd user directory");
+    fs::write(&unit_path, "[Unit]\nDescription=isolated test unit\n").expect("write isolated unit");
+    let present = status();
+    assert_eq!(present["unit"], absent["unit"]);
+    assert_eq!(present["unit_path"], absent["unit_path"]);
+    assert_eq!(present["installed"], true);
+    assert_eq!(present["active"], true);
+    assert_eq!(present["enabled"], false);
+}
+
 #[test]
 fn config_masks_parent_sourced_secrets_and_credential_overrides() {
     let workspace = support::TestWorkspace::new("config_masks_parent_secrets");

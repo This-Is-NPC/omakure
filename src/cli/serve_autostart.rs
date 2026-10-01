@@ -24,6 +24,32 @@ use std::fs;
 #[cfg(target_os = "linux")]
 use std::process::Command;
 
+#[cfg(any(target_os = "linux", test))]
+#[derive(Debug, thiserror::Error)]
+enum AutostartError {
+    #[cfg(target_os = "linux")]
+    #[error("HOME is not set")]
+    HomeMissing,
+    #[error("current_exe: {0}")]
+    CurrentExe(#[source] std::io::Error),
+    #[error("canonicalize workspace {path}: {source}")]
+    CanonicalizeWorkspace {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[cfg(target_os = "linux")]
+    #[error("systemctl --user {args:?}: {source}")]
+    SystemctlIo {
+        args: Vec<String>,
+        #[source]
+        source: std::io::Error,
+    },
+    #[cfg(target_os = "linux")]
+    #[error("systemctl --user {args:?} failed: {stderr}")]
+    SystemctlFailed { args: Vec<String>, stderr: String },
+}
+
 /// Public entry points mirror the three CLI flags.
 pub fn install(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     #[cfg(target_os = "linux")]
@@ -99,25 +125,29 @@ pub(crate) fn unit_name(workspace: &Workspace) -> String {
 }
 
 #[cfg(target_os = "linux")]
-fn unit_dir() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_string())?;
+fn unit_dir() -> Result<PathBuf, AutostartError> {
+    let home = std::env::var_os("HOME").ok_or(AutostartError::HomeMissing)?;
     Ok(PathBuf::from(home).join(".config/systemd/user"))
 }
 
 #[cfg(target_os = "linux")]
-fn unit_path(workspace: &Workspace) -> Result<PathBuf, String> {
+fn unit_path(workspace: &Workspace) -> Result<PathBuf, AutostartError> {
     Ok(unit_dir()?.join(unit_name(workspace)))
 }
 
 #[cfg(any(target_os = "linux", test))]
-fn current_binary() -> Result<PathBuf, String> {
-    std::env::current_exe().map_err(|e| format!("current_exe: {e}"))
+fn current_binary() -> Result<PathBuf, AutostartError> {
+    std::env::current_exe().map_err(AutostartError::CurrentExe)
 }
 
 #[cfg(any(target_os = "linux", test))]
-fn render_unit(workspace: &Workspace) -> Result<String, String> {
-    let canonical = std::fs::canonicalize(workspace.root())
-        .map_err(|e| format!("canonicalize workspace {}: {e}", workspace.root().display()))?;
+fn render_unit(workspace: &Workspace) -> Result<String, AutostartError> {
+    let canonical = std::fs::canonicalize(workspace.root()).map_err(|source| {
+        AutostartError::CanonicalizeWorkspace {
+            path: workspace.root().display().to_string(),
+            source,
+        }
+    })?;
     let bin = current_binary()?;
     Ok(format!(
         "[Unit]\n\
@@ -146,7 +176,7 @@ fn render_unit(workspace: &Workspace) -> Result<String, String> {
 fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let dir = match unit_dir() {
         Ok(d) => d,
-        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e.to_string()),
     };
     if let Err(e) = fs::create_dir_all(&dir) {
         exit_with_error(
@@ -158,11 +188,11 @@ fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn
 
     let path = match unit_path(workspace) {
         Ok(p) => p,
-        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e.to_string()),
     };
     let body = match render_unit(workspace) {
         Ok(b) => b,
-        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e.to_string()),
     };
     if let Err(e) = fs::write(&path, &body) {
         exit_with_error(
@@ -178,10 +208,10 @@ fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn
     // failures as fatal — an installed-but-unstarted unit would be
     // worse UX than a loud error.
     if let Err(e) = systemctl(&["daemon-reload"]) {
-        exit_with_error(json_output, codes::INTERNAL, e);
+        exit_with_error(json_output, codes::INTERNAL, e.to_string());
     }
     if let Err(e) = systemctl(&["enable", "--now", &name]) {
-        exit_with_error(json_output, codes::INTERNAL, e);
+        exit_with_error(json_output, codes::INTERNAL, e.to_string());
     }
 
     if json_output {
@@ -203,7 +233,7 @@ fn install_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn
 fn uninstall_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let path = match unit_path(workspace) {
         Ok(p) => p,
-        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e.to_string()),
     };
     let name = unit_name(workspace);
 
@@ -241,7 +271,7 @@ fn status_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn 
     let name = unit_name(workspace);
     let path = match unit_path(workspace) {
         Ok(p) => p,
-        Err(e) => exit_with_error(json_output, codes::INTERNAL, e),
+        Err(e) => exit_with_error(json_output, codes::INTERNAL, e.to_string()),
     };
     let installed = path.exists();
     let active = installed && systemctl_is_active(&name);
@@ -269,18 +299,22 @@ fn status_linux(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn 
 }
 
 #[cfg(target_os = "linux")]
-fn systemctl(args: &[&str]) -> Result<(), String> {
+fn systemctl(args: &[&str]) -> Result<(), AutostartError> {
+    let owned_args = || args.iter().map(|arg| (*arg).to_string()).collect();
     let output = Command::new("systemctl")
         .arg("--user")
         .args(args)
         .output()
-        .map_err(|e| format!("systemctl --user {args:?}: {e}"))?;
+        .map_err(|source| AutostartError::SystemctlIo {
+            args: owned_args(),
+            source,
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "systemctl --user {args:?} failed: {}",
-            stderr.trim()
-        ));
+        return Err(AutostartError::SystemctlFailed {
+            args: owned_args(),
+            stderr: stderr.trim().to_string(),
+        });
     }
     Ok(())
 }
@@ -347,5 +381,44 @@ mod tests {
         assert!(body.contains(" serve\n"));
         assert!(body.contains("[Install]"));
         assert!(body.contains("WantedBy=default.target"));
+    }
+
+    #[test]
+    fn render_unit_preserves_canonicalization_error_context() {
+        let tmp = TempDir::new().unwrap();
+        let missing = tmp.path().join("missing");
+        let workspace = Workspace::new(missing.clone());
+        let source = std::fs::canonicalize(&missing).unwrap_err();
+        let error = render_unit(&workspace).unwrap_err();
+        assert!(matches!(
+            error,
+            AutostartError::CanonicalizeWorkspace { .. }
+        ));
+        assert_eq!(
+            error.to_string(),
+            format!("canonicalize workspace {}: {source}", missing.display())
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn systemctl_errors_preserve_command_and_stderr_text() {
+        let args = vec!["enable".to_string(), "--now".to_string()];
+        let io_error = AutostartError::SystemctlIo {
+            args: args.clone(),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "missing executable"),
+        };
+        assert_eq!(
+            io_error.to_string(),
+            "systemctl --user [\"enable\", \"--now\"]: missing executable"
+        );
+        let failure = AutostartError::SystemctlFailed {
+            args,
+            stderr: "unit missing".to_string(),
+        };
+        assert_eq!(
+            failure.to_string(),
+            "systemctl --user [\"enable\", \"--now\"] failed: unit missing"
+        );
     }
 }

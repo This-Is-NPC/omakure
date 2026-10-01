@@ -309,6 +309,18 @@ pub struct SignalRecord {
     pub subject: Option<String>,
 }
 
+/// One Signal to append to the bounded Performer outbox.
+#[derive(Debug, Clone, Copy)]
+pub struct SignalEnqueueRequest<'a> {
+    pub target_node_id: &'a str,
+    pub signal_id: &'a str,
+    pub kind: SignalKind,
+    pub occurred_at: i64,
+    pub subject: Option<&'a str>,
+    pub run: Option<&'a RunFact>,
+    pub message_bytes: i64,
+}
+
 /// A positive acknowledgement carrying the receiver's Signal cursor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AckBody {

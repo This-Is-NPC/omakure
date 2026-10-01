@@ -24,7 +24,9 @@ use omakure::health_plane::bounds::{
     RATE_MINUTE_WINDOW_SECONDS, REORDER_BUFFER_ENTRIES, REORDER_BUFFER_SECONDS,
     SIGNAL_INBOX_CAPACITY, SIGNAL_OUTBOX_CAPACITY, SIGNAL_RETENTION_SECONDS, STORAGE_CEILING_BYTES,
 };
-use omakure::health_plane::model::{HealthCode, HealthDecision, RunFact, RunnerFact, SignalKind};
+use omakure::health_plane::model::{
+    HealthCode, HealthDecision, RunFact, RunnerFact, SignalEnqueueRequest, SignalKind,
+};
 use omakure::health_plane::report::{
     HealthFactsSource, HealthReporter, ProfileFacts, PulseFacts, ack_payload as ack_body,
 };
@@ -890,15 +892,15 @@ fn an_acknowledgement_retires_exactly_the_outbox_signal_it_names() {
         trigger: None,
     };
     let first = plane
-        .enqueue_signal(
-            &conductor,
-            &hex16(31),
-            SignalKind::RunCompleted,
-            node.now(),
-            None,
-            Some(&run),
-            900,
-        )
+        .enqueue_signal(SignalEnqueueRequest {
+            target_node_id: &conductor,
+            signal_id: &hex16(31),
+            kind: SignalKind::RunCompleted,
+            occurred_at: node.now(),
+            subject: None,
+            run: Some(&run),
+            message_bytes: 900,
+        })
         .expect("enqueue signal");
     assert_eq!(first.sequence, 1);
     assert_eq!(first.attempts, 0);
@@ -910,15 +912,15 @@ fn an_acknowledgement_retires_exactly_the_outbox_signal_it_names() {
     // The same logical Signal is never queued twice.
     assert!(
         plane
-            .enqueue_signal(
-                &conductor,
-                &hex16(31),
-                SignalKind::RunCompleted,
-                node.now(),
-                None,
-                Some(&run),
-                900,
-            )
+            .enqueue_signal(SignalEnqueueRequest {
+                target_node_id: &conductor,
+                signal_id: &hex16(31),
+                kind: SignalKind::RunCompleted,
+                occurred_at: node.now(),
+                subject: None,
+                run: Some(&run),
+                message_bytes: 900,
+            })
             .is_err()
     );
     assert_eq!(plane.outbox(64).expect("outbox").len(), 1);
@@ -967,15 +969,15 @@ fn outbox_overflow_drops_the_oldest_signal_and_the_queue_survives_a_restart() {
             state: "completed".to_string(),
             trigger: None,
         };
-        plane.enqueue_signal(
-            &conductor,
-            &hex16(index),
-            SignalKind::RunCompleted,
-            node.now(),
-            None,
-            Some(&run),
-            900,
-        )
+        plane.enqueue_signal(SignalEnqueueRequest {
+            target_node_id: &conductor,
+            signal_id: &hex16(index),
+            kind: SignalKind::RunCompleted,
+            occurred_at: node.now(),
+            subject: None,
+            run: Some(&run),
+            message_bytes: 900,
+        })
     };
 
     for index in 1..=(SIGNAL_OUTBOX_CAPACITY as u64) {

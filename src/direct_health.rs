@@ -377,15 +377,15 @@ impl<'a> HealthSession<'a> {
             // A duplicate or a full outbox is a bounded, already-audited
             // outcome inside the shared operations; it is never a reason to
             // retry a run or to widen a bound here.
-            let _ = plane.enqueue_signal(
-                &self.remote_node_id,
-                &signal_id,
-                SignalKind::RunCompleted,
-                run.finished_at,
-                None,
-                Some(&run),
+            let _ = plane.enqueue_signal(crate::health_plane::model::SignalEnqueueRequest {
+                target_node_id: &self.remote_node_id,
+                signal_id: &signal_id,
+                kind: SignalKind::RunCompleted,
+                occurred_at: run.finished_at,
+                subject: None,
+                run: Some(&run),
                 message_bytes,
-            );
+            });
         }
     }
 

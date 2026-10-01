@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "28625d49e370c2f58a6a11937e73d2d4df799d0c9a664516e21e45b76fb77da0",
+  "canonical_sha256": "32d929caabbf79eba1ecb103b7f312d88cc8b60b81faa4e259430032e887192c",
   "config_identity": "no-config",
   "files": [
     {
@@ -54553,23 +54553,23 @@
         "identity": "crate::health_plane::enqueue_signal",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn enqueue_signal( &self, target_node_id: &str, signal_id: &str, kind: SignalKind, occurred_at: i64, subject: Option<&str>, run: Option<&RunFact>, message_bytes: i64, ) -> Result<HealthOutboxEntry, RegistryError>",
+        "signature": "pub fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, ) -> Result<HealthOutboxEntry, RegistryError>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::enqueue_signal",
       "kind": "method",
-      "line": 450,
+      "line": 458,
       "name": "enqueue_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 450,
+        "line": 458,
         "name": "enqueue_signal"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn enqueue_signal( &self, target_node_id: &str, signal_id: &str, kind: SignalKind, occurred_at: i64, subject: Option<&str>, run: Option<&RunFact>, message_bytes: i64, ) -> Result<HealthOutboxEntry, RegistryError>",
+      "signature": "pub fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, ) -> Result<HealthOutboxEntry, RegistryError>",
       "source_class": "handwritten"
     },
     {
@@ -69763,23 +69763,23 @@
         "identity": "crate::node_registry::health::outbox::health_enqueue_signal",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/health/outbox.rs",
-        "signature": "pub fn health_enqueue_signal( &self, target_node_id: &str, signal_id: &str, kind: SignalKind, occurred_at: i64, subject: Option<&str>, run: Option<&RunFact>, message_bytes: i64, now: i64, ) -> Result<HealthOutboxEntry, RegistryError>",
+        "signature": "pub fn health_enqueue_signal( &self, request: SignalEnqueueRequest<'_>, now: i64, ) -> Result<HealthOutboxEntry, RegistryError>",
         "source_class": "handwritten"
       },
       "identity": "crate::node_registry::health::outbox::health_enqueue_signal",
       "kind": "method",
-      "line": 16,
+      "line": 17,
       "name": "health_enqueue_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 16,
+        "line": 17,
         "name": "health_enqueue_signal"
       },
       "path": "src/node_registry/health/outbox.rs",
-      "signature": "pub fn health_enqueue_signal( &self, target_node_id: &str, signal_id: &str, kind: SignalKind, occurred_at: i64, subject: Option<&str>, run: Option<&RunFact>, message_bytes: i64, now: i64, ) -> Result<HealthOutboxEntry, RegistryError>",
+      "signature": "pub fn health_enqueue_signal( &self, request: SignalEnqueueRequest<'_>, now: i64, ) -> Result<HealthOutboxEntry, RegistryError>",
       "source_class": "handwritten"
     },
     {

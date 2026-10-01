@@ -9,13 +9,15 @@ fn outbox_is_bounded_drops_the_oldest_and_retires_on_acknowledgement() {
         fixture
             .registry
             .health_enqueue_signal(
-                &conductor,
-                &opaque_id_hex(3_000 + index),
-                SignalKind::Enrolled,
-                BASE_NOW + index as i64,
-                Some(&conductor),
-                None,
-                777,
+                SignalEnqueueRequest {
+                    target_node_id: &conductor,
+                    signal_id: &opaque_id_hex(3_000 + index),
+                    kind: SignalKind::Enrolled,
+                    occurred_at: BASE_NOW + index as i64,
+                    subject: Some(&conductor),
+                    run: None,
+                    message_bytes: 777,
+                },
                 BASE_NOW + index as i64,
             )
             .unwrap();
@@ -28,13 +30,15 @@ fn outbox_is_bounded_drops_the_oldest_and_retires_on_acknowledgement() {
     // Re-queuing the same signal_id is refused; idempotency is by signal_id.
     assert!(matches!(
         fixture.registry.health_enqueue_signal(
-            &conductor,
-            &opaque_id_hex(3_000 + SIGNAL_OUTBOX_CAPACITY as u64),
-            SignalKind::Enrolled,
-            BASE_NOW,
-            Some(&conductor),
-            None,
-            777,
+            SignalEnqueueRequest {
+                target_node_id: &conductor,
+                signal_id: &opaque_id_hex(3_000 + SIGNAL_OUTBOX_CAPACITY as u64),
+                kind: SignalKind::Enrolled,
+                occurred_at: BASE_NOW,
+                subject: Some(&conductor),
+                run: None,
+                message_bytes: 777,
+            },
             BASE_NOW,
         ),
         Err(RegistryError::Duplicate(_))

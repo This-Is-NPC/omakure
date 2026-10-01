@@ -5,7 +5,7 @@ use super::rows::{decode_opaque_id, signal_from_row};
 use super::types::HealthOutboxEntry;
 use crate::domain::health_plane::bounds::{SIGNAL_OUTBOX_CAPACITY, SIGNAL_RETENTION_SECONDS};
 use crate::domain::health_plane::model::{
-    HealthCode, HealthKind, RunFact, SignalKind, SignalRecord,
+    HealthCode, HealthKind, SignalEnqueueRequest, SignalKind, SignalRecord,
 };
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 
@@ -14,33 +14,29 @@ impl NodeRegistry {
     ///
     /// At capacity the oldest undelivered Signal is dropped, the local
     /// `signals_dropped` counter is incremented, and the drop is audited once.
-    #[allow(clippy::too_many_arguments)]
     pub fn health_enqueue_signal(
         &self,
-        target_node_id: &str,
-        signal_id: &str,
-        kind: SignalKind,
-        occurred_at: i64,
-        subject: Option<&str>,
-        run: Option<&RunFact>,
-        message_bytes: i64,
+        request: SignalEnqueueRequest<'_>,
         now: i64,
     ) -> Result<HealthOutboxEntry, RegistryError> {
-        validate_node_id(target_node_id)?;
-        let raw_signal_id = decode_opaque_id(signal_id)?;
-        if message_bytes < 1 || message_bytes > HealthKind::Signal.max_stored_bytes().unwrap_or(0) {
+        validate_node_id(request.target_node_id)?;
+        let raw_signal_id = decode_opaque_id(request.signal_id)?;
+        if request.message_bytes < 1
+            || request.message_bytes > HealthKind::Signal.max_stored_bytes().unwrap_or(0)
+        {
             return Err(RegistryError::InvalidInput(
                 "health signal exceeds the frozen stored byte cap".to_string(),
             ));
         }
-        if (subject.is_some() == run.is_some())
-            || (matches!(kind, SignalKind::RunCompleted) != run.is_some())
+        if (request.subject.is_some() == request.run.is_some())
+            || (matches!(request.kind, SignalKind::RunCompleted) != request.run.is_some())
         {
             return Err(RegistryError::InvalidInput(
                 "health signal body does not match its kind".to_string(),
             ));
         }
-        let run_json = run
+        let run_json = request
+            .run
             .map(serde_json::to_string)
             .transpose()
             .map_err(|_| RegistryError::InvalidInput("health run is not encodable".to_string()))?;
@@ -116,29 +112,29 @@ impl NodeRegistry {
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, NULL, ?9, ?9, ?10)",
                 params![
                     raw_signal_id,
-                    target_node_id,
+                    request.target_node_id,
                     sequence,
-                    kind.wire(),
-                    occurred_at,
-                    subject,
+                    request.kind.wire(),
+                    request.occurred_at,
+                    request.subject,
                     run_json,
-                    message_bytes,
+                    request.message_bytes,
                     now,
                     expires_at,
                 ],
             )?;
             transaction.commit()?;
             Ok(HealthOutboxEntry {
-                signal_id: signal_id.to_string(),
-                target_node_id: target_node_id.to_string(),
+                signal_id: request.signal_id.to_string(),
+                target_node_id: request.target_node_id.to_string(),
                 sequence: sequence as u64,
                 signal: SignalRecord {
-                    kind,
-                    occurred_at,
-                    run: run.cloned(),
+                    kind: request.kind,
+                    occurred_at: request.occurred_at,
+                    run: request.run.cloned(),
                     sequence: sequence as u64,
-                    signal_id: signal_id.to_string(),
-                    subject: subject.map(str::to_string),
+                    signal_id: request.signal_id.to_string(),
+                    subject: request.subject.map(str::to_string),
                 },
                 attempts: 0,
                 enqueued_at: now,

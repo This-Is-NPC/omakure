@@ -12,7 +12,8 @@ use crate::domain::health_plane::bounds::{
 };
 use crate::domain::health_plane::model::{
     HealthBody, HealthCode, HealthDecision, HealthKind, HealthPayload, ProfileSnapshot,
-    PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalKind, SignalRecord,
+    PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalEnqueueRequest, SignalKind,
+    SignalRecord,
 };
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;

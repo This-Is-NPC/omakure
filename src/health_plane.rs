@@ -22,8 +22,8 @@ use crate::node_registry::health::{
 use crate::node_registry::{NodeRegistry, PeerState, RegistryError};
 use bounds::{PROCESSING_BUDGET_MILLIS, SIGNATURE_BYTES};
 use model::{
-    HealthCode, HealthDecision, HealthKind, Presence, ProfileSnapshot, PulseSnapshot, RunFact,
-    SignalKind, SignalRecord,
+    HealthCode, HealthDecision, HealthKind, Presence, ProfileSnapshot, PulseSnapshot,
+    SignalEnqueueRequest, SignalRecord,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -455,27 +455,12 @@ impl<'registry> HealthPlane<'registry> {
     }
 
     /// Append one Signal to the bounded Performer outbox.
-    #[allow(clippy::too_many_arguments)]
     pub fn enqueue_signal(
         &self,
-        target_node_id: &str,
-        signal_id: &str,
-        kind: SignalKind,
-        occurred_at: i64,
-        subject: Option<&str>,
-        run: Option<&RunFact>,
-        message_bytes: i64,
+        request: SignalEnqueueRequest<'_>,
     ) -> Result<HealthOutboxEntry, RegistryError> {
-        self.registry.health_enqueue_signal(
-            target_node_id,
-            signal_id,
-            kind,
-            occurred_at,
-            subject,
-            run,
-            message_bytes,
-            self.clock.unix_seconds(),
-        )
+        self.registry
+            .health_enqueue_signal(request, self.clock.unix_seconds())
     }
 
     /// Read the bounded Performer outbox in send order.

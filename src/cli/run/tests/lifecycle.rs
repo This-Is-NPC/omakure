@@ -116,8 +116,11 @@ fn test_finalize_run_cancelled_records_output() {
         },
     )
     .unwrap();
-    runs::cancel(&conn, &row.run_id, Some("stop".into()), None).unwrap();
     drop(conn);
+    runs::RunStore::open(&ws)
+        .unwrap()
+        .cancel(&row.run_id, Some("stop".into()))
+        .unwrap();
 
     let result = ExecutionResult {
         terminal: ExecutionTerminal::Cancelled,

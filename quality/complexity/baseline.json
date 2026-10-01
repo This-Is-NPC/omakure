@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "152ae9ad0dca48e4c83c989884a01bc193b0498c15b84e5c632d4a6c8f61a35a",
+  "canonical_sha256": "9e6d3d7b408eb8fc55fdaf492d7dbd105b9f0334823d9f6e6b9d57c21e612bf5",
   "config_identity": "no-config",
   "files": [
     {
@@ -4800,8 +4800,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 10,
-        "cyclomatic": 10
+        "cognitive": 17,
+        "cyclomatic": 17
       },
       "path": "src/runs/store.rs",
       "source_class": "handwritten"
@@ -91513,7 +91513,7 @@
         "identity": "crate::operations::worker::execute_and_finalize_inner::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/worker.rs",
-        "signature": ".and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());",
+        "signature": ".and_then(|store| store.get_run_env(&row.run_id).ok().flatten());",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::worker::execute_and_finalize_inner::<closure>",
@@ -91529,7 +91529,7 @@
         "name": "<closure>"
       },
       "path": "src/operations/worker.rs",
-      "signature": ".and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());",
+      "signature": ".and_then(|store| store.get_run_env(&row.run_id).ok().flatten());",
       "source_class": "handwritten"
     },
     {
@@ -91648,14 +91648,14 @@
       },
       "identity": "crate::operations::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
       "kind": "function",
-      "line": 370,
+      "line": 369,
       "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 370,
+        "line": 369,
         "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender"
       },
       "path": "src/operations/worker.rs",
@@ -110198,6 +110198,188 @@
       },
       "path": "src/runs/store.rs",
       "signature": "pub(crate) fn cancel_cue_runs_for_actor(&self, actor: &str) -> Result<Vec<String>, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::recover_abandoned_cue_runs",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn recover_abandoned_cue_runs(&self) -> Result<Vec<String>, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::recover_abandoned_cue_runs",
+      "kind": "method",
+      "line": 77,
+      "name": "recover_abandoned_cue_runs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 77,
+        "name": "recover_abandoned_cue_runs"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn recover_abandoned_cue_runs(&self) -> Result<Vec<String>, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::claim_next",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn claim_next( &self, worker_id: &str, filters: &ClaimFilters, ) -> Result<Option<RunRow>, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::claim_next",
+      "kind": "method",
+      "line": 81,
+      "name": "claim_next",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 81,
+        "name": "claim_next"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn claim_next( &self, worker_id: &str, filters: &ClaimFilters, ) -> Result<Option<RunRow>, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::get_run_env",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn get_run_env(&self, run_id: &str) -> Result<Option<String>, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::get_run_env",
+      "kind": "method",
+      "line": 89,
+      "name": "get_run_env",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 89,
+        "name": "get_run_env"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn get_run_env(&self, run_id: &str) -> Result<Option<String>, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::complete",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn complete( &self, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::complete",
+      "kind": "method",
+      "line": 93,
+      "name": "complete",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 93,
+        "name": "complete"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn complete( &self, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::fail",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn fail(&self, run_id: &str, completion: RunCompletion) -> Result<(), RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::fail",
+      "kind": "method",
+      "line": 101,
+      "name": "fail",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 101,
+        "name": "fail"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn fail(&self, run_id: &str, completion: RunCompletion) -> Result<(), RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::time_out",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn time_out( &self, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::time_out",
+      "kind": "method",
+      "line": 105,
+      "name": "time_out",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 105,
+        "name": "time_out"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn time_out( &self, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::record_cancelled_output",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn record_cancelled_output( &self, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::record_cancelled_output",
+      "kind": "method",
+      "line": 113,
+      "name": "record_cancelled_output",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 113,
+        "name": "record_cancelled_output"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn record_cancelled_output( &self, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
       "source_class": "handwritten"
     },
     {

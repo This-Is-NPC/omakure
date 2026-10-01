@@ -20,8 +20,8 @@ pub use enqueue::{
 pub use error::RunsError;
 pub use ids::format_run_timestamp;
 pub use lifecycle::{
-    cancel, cancel_cue_runs_for_actor, claim_next, complete, fail, heartbeat,
-    record_cancelled_output, recover_abandoned_cue_runs, time_out, ClaimFilters, RunCompletion,
+    cancel_cue_runs_for_actor, claim_next, complete, fail, heartbeat, record_cancelled_output,
+    recover_abandoned_cue_runs, time_out, ClaimFilters, RunCompletion,
 };
 pub use open::open;
 pub use query::{get_run, last_scheduled_fire_ms, RunFilters, RunRow, RunStats};

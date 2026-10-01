@@ -1,7 +1,7 @@
 use crate::node_identity::NodeIdentityError;
 use crate::node_registry::RegistryError;
 use crate::run_executor::ExecutionTerminal;
-use crate::runs::{self, ClaimFilters, RunCompletion, RunRow};
+use crate::runs::{self, ClaimFilters, RunCompletion, RunRow, RunStore};
 use crate::workspace::Workspace;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -119,8 +119,8 @@ fn worker_loop_inner(
     // Best effort on purpose: a worker that cannot open the database has bigger
     // problems than an unresolved row, and failing to start over it would take
     // out the queue as well.
-    if let Ok(conn) = runs::open(&workspace) {
-        if let Ok(recovered) = runs::recover_abandoned_cue_runs(&conn) {
+    if let Ok(store) = RunStore::open(&workspace) {
+        if let Ok(recovered) = store.recover_abandoned_cue_runs() {
             for run_id in recovered {
                 eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");
             }
@@ -131,22 +131,22 @@ fn worker_loop_inner(
         if cancel_flag.load(Ordering::SeqCst) {
             return;
         }
-        let conn = match runs::open(&workspace) {
-            Ok(c) => c,
+        let store = match RunStore::open(&workspace) {
+            Ok(store) => store,
             Err(_) => {
                 thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
                 continue;
             }
         };
-        let claimed = match runs::claim_next(&conn, &worker_id, &filters) {
+        let claimed = match store.claim_next(&worker_id, &filters) {
             Ok(opt) => opt,
             Err(_) => {
-                drop(conn);
+                drop(store);
                 thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
                 continue;
             }
         };
-        drop(conn);
+        drop(store);
         let Some(row) = claimed else {
             if once {
                 return;
@@ -203,9 +203,9 @@ fn execute_and_finalize_inner(
     // (`docs/internal/env-injection-spec.md` §1): the active managed env. Reserved
     // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
     // and remain non-overridable.
-    let run_env_name = runs::open(workspace)
+    let run_env_name = RunStore::open(workspace)
         .ok()
-        .and_then(|conn| runs::get_run_env(&conn, &row.run_id).ok().flatten());
+        .and_then(|store| store.get_run_env(&row.run_id).ok().flatten());
     let extra_env = match run_env_name.as_deref() {
         Some(name) => {
             let path = match crate::operations::envs::env_file_path(workspace, name) {
@@ -241,26 +241,26 @@ fn execute_and_finalize_inner(
         Some(cancel_flag),
         spawn_guard,
     );
-    let conn = match runs::open(workspace) {
-        Ok(c) => c,
+    let store = match RunStore::open(workspace) {
+        Ok(store) => store,
         Err(_) => return,
     };
     match result.terminal {
         ExecutionTerminal::Completed => {
-            let _ = runs::complete(&conn, &row.run_id, result.completion);
+            let _ = store.complete(&row.run_id, result.completion);
         }
         ExecutionTerminal::Failed | ExecutionTerminal::Errored => {
-            let _ = runs::fail(&conn, &row.run_id, result.completion);
+            let _ = store.fail(&row.run_id, result.completion);
         }
         ExecutionTerminal::TimedOut => {
-            let _ = runs::time_out(&conn, &row.run_id, result.completion);
+            let _ = store.time_out(&row.run_id, result.completion);
         }
         ExecutionTerminal::Cancelled => {
             // The cancel transition was already written by the
             // heartbeat-detection path (or is being written now). Either
             // way, record the captured stdout/stderr on the cancelled
             // row.
-            let _ = runs::record_cancelled_output(&conn, &row.run_id, result.completion);
+            let _ = store.record_cancelled_output(&row.run_id, result.completion);
         }
     }
 }
@@ -335,18 +335,17 @@ fn cancel_without_execution(workspace: &Workspace, row: &RunRow, error: String) 
         "omakure: cancelled remote run {} before execution: {error}",
         row.run_id
     );
-    let Ok(conn) = runs::open(workspace) else {
+    let Ok(store) = RunStore::open(workspace) else {
         return;
     };
-    let _ = runs::cancel(&conn, &row.run_id, Some(error), None);
+    let _ = store.cancel(&row.run_id, Some(error));
 }
 
 fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String) {
-    let Ok(conn) = runs::open(workspace) else {
+    let Ok(store) = RunStore::open(workspace) else {
         return;
     };
-    let _ = runs::fail(
-        &conn,
+    let _ = store.fail(
         &row.run_id,
         RunCompletion {
             stdout: String::new(),
@@ -372,18 +371,18 @@ mod cue_preflight_tests {
         let workspace = workspace_in(&temp);
         let context = node_context(temp.path());
         let script = write_bash_script(&workspace, "cue.sh", "true");
-        let connection = runs::open(&workspace).unwrap();
-        let row = runs::enqueue(
-            &connection,
-            script.to_str().unwrap(),
-            &[],
-            EnqueueOptions {
-                actor: format!("omk1_{}", "a".repeat(64)),
-                omakure_version: "test".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let store = RunStore::open(&workspace).unwrap();
+        let row = store
+            .enqueue(
+                script.to_str().unwrap(),
+                &[],
+                EnqueueOptions {
+                    actor: format!("omk1_{}", "a".repeat(64)),
+                    omakure_version: "test".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let error = cue_worker_preflight(&context, &workspace, &row).unwrap_err();
         assert!(matches!(error, CuePreflightError::Identity(_)));

@@ -1,4 +1,5 @@
 use super::*;
+use crate::runs::lifecycle::cancel;
 
 // -----------------------------------------------------------------
 // Transitions

@@ -3,7 +3,7 @@ use super::lifecycle;
 use super::open;
 use super::query::{self, RunFilters, RunRow, RunStats};
 use super::trace::{self, TraceLevel, TraceRow};
-use super::RunsError;
+use super::{ClaimFilters, RunCompletion, RunsError};
 use crate::workspace::Workspace;
 use rusqlite::Connection;
 
@@ -72,5 +72,49 @@ impl RunStore {
 
     pub(crate) fn cancel_cue_runs_for_actor(&self, actor: &str) -> Result<Vec<String>, RunsError> {
         super::cancel_cue_runs_for_actor(&self.connection, actor)
+    }
+
+    pub(crate) fn recover_abandoned_cue_runs(&self) -> Result<Vec<String>, RunsError> {
+        super::recover_abandoned_cue_runs(&self.connection)
+    }
+
+    pub(crate) fn claim_next(
+        &self,
+        worker_id: &str,
+        filters: &ClaimFilters,
+    ) -> Result<Option<RunRow>, RunsError> {
+        super::claim_next(&self.connection, worker_id, filters)
+    }
+
+    pub(crate) fn get_run_env(&self, run_id: &str) -> Result<Option<String>, RunsError> {
+        super::get_run_env(&self.connection, run_id)
+    }
+
+    pub(crate) fn complete(
+        &self,
+        run_id: &str,
+        completion: RunCompletion,
+    ) -> Result<(), RunsError> {
+        super::complete(&self.connection, run_id, completion)
+    }
+
+    pub(crate) fn fail(&self, run_id: &str, completion: RunCompletion) -> Result<(), RunsError> {
+        super::fail(&self.connection, run_id, completion)
+    }
+
+    pub(crate) fn time_out(
+        &self,
+        run_id: &str,
+        completion: RunCompletion,
+    ) -> Result<(), RunsError> {
+        super::time_out(&self.connection, run_id, completion)
+    }
+
+    pub(crate) fn record_cancelled_output(
+        &self,
+        run_id: &str,
+        completion: RunCompletion,
+    ) -> Result<(), RunsError> {
+        super::record_cancelled_output(&self.connection, run_id, completion)
     }
 }

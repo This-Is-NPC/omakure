@@ -683,8 +683,8 @@ fn execute_external_cancel_kills_running_script() {
     let id = row.run_id.clone();
     let canceller = thread::spawn(move || {
         thread::sleep(Duration::from_millis(400));
-        let conn = runs::open(&ws_thread).unwrap();
-        runs::cancel(&conn, &id, Some("user".into()), None).unwrap();
+        let store = runs::RunStore::open(&ws_thread).unwrap();
+        store.cancel(&id, Some("user".into())).unwrap();
     });
 
     let started = Instant::now();

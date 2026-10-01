@@ -148,7 +148,7 @@ src/
 │   │                        bearer auth, bounded blocking work, audit, and route groups)
 │   ├── node_service.rs      HTTP + workers + scheduler lifecycle
 │   ├── run/                synchronous execution entry point and tests
-│   ├── queue/               queue dispatch, producers, worker, and tests
+│   ├── queue/               queue command dispatch, producers, and tests
 │   ├── history.rs           run and trace queries
 │   ├── serve.rs             standalone cron scheduler
 │   ├── env.rs               managed environment commands
@@ -171,7 +171,7 @@ src/
 │   ├── health.rs            fleet-status and Signal-feed projections
 │   ├── cue.rs               Cue service dispatch validation and outcomes
 │   ├── baseline/            baseline delivery, install, status, and rollback
-│   └── worker.rs            queue claiming, Cue preflight, and run finalization
+│   └── worker.rs            queue worker lifecycle, claiming, Cue preflight, and run finalization
 ├── adapters/                filesystem, process, environment, and checks
 │   ├── git.rs               isolated Git process execution and bounded probes
 │   └── signals.rs           process shutdown signal registration

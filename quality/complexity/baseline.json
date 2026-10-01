@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "36761364e17aef156849b666a01eebe4dd21c2056d2aa16e193775bc6b60d674",
+  "canonical_sha256": "f5809309ff7436c3deccc5e325347c217183347ffbac5ac18a60b339053481ee",
   "config_identity": "no-config",
   "files": [
     {
@@ -1184,12 +1184,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 0,
+        "invocations": 2,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 1,
-        "cyclomatic": 6
+        "cognitive": 3,
+        "cyclomatic": 8
       },
       "path": "src/cli/queue/mod.rs",
       "source_class": "handwritten"
@@ -1220,20 +1220,6 @@
         "cyclomatic": 32
       },
       "path": "src/cli/queue/tests.rs",
-      "source_class": "handwritten"
-    },
-    {
-      "macro": {
-        "declarations": 0,
-        "expansion": "not_measured",
-        "invocations": 3,
-        "score_inclusion": "native_source_ast_only"
-      },
-      "native": {
-        "cognitive": 4,
-        "cyclomatic": 5
-      },
-      "path": "src/cli/queue/worker.rs",
       "source_class": "handwritten"
     },
     {
@@ -4194,12 +4180,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 11,
+        "invocations": 12,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 32,
-        "cyclomatic": 40
+        "cognitive": 34,
+        "cyclomatic": 44
       },
       "path": "src/operations/worker.rs",
       "source_class": "handwritten"
@@ -30709,6 +30695,32 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::cli::queue::worker",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/mod.rs",
+        "signature": "fn worker( workspace: &Workspace, opts: crate::cli::args::QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::worker",
+      "kind": "function",
+      "line": 39,
+      "name": "worker",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 39,
+        "name": "worker"
+      },
+      "path": "src/cli/queue/mod.rs",
+      "signature": "fn worker( workspace: &Workspace, opts: crate::cli::args::QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 6,
       "cyclomatic": 7,
       "derived": {
@@ -31642,58 +31654,6 @@
       },
       "path": "src/cli/queue/tests.rs",
       "signature": "fn worker_with_concurrency_and_once_drains_queue()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 4,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::cli::queue::worker::worker",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "pub(super) fn worker( workspace: &Workspace, opts: QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::worker",
-      "kind": "function",
-      "line": 12,
-      "name": "worker",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 12,
-        "name": "worker"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "pub(super) fn worker( workspace: &Workspace, opts: QueueWorkerArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::worker::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": "handles.push(thread::spawn(move || {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::worker::<closure>",
-      "kind": "closure",
-      "line": 30,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 30,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": "handles.push(thread::spawn(move || {",
       "source_class": "handwritten"
     },
     {
@@ -91289,6 +91249,58 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::operations::worker::run_standalone_workers",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "pub(crate) fn run_standalone_workers(workspace: &Workspace, options: StandaloneWorkerOptions)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::run_standalone_workers",
+      "kind": "function",
+      "line": 19,
+      "name": "run_standalone_workers",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 19,
+        "name": "run_standalone_workers"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "pub(crate) fn run_standalone_workers(workspace: &Workspace, options: StandaloneWorkerOptions)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::run_standalone_workers::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "handles.push(thread::spawn(move || {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::run_standalone_workers::<closure>",
+      "kind": "closure",
+      "line": 32,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 32,
+        "name": "<closure>"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "handles.push(thread::spawn(move || {",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -91300,14 +91312,14 @@
       },
       "identity": "crate::operations::worker::worker_loop",
       "kind": "function",
-      "line": 16,
+      "line": 53,
       "name": "worker_loop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 16,
+        "line": 53,
         "name": "worker_loop"
       },
       "path": "src/operations/worker.rs",
@@ -91326,14 +91338,14 @@
       },
       "identity": "crate::operations::worker::worker_loop_with_context",
       "kind": "function",
-      "line": 39,
+      "line": 76,
       "name": "worker_loop_with_context",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 39,
+        "line": 76,
         "name": "worker_loop_with_context"
       },
       "path": "src/operations/worker.rs",
@@ -91352,14 +91364,14 @@
       },
       "identity": "crate::operations::worker::worker_loop_inner",
       "kind": "function",
-      "line": 59,
+      "line": 96,
       "name": "worker_loop_inner",
       "native": {
         "analyzer": "cccc",
         "cognitive": 17,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 59,
+        "line": 96,
         "name": "worker_loop_inner"
       },
       "path": "src/operations/worker.rs",
@@ -91378,14 +91390,14 @@
       },
       "identity": "crate::operations::worker::execute_and_finalize",
       "kind": "function",
-      "line": 134,
+      "line": 171,
       "name": "execute_and_finalize",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 134,
+        "line": 171,
         "name": "execute_and_finalize"
       },
       "path": "src/operations/worker.rs",
@@ -91404,14 +91416,14 @@
       },
       "identity": "crate::operations::worker::execute_and_finalize_inner",
       "kind": "function",
-      "line": 159,
+      "line": 196,
       "name": "execute_and_finalize_inner",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 159,
+        "line": 196,
         "name": "execute_and_finalize_inner"
       },
       "path": "src/operations/worker.rs",
@@ -91430,14 +91442,14 @@
       },
       "identity": "crate::operations::worker::execute_and_finalize_inner::<closure>",
       "kind": "closure",
-      "line": 171,
+      "line": 208,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 171,
+        "line": 208,
         "name": "<closure>"
       },
       "path": "src/operations/worker.rs",
@@ -91456,14 +91468,14 @@
       },
       "identity": "crate::operations::worker::cue_worker_preflight",
       "kind": "function",
-      "line": 251,
+      "line": 288,
       "name": "cue_worker_preflight",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 251,
+        "line": 288,
         "name": "cue_worker_preflight"
       },
       "path": "src/operations/worker.rs",
@@ -91482,14 +91494,14 @@
       },
       "identity": "crate::operations::worker::cue_worker_preflight::<closure>",
       "kind": "closure",
-      "line": 292,
+      "line": 329,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 292,
+        "line": 329,
         "name": "<closure>"
       },
       "path": "src/operations/worker.rs",
@@ -91508,14 +91520,14 @@
       },
       "identity": "crate::operations::worker::cancel_without_execution",
       "kind": "function",
-      "line": 296,
+      "line": 333,
       "name": "cancel_without_execution",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 296,
+        "line": 333,
         "name": "cancel_without_execution"
       },
       "path": "src/operations/worker.rs",
@@ -91534,14 +91546,14 @@
       },
       "identity": "crate::operations::worker::fail_without_execution",
       "kind": "function",
-      "line": 307,
+      "line": 344,
       "name": "fail_without_execution",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 307,
+        "line": 344,
         "name": "fail_without_execution"
       },
       "path": "src/operations/worker.rs",
@@ -91560,14 +91572,14 @@
       },
       "identity": "crate::operations::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
       "kind": "function",
-      "line": 333,
+      "line": 370,
       "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 333,
+        "line": 370,
         "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender"
       },
       "path": "src/operations/worker.rs",

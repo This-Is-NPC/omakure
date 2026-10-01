@@ -8,6 +8,43 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+pub(crate) struct StandaloneWorkerOptions {
+    pub(crate) concurrency: u32,
+    pub(crate) actor_filter: Option<String>,
+    pub(crate) script_filter: Option<String>,
+    pub(crate) once: bool,
+}
+
+/// Run standalone queue workers until their work completes or a shutdown signal arrives.
+pub(crate) fn run_standalone_workers(workspace: &Workspace, options: StandaloneWorkerOptions) {
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    crate::adapters::signals::install_signal_handlers(Arc::clone(&cancel_flag));
+
+    let concurrency = options.concurrency.max(1);
+    let mut handles = Vec::with_capacity(concurrency as usize);
+    for thread_idx in 0..concurrency {
+        let workspace = workspace.clone_for_executor();
+        let cancel_flag = Arc::clone(&cancel_flag);
+        let actor_filter = options.actor_filter.clone();
+        let script_filter = options.script_filter.clone();
+        let once = options.once;
+        let worker_id = format!("worker:{}-t{}", std::process::id(), thread_idx);
+        handles.push(thread::spawn(move || {
+            worker_loop(
+                workspace,
+                worker_id,
+                cancel_flag,
+                actor_filter,
+                script_filter,
+                once,
+            );
+        }));
+    }
+    for handle in handles {
+        let _ = handle.join();
+    }
+}
+
 /// Internal poll interval for an idle worker thread (no eligible jobs).
 const WORKER_IDLE_POLL_MS: u64 = 250;
 

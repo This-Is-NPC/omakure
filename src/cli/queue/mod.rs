@@ -10,18 +10,19 @@
 //! [`crate::run_executor::execute_with_heartbeat`].
 
 mod producers;
-mod worker;
 
 #[cfg(test)]
 mod tests;
 
 use crate::cli::args::{QueueArgs, QueueCommand};
+use crate::cli::json;
+use crate::operations::worker::{run_standalone_workers, StandaloneWorkerOptions};
 use crate::workspace::Workspace;
+use serde_json::json;
 use std::error::Error;
 use std::path::PathBuf;
 
 use producers::{add, cancel, dead_letter, stats};
-use worker::worker;
 
 pub fn run(scripts_dir: PathBuf, args: QueueArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     let workspace = Workspace::new(scripts_dir);
@@ -33,4 +34,27 @@ pub fn run(scripts_dir: PathBuf, args: QueueArgs, json_output: bool) -> Result<(
         QueueCommand::Worker(opts) => worker(&workspace, opts, json_output),
         QueueCommand::Stats => stats(&workspace, json_output),
     }
+}
+
+fn worker(
+    workspace: &Workspace,
+    opts: crate::cli::args::QueueWorkerArgs,
+    json_output: bool,
+) -> Result<(), Box<dyn Error>> {
+    run_standalone_workers(
+        workspace,
+        StandaloneWorkerOptions {
+            concurrency: opts.concurrency,
+            actor_filter: opts.actor_filter,
+            script_filter: opts.script_filter,
+            once: opts.once,
+        },
+    );
+
+    if json_output {
+        json::print_ok(json!({"status": "stopped"}));
+    } else {
+        println!("worker stopped");
+    }
+    Ok(())
 }

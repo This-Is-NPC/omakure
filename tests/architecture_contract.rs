@@ -542,6 +542,11 @@ fn production_architecture_boundaries_are_clean() {
         .iter()
         .any(|call| call == "execute_with_heartbeat_guarded"));
 
+    let queue_adapter = fs::read_to_string(src.join("cli/queue/mod.rs")).unwrap();
+    assert!(queue_adapter.contains("run_standalone_workers("));
+    assert!(!queue_adapter.contains("install_signal_handlers("));
+    assert!(!queue_adapter.contains("thread::spawn("));
+
     let scheduler = parse_contract(
         Rule::Executor,
         "src/cli/serve/scheduler.rs",

@@ -177,7 +177,6 @@ src/
 │   ├── git.rs               isolated Git process execution and bounded probes
 │   └── signals.rs           process shutdown signal registration
 ├── ports/                   repository and environment interfaces
-├── use_cases/               environment service over the environment port
 ├── error.rs                 schema and environment application errors
 ├── util/                    shared filesystem, process, encoding, and OS entropy helpers
 ├── app_meta.rs              package version constant

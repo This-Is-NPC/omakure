@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "be7aa3febab89d1f2263e18a34b7b10ac41fce9e4763e7febde8eb104ed8f8eb",
+  "canonical_sha256": "b7308439747b9918cfe946f8bf9e996d1a31a6b2b88569273128f8d00866bdde",
   "config_identity": "no-config",
   "files": [
     {
@@ -4720,34 +4720,6 @@
         "cyclomatic": 152
       },
       "path": "src/secrets.rs",
-      "source_class": "handwritten"
-    },
-    {
-      "macro": {
-        "declarations": 0,
-        "expansion": "not_measured",
-        "invocations": 3,
-        "score_inclusion": "native_source_ast_only"
-      },
-      "native": {
-        "cognitive": 10,
-        "cyclomatic": 15
-      },
-      "path": "src/use_cases/environment.rs",
-      "source_class": "handwritten"
-    },
-    {
-      "macro": {
-        "declarations": 0,
-        "expansion": "not_measured",
-        "invocations": 0,
-        "score_inclusion": "native_source_ast_only"
-      },
-      "native": {
-        "cognitive": 0,
-        "cyclomatic": 0
-      },
-      "path": "src/use_cases/mod.rs",
       "source_class": "handwritten"
     },
     {
@@ -84526,14 +84498,14 @@
       },
       "identity": "crate::operations::envs::delete_env",
       "kind": "function",
-      "line": 102,
+      "line": 100,
       "name": "delete_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 102,
+        "line": 100,
         "name": "delete_env"
       },
       "path": "src/operations/envs.rs",
@@ -84544,26 +84516,26 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::envs::env_service",
+        "identity": "crate::operations::envs::env_repo",
         "macro_expansion": "not_measured",
         "path": "src/operations/envs.rs",
-        "signature": "fn env_service(workspace: &Workspace) -> EnvironmentService",
+        "signature": "fn env_repo(workspace: &Workspace) -> FsEnvironmentRepository",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::envs::env_service",
+      "identity": "crate::operations::envs::env_repo",
       "kind": "function",
-      "line": 108,
-      "name": "env_service",
+      "line": 104,
+      "name": "env_repo",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 108,
-        "name": "env_service"
+        "line": 104,
+        "name": "env_repo"
       },
       "path": "src/operations/envs.rs",
-      "signature": "fn env_service(workspace: &Workspace) -> EnvironmentService",
+      "signature": "fn env_repo(workspace: &Workspace) -> FsEnvironmentRepository",
       "source_class": "handwritten"
     },
     {
@@ -84578,14 +84550,14 @@
       },
       "identity": "crate::operations::envs::param_refs",
       "kind": "function",
-      "line": 112,
+      "line": 108,
       "name": "param_refs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 112,
+        "line": 108,
         "name": "param_refs"
       },
       "path": "src/operations/envs.rs",
@@ -84604,14 +84576,14 @@
       },
       "identity": "crate::operations::envs::param_refs::<closure>",
       "kind": "closure",
-      "line": 115,
+      "line": 111,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 115,
+        "line": 111,
         "name": "<closure>"
       },
       "path": "src/operations/envs.rs",
@@ -84630,14 +84602,14 @@
       },
       "identity": "crate::operations::envs::map_env_error",
       "kind": "function",
-      "line": 119,
+      "line": 115,
       "name": "map_env_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 119,
+        "line": 115,
         "name": "map_env_error"
       },
       "path": "src/operations/envs.rs",
@@ -84656,14 +84628,14 @@
       },
       "identity": "crate::operations::envs::workspace",
       "kind": "function",
-      "line": 150,
+      "line": 146,
       "name": "workspace",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 150,
+        "line": 146,
         "name": "workspace"
       },
       "path": "src/operations/envs.rs",
@@ -84682,14 +84654,14 @@
       },
       "identity": "crate::operations::envs::env_operations_round_trip_and_mask_preview",
       "kind": "function",
-      "line": 159,
+      "line": 155,
       "name": "env_operations_round_trip_and_mask_preview",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 159,
+        "line": 155,
         "name": "env_operations_round_trip_and_mask_preview"
       },
       "path": "src/operations/envs.rs",
@@ -107054,396 +107026,6 @@
       },
       "path": "src/secrets.rs",
       "signature": "fn list_secret_metadata_respects_ref_acl_without_use_scope()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::new",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn new(repo: Box<dyn EnvironmentRepository>) -> Self",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::new",
-      "kind": "method",
-      "line": 9,
-      "name": "new",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 9,
-        "name": "new"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn new(repo: Box<dyn EnvironmentRepository>) -> Self",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::list_env_files",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn list_env_files(&self) -> AppResult<Vec<EnvFile>>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::list_env_files",
-      "kind": "method",
-      "line": 13,
-      "name": "list_env_files",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 13,
-        "name": "list_env_files"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn list_env_files(&self) -> AppResult<Vec<EnvFile>>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::load_environment_config",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn load_environment_config(&self) -> AppResult<EnvironmentConfig>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::load_environment_config",
-      "kind": "method",
-      "line": 17,
-      "name": "load_environment_config",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 17,
-        "name": "load_environment_config"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn load_environment_config(&self) -> AppResult<EnvironmentConfig>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::create_env",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::create_env",
-      "kind": "method",
-      "line": 21,
-      "name": "create_env",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 21,
-        "name": "create_env"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::load_env_preview_by_name",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::load_env_preview_by_name",
-      "kind": "method",
-      "line": 25,
-      "name": "load_env_preview_by_name",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 25,
-        "name": "load_env_preview_by_name"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::replace_env",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::replace_env",
-      "kind": "method",
-      "line": 29,
-      "name": "replace_env",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 29,
-        "name": "replace_env"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::set_env_param",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::set_env_param",
-      "kind": "method",
-      "line": 33,
-      "name": "set_env_param",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 33,
-        "name": "set_env_param"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::remove_env_param",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::remove_env_param",
-      "kind": "method",
-      "line": 37,
-      "name": "remove_env_param",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 37,
-        "name": "remove_env_param"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::activate_env",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn activate_env(&self, name: &str) -> AppResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::activate_env",
-      "kind": "method",
-      "line": 41,
-      "name": "activate_env",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 41,
-        "name": "activate_env"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn activate_env(&self, name: &str) -> AppResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::deactivate_env",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn deactivate_env(&self) -> AppResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::deactivate_env",
-      "kind": "method",
-      "line": 45,
-      "name": "deactivate_env",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 45,
-        "name": "deactivate_env"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn deactivate_env(&self) -> AppResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::delete_env",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "pub fn delete_env(&self, name: &str) -> AppResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::delete_env",
-      "kind": "method",
-      "line": 49,
-      "name": "delete_env",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 49,
-        "name": "delete_env"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "pub fn delete_env(&self, name: &str) -> AppResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::env_service",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "fn env_service() -> (TempDir, EnvironmentService)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::env_service",
-      "kind": "function",
-      "line": 64,
-      "name": "env_service",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 64,
-        "name": "env_service"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "fn env_service() -> (TempDir, EnvironmentService)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::test_list_env_files",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "fn test_list_env_files(env_service: (TempDir, EnvironmentService))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::test_list_env_files",
-      "kind": "function",
-      "line": 77,
-      "name": "test_list_env_files",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 77,
-        "name": "test_list_env_files"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "fn test_list_env_files(env_service: (TempDir, EnvironmentService))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::test_load_environment_config",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "fn test_load_environment_config(env_service: (TempDir, EnvironmentService))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::test_load_environment_config",
-      "kind": "function",
-      "line": 84,
-      "name": "test_load_environment_config",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 84,
-        "name": "test_load_environment_config"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "fn test_load_environment_config(env_service: (TempDir, EnvironmentService))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::use_cases::environment::test_activate_env",
-        "macro_expansion": "not_measured",
-        "path": "src/use_cases/environment.rs",
-        "signature": "fn test_activate_env(env_service: (TempDir, EnvironmentService))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::use_cases::environment::test_activate_env",
-      "kind": "function",
-      "line": 91,
-      "name": "test_activate_env",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 91,
-        "name": "test_activate_env"
-      },
-      "path": "src/use_cases/environment.rs",
-      "signature": "fn test_activate_env(env_service: (TempDir, EnvironmentService))",
       "source_class": "handwritten"
     },
     {

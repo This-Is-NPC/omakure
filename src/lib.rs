@@ -57,7 +57,6 @@ mod search_index;
 pub mod secrets;
 #[cfg(test)]
 mod test_support;
-mod use_cases;
 mod util;
 #[doc(hidden)]
 pub use util::exec::{generated_executable_tempdir, write_generated_executable};

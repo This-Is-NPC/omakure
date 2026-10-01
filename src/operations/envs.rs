@@ -1,6 +1,6 @@
 use crate::adapters::environments::FsEnvironmentRepository;
 use crate::error::{AppError, EnvironmentError};
-use crate::use_cases::EnvironmentService;
+use crate::ports::EnvironmentRepository;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -27,12 +27,12 @@ pub struct EnvPreviewEntry {
 }
 
 pub fn list_envs(workspace: &Workspace) -> OperationResult<Vec<EnvSummary>> {
-    let service = env_service(workspace);
-    let active = service
+    let repo = env_repo(workspace);
+    let active = repo
         .load_environment_config()
         .map_err(map_env_error)?
         .active;
-    let envs = service.list_env_files().map_err(map_env_error)?;
+    let envs = repo.list_env_files().map_err(map_env_error)?;
     Ok(envs
         .into_iter()
         .map(|env| EnvSummary {
@@ -45,13 +45,13 @@ pub fn list_envs(workspace: &Workspace) -> OperationResult<Vec<EnvSummary>> {
 
 pub fn create_env(workspace: &Workspace, name: &str, params: &[EnvParam]) -> OperationResult<()> {
     let refs = param_refs(params);
-    env_service(workspace)
+    env_repo(workspace)
         .create_env(name, &refs)
         .map_err(map_env_error)
 }
 
 pub fn show_env(workspace: &Workspace, name: &str) -> OperationResult<Vec<EnvPreviewEntry>> {
-    env_service(workspace)
+    env_repo(workspace)
         .load_env_preview_by_name(name)
         .map(|entries| {
             entries
@@ -70,43 +70,39 @@ pub fn env_file_path(workspace: &Workspace, name: &str) -> OperationResult<PathB
 
 pub fn replace_env(workspace: &Workspace, name: &str, params: &[EnvParam]) -> OperationResult<()> {
     let refs = param_refs(params);
-    env_service(workspace)
+    env_repo(workspace)
         .replace_env(name, &refs)
         .map_err(map_env_error)
 }
 
 pub fn set_param(workspace: &Workspace, name: &str, key: &str, value: &str) -> OperationResult<()> {
-    env_service(workspace)
+    env_repo(workspace)
         .set_env_param(name, key, value)
         .map_err(map_env_error)
 }
 
 pub fn remove_param(workspace: &Workspace, name: &str, key: &str) -> OperationResult<()> {
-    env_service(workspace)
+    env_repo(workspace)
         .remove_env_param(name, key)
         .map_err(map_env_error)
 }
 
 pub fn activate_env(workspace: &Workspace, name: &str) -> OperationResult<()> {
-    env_service(workspace)
+    env_repo(workspace)
         .activate_env(name)
         .map_err(map_env_error)
 }
 
 pub fn deactivate_env(workspace: &Workspace) -> OperationResult<()> {
-    env_service(workspace)
-        .deactivate_env()
-        .map_err(map_env_error)
+    env_repo(workspace).deactivate_env().map_err(map_env_error)
 }
 
 pub fn delete_env(workspace: &Workspace, name: &str) -> OperationResult<()> {
-    env_service(workspace)
-        .delete_env(name)
-        .map_err(map_env_error)
+    env_repo(workspace).delete_env(name).map_err(map_env_error)
 }
 
-fn env_service(workspace: &Workspace) -> EnvironmentService {
-    EnvironmentService::new(Box::new(FsEnvironmentRepository::new(workspace.envs_dir())))
+fn env_repo(workspace: &Workspace) -> FsEnvironmentRepository {
+    FsEnvironmentRepository::new(workspace.envs_dir())
 }
 
 fn param_refs(params: &[EnvParam]) -> Vec<(&str, &str)> {

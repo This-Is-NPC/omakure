@@ -4,13 +4,15 @@ use super::git_url::{redacted_git_url, url_contains_credentials};
 use super::path_safety::reject_symlink_components;
 use super::sync::resolve_battery_token;
 use super::types::{BatteryAuth, BatteryAuthMethod};
+use crate::adapters::git::{self as git_adapter, GitProbeError, GitProcess};
 use crate::secrets::SecretAccess;
 use crate::workspace::Workspace;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+#[cfg(test)]
+use std::process::Command;
 
 pub(super) struct GitAskpassGuard {
     _temp: tempfile::TempDir,
@@ -164,14 +166,13 @@ pub(super) fn run_git_with_context(
     spec: GitCommandSpec,
     ctx: &GitExecContext<'_>,
 ) -> OperationResult<()> {
-    let output = git_command_with_context(&spec, ctx)
-        .output()
-        .map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::GitFailed,
-                format!("failed to spawn git: {err}"),
-            )
-        })?;
+    let pin = ctx.http_pin.map(GitHttpPin::curlopt_resolve);
+    let output = git_adapter::run(&git_process(&spec, ctx, pin.as_deref())).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::GitFailed,
+            format!("failed to spawn git: {err}"),
+        )
+    })?;
     if output.status.success() {
         Ok(())
     } else {
@@ -226,14 +227,13 @@ pub(super) fn run_git_capture_with_context(
     spec: GitCommandSpec,
     ctx: &GitExecContext<'_>,
 ) -> OperationResult<String> {
-    let output = git_command_with_context(&spec, ctx)
-        .output()
-        .map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::GitFailed,
-                format!("failed to spawn git: {err}"),
-            )
-        })?;
+    let pin = ctx.http_pin.map(GitHttpPin::curlopt_resolve);
+    let output = git_adapter::run(&git_process(&spec, ctx, pin.as_deref())).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::GitFailed,
+            format!("failed to spawn git: {err}"),
+        )
+    })?;
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         Ok(redact_token_in_text(
@@ -276,62 +276,29 @@ fn run_git_capture_with_timeout(
     ctx: &GitExecContext<'_>,
     timeout: std::time::Duration,
 ) -> OperationResult<String> {
-    let mut child = git_command_with_context(&spec, ctx)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::GitFailed,
-                format!("failed to spawn git: {err}"),
-            )
-        })?;
-
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let mut stdout = String::new();
-                if let Some(mut out) = child.stdout.take() {
-                    let _ = out.read_to_string(&mut stdout);
-                }
-                let mut stderr = Vec::new();
-                if let Some(mut err) = child.stderr.take() {
-                    let _ = err.read_to_end(&mut stderr);
-                }
-                return if status.success() {
-                    Ok(redact_token_in_text(
-                        &stdout,
-                        ctx.askpass.map(|a| a.token.as_str()),
-                    ))
-                } else {
-                    Err(OperationError::new(
-                        OperationErrorCode::GitFailed,
-                        sanitize_git_output(
-                            &String::from_utf8_lossy(&stderr),
-                            ctx.askpass.map(|a| a.token.as_str()),
-                        ),
-                    ))
-                };
-            }
-            Ok(None) => {
-                if std::time::Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(OperationError::new(
-                        OperationErrorCode::GitFailed,
-                        format!("git probe timed out after {timeout:?}"),
-                    ));
-                }
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
-            Err(err) => {
-                return Err(OperationError::new(
-                    OperationErrorCode::GitFailed,
-                    format!("failed to wait for git: {err}"),
-                ))
-            }
-        }
+    let pin = ctx.http_pin.map(GitHttpPin::curlopt_resolve);
+    let output = git_adapter::run_with_timeout(&git_process(&spec, ctx, pin.as_deref()), timeout)
+        .map_err(|error| {
+        let message = match error {
+            GitProbeError::Spawn(err) => format!("failed to spawn git: {err}"),
+            GitProbeError::Wait(err) => format!("failed to wait for git: {err}"),
+            GitProbeError::Timeout(timeout) => format!("git probe timed out after {timeout:?}"),
+        };
+        OperationError::new(OperationErrorCode::GitFailed, message)
+    })?;
+    if output.status.success() {
+        Ok(redact_token_in_text(
+            &output.stdout,
+            ctx.askpass.map(|a| a.token.as_str()),
+        ))
+    } else {
+        Err(OperationError::new(
+            OperationErrorCode::GitFailed,
+            sanitize_git_output(
+                &String::from_utf8_lossy(&output.stderr),
+                ctx.askpass.map(|a| a.token.as_str()),
+            ),
+        ))
     }
 }
 
@@ -391,67 +358,26 @@ pub(super) fn git_command(spec: &GitCommandSpec, policy: GitTransportPolicy) -> 
     )
 }
 
+#[cfg(test)]
 pub(super) fn git_command_with_context(spec: &GitCommandSpec, ctx: &GitExecContext<'_>) -> Command {
-    let mut command = Command::new(&spec.program);
-    command
-        .args(["-c", "http.followRedirects=false"])
-        .args(["-c", "http.proxy="])
-        .args(["-c", "core.autocrlf=false"]);
-    #[cfg(windows)]
-    command.args(["-c", "core.filemode=false"]);
-    if let Some(pin) = ctx.http_pin {
-        command.args([
-            "-c",
-            &format!("http.curloptResolve={}", pin.curlopt_resolve()),
-        ]);
+    let pin = ctx.http_pin.map(GitHttpPin::curlopt_resolve);
+    git_adapter::command(&git_process(spec, ctx, pin.as_deref()))
+}
+
+fn git_process<'a>(
+    spec: &'a GitCommandSpec,
+    ctx: &'a GitExecContext<'_>,
+    pin: Option<&'a str>,
+) -> GitProcess<'a> {
+    GitProcess {
+        program: &spec.program,
+        args: &spec.args,
+        allowed_protocols: ctx.policy.allowed_protocols(),
+        global_config: ctx.global_config,
+        askpass: ctx.askpass.map(|guard| guard.script_path.as_path()),
+        credential_authority: ctx.http_pin.map(GitHttpPin::credential_authority),
+        curlopt_resolve: pin,
     }
-    command
-        .args(&spec.args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_ALLOW_PROTOCOL", ctx.policy.allowed_protocols());
-    if let Some(path) = ctx.global_config {
-        command.env("GIT_CONFIG_GLOBAL", path);
-    } else {
-        command.env_remove("GIT_CONFIG_GLOBAL");
-    }
-    command
-        .env_remove("SSH_ASKPASS")
-        .env_remove("GIT_SSH")
-        .env_remove("GIT_SSH_COMMAND")
-        .env_remove("GIT_TEMPLATE_DIR")
-        .env_remove("GIT_EXEC_PATH")
-        .env_remove("HOME")
-        .env_remove("XDG_CONFIG_HOME")
-        .env_remove("XDG_CONFIG_DIRS")
-        .env_remove("GIT_CONFIG")
-        .env_remove("GIT_CONFIG_SYSTEM")
-        .env_remove("GIT_CONFIG_COUNT")
-        .env_remove("GIT_CONFIG_PARAMETERS")
-        .env_remove("OMAKURE_API_TOKEN")
-        .env_remove("http_proxy")
-        .env_remove("https_proxy")
-        .env_remove("all_proxy")
-        .env_remove("no_proxy")
-        .env_remove("HTTP_PROXY")
-        .env_remove("HTTPS_PROXY")
-        .env_remove("ALL_PROXY")
-        .env_remove("NO_PROXY");
-    if let Some(askpass) = ctx.askpass {
-        command
-            .env("GIT_ASKPASS", &askpass.script_path)
-            .env("GIT_TERMINAL_PROMPT", "0");
-        if let Some(pin) = ctx.http_pin {
-            command.env("OMAKURE_GIT_AUTHORITY", pin.credential_authority());
-        } else {
-            command.env_remove("OMAKURE_GIT_AUTHORITY");
-        }
-    } else {
-        command
-            .env_remove("GIT_ASKPASS")
-            .env_remove("OMAKURE_GIT_AUTHORITY");
-    }
-    command
 }
 
 #[cfg(test)]

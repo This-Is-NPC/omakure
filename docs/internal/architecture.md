@@ -172,6 +172,7 @@ src/
 │   ├── health.rs            fleet-status and Signal-feed projections
 │   └── baseline.rs          baseline push, status, and rollback
 ├── adapters/                filesystem, process, environment, and checks
+│   └── git.rs               isolated Git process execution and bounded probes
 ├── ports/                   repository and environment interfaces
 ├── use_cases/               environment service over the environment port
 ├── error.rs                 schema and environment application errors

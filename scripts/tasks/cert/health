@@ -520,23 +520,12 @@ assert_no_log_leakage() {
     done
 }
 
-# Re-establish both Performers' sessions with the Conductor.
-#
-# This is shipped transport behaviour, not a workaround: `DirectService`'s
-# static-peer dialer stops after the frozen `MAX_RETRY_ATTEMPTS` consecutive
-# connection failures (`src/direct_service/dial.rs`), so a Performer that outlived a
-# Conductor outage longer than its frozen 1/2/4-second backoff needs an explicit
-# restart to dial again. The existing transport certification restarts peers for
-# the same reason. Every step below is bounded.
-restore_fleet_sessions() {
-    local performer
-    "${compose[@]}" restart "$alpha_svc" "$beta_svc" >/dev/null \
-        || fail "restarting the Performers after a Conductor outage failed"
-    for performer in "$alpha_svc" "$beta_svc"; do
-        wait_service "$performer"
-    done
+# Wait for both Performers to reconnect after a Conductor outage.
+wait_fleet_sessions() {
     wait_connected "$conductor_svc" "$alpha_id"
     wait_connected "$conductor_svc" "$beta_id"
+    wait_connected "$alpha_svc" "$conductor_id"
+    wait_connected "$beta_svc" "$conductor_id"
 }
 
 reclaim_material() {
@@ -897,7 +886,7 @@ copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
     || fail "the Conductor restart changed its public identity"
 (( $(latest_health_audit_id "$tmp_dir/conductor.sqlite") >= audit_before_restart )) \
     || fail "the Conductor restart regressed the Health Plane audit trail"
-restore_fleet_sessions
+wait_fleet_sessions
 wait_presence "$conductor_svc" "$alpha_id" online "$REPORT_BUDGET" >/dev/null
 wait_presence "$conductor_svc" "$beta_id" online "$REPORT_BUDGET" >/dev/null
 
@@ -1025,7 +1014,7 @@ FROM seeded;
     >/dev/null || fail "restoring seeded database ownership failed"
 "${compose[@]}" start "$conductor_svc" >/dev/null || fail "starting the Conductor failed"
 wait_service "$conductor_svc"
-restore_fleet_sessions
+wait_fleet_sessions
 
 copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
 alpha_trust_before=$(peer_trust_snapshot "$tmp_dir/conductor.sqlite" "$alpha_id")
@@ -1123,7 +1112,7 @@ copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
     || fail "the corrupt Profile row survived quarantine"
 [[ "$alpha_trust_before" == "$(peer_trust_snapshot "$tmp_dir/conductor.sqlite" "$alpha_id")" ]] \
     || fail "corrupt-state quarantine mutated a Performer's trust row"
-restore_fleet_sessions
+wait_fleet_sessions
 wait_presence "$conductor_svc" "$beta_id" online "$REPORT_BUDGET" >/dev/null
 recovery_deadline=$((SECONDS + REPORT_BUDGET))
 beta_profiles=0
@@ -1265,9 +1254,8 @@ rm -f "$exhaust_ready"
 export OMAKURE_HP_ADVERSARY_ID="$adversary_id"
 export OMAKURE_HP_PERFORMER_ID="$alpha_id"
 
-# Start the harness before the Performer is repointed. The shipped dialer stops
-# after its frozen three attempts, so the listener has to be accepting already;
-# a container start in between would burn that budget.
+# Start the harness before the Performer starts so the test observes the
+# intended connection path as soon as it begins dialing.
 "${compose[@]}" up --detach --no-deps hp-harness >/dev/null \
     || fail "starting the attempt-exhaustion harness failed"
 harness_container=$("${compose[@]}" ps --quiet hp-harness)

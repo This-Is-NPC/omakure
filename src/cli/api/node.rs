@@ -621,7 +621,7 @@ pub(super) async fn node_baseline_rollback_handler(
 
 /// Decode lowercase hex, refusing upper case so one artefact has one spelling.
 fn decode_lower_hex(value: &str) -> Option<Vec<u8>> {
-    if value.bytes().any(|byte| byte.is_ascii_uppercase()) {
+    if !hex::is_lower(value) {
         return None;
     }
     hex::decode(value)

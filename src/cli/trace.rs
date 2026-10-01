@@ -12,7 +12,7 @@
 use crate::cli::args::TraceArgs;
 use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
-use crate::runs::{self, TraceLevel};
+use crate::runs::{self, RunsError, TraceLevel};
 use crate::workspace::Workspace;
 use serde_json::json;
 use std::env;
@@ -52,7 +52,7 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
     workspace.ensure_layout()?;
     let mut conn = match runs::open(&workspace) {
         Ok(c) => c,
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_error(json_output, codes::INTERNAL, err.to_string()),
     };
 
     let secrets = crate::secrets::secrets_from_env();
@@ -64,14 +64,14 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
 
     let trace = match runs::insert_trace(&mut conn, &run_id, level, &message, data.as_deref()) {
         Ok(trace) => trace,
-        Err(err) if err.starts_with("not_found") => {
+        Err(RunsError::NotFound(_)) => {
             return emit_error(
                 json_output,
                 codes::NOT_FOUND,
                 format!("run not found: {}", run_id),
             );
         }
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_error(json_output, codes::INTERNAL, err.to_string()),
     };
 
     if json_output {

@@ -21,7 +21,8 @@ fn insert_trace_unknown_run_returns_not_found() {
     let ws = scratch_workspace("trace_unknown");
     let mut conn = open(&ws).expect("open");
     let err = insert_trace(&mut conn, "missing", TraceLevel::Info, "x", None).unwrap_err();
-    assert!(err.starts_with("not_found"));
+    assert!(matches!(err, RunsError::NotFound(ref id) if id == "missing"));
+    assert_eq!(err.to_string(), "not_found: missing");
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -141,7 +142,8 @@ fn query_traces_unknown_run_returns_not_found() {
     let ws = scratch_workspace("trace_q_unknown");
     let conn = open(&ws).expect("open");
     let err = query_traces(&conn, "missing", None, None).unwrap_err();
-    assert!(err.starts_with("not_found"));
+    assert!(matches!(err, RunsError::NotFound(ref id) if id == "missing"));
+    assert_eq!(err.to_string(), "not_found: missing");
     let _ = fs::remove_dir_all(ws.root());
 }
 

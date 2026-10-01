@@ -3,7 +3,7 @@ use super::types::{
 };
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::runs::{
-    self, RunFilters, RunRow, RunState, RunStateSet, RunStats, TraceLevel, TraceRow,
+    self, RunFilters, RunRow, RunState, RunStateSet, RunStats, RunsError, TraceLevel, TraceRow,
 };
 use crate::workspace::Workspace;
 use std::str::FromStr;
@@ -44,7 +44,7 @@ pub fn list_traces(
         None => None,
     };
     runs::query_traces(&conn, &request.run_id, level, request.since_sequence)
-        .map_err(map_not_found_string)
+        .map_err(map_trace_error)
 }
 
 pub fn queue_stats(workspace: &Workspace) -> OperationResult<RunStats> {
@@ -113,12 +113,12 @@ pub(super) fn map_transition_error(message: String) -> OperationError {
     }
 }
 
-fn map_not_found_string(message: String) -> OperationError {
-    if message.starts_with("not_found") {
-        OperationError::new(OperationErrorCode::NotFound, message)
-    } else {
-        OperationError::new(OperationErrorCode::IoFailed, message)
-    }
+fn map_trace_error(error: RunsError) -> OperationError {
+    let code = match &error {
+        RunsError::NotFound(_) => OperationErrorCode::NotFound,
+        RunsError::Sqlite { .. } => OperationErrorCode::IoFailed,
+    };
+    OperationError::new(code, error.to_string())
 }
 
 fn invalid_input(message: String) -> OperationError {

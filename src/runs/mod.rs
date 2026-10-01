@@ -1,9 +1,10 @@
 //! SQLite-backed run history with a state machine and structured trace stream.
 //!
-//! `runs.rs` is the **only** code path that persists script execution
+//! `runs/` is the **only** code path that persists script execution
 //! history.
 
 mod enqueue;
+mod error;
 mod ids;
 mod lifecycle;
 mod open;
@@ -15,6 +16,7 @@ pub use enqueue::{
     enqueue, enqueue_cue, enqueue_scheduled, get_run_env, get_run_script_hash, get_run_secret_refs,
     start_inline, EnqueueOptions, ALLOW_ALL_SECRET_REFS_POLICY,
 };
+pub use error::RunsError;
 pub use ids::format_run_timestamp;
 pub use lifecycle::{
     cancel, cancel_cue_runs_for_actor, claim_next, complete, dead_letter, fail, heartbeat,

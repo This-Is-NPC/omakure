@@ -1,4 +1,4 @@
-use crate::util::sqlite::is_lock_contention;
+use super::RunsError;
 use crate::util::time::unix_millis;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
@@ -64,39 +64,18 @@ pub struct TraceRow {
 
 const TRACE_RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(25), Duration::from_millis(100)];
 
-enum TraceInsertError {
-    NotFound(String),
-    Sqlite {
-        operation: &'static str,
-        error: rusqlite::Error,
-    },
-}
-
-impl TraceInsertError {
-    fn is_retryable(&self) -> bool {
-        matches!(self, Self::Sqlite { error, .. } if is_lock_contention(error))
-    }
-
-    fn into_message(self) -> String {
-        match self {
-            Self::NotFound(run_id) => format!("not_found: {run_id}"),
-            Self::Sqlite { operation, error } => format!("{operation}: {error}"),
-        }
-    }
-}
-
 fn insert_trace_once(
     conn: &mut Connection,
     run_id: &str,
     level: TraceLevel,
     message: &str,
     data_json: Option<&str>,
-) -> Result<TraceRow, TraceInsertError> {
+) -> Result<TraceRow, RunsError> {
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| TraceInsertError::Sqlite {
+        .map_err(|error| RunsError::Sqlite {
             operation: "Begin trace tx failed",
-            error,
+            source: error,
         })?;
 
     let exists: bool = tx
@@ -106,13 +85,13 @@ fn insert_trace_once(
             |row| row.get::<_, i64>(0),
         )
         .optional()
-        .map_err(|error| TraceInsertError::Sqlite {
+        .map_err(|error| RunsError::Sqlite {
             operation: "Lookup run for trace failed",
-            error,
+            source: error,
         })?
         .is_some();
     if !exists {
-        return Err(TraceInsertError::NotFound(run_id.to_string()));
+        return Err(RunsError::NotFound(run_id.to_string()));
     }
 
     let next_seq: i64 = tx
@@ -121,9 +100,9 @@ fn insert_trace_once(
             params![run_id],
             |row| row.get(0),
         )
-        .map_err(|error| TraceInsertError::Sqlite {
+        .map_err(|error| RunsError::Sqlite {
             operation: "Compute next sequence failed",
-            error,
+            source: error,
         })?;
     let now = unix_millis();
     tx.execute(
@@ -131,14 +110,14 @@ fn insert_trace_once(
              VALUES (?,?,?,?,?,?)",
         params![run_id, now, next_seq, level.as_str(), message, data_json],
     )
-    .map_err(|error| TraceInsertError::Sqlite {
+    .map_err(|error| RunsError::Sqlite {
         operation: "Insert trace failed",
-        error,
+        source: error,
     })?;
     let trace_id = tx.last_insert_rowid();
-    tx.commit().map_err(|error| TraceInsertError::Sqlite {
+    tx.commit().map_err(|error| RunsError::Sqlite {
         operation: "Commit trace tx failed",
-        error,
+        source: error,
     })?;
 
     Ok(TraceRow {
@@ -160,7 +139,7 @@ fn insert_trace_once(
 /// connection's normal busy timeout. Each retry starts a fresh transaction;
 /// non-busy SQLite errors are returned immediately.
 ///
-/// Returns an error message describing `not_found` when the parent run
+/// Returns [`RunsError::NotFound`] when the parent run
 /// does not exist; the CLI maps this to `error.code = "not_found"`.
 pub fn insert_trace(
     conn: &mut Connection,
@@ -168,7 +147,7 @@ pub fn insert_trace(
     level: TraceLevel,
     message: &str,
     data_json: Option<&str>,
-) -> Result<TraceRow, String> {
+) -> Result<TraceRow, RunsError> {
     let mut retry = 0;
     loop {
         match insert_trace_once(conn, run_id, level, message, data_json) {
@@ -177,7 +156,7 @@ pub fn insert_trace(
                 std::thread::sleep(TRACE_RETRY_DELAYS[retry]);
                 retry += 1;
             }
-            Err(error) => return Err(error.into_message()),
+            Err(error) => return Err(error),
         }
     }
 }
@@ -188,13 +167,13 @@ pub fn insert_trace(
 /// (e.g. `Warn` returns warn and error). `since_sequence` returns only
 /// entries with `sequence > since_sequence`.
 ///
-/// Returns an `Err("not_found: ...")` when the parent run does not exist.
+/// Returns [`RunsError::NotFound`] when the parent run does not exist.
 pub fn query_traces(
     conn: &Connection,
     run_id: &str,
     level_min: Option<TraceLevel>,
     since_sequence: Option<i64>,
-) -> Result<Vec<TraceRow>, String> {
+) -> Result<Vec<TraceRow>, RunsError> {
     let exists: bool = conn
         .query_row(
             "SELECT 1 FROM runs WHERE run_id = ? LIMIT 1",
@@ -202,10 +181,13 @@ pub fn query_traces(
             |row| row.get::<_, i64>(0),
         )
         .optional()
-        .map_err(|err| format!("Lookup run for traces failed: {}", err))?
+        .map_err(|err| RunsError::Sqlite {
+            operation: "Lookup run for traces failed",
+            source: err,
+        })?
         .is_some();
     if !exists {
-        return Err(format!("not_found: {}", run_id));
+        return Err(RunsError::NotFound(run_id.to_string()));
     }
 
     let mut sql = String::from(
@@ -233,9 +215,10 @@ pub fn query_traces(
     }
     sql.push_str(" ORDER BY sequence ASC");
 
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|err| format!("Prepare query_traces failed: {}", err))?;
+    let mut stmt = conn.prepare(&sql).map_err(|err| RunsError::Sqlite {
+        operation: "Prepare query_traces failed",
+        source: err,
+    })?;
     let rows = stmt
         .query_map(params_from_iter(params.iter().map(|p| p.as_ref())), |row| {
             Ok(TraceRow {
@@ -248,10 +231,16 @@ pub fn query_traces(
                 data_json: row.get(6)?,
             })
         })
-        .map_err(|err| format!("Query traces failed: {}", err))?;
+        .map_err(|err| RunsError::Sqlite {
+            operation: "Query traces failed",
+            source: err,
+        })?;
     let mut out = Vec::new();
     for row in rows {
-        out.push(row.map_err(|err| format!("Trace row failed: {}", err))?);
+        out.push(row.map_err(|err| RunsError::Sqlite {
+            operation: "Trace row failed",
+            source: err,
+        })?);
     }
     Ok(out)
 }

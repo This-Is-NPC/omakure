@@ -566,10 +566,8 @@ impl<'a> BaselineSession<'a> {
         now: u64,
     ) -> BaselineOutcome {
         self.audit("baseline_rejected", "rejected", Some(code));
-        if code.is_reportable() {
-            if let Some(baseline_id) = baseline_id {
-                self.queue_reply(&baseline_id, Some(code), now);
-            }
+        if let Some(baseline_id) = baseline_id.filter(|_| code.is_reportable()) {
+            self.queue_reply(&baseline_id, Some(code), now);
         }
         BaselineOutcome::Decided(BaselineDecision::Rejected(code))
     }

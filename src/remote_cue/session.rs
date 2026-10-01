@@ -362,11 +362,9 @@ impl<'a> CueSession<'a> {
     /// already authorized to have been evaluated.
     fn refuse(&mut self, dispatch: Option<&CueDispatch>, code: CueCode, now: i64) -> CueOutcome {
         self.audit("cue_rejected", "rejected", Some(code), dispatch);
-        if code.is_reportable() {
-            if let Some(dispatch) = dispatch {
-                let reported = code.reply_code();
-                self.queue_reply(&dispatch.cue_id, Some(reported), now);
-            }
+        if let Some(dispatch) = dispatch.filter(|_| code.is_reportable()) {
+            let reported = code.reply_code();
+            self.queue_reply(&dispatch.cue_id, Some(reported), now);
         }
         if let Some(dispatch) = dispatch {
             self.remember_cue(&dispatch.cue_id, now);

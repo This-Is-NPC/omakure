@@ -336,13 +336,15 @@ impl<'a> HealthSession<'a> {
         // Pulse keeps priority over the Signal feed, because presence is what
         // an operator loses first and the frozen 10-per-minute Signal bound
         // already leaves most of the 30-second Pulse window free for Signals.
-        if self.next_pulse.is_none_or(|due| now >= due) {
-            if let Some(message) = reporter.pulse(&self.remote_node_id, &fresh_id(), now) {
-                self.next_pulse =
-                    Some(now.saturating_add(HealthReporter::pulse_interval_seconds()));
-                self.last_pulse_sent = Some(now);
-                return self.send(HealthKind::Pulse, message.payload, now);
-            }
+        if let Some(message) = self
+            .next_pulse
+            .is_none_or(|due| now >= due)
+            .then(|| reporter.pulse(&self.remote_node_id, &fresh_id(), now))
+            .flatten()
+        {
+            self.next_pulse = Some(now.saturating_add(HealthReporter::pulse_interval_seconds()));
+            self.last_pulse_sent = Some(now);
+            return self.send(HealthKind::Pulse, message.payload, now);
         }
         self.send_next_signal(&authorization.1, now)
     }

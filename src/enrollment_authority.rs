@@ -84,6 +84,20 @@ pub struct EnrollmentAuthority {
     signing_key: SigningKey,
 }
 
+pub struct BundleIssueMaterial {
+    pub bundle_id: [u8; crate::enrollment::REQUEST_ID_BYTES],
+    pub organization: String,
+    pub audience_node_id: String,
+    pub subject_node_id: String,
+    pub subject_xonly: [u8; 32],
+    pub subject_transport_x25519: [u8; 32],
+    pub subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+    pub role: crate::enrollment::EnrollmentRole,
+    pub capabilities: Vec<String>,
+    pub issued_at: u64,
+    pub expires_at: u64,
+}
+
 impl EnrollmentAuthority {
     /// Create the authority key, refusing to replace one that already exists.
     ///
@@ -120,42 +134,28 @@ impl EnrollmentAuthority {
 
     /// Mint one bundle. The signing itself is the shipped, tested construction;
     /// this is the caller it never had.
-    #[allow(clippy::too_many_arguments)]
-    pub fn issue(
-        &self,
-        bundle_id: [u8; crate::enrollment::REQUEST_ID_BYTES],
-        organization: String,
-        audience_node_id: String,
-        subject_node_id: String,
-        subject_xonly: [u8; 32],
-        subject_transport_x25519: [u8; 32],
-        subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-        role: crate::enrollment::EnrollmentRole,
-        capabilities: Vec<String>,
-        issued_at: u64,
-        expires_at: u64,
-    ) -> Result<Vec<u8>, AuthorityError> {
+    pub fn issue(&self, material: BundleIssueMaterial) -> Result<Vec<u8>, AuthorityError> {
         // A bundle whose audience is its own subject would enrol a node into
         // trusting itself. Refused here rather than left to the receiver.
-        if audience_node_id == subject_node_id {
+        if material.audience_node_id == material.subject_node_id {
             return Err(AuthorityError::Signing(
                 "a bundle cannot name the same node as audience and subject".to_string(),
             ));
         }
         crate::enrollment::SignedEnrollmentBundle::sign_with_material(
             self.signing_key.to_bytes().as_ref(),
-            bundle_id,
+            material.bundle_id,
             self.key_id(),
-            organization,
-            audience_node_id,
-            subject_node_id,
-            subject_xonly,
-            subject_transport_x25519,
-            subject_certificate,
-            role,
-            capabilities,
-            issued_at,
-            expires_at,
+            material.organization,
+            material.audience_node_id,
+            material.subject_node_id,
+            material.subject_xonly,
+            material.subject_transport_x25519,
+            material.subject_certificate,
+            material.role,
+            material.capabilities,
+            material.issued_at,
+            material.expires_at,
         )
         .map(|bundle| bundle.encode())
         .map_err(|error| AuthorityError::Signing(format!("{error:?}")))
@@ -323,22 +323,24 @@ mod tests {
         let authority = EnrollmentAuthority::create(&context).expect("create");
         let node = format!("omk1_{}", "a".repeat(64));
 
-        assert!(
-            authority
-                .issue(
-                    [1u8; crate::enrollment::REQUEST_ID_BYTES],
-                    "org".to_string(),
-                    node.clone(),
-                    node,
-                    [2u8; 32],
-                    [3u8; 32],
-                    [0u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-                    crate::enrollment::EnrollmentRole::Conductor,
-                    vec!["remote-run".to_string()],
-                    1_800_000_000,
-                    1_800_003_600,
-                )
-                .is_err()
+        let error = authority
+            .issue(BundleIssueMaterial {
+                bundle_id: [1u8; crate::enrollment::REQUEST_ID_BYTES],
+                organization: "org".to_string(),
+                audience_node_id: node.clone(),
+                subject_node_id: node,
+                subject_xonly: [2u8; 32],
+                subject_transport_x25519: [3u8; 32],
+                subject_certificate: [0u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+                role: crate::enrollment::EnrollmentRole::Conductor,
+                capabilities: vec!["remote-run".to_string()],
+                issued_at: 1_800_000_000,
+                expires_at: 1_800_003_600,
+            })
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "a bundle cannot name the same node as audience and subject"
         );
     }
 }

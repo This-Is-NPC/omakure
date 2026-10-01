@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "7e14c43104038947e7136842b15a565993c3b456d886006f41966e2b60d598b4",
+  "canonical_sha256": "162f12f8a6c9bf994e00e5898d2aff70abefda5963b72d7d641fdf4e74143f5b",
   "config_identity": "no-config",
   "files": [
     {
@@ -2346,12 +2346,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 21,
+        "invocations": 20,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 7,
-        "cyclomatic": 34
+        "cognitive": 2,
+        "cyclomatic": 24
       },
       "path": "src/enrollment_authority.rs",
       "source_class": "handwritten"
@@ -53747,23 +53747,23 @@
         "identity": "crate::enrollment_authority::issue",
         "macro_expansion": "not_measured",
         "path": "src/enrollment_authority.rs",
-        "signature": "pub fn issue( &self, bundle_id: [u8",
+        "signature": "pub fn issue(&self, material: BundleIssueMaterial) -> Result<Vec<u8>, AuthorityError>",
         "source_class": "handwritten"
       },
       "identity": "crate::enrollment_authority::issue",
       "kind": "method",
-      "line": 156,
+      "line": 137,
       "name": "issue",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 156,
+        "line": 137,
         "name": "issue"
       },
       "path": "src/enrollment_authority.rs",
-      "signature": "pub fn issue( &self, bundle_id: [u8",
+      "signature": "pub fn issue(&self, material: BundleIssueMaterial) -> Result<Vec<u8>, AuthorityError>",
       "source_class": "handwritten"
     },
     {
@@ -53986,14 +53986,14 @@
       },
       "identity": "crate::enrollment_authority::a_bundle_cannot_name_one_node_as_both_sides",
       "kind": "function",
-      "line": 397,
+      "line": 320,
       "name": "a_bundle_cannot_name_one_node_as_both_sides",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 397,
+        "line": 320,
         "name": "a_bundle_cannot_name_one_node_as_both_sides"
       },
       "path": "src/enrollment_authority.rs",
@@ -87567,8 +87567,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 6,
-      "cyclomatic": 9,
+      "cognitive": 4,
+      "cyclomatic": 5,
       "derived": {
         "identity": "crate::operations::node::authority::issue_enrollment_bundle",
         "macro_expansion": "not_measured",
@@ -87578,14 +87578,14 @@
       },
       "identity": "crate::operations::node::authority::issue_enrollment_bundle",
       "kind": "function",
-      "line": 79,
+      "line": 80,
       "name": "issue_enrollment_bundle",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 9,
+        "cognitive": 4,
+        "cyclomatic": 5,
         "kind": "function",
-        "line": 79,
+        "line": 80,
         "name": "issue_enrollment_bundle"
       },
       "path": "src/operations/node/authority.rs",

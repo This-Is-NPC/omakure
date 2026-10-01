@@ -3,6 +3,7 @@ use super::errors::map_identity_error;
 use super::require_confirmation;
 use super::status::load_node_config;
 use crate::enrollment::EnrollmentRole;
+use crate::enrollment_authority::BundleIssueMaterial;
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
@@ -134,19 +135,19 @@ pub fn issue_enrollment_bundle(
 
     let subject_node_id = identity.public_status().node_id.clone();
     let bundle = authority
-        .issue(
+        .issue(BundleIssueMaterial {
             bundle_id,
-            config.organization.id.clone(),
-            request.audience_node_id.clone(),
-            subject_node_id.clone(),
-            *certificate.identity_key(),
-            *certificate.transport_public(),
-            *certificate.as_bytes(),
+            organization: config.organization.id.clone(),
+            audience_node_id: request.audience_node_id.clone(),
+            subject_node_id: subject_node_id.clone(),
+            subject_xonly: *certificate.identity_key(),
+            subject_transport_x25519: *certificate.transport_public(),
+            subject_certificate: *certificate.as_bytes(),
             role,
-            request.capabilities,
+            capabilities: request.capabilities,
             issued_at,
             expires_at,
-        )
+        })
         .map_err(map_authority_error)?;
 
     Ok(IssuedBundle {

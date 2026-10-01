@@ -127,7 +127,7 @@ verify workspace paths or host runtimes.
 | Resolution | hickory-resolver 0.25 | Bounded async static-peer DNS resolution |
 | Filesystem | fs2 0.4, tempfile 3.10 | File locks, staged installs, and atomic writes |
 | Unix | libc 0.2 | Ownership, permission, and process checks |
-| Windows | winreg 0.52, windows-sys 0.61 | Install-path registry handling, ACLs, and process checks |
+| Windows | winreg 0.56, windows-sys 0.61 | Install-path registry handling, ACLs, and process checks |
 | Docs generator (`usage-generator` feature) | clap_usage 5, usage-lib 6.6 (`jdx/usage` rev `9732c63`) | Usage KDL, Markdown, and roff artifacts; not in runtime builds |
 
 Direct dependencies are intentionally limited to the retained headless surface.

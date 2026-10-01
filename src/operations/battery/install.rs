@@ -13,7 +13,7 @@ use super::git::{run_git_capture, GitCommandSpec};
 #[cfg(unix)]
 use super::git_url::redacted_git_url;
 #[cfg(unix)]
-use super::manifest::open_validated_script_entry;
+use super::manifest::{open_validated_script_entry, BatteryManifestScript};
 #[cfg(unix)]
 use super::path_safety::reject_symlink_components;
 use super::path_safety::{
@@ -25,7 +25,7 @@ use super::registry::{
     cache_path_for_battery, inspect_battery, installed_root_for_workspace, sanitize_file_component,
 };
 #[cfg(unix)]
-use super::types::{InspectBatteryRequest, InstalledScriptProvenance};
+use super::types::{BatteryInspectResponse, InspectBatteryRequest, InstalledScriptProvenance};
 use super::types::{InstallBatteryScriptRequest, InstallBatteryScriptResponse};
 use crate::workspace::Workspace;
 #[cfg(unix)]
@@ -55,8 +55,6 @@ pub fn install_battery_script(
     }
     #[cfg(unix)]
     {
-        use crate::util::hex;
-
         let inspect = inspect_battery(
             workspace,
             InspectBatteryRequest {
@@ -76,32 +74,14 @@ pub fn install_battery_script(
             })?;
         let cache_path = cache_path_for_battery(workspace, &inspect.summary.name)?;
         let (_source_path, mut source_file) = open_validated_script_entry(&cache_path, script)?;
-        reject_unsafe_relative_path(&script.path)?;
-        reject_reserved_install_path(&script.path)?;
-        let installed_path = workspace.scripts_root().join(&script.path);
-        let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::UnsafePath,
-                format!("failed to canonicalize scripts root: {err}"),
-            )
-        })?;
-        if let Some(parent) = installed_path.parent() {
-            ensure_install_target_safe(&scripts_root, &script.path, &installed_path)?;
-            fs::create_dir_all(parent).map_err(|err| {
-                OperationError::new(
-                    OperationErrorCode::IoFailed,
-                    format!("failed to create install directory: {err}"),
-                )
-            })?;
-            ensure_install_target_safe(&scripts_root, &script.path, &installed_path)?;
-        }
-        let operation_path =
-            canonical_install_target_path(&scripts_root, &script.path, &installed_path)?;
-        let target_existed = operation_path.exists();
-        if target_existed && !request.force {
+        let target = prepare_install_target(workspace, &script.path)?;
+        if target.existed && !request.force {
             return Err(OperationError::new(
                 OperationErrorCode::Conflict,
-                format!("target script already exists: {}", installed_path.display()),
+                format!(
+                    "target script already exists: {}",
+                    target.installed_path.display()
+                ),
             ));
         }
         let resolved_commit = inspect.summary.resolved_commit.clone().ok_or_else(|| {
@@ -110,68 +90,28 @@ pub fn install_battery_script(
                 format!("battery '{}' has not been synced", request.battery_name),
             )
         })?;
-        let installed_root = installed_root_for_workspace(workspace)?;
-        let provenance_rel = PathBuf::from(sanitize_file_component(&request.battery_name)).join(
-            format!("{}.json", hex::encode(request.script_id.as_bytes())),
-        );
-        let provenance_path = installed_root.join(&provenance_rel);
-        if let Some(parent) = provenance_path.parent() {
-            reject_symlink_components(&installed_root, &provenance_rel, false)?;
-            fs::create_dir_all(parent).map_err(|err| {
-                OperationError::new(
-                    OperationErrorCode::IoFailed,
-                    format!("failed to create provenance directory: {err}"),
-                )
-            })?;
-            reject_symlink_components(&installed_root, &provenance_rel, false)?;
-        }
-        let provenance = InstalledScriptProvenance {
-            battery_name: request.battery_name.clone(),
-            script_id: request.script_id.clone(),
-            git_url: redacted_git_url(&inspect.summary.git_url),
-            requested_ref: inspect.summary.requested_ref.clone(),
-            resolved_commit: resolved_commit.clone(),
-            source_path: script.path.clone(),
-            installed_path: installed_path.clone(),
-        };
-        let contents = serde_json::to_string_pretty(&provenance).map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::IoFailed,
-                format!("failed to serialize install provenance: {err}"),
-            )
-        })?;
+        let (provenance_path, contents) = prepare_install_provenance(
+            workspace,
+            &request,
+            &inspect,
+            script,
+            &target.installed_path,
+            &resolved_commit,
+        )?;
         // The cache entry was already read once for validation, so the reader
         // handed to the install must start at the top of the file again.
-        source_file.seek(SeekFrom::Start(0)).map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::IoFailed,
-                format!("failed to rewind battery script: {err}"),
-            )
-        })?;
-        let source_mode = {
-            use std::os::unix::fs::PermissionsExt;
-            source_file
-                .metadata()
-                .map_err(|err| {
-                    OperationError::new(
-                        OperationErrorCode::IoFailed,
-                        format!("failed to read battery script mode: {err}"),
-                    )
-                })?
-                .permissions()
-                .mode()
-        };
+        let source_mode = rewind_and_read_source_mode(&mut source_file)?;
         let mut install_state = materialize_install(
-            &scripts_root,
+            &target.scripts_root,
             &script.path,
-            &installed_path,
-            &operation_path,
+            &target.installed_path,
+            &target.operation_path,
             InstallSource {
                 reader: &mut source_file,
                 mode: source_mode,
             },
             request.force,
-            target_existed,
+            target.existed,
         )?;
 
         if let Err(err) =
@@ -183,13 +123,118 @@ pub fn install_battery_script(
         install_state.cleanup();
 
         Ok(InstallBatteryScriptResponse {
-            installed_path,
+            installed_path: target.installed_path,
             provenance_path,
             battery_name: request.battery_name,
             script_id: request.script_id,
             resolved_commit,
         })
     }
+}
+
+#[cfg(unix)]
+fn prepare_install_provenance(
+    workspace: &Workspace,
+    request: &InstallBatteryScriptRequest,
+    inspect: &BatteryInspectResponse,
+    script: &BatteryManifestScript,
+    installed_path: &Path,
+    resolved_commit: &str,
+) -> OperationResult<(PathBuf, String)> {
+    let installed_root = installed_root_for_workspace(workspace)?;
+    let provenance_rel =
+        PathBuf::from(sanitize_file_component(&request.battery_name)).join(format!(
+            "{}.json",
+            crate::util::hex::encode(request.script_id.as_bytes())
+        ));
+    let provenance_path = installed_root.join(&provenance_rel);
+    if let Some(parent) = provenance_path.parent() {
+        reject_symlink_components(&installed_root, &provenance_rel, false)?;
+        fs::create_dir_all(parent).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to create provenance directory: {err}"),
+            )
+        })?;
+        reject_symlink_components(&installed_root, &provenance_rel, false)?;
+    }
+    let provenance = InstalledScriptProvenance {
+        battery_name: request.battery_name.clone(),
+        script_id: request.script_id.clone(),
+        git_url: redacted_git_url(&inspect.summary.git_url),
+        requested_ref: inspect.summary.requested_ref.clone(),
+        resolved_commit: resolved_commit.to_string(),
+        source_path: script.path.clone(),
+        installed_path: installed_path.to_path_buf(),
+    };
+    let contents = serde_json::to_string_pretty(&provenance).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to serialize install provenance: {err}"),
+        )
+    })?;
+    Ok((provenance_path, contents))
+}
+
+struct InstallTarget {
+    scripts_root: PathBuf,
+    installed_path: PathBuf,
+    operation_path: PathBuf,
+    existed: bool,
+}
+
+fn prepare_install_target(
+    workspace: &Workspace,
+    relative: &Path,
+) -> OperationResult<InstallTarget> {
+    reject_unsafe_relative_path(relative)?;
+    reject_reserved_install_path(relative)?;
+    let installed_path = workspace.scripts_root().join(relative);
+    let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::UnsafePath,
+            format!("failed to canonicalize scripts root: {err}"),
+        )
+    })?;
+    if let Some(parent) = installed_path.parent() {
+        ensure_install_target_safe(&scripts_root, relative, &installed_path)?;
+        fs::create_dir_all(parent).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to create install directory: {err}"),
+            )
+        })?;
+        ensure_install_target_safe(&scripts_root, relative, &installed_path)?;
+    }
+    let operation_path = canonical_install_target_path(&scripts_root, relative, &installed_path)?;
+    let existed = operation_path.exists();
+    Ok(InstallTarget {
+        scripts_root,
+        installed_path,
+        operation_path,
+        existed,
+    })
+}
+
+#[cfg(unix)]
+fn rewind_and_read_source_mode(source_file: &mut File) -> OperationResult<u32> {
+    use std::os::unix::fs::PermissionsExt;
+
+    source_file.seek(SeekFrom::Start(0)).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::IoFailed,
+            format!("failed to rewind battery script: {err}"),
+        )
+    })?;
+    source_file
+        .metadata()
+        .map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to read battery script mode: {err}"),
+            )
+        })
+        .map(|metadata| metadata.permissions().mode())
 }
 
 /// What an installed script may carry of its source's mode.
@@ -226,41 +271,19 @@ pub(crate) fn install_verified_script(
     bytes: &[u8],
     mode: u32,
 ) -> OperationResult<InstallState> {
-    reject_unsafe_relative_path(relative)?;
-    reject_reserved_install_path(relative)?;
-    let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::UnsafePath,
-            format!("failed to canonicalize scripts root: {err}"),
-        )
-    })?;
-    let installed_path = workspace.scripts_root().join(relative);
-    if let Some(parent) = installed_path.parent() {
-        ensure_install_target_safe(&scripts_root, relative, &installed_path)?;
-        fs::create_dir_all(parent).map_err(|err| {
-            OperationError::new(
-                OperationErrorCode::IoFailed,
-                format!("failed to create install directory: {err}"),
-            )
-        })?;
-        // Asked again after the directories exist: the first call could only
-        // check the components that were already there.
-        ensure_install_target_safe(&scripts_root, relative, &installed_path)?;
-    }
-    let operation_path = canonical_install_target_path(&scripts_root, relative, &installed_path)?;
-    let target_existed = operation_path.exists();
+    let target = prepare_install_target(workspace, relative)?;
     let mut source = bytes;
     materialize_install(
-        &scripts_root,
+        &target.scripts_root,
         relative,
-        &installed_path,
-        &operation_path,
+        &target.installed_path,
+        &target.operation_path,
         InstallSource {
             reader: &mut source,
             mode,
         },
         true,
-        target_existed,
+        target.existed,
     )
 }
 

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "c3e11187ebe0fcbcf28cb0eff3e5757ca79df1d9f0faf1abac8f830a60b4a89a",
+  "canonical_sha256": "73e200fc0d67dd43b7ffedf11cfc1c89465b0565d6c8037b9f883a40fe90b6b6",
   "config_identity": "no-config",
   "files": [
     {
@@ -3480,12 +3480,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 28,
+        "invocations": 26,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 47,
-        "cyclomatic": 71
+        "cognitive": 46,
+        "cyclomatic": 72
       },
       "path": "src/operations/battery/install.rs",
       "source_class": "handwritten"
@@ -3606,12 +3606,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 19,
+        "invocations": 21,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 1,
-        "cyclomatic": 12
+        "cyclomatic": 13
       },
       "path": "src/operations/battery/tests/install.rs",
       "source_class": "handwritten"
@@ -73715,29 +73715,861 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::operations::battery::install::install_battery_script",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "pub fn install_battery_script( workspace: &Workspace, request: InstallBatteryScriptRequest, ) -> OperationResult<InstallBatteryScriptResponse>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::install_battery_script",
+      "kind": "function",
+      "line": 44,
+      "name": "install_battery_script",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 44,
+        "name": "install_battery_script"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "pub fn install_battery_script( workspace: &Workspace, request: InstallBatteryScriptRequest, ) -> OperationResult<InstallBatteryScriptResponse>",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script::<closure>@155#9",
+        "identity": "crate::operations::battery::install::install_battery_script::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/battery/install.rs",
-        "signature": ".map_err(|err| {",
+        "signature": ".find(|script| script.id == request.script_id)",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::battery::install::install_battery_script::<closure>@155#9",
+      "identity": "crate::operations::battery::install::install_battery_script::<closure>",
       "kind": "closure",
-      "line": 155,
+      "line": 68,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 155,
+        "line": 68,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": ".find(|script| script.id == request.script_id)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::install_battery_script::<closure>@69#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": ".ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::install_battery_script::<closure>@69#2",
+      "kind": "closure",
+      "line": 69,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 69,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": ".ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::install_battery_script::<closure>@87#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "let resolved_commit = inspect.summary.resolved_commit.clone().ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::install_battery_script::<closure>@87#3",
+      "kind": "closure",
+      "line": 87,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 87,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "let resolved_commit = inspect.summary.resolved_commit.clone().ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::battery::install::prepare_install_provenance",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fn prepare_install_provenance( workspace: &Workspace, request: &InstallBatteryScriptRequest, inspect: &BatteryInspectResponse, script: &BatteryManifestScript, installed_path: &Path, resolved_commit: &str, ) -> OperationResult<(PathBuf, String)>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::prepare_install_provenance",
+      "kind": "function",
+      "line": 136,
+      "name": "prepare_install_provenance",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 136,
+        "name": "prepare_install_provenance"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fn prepare_install_provenance( workspace: &Workspace, request: &InstallBatteryScriptRequest, inspect: &BatteryInspectResponse, script: &BatteryManifestScript, installed_path: &Path, resolved_commit: &str, ) -> OperationResult<(PathBuf, String)>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::prepare_install_provenance::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fs::create_dir_all(parent).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::prepare_install_provenance::<closure>",
+      "kind": "closure",
+      "line": 153,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 153,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fs::create_dir_all(parent).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::prepare_install_provenance::<closure>@170#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "let contents = serde_json::to_string_pretty(&provenance).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::prepare_install_provenance::<closure>@170#2",
+      "kind": "closure",
+      "line": 170,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 170,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "let contents = serde_json::to_string_pretty(&provenance).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::battery::install::prepare_install_target",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fn prepare_install_target( workspace: &Workspace, relative: &Path, ) -> OperationResult<InstallTarget>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::prepare_install_target",
+      "kind": "function",
+      "line": 186,
+      "name": "prepare_install_target",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 186,
+        "name": "prepare_install_target"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fn prepare_install_target( workspace: &Workspace, relative: &Path, ) -> OperationResult<InstallTarget>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::prepare_install_target::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::prepare_install_target::<closure>",
+      "kind": "closure",
+      "line": 193,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 193,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::prepare_install_target::<closure>@201#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fs::create_dir_all(parent).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::prepare_install_target::<closure>@201#2",
+      "kind": "closure",
+      "line": 201,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 201,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fs::create_dir_all(parent).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::rewind_and_read_source_mode",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fn rewind_and_read_source_mode(source_file: &mut File) -> OperationResult<u32>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::rewind_and_read_source_mode",
+      "kind": "function",
+      "line": 220,
+      "name": "rewind_and_read_source_mode",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 220,
+        "name": "rewind_and_read_source_mode"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fn rewind_and_read_source_mode(source_file: &mut File) -> OperationResult<u32>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::rewind_and_read_source_mode::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "source_file.seek(SeekFrom::Start(0)).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::rewind_and_read_source_mode::<closure>",
+      "kind": "closure",
+      "line": 223,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 223,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "source_file.seek(SeekFrom::Start(0)).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::rewind_and_read_source_mode::<closure>@231#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": ".map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::rewind_and_read_source_mode::<closure>@231#2",
+      "kind": "closure",
+      "line": 231,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 231,
         "name": "<closure>"
       },
       "path": "src/operations/battery/install.rs",
       "signature": ".map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::rewind_and_read_source_mode::<closure>@237#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": ".map(|metadata| metadata.permissions().mode())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::rewind_and_read_source_mode::<closure>@237#3",
+      "kind": "closure",
+      "line": 237,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 237,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": ".map(|metadata| metadata.permissions().mode())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::install_verified_script",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "pub(crate) fn install_verified_script( workspace: &Workspace, relative: &Path, bytes: &[u8], mode: u32, ) -> OperationResult<InstallState>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::install_verified_script",
+      "kind": "function",
+      "line": 268,
+      "name": "install_verified_script",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 268,
+        "name": "install_verified_script"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "pub(crate) fn install_verified_script( workspace: &Workspace, relative: &Path, bytes: &[u8], mode: u32, ) -> OperationResult<InstallState>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::operations::battery::install::rollback",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "pub(crate) fn rollback(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::rollback",
+      "kind": "method",
+      "line": 307,
+      "name": "rollback",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 7,
+        "kind": "method",
+        "line": 307,
+        "name": "rollback"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "pub(crate) fn rollback(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::operations::battery::install::cleanup",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "pub(crate) fn cleanup(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::cleanup",
+      "kind": "method",
+      "line": 339,
+      "name": "cleanup",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 339,
+        "name": "cleanup"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "pub(crate) fn cleanup(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fn materialize_install( scripts_root: &Path, relative: &Path, installed_path: &Path, operation_path: &Path, source: InstallSource<'_>, force: bool, target_existed: bool, ) -> OperationResult<InstallState>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install",
+      "kind": "function",
+      "line": 373,
+      "name": "materialize_install",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 8,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 373,
+        "name": "materialize_install"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fn materialize_install( scripts_root: &Path, relative: &Path, installed_path: &Path, operation_path: &Path, source: InstallSource<'_>, force: bool, target_existed: bool, ) -> OperationResult<InstallState>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "let parent_path = operation_path.parent().ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install::<closure>",
+      "kind": "closure",
+      "line": 385,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 385,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "let parent_path = operation_path.parent().ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install::<closure>@391#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "let target_name = operation_path.file_name().ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install::<closure>@391#2",
+      "kind": "closure",
+      "line": 391,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 391,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "let target_name = operation_path.file_name().ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install::<closure>@409#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": ".map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install::<closure>@409#3",
+      "kind": "closure",
+      "line": 409,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 409,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": ".map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install::<closure>@428#4",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "linkat_file(&parent, &tmp_name, target_name).and_then(|_| unlinkat_file(&parent, &tmp_name))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install::<closure>@428#4",
+      "kind": "closure",
+      "line": 428,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 428,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "linkat_file(&parent, &tmp_name, target_name).and_then(|_| unlinkat_file(&parent, &tmp_name))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install@447#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fn materialize_install( scripts_root: &Path, relative: &Path, installed_path: &Path, operation_path: &Path, source: InstallSource<'_>, force: bool, target_existed: bool, ) -> OperationResult<InstallState>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install@447#2",
+      "kind": "function",
+      "line": 447,
+      "name": "materialize_install",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 447,
+        "name": "materialize_install"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fn materialize_install( scripts_root: &Path, relative: &Path, installed_path: &Path, operation_path: &Path, source: InstallSource<'_>, force: bool, target_existed: bool, ) -> OperationResult<InstallState>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install::<closure>@466#5",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fs::rename(&tmp_path, operation_path).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install::<closure>@466#5",
+      "kind": "closure",
+      "line": 466,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 466,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fs::rename(&tmp_path, operation_path).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install::<closure>@478#6",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fs::hard_link(&tmp_path, operation_path).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install::<closure>@478#6",
+      "kind": "closure",
+      "line": 478,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 478,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fs::hard_link(&tmp_path, operation_path).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::materialize_install::<closure>@487#7",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fs::remove_file(&tmp_path).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::materialize_install::<closure>@487#7",
+      "kind": "closure",
+      "line": 487,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 487,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fs::remove_file(&tmp_path).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::operations::battery::install::verify_tracked_blob",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "pub(super) fn verify_tracked_blob(cache_path: &Path, relative: &Path) -> OperationResult<()>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::verify_tracked_blob",
+      "kind": "function",
+      "line": 502,
+      "name": "verify_tracked_blob",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 502,
+        "name": "verify_tracked_blob"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "pub(super) fn verify_tracked_blob(cache_path: &Path, relative: &Path) -> OperationResult<()>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::operations::battery::install::unique_install_tmp_file",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fn unique_install_tmp_file(target: &Path) -> OperationResult<(PathBuf, File)>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::unique_install_tmp_file",
+      "kind": "function",
+      "line": 535,
+      "name": "unique_install_tmp_file",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 535,
+        "name": "unique_install_tmp_file"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fn unique_install_tmp_file(target: &Path) -> OperationResult<(PathBuf, File)>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "let parent = target.parent().ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>",
+      "kind": "closure",
+      "line": 536,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 536,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "let parent = target.parent().ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>@544#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": ".and_then(|name| name.to_str())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>@544#2",
+      "kind": "closure",
+      "line": 544,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 544,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": ".and_then(|name| name.to_str())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 9,
+      "cyclomatic": 8,
+      "derived": {
+        "identity": "crate::operations::battery::install::backup_existing_target",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "fn backup_existing_target(target: &Path) -> OperationResult<PathBuf>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::backup_existing_target",
+      "kind": "function",
+      "line": 574,
+      "name": "backup_existing_target",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 9,
+        "cyclomatic": 8,
+        "kind": "function",
+        "line": 574,
+        "name": "backup_existing_target"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "fn backup_existing_target(target: &Path) -> OperationResult<PathBuf>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::backup_existing_target::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": "let parent = target.parent().ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::backup_existing_target::<closure>",
+      "kind": "closure",
+      "line": 575,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 575,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": "let parent = target.parent().ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::install::backup_existing_target::<closure>@583#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/install.rs",
+        "signature": ".and_then(|name| name.to_str())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::install::backup_existing_target::<closure>@583#2",
+      "kind": "closure",
+      "line": 583,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 583,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/install.rs",
+      "signature": ".and_then(|name| name.to_str())",
       "source_class": "handwritten"
     },
     {
@@ -73868,188 +74700,6 @@
       },
       "path": "src/operations/battery/sync.rs",
       "signature": "secrets::resolve_secret_value(workspace, token_ref, access).map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 5,
-      "cyclomatic": 6,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "pub fn install_battery_script( workspace: &Workspace, request: InstallBatteryScriptRequest, ) -> OperationResult<InstallBatteryScriptResponse>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_battery_script",
-      "kind": "function",
-      "line": 44,
-      "name": "install_battery_script",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 6,
-        "kind": "function",
-        "line": 44,
-        "name": "install_battery_script"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "pub fn install_battery_script( workspace: &Workspace, request: InstallBatteryScriptRequest, ) -> OperationResult<InstallBatteryScriptResponse>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": ".find(|script| script.id == request.script_id)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_battery_script::<closure>",
-      "kind": "closure",
-      "line": 70,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 70,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": ".find(|script| script.id == request.script_id)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script::<closure>@82#3",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_battery_script::<closure>@82#3",
-      "kind": "closure",
-      "line": 82,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 82,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script::<closure>@90#4",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "fs::create_dir_all(parent).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_battery_script::<closure>@90#4",
-      "kind": "closure",
-      "line": 90,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 90,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "fs::create_dir_all(parent).map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script::<closure>@107#5",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let resolved_commit = inspect.summary.resolved_commit.clone().ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_battery_script::<closure>@107#5",
-      "kind": "closure",
-      "line": 107,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 107,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let resolved_commit = inspect.summary.resolved_commit.clone().ok_or_else(|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script::<closure>@137#7",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let contents = serde_json::to_string_pretty(&provenance).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_battery_script::<closure>@137#7",
-      "kind": "closure",
-      "line": 137,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 137,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let contents = serde_json::to_string_pretty(&provenance).map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_battery_script::<closure>@145#8",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "source_file.seek(SeekFrom::Start(0)).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_battery_script::<closure>@145#8",
-      "kind": "closure",
-      "line": 145,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 145,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "source_file.seek(SeekFrom::Start(0)).map_err(|err| {",
       "source_class": "handwritten"
     },
     {
@@ -76783,32 +77433,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::install_verified_script::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::install_verified_script::<closure>",
-      "kind": "closure",
-      "line": 231,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 231,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let scripts_root = workspace.scripts_root().canonicalize().map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
@@ -77095,214 +77719,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 7,
-      "cyclomatic": 7,
-      "derived": {
-        "identity": "crate::operations::battery::install::rollback",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "pub(crate) fn rollback(&mut self)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::rollback",
-      "kind": "method",
-      "line": 284,
-      "name": "rollback",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 7,
-        "cyclomatic": 7,
-        "kind": "method",
-        "line": 284,
-        "name": "rollback"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "pub(crate) fn rollback(&mut self)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 5,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::operations::battery::install::cleanup",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "pub(crate) fn cleanup(&mut self)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::cleanup",
-      "kind": "method",
-      "line": 316,
-      "name": "cleanup",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 5,
-        "kind": "method",
-        "line": 316,
-        "name": "cleanup"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "pub(crate) fn cleanup(&mut self)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::materialize_install::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let parent_path = operation_path.parent().ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::materialize_install::<closure>",
-      "kind": "closure",
-      "line": 362,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 362,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let parent_path = operation_path.parent().ok_or_else(|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::materialize_install::<closure>@368#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let target_name = operation_path.file_name().ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::materialize_install::<closure>@368#2",
-      "kind": "closure",
-      "line": 368,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 368,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let target_name = operation_path.file_name().ok_or_else(|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::materialize_install::<closure>@405#4",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "linkat_file(&parent, &tmp_name, target_name).and_then(|_| unlinkat_file(&parent, &tmp_name))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::materialize_install::<closure>@405#4",
-      "kind": "closure",
-      "line": 405,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 405,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "linkat_file(&parent, &tmp_name, target_name).and_then(|_| unlinkat_file(&parent, &tmp_name))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::operations::battery::install::materialize_install::<closure>@443#5",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "fs::rename(&tmp_path, operation_path).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::materialize_install::<closure>@443#5",
-      "kind": "closure",
-      "line": 443,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "closure",
-        "line": 443,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "fs::rename(&tmp_path, operation_path).map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::operations::battery::install::materialize_install::<closure>@455#6",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "fs::hard_link(&tmp_path, operation_path).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::materialize_install::<closure>@455#6",
-      "kind": "closure",
-      "line": 455,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 2,
-        "kind": "closure",
-        "line": 455,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "fs::hard_link(&tmp_path, operation_path).map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::materialize_install::<closure>@464#7",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "fs::remove_file(&tmp_path).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::materialize_install::<closure>@464#7",
-      "kind": "closure",
-      "line": 464,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 464,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "fs::remove_file(&tmp_path).map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
@@ -77430,162 +77846,6 @@
       },
       "path": "src/operations/battery/path_safety.rs",
       "signature": "pub(super) fn reject_existing_symlink_ancestors(path: &Path) -> OperationResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::operations::battery::install::verify_tracked_blob",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "pub(super) fn verify_tracked_blob(cache_path: &Path, relative: &Path) -> OperationResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::verify_tracked_blob",
-      "kind": "function",
-      "line": 479,
-      "name": "verify_tracked_blob",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 479,
-        "name": "verify_tracked_blob"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "pub(super) fn verify_tracked_blob(cache_path: &Path, relative: &Path) -> OperationResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 3,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::operations::battery::install::unique_install_tmp_file",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "fn unique_install_tmp_file(target: &Path) -> OperationResult<(PathBuf, File)>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::unique_install_tmp_file",
-      "kind": "function",
-      "line": 512,
-      "name": "unique_install_tmp_file",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 5,
-        "kind": "function",
-        "line": 512,
-        "name": "unique_install_tmp_file"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "fn unique_install_tmp_file(target: &Path) -> OperationResult<(PathBuf, File)>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let parent = target.parent().ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>",
-      "kind": "closure",
-      "line": 513,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 513,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let parent = target.parent().ok_or_else(|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>@521#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": ".and_then(|name| name.to_str())",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::unique_install_tmp_file::<closure>@521#2",
-      "kind": "closure",
-      "line": 521,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 521,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": ".and_then(|name| name.to_str())",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 9,
-      "cyclomatic": 8,
-      "derived": {
-        "identity": "crate::operations::battery::install::backup_existing_target",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "fn backup_existing_target(target: &Path) -> OperationResult<PathBuf>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::backup_existing_target",
-      "kind": "function",
-      "line": 551,
-      "name": "backup_existing_target",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 9,
-        "cyclomatic": 8,
-        "kind": "function",
-        "line": 551,
-        "name": "backup_existing_target"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "fn backup_existing_target(target: &Path) -> OperationResult<PathBuf>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::install::backup_existing_target::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/install.rs",
-        "signature": "let parent = target.parent().ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::install::backup_existing_target::<closure>",
-      "kind": "closure",
-      "line": 552,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 552,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/install.rs",
-      "signature": "let parent = target.parent().ok_or_else(|| {",
       "source_class": "handwritten"
     },
     {
@@ -78782,6 +79042,292 @@
       },
       "path": "src/operations/battery/tests/install.rs",
       "signature": "fn install_request_keeps_force_explicit()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::install_battery_script_refuses_overwrite_without_force_and_writes_provenance",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn install_battery_script_refuses_overwrite_without_force_and_writes_provenance()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::install_battery_script_refuses_overwrite_without_force_and_writes_provenance",
+      "kind": "function",
+      "line": 16,
+      "name": "install_battery_script_refuses_overwrite_without_force_and_writes_provenance",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 16,
+        "name": "install_battery_script_refuses_overwrite_without_force_and_writes_provenance"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn install_battery_script_refuses_overwrite_without_force_and_writes_provenance()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::install_keeps_the_source_execute_bits_and_owner_only_write",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn install_keeps_the_source_execute_bits_and_owner_only_write()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::install_keeps_the_source_execute_bits_and_owner_only_write",
+      "kind": "function",
+      "line": 47,
+      "name": "install_keeps_the_source_execute_bits_and_owner_only_write",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 47,
+        "name": "install_keeps_the_source_execute_bits_and_owner_only_write"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn install_keeps_the_source_execute_bits_and_owner_only_write()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::provenance_paths_do_not_collide_for_sanitized_script_ids",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn provenance_paths_do_not_collide_for_sanitized_script_ids()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::provenance_paths_do_not_collide_for_sanitized_script_ids",
+      "kind": "function",
+      "line": 87,
+      "name": "provenance_paths_do_not_collide_for_sanitized_script_ids",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 87,
+        "name": "provenance_paths_do_not_collide_for_sanitized_script_ids"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn provenance_paths_do_not_collide_for_sanitized_script_ids()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::install_battery_script_does_not_clobber_existing_predictable_temp_sibling",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn install_battery_script_does_not_clobber_existing_predictable_temp_sibling()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::install_battery_script_does_not_clobber_existing_predictable_temp_sibling",
+      "kind": "function",
+      "line": 97,
+      "name": "install_battery_script_does_not_clobber_existing_predictable_temp_sibling",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 97,
+        "name": "install_battery_script_does_not_clobber_existing_predictable_temp_sibling"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn install_battery_script_does_not_clobber_existing_predictable_temp_sibling()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::install_rejects_symlinked_parent_directory",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn install_rejects_symlinked_parent_directory()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::install_rejects_symlinked_parent_directory",
+      "kind": "function",
+      "line": 120,
+      "name": "install_rejects_symlinked_parent_directory",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 120,
+        "name": "install_rejects_symlinked_parent_directory"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn install_rejects_symlinked_parent_directory()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::verified_install_rejects_symlinked_parent_before_writing",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn verified_install_rejects_symlinked_parent_before_writing()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::verified_install_rejects_symlinked_parent_before_writing",
+      "kind": "function",
+      "line": 145,
+      "name": "verified_install_rejects_symlinked_parent_before_writing",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 145,
+        "name": "verified_install_rejects_symlinked_parent_before_writing"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn verified_install_rejects_symlinked_parent_before_writing()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::installed_root_symlink_is_rejected_before_installing_script",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn installed_root_symlink_is_rejected_before_installing_script()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::installed_root_symlink_is_rejected_before_installing_script",
+      "kind": "function",
+      "line": 163,
+      "name": "installed_root_symlink_is_rejected_before_installing_script",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 163,
+        "name": "installed_root_symlink_is_rejected_before_installing_script"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn installed_root_symlink_is_rejected_before_installing_script()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::install_rolls_back_script_when_provenance_write_fails",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn install_rolls_back_script_when_provenance_write_fails()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::install_rolls_back_script_when_provenance_write_fails",
+      "kind": "function",
+      "line": 191,
+      "name": "install_rolls_back_script_when_provenance_write_fails",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 191,
+        "name": "install_rolls_back_script_when_provenance_write_fails"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn install_rolls_back_script_when_provenance_write_fails()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::force_install_restores_existing_script_when_provenance_write_fails",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn force_install_restores_existing_script_when_provenance_write_fails()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::force_install_restores_existing_script_when_provenance_write_fails",
+      "kind": "function",
+      "line": 218,
+      "name": "force_install_restores_existing_script_when_provenance_write_fails",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 218,
+        "name": "force_install_restores_existing_script_when_provenance_write_fails"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn force_install_restores_existing_script_when_provenance_write_fails()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::force_install_does_not_clobber_existing_backup_sibling",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn force_install_does_not_clobber_existing_backup_sibling()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::force_install_does_not_clobber_existing_backup_sibling",
+      "kind": "function",
+      "line": 248,
+      "name": "force_install_does_not_clobber_existing_backup_sibling",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 248,
+        "name": "force_install_does_not_clobber_existing_backup_sibling"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn force_install_does_not_clobber_existing_backup_sibling()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::tests::install::install_battery_script_force_overwrites_existing_target",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/tests/install.rs",
+        "signature": "fn install_battery_script_force_overwrites_existing_target()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::tests::install::install_battery_script_force_overwrites_existing_target",
+      "kind": "function",
+      "line": 276,
+      "name": "install_battery_script_force_overwrites_existing_target",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 276,
+        "name": "install_battery_script_force_overwrites_existing_target"
+      },
+      "path": "src/operations/battery/tests/install.rs",
+      "signature": "fn install_battery_script_force_overwrites_existing_target()",
       "source_class": "handwritten"
     },
     {
@@ -80446,240 +80992,6 @@
       },
       "path": "src/operations/battery/tests/registry.rs",
       "signature": "fn registry_write_rejects_symlinked_omakure_parent()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::install_battery_script_refuses_overwrite_without_force_and_writes_provenance",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn install_battery_script_refuses_overwrite_without_force_and_writes_provenance()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::install_battery_script_refuses_overwrite_without_force_and_writes_provenance",
-      "kind": "function",
-      "line": 16,
-      "name": "install_battery_script_refuses_overwrite_without_force_and_writes_provenance",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 16,
-        "name": "install_battery_script_refuses_overwrite_without_force_and_writes_provenance"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn install_battery_script_refuses_overwrite_without_force_and_writes_provenance()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::provenance_paths_do_not_collide_for_sanitized_script_ids",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn provenance_paths_do_not_collide_for_sanitized_script_ids()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::provenance_paths_do_not_collide_for_sanitized_script_ids",
-      "kind": "function",
-      "line": 87,
-      "name": "provenance_paths_do_not_collide_for_sanitized_script_ids",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 87,
-        "name": "provenance_paths_do_not_collide_for_sanitized_script_ids"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn provenance_paths_do_not_collide_for_sanitized_script_ids()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::install_battery_script_does_not_clobber_existing_predictable_temp_sibling",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn install_battery_script_does_not_clobber_existing_predictable_temp_sibling()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::install_battery_script_does_not_clobber_existing_predictable_temp_sibling",
-      "kind": "function",
-      "line": 97,
-      "name": "install_battery_script_does_not_clobber_existing_predictable_temp_sibling",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 97,
-        "name": "install_battery_script_does_not_clobber_existing_predictable_temp_sibling"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn install_battery_script_does_not_clobber_existing_predictable_temp_sibling()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::install_rejects_symlinked_parent_directory",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn install_rejects_symlinked_parent_directory()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::install_rejects_symlinked_parent_directory",
-      "kind": "function",
-      "line": 120,
-      "name": "install_rejects_symlinked_parent_directory",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 120,
-        "name": "install_rejects_symlinked_parent_directory"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn install_rejects_symlinked_parent_directory()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::installed_root_symlink_is_rejected_before_installing_script",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn installed_root_symlink_is_rejected_before_installing_script()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::installed_root_symlink_is_rejected_before_installing_script",
-      "kind": "function",
-      "line": 145,
-      "name": "installed_root_symlink_is_rejected_before_installing_script",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 145,
-        "name": "installed_root_symlink_is_rejected_before_installing_script"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn installed_root_symlink_is_rejected_before_installing_script()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::install_rolls_back_script_when_provenance_write_fails",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn install_rolls_back_script_when_provenance_write_fails()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::install_rolls_back_script_when_provenance_write_fails",
-      "kind": "function",
-      "line": 173,
-      "name": "install_rolls_back_script_when_provenance_write_fails",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 173,
-        "name": "install_rolls_back_script_when_provenance_write_fails"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn install_rolls_back_script_when_provenance_write_fails()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::force_install_restores_existing_script_when_provenance_write_fails",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn force_install_restores_existing_script_when_provenance_write_fails()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::force_install_restores_existing_script_when_provenance_write_fails",
-      "kind": "function",
-      "line": 200,
-      "name": "force_install_restores_existing_script_when_provenance_write_fails",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 200,
-        "name": "force_install_restores_existing_script_when_provenance_write_fails"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn force_install_restores_existing_script_when_provenance_write_fails()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::force_install_does_not_clobber_existing_backup_sibling",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn force_install_does_not_clobber_existing_backup_sibling()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::force_install_does_not_clobber_existing_backup_sibling",
-      "kind": "function",
-      "line": 230,
-      "name": "force_install_does_not_clobber_existing_backup_sibling",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 230,
-        "name": "force_install_does_not_clobber_existing_backup_sibling"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn force_install_does_not_clobber_existing_backup_sibling()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::tests::install::install_battery_script_force_overwrites_existing_target",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/tests/install.rs",
-        "signature": "fn install_battery_script_force_overwrites_existing_target()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::tests::install::install_battery_script_force_overwrites_existing_target",
-      "kind": "function",
-      "line": 258,
-      "name": "install_battery_script_force_overwrites_existing_target",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 258,
-        "name": "install_battery_script_force_overwrites_existing_target"
-      },
-      "path": "src/operations/battery/tests/install.rs",
-      "signature": "fn install_battery_script_force_overwrites_existing_target()",
       "source_class": "handwritten"
     },
     {

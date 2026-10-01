@@ -142,6 +142,24 @@ fn install_rejects_symlinked_parent_directory() {
 
 #[cfg(unix)]
 #[test]
+fn verified_install_rejects_symlinked_parent_before_writing() {
+    use std::os::unix::fs::symlink;
+
+    let dir = TempDir::new().unwrap();
+    let ws = workspace_in(&dir);
+    let outside = dir.path().join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    symlink(&outside, ws.scripts_root().join("scripts")).unwrap();
+
+    let error = install_verified_script(&ws, Path::new("scripts/list.sh"), b"echo safe\n", 0o755)
+        .err()
+        .expect("a symlinked install parent must fail");
+    assert_eq!(error.code, OperationErrorCode::UnsafePath);
+    assert!(!outside.join("list.sh").exists());
+}
+
+#[cfg(unix)]
+#[test]
 fn installed_root_symlink_is_rejected_before_installing_script() {
     use std::os::unix::fs::symlink;
 

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "359d4c185f8b82c32058034f6e33c2c81b1f047d2d27a7fee669212ca90ab2ab",
+  "canonical_sha256": "61d9a5278f6342f0c1f92a1841b68abd2b26545edde5b4b363ba09e1f45ae2b7",
   "config_identity": "no-config",
   "files": [
     {
@@ -4110,12 +4110,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 7,
+        "invocations": 14,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 8,
-        "cyclomatic": 18
+        "cognitive": 4,
+        "cyclomatic": 13
       },
       "path": "src/operations/search.rs",
       "source_class": "handwritten"
@@ -4628,12 +4628,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 66,
+        "invocations": 65,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 28,
-        "cyclomatic": 87
+        "cognitive": 24,
+        "cyclomatic": 75
       },
       "path": "src/search_index.rs",
       "source_class": "handwritten"
@@ -88729,8 +88729,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 2,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::operations::search::search_scripts",
         "macro_expansion": "not_measured",
@@ -88740,14 +88740,14 @@
       },
       "identity": "crate::operations::search::search_scripts",
       "kind": "function",
-      "line": 17,
+      "line": 15,
       "name": "search_scripts",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 17,
+        "line": 15,
         "name": "search_scripts"
       },
       "path": "src/operations/search.rs",
@@ -88761,49 +88761,75 @@
         "identity": "crate::operations::search::search_scripts::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/search.rs",
-        "signature": ".map_err(|err| OperationError::new(OperationErrorCode::IoFailed, err))?;",
+        "signature": ".map(|result| to_summary(result, workspace.scripts_root()))",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::search::search_scripts::<closure>",
       "kind": "closure",
-      "line": 31,
+      "line": 28,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 31,
+        "line": 28,
         "name": "<closure>"
       },
       "path": "src/operations/search.rs",
-      "signature": ".map_err(|err| OperationError::new(OperationErrorCode::IoFailed, err))?;",
+      "signature": ".map(|result| to_summary(result, workspace.scripts_root()))",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::search::search_scripts::<closure>@35#2",
+        "identity": "crate::operations::search::search_scripts::<closure>@29#2",
         "macro_expansion": "not_measured",
         "path": "src/operations/search.rs",
-        "signature": ".map(|result| to_summary(result, workspace.scripts_root()))",
+        "signature": ".filter(|entry| super::core::matches_all_tags(entry, &request.tags))",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::search::search_scripts::<closure>@35#2",
+      "identity": "crate::operations::search::search_scripts::<closure>@29#2",
       "kind": "closure",
-      "line": 35,
+      "line": 29,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 35,
+        "line": 29,
         "name": "<closure>"
       },
       "path": "src/operations/search.rs",
-      "signature": ".map(|result| to_summary(result, workspace.scripts_root()))",
+      "signature": ".filter(|entry| super::core::matches_all_tags(entry, &request.tags))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::search::map_search_index_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/search.rs",
+        "signature": "fn map_search_index_error(error: SearchIndexError) -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::search::map_search_index_error",
+      "kind": "function",
+      "line": 33,
+      "name": "map_search_index_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 33,
+        "name": "map_search_index_error"
+      },
+      "path": "src/operations/search.rs",
+      "signature": "fn map_search_index_error(error: SearchIndexError) -> OperationError",
       "source_class": "handwritten"
     },
     {
@@ -88818,14 +88844,14 @@
       },
       "identity": "crate::operations::search::to_summary",
       "kind": "function",
-      "line": 40,
+      "line": 37,
       "name": "to_summary",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 40,
+        "line": 37,
         "name": "to_summary"
       },
       "path": "src/operations/search.rs",
@@ -88844,18 +88870,70 @@
       },
       "identity": "crate::operations::search::write_script",
       "kind": "function",
-      "line": 86,
+      "line": 65,
       "name": "write_script",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 86,
+        "line": 65,
         "name": "write_script"
       },
       "path": "src/operations/search.rs",
       "signature": "fn write_script(dir: &std::path::Path, name: &str, tags: &[&str])",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::search::search_index_error_maps_to_existing_operation_code_and_message",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/search.rs",
+        "signature": "fn search_index_error_maps_to_existing_operation_code_and_message()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::search::search_index_error_maps_to_existing_operation_code_and_message",
+      "kind": "function",
+      "line": 87,
+      "name": "search_index_error_maps_to_existing_operation_code_and_message",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 87,
+        "name": "search_index_error_maps_to_existing_operation_code_and_message"
+      },
+      "path": "src/operations/search.rs",
+      "signature": "fn search_index_error_maps_to_existing_operation_code_and_message()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::search::root_relative_index_paths_are_resolved_against_scripts_root",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/search.rs",
+        "signature": "fn root_relative_index_paths_are_resolved_against_scripts_root()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::search::root_relative_index_paths_are_resolved_against_scripts_root",
+      "kind": "function",
+      "line": 96,
+      "name": "root_relative_index_paths_are_resolved_against_scripts_root",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 96,
+        "name": "root_relative_index_paths_are_resolved_against_scripts_root"
+      },
+      "path": "src/operations/search.rs",
+      "signature": "fn root_relative_index_paths_are_resolved_against_scripts_root()",
       "source_class": "handwritten"
     },
     {
@@ -88870,18 +88948,44 @@
       },
       "identity": "crate::operations::search::search_scripts_refreshes_index_and_filters_tags",
       "kind": "function",
-      "line": 108,
+      "line": 130,
       "name": "search_scripts_refreshes_index_and_filters_tags",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 108,
+        "line": 130,
         "name": "search_scripts_refreshes_index_and_filters_tags"
       },
       "path": "src/operations/search.rs",
       "signature": "fn search_scripts_refreshes_index_and_filters_tags()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::search::search_scripts_field_count_matches_indexed_schema_fields",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/search.rs",
+        "signature": "fn search_scripts_field_count_matches_indexed_schema_fields()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::search::search_scripts_field_count_matches_indexed_schema_fields",
+      "kind": "function",
+      "line": 150,
+      "name": "search_scripts_field_count_matches_indexed_schema_fields",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 150,
+        "name": "search_scripts_field_count_matches_indexed_schema_fields"
+      },
+      "path": "src/operations/search.rs",
+      "signature": "fn search_scripts_field_count_matches_indexed_schema_fields()",
       "source_class": "handwritten"
     },
     {
@@ -88896,14 +89000,14 @@
       },
       "identity": "crate::operations::search::search_scripts_empty_query_returns_indexed_scripts",
       "kind": "function",
-      "line": 129,
+      "line": 177,
       "name": "search_scripts_empty_query_returns_indexed_scripts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 129,
+        "line": 177,
         "name": "search_scripts_empty_query_returns_indexed_scripts"
       },
       "path": "src/operations/search.rs",
@@ -100871,7 +100975,7 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 2,
+      "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
         "identity": "crate::search_index::new",
@@ -100882,14 +100986,14 @@
       },
       "identity": "crate::search_index::new",
       "kind": "method",
-      "line": 52,
+      "line": 51,
       "name": "new",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 2,
+        "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 52,
+        "line": 51,
         "name": "new"
       },
       "path": "src/search_index.rs",
@@ -100897,77 +101001,207 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 7,
-      "cyclomatic": 5,
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::search",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "pub fn search(&self, root: &Path, query: &str) -> Result<Vec<SearchResult>, SearchIndexError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::search",
+      "kind": "method",
+      "line": 56,
+      "name": "search",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 56,
+        "name": "search"
+      },
+      "path": "src/search_index.rs",
+      "signature": "pub fn search(&self, root: &Path, query: &str) -> Result<Vec<SearchResult>, SearchIndexError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::search::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::search::<closure>",
+      "kind": "closure",
+      "line": 59,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 59,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::search::<closure>@65#2",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::search::<closure>@65#2",
+      "kind": "closure",
+      "line": 65,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 65,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::search::<closure>@72#3",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "tx.commit().map_err(|err| SearchIndexError::Sqlite {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::search::<closure>@72#3",
+      "kind": "closure",
+      "line": 72,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 72,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": "tx.commit().map_err(|err| SearchIndexError::Sqlite {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::search_index::query",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": "pub fn query(&self, query: &str) -> Result<Vec<SearchResult>, String>",
+        "signature": "pub fn query(&self, query: &str) -> Result<Vec<SearchResult>, SearchIndexError>",
         "source_class": "handwritten"
       },
       "identity": "crate::search_index::query",
       "kind": "method",
-      "line": 97,
+      "line": 80,
       "name": "query",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 80,
+        "name": "query"
+      },
+      "path": "src/search_index.rs",
+      "signature": "pub fn query(&self, query: &str) -> Result<Vec<SearchResult>, SearchIndexError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::search_index::query_connection",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "fn query_connection( conn: &Connection, query: &str, ) -> Result<Vec<SearchResult>, SearchIndexError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::query_connection",
+      "kind": "method",
+      "line": 86,
+      "name": "query_connection",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 97,
-        "name": "query"
+        "line": 86,
+        "name": "query_connection"
       },
       "path": "src/search_index.rs",
-      "signature": "pub fn query(&self, query: &str) -> Result<Vec<SearchResult>, String>",
+      "signature": "fn query_connection( conn: &Connection, query: &str, ) -> Result<Vec<SearchResult>, SearchIndexError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::query::<closure>",
+        "identity": "crate::search_index::query_connection::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"Search prepare failed: {}\", err))?;",
+        "signature": "let mut stmt = conn.prepare(&sql).map_err(|err| SearchIndexError::Sqlite {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::query::<closure>",
+      "identity": "crate::search_index::query_connection::<closure>",
       "kind": "closure",
-      "line": 119,
+      "line": 107,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 119,
+        "line": 107,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"Search prepare failed: {}\", err))?;",
+      "signature": "let mut stmt = conn.prepare(&sql).map_err(|err| SearchIndexError::Sqlite {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::query::<closure>@123#2",
+        "identity": "crate::search_index::query_connection::<closure>@114#2",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
         "signature": ".map(|token| format!(\"%{}%\", escape_like(token)))",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::query::<closure>@123#2",
+      "identity": "crate::search_index::query_connection::<closure>@114#2",
       "kind": "closure",
-      "line": 123,
+      "line": 114,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 123,
+        "line": 114,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -100978,22 +101212,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::query::<closure>@126#3",
+        "identity": "crate::search_index::query_connection::<closure>@117#3",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
         "signature": ".query_map(params_from_iter(params), |row| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::query::<closure>@126#3",
+      "identity": "crate::search_index::query_connection::<closure>@117#3",
       "kind": "closure",
-      "line": 126,
+      "line": 117,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 126,
+        "line": 117,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101004,13 +101238,39 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::query::<closure>@140#4",
+        "identity": "crate::search_index::query_connection::<closure>@133#4",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"Search query failed: {}\", err))?;",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::query::<closure>@140#4",
+      "identity": "crate::search_index::query_connection::<closure>@133#4",
+      "kind": "closure",
+      "line": 133,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 133,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::query_connection::<closure>@140#5",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "results.push(row.map_err(|err| SearchIndexError::Sqlite {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::query_connection::<closure>@140#5",
       "kind": "closure",
       "line": 140,
       "name": "<closure>",
@@ -101023,33 +101283,33 @@
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"Search query failed: {}\", err))?;",
+      "signature": "results.push(row.map_err(|err| SearchIndexError::Sqlite {",
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
+      "cognitive": 8,
+      "cyclomatic": 6,
       "derived": {
-        "identity": "crate::search_index::query::<closure>@144#5",
+        "identity": "crate::search_index::rebuild_index",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": "results.push(row.map_err(|err| format!(\"Search row failed: {}\", err))?);",
+        "signature": "fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), SearchIndexError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::query::<closure>@144#5",
-      "kind": "closure",
-      "line": 144,
-      "name": "<closure>",
+      "identity": "crate::search_index::rebuild_index",
+      "kind": "function",
+      "line": 149,
+      "name": "rebuild_index",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 144,
-        "name": "<closure>"
+        "cognitive": 8,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 149,
+        "name": "rebuild_index"
       },
       "path": "src/search_index.rs",
-      "signature": "results.push(row.map_err(|err| format!(\"Search row failed: {}\", err))?);",
+      "signature": "fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), SearchIndexError>",
       "source_class": "handwritten"
     },
     {
@@ -101059,97 +101319,123 @@
         "identity": "crate::search_index::rebuild_index::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"List scripts failed: {}\", err))?;",
+        "signature": ".map_err(|error| SearchIndexError::Filesystem {",
         "source_class": "handwritten"
       },
       "identity": "crate::search_index::rebuild_index::<closure>",
       "kind": "closure",
-      "line": 216,
+      "line": 152,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 216,
+        "line": 152,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"List scripts failed: {}\", err))?;",
+      "signature": ".map_err(|error| SearchIndexError::Filesystem {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::rebuild_index::<closure>@227#4",
+        "identity": "crate::search_index::rebuild_index::<closure>@159#2",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"Clear fields failed: {}\", err))?;",
+        "signature": ".map_err(|err| SearchIndexError::Filesystem {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::rebuild_index::<closure>@227#4",
+      "identity": "crate::search_index::rebuild_index::<closure>@159#2",
       "kind": "closure",
-      "line": 227,
+      "line": 159,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 227,
+        "line": 159,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"Clear fields failed: {}\", err))?;",
+      "signature": ".map_err(|err| SearchIndexError::Filesystem {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::rebuild_index::<closure>@229#5",
+        "identity": "crate::search_index::rebuild_index::<closure>@165#3",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"Clear scripts failed: {}\", err))?;",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::rebuild_index::<closure>@229#5",
+      "identity": "crate::search_index::rebuild_index::<closure>@165#3",
       "kind": "closure",
-      "line": 229,
+      "line": 165,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 229,
+        "line": 165,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"Clear scripts failed: {}\", err))?;",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::rebuild_index::<closure>@236#6",
+        "identity": "crate::search_index::rebuild_index::<closure>@170#4",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::rebuild_index::<closure>@170#4",
+      "kind": "closure",
+      "line": 170,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 170,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::rebuild_index::<closure>@179#5",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
         "signature": ".and_then(|name| name.to_str())",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::rebuild_index::<closure>@236#6",
+      "identity": "crate::search_index::rebuild_index::<closure>@179#5",
       "kind": "closure",
-      "line": 236,
+      "line": 179,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 236,
+        "line": 179,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101160,22 +101446,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::rebuild_index::<closure>@253#7",
+        "identity": "crate::search_index::rebuild_index::<closure>@196#6",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
         "signature": ".map(|field| SearchField {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::rebuild_index::<closure>@253#7",
+      "identity": "crate::search_index::rebuild_index::<closure>@196#6",
       "kind": "closure",
-      "line": 253,
+      "line": 196,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 253,
+        "line": 196,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101186,78 +101472,78 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::rebuild_index::<closure>@295#8",
+        "identity": "crate::search_index::rebuild_index::<closure>@238#7",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"Insert script failed: {}\", err))?;",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::rebuild_index::<closure>@295#8",
+      "identity": "crate::search_index::rebuild_index::<closure>@238#7",
       "kind": "closure",
-      "line": 295,
+      "line": 238,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 295,
+        "line": 238,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"Insert script failed: {}\", err))?;",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::rebuild_index::<closure>@311#9",
+        "identity": "crate::search_index::rebuild_index::<closure>@257#8",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"Insert field failed: {}\", err))?;",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::rebuild_index::<closure>@311#9",
+      "identity": "crate::search_index::rebuild_index::<closure>@257#8",
       "kind": "closure",
-      "line": 311,
+      "line": 257,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 311,
+        "line": 257,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"Insert field failed: {}\", err))?;",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 2,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::search_index::open_connection",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": "fn open_connection(db_path: &Path) -> Result<Connection, String>",
+        "signature": "fn open_connection(db_path: &Path) -> Result<Connection, SearchIndexError>",
         "source_class": "handwritten"
       },
       "identity": "crate::search_index::open_connection",
       "kind": "function",
-      "line": 320,
+      "line": 273,
       "name": "open_connection",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 320,
+        "line": 273,
         "name": "open_connection"
       },
       "path": "src/search_index.rs",
-      "signature": "fn open_connection(db_path: &Path) -> Result<Connection, String>",
+      "signature": "fn open_connection(db_path: &Path) -> Result<Connection, SearchIndexError>",
       "source_class": "handwritten"
     },
     {
@@ -101267,23 +101553,23 @@
         "identity": "crate::search_index::init_db",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": "fn init_db(conn: &Connection) -> Result<(), String>",
+        "signature": "fn init_db(conn: &Connection) -> Result<(), SearchIndexError>",
         "source_class": "handwritten"
       },
       "identity": "crate::search_index::init_db",
       "kind": "function",
-      "line": 335,
+      "line": 278,
       "name": "init_db",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 335,
+        "line": 278,
         "name": "init_db"
       },
       "path": "src/search_index.rs",
-      "signature": "fn init_db(conn: &Connection) -> Result<(), String>",
+      "signature": "fn init_db(conn: &Connection) -> Result<(), SearchIndexError>",
       "source_class": "handwritten"
     },
     {
@@ -101293,23 +101579,23 @@
         "identity": "crate::search_index::init_db::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
-        "signature": ".map_err(|err| format!(\"Init search db failed: {}\", err))",
+        "signature": ".map_err(|err| SearchIndexError::Sqlite {",
         "source_class": "handwritten"
       },
       "identity": "crate::search_index::init_db::<closure>",
       "kind": "closure",
-      "line": 358,
+      "line": 301,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 358,
+        "line": 301,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
-      "signature": ".map_err(|err| format!(\"Init search db failed: {}\", err))",
+      "signature": ".map_err(|err| SearchIndexError::Sqlite {",
       "source_class": "handwritten"
     },
     {
@@ -101324,14 +101610,14 @@
       },
       "identity": "crate::search_index::build_search_blob",
       "kind": "function",
-      "line": 361,
+      "line": 307,
       "name": "build_search_blob",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 361,
+        "line": 307,
         "name": "build_search_blob"
       },
       "path": "src/search_index.rs",
@@ -101350,14 +101636,14 @@
       },
       "identity": "crate::search_index::split_query",
       "kind": "function",
-      "line": 387,
+      "line": 333,
       "name": "split_query",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 387,
+        "line": 333,
         "name": "split_query"
       },
       "path": "src/search_index.rs",
@@ -101376,14 +101662,14 @@
       },
       "identity": "crate::search_index::split_query::<closure>",
       "kind": "closure",
-      "line": 390,
+      "line": 336,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 390,
+        "line": 336,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101394,22 +101680,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::split_query::<closure>@391#2",
+        "identity": "crate::search_index::split_query::<closure>@337#2",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
         "signature": ".map(|token| token.to_lowercase())",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::split_query::<closure>@391#2",
+      "identity": "crate::search_index::split_query::<closure>@337#2",
       "kind": "closure",
-      "line": 391,
+      "line": 337,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 391,
+        "line": 337,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101428,14 +101714,14 @@
       },
       "identity": "crate::search_index::escape_like",
       "kind": "function",
-      "line": 395,
+      "line": 341,
       "name": "escape_like",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 395,
+        "line": 341,
         "name": "escape_like"
       },
       "path": "src/search_index.rs",
@@ -101454,14 +101740,14 @@
       },
       "identity": "crate::search_index::parse_tags",
       "kind": "function",
-      "line": 402,
+      "line": 348,
       "name": "parse_tags",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 402,
+        "line": 348,
         "name": "parse_tags"
       },
       "path": "src/search_index.rs",
@@ -101480,14 +101766,14 @@
       },
       "identity": "crate::search_index::parse_tags::<closure>",
       "kind": "closure",
-      "line": 408,
+      "line": 354,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 408,
+        "line": 354,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101498,22 +101784,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::parse_tags::<closure>@409#2",
+        "identity": "crate::search_index::parse_tags::<closure>@355#2",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
         "signature": ".filter(|tag| !tag.is_empty())",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::parse_tags::<closure>@409#2",
+      "identity": "crate::search_index::parse_tags::<closure>@355#2",
       "kind": "closure",
-      "line": 409,
+      "line": 355,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 409,
+        "line": 355,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101524,22 +101810,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::search_index::parse_tags::<closure>@410#3",
+        "identity": "crate::search_index::parse_tags::<closure>@356#3",
         "macro_expansion": "not_measured",
         "path": "src/search_index.rs",
         "signature": ".map(|tag| tag.to_string())",
         "source_class": "handwritten"
       },
-      "identity": "crate::search_index::parse_tags::<closure>@410#3",
+      "identity": "crate::search_index::parse_tags::<closure>@356#3",
       "kind": "closure",
-      "line": 410,
+      "line": 356,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 410,
+        "line": 356,
         "name": "<closure>"
       },
       "path": "src/search_index.rs",
@@ -101558,14 +101844,14 @@
       },
       "identity": "crate::search_index::test_build_search_blob_basic",
       "kind": "function",
-      "line": 440,
+      "line": 371,
       "name": "test_build_search_blob_basic",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 440,
+        "line": 371,
         "name": "test_build_search_blob_basic"
       },
       "path": "src/search_index.rs",
@@ -101584,14 +101870,14 @@
       },
       "identity": "crate::search_index::test_build_search_blob_no_description",
       "kind": "function",
-      "line": 446,
+      "line": 377,
       "name": "test_build_search_blob_no_description",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 446,
+        "line": 377,
         "name": "test_build_search_blob_no_description"
       },
       "path": "src/search_index.rs",
@@ -101610,14 +101896,14 @@
       },
       "identity": "crate::search_index::test_build_search_blob_with_tags_and_fields",
       "kind": "function",
-      "line": 452,
+      "line": 383,
       "name": "test_build_search_blob_with_tags_and_fields",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 452,
+        "line": 383,
         "name": "test_build_search_blob_with_tags_and_fields"
       },
       "path": "src/search_index.rs",
@@ -101636,14 +101922,14 @@
       },
       "identity": "crate::search_index::test_split_query",
       "kind": "function",
-      "line": 473,
+      "line": 404,
       "name": "test_split_query",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 473,
+        "line": 404,
         "name": "test_split_query"
       },
       "path": "src/search_index.rs",
@@ -101662,14 +101948,14 @@
       },
       "identity": "crate::search_index::test_escape_like",
       "kind": "function",
-      "line": 484,
+      "line": 415,
       "name": "test_escape_like",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 484,
+        "line": 415,
         "name": "test_escape_like"
       },
       "path": "src/search_index.rs",
@@ -101688,14 +101974,14 @@
       },
       "identity": "crate::search_index::test_parse_tags_csv",
       "kind": "function",
-      "line": 489,
+      "line": 420,
       "name": "test_parse_tags_csv",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 489,
+        "line": 420,
         "name": "test_parse_tags_csv"
       },
       "path": "src/search_index.rs",
@@ -101714,14 +102000,14 @@
       },
       "identity": "crate::search_index::test_parse_tags_single",
       "kind": "function",
-      "line": 494,
+      "line": 425,
       "name": "test_parse_tags_single",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 494,
+        "line": 425,
         "name": "test_parse_tags_single"
       },
       "path": "src/search_index.rs",
@@ -101740,14 +102026,14 @@
       },
       "identity": "crate::search_index::test_parse_tags_trimmed",
       "kind": "function",
-      "line": 499,
+      "line": 430,
       "name": "test_parse_tags_trimmed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 499,
+        "line": 430,
         "name": "test_parse_tags_trimmed"
       },
       "path": "src/search_index.rs",
@@ -101766,14 +102052,14 @@
       },
       "identity": "crate::search_index::test_parse_tags_none",
       "kind": "function",
-      "line": 507,
+      "line": 438,
       "name": "test_parse_tags_none",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 507,
+        "line": 438,
         "name": "test_parse_tags_none"
       },
       "path": "src/search_index.rs",
@@ -101792,18 +102078,304 @@
       },
       "identity": "crate::search_index::test_parse_tags_empty_string",
       "kind": "function",
-      "line": 513,
+      "line": 444,
       "name": "test_parse_tags_empty_string",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 513,
+        "line": 444,
         "name": "test_parse_tags_empty_string"
       },
       "path": "src/search_index.rs",
       "signature": "fn test_parse_tags_empty_string()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::invalid_database_parent_has_typed_open_error",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "fn invalid_database_parent_has_typed_open_error()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::invalid_database_parent_has_typed_open_error",
+      "kind": "function",
+      "line": 452,
+      "name": "invalid_database_parent_has_typed_open_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 452,
+        "name": "invalid_database_parent_has_typed_open_error"
+      },
+      "path": "src/search_index.rs",
+      "signature": "fn invalid_database_parent_has_typed_open_error()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::missing_search_root_has_typed_filesystem_error",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "fn missing_search_root_has_typed_filesystem_error()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::missing_search_root_has_typed_filesystem_error",
+      "kind": "function",
+      "line": 465,
+      "name": "missing_search_root_has_typed_filesystem_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 465,
+        "name": "missing_search_root_has_typed_filesystem_error"
+      },
+      "path": "src/search_index.rs",
+      "signature": "fn missing_search_root_has_typed_filesystem_error()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::failed_refresh_rolls_back_and_does_not_return_stale_results",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "fn failed_refresh_rolls_back_and_does_not_return_stale_results()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::failed_refresh_rolls_back_and_does_not_return_stale_results",
+      "kind": "function",
+      "line": 483,
+      "name": "failed_refresh_rolls_back_and_does_not_return_stale_results",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 483,
+        "name": "failed_refresh_rolls_back_and_does_not_return_stale_results"
+      },
+      "path": "src/search_index.rs",
+      "signature": "fn failed_refresh_rolls_back_and_does_not_return_stale_results()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::commit_failure_does_not_return_uncommitted_results",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "fn commit_failure_does_not_return_uncommitted_results()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::commit_failure_does_not_return_uncommitted_results",
+      "kind": "function",
+      "line": 522,
+      "name": "commit_failure_does_not_return_uncommitted_results",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 522,
+        "name": "commit_failure_does_not_return_uncommitted_results"
+      },
+      "path": "src/search_index.rs",
+      "signature": "fn commit_failure_does_not_return_uncommitted_results()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::locked_index_returns_an_error_instead_of_cached_results",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "fn locked_index_returns_an_error_instead_of_cached_results()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::locked_index_returns_an_error_instead_of_cached_results",
+      "kind": "function",
+      "line": 559,
+      "name": "locked_index_returns_an_error_instead_of_cached_results",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 559,
+        "name": "locked_index_returns_an_error_instead_of_cached_results"
+      },
+      "path": "src/search_index.rs",
+      "signature": "fn locked_index_returns_an_error_instead_of_cached_results()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::search_index::concurrent_searches_return_complete_snapshots",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "fn concurrent_searches_return_complete_snapshots()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::concurrent_searches_return_complete_snapshots",
+      "kind": "function",
+      "line": 578,
+      "name": "concurrent_searches_return_complete_snapshots",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 578,
+        "name": "concurrent_searches_return_complete_snapshots"
+      },
+      "path": "src/search_index.rs",
+      "signature": "fn concurrent_searches_return_complete_snapshots()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "std::thread::scope(|scope| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>",
+      "kind": "closure",
+      "line": 589,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 4,
+        "kind": "closure",
+        "line": 589,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": "std::thread::scope(|scope| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": ".map(|_| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>",
+      "kind": "closure",
+      "line": 591,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 591,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": ".map(|_| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "scope.spawn(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>::<closure>",
+      "kind": "closure",
+      "line": 592,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 592,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": "scope.spawn(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": "index.search(&root, \"\").map(|results| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>::<closure>::<closure>",
+      "kind": "closure",
+      "line": 594,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 594,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": "index.search(&root, \"\").map(|results| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>::<closure>::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/search_index.rs",
+        "signature": ".map(|entry| entry.script_path)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::search_index::concurrent_searches_return_complete_snapshots::<closure>::<closure>::<closure>::<closure>::<closure>",
+      "kind": "closure",
+      "line": 597,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 597,
+        "name": "<closure>"
+      },
+      "path": "src/search_index.rs",
+      "signature": ".map(|entry| entry.script_path)",
       "source_class": "handwritten"
     },
     {
@@ -101818,14 +102390,14 @@
       },
       "identity": "crate::search_index::test_query_empty_index",
       "kind": "function",
-      "line": 521,
+      "line": 626,
       "name": "test_query_empty_index",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 521,
+        "line": 626,
         "name": "test_query_empty_index"
       },
       "path": "src/search_index.rs",
@@ -101844,14 +102416,14 @@
       },
       "identity": "crate::search_index::test_rebuild_and_query",
       "kind": "function",
-      "line": 530,
+      "line": 635,
       "name": "test_rebuild_and_query",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 530,
+        "line": 635,
         "name": "test_rebuild_and_query"
       },
       "path": "src/search_index.rs",
@@ -101870,14 +102442,14 @@
       },
       "identity": "crate::search_index::test_rebuild_honors_omakureignore",
       "kind": "function",
-      "line": 566,
+      "line": 672,
       "name": "test_rebuild_honors_omakureignore",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 566,
+        "line": 672,
         "name": "test_rebuild_honors_omakureignore"
       },
       "path": "src/search_index.rs",
@@ -101896,14 +102468,14 @@
       },
       "identity": "crate::search_index::test_query_with_multiple_tokens_uses_and",
       "kind": "function",
-      "line": 651,
+      "line": 705,
       "name": "test_query_with_multiple_tokens_uses_and",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 651,
+        "line": 705,
         "name": "test_query_with_multiple_tokens_uses_and"
       },
       "path": "src/search_index.rs",

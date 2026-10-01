@@ -1,5 +1,5 @@
 use crate::operations::core::ScriptSummary;
-use crate::search_index::{SearchIndex, SearchResult};
+use crate::search_index::{SearchIndex, SearchIndexError, SearchResult};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 
@@ -21,13 +21,17 @@ pub fn search_scripts(
     let index = SearchIndex::new(workspace.search_db_path());
     let results = index
         .search(workspace.scripts_root(), &request.query)
-        .map_err(|err| OperationError::new(OperationErrorCode::IoFailed, err))?;
+        .map_err(map_search_index_error)?;
 
     Ok(results
         .into_iter()
         .map(|result| to_summary(result, workspace.scripts_root()))
         .filter(|entry| super::core::matches_all_tags(entry, &request.tags))
         .collect())
+}
+
+fn map_search_index_error(error: SearchIndexError) -> OperationError {
+    OperationError::new(OperationErrorCode::IoFailed, error.to_string())
 }
 
 fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
@@ -77,6 +81,15 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn search_index_error_maps_to_existing_operation_code_and_message() {
+        let error = map_search_index_error(SearchIndexError::DatabaseOpen(
+            "Open search db failed: unavailable".to_string(),
+        ));
+        assert_eq!(error.code, OperationErrorCode::IoFailed);
+        assert_eq!(error.message, "Open search db failed: unavailable");
     }
 
     #[test]

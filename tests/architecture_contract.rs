@@ -481,8 +481,8 @@ fn production_architecture_boundaries_are_clean() {
 
     let scheduler = parse_contract(
         Rule::Executor,
-        "src/cli/serve.rs",
-        &fs::read_to_string(src.join("cli/serve.rs")).unwrap(),
+        "src/cli/serve/scheduler.rs",
+        &fs::read_to_string(src.join("cli/serve/scheduler.rs")).unwrap(),
     );
     assert!(scheduler
         .findings

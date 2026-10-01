@@ -228,7 +228,7 @@ src/
 - Schedules are declared in script schemas. `serve` scans every five seconds,
   prevents overlapping fires, and records scheduler provenance in SQLite.
 - Scheduler run-table reads are exposed by the tested `runs/` APIs
-  `last_scheduled_fire_ms` and `has_live_scheduled_run`; `src/cli/serve.rs`
+  `last_scheduled_fire_ms` and `has_live_scheduled_run`; `src/cli/serve/`
   only discovers schedules and enqueues due work.
 - `tests/architecture_contract.rs` parses handwritten Rust with the pinned
   `syn` development dependency and checks HTTP, domain, run-table SQL, and

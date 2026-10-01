@@ -299,7 +299,7 @@ fn terminal_runs(connection: &rusqlite::Connection, limit: usize) -> Vec<RunFact
 ///
 /// The contract permits the script *schema name* and nothing else. The shipped
 /// run log records `script_name` only for scheduler-enqueued runs
-/// (`src/cli/serve.rs`); a manual `omakure run`, a queue enqueue, and
+/// (`src/cli/serve/`); a manual `omakure run`, a queue enqueue, and
 /// `POST /v1/runs` all record `None`, which would leave the frozen field empty
 /// and make the whole run unrepresentable. The file stem - the very token
 /// `omakure init` derives a script's canonical id from - is the fallback. A stem is the script's name, not its location: the

@@ -22,8 +22,8 @@ must be updated in the same change.
 | FR-012 | Runs are stored in SQLite with state, actor, reason, args, output, timing, trigger, and schedule provenance. | `src/runs/` |
 | FR-013 | Queue producers add, cancel, dead-letter, and report jobs; workers claim jobs atomically, heartbeat leases, honor timeouts, and drain on signals. | `src/cli/queue/`, `src/runs/`, `src/run_executor/` |
 | FR-014 | History lists, shows, tails, aggregates, and filters runs; trace events can be written from a child and read incrementally. | `src/cli/history.rs`, `src/cli/trace.rs`, `src/runs/` |
-| FR-015 | Schema schedules accept supported cron forms, enqueue due runs every five seconds, skip overlap, and log lifecycle/errors. | `src/domain/schedule.rs`, `src/cli/serve.rs` |
-| FR-016 | Linux systemd user lifecycle operations install, uninstall, and report the per-workspace scheduler service. | `src/cli/serve_autostart.rs`, `src/cli/serve.rs` |
+| FR-015 | Schema schedules accept supported cron forms, enqueue due runs every five seconds, skip overlap, and log lifecycle/errors. | `src/domain/schedule.rs`, `src/cli/serve/` |
+| FR-016 | Linux systemd user lifecycle operations install, uninstall, and report the per-workspace scheduler service. | `src/cli/serve_autostart.rs`, `src/cli/serve/` |
 | FR-017 | Batteries can be registered, synced, inspected, listed, installed with validation/provenance, and removed; installation is Unix-only and may be initiated locally by the CLI or authenticated HTTP, never by a peer or Cue; cached content is untrusted. | `src/cli/battery.rs`, `src/operations/battery/` |
 | FR-018 | `doctor`, `config`, `completion`, `update`, and `uninstall` provide local diagnostics, integration, lifecycle, and release operations. | `src/cli/doctor.rs`, `src/cli/config.rs`, `src/main.rs` |
 | FR-019 | `help-ai` derives a machine-readable command and data-shape inventory from clap metadata. | `src/cli/help_ai.rs`, `src/cli/args/` |
@@ -45,7 +45,7 @@ must be updated in the same change.
 
 | ID | Requirement | Source |
 |---|---|---|
-| NFR-001 | Linux, macOS, and Windows builds use conditional platform adapters for paths, daemonization, signals, and services. | `src/main.rs`, `src/cli/serve.rs`, `src/cli/serve_autostart.rs`, `Cargo.toml` |
+| NFR-001 | Linux, macOS, and Windows builds use conditional platform adapters for paths, daemonization, signals, and services. | `src/main.rs`, `src/cli/serve/`, `src/cli/serve_autostart.rs`, `Cargo.toml` |
 | NFR-002 | CLI and HTTP behavior remains protocol-neutral in `operations/`; adapters do not duplicate business rules. | `src/operations/`, `src/cli/`, `src/cli/api/` |
 | NFR-003 | SQLite uses WAL/busy-timeout behavior for concurrent local readers and writers; one workspace remains single-host storage. | `src/runs/`, `src/search_index.rs` |
 | NFR-004 | HTTP request bodies and script/tree responses are bounded, and unsafe paths/symlinks/metadata paths are rejected. | `src/cli/api/`, `src/operations/scripts.rs` |
@@ -64,8 +64,8 @@ must be updated in the same change.
 |---|---|---|
 | BR-001 | `.history`, `.git`, and `.omakure` metadata are excluded from script discovery. | `src/adapters/workspace_repository.rs` |
 | BR-002 | Schema markers and field names use extension comment syntax (`#` for Bash and Python, `#` or `;` for PowerShell, `--` for Lua) and PascalCase JSON keys. | `src/domain/parsing.rs`, `src/domain/schema.rs` |
-| BR-003 | Scheduled runs use declared field defaults; missing defaults are omitted rather than blocking the scheduler. | `src/cli/serve.rs` |
-| BR-004 | Scheduler overlap is keyed by canonical script path and cron expression. | `src/cli/serve.rs`, `src/runs/` |
+| BR-003 | Scheduled runs use declared field defaults; missing defaults are omitted rather than blocking the scheduler. | `src/cli/serve/` |
+| BR-004 | Scheduler overlap is keyed by canonical script path and cron expression. | `src/cli/serve/`, `src/runs/` |
 | BR-005 | Secret schema fields cannot declare choices; plaintext secret values are redacted while provider references can be retained. | `src/domain/schema.rs`, `src/secrets.rs`, `src/runs/` |
 | BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor/` |
 | BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery/`, `src/cli/api/` |

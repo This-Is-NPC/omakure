@@ -179,30 +179,62 @@ fn remove_windows_pid_file_if_current(path: &Path, expected: &WindowsPidFile) {
 pub(super) fn publish_windows_pid_file(
     path: &Path,
     identity: &WindowsPidFile,
-) -> Result<(), String> {
+) -> Result<(), WindowsPidPublicationError> {
     let token = identity
         .stop_event
-        .rsplit('-')
-        .next()
-        .ok_or_else(|| "stop-event identity has no publication token".to_string())?;
+        .rsplit_once('-')
+        .map_or(identity.stop_event.as_str(), |(_, token)| token);
     let temp_path = path.with_file_name(format!("daemon.pid.{token}.tmp"));
     let result = (|| {
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&temp_path)
-            .map_err(|error| format!("create {}: {error}", temp_path.display()))?;
+            .map_err(|source| WindowsPidPublicationError::Create {
+                path: temp_path.clone(),
+                source,
+            })?;
         writeln!(file, "{}\n{}", identity.pid, identity.stop_event)
             .and_then(|_| file.sync_all())
-            .map_err(|error| format!("flush {}: {error}", temp_path.display()))?;
+            .map_err(|source| WindowsPidPublicationError::Flush {
+                path: temp_path.clone(),
+                source,
+            })?;
         drop(file);
-        serve_windows::publish_exclusive(&temp_path, path)
-            .map_err(|error| format!("publish {}: {error}", path.display()))
+        serve_windows::publish_exclusive(&temp_path, path).map_err(|source| {
+            WindowsPidPublicationError::Publish {
+                path: path.to_path_buf(),
+                source,
+            }
+        })
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temp_path);
     }
     result
+}
+
+#[cfg(windows)]
+#[derive(Debug, thiserror::Error)]
+pub(super) enum WindowsPidPublicationError {
+    #[error("create {}: {source}", path.display())]
+    Create {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("flush {}: {source}", path.display())]
+    Flush {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("publish {}: {source}", path.display())]
+    Publish {
+        path: PathBuf,
+        #[source]
+        source: serve_windows::PublishExclusiveError,
+    },
 }
 
 #[cfg(windows)]
@@ -255,7 +287,7 @@ pub(super) fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, String>
         pid: std::process::id(),
         stop_event: stop_event_name,
     };
-    publish_windows_pid_file(&path, &identity)?;
+    publish_windows_pid_file(&path, &identity).map_err(|error| error.to_string())?;
     Ok(WindowsLock {
         identity,
         stop_event,

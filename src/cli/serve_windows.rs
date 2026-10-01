@@ -152,16 +152,20 @@ pub(crate) fn signal_stop(name: &str) -> Result<(), String> {
 pub(crate) fn publish_exclusive(
     from: &std::path::Path,
     to: &std::path::Path,
-) -> Result<(), String> {
+) -> Result<(), PublishExclusiveError> {
     let from = wide_path(from);
     let to = wide_path(to);
     // Omitting MOVEFILE_REPLACE_EXISTING makes a competing starter fail rather
     // than replacing the already-published daemon identity.
     if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
-        return Err(last_error("MoveFileExW"));
+        return Err(PublishExclusiveError(unsafe { GetLastError() }));
     }
     Ok(())
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("MoveFileExW failed with Windows error {0}")]
+pub(crate) struct PublishExclusiveError(u32);
 
 fn last_error(operation: &str) -> String {
     let error = unsafe { GetLastError() };

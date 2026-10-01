@@ -4,6 +4,7 @@ use super::lifecycle::{acquire_lock, pid_file, release_lock};
 #[cfg(windows)]
 use super::lifecycle::{
     publish_windows_pid_file, read_windows_pid_file, WindowsPidFile, WindowsPidFileError,
+    WindowsPidPublicationError,
 };
 use super::logging::log_file;
 use super::scheduler::{build_args_from_defaults, scheduler_tick, SchedulerTickError};
@@ -403,10 +404,36 @@ fn windows_pid_publication_is_complete_and_exclusive() {
         pid: 401,
         stop_event: "Local\\OmakureServeStop-00000000000000000000000000000005".to_string(),
     };
-    let result = publish_windows_pid_file(&pid_file(&ws), &replacement);
-    assert!(result.is_err(), "publication must retain exclusive startup");
+    let error = publish_windows_pid_file(&pid_file(&ws), &replacement).unwrap_err();
+    assert!(matches!(&error, WindowsPidPublicationError::Publish { .. }));
+    assert!(error.to_string().starts_with(&format!(
+        "publish {}: MoveFileExW failed with Windows error ",
+        pid_file(&ws).display()
+    )));
     assert_eq!(read_windows_pid_file(&pid_file(&ws)).unwrap(), identity);
     assert!(!pid_file(&ws)
         .with_file_name("daemon.pid.00000000000000000000000000000005.tmp")
         .exists());
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_pid_publication_reports_create_failure() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("missing").join("daemon.pid");
+    let identity = WindowsPidFile {
+        pid: 402,
+        stop_event: "Local\\OmakureServeStop-00000000000000000000000000000006".to_string(),
+    };
+    let temp_path = path.with_file_name("daemon.pid.00000000000000000000000000000006.tmp");
+    let error = publish_windows_pid_file(&path, &identity).unwrap_err();
+    assert!(matches!(
+        &error,
+        WindowsPidPublicationError::Create { path: failed_path, source }
+            if failed_path == &temp_path
+                && source.kind() == std::io::ErrorKind::NotFound
+    ));
+    assert!(error
+        .to_string()
+        .starts_with(&format!("create {}: ", temp_path.display())));
 }

@@ -121,21 +121,23 @@ fn signed_bundle_fixture(
     let now = crate::util::time::unix_seconds();
     let bundle = enrollment::SignedEnrollmentBundle::sign_with_material(
         &authority_private,
-        [bundle_byte; enrollment::REQUEST_ID_BYTES],
         [8; enrollment::BUNDLE_AUTHORITY_ID_BYTES],
-        "omakure".into(),
-        target_identity.public_status().node_id.clone(),
-        manager.public_status().node_id.clone(),
-        enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
-            .unwrap()
-            .try_into()
-            .unwrap(),
-        *manager_transport.certificate().transport_public(),
-        *manager_transport.certificate().as_bytes(),
-        EnrollmentRole::Conductor,
-        vec!["remote-run".into()],
-        now,
-        now + 600,
+        crate::enrollment::BundleMaterial {
+            bundle_id: [bundle_byte; enrollment::REQUEST_ID_BYTES],
+            organization: "omakure".into(),
+            audience_node_id: target_identity.public_status().node_id.clone(),
+            subject_node_id: manager.public_status().node_id.clone(),
+            subject_xonly: enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            subject_transport_x25519: *manager_transport.certificate().transport_public(),
+            subject_certificate: *manager_transport.certificate().as_bytes(),
+            role: EnrollmentRole::Conductor,
+            capabilities: vec!["remote-run".into()],
+            issued_at: now,
+            expires_at: now + 600,
+        },
     )
     .unwrap();
     let token_path = target_temp.path().join("bootstrap.token");

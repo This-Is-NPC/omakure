@@ -79,21 +79,23 @@ fn signed_bundle_apply_is_target_bound_atomic_and_single_use() {
     let now = crate::util::time::unix_seconds();
     let bundle = enrollment::SignedEnrollmentBundle::sign_with_material(
         &authority_private,
-        [7; enrollment::REQUEST_ID_BYTES],
         [8; enrollment::BUNDLE_AUTHORITY_ID_BYTES],
-        "omakure".into(),
-        target_identity.public_status().node_id.clone(),
-        manager.public_status().node_id.clone(),
-        enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
-            .unwrap()
-            .try_into()
-            .unwrap(),
-        *manager_transport.certificate().transport_public(),
-        *manager_transport.certificate().as_bytes(),
-        EnrollmentRole::Conductor,
-        vec!["remote-run".into()],
-        now,
-        now + 600,
+        crate::enrollment::BundleMaterial {
+            bundle_id: [7; enrollment::REQUEST_ID_BYTES],
+            organization: "omakure".into(),
+            audience_node_id: target_identity.public_status().node_id.clone(),
+            subject_node_id: manager.public_status().node_id.clone(),
+            subject_xonly: enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            subject_transport_x25519: *manager_transport.certificate().transport_public(),
+            subject_certificate: *manager_transport.certificate().as_bytes(),
+            role: EnrollmentRole::Conductor,
+            capabilities: vec!["remote-run".into()],
+            issued_at: now,
+            expires_at: now + 600,
+        },
     )
     .unwrap();
     let request = SignedBundleApplyRequest {
@@ -347,21 +349,23 @@ fn signed_bundle_distinct_conductors_have_one_transactional_winner() {
     let make_bundle = |bundle_id: [u8; 16], manager: &NodeIdentity, transport: &LocalTransport| {
         enrollment::SignedEnrollmentBundle::sign_with_material(
             &authority_private,
-            bundle_id,
             [8; 16],
-            "omakure".into(),
-            target_id.clone(),
-            manager.public_status().node_id.clone(),
-            enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
-                .unwrap()
-                .try_into()
-                .unwrap(),
-            *transport.certificate().transport_public(),
-            *transport.certificate().as_bytes(),
-            EnrollmentRole::Conductor,
-            vec!["remote-run".into()],
-            crate::util::time::unix_seconds(),
-            crate::util::time::unix_seconds() + 600,
+            crate::enrollment::BundleMaterial {
+                bundle_id,
+                organization: "omakure".into(),
+                audience_node_id: target_id.clone(),
+                subject_node_id: manager.public_status().node_id.clone(),
+                subject_xonly: enrollment::parse_hex(&manager.public_status().public_key_hex, 32)
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                subject_transport_x25519: *transport.certificate().transport_public(),
+                subject_certificate: *transport.certificate().as_bytes(),
+                role: EnrollmentRole::Conductor,
+                capabilities: vec!["remote-run".into()],
+                issued_at: crate::util::time::unix_seconds(),
+                expires_at: crate::util::time::unix_seconds() + 600,
+            },
         )
         .unwrap()
     };

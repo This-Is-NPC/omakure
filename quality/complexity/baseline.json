@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "5c9167dce02b81e06e2d38bc9781469f8fc162e420fddcc0fc2533054c2e8124",
+  "canonical_sha256": "6959c605f801b97386b2c461672662db211d4ef9a4307d827148933cdf2281a1",
   "config_identity": "no-config",
   "files": [
     {
@@ -2332,12 +2332,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 17,
+        "invocations": 16,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 64,
-        "cyclomatic": 159
+        "cognitive": 51,
+        "cyclomatic": 118
       },
       "path": "src/enrollment.rs",
       "source_class": "handwritten"
@@ -52452,14 +52452,14 @@
       },
       "identity": "crate::enrollment::fmt",
       "kind": "method",
-      "line": 104,
+      "line": 108,
       "name": "fmt",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 104,
+        "line": 108,
         "name": "fmt"
       },
       "path": "src/enrollment.rs",
@@ -52473,23 +52473,23 @@
         "identity": "crate::enrollment::sign_with_material",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
-        "signature": "pub fn sign_with_material( authority_private_key: &[u8], bundle_id: [u8",
+        "signature": "pub fn sign_with_material( authority_private_key: &[u8], authority_key_id: [u8",
         "source_class": "handwritten"
       },
       "identity": "crate::enrollment::sign_with_material",
       "kind": "method",
-      "line": 126,
+      "line": 129,
       "name": "sign_with_material",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 126,
+        "line": 129,
         "name": "sign_with_material"
       },
       "path": "src/enrollment.rs",
-      "signature": "pub fn sign_with_material( authority_private_key: &[u8], bundle_id: [u8",
+      "signature": "pub fn sign_with_material( authority_private_key: &[u8], authority_key_id: [u8",
       "source_class": "handwritten"
     },
     {
@@ -52504,14 +52504,14 @@
       },
       "identity": "crate::enrollment::sign_with_material::<closure>",
       "kind": "closure",
-      "line": 142,
+      "line": 135,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 142,
+        "line": 135,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52522,22 +52522,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::sign_with_material::<closure>@161#2",
+        "identity": "crate::enrollment::sign_with_material::<closure>@154#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::sign_with_material::<closure>@161#2",
+      "identity": "crate::enrollment::sign_with_material::<closure>@154#2",
       "kind": "closure",
-      "line": 161,
+      "line": 154,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 161,
+        "line": 154,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52556,14 +52556,14 @@
       },
       "identity": "crate::enrollment::decode",
       "kind": "method",
-      "line": 167,
+      "line": 160,
       "name": "decode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 8,
         "kind": "method",
-        "line": 167,
+        "line": 160,
         "name": "decode"
       },
       "path": "src/enrollment.rs",
@@ -52582,14 +52582,14 @@
       },
       "identity": "crate::enrollment::encode",
       "kind": "method",
-      "line": 223,
+      "line": 216,
       "name": "encode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 223,
+        "line": 216,
         "name": "encode"
       },
       "path": "src/enrollment.rs",
@@ -52608,14 +52608,14 @@
       },
       "identity": "crate::enrollment::verify",
       "kind": "method",
-      "line": 231,
+      "line": 224,
       "name": "verify",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 7,
         "kind": "method",
-        "line": 231,
+        "line": 224,
         "name": "verify"
       },
       "path": "src/enrollment.rs",
@@ -52634,14 +52634,14 @@
       },
       "identity": "crate::enrollment::verify::<closure>",
       "kind": "closure",
-      "line": 256,
+      "line": 249,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 256,
+        "line": 249,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52652,22 +52652,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::verify::<closure>@258#2",
+        "identity": "crate::enrollment::verify::<closure>@251#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": ".map_err(|_| EnrollmentError::Invalid)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::verify::<closure>@258#2",
+      "identity": "crate::enrollment::verify::<closure>@251#2",
       "kind": "closure",
-      "line": 258,
+      "line": 251,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 258,
+        "line": 251,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52678,22 +52678,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::verify::<closure>@261#3",
+        "identity": "crate::enrollment::verify::<closure>@254#3",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::verify::<closure>@261#3",
+      "identity": "crate::enrollment::verify::<closure>@254#3",
       "kind": "closure",
-      "line": 261,
+      "line": 254,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 261,
+        "line": 254,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52712,14 +52712,14 @@
       },
       "identity": "crate::enrollment::replay_expiry",
       "kind": "method",
-      "line": 264,
+      "line": 257,
       "name": "replay_expiry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 264,
+        "line": 257,
         "name": "replay_expiry"
       },
       "path": "src/enrollment.rs",
@@ -52738,14 +52738,14 @@
       },
       "identity": "crate::enrollment::unsigned_bytes",
       "kind": "method",
-      "line": 268,
+      "line": 261,
       "name": "unsigned_bytes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 268,
+        "line": 261,
         "name": "unsigned_bytes"
       },
       "path": "src/enrollment.rs",
@@ -52764,14 +52764,14 @@
       },
       "identity": "crate::enrollment::unsigned_bytes::<closure>",
       "kind": "closure",
-      "line": 278,
+      "line": 271,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 278,
+        "line": 271,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52782,22 +52782,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::unsigned_bytes::<closure>@288#2",
+        "identity": "crate::enrollment::unsigned_bytes::<closure>@281#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "bytes.push(u8::try_from(self.capabilities.len()).map_err(|_| EnrollmentError::Invalid)?);",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::unsigned_bytes::<closure>@288#2",
+      "identity": "crate::enrollment::unsigned_bytes::<closure>@281#2",
       "kind": "closure",
-      "line": 288,
+      "line": 281,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 288,
+        "line": 281,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52808,22 +52808,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::unsigned_bytes::<closure>@292#3",
+        "identity": "crate::enrollment::unsigned_bytes::<closure>@285#3",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": ".map_err(|_| EnrollmentError::Invalid)?",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::unsigned_bytes::<closure>@292#3",
+      "identity": "crate::enrollment::unsigned_bytes::<closure>@285#3",
       "kind": "closure",
-      "line": 292,
+      "line": 285,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 292,
+        "line": 285,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -52831,8 +52831,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 11,
-      "cyclomatic": 16,
+      "cognitive": 10,
+      "cyclomatic": 14,
       "derived": {
         "identity": "crate::enrollment::verify_shape",
         "macro_expansion": "not_measured",
@@ -52842,14 +52842,14 @@
       },
       "identity": "crate::enrollment::verify_shape",
       "kind": "method",
-      "line": 305,
+      "line": 298,
       "name": "verify_shape",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 11,
-        "cyclomatic": 16,
+        "cognitive": 10,
+        "cyclomatic": 14,
         "kind": "method",
-        "line": 305,
+        "line": 298,
         "name": "verify_shape"
       },
       "path": "src/enrollment.rs",
@@ -52868,18 +52868,70 @@
       },
       "identity": "crate::enrollment::verify_shape::<closure>",
       "kind": "closure",
-      "line": 313,
+      "line": 306,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 313,
+        "line": 306,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
       "signature": ".any(|byte| byte.is_ascii_control())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::verify_shape::<closure>@321#2",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": ".map_err(|_| EnrollmentError::Invalid)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::verify_shape::<closure>@321#2",
+      "kind": "closure",
+      "line": 321,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 321,
+        "name": "<closure>"
+      },
+      "path": "src/enrollment.rs",
+      "signature": ".map_err(|_| EnrollmentError::Invalid)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::verify_shape::<closure>@324#3",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::verify_shape::<closure>@324#3",
+      "kind": "closure",
+      "line": 324,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 324,
+        "name": "<closure>"
+      },
+      "path": "src/enrollment.rs",
+      "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?;",
       "source_class": "handwritten"
     },
     {
@@ -52894,14 +52946,14 @@
       },
       "identity": "crate::enrollment::hash_bootstrap_token",
       "kind": "function",
-      "line": 352,
+      "line": 340,
       "name": "hash_bootstrap_token",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 352,
+        "line": 340,
         "name": "hash_bootstrap_token"
       },
       "path": "src/enrollment.rs",
@@ -52920,18 +52972,44 @@
       },
       "identity": "crate::enrollment::hash_bootstrap_nonce",
       "kind": "function",
-      "line": 356,
+      "line": 344,
       "name": "hash_bootstrap_nonce",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 356,
+        "line": 344,
         "name": "hash_bootstrap_nonce"
       },
       "path": "src/enrollment.rs",
       "signature": "pub fn hash_bootstrap_nonce(nonce: &[u8]) -> [u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::enrollment::from_wire",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": "pub fn from_wire(value: &str) -> Option<Self>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::from_wire",
+      "kind": "method",
+      "line": 357,
+      "name": "from_wire",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 357,
+        "name": "from_wire"
+      },
+      "path": "src/enrollment.rs",
+      "signature": "pub fn from_wire(value: &str) -> Option<Self>",
       "source_class": "handwritten"
     },
     {
@@ -52946,14 +53024,14 @@
       },
       "identity": "crate::enrollment::from_u8",
       "kind": "method",
-      "line": 368,
+      "line": 365,
       "name": "from_u8",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 368,
+        "line": 365,
         "name": "from_u8"
       },
       "path": "src/enrollment.rs",
@@ -52964,26 +53042,78 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::fmt@388#2",
+        "identity": "crate::enrollment::fmt@390#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::fmt@388#2",
+      "identity": "crate::enrollment::fmt@390#2",
       "kind": "method",
-      "line": 388,
+      "line": 390,
       "name": "fmt",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 388,
+        "line": 390,
         "name": "fmt"
       },
       "path": "src/enrollment.rs",
       "signature": "fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::enrollment::validate_request_inputs",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": "fn validate_request_inputs( proposer_transport_x25519: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::validate_request_inputs",
+      "kind": "function",
+      "line": 420,
+      "name": "validate_request_inputs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 420,
+        "name": "validate_request_inputs"
+      },
+      "path": "src/enrollment.rs",
+      "signature": "fn validate_request_inputs( proposer_transport_x25519: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::validate_request_inputs::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": "validate_x25519_public(proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::validate_request_inputs::<closure>",
+      "kind": "closure",
+      "line": 426,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 426,
+        "name": "<closure>"
+      },
+      "path": "src/enrollment.rs",
+      "signature": "validate_x25519_public(proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;",
       "source_class": "handwritten"
     },
     {
@@ -52998,14 +53128,14 @@
       },
       "identity": "crate::enrollment::request_hex",
       "kind": "method",
-      "line": 418,
+      "line": 434,
       "name": "request_hex",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 418,
+        "line": 434,
         "name": "request_hex"
       },
       "path": "src/enrollment.rs",
@@ -53024,14 +53154,14 @@
       },
       "identity": "crate::enrollment::code_hex",
       "kind": "method",
-      "line": 422,
+      "line": 438,
       "name": "code_hex",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 422,
+        "line": 438,
         "name": "code_hex"
       },
       "path": "src/enrollment.rs",
@@ -53050,14 +53180,14 @@
       },
       "identity": "crate::enrollment::pairing_id_hex",
       "kind": "method",
-      "line": 428,
+      "line": 444,
       "name": "pairing_id_hex",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 428,
+        "line": 444,
         "name": "pairing_id_hex"
       },
       "path": "src/enrollment.rs",
@@ -53076,14 +53206,14 @@
       },
       "identity": "crate::enrollment::request_id_hex",
       "kind": "method",
-      "line": 432,
+      "line": 448,
       "name": "request_id_hex",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 432,
+        "line": 448,
         "name": "request_id_hex"
       },
       "path": "src/enrollment.rs",
@@ -53102,14 +53232,14 @@
       },
       "identity": "crate::enrollment::create",
       "kind": "method",
-      "line": 436,
+      "line": 452,
       "name": "create",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 436,
+        "line": 452,
         "name": "create"
       },
       "path": "src/enrollment.rs",
@@ -53117,8 +53247,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 2,
-      "cyclomatic": 3,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::enrollment::create_with_pairing_id",
         "macro_expansion": "not_measured",
@@ -53128,14 +53258,14 @@
       },
       "identity": "crate::enrollment::create_with_pairing_id",
       "kind": "method",
-      "line": 457,
+      "line": 473,
       "name": "create_with_pairing_id",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "method",
-        "line": 457,
+        "line": 473,
         "name": "create_with_pairing_id"
       },
       "path": "src/enrollment.rs",
@@ -53146,32 +53276,6 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::create_with_pairing_id::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/enrollment.rs",
-        "signature": "validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::enrollment::create_with_pairing_id::<closure>",
-      "kind": "closure",
-      "line": 467,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 467,
-        "name": "<closure>"
-      },
-      "path": "src/enrollment.rs",
-      "signature": "validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
         "identity": "crate::enrollment::create_with_material",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
@@ -53180,14 +53284,14 @@
       },
       "identity": "crate::enrollment::create_with_material",
       "kind": "method",
-      "line": 490,
+      "line": 503,
       "name": "create_with_material",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "method",
-        "line": 490,
+        "line": 503,
         "name": "create_with_material"
       },
       "path": "src/enrollment.rs",
@@ -53198,48 +53302,48 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::create_with_material::<closure>",
+        "identity": "crate::enrollment::create_validated_with_material",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
-        "signature": "validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;",
+        "signature": "fn create_validated_with_material( identity: &NodeIdentity, proposer_transport_x25519: [u8",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::create_with_material::<closure>",
-      "kind": "closure",
-      "line": 502,
-      "name": "<closure>",
+      "identity": "crate::enrollment::create_validated_with_material",
+      "kind": "method",
+      "line": 524,
+      "name": "create_validated_with_material",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
-        "kind": "closure",
-        "line": 502,
-        "name": "<closure>"
+        "kind": "method",
+        "line": 524,
+        "name": "create_validated_with_material"
       },
       "path": "src/enrollment.rs",
-      "signature": "validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;",
+      "signature": "fn create_validated_with_material( identity: &NodeIdentity, proposer_transport_x25519: [u8",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::create_with_material::<closure>@514#2",
+        "identity": "crate::enrollment::create_validated_with_material::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?,",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::create_with_material::<closure>@514#2",
+      "identity": "crate::enrollment::create_validated_with_material::<closure>",
       "kind": "closure",
-      "line": 514,
+      "line": 541,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 514,
+        "line": 541,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -53247,25 +53351,51 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::create_validated_with_material::<closure>@555#2",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::create_validated_with_material::<closure>@555#2",
+      "kind": "closure",
+      "line": 555,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 555,
+        "name": "<closure>"
+      },
+      "path": "src/enrollment.rs",
+      "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?;",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 9,
       "cyclomatic": 9,
       "derived": {
-        "identity": "crate::enrollment::decode@529#2",
+        "identity": "crate::enrollment::decode@564#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "pub fn decode(bytes: &[u8]) -> Result<Self, EnrollmentError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::decode@529#2",
+      "identity": "crate::enrollment::decode@564#2",
       "kind": "method",
-      "line": 529,
+      "line": 564,
       "name": "decode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 9,
         "cyclomatic": 9,
         "kind": "method",
-        "line": 529,
+        "line": 564,
         "name": "decode"
       },
       "path": "src/enrollment.rs",
@@ -53284,14 +53414,14 @@
       },
       "identity": "crate::enrollment::decode::<closure>",
       "kind": "closure",
-      "line": 547,
+      "line": 577,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 547,
+        "line": 577,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -53302,22 +53432,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::encode@580#2",
+        "identity": "crate::enrollment::encode@615#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "pub fn encode(&self) -> Vec<u8>",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::encode@580#2",
+      "identity": "crate::enrollment::encode@615#2",
       "kind": "method",
-      "line": 580,
+      "line": 615,
       "name": "encode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 580,
+        "line": 615,
         "name": "encode"
       },
       "path": "src/enrollment.rs",
@@ -53328,22 +53458,22 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::enrollment::verify@593#2",
+        "identity": "crate::enrollment::verify@623#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "pub fn verify(&self, now: u64) -> Result<(), EnrollmentError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::verify@593#2",
+      "identity": "crate::enrollment::verify@623#2",
       "kind": "method",
-      "line": 593,
+      "line": 623,
       "name": "verify",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 593,
+        "line": 623,
         "name": "verify"
       },
       "path": "src/enrollment.rs",
@@ -53354,22 +53484,48 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::verify::<closure>@602#5",
+        "identity": "crate::enrollment::verify::<closure>@629#4",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
-        "signature": "Signature::from_slice(&self.signature).map_err(|_| EnrollmentError::Invalid)?;",
+        "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::verify::<closure>@602#5",
+      "identity": "crate::enrollment::verify::<closure>@629#4",
       "kind": "closure",
-      "line": 602,
+      "line": 629,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 602,
+        "line": 629,
+        "name": "<closure>"
+      },
+      "path": "src/enrollment.rs",
+      "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::verify::<closure>@632#5",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": "Signature::from_slice(&self.signature).map_err(|_| EnrollmentError::Invalid)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::verify::<closure>@632#5",
+      "kind": "closure",
+      "line": 632,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 632,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -53380,22 +53536,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::verify::<closure>@599#6",
+        "identity": "crate::enrollment::verify::<closure>@634#6",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": ".map_err(|_| EnrollmentError::IdentityMismatch)",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::verify::<closure>@599#6",
+      "identity": "crate::enrollment::verify::<closure>@634#6",
       "kind": "closure",
-      "line": 599,
+      "line": 634,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 599,
+        "line": 634,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -53414,14 +53570,14 @@
       },
       "identity": "crate::enrollment::verify_code",
       "kind": "method",
-      "line": 607,
+      "line": 637,
       "name": "verify_code",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 607,
+        "line": 637,
         "name": "verify_code"
       },
       "path": "src/enrollment.rs",
@@ -53432,22 +53588,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::replay_expiry@609#2",
+        "identity": "crate::enrollment::replay_expiry@644#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "pub fn replay_expiry(&self) -> u64",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::replay_expiry@609#2",
+      "identity": "crate::enrollment::replay_expiry@644#2",
       "kind": "method",
-      "line": 609,
+      "line": 644,
       "name": "replay_expiry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 609,
+        "line": 644,
         "name": "replay_expiry"
       },
       "path": "src/enrollment.rs",
@@ -53466,14 +53622,14 @@
       },
       "identity": "crate::enrollment::public_key_hex",
       "kind": "method",
-      "line": 618,
+      "line": 648,
       "name": "public_key_hex",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 618,
+        "line": 648,
         "name": "public_key_hex"
       },
       "path": "src/enrollment.rs",
@@ -53484,22 +53640,22 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::enrollment::unsigned_bytes@617#2",
+        "identity": "crate::enrollment::unsigned_bytes@652#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "fn unsigned_bytes(&self) -> Result<Vec<u8>, EnrollmentError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::unsigned_bytes@617#2",
+      "identity": "crate::enrollment::unsigned_bytes@652#2",
       "kind": "method",
-      "line": 617,
+      "line": 652,
       "name": "unsigned_bytes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 617,
+        "line": 652,
         "name": "unsigned_bytes"
       },
       "path": "src/enrollment.rs",
@@ -53510,22 +53666,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::unsigned_bytes::<closure>@628#4",
+        "identity": "crate::enrollment::unsigned_bytes::<closure>@663#4",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "bytes.push(u8::try_from(self.capabilities.len()).map_err(|_| EnrollmentError::Invalid)?);",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::unsigned_bytes::<closure>@628#4",
+      "identity": "crate::enrollment::unsigned_bytes::<closure>@663#4",
       "kind": "closure",
-      "line": 628,
+      "line": 663,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 628,
+        "line": 663,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -53536,22 +53692,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::unsigned_bytes::<closure>@635#5",
+        "identity": "crate::enrollment::unsigned_bytes::<closure>@665#5",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": "let length = u16::try_from(capability.len()).map_err(|_| EnrollmentError::Invalid)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::unsigned_bytes::<closure>@635#5",
+      "identity": "crate::enrollment::unsigned_bytes::<closure>@665#5",
       "kind": "closure",
-      "line": 635,
+      "line": 665,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 635,
+        "line": 665,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -53560,7 +53716,7 @@
     },
     {
       "cognitive": 6,
-      "cyclomatic": 9,
+      "cyclomatic": 7,
       "derived": {
         "identity": "crate::enrollment::validate_shape",
         "macro_expansion": "not_measured",
@@ -53570,18 +53726,44 @@
       },
       "identity": "crate::enrollment::validate_shape",
       "kind": "method",
-      "line": 648,
+      "line": 678,
       "name": "validate_shape",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
-        "cyclomatic": 9,
+        "cyclomatic": 7,
         "kind": "method",
-        "line": 648,
+        "line": 678,
         "name": "validate_shape"
       },
       "path": "src/enrollment.rs",
       "signature": "fn validate_shape(&self) -> Result<(), EnrollmentError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::validate_shape::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": ".map_err(|_| EnrollmentError::Invalid)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::validate_shape::<closure>",
+      "kind": "closure",
+      "line": 689,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 689,
+        "name": "<closure>"
+      },
+      "path": "src/enrollment.rs",
+      "signature": ".map_err(|_| EnrollmentError::Invalid)?;",
       "source_class": "handwritten"
     },
     {
@@ -53596,14 +53778,14 @@
       },
       "identity": "crate::enrollment::parse_hex",
       "kind": "function",
-      "line": 684,
+      "line": 703,
       "name": "parse_hex",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 684,
+        "line": 703,
         "name": "parse_hex"
       },
       "path": "src/enrollment.rs",
@@ -53611,8 +53793,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 5,
-      "cyclomatic": 8,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::enrollment::validate_capabilities",
         "macro_expansion": "not_measured",
@@ -53622,18 +53804,44 @@
       },
       "identity": "crate::enrollment::validate_capabilities",
       "kind": "function",
-      "line": 704,
+      "line": 710,
       "name": "validate_capabilities",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 8,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 704,
+        "line": 710,
         "name": "validate_capabilities"
       },
       "path": "src/enrollment.rs",
       "signature": "pub fn validate_capabilities(capabilities: &[String]) -> Result<(), EnrollmentError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::validate_capabilities::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": "crate::domain::check_capability_list(capabilities).map_err(|_| EnrollmentError::Invalid)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::validate_capabilities::<closure>",
+      "kind": "closure",
+      "line": 711,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 711,
+        "name": "<closure>"
+      },
+      "path": "src/enrollment.rs",
+      "signature": "crate::domain::check_capability_list(capabilities).map_err(|_| EnrollmentError::Invalid)",
       "source_class": "handwritten"
     },
     {
@@ -53648,14 +53856,14 @@
       },
       "identity": "crate::enrollment::hash_code",
       "kind": "function",
-      "line": 725,
+      "line": 714,
       "name": "hash_code",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 725,
+        "line": 714,
         "name": "hash_code"
       },
       "path": "src/enrollment.rs",
@@ -53666,22 +53874,48 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment::decode_hex::<closure>",
+        "identity": "crate::enrollment::parse_hex_array",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment.rs",
+        "signature": "fn parse_hex_array<const N: usize>(value: &str) -> Result<[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment::parse_hex_array",
+      "kind": "function",
+      "line": 718,
+      "name": "parse_hex_array",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 718,
+        "name": "parse_hex_array"
+      },
+      "path": "src/enrollment.rs",
+      "signature": "fn parse_hex_array<const N: usize>(value: &str) -> Result<[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment::parse_hex_array::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/enrollment.rs",
         "signature": ".map_err(|_| EnrollmentError::Invalid)",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment::decode_hex::<closure>",
+      "identity": "crate::enrollment::parse_hex_array::<closure>",
       "kind": "closure",
-      "line": 743,
+      "line": 721,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 743,
+        "line": 721,
         "name": "<closure>"
       },
       "path": "src/enrollment.rs",
@@ -53700,14 +53934,14 @@
       },
       "identity": "crate::enrollment::identity",
       "kind": "function",
-      "line": 819,
+      "line": 732,
       "name": "identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 819,
+        "line": 732,
         "name": "identity"
       },
       "path": "src/enrollment.rs",
@@ -53726,14 +53960,14 @@
       },
       "identity": "crate::enrollment::code_hash_matches_public_vector",
       "kind": "function",
-      "line": 838,
+      "line": 740,
       "name": "code_hash_matches_public_vector",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 838,
+        "line": 740,
         "name": "code_hash_matches_public_vector"
       },
       "path": "src/enrollment.rs",
@@ -53752,14 +53986,14 @@
       },
       "identity": "crate::enrollment::request_round_trips_and_rejects_trailing_bytes",
       "kind": "function",
-      "line": 847,
+      "line": 749,
       "name": "request_round_trips_and_rejects_trailing_bytes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 847,
+        "line": 749,
         "name": "request_round_trips_and_rejects_trailing_bytes"
       },
       "path": "src/enrollment.rs",
@@ -53778,14 +54012,14 @@
       },
       "identity": "crate::enrollment::request_rejects_identity_mismatch_and_expiry",
       "kind": "function",
-      "line": 866,
+      "line": 768,
       "name": "request_rejects_identity_mismatch_and_expiry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 866,
+        "line": 768,
         "name": "request_rejects_identity_mismatch_and_expiry"
       },
       "path": "src/enrollment.rs",
@@ -53804,14 +54038,14 @@
       },
       "identity": "crate::enrollment::signed_bundle_is_canonical_and_binds_authority_audience_and_certificate",
       "kind": "function",
-      "line": 890,
+      "line": 792,
       "name": "signed_bundle_is_canonical_and_binds_authority_audience_and_certificate",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 890,
+        "line": 792,
         "name": "signed_bundle_is_canonical_and_binds_authority_audience_and_certificate"
       },
       "path": "src/enrollment.rs",
@@ -53830,14 +54064,14 @@
       },
       "identity": "crate::enrollment_authority::fmt",
       "kind": "method",
-      "line": 51,
+      "line": 45,
       "name": "fmt",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 51,
+        "line": 45,
         "name": "fmt"
       },
       "path": "src/enrollment_authority.rs",
@@ -53856,6 +54090,32 @@
       },
       "identity": "crate::enrollment_authority::from",
       "kind": "method",
+      "line": 56,
+      "name": "from",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 56,
+        "name": "from"
+      },
+      "path": "src/enrollment_authority.rs",
+      "signature": "fn from(error: std::io::Error) -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment_authority::from@62#2",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment_authority.rs",
+        "signature": "fn from(error: NodeError) -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment_authority::from@62#2",
+      "kind": "method",
       "line": 62,
       "name": "from",
       "native": {
@@ -53867,38 +54127,64 @@
         "name": "from"
       },
       "path": "src/enrollment_authority.rs",
-      "signature": "fn from(error: std::io::Error) -> Self",
+      "signature": "fn from(error: NodeError) -> Self",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment_authority::from@68#2",
+        "identity": "crate::enrollment_authority::state",
         "macro_expansion": "not_measured",
         "path": "src/enrollment_authority.rs",
-        "signature": "fn from(error: NodeError) -> Self",
+        "signature": "fn state(detail: String) -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment_authority::from@68#2",
+      "identity": "crate::enrollment_authority::state",
       "kind": "method",
       "line": 68,
-      "name": "from",
+      "name": "state",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
         "line": 68,
-        "name": "from"
+        "name": "state"
       },
       "path": "src/enrollment_authority.rs",
-      "signature": "fn from(error: NodeError) -> Self",
+      "signature": "fn state(detail: String) -> Self",
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 2,
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::enrollment_authority::invalid_key",
+        "macro_expansion": "not_measured",
+        "path": "src/enrollment_authority.rs",
+        "signature": "fn invalid_key() -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::enrollment_authority::invalid_key",
+      "kind": "method",
+      "line": 72,
+      "name": "invalid_key",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 72,
+        "name": "invalid_key"
+      },
+      "path": "src/enrollment_authority.rs",
+      "signature": "fn invalid_key() -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::enrollment_authority::create",
         "macro_expansion": "not_measured",
@@ -53908,14 +54194,14 @@
       },
       "identity": "crate::enrollment_authority::create",
       "kind": "method",
-      "line": 85,
+      "line": 95,
       "name": "create",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "method",
-        "line": 85,
+        "line": 95,
         "name": "create"
       },
       "path": "src/enrollment_authority.rs",
@@ -53923,8 +54209,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 3,
-      "cyclomatic": 4,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::enrollment_authority::load_existing",
         "macro_expansion": "not_measured",
@@ -53934,14 +54220,14 @@
       },
       "identity": "crate::enrollment_authority::load_existing",
       "kind": "method",
-      "line": 100,
+      "line": 103,
       "name": "load_existing",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 4,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "method",
-        "line": 100,
+        "line": 103,
         "name": "load_existing"
       },
       "path": "src/enrollment_authority.rs",
@@ -53960,14 +54246,14 @@
       },
       "identity": "crate::enrollment_authority::public_key",
       "kind": "method",
-      "line": 136,
+      "line": 110,
       "name": "public_key",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 136,
+        "line": 110,
         "name": "public_key"
       },
       "path": "src/enrollment_authority.rs",
@@ -53986,14 +54272,14 @@
       },
       "identity": "crate::enrollment_authority::key_id",
       "kind": "method",
-      "line": 146,
+      "line": 118,
       "name": "key_id",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 146,
+        "line": 118,
         "name": "key_id"
       },
       "path": "src/enrollment_authority.rs",
@@ -54007,23 +54293,23 @@
         "identity": "crate::enrollment_authority::issue",
         "macro_expansion": "not_measured",
         "path": "src/enrollment_authority.rs",
-        "signature": "pub fn issue(&self, material: BundleIssueMaterial) -> Result<Vec<u8>, AuthorityError>",
+        "signature": "pub fn issue(&self, material: BundleMaterial) -> Result<Vec<u8>, AuthorityError>",
         "source_class": "handwritten"
       },
       "identity": "crate::enrollment_authority::issue",
       "kind": "method",
-      "line": 137,
+      "line": 124,
       "name": "issue",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 137,
+        "line": 124,
         "name": "issue"
       },
       "path": "src/enrollment_authority.rs",
-      "signature": "pub fn issue(&self, material: BundleIssueMaterial) -> Result<Vec<u8>, AuthorityError>",
+      "signature": "pub fn issue(&self, material: BundleMaterial) -> Result<Vec<u8>, AuthorityError>",
       "source_class": "handwritten"
     },
     {
@@ -54038,14 +54324,14 @@
       },
       "identity": "crate::enrollment_authority::issue::<closure>",
       "kind": "closure",
-      "line": 192,
+      "line": 137,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 192,
+        "line": 137,
         "name": "<closure>"
       },
       "path": "src/enrollment_authority.rs",
@@ -54056,22 +54342,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::enrollment_authority::issue::<closure>@193#2",
+        "identity": "crate::enrollment_authority::issue::<closure>@138#2",
         "macro_expansion": "not_measured",
         "path": "src/enrollment_authority.rs",
         "signature": ".map_err(|error| AuthorityError::Signing(format!(\"{error:?}\")))",
         "source_class": "handwritten"
       },
-      "identity": "crate::enrollment_authority::issue::<closure>@193#2",
+      "identity": "crate::enrollment_authority::issue::<closure>@138#2",
       "kind": "closure",
-      "line": 193,
+      "line": 138,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 193,
+        "line": 138,
         "name": "<closure>"
       },
       "path": "src/enrollment_authority.rs",
@@ -54090,14 +54376,14 @@
       },
       "identity": "crate::enrollment_authority::an_authority_key_is_never_silently_replaced",
       "kind": "function",
-      "line": 252,
+      "line": 153,
       "name": "an_authority_key_is_never_silently_replaced",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 252,
+        "line": 153,
         "name": "an_authority_key_is_never_silently_replaced"
       },
       "path": "src/enrollment_authority.rs",
@@ -54116,14 +54402,14 @@
       },
       "identity": "crate::enrollment_authority::the_key_id_is_a_function_of_the_public_key",
       "kind": "function",
-      "line": 274,
+      "line": 175,
       "name": "the_key_id_is_a_function_of_the_public_key",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 274,
+        "line": 175,
         "name": "the_key_id_is_a_function_of_the_public_key"
       },
       "path": "src/enrollment_authority.rs",
@@ -54142,14 +54428,14 @@
       },
       "identity": "crate::enrollment_authority::loading_without_a_key_refuses_instead_of_creating_one",
       "kind": "function",
-      "line": 296,
+      "line": 197,
       "name": "loading_without_a_key_refuses_instead_of_creating_one",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 296,
+        "line": 197,
         "name": "loading_without_a_key_refuses_instead_of_creating_one"
       },
       "path": "src/enrollment_authority.rs",
@@ -54168,14 +54454,14 @@
       },
       "identity": "crate::enrollment_authority::a_loosened_authority_key_is_refused",
       "kind": "function",
-      "line": 312,
+      "line": 212,
       "name": "a_loosened_authority_key_is_refused",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 312,
+        "line": 212,
         "name": "a_loosened_authority_key_is_refused"
       },
       "path": "src/enrollment_authority.rs",
@@ -54194,14 +54480,14 @@
       },
       "identity": "crate::enrollment_authority::a_symlinked_authority_key_is_refused",
       "kind": "function",
-      "line": 342,
+      "line": 242,
       "name": "a_symlinked_authority_key_is_refused",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 342,
+        "line": 242,
         "name": "a_symlinked_authority_key_is_refused"
       },
       "path": "src/enrollment_authority.rs",
@@ -54220,14 +54506,14 @@
       },
       "identity": "crate::enrollment_authority::the_amended_state_allow_list_admits_the_key_and_nothing_else",
       "kind": "function",
-      "line": 374,
+      "line": 274,
       "name": "the_amended_state_allow_list_admits_the_key_and_nothing_else",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 374,
+        "line": 274,
         "name": "the_amended_state_allow_list_admits_the_key_and_nothing_else"
       },
       "path": "src/enrollment_authority.rs",
@@ -54246,14 +54532,14 @@
       },
       "identity": "crate::enrollment_authority::a_bundle_cannot_name_one_node_as_both_sides",
       "kind": "function",
-      "line": 320,
+      "line": 297,
       "name": "a_bundle_cannot_name_one_node_as_both_sides",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 320,
+        "line": 297,
         "name": "a_bundle_cannot_name_one_node_as_both_sides"
       },
       "path": "src/enrollment_authority.rs",

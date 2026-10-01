@@ -527,21 +527,23 @@ fn bundle(
 ) -> Vec<u8> {
     SignedEnrollmentBundle::sign_with_material(
         private_key,
-        bundle_id,
         [8; 16],
-        organization.into(),
-        audience.into(),
-        subject.0.into(),
-        enrollment::parse_hex(subject.1, 32)
-            .unwrap()
-            .try_into()
-            .unwrap(),
-        certificate[109..141].try_into().unwrap(),
-        certificate.try_into().unwrap(),
-        EnrollmentRole::Conductor,
-        vec!["remote-run".into()],
-        issued_at,
-        expires_at,
+        omakure::enrollment::BundleMaterial {
+            bundle_id,
+            organization: organization.into(),
+            audience_node_id: audience.into(),
+            subject_node_id: subject.0.into(),
+            subject_xonly: enrollment::parse_hex(subject.1, 32)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            subject_transport_x25519: certificate[109..141].try_into().unwrap(),
+            subject_certificate: certificate.try_into().unwrap(),
+            role: EnrollmentRole::Conductor,
+            capabilities: vec!["remote-run".into()],
+            issued_at,
+            expires_at,
+        },
     )
     .unwrap()
     .encode()

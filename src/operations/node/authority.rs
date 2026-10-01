@@ -2,8 +2,7 @@ use super::super::{OperationError, OperationErrorCode, OperationResult};
 use super::errors::map_identity_error;
 use super::require_confirmation;
 use super::status::load_node_config;
-use crate::enrollment::EnrollmentRole;
-use crate::enrollment_authority::BundleIssueMaterial;
+use crate::enrollment::{BundleMaterial, EnrollmentRole};
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
@@ -135,7 +134,7 @@ pub fn issue_enrollment_bundle(
 
     let subject_node_id = identity.public_status().node_id.clone();
     let bundle = authority
-        .issue(BundleIssueMaterial {
+        .issue(BundleMaterial {
             bundle_id,
             organization: config.organization.id.clone(),
             audience_node_id: request.audience_node_id.clone(),

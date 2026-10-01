@@ -73,6 +73,20 @@ pub struct BundleAuthority {
     pub revoked: bool,
 }
 
+pub struct BundleMaterial {
+    pub bundle_id: [u8; REQUEST_ID_BYTES],
+    pub organization: String,
+    pub audience_node_id: String,
+    pub subject_node_id: String,
+    pub subject_xonly: [u8; IDENTITY_KEY_BYTES],
+    pub subject_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
+    pub subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+    pub role: EnrollmentRole,
+    pub capabilities: Vec<String>,
+    pub issued_at: u64,
+    pub expires_at: u64,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct SignedEnrollmentBundle {
     pub bundle_id: [u8; REQUEST_ID_BYTES],
@@ -112,37 +126,26 @@ impl fmt::Debug for SignedEnrollmentBundle {
 }
 
 impl SignedEnrollmentBundle {
-    #[allow(clippy::too_many_arguments)]
     pub fn sign_with_material(
         authority_private_key: &[u8],
-        bundle_id: [u8; REQUEST_ID_BYTES],
         authority_key_id: [u8; BUNDLE_AUTHORITY_ID_BYTES],
-        organization: String,
-        audience_node_id: String,
-        subject_node_id: String,
-        subject_xonly: [u8; IDENTITY_KEY_BYTES],
-        subject_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
-        subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-        role: EnrollmentRole,
-        capabilities: Vec<String>,
-        issued_at: u64,
-        expires_at: u64,
+        material: BundleMaterial,
     ) -> Result<Self, EnrollmentError> {
         let signing_key = SigningKey::from_slice(authority_private_key)
             .map_err(|_| EnrollmentError::IdentityMismatch)?;
         let mut bundle = Self {
-            bundle_id,
+            bundle_id: material.bundle_id,
             authority_key_id,
-            organization,
-            audience_node_id,
-            subject_node_id,
-            subject_xonly,
-            subject_transport_x25519,
-            subject_certificate,
-            role,
-            capabilities,
-            issued_at,
-            expires_at,
+            organization: material.organization,
+            audience_node_id: material.audience_node_id,
+            subject_node_id: material.subject_node_id,
+            subject_xonly: material.subject_xonly,
+            subject_transport_x25519: material.subject_transport_x25519,
+            subject_certificate: material.subject_certificate,
+            role: material.role,
+            capabilities: material.capabilities,
+            issued_at: material.issued_at,
+            expires_at: material.expires_at,
             authority_signature: [0; SIGNATURE_BYTES],
         };
         let digest = sha256_domain(BUNDLE_DOMAIN, &bundle.unsigned_bytes()?);
@@ -408,6 +411,25 @@ pub struct ManualEnrollmentOffer {
     pub code: [u8; CODE_BYTES],
 }
 
+pub struct ManualRequestMaterial {
+    pub pairing_id: [u8; PAIRING_ID_BYTES],
+    pub request_id: [u8; REQUEST_ID_BYTES],
+    pub code: [u8; CODE_BYTES],
+}
+
+fn validate_request_inputs(
+    proposer_transport_x25519: &[u8; TRANSPORT_KEY_BYTES],
+    capabilities: &[String],
+    lifetime_seconds: u64,
+) -> Result<(), EnrollmentError> {
+    validate_capabilities(capabilities)?;
+    validate_x25519_public(proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
+    if lifetime_seconds == 0 || lifetime_seconds > MAX_LIFETIME_SECONDS {
+        return Err(EnrollmentError::Invalid);
+    }
+    Ok(())
+}
+
 impl ManualEnrollmentOffer {
     pub fn request_hex(&self) -> String {
         hex::encode(&self.request.encode())
@@ -457,30 +479,27 @@ impl ManualEnrollmentRequest {
         lifetime_seconds: u64,
         pairing_id: [u8; PAIRING_ID_BYTES],
     ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
-        validate_capabilities(&capabilities)?;
-        validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
-        if lifetime_seconds == 0 || lifetime_seconds > MAX_LIFETIME_SECONDS {
-            return Err(EnrollmentError::Invalid);
-        }
+        validate_request_inputs(&proposer_transport_x25519, &capabilities, lifetime_seconds)?;
         let mut request_id = [0u8; REQUEST_ID_BYTES];
         let mut code = [0u8; CODE_BYTES];
         entropy::fill_bytes(&mut request_id);
         entropy::fill_bytes(&mut code);
-        Self::create_with_material(
+        Self::create_validated_with_material(
             identity,
             proposer_transport_x25519,
             role,
             capabilities,
             now,
             lifetime_seconds,
-            pairing_id,
-            request_id,
-            code,
+            ManualRequestMaterial {
+                pairing_id,
+                request_id,
+                code,
+            },
         )
     }
 
     /// Construct a deterministic request for protocol vectors and fixtures.
-    #[allow(clippy::too_many_arguments)] // Fixed protocol-vector material must remain explicit.
     pub fn create_with_material(
         identity: &NodeIdentity,
         proposer_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
@@ -488,19 +507,33 @@ impl ManualEnrollmentRequest {
         capabilities: Vec<String>,
         now: u64,
         lifetime_seconds: u64,
-        pairing_id: [u8; PAIRING_ID_BYTES],
-        request_id: [u8; REQUEST_ID_BYTES],
-        code: [u8; CODE_BYTES],
+        material: ManualRequestMaterial,
     ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
-        validate_capabilities(&capabilities)?;
-        validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
-        if lifetime_seconds == 0 || lifetime_seconds > MAX_LIFETIME_SECONDS {
-            return Err(EnrollmentError::Invalid);
-        }
-        let code_hash = hash_code(&code);
+        validate_request_inputs(&proposer_transport_x25519, &capabilities, lifetime_seconds)?;
+        Self::create_validated_with_material(
+            identity,
+            proposer_transport_x25519,
+            role,
+            capabilities,
+            now,
+            lifetime_seconds,
+            material,
+        )
+    }
+
+    fn create_validated_with_material(
+        identity: &NodeIdentity,
+        proposer_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
+        role: EnrollmentRole,
+        capabilities: Vec<String>,
+        now: u64,
+        lifetime_seconds: u64,
+        material: ManualRequestMaterial,
+    ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
+        let code_hash = hash_code(&material.code);
         let mut request = Self {
-            pairing_id,
-            request_id,
+            pairing_id: material.pairing_id,
+            request_id: material.request_id,
             proposer_node_id: identity.public_status().node_id.clone(),
             proposer_xonly: parse_hex_array::<IDENTITY_KEY_BYTES>(
                 &identity.public_status().public_key_hex,
@@ -522,7 +555,10 @@ impl ManualEnrollmentRequest {
             .map_err(|_| EnrollmentError::IdentityMismatch)?;
         request.signature = signature.to_bytes();
         request.verify(now)?;
-        Ok(ManualEnrollmentOffer { request, code })
+        Ok(ManualEnrollmentOffer {
+            request,
+            code: material.code,
+        })
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, EnrollmentError> {
@@ -767,18 +803,20 @@ mod tests {
         let authority_key = SigningKey::from_slice(&authority_private).unwrap();
         let bundle = SignedEnrollmentBundle::sign_with_material(
             &authority_private,
-            [7; REQUEST_ID_BYTES],
             [8; BUNDLE_AUTHORITY_ID_BYTES],
-            "omakure".to_string(),
-            target.public_status().node_id.clone(),
-            manager.public_status().node_id.clone(),
-            parse_hex_array(&manager.public_status().public_key_hex).unwrap(),
-            *manager_transport.certificate().transport_public(),
-            *manager_transport.certificate().as_bytes(),
-            EnrollmentRole::Conductor,
-            vec!["baseline-push".to_string(), "remote-run".to_string()],
-            1_700_000_000,
-            1_700_000_600,
+            crate::enrollment::BundleMaterial {
+                bundle_id: [7; REQUEST_ID_BYTES],
+                organization: "omakure".to_string(),
+                audience_node_id: target.public_status().node_id.clone(),
+                subject_node_id: manager.public_status().node_id.clone(),
+                subject_xonly: parse_hex_array(&manager.public_status().public_key_hex).unwrap(),
+                subject_transport_x25519: *manager_transport.certificate().transport_public(),
+                subject_certificate: *manager_transport.certificate().as_bytes(),
+                role: EnrollmentRole::Conductor,
+                capabilities: vec!["baseline-push".to_string(), "remote-run".to_string()],
+                issued_at: 1_700_000_000,
+                expires_at: 1_700_000_600,
+            },
         )
         .unwrap();
         assert_eq!(bundle.encode().len(), 604);

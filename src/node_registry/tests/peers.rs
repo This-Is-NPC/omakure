@@ -47,21 +47,23 @@ fn a_baseline_publisher_is_refused_conductor_authority_on_every_path() {
 
     let bundle = SignedEnrollmentBundle::sign_with_material(
         &[5u8; 32],
-        [2; crate::enrollment::REQUEST_ID_BYTES],
         [8; crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES],
-        "omakure".to_string(),
-        identity.public_status().node_id.clone(),
-        remote.public_status().node_id.clone(),
-        crate::enrollment::parse_hex(&remote.public_status().public_key_hex, 32)
-            .unwrap()
-            .try_into()
-            .unwrap(),
-        REMOTE_TRANSPORT_PUBLIC,
-        *certificate.as_bytes(),
-        crate::enrollment::EnrollmentRole::Performer,
-        vec!["remote-run".to_string()],
-        now,
-        now + 600,
+        crate::enrollment::BundleMaterial {
+            bundle_id: [2; crate::enrollment::REQUEST_ID_BYTES],
+            organization: "omakure".to_string(),
+            audience_node_id: identity.public_status().node_id.clone(),
+            subject_node_id: remote.public_status().node_id.clone(),
+            subject_xonly: crate::enrollment::parse_hex(&remote.public_status().public_key_hex, 32)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            subject_transport_x25519: REMOTE_TRANSPORT_PUBLIC,
+            subject_certificate: *certificate.as_bytes(),
+            role: crate::enrollment::EnrollmentRole::Performer,
+            capabilities: vec!["remote-run".to_string()],
+            issued_at: now,
+            expires_at: now + 600,
+        },
     )
     .unwrap();
     assert!(matches!(

@@ -644,9 +644,11 @@ fn production_manual_request_with_pairing(
         vec!["baseline-push".to_string()],
         u64_value(fixture, "manual_created_at"),
         u64_value(fixture, "manual_expires_at") - u64_value(fixture, "manual_created_at"),
-        pairing_id,
-        bytes(fixture, "manual_request_id_hex").try_into().unwrap(),
-        bytes(fixture, "manual_code_hex").try_into().unwrap(),
+        omakure::enrollment::ManualRequestMaterial {
+            pairing_id,
+            request_id: bytes(fixture, "manual_request_id_hex").try_into().unwrap(),
+            code: bytes(fixture, "manual_code_hex").try_into().unwrap(),
+        },
     )?;
     Ok(offer.request.encode())
 }

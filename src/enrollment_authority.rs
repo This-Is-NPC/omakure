@@ -19,6 +19,7 @@
 //! `O_NOFOLLOW` so a symlink cannot redirect it, and never returned by any read
 //! path.
 
+use crate::enrollment::BundleMaterial;
 use crate::node::{NodeContext, NodeError};
 use crate::node_key::{HeldKey, KeyFileError};
 use k256::schnorr::SigningKey;
@@ -84,20 +85,6 @@ pub struct EnrollmentAuthority {
     signing_key: SigningKey,
 }
 
-pub struct BundleIssueMaterial {
-    pub bundle_id: [u8; crate::enrollment::REQUEST_ID_BYTES],
-    pub organization: String,
-    pub audience_node_id: String,
-    pub subject_node_id: String,
-    pub subject_xonly: [u8; 32],
-    pub subject_transport_x25519: [u8; 32],
-    pub subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-    pub role: crate::enrollment::EnrollmentRole,
-    pub capabilities: Vec<String>,
-    pub issued_at: u64,
-    pub expires_at: u64,
-}
-
 impl EnrollmentAuthority {
     /// Create the authority key, refusing to replace one that already exists.
     ///
@@ -134,7 +121,7 @@ impl EnrollmentAuthority {
 
     /// Mint one bundle. The signing itself is the shipped, tested construction;
     /// this is the caller it never had.
-    pub fn issue(&self, material: BundleIssueMaterial) -> Result<Vec<u8>, AuthorityError> {
+    pub fn issue(&self, material: BundleMaterial) -> Result<Vec<u8>, AuthorityError> {
         // A bundle whose audience is its own subject would enrol a node into
         // trusting itself. Refused here rather than left to the receiver.
         if material.audience_node_id == material.subject_node_id {
@@ -144,18 +131,8 @@ impl EnrollmentAuthority {
         }
         crate::enrollment::SignedEnrollmentBundle::sign_with_material(
             self.signing_key.to_bytes().as_ref(),
-            material.bundle_id,
             self.key_id(),
-            material.organization,
-            material.audience_node_id,
-            material.subject_node_id,
-            material.subject_xonly,
-            material.subject_transport_x25519,
-            material.subject_certificate,
-            material.role,
-            material.capabilities,
-            material.issued_at,
-            material.expires_at,
+            material,
         )
         .map(|bundle| bundle.encode())
         .map_err(|error| AuthorityError::Signing(format!("{error:?}")))
@@ -324,7 +301,7 @@ mod tests {
         let node = format!("omk1_{}", "a".repeat(64));
 
         let error = authority
-            .issue(BundleIssueMaterial {
+            .issue(BundleMaterial {
                 bundle_id: [1u8; crate::enrollment::REQUEST_ID_BYTES],
                 organization: "org".to_string(),
                 audience_node_id: node.clone(),

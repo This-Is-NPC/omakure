@@ -18,6 +18,8 @@ enum Rule {
     Executor,
     GitProcess,
     HealthLifecycle,
+    HealthFacade,
+    HealthRegistry,
     HealthProcess,
     BatteryFilesystem,
     OperationInput,
@@ -105,6 +107,19 @@ impl ContractVisitor {
             self.record(
                 "ARCH-HEALTH-LIFECYCLE-REGISTRY",
                 "lifecycle projection must consume domain transition values",
+            );
+        }
+        if self.rule == Rule::HealthFacade && Self::starts_with(path, &["crate", "node_registry"]) {
+            self.record(
+                "ARCH-HEALTH-STORE",
+                "Health Plane facade must use HealthStore",
+            );
+        }
+        if self.rule == Rule::HealthRegistry && Self::starts_with(path, &["crate", "health_plane"])
+        {
+            self.record(
+                "ARCH-HEALTH-REGISTRY",
+                "registry must use domain Health Plane types",
             );
         }
         if self.rule == Rule::HealthProcess && Self::starts_with(path, &["std", "process"]) {
@@ -909,4 +924,42 @@ fn lifecycle_projection_rejects_registry_types() {
     );
     assert_eq!(contract.findings.len(), 1);
     assert_eq!(contract.findings[0].rule, "ARCH-HEALTH-LIFECYCLE-REGISTRY");
+}
+
+#[test]
+fn health_plane_store_boundary_has_no_facade_registry_cycle() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let facade = fs::read_to_string(root.join("src/health_plane.rs")).unwrap();
+    let contract = parse_contract(Rule::HealthFacade, "src/health_plane.rs", &facade);
+    assert!(contract.findings.is_empty(), "{:?}", contract.findings);
+    for path in source_files(&root.join("src/node_registry")) {
+        let display = path.strip_prefix(root).unwrap().display().to_string();
+        let source = fs::read_to_string(&path).unwrap();
+        let contract = parse_contract(Rule::HealthRegistry, &display, &source);
+        assert!(
+            contract.findings.is_empty(),
+            "{display}: {:?}",
+            contract.findings
+        );
+    }
+    assert_eq!(
+        parse_contract(
+            Rule::HealthFacade,
+            "fixture.rs",
+            "use crate::node_registry::NodeRegistry;"
+        )
+        .findings[0]
+            .rule,
+        "ARCH-HEALTH-STORE"
+    );
+    assert_eq!(
+        parse_contract(
+            Rule::HealthRegistry,
+            "fixture.rs",
+            "use crate::health_plane::HealthPlane;"
+        )
+        .findings[0]
+            .rule,
+        "ARCH-HEALTH-REGISTRY"
+    );
 }

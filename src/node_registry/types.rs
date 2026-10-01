@@ -221,15 +221,11 @@ mod lifecycle_tests {
         assert_eq!(view.from_state, Some(LifecycleState::Other));
         assert_eq!(view.to_state, Some(LifecycleState::Active));
         assert_eq!(view.occurred_at, Some(1_700_000_000));
-        let signals = crate::health_plane::lifecycle::project([view], 1_700_000_000, 1);
-        assert_eq!(signals.len(), 1);
-        let encoded = serde_json::to_string(&signals).unwrap();
-        assert!(!encoded.contains("secret://"));
-        assert!(!encoded.contains("AWS_SECRET"));
-        assert!(!encoded.contains("/home/operator"));
+        assert_eq!(view.id, 7);
+        assert_eq!(view.node_id, audit.node_id);
 
         audit.occurred_at = "invalid".into();
         let invalid = audit.lifecycle_transition();
-        assert!(crate::health_plane::lifecycle::project([invalid], 1_700_000_000, 1).is_empty());
+        assert_eq!(invalid.occurred_at, None);
     }
 }

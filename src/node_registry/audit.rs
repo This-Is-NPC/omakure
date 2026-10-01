@@ -77,19 +77,6 @@ impl NodeRegistry {
         })
     }
 
-    /// The bounded, newest-first trust transitions the Health Plane projects
-    /// into Conductor-local `enrolled` and `revoked` Signals.
-    ///
-    /// This is a **read-only** projection over the existing append-only
-    /// `audit_events` table. It adds no table, no trigger, no write path, and
-    /// no new trust state: the authoritative local record of a peer becoming
-    /// trusted or being revoked already exists, and the Health Plane only
-    /// reads it. Rows whose `to_state` is neither `active` nor `revoked` are
-    /// not lifecycle transitions and never leave the registry.
-    pub fn lifecycle_trust_events(&self, limit: usize) -> Result<Vec<AuditEvent>, RegistryError> {
-        self.with_connection(|connection| lifecycle_trust_events_in(connection, limit))
-    }
-
     /// Append a redacted transport outcome with optional bounded Cue correlation.
     pub(crate) fn record_transport_audit(
         &self,

@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::{node_context, opaque_id_hex, peer_identity};
 
 use crate::node_identity::NodeIdentity;
-use crate::node_registry::{PeerRegistration, PeerRole, PeerSource};
+use crate::node_registry::{NodeRegistry, PeerRegistration, PeerRole, PeerSource, PeerState};
 
 use serde_json::json;
 use std::sync::Arc;
@@ -100,7 +100,7 @@ fn fixture() -> Fixture {
 }
 
 impl Fixture {
-    fn plane(&self) -> HealthPlane<'_> {
+    fn plane(&self) -> HealthPlane<'_, NodeRegistry> {
         HealthPlane::with_clock(&self.registry, Box::new(Arc::clone(&self.clock)))
     }
 

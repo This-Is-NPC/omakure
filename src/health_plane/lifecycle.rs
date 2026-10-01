@@ -201,6 +201,19 @@ mod tests {
     }
 
     #[test]
+    fn a_transition_without_a_valid_timestamp_produces_no_signal() {
+        let mut invalid = event(
+            7,
+            PEER,
+            Some(LifecycleState::Other),
+            Some(LifecycleState::Active),
+            NOW,
+        );
+        invalid.occurred_at = None;
+        assert!(project([invalid], NOW, 1).is_empty());
+    }
+
+    #[test]
     fn the_signal_id_is_stable_per_row_and_distinct_across_rows() {
         let one = event(
             7,

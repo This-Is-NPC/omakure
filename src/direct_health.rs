@@ -184,7 +184,7 @@ impl<'a> HealthSession<'a> {
     }
 
     /// The Wave 2 shared operations over this session's clock.
-    fn plane(&self) -> HealthPlane<'_> {
+    fn plane(&self) -> HealthPlane<'_, NodeRegistry> {
         HealthPlane::with_clock(
             self.registry,
             Box::new(SharedClock(Arc::clone(&self.clock))),

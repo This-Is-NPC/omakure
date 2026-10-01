@@ -1,7 +1,7 @@
 use super::super::{NodeRegistry, PeerRole, PeerState, RegistryError};
 use super::feed::fleet_peer_in;
 use super::rows::{CorruptHealthIdentity, cleanup_corrupt_health_rows, load_peer_state};
-use super::*;
+use super::types::HealthApplyRequest;
 use crate::domain::health_plane::bounds::{
     AUDIT_ROW_BYTES, MAX_AGE_SECONDS, MAX_AUDIT_ROWS, MAX_FUTURE_SKEW_SECONDS,
     MAX_PERFORMERS_PER_CONDUCTOR, MAX_PROFILES_PER_PEER_PER_HOUR, MAX_REPLAY_ROWS,

@@ -54,7 +54,7 @@ pub struct PresenceCounts {
 }
 
 fn collect_active_fleet_nodes(
-    plane: &HealthPlane<'_>,
+    plane: &HealthPlane<'_, NodeRegistry>,
     registry: &NodeRegistry,
     observed_at: i64,
     mut nodes: Vec<FleetNode>,

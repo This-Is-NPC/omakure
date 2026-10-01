@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "4006fedb3c2fc4c6ee0e2b2dbe9a86820ec1685393e55cd0730f1f94e3ea8d3e",
+  "canonical_sha256": "be847cbf605f565ddaf608cc6dccff45ccf58f5d5d7e54a8355cae58b98a7bf2",
   "config_identity": "no-config",
   "files": [
     {
@@ -2379,7 +2379,7 @@
       },
       "native": {
         "cognitive": 25,
-        "cyclomatic": 56
+        "cyclomatic": 52
       },
       "path": "src/health_plane.rs",
       "source_class": "handwritten"
@@ -2402,12 +2402,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 21,
+        "invocations": 17,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 11,
-        "cyclomatic": 19
+        "cognitive": 10,
+        "cyclomatic": 17
       },
       "path": "src/health_plane/lifecycle.rs",
       "source_class": "handwritten"
@@ -2869,7 +2869,7 @@
       },
       "native": {
         "cognitive": 17,
-        "cyclomatic": 32
+        "cyclomatic": 30
       },
       "path": "src/node_registry/audit.rs",
       "source_class": "handwritten"
@@ -3326,7 +3326,7 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 3,
+        "invocations": 10,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
@@ -4804,6 +4804,48 @@
         "cyclomatic": 2
       },
       "path": "src/util/entropy.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/domain/health_plane/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 1
+      },
+      "path": "src/domain/health_plane/store.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 3,
+        "cyclomatic": 30
+      },
+      "path": "src/node_registry/health/store.rs",
       "source_class": "handwritten"
     }
   ],
@@ -37913,7 +37955,7 @@
         "identity": "crate::direct_health::plane",
         "macro_expansion": "not_measured",
         "path": "src/direct_health.rs",
-        "signature": "fn plane(&self) -> HealthPlane<'_>",
+        "signature": "fn plane(&self) -> HealthPlane<'_, NodeRegistry>",
         "source_class": "handwritten"
       },
       "identity": "crate::direct_health::plane",
@@ -37929,7 +37971,7 @@
         "name": "plane"
       },
       "path": "src/direct_health.rs",
-      "signature": "fn plane(&self) -> HealthPlane<'_>",
+      "signature": "fn plane(&self) -> HealthPlane<'_, NodeRegistry>",
       "source_class": "handwritten"
     },
     {
@@ -43321,7 +43363,7 @@
         "identity": "crate::direct_service::cue::signal_recorded",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/cue.rs",
-        "signature": "fn signal_recorded( plane: &crate::health_plane::HealthPlane<'_>, node_id: &str, expected_run_id: &str, ) -> bool",
+        "signature": "fn signal_recorded( plane: &crate::health_plane::HealthPlane<'_, NodeRegistry>, node_id: &str, expected_run_id: &str, ) -> bool",
         "source_class": "handwritten"
       },
       "identity": "crate::direct_service::cue::signal_recorded",
@@ -43337,7 +43379,7 @@
         "name": "signal_recorded"
       },
       "path": "src/direct_service/cue.rs",
-      "signature": "fn signal_recorded( plane: &crate::health_plane::HealthPlane<'_>, node_id: &str, expected_run_id: &str, ) -> bool",
+      "signature": "fn signal_recorded( plane: &crate::health_plane::HealthPlane<'_, NodeRegistry>, node_id: &str, expected_run_id: &str, ) -> bool",
       "source_class": "handwritten"
     },
     {
@@ -55286,14 +55328,14 @@
       },
       "identity": "crate::health_plane::new",
       "kind": "method",
-      "line": 49,
+      "line": 46,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 49,
+        "line": 46,
         "name": "new"
       },
       "path": "src/health_plane.rs",
@@ -55312,14 +55354,14 @@
       },
       "identity": "crate::health_plane::unix_seconds",
       "kind": "method",
-      "line": 57,
+      "line": 54,
       "name": "unix_seconds",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 57,
+        "line": 54,
         "name": "unix_seconds"
       },
       "path": "src/health_plane.rs",
@@ -55338,14 +55380,14 @@
       },
       "identity": "crate::health_plane::monotonic_millis",
       "kind": "method",
-      "line": 61,
+      "line": 58,
       "name": "monotonic_millis",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 61,
+        "line": 58,
         "name": "monotonic_millis"
       },
       "path": "src/health_plane.rs",
@@ -55364,14 +55406,14 @@
       },
       "identity": "crate::health_plane::code",
       "kind": "method",
-      "line": 113,
+      "line": 110,
       "name": "code",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 113,
+        "line": 110,
         "name": "code"
       },
       "path": "src/health_plane.rs",
@@ -55390,14 +55432,14 @@
       },
       "identity": "crate::health_plane::accepted",
       "kind": "method",
-      "line": 118,
+      "line": 115,
       "name": "accepted",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 118,
+        "line": 115,
         "name": "accepted"
       },
       "path": "src/health_plane.rs",
@@ -55416,14 +55458,14 @@
       },
       "identity": "crate::health_plane::derive",
       "kind": "method",
-      "line": 152,
+      "line": 149,
       "name": "derive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 152,
+        "line": 149,
         "name": "derive"
       },
       "path": "src/health_plane.rs",
@@ -55434,26 +55476,26 @@
       "cognitive": 2,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::new@231#2",
+        "identity": "crate::health_plane::new@228#2",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn new(registry: &'registry NodeRegistry) -> Self",
+        "signature": "pub fn new(store: &'store S) -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::new@231#2",
+      "identity": "crate::health_plane::new@228#2",
       "kind": "method",
-      "line": 231,
+      "line": 228,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 231,
+        "line": 228,
         "name": "new"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn new(registry: &'registry NodeRegistry) -> Self",
+      "signature": "pub fn new(store: &'store S) -> Self",
       "source_class": "handwritten"
     },
     {
@@ -55463,23 +55505,23 @@
         "identity": "crate::health_plane::with_clock",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn with_clock(registry: &'registry NodeRegistry, clock: Box<dyn HealthClock>) -> Self",
+        "signature": "pub fn with_clock(store: &'store S, clock: Box<dyn HealthClock>) -> Self",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::with_clock",
       "kind": "method",
-      "line": 236,
+      "line": 233,
       "name": "with_clock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 236,
+        "line": 233,
         "name": "with_clock"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn with_clock(registry: &'registry NodeRegistry, clock: Box<dyn HealthClock>) -> Self",
+      "signature": "pub fn with_clock(store: &'store S, clock: Box<dyn HealthClock>) -> Self",
       "source_class": "handwritten"
     },
     {
@@ -55494,14 +55536,14 @@
       },
       "identity": "crate::health_plane::now",
       "kind": "method",
-      "line": 241,
+      "line": 238,
       "name": "now",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 241,
+        "line": 238,
         "name": "now"
       },
       "path": "src/health_plane.rs",
@@ -55509,29 +55551,29 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 9,
-      "cyclomatic": 10,
+      "cognitive": 8,
+      "cyclomatic": 9,
       "derived": {
         "identity": "crate::health_plane::ingest",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn ingest(&self, message: InboundHealthMessage<'_>) -> Result<HealthIngest, RegistryError>",
+        "signature": "pub fn ingest(&self, message: InboundHealthMessage<'_>) -> Result<HealthIngest, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::ingest",
       "kind": "method",
-      "line": 252,
+      "line": 249,
       "name": "ingest",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 9,
-        "cyclomatic": 10,
+        "cognitive": 8,
+        "cyclomatic": 9,
         "kind": "method",
-        "line": 252,
+        "line": 249,
         "name": "ingest"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn ingest(&self, message: InboundHealthMessage<'_>) -> Result<HealthIngest, RegistryError>",
+      "signature": "pub fn ingest(&self, message: InboundHealthMessage<'_>) -> Result<HealthIngest, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55541,23 +55583,23 @@
         "identity": "crate::health_plane::fleet_status",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn fleet_status(&self) -> Result<Vec<FleetNode>, RegistryError>",
+        "signature": "pub fn fleet_status(&self) -> Result<Vec<FleetNode>, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::fleet_status",
       "kind": "method",
-      "line": 363,
+      "line": 360,
       "name": "fleet_status",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 363,
+        "line": 360,
         "name": "fleet_status"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn fleet_status(&self) -> Result<Vec<FleetNode>, RegistryError>",
+      "signature": "pub fn fleet_status(&self) -> Result<Vec<FleetNode>, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55572,14 +55614,14 @@
       },
       "identity": "crate::health_plane::fleet_status::<closure>",
       "kind": "closure",
-      "line": 369,
+      "line": 366,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 369,
+        "line": 366,
         "name": "<closure>"
       },
       "path": "src/health_plane.rs",
@@ -55593,23 +55635,23 @@
         "identity": "crate::health_plane::node_status",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn node_status(&self, node_id: &str) -> Result<Option<FleetNode>, RegistryError>",
+        "signature": "pub fn node_status(&self, node_id: &str) -> Result<Option<FleetNode>, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::node_status",
       "kind": "method",
-      "line": 374,
+      "line": 371,
       "name": "node_status",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 374,
+        "line": 371,
         "name": "node_status"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn node_status(&self, node_id: &str) -> Result<Option<FleetNode>, RegistryError>",
+      "signature": "pub fn node_status(&self, node_id: &str) -> Result<Option<FleetNode>, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55624,14 +55666,14 @@
       },
       "identity": "crate::health_plane::node_status::<closure>",
       "kind": "closure",
-      "line": 379,
+      "line": 376,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 379,
+        "line": 376,
         "name": "<closure>"
       },
       "path": "src/health_plane.rs",
@@ -55645,23 +55687,23 @@
         "identity": "crate::health_plane::signal_feed",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn signal_feed(&self, limit: usize) -> Result<FleetSignalFeed, RegistryError>",
+        "signature": "pub fn signal_feed(&self, limit: usize) -> Result<FleetSignalFeed, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::signal_feed",
       "kind": "method",
-      "line": 389,
+      "line": 386,
       "name": "signal_feed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 389,
+        "line": 386,
         "name": "signal_feed"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn signal_feed(&self, limit: usize) -> Result<FleetSignalFeed, RegistryError>",
+      "signature": "pub fn signal_feed(&self, limit: usize) -> Result<FleetSignalFeed, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55671,75 +55713,75 @@
         "identity": "crate::health_plane::signal_feed::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": ".map(|peer| FleetSignalCursor {",
+        "signature": ".map(|node| FleetSignalCursor {",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::signal_feed::<closure>",
       "kind": "closure",
-      "line": 395,
+      "line": 392,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 395,
+        "line": 392,
         "name": "<closure>"
       },
       "path": "src/health_plane.rs",
-      "signature": ".map(|peer| FleetSignalCursor {",
+      "signature": ".map(|node| FleetSignalCursor {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::signal_feed::<closure>::<closure>@400#2",
+        "identity": "crate::health_plane::signal_feed::<closure>@403#2",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": ".unwrap_or_else(|| \"unknown\".to_string()),",
+        "signature": ".map(|(source, signal)| FleetSignal { source, signal })",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::signal_feed::<closure>::<closure>@400#2",
+      "identity": "crate::health_plane::signal_feed::<closure>@403#2",
       "kind": "closure",
-      "line": 400,
+      "line": 403,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 400,
+        "line": 403,
         "name": "<closure>"
       },
       "path": "src/health_plane.rs",
-      "signature": ".unwrap_or_else(|| \"unknown\".to_string()),",
+      "signature": ".map(|(source, signal)| FleetSignal { source, signal })",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::signal_feed::<closure>@409#2",
+        "identity": "crate::health_plane::signal_feed::<closure>@408#3",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": ".map(|entry| FleetSignal {",
+        "signature": "feed.lifecycle.iter().map(|event| event.as_transition()),",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::signal_feed::<closure>@409#2",
+      "identity": "crate::health_plane::signal_feed::<closure>@408#3",
       "kind": "closure",
-      "line": 409,
+      "line": 408,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 409,
+        "line": 408,
         "name": "<closure>"
       },
       "path": "src/health_plane.rs",
-      "signature": ".map(|entry| FleetSignal {",
+      "signature": "feed.lifecycle.iter().map(|event| event.as_transition()),",
       "source_class": "handwritten"
     },
     {
@@ -55749,49 +55791,23 @@
         "identity": "crate::health_plane::signals",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn signals(&self, node_id: &str, limit: usize) -> Result<Vec<SignalRecord>, RegistryError>",
+        "signature": "pub fn signals(&self, node_id: &str, limit: usize) -> Result<Vec<SignalRecord>, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::signals",
       "kind": "method",
-      "line": 423,
+      "line": 418,
       "name": "signals",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 423,
+        "line": 418,
         "name": "signals"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn signals(&self, node_id: &str, limit: usize) -> Result<Vec<SignalRecord>, RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::local_signals",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane.rs",
-        "signature": "pub fn local_signals(&self, limit: usize) -> Result<Vec<SignalRecord>, RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::local_signals",
-      "kind": "method",
-      "line": 434,
-      "name": "local_signals",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 434,
-        "name": "local_signals"
-      },
-      "path": "src/health_plane.rs",
-      "signature": "pub fn local_signals(&self, limit: usize) -> Result<Vec<SignalRecord>, RegistryError>",
+      "signature": "pub fn signals(&self, node_id: &str, limit: usize) -> Result<Vec<SignalRecord>, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55801,23 +55817,23 @@
         "identity": "crate::health_plane::authorization",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn authorization( &self, node_id: &str, ) -> Result<Option<HealthAuthorization>, RegistryError>",
+        "signature": "pub fn authorization(&self, node_id: &str) -> Result<Option<S::Authorization>, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::authorization",
       "kind": "method",
-      "line": 441,
+      "line": 424,
       "name": "authorization",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 441,
+        "line": 424,
         "name": "authorization"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn authorization( &self, node_id: &str, ) -> Result<Option<HealthAuthorization>, RegistryError>",
+      "signature": "pub fn authorization(&self, node_id: &str) -> Result<Option<S::Authorization>, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55827,23 +55843,23 @@
         "identity": "crate::health_plane::enqueue_signal",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, ) -> Result<HealthOutboxEntry, RegistryError>",
+        "signature": "pub fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, ) -> Result<S::OutboxEntry, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::enqueue_signal",
       "kind": "method",
-      "line": 458,
+      "line": 429,
       "name": "enqueue_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 458,
+        "line": 429,
         "name": "enqueue_signal"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, ) -> Result<HealthOutboxEntry, RegistryError>",
+      "signature": "pub fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, ) -> Result<S::OutboxEntry, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55853,23 +55869,23 @@
         "identity": "crate::health_plane::outbox",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn outbox(&self, limit: usize) -> Result<Vec<HealthOutboxEntry>, RegistryError>",
+        "signature": "pub fn outbox(&self, limit: usize) -> Result<Vec<S::OutboxEntry>, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::outbox",
       "kind": "method",
-      "line": 473,
+      "line": 438,
       "name": "outbox",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 473,
+        "line": 438,
         "name": "outbox"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn outbox(&self, limit: usize) -> Result<Vec<HealthOutboxEntry>, RegistryError>",
+      "signature": "pub fn outbox(&self, limit: usize) -> Result<Vec<S::OutboxEntry>, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55879,23 +55895,23 @@
         "identity": "crate::health_plane::mark_signal_sent",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn mark_signal_sent( &self, signal_id: &str, message_id: &str, ) -> Result<bool, RegistryError>",
+        "signature": "pub fn mark_signal_sent(&self, signal_id: &str, message_id: &str) -> Result<bool, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::mark_signal_sent",
       "kind": "method",
-      "line": 478,
+      "line": 443,
       "name": "mark_signal_sent",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 478,
+        "line": 443,
         "name": "mark_signal_sent"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn mark_signal_sent( &self, signal_id: &str, message_id: &str, ) -> Result<bool, RegistryError>",
+      "signature": "pub fn mark_signal_sent(&self, signal_id: &str, message_id: &str) -> Result<bool, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55905,23 +55921,23 @@
         "identity": "crate::health_plane::reset_outbox_attempts",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn reset_outbox_attempts(&self, target_node_id: &str) -> Result<u64, RegistryError>",
+        "signature": "pub fn reset_outbox_attempts(&self, target_node_id: &str) -> Result<u64, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::reset_outbox_attempts",
       "kind": "method",
-      "line": 493,
+      "line": 454,
       "name": "reset_outbox_attempts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 493,
+        "line": 454,
         "name": "reset_outbox_attempts"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn reset_outbox_attempts(&self, target_node_id: &str) -> Result<u64, RegistryError>",
+      "signature": "pub fn reset_outbox_attempts(&self, target_node_id: &str) -> Result<u64, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55931,23 +55947,23 @@
         "identity": "crate::health_plane::signals_dropped",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn signals_dropped(&self) -> Result<i64, RegistryError>",
+        "signature": "pub fn signals_dropped(&self) -> Result<i64, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::signals_dropped",
       "kind": "method",
-      "line": 499,
+      "line": 460,
       "name": "signals_dropped",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 499,
+        "line": 460,
         "name": "signals_dropped"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn signals_dropped(&self) -> Result<i64, RegistryError>",
+      "signature": "pub fn signals_dropped(&self) -> Result<i64, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55957,23 +55973,23 @@
         "identity": "crate::health_plane::prune",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn prune(&self) -> Result<HealthPruneReport, RegistryError>",
+        "signature": "pub fn prune(&self) -> Result<S::PruneReport, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::prune",
       "kind": "method",
-      "line": 504,
+      "line": 465,
       "name": "prune",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 504,
+        "line": 465,
         "name": "prune"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn prune(&self) -> Result<HealthPruneReport, RegistryError>",
+      "signature": "pub fn prune(&self) -> Result<S::PruneReport, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -55983,23 +55999,23 @@
         "identity": "crate::health_plane::purge_revoked",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn purge_revoked(&self) -> Result<Vec<String>, RegistryError>",
+        "signature": "pub fn purge_revoked(&self) -> Result<Vec<String>, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::purge_revoked",
       "kind": "method",
-      "line": 509,
+      "line": 470,
       "name": "purge_revoked",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 509,
+        "line": 470,
         "name": "purge_revoked"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn purge_revoked(&self) -> Result<Vec<String>, RegistryError>",
+      "signature": "pub fn purge_revoked(&self) -> Result<Vec<String>, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -56009,23 +56025,23 @@
         "identity": "crate::health_plane::storage_bytes",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn storage_bytes(&self) -> Result<i64, RegistryError>",
+        "signature": "pub fn storage_bytes(&self) -> Result<i64, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::storage_bytes",
       "kind": "method",
-      "line": 515,
+      "line": 475,
       "name": "storage_bytes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 515,
+        "line": 475,
         "name": "storage_bytes"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn storage_bytes(&self) -> Result<i64, RegistryError>",
+      "signature": "pub fn storage_bytes(&self) -> Result<i64, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -56035,23 +56051,23 @@
         "identity": "crate::health_plane::audit_events",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "pub fn audit_events(&self, limit: usize) -> Result<Vec<HealthAuditEvent>, RegistryError>",
+        "signature": "pub fn audit_events(&self, limit: usize) -> Result<Vec<S::AuditEvent>, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::audit_events",
       "kind": "method",
-      "line": 520,
+      "line": 480,
       "name": "audit_events",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 520,
+        "line": 480,
         "name": "audit_events"
       },
       "path": "src/health_plane.rs",
-      "signature": "pub fn audit_events(&self, limit: usize) -> Result<Vec<HealthAuditEvent>, RegistryError>",
+      "signature": "pub fn audit_events(&self, limit: usize) -> Result<Vec<S::AuditEvent>, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -56066,14 +56082,14 @@
       },
       "identity": "crate::health_plane::reply_for",
       "kind": "method",
-      "line": 524,
+      "line": 484,
       "name": "reply_for",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 524,
+        "line": 484,
         "name": "reply_for"
       },
       "path": "src/health_plane.rs",
@@ -56087,49 +56103,49 @@
         "identity": "crate::health_plane::reject_before_storage",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "fn reject_before_storage( &self, message: &InboundHealthMessage<'_>, kind: Option<HealthKind>, message_id: Option<String>, code: HealthCode, byte_count: i64, now: i64, ) -> Result<HealthIngest, RegistryError>",
+        "signature": "fn reject_before_storage( &self, message: &InboundHealthMessage<'_>, kind: Option<HealthKind>, message_id: Option<String>, code: HealthCode, byte_count: i64, now: i64, ) -> Result<HealthIngest, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::reject_before_storage",
       "kind": "method",
-      "line": 560,
+      "line": 520,
       "name": "reject_before_storage",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 560,
+        "line": 520,
         "name": "reject_before_storage"
       },
       "path": "src/health_plane.rs",
-      "signature": "fn reject_before_storage( &self, message: &InboundHealthMessage<'_>, kind: Option<HealthKind>, message_id: Option<String>, code: HealthCode, byte_count: i64, now: i64, ) -> Result<HealthIngest, RegistryError>",
+      "signature": "fn reject_before_storage( &self, message: &InboundHealthMessage<'_>, kind: Option<HealthKind>, message_id: Option<String>, code: HealthCode, byte_count: i64, now: i64, ) -> Result<HealthIngest, S::Error>",
       "source_class": "handwritten"
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 5,
+      "cognitive": 3,
+      "cyclomatic": 4,
       "derived": {
         "identity": "crate::health_plane::reject_unsupported_version",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "fn reject_unsupported_version( &self, message: &InboundHealthMessage<'_>, kind: HealthKind, byte_count: i64, now: i64, ) -> Result<HealthIngest, RegistryError>",
+        "signature": "fn reject_unsupported_version( &self, message: &InboundHealthMessage<'_>, kind: HealthKind, byte_count: i64, now: i64, ) -> Result<HealthIngest, S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::reject_unsupported_version",
       "kind": "method",
-      "line": 593,
+      "line": 553,
       "name": "reject_unsupported_version",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 5,
+        "cognitive": 3,
+        "cyclomatic": 4,
         "kind": "method",
-        "line": 593,
+        "line": 553,
         "name": "reject_unsupported_version"
       },
       "path": "src/health_plane.rs",
-      "signature": "fn reject_unsupported_version( &self, message: &InboundHealthMessage<'_>, kind: HealthKind, byte_count: i64, now: i64, ) -> Result<HealthIngest, RegistryError>",
+      "signature": "fn reject_unsupported_version( &self, message: &InboundHealthMessage<'_>, kind: HealthKind, byte_count: i64, now: i64, ) -> Result<HealthIngest, S::Error>",
       "source_class": "handwritten"
     },
     {
@@ -56139,49 +56155,49 @@
         "identity": "crate::health_plane::audit",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "fn audit( &self, sender: &str, kind: Option<HealthKind>, byte_count: i64, outcome: &str, code: Option<HealthCode>, now: i64, ) -> Result<(), RegistryError>",
+        "signature": "fn audit( &self, sender: &str, kind: Option<HealthKind>, byte_count: i64, outcome: &str, code: Option<HealthCode>, now: i64, ) -> Result<(), S::Error>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::audit",
       "kind": "method",
-      "line": 638,
+      "line": 594,
       "name": "audit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 638,
+        "line": 594,
         "name": "audit"
       },
       "path": "src/health_plane.rs",
-      "signature": "fn audit( &self, sender: &str, kind: Option<HealthKind>, byte_count: i64, outcome: &str, code: Option<HealthCode>, now: i64, ) -> Result<(), RegistryError>",
+      "signature": "fn audit( &self, sender: &str, kind: Option<HealthKind>, byte_count: i64, outcome: &str, code: Option<HealthCode>, now: i64, ) -> Result<(), S::Error>",
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 2,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::health_plane::project",
         "macro_expansion": "not_measured",
         "path": "src/health_plane.rs",
-        "signature": "fn project(peer: HealthFleetPeer, now: i64) -> FleetNode",
+        "signature": "fn project(peer: HealthFleetView, now: i64) -> FleetNode",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::project",
       "kind": "function",
-      "line": 661,
+      "line": 617,
       "name": "project",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 661,
+        "line": 617,
         "name": "project"
       },
       "path": "src/health_plane.rs",
-      "signature": "fn project(peer: HealthFleetPeer, now: i64) -> FleetNode",
+      "signature": "fn project(peer: HealthFleetView, now: i64) -> FleetNode",
       "source_class": "handwritten"
     },
     {
@@ -56234,6 +56250,58 @@
       },
       "path": "src/health_plane/tests/mod.rs",
       "signature": "fn set(&self, seconds: i64)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::tests::unix_seconds",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/tests/mod.rs",
+        "signature": "fn unix_seconds(&self) -> i64",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::tests::unix_seconds",
+      "kind": "method",
+      "line": 41,
+      "name": "unix_seconds",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 41,
+        "name": "unix_seconds"
+      },
+      "path": "src/health_plane/tests/mod.rs",
+      "signature": "fn unix_seconds(&self) -> i64",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::tests::monotonic_millis",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/tests/mod.rs",
+        "signature": "fn monotonic_millis(&self) -> u64",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::tests::monotonic_millis",
+      "kind": "method",
+      "line": 45,
+      "name": "monotonic_millis",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 45,
+        "name": "monotonic_millis"
+      },
+      "path": "src/health_plane/tests/mod.rs",
+      "signature": "fn monotonic_millis(&self) -> u64",
       "source_class": "handwritten"
     },
     {
@@ -56321,7 +56389,7 @@
         "identity": "crate::health_plane::tests::plane",
         "macro_expansion": "not_measured",
         "path": "src/health_plane/tests/mod.rs",
-        "signature": "fn plane(&self) -> HealthPlane<'_>",
+        "signature": "fn plane(&self) -> HealthPlane<'_, NodeRegistry>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::tests::plane",
@@ -56337,7 +56405,7 @@
         "name": "plane"
       },
       "path": "src/health_plane/tests/mod.rs",
-      "signature": "fn plane(&self) -> HealthPlane<'_>",
+      "signature": "fn plane(&self) -> HealthPlane<'_, NodeRegistry>",
       "source_class": "handwritten"
     },
     {
@@ -56971,23 +57039,23 @@
         "identity": "crate::health_plane::lifecycle::project",
         "macro_expansion": "not_measured",
         "path": "src/health_plane/lifecycle.rs",
-        "signature": "pub fn project(events: &[AuditEvent], now: i64, limit: usize) -> Vec<SignalRecord>",
+        "signature": "pub fn project<'a>( events: impl IntoIterator<Item = LifecycleTransition<'a>>, now: i64, limit: usize, ) -> Vec<SignalRecord>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::lifecycle::project",
       "kind": "function",
-      "line": 49,
+      "line": 47,
       "name": "project",
       "native": {
         "analyzer": "cccc",
         "cognitive": 8,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 49,
+        "line": 47,
         "name": "project"
       },
       "path": "src/health_plane/lifecycle.rs",
-      "signature": "pub fn project(events: &[AuditEvent], now: i64, limit: usize) -> Vec<SignalRecord>",
+      "signature": "pub fn project<'a>( events: impl IntoIterator<Item = LifecycleTransition<'a>>, now: i64, limit: usize, ) -> Vec<SignalRecord>",
       "source_class": "handwritten"
     },
     {
@@ -56997,23 +57065,23 @@
         "identity": "crate::health_plane::lifecycle::lifecycle_kind",
         "macro_expansion": "not_measured",
         "path": "src/health_plane/lifecycle.rs",
-        "signature": "fn lifecycle_kind(event: &AuditEvent) -> Option<SignalKind>",
+        "signature": "fn lifecycle_kind(event: &LifecycleTransition<'_>) -> Option<SignalKind>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::lifecycle::lifecycle_kind",
       "kind": "function",
-      "line": 93,
+      "line": 95,
       "name": "lifecycle_kind",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 93,
+        "line": 95,
         "name": "lifecycle_kind"
       },
       "path": "src/health_plane/lifecycle.rs",
-      "signature": "fn lifecycle_kind(event: &AuditEvent) -> Option<SignalKind>",
+      "signature": "fn lifecycle_kind(event: &LifecycleTransition<'_>) -> Option<SignalKind>",
       "source_class": "handwritten"
     },
     {
@@ -57028,14 +57096,14 @@
       },
       "identity": "crate::health_plane::lifecycle::local_signal_id",
       "kind": "function",
-      "line": 106,
+      "line": 108,
       "name": "local_signal_id",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 106,
+        "line": 108,
         "name": "local_signal_id"
       },
       "path": "src/health_plane/lifecycle.rs",
@@ -57046,52 +57114,26 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::lifecycle::occurred_at_seconds",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/lifecycle.rs",
-        "signature": "fn occurred_at_seconds(value: &str) -> Option<i64>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::lifecycle::occurred_at_seconds",
-      "kind": "function",
-      "line": 121,
-      "name": "occurred_at_seconds",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 121,
-        "name": "occurred_at_seconds"
-      },
-      "path": "src/health_plane/lifecycle.rs",
-      "signature": "fn occurred_at_seconds(value: &str) -> Option<i64>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
         "identity": "crate::health_plane::lifecycle::event",
         "macro_expansion": "not_measured",
         "path": "src/health_plane/lifecycle.rs",
-        "signature": "fn event( id: i64, node_id: &str, from_state: Option<PeerState>, to_state: Option<PeerState>, occurred_at: i64, ) -> AuditEvent",
+        "signature": "fn event( id: i64, node_id: &'static str, from_state: Option<LifecycleState>, to_state: Option<LifecycleState>, occurred_at: i64, ) -> LifecycleTransition<'static>",
         "source_class": "handwritten"
       },
       "identity": "crate::health_plane::lifecycle::event",
       "kind": "function",
-      "line": 134,
+      "line": 130,
       "name": "event",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 134,
+        "line": 130,
         "name": "event"
       },
       "path": "src/health_plane/lifecycle.rs",
-      "signature": "fn event( id: i64, node_id: &str, from_state: Option<PeerState>, to_state: Option<PeerState>, occurred_at: i64, ) -> AuditEvent",
+      "signature": "fn event( id: i64, node_id: &'static str, from_state: Option<LifecycleState>, to_state: Option<LifecycleState>, occurred_at: i64, ) -> LifecycleTransition<'static>",
       "source_class": "handwritten"
     },
     {
@@ -57106,14 +57148,14 @@
       },
       "identity": "crate::health_plane::lifecycle::activation_and_revocation_project_onto_the_two_local_signal_kinds",
       "kind": "function",
-      "line": 158,
+      "line": 147,
       "name": "activation_and_revocation_project_onto_the_two_local_signal_kinds",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 158,
+        "line": 147,
         "name": "activation_and_revocation_project_onto_the_two_local_signal_kinds"
       },
       "path": "src/health_plane/lifecycle.rs",
@@ -57132,18 +57174,44 @@
       },
       "identity": "crate::health_plane::lifecycle::a_non_transition_row_produces_no_signal",
       "kind": "function",
-      "line": 186,
+      "line": 175,
       "name": "a_non_transition_row_produces_no_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 186,
+        "line": 175,
         "name": "a_non_transition_row_produces_no_signal"
       },
       "path": "src/health_plane/lifecycle.rs",
       "signature": "fn a_non_transition_row_produces_no_signal()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::lifecycle::a_transition_without_a_valid_timestamp_produces_no_signal",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/lifecycle.rs",
+        "signature": "fn a_transition_without_a_valid_timestamp_produces_no_signal()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::lifecycle::a_transition_without_a_valid_timestamp_produces_no_signal",
+      "kind": "function",
+      "line": 204,
+      "name": "a_transition_without_a_valid_timestamp_produces_no_signal",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 204,
+        "name": "a_transition_without_a_valid_timestamp_produces_no_signal"
+      },
+      "path": "src/health_plane/lifecycle.rs",
+      "signature": "fn a_transition_without_a_valid_timestamp_produces_no_signal()",
       "source_class": "handwritten"
     },
     {
@@ -57158,14 +57226,14 @@
       },
       "identity": "crate::health_plane::lifecycle::the_signal_id_is_stable_per_row_and_distinct_across_rows",
       "kind": "function",
-      "line": 215,
+      "line": 217,
       "name": "the_signal_id_is_stable_per_row_and_distinct_across_rows",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 215,
+        "line": 217,
         "name": "the_signal_id_is_stable_per_row_and_distinct_across_rows"
       },
       "path": "src/health_plane/lifecycle.rs",
@@ -57196,32 +57264,6 @@
       },
       "path": "src/health_plane/lifecycle.rs",
       "signature": "fn the_feed_is_bounded_by_capacity_and_by_the_frozen_retention_window()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::health_plane::lifecycle::no_privacy_class_one_field_can_reach_a_projected_signal",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/lifecycle.rs",
-        "signature": "fn no_privacy_class_one_field_can_reach_a_projected_signal()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::lifecycle::no_privacy_class_one_field_can_reach_a_projected_signal",
-      "kind": "function",
-      "line": 293,
-      "name": "no_privacy_class_one_field_can_reach_a_projected_signal",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 293,
-        "name": "no_privacy_class_one_field_can_reach_a_projected_signal"
-      },
-      "path": "src/health_plane/lifecycle.rs",
-      "signature": "fn no_privacy_class_one_field_can_reach_a_projected_signal()",
       "source_class": "handwritten"
     },
     {
@@ -65184,6 +65226,58 @@
       "cognitive": 1,
       "cyclomatic": 3,
       "derived": {
+        "identity": "crate::node_registry::types::as_str",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub fn as_str(self) -> &'static str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::as_str",
+      "kind": "method",
+      "line": 13,
+      "name": "as_str",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 13,
+        "name": "as_str"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub fn as_str(self) -> &'static str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::types::from_wire",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub fn from_wire(value: &str) -> Option<Self>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::from_wire",
+      "kind": "method",
+      "line": 20,
+      "name": "from_wire",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 20,
+        "name": "from_wire"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub fn from_wire(value: &str) -> Option<Self>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
         "identity": "crate::node_registry::types::parse",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/types.rs",
@@ -65192,14 +65286,196 @@
       },
       "identity": "crate::node_registry::types::parse",
       "kind": "method",
-      "line": 23,
+      "line": 24,
       "name": "parse",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 24,
+        "name": "parse"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub(super) fn parse(value: &str) -> Result<Self, RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::types::parse::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": ".ok_or_else(|| RegistryError::InvalidSchema(format!(\"unknown peer role {value:?}\")))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::parse::<closure>",
+      "kind": "closure",
+      "line": 26,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 26,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": ".ok_or_else(|| RegistryError::InvalidSchema(format!(\"unknown peer role {value:?}\")))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::types::code",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub const fn code(self) -> i64",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::code",
+      "kind": "method",
+      "line": 31,
+      "name": "code",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 23,
+        "line": 31,
+        "name": "code"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub const fn code(self) -> i64",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::types::from_code",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub fn from_code(code: i64) -> Option<Self>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::from_code",
+      "kind": "method",
+      "line": 38,
+      "name": "from_code",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 38,
+        "name": "from_code"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub fn from_code(code: i64) -> Option<Self>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::types::from",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "fn from(role: EnrollmentRole) -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::from",
+      "kind": "method",
+      "line": 48,
+      "name": "from",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 48,
+        "name": "from"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "fn from(role: EnrollmentRole) -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node_registry::types::lifecycle_state",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "fn lifecycle_state(self) -> LifecycleState",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::lifecycle_state",
+      "kind": "method",
+      "line": 65,
+      "name": "lifecycle_state",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 65,
+        "name": "lifecycle_state"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "fn lifecycle_state(self) -> LifecycleState",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::node_registry::types::as_str@73#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub fn as_str(self) -> &'static str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::as_str@73#2",
+      "kind": "method",
+      "line": 73,
+      "name": "as_str",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 73,
+        "name": "as_str"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub fn as_str(self) -> &'static str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::node_registry::types::parse@82#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub(super) fn parse(value: &str) -> Result<Self, RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::parse@82#2",
+      "kind": "method",
+      "line": 82,
+      "name": "parse",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 82,
         "name": "parse"
       },
       "path": "src/node_registry/types.rs",
@@ -65218,18 +65494,148 @@
       },
       "identity": "crate::node_registry::types::fmt",
       "kind": "method",
-      "line": 87,
+      "line": 96,
       "name": "fmt",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 87,
+        "line": 96,
         "name": "fmt"
       },
       "path": "src/node_registry/types.rs",
       "signature": "fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node_registry::types::as_str@109#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub fn as_str(self) -> &'static str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::as_str@109#3",
+      "kind": "method",
+      "line": 109,
+      "name": "as_str",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 109,
+        "name": "as_str"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub fn as_str(self) -> &'static str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node_registry::types::parse@117#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub(super) fn parse(value: &str) -> Result<Self, RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::parse@117#3",
+      "kind": "method",
+      "line": 117,
+      "name": "parse",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 117,
+        "name": "parse"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub(super) fn parse(value: &str) -> Result<Self, RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::types::lifecycle_transition",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "pub(crate) fn lifecycle_transition(&self) -> LifecycleTransition<'_>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::lifecycle_transition",
+      "kind": "method",
+      "line": 191,
+      "name": "lifecycle_transition",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 191,
+        "name": "lifecycle_transition"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "pub(crate) fn lifecycle_transition(&self) -> LifecycleTransition<'_>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::types::lifecycle_transition::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": ".map(|time| time.timestamp()),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::lifecycle_transition::<closure>",
+      "kind": "closure",
+      "line": 199,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 199,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": ".map(|time| time.timestamp()),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::types::audit_transition_view_excludes_private_fields_and_preserves_timestamp_validation",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/types.rs",
+        "signature": "fn audit_transition_view_excludes_private_fields_and_preserves_timestamp_validation()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::types::audit_transition_view_excludes_private_fields_and_preserves_timestamp_validation",
+      "kind": "function",
+      "line": 209,
+      "name": "audit_transition_view_excludes_private_fields_and_preserves_timestamp_validation",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 209,
+        "name": "audit_transition_view_excludes_private_fields_and_preserves_timestamp_validation"
+      },
+      "path": "src/node_registry/types.rs",
+      "signature": "fn audit_transition_view_excludes_private_fields_and_preserves_timestamp_validation()",
       "source_class": "handwritten"
     },
     {
@@ -67654,58 +68060,6 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::audit::lifecycle_trust_events",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub fn lifecycle_trust_events(&self, limit: usize) -> Result<Vec<AuditEvent>, RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::lifecycle_trust_events",
-      "kind": "method",
-      "line": 89,
-      "name": "lifecycle_trust_events",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 89,
-        "name": "lifecycle_trust_events"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub fn lifecycle_trust_events(&self, limit: usize) -> Result<Vec<AuditEvent>, RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::lifecycle_trust_events::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "self.with_connection(|connection| lifecycle_trust_events_in(connection, limit))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::lifecycle_trust_events::<closure>",
-      "kind": "closure",
-      "line": 90,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 90,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "self.with_connection(|connection| lifecycle_trust_events_in(connection, limit))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
         "identity": "crate::node_registry::audit::record_transport_audit",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/audit.rs",
@@ -67714,14 +68068,14 @@
       },
       "identity": "crate::node_registry::audit::record_transport_audit",
       "kind": "method",
-      "line": 94,
+      "line": 81,
       "name": "record_transport_audit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 94,
+        "line": 81,
         "name": "record_transport_audit"
       },
       "path": "src/node_registry/audit.rs",
@@ -67740,14 +68094,14 @@
       },
       "identity": "crate::node_registry::audit::record_transport_audit::<closure>",
       "kind": "closure",
-      "line": 100,
+      "line": 87,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 100,
+        "line": 87,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
@@ -67766,14 +68120,14 @@
       },
       "identity": "crate::node_registry::audit::record_transport_audit::<closure>::<closure>",
       "kind": "closure",
-      "line": 105,
+      "line": 92,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 105,
+        "line": 92,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
@@ -67792,14 +68146,14 @@
       },
       "identity": "crate::node_registry::audit::consume_cue_rate",
       "kind": "method",
-      "line": 138,
+      "line": 125,
       "name": "consume_cue_rate",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 138,
+        "line": 125,
         "name": "consume_cue_rate"
       },
       "path": "src/node_registry/audit.rs",
@@ -67818,14 +68172,14 @@
       },
       "identity": "crate::node_registry::audit::consume_cue_rate::<closure>",
       "kind": "closure",
-      "line": 145,
+      "line": 132,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "closure",
-        "line": 145,
+        "line": 132,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
@@ -67844,14 +68198,14 @@
       },
       "identity": "crate::node_registry::audit::consume_cue_rate::<closure>::<closure>",
       "kind": "closure",
-      "line": 152,
+      "line": 139,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 152,
+        "line": 139,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
@@ -67870,14 +68224,14 @@
       },
       "identity": "crate::node_registry::audit::record_enrollment_audit",
       "kind": "method",
-      "line": 181,
+      "line": 168,
       "name": "record_enrollment_audit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 181,
+        "line": 168,
         "name": "record_enrollment_audit"
       },
       "path": "src/node_registry/audit.rs",
@@ -67896,14 +68250,14 @@
       },
       "identity": "crate::node_registry::audit::record_enrollment_audit::<closure>",
       "kind": "closure",
-      "line": 194,
+      "line": 181,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 194,
+        "line": 181,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
@@ -67922,14 +68276,14 @@
       },
       "identity": "crate::node_registry::audit::record_enrollment_audit_tx",
       "kind": "function",
-      "line": 212,
+      "line": 199,
       "name": "record_enrollment_audit_tx",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 212,
+        "line": 199,
         "name": "record_enrollment_audit_tx"
       },
       "path": "src/node_registry/audit.rs",
@@ -67948,14 +68302,14 @@
       },
       "identity": "crate::node_registry::audit::record_enrollment_audit_tx::<closure>",
       "kind": "closure",
-      "line": 222,
+      "line": 209,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 222,
+        "line": 209,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
@@ -67974,14 +68328,14 @@
       },
       "identity": "crate::node_registry::audit::record_audit",
       "kind": "function",
-      "line": 255,
+      "line": 242,
       "name": "record_audit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 255,
+        "line": 242,
         "name": "record_audit"
       },
       "path": "src/node_registry/audit.rs",
@@ -68000,14 +68354,14 @@
       },
       "identity": "crate::node_registry::audit::lifecycle_trust_events_in",
       "kind": "function",
-      "line": 284,
+      "line": 271,
       "name": "lifecycle_trust_events_in",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 284,
+        "line": 271,
         "name": "lifecycle_trust_events_in"
       },
       "path": "src/node_registry/audit.rs",
@@ -68026,14 +68380,14 @@
       },
       "identity": "crate::node_registry::audit::audit_from_row",
       "kind": "function",
-      "line": 299,
+      "line": 286,
       "name": "audit_from_row",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 299,
+        "line": 286,
         "name": "audit_from_row"
       },
       "path": "src/node_registry/audit.rs",
@@ -73070,14 +73424,14 @@
       },
       "identity": "crate::node_registry::health::tests::fixture",
       "kind": "function",
-      "line": 41,
+      "line": 42,
       "name": "fixture",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 41,
+        "line": 42,
         "name": "fixture"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73096,14 +73450,14 @@
       },
       "identity": "crate::node_registry::health::tests::reopen",
       "kind": "function",
-      "line": 53,
+      "line": 54,
       "name": "reopen",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 53,
+        "line": 54,
         "name": "reopen"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73122,14 +73476,14 @@
       },
       "identity": "crate::node_registry::health::tests::trust",
       "kind": "function",
-      "line": 58,
+      "line": 59,
       "name": "trust",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 58,
+        "line": 59,
         "name": "trust"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73148,14 +73502,14 @@
       },
       "identity": "crate::node_registry::health::tests::trust::<closure>",
       "kind": "closure",
-      "line": 66,
+      "line": 67,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 66,
+        "line": 67,
         "name": "<closure>"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73174,14 +73528,14 @@
       },
       "identity": "crate::node_registry::health::tests::performer",
       "kind": "function",
-      "line": 77,
+      "line": 78,
       "name": "performer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 77,
+        "line": 78,
         "name": "performer"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73200,14 +73554,14 @@
       },
       "identity": "crate::node_registry::health::tests::profile",
       "kind": "function",
-      "line": 86,
+      "line": 87,
       "name": "profile",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 86,
+        "line": 87,
         "name": "profile"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73226,14 +73580,14 @@
       },
       "identity": "crate::node_registry::health::tests::pulse",
       "kind": "function",
-      "line": 113,
+      "line": 114,
       "name": "pulse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 113,
+        "line": 114,
         "name": "pulse"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73252,14 +73606,14 @@
       },
       "identity": "crate::node_registry::health::tests::signal",
       "kind": "function",
-      "line": 134,
+      "line": 135,
       "name": "signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 134,
+        "line": 135,
         "name": "signal"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73278,14 +73632,14 @@
       },
       "identity": "crate::node_registry::health::tests::apply",
       "kind": "function",
-      "line": 163,
+      "line": 164,
       "name": "apply",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 163,
+        "line": 164,
         "name": "apply"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73304,14 +73658,14 @@
       },
       "identity": "crate::node_registry::health::tests::apply_at",
       "kind": "function",
-      "line": 172,
+      "line": 173,
       "name": "apply_at",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 172,
+        "line": 173,
         "name": "apply_at"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73330,18 +73684,44 @@
       },
       "identity": "crate::node_registry::health::tests::accepted",
       "kind": "function",
-      "line": 196,
+      "line": 197,
       "name": "accepted",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 196,
+        "line": 197,
         "name": "accepted"
       },
       "path": "src/node_registry/health/tests/mod.rs",
       "signature": "fn accepted(cursor: u64) -> HealthDecision",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/tests/mod.rs",
+        "signature": "fn schema_creates_bounded_empty_tables_beside_trust_rows()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows",
+      "kind": "function",
+      "line": 202,
+      "name": "schema_creates_bounded_empty_tables_beside_trust_rows",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 202,
+        "name": "schema_creates_bounded_empty_tables_beside_trust_rows"
+      },
+      "path": "src/node_registry/health/tests/mod.rs",
+      "signature": "fn schema_creates_bounded_empty_tables_beside_trust_rows()",
       "source_class": "handwritten"
     },
     {
@@ -73356,14 +73736,14 @@
       },
       "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>",
       "kind": "closure",
-      "line": 207,
+      "line": 208,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 207,
+        "line": 208,
         "name": "<closure>"
       },
       "path": "src/node_registry/health/tests/mod.rs",
@@ -73374,26 +73754,104 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@239#4",
+        "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@215#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/health/tests/mod.rs",
-        "signature": ".query_row(&format!(\"SELECT COUNT(*) FROM {table}\"), [], |row| {",
+        "signature": "|row| row.get(0),",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@239#4",
+      "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@215#2",
       "kind": "closure",
-      "line": 239,
+      "line": 215,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 239,
+        "line": 215,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/tests/mod.rs",
+      "signature": "|row| row.get(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@224#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/tests/mod.rs",
+        "signature": "|row| row.get(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@224#3",
+      "kind": "closure",
+      "line": 224,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 224,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/tests/mod.rs",
+      "signature": "|row| row.get(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@240#4",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/tests/mod.rs",
+        "signature": ".query_row(&format!(\"SELECT COUNT(*) FROM {table}\"), [], |row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@240#4",
+      "kind": "closure",
+      "line": 240,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 240,
         "name": "<closure>"
       },
       "path": "src/node_registry/health/tests/mod.rs",
       "signature": ".query_row(&format!(\"SELECT COUNT(*) FROM {table}\"), [], |row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@250#5",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/tests/mod.rs",
+        "signature": "|row| row.get(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::tests::schema_creates_bounded_empty_tables_beside_trust_rows::<closure>@250#5",
+      "kind": "closure",
+      "line": 250,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 250,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/tests/mod.rs",
+      "signature": "|row| row.get(0),",
       "source_class": "handwritten"
     },
     {
@@ -87937,7 +88395,7 @@
         "identity": "crate::operations::health::fleet::collect_active_fleet_nodes",
         "macro_expansion": "not_measured",
         "path": "src/operations/health/fleet.rs",
-        "signature": "fn collect_active_fleet_nodes( plane: &HealthPlane<'_>, registry: &NodeRegistry, observed_at: i64, mut nodes: Vec<FleetNode>, ) -> OperationResult<Vec<FleetNode>>",
+        "signature": "fn collect_active_fleet_nodes( plane: &HealthPlane<'_, NodeRegistry>, registry: &NodeRegistry, observed_at: i64, mut nodes: Vec<FleetNode>, ) -> OperationResult<Vec<FleetNode>>",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::health::fleet::collect_active_fleet_nodes",
@@ -87953,7 +88411,7 @@
         "name": "collect_active_fleet_nodes"
       },
       "path": "src/operations/health/fleet.rs",
-      "signature": "fn collect_active_fleet_nodes( plane: &HealthPlane<'_>, registry: &NodeRegistry, observed_at: i64, mut nodes: Vec<FleetNode>, ) -> OperationResult<Vec<FleetNode>>",
+      "signature": "fn collect_active_fleet_nodes( plane: &HealthPlane<'_, NodeRegistry>, registry: &NodeRegistry, observed_at: i64, mut nodes: Vec<FleetNode>, ) -> OperationResult<Vec<FleetNode>>",
       "source_class": "handwritten"
     },
     {
@@ -111952,6 +112410,760 @@
       },
       "path": "src/util/entropy.rs",
       "signature": "pub fn next_u32() -> u32",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::domain::health_plane::store::as_transition",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/health_plane/store.rs",
+        "signature": "pub fn as_transition(&self) -> super::model::LifecycleTransition<'_>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::health_plane::store::as_transition",
+      "kind": "method",
+      "line": 47,
+      "name": "as_transition",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 47,
+        "name": "as_transition"
+      },
+      "path": "src/domain/health_plane/store.rs",
+      "signature": "pub fn as_transition(&self) -> super::model::LifecycleTransition<'_>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::health::store::is_active_for_role",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn is_active_for_role(&self, role: i64) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::is_active_for_role",
+      "kind": "method",
+      "line": 18,
+      "name": "is_active_for_role",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 18,
+        "name": "is_active_for_role"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn is_active_for_role(&self, role: i64) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::health::store::fleet_view",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn fleet_view(peer: HealthFleetPeer) -> HealthFleetView",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::fleet_view",
+      "kind": "function",
+      "line": 23,
+      "name": "fleet_view",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 23,
+        "name": "fleet_view"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn fleet_view(peer: HealthFleetPeer) -> HealthFleetView",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::transition_view",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn transition_view(event: AuditEvent) -> HealthTransitionView",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::transition_view",
+      "kind": "function",
+      "line": 47,
+      "name": "transition_view",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 47,
+        "name": "transition_view"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn transition_view(event: AuditEvent) -> HealthTransitionView",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signal_view",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn signal_view(feed: HealthSignalFeed) -> HealthSignalView",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signal_view",
+      "kind": "function",
+      "line": 58,
+      "name": "signal_view",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 58,
+        "name": "signal_view"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn signal_view(feed: HealthSignalFeed) -> HealthSignalView",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signal_view::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": ".map(|peer| HealthCursorView {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signal_view::<closure>",
+      "kind": "closure",
+      "line": 63,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 63,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": ".map(|peer| HealthCursorView {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signal_view::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": ".map(|authorization| authorization.state.as_str().to_owned())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signal_view::<closure>::<closure>",
+      "kind": "closure",
+      "line": 67,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 67,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": ".map(|authorization| authorization.state.as_str().to_owned())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signal_view::<closure>::<closure>@68#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": ".unwrap_or_else(|| \"unknown\".to_owned()),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signal_view::<closure>::<closure>@68#2",
+      "kind": "closure",
+      "line": 68,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 68,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": ".unwrap_or_else(|| \"unknown\".to_owned()),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signal_view::<closure>@77#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": ".map(|entry| (entry.node_id, entry.signal))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signal_view::<closure>@77#2",
+      "kind": "closure",
+      "line": 77,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 77,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": ".map(|entry| (entry.node_id, entry.signal))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::local_node_id",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn local_node_id(&self) -> &str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::local_node_id",
+      "kind": "method",
+      "line": 90,
+      "name": "local_node_id",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 90,
+        "name": "local_node_id"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn local_node_id(&self) -> &str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::apply_message",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn apply_message( &self, sender: &str, payload: &HealthPayload, created_at: i64, now: i64, message_bytes: i64, ) -> Result<HealthDecision, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::apply_message",
+      "kind": "method",
+      "line": 93,
+      "name": "apply_message",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 93,
+        "name": "apply_message"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn apply_message( &self, sender: &str, payload: &HealthPayload, created_at: i64, now: i64, message_bytes: i64, ) -> Result<HealthDecision, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::fleet_snapshot",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn fleet_snapshot(&self, now: i64) -> Result<Vec<HealthFleetView>, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::fleet_snapshot",
+      "kind": "method",
+      "line": 109,
+      "name": "fleet_snapshot",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 109,
+        "name": "fleet_snapshot"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn fleet_snapshot(&self, now: i64) -> Result<Vec<HealthFleetView>, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::fleet_snapshot::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": ".map(|peers| peers.into_iter().map(fleet_view).collect())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::fleet_snapshot::<closure>",
+      "kind": "closure",
+      "line": 111,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 111,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": ".map(|peers| peers.into_iter().map(fleet_view).collect())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::node_snapshot",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn node_snapshot( &self, node_id: &str, now: i64, ) -> Result<Option<HealthFleetView>, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::node_snapshot",
+      "kind": "method",
+      "line": 113,
+      "name": "node_snapshot",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 113,
+        "name": "node_snapshot"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn node_snapshot( &self, node_id: &str, now: i64, ) -> Result<Option<HealthFleetView>, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::node_snapshot::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": ".map(|peer| peer.map(fleet_view))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::node_snapshot::<closure>",
+      "kind": "closure",
+      "line": 119,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 119,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": ".map(|peer| peer.map(fleet_view))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signal_feed",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn signal_feed(&self, limit: usize, now: i64) -> Result<HealthSignalView, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signal_feed",
+      "kind": "method",
+      "line": 121,
+      "name": "signal_feed",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 121,
+        "name": "signal_feed"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn signal_feed(&self, limit: usize, now: i64) -> Result<HealthSignalView, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signals",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn signals( &self, node_id: &str, limit: usize, now: i64, ) -> Result<Vec<SignalRecord>, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signals",
+      "kind": "method",
+      "line": 124,
+      "name": "signals",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 124,
+        "name": "signals"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn signals( &self, node_id: &str, limit: usize, now: i64, ) -> Result<Vec<SignalRecord>, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::authorization",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn authorization(&self, node_id: &str) -> Result<Option<Self::Authorization>, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::authorization",
+      "kind": "method",
+      "line": 132,
+      "name": "authorization",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 132,
+        "name": "authorization"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn authorization(&self, node_id: &str) -> Result<Option<Self::Authorization>, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::enqueue_signal",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, now: i64, ) -> Result<Self::OutboxEntry, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::enqueue_signal",
+      "kind": "method",
+      "line": 135,
+      "name": "enqueue_signal",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 135,
+        "name": "enqueue_signal"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn enqueue_signal( &self, request: SignalEnqueueRequest<'_>, now: i64, ) -> Result<Self::OutboxEntry, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::outbox",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn outbox(&self, limit: usize) -> Result<Vec<Self::OutboxEntry>, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::outbox",
+      "kind": "method",
+      "line": 142,
+      "name": "outbox",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 142,
+        "name": "outbox"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn outbox(&self, limit: usize) -> Result<Vec<Self::OutboxEntry>, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::mark_signal_sent",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn mark_signal_sent( &self, signal_id: &str, message_id: &str, now: i64, ) -> Result<bool, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::mark_signal_sent",
+      "kind": "method",
+      "line": 145,
+      "name": "mark_signal_sent",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 145,
+        "name": "mark_signal_sent"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn mark_signal_sent( &self, signal_id: &str, message_id: &str, now: i64, ) -> Result<bool, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::reset_outbox_attempts",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn reset_outbox_attempts(&self, target_node_id: &str, now: i64) -> Result<u64, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::reset_outbox_attempts",
+      "kind": "method",
+      "line": 153,
+      "name": "reset_outbox_attempts",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 153,
+        "name": "reset_outbox_attempts"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn reset_outbox_attempts(&self, target_node_id: &str, now: i64) -> Result<u64, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::signals_dropped",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn signals_dropped(&self) -> Result<i64, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::signals_dropped",
+      "kind": "method",
+      "line": 156,
+      "name": "signals_dropped",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 156,
+        "name": "signals_dropped"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn signals_dropped(&self) -> Result<i64, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::prune",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn prune(&self, now: i64) -> Result<Self::PruneReport, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::prune",
+      "kind": "method",
+      "line": 159,
+      "name": "prune",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 159,
+        "name": "prune"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn prune(&self, now: i64) -> Result<Self::PruneReport, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::purge_revoked",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn purge_revoked(&self, now: i64) -> Result<Vec<String>, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::purge_revoked",
+      "kind": "method",
+      "line": 162,
+      "name": "purge_revoked",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 162,
+        "name": "purge_revoked"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn purge_revoked(&self, now: i64) -> Result<Vec<String>, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::storage_bytes",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn storage_bytes(&self) -> Result<i64, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::storage_bytes",
+      "kind": "method",
+      "line": 165,
+      "name": "storage_bytes",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 165,
+        "name": "storage_bytes"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn storage_bytes(&self) -> Result<i64, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::audit_events",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn audit_events(&self, limit: usize) -> Result<Vec<Self::AuditEvent>, Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::audit_events",
+      "kind": "method",
+      "line": 168,
+      "name": "audit_events",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 168,
+        "name": "audit_events"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn audit_events(&self, limit: usize) -> Result<Vec<Self::AuditEvent>, Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::mark_version_incompatible",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn mark_version_incompatible(&self, node_id: &str, now: i64) -> Result<(), Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::mark_version_incompatible",
+      "kind": "method",
+      "line": 171,
+      "name": "mark_version_incompatible",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 171,
+        "name": "mark_version_incompatible"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn mark_version_incompatible(&self, node_id: &str, now: i64) -> Result<(), Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::health::store::record_audit",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/health/store.rs",
+        "signature": "fn record_audit(&self, input: HealthAuditInput<'_>) -> Result<(), Self::Error>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::health::store::record_audit",
+      "kind": "method",
+      "line": 174,
+      "name": "record_audit",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 174,
+        "name": "record_audit"
+      },
+      "path": "src/node_registry/health/store.rs",
+      "signature": "fn record_audit(&self, input: HealthAuditInput<'_>) -> Result<(), Self::Error>",
       "source_class": "handwritten"
     }
   ],

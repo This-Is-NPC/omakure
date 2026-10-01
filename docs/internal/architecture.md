@@ -134,10 +134,8 @@ verify workspace paths or host runtimes.
 | Windows | winreg 0.56, windows-sys 0.61 | Install-path registry handling, ACLs, and process checks |
 | Docs generator (`usage-generator` feature) | clap_usage 5, usage-lib 6.6 (`jdx/usage` rev `9732c63`) | Usage KDL, Markdown, and roff artifacts; not in runtime builds |
 
-Direct dependencies are intentionally limited to the retained headless surface.
-The package does not declare `ratatui`, `crossterm`, or `rattles`. It does
-declare `mlua` (`lua54`, `vendored`), the embedded runtime for the `.lua`
-script kind; the removed TUI widget runtime is unrelated and stays removed.
+Direct dependencies match the supported headless runtime. `mlua` (`lua54`,
+`vendored`) runs the `.lua` script kind.
 
 ## Source structure
 
@@ -164,7 +162,7 @@ src/
 │   ├── json.rs              stable envelope and error codes
 │   └── …                    one adapter per remaining verb (init, trace, token, update, …)
 ├── domain/                  pure schema, parsing, validation, scheduling
-│   └── health_plane/        frozen Health Plane bounds and value types
+│   └── health_plane/        frozen bounds, value types, and storage contract
 ├── operations/              protocol-neutral CLI/HTTP behavior
 │   ├── core/                scripts, runs, queue, and workspace operations
 │   ├── config.rs            resolved config and environment diagnostics
@@ -202,12 +200,12 @@ src/
 ├── node_identity.rs         BIP-340 machine identity and node ID derivation
 ├── node_key.rs              shared private-key custody and file validation
 ├── node_registry/           node-owned trust and delivery persistence boundary
-│   └── health/              Health Plane reads and receive-order application
+│   └── health/              Health Plane reads, receive-order application, and store implementation
 ├── direct_transport/        Noise framing, certificates, envelopes, and replay limits
 ├── direct_service/          production direct listener, peer admission, and outboxes
 │   └── ack.rs               shared signed ACK verification for Cue and Baseline
 ├── direct_health.rs         Health Plane carriage over an established direct session
-├── health_plane.rs          Health Plane ingest, authorization, ordering, and fleet projection
+├── health_plane.rs          store-neutral Health Plane ingest and fleet projection
 ├── health_plane/            Health Plane schema, reporting, lifecycle, and tests
 │   ├── schema.rs            frozen wire schema
 │   ├── report/              Performer-side facts, reporting, payloads, sanitization, and IDs
@@ -287,7 +285,10 @@ src/
   `health_ack`, `health_error` — and no new transport, signature construction,
   key material, or capability. `src/direct_health.rs` is the only seam between
   the shipped session and `src/health_plane.rs`, which owns authorization,
-  ordering, idempotency, capacity, retention, and every bound. The companion
+  ordering, idempotency, capacity, retention, and every bound through the
+  `domain::health_plane::store::HealthStore` interface. The registry implements
+  that interface while retaining exclusive ownership of its SQL transactions.
+  The companion
   `src/health_plane/` directory holds its wire schema, reporting, and lifecycle
   support.
   `src/operations/health/` projects the Conductor-local fleet-status and

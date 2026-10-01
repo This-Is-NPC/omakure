@@ -216,7 +216,7 @@ fn signal_payload(
 }
 
 fn ingest(
-    plane: &HealthPlane<'_>,
+    plane: &HealthPlane<'_, NodeRegistry>,
     sender: &str,
     kind: &str,
     created_at: i64,

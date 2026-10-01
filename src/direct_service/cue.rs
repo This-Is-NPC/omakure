@@ -476,7 +476,7 @@ fn await_cue_outcome(
 
 /// Whether this peer's recorded Signals already carry the awaited run.
 fn signal_recorded(
-    plane: &crate::health_plane::HealthPlane<'_>,
+    plane: &crate::health_plane::HealthPlane<'_, NodeRegistry>,
     node_id: &str,
     expected_run_id: &str,
 ) -> bool {

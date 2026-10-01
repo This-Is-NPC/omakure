@@ -136,7 +136,7 @@ impl Node {
     }
 }
 
-fn open_plane<'a>(node: &Node, registry: &'a NodeRegistry) -> HealthPlane<'a> {
+fn open_plane<'a>(node: &Node, registry: &'a NodeRegistry) -> HealthPlane<'a, NodeRegistry> {
     HealthPlane::with_clock(registry, Box::new(SharedClock(Arc::clone(&node.clock))))
 }
 
@@ -249,7 +249,7 @@ fn ack_payload(target: &str, message_seed: u64, acked: &str, cursor: u64) -> Val
 }
 
 fn ingest(
-    plane: &HealthPlane<'_>,
+    plane: &HealthPlane<'_, NodeRegistry>,
     sender: &str,
     kind: &str,
     created_at: i64,
@@ -270,7 +270,7 @@ fn ingest(
 /// Deliver one `run-completed` Signal and return the decision.
 fn deliver_signal(
     node: &Node,
-    plane: &HealthPlane<'_>,
+    plane: &HealthPlane<'_, NodeRegistry>,
     sender: &str,
     message_seed: u64,
     sequence: u64,
@@ -435,21 +435,29 @@ fn enrollment_and_revocation_each_produce_exactly_one_local_lifecycle_signal() {
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
 
-    let enrolled = plane.local_signals(64).expect("local signals");
+    let enrolled = plane.signal_feed(64).expect("signal feed").local;
     assert_eq!(enrolled.len(), 1, "one activation is one Signal");
     assert_eq!(enrolled[0].kind, SignalKind::Enrolled);
     assert_eq!(enrolled[0].subject.as_deref(), Some(performer.as_str()));
     assert!(enrolled[0].run.is_none());
+    assert_no_leakage(
+        "local enrollment signals",
+        &serde_json::to_string(&enrolled).unwrap(),
+    );
 
     // Reading twice cannot mint a second Signal, because nothing is written.
-    assert_eq!(plane.local_signals(64).expect("local signals"), enrolled);
+    assert_eq!(plane.signal_feed(64).expect("signal feed").local, enrolled);
 
     revoke_peer(&node, &performer);
-    let after = plane.local_signals(64).expect("local signals");
+    let after = plane.signal_feed(64).expect("signal feed").local;
     assert_eq!(after.len(), 2, "one revocation is one more Signal");
     assert_eq!(after[0].kind, SignalKind::Revoked);
     assert_eq!(after[0].subject.as_deref(), Some(performer.as_str()));
     assert_eq!(after[1], enrolled[0], "the enrolled Signal is unchanged");
+    assert_no_leakage(
+        "local revocation signals",
+        &serde_json::to_string(&after).unwrap(),
+    );
     assert!(
         after[0].sequence > after[1].sequence,
         "the local feed is ordered newest first"
@@ -458,7 +466,7 @@ fn enrollment_and_revocation_each_produce_exactly_one_local_lifecycle_signal() {
     // Revocation cleanup deletes every Health Plane row for a peer that is no
     // longer actively trusted. The local revocation Signal must survive it.
     plane.purge_revoked().expect("purge revoked");
-    let preserved = plane.local_signals(64).expect("local signals");
+    let preserved = plane.signal_feed(64).expect("signal feed").local;
     assert_eq!(preserved, after, "the local revocation Signal is preserved");
 
     // A restart reproduces exactly the same feed, ids included.
@@ -466,7 +474,7 @@ fn enrollment_and_revocation_each_produce_exactly_one_local_lifecycle_signal() {
     drop(registry);
     let restarted = node.registry();
     let plane = open_plane(&node, &restarted);
-    assert_eq!(plane.local_signals(64).expect("local signals"), after);
+    assert_eq!(plane.signal_feed(64).expect("signal feed").local, after);
 }
 
 // ---------------------------------------------------------------------------
@@ -517,7 +525,7 @@ fn revocation_blocks_later_remote_signals_and_keeps_the_local_revocation_signal(
         "a rejected Signal must not touch trust"
     );
 
-    let local = plane.local_signals(64).expect("local signals");
+    let local = plane.signal_feed(64).expect("signal feed").local;
     assert_eq!(local.len(), 2);
     assert_eq!(local[0].kind, SignalKind::Revoked);
 
@@ -959,7 +967,7 @@ fn outbox_overflow_drops_the_oldest_signal_and_the_queue_survives_a_restart() {
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
 
-    let enqueue = |plane: &HealthPlane<'_>, index: u64| {
+    let enqueue = |plane: &HealthPlane<'_, NodeRegistry>, index: u64| {
         let run = omakure::health_plane::model::RunFact {
             exit_code: Some(0),
             finished_at: node.now(),

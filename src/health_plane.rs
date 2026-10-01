@@ -14,12 +14,10 @@ pub mod lifecycle;
 pub mod report;
 pub mod schema;
 
-use crate::domain::is_node_id;
-use crate::node_registry::health::{
-    HealthApplyRequest, HealthAuditEvent, HealthAuthorization, HealthFleetPeer, HealthOutboxEntry,
-    HealthPruneReport,
+use crate::domain::health_plane::store::{
+    HealthAuditInput, HealthAuthorizationView, HealthFleetView, HealthStore,
 };
-use crate::node_registry::{NodeRegistry, PeerState, RegistryError};
+use crate::domain::is_node_id;
 use bounds::{PROCESSING_BUDGET_MILLIS, SIGNATURE_BYTES};
 use model::{
     HealthCode, HealthDecision, HealthKind, Presence, ProfileSnapshot, PulseSnapshot,
@@ -220,20 +218,20 @@ pub struct FleetSignal {
 }
 
 /// The shared, protocol-neutral Health Plane operations.
-pub struct HealthPlane<'registry> {
-    registry: &'registry NodeRegistry,
+pub struct HealthPlane<'store, S: HealthStore> {
+    store: &'store S,
     clock: Box<dyn HealthClock>,
 }
 
-impl<'registry> HealthPlane<'registry> {
+impl<'store, S: HealthStore> HealthPlane<'store, S> {
     /// Build the operations facade over the production clock.
-    pub fn new(registry: &'registry NodeRegistry) -> Self {
-        Self::with_clock(registry, Box::new(SystemHealthClock::new()))
+    pub fn new(store: &'store S) -> Self {
+        Self::with_clock(store, Box::new(SystemHealthClock::new()))
     }
 
     /// Build the operations facade over an injected clock.
-    pub fn with_clock(registry: &'registry NodeRegistry, clock: Box<dyn HealthClock>) -> Self {
-        Self { registry, clock }
+    pub fn with_clock(store: &'store S, clock: Box<dyn HealthClock>) -> Self {
+        Self { store, clock }
     }
 
     /// The current UTC Unix second according to the injected clock.
@@ -248,7 +246,7 @@ impl<'registry> HealthPlane<'registry> {
     /// (version), step 5 (strict closed schema), step 6 (target binding), and
     /// then hands steps 7 through 15 to the registry, which applies them in
     /// exactly one transaction.
-    pub fn ingest(&self, message: InboundHealthMessage<'_>) -> Result<HealthIngest, RegistryError> {
+    pub fn ingest(&self, message: InboundHealthMessage<'_>) -> Result<HealthIngest, S::Error> {
         let now = self.clock.unix_seconds();
         let started = self.clock.monotonic_millis();
         let byte_count = (message.canonical_len + SIGNATURE_BYTES) as i64;
@@ -312,7 +310,7 @@ impl<'registry> HealthPlane<'registry> {
         };
 
         // Step 6: target binding.
-        if payload.target != self.registry.local_node_id() {
+        if payload.target != self.store.local_node_id() {
             return self.reject_before_storage(
                 &message,
                 Some(kind),
@@ -337,13 +335,13 @@ impl<'registry> HealthPlane<'registry> {
         }
 
         // Steps 7 through 15, in exactly one transaction.
-        let decision = self.registry.apply_health_message(HealthApplyRequest {
-            sender: message.sender,
-            payload: &payload,
-            created_at: message.created_at,
+        let decision = self.store.apply_message(
+            message.sender,
+            &payload,
+            message.created_at,
             now,
-            message_bytes: byte_count,
-        })?;
+            byte_count,
+        )?;
         let reply = self.reply_for(kind, &payload.message_id, &decision);
         Ok(HealthIngest {
             kind: Some(kind),
@@ -359,22 +357,22 @@ impl<'registry> HealthPlane<'registry> {
     /// peer, it could report counts, presence, and baselines that belong to
     /// different instants, which is a status report of a fleet that never
     /// existed.
-    pub fn fleet_status(&self) -> Result<Vec<FleetNode>, RegistryError> {
+    pub fn fleet_status(&self) -> Result<Vec<FleetNode>, S::Error> {
         let now = self.clock.unix_seconds();
         Ok(self
-            .registry
-            .health_fleet_snapshot(now)?
+            .store
+            .fleet_snapshot(now)?
             .into_iter()
             .map(|peer| project(peer, now))
             .collect())
     }
 
     /// The fleet-status projection for one peer.
-    pub fn node_status(&self, node_id: &str) -> Result<Option<FleetNode>, RegistryError> {
+    pub fn node_status(&self, node_id: &str) -> Result<Option<FleetNode>, S::Error> {
         let now = self.clock.unix_seconds();
         Ok(self
-            .registry
-            .health_node_snapshot(node_id, now)?
+            .store
+            .node_snapshot(node_id, now)?
             .map(|peer| project(peer, now)))
     }
 
@@ -385,37 +383,29 @@ impl<'registry> HealthPlane<'registry> {
     /// assembled from separate reads can contradict itself — a Signal beside
     /// a cursor that has not counted it — and `gap`, which tells an operator
     /// whether delivery has stalled, is derived from the same counters.
-    pub fn signal_feed(&self, limit: usize) -> Result<FleetSignalFeed, RegistryError> {
+    pub fn signal_feed(&self, limit: usize) -> Result<FleetSignalFeed, S::Error> {
         let observed_at = self.clock.unix_seconds();
-        let feed = self.registry.health_signal_feed(limit, observed_at)?;
+        let feed = self.store.signal_feed(limit, observed_at)?;
         let nodes = feed
-            .peers
+            .nodes
             .into_iter()
-            .map(|peer| FleetSignalCursor {
-                node_id: peer.state.node_id,
-                trust_state: peer
-                    .authorization
-                    .map(|authorization| authorization.state.as_str().to_string())
-                    .unwrap_or_else(|| "unknown".to_string()),
-                cursor: peer.state.cursor,
-                stored: peer.state.stored_signals,
-                held: peer.state.held_signals,
+            .map(|node| FleetSignalCursor {
+                node_id: node.node_id,
+                trust_state: node.trust_state,
+                cursor: node.cursor,
+                stored: node.stored,
+                held: node.held,
             })
             .collect();
         let signals = feed
             .signals
             .into_iter()
-            .map(|entry| FleetSignal {
-                source: entry.node_id,
-                signal: entry.signal,
-            })
+            .map(|(source, signal)| FleetSignal { source, signal })
             .collect();
         Ok(FleetSignalFeed {
             observed_at,
             local: lifecycle::project(
-                feed.lifecycle
-                    .iter()
-                    .map(|event| event.lifecycle_transition()),
+                feed.lifecycle.iter().map(|event| event.as_transition()),
                 observed_at,
                 limit,
             ),
@@ -425,57 +415,34 @@ impl<'registry> HealthPlane<'registry> {
     }
 
     /// The bounded, ordered Signal inbox for one peer.
-    pub fn signals(&self, node_id: &str, limit: usize) -> Result<Vec<SignalRecord>, RegistryError> {
-        self.registry
-            .health_signals(node_id, limit, self.clock.unix_seconds())
-    }
-
-    /// The bounded, newest-first Conductor-local lifecycle Signal feed.
-    ///
-    /// `enrolled` and `revoked` are decided by this node, so they are
-    /// projected from the append-only trust audit rather than received,
-    /// stored, or re-derived. Nothing is written by this call. See
-    /// [`lifecycle`] for why projection is the only revocation-safe shape.
-    pub fn local_signals(&self, limit: usize) -> Result<Vec<SignalRecord>, RegistryError> {
-        let now = self.clock.unix_seconds();
-        let events = self.registry.lifecycle_trust_events(usize::MAX)?;
-        Ok(lifecycle::project(
-            events.iter().map(|event| event.lifecycle_transition()),
-            now,
-            limit,
-        ))
+    pub fn signals(&self, node_id: &str, limit: usize) -> Result<Vec<SignalRecord>, S::Error> {
+        self.store
+            .signals(node_id, limit, self.clock.unix_seconds())
     }
 
     /// The read-only authorization projection for one peer.
-    pub fn authorization(
-        &self,
-        node_id: &str,
-    ) -> Result<Option<HealthAuthorization>, RegistryError> {
-        self.registry.health_authorization(node_id)
+    pub fn authorization(&self, node_id: &str) -> Result<Option<S::Authorization>, S::Error> {
+        self.store.authorization(node_id)
     }
 
     /// Append one Signal to the bounded Performer outbox.
     pub fn enqueue_signal(
         &self,
         request: SignalEnqueueRequest<'_>,
-    ) -> Result<HealthOutboxEntry, RegistryError> {
-        self.registry
-            .health_enqueue_signal(request, self.clock.unix_seconds())
+    ) -> Result<S::OutboxEntry, S::Error> {
+        self.store
+            .enqueue_signal(request, self.clock.unix_seconds())
     }
 
     /// Read the bounded Performer outbox in send order.
-    pub fn outbox(&self, limit: usize) -> Result<Vec<HealthOutboxEntry>, RegistryError> {
-        self.registry.health_outbox(limit)
+    pub fn outbox(&self, limit: usize) -> Result<Vec<S::OutboxEntry>, S::Error> {
+        self.store.outbox(limit)
     }
 
     /// Bind one outbox Signal to the `message_id` of a send attempt.
-    pub fn mark_signal_sent(
-        &self,
-        signal_id: &str,
-        message_id: &str,
-    ) -> Result<bool, RegistryError> {
-        self.registry
-            .health_mark_signal_sent(signal_id, message_id, self.clock.unix_seconds())
+    pub fn mark_signal_sent(&self, signal_id: &str, message_id: &str) -> Result<bool, S::Error> {
+        self.store
+            .mark_signal_sent(signal_id, message_id, self.clock.unix_seconds())
     }
 
     /// Re-arm the delivery budget of every Signal queued for one peer.
@@ -484,35 +451,34 @@ impl<'registry> HealthPlane<'registry> {
     /// spent its three attempts is retained in the bounded outbox and resent on
     /// the next session. Callers invoke this once, when a session to that peer
     /// is established; it re-arms nothing else and widens no bound.
-    pub fn reset_outbox_attempts(&self, target_node_id: &str) -> Result<u64, RegistryError> {
-        self.registry
-            .health_reset_outbox_attempts(target_node_id, self.clock.unix_seconds())
+    pub fn reset_outbox_attempts(&self, target_node_id: &str) -> Result<u64, S::Error> {
+        self.store
+            .reset_outbox_attempts(target_node_id, self.clock.unix_seconds())
     }
 
     /// How many Signals outbox overflow has dropped on this node.
-    pub fn signals_dropped(&self) -> Result<i64, RegistryError> {
-        self.registry.health_signals_dropped()
+    pub fn signals_dropped(&self) -> Result<i64, S::Error> {
+        self.store.signals_dropped()
     }
 
     /// Enforce every retention and capacity bound.
-    pub fn prune(&self) -> Result<HealthPruneReport, RegistryError> {
-        self.registry.health_prune(self.clock.unix_seconds())
+    pub fn prune(&self) -> Result<S::PruneReport, S::Error> {
+        self.store.prune(self.clock.unix_seconds())
     }
 
     /// Delete Health Plane state for peers that are no longer actively trusted.
-    pub fn purge_revoked(&self) -> Result<Vec<String>, RegistryError> {
-        self.registry
-            .health_purge_revoked(self.clock.unix_seconds())
+    pub fn purge_revoked(&self) -> Result<Vec<String>, S::Error> {
+        self.store.purge_revoked(self.clock.unix_seconds())
     }
 
     /// The bytes the Health Plane currently accounts for.
-    pub fn storage_bytes(&self) -> Result<i64, RegistryError> {
-        self.registry.health_storage_bytes()
+    pub fn storage_bytes(&self) -> Result<i64, S::Error> {
+        self.store.storage_bytes()
     }
 
     /// The redacted Health Plane audit trail, newest first.
-    pub fn audit_events(&self, limit: usize) -> Result<Vec<HealthAuditEvent>, RegistryError> {
-        self.registry.health_audit_events(limit)
+    pub fn audit_events(&self, limit: usize) -> Result<Vec<S::AuditEvent>, S::Error> {
+        self.store.audit_events(limit)
     }
 
     fn reply_for(
@@ -559,7 +525,7 @@ impl<'registry> HealthPlane<'registry> {
         code: HealthCode,
         byte_count: i64,
         now: i64,
-    ) -> Result<HealthIngest, RegistryError> {
+    ) -> Result<HealthIngest, S::Error> {
         self.audit(
             message.sender,
             kind,
@@ -590,7 +556,7 @@ impl<'registry> HealthPlane<'registry> {
         kind: HealthKind,
         byte_count: i64,
         now: i64,
-    ) -> Result<HealthIngest, RegistryError> {
+    ) -> Result<HealthIngest, S::Error> {
         let code = HealthCode::UnsupportedVersion;
         self.audit(
             message.sender,
@@ -602,18 +568,14 @@ impl<'registry> HealthPlane<'registry> {
         )?;
         let message_id = schema::peek_message_id(message.payload);
         let target = schema::peek_target(message.payload);
-        let addressed = target.as_deref() == Some(self.registry.local_node_id());
-        let authorized = match self.registry.health_authorization(message.sender)? {
-            Some(authorization) => {
-                authorization.state == PeerState::Active
-                    && authorization.role.code() == kind.required_role()
-            }
+        let addressed = target.as_deref() == Some(self.store.local_node_id());
+        let authorized = match self.store.authorization(message.sender)? {
+            Some(authorization) => authorization.is_active_for_role(kind.required_role()),
             None => false,
         };
         let reply = match (&message_id, addressed && authorized) {
             (Some(message_id), true) => {
-                self.registry
-                    .mark_health_version_incompatible(message.sender, now)?;
+                self.store.mark_version_incompatible(message.sender, now)?;
                 HealthReply::Error {
                     acked_message_id: message_id.clone(),
                     code,
@@ -637,45 +599,36 @@ impl<'registry> HealthPlane<'registry> {
         outcome: &str,
         code: Option<HealthCode>,
         now: i64,
-    ) -> Result<(), RegistryError> {
+    ) -> Result<(), S::Error> {
         let kind_name = kind.map(HealthKind::wire).unwrap_or("unknown");
-        self.registry
-            .record_health_audit(crate::node_registry::health::HealthAuditRecord {
-                event_code: kind_name,
-                node_id: sender,
-                message_kind: kind_name,
-                byte_count,
-                outcome,
-                error_code: code.map(HealthCode::code),
-                now,
-            })
+        self.store.record_audit(HealthAuditInput {
+            event_code: kind_name,
+            node_id: sender,
+            message_kind: kind_name,
+            byte_count,
+            outcome,
+            error_code: code.map(HealthCode::code),
+            now,
+        })
     }
 }
 
 /// Render one fleet-status row from the snapshot it was read in.
-fn project(peer: HealthFleetPeer, now: i64) -> FleetNode {
-    let snapshot = peer.snapshot;
-    let (trust_state, capabilities) = match peer.authorization {
-        Some(authorization) => (
-            authorization.state.as_str().to_string(),
-            authorization.capabilities,
-        ),
-        None => ("unknown".to_string(), Vec::new()),
-    };
+fn project(peer: HealthFleetView, now: i64) -> FleetNode {
     FleetNode {
-        node_id: snapshot.state.node_id.clone(),
-        role: snapshot.state.role.as_str().to_string(),
-        capabilities,
-        trust_state,
-        presence: Presence::derive(snapshot.state.last_pulse_at, now),
-        last_pulse_at: snapshot.state.last_pulse_at,
-        baseline_status: BaselineStatus::derive(snapshot.profile.as_ref()),
-        profile: snapshot.profile,
-        pulse: snapshot.pulse,
-        signal_cursor: snapshot.state.cursor,
-        stored_signals: snapshot.state.stored_signals,
-        held_signals: snapshot.state.held_signals,
-        version_incompatible: snapshot.state.version_incompatible,
+        node_id: peer.node_id,
+        role: peer.role,
+        capabilities: peer.capabilities,
+        trust_state: peer.trust_state,
+        presence: Presence::derive(peer.last_pulse_at, now),
+        last_pulse_at: peer.last_pulse_at,
+        baseline_status: BaselineStatus::derive(peer.profile.as_ref()),
+        profile: peer.profile,
+        pulse: peer.pulse,
+        signal_cursor: peer.cursor,
+        stored_signals: peer.stored_signals,
+        held_signals: peer.held_signals,
+        version_incompatible: peer.version_incompatible,
     }
 }
 

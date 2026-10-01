@@ -367,8 +367,8 @@ fn parse_compact_duration_ms(s: &str) -> Result<i64, String> {
     if s.is_empty() {
         return Err("empty duration".into());
     }
-    let (digits, unit) = s.split_at(s.len() - 1);
-    let unit_char = unit.chars().next().ok_or("missing unit")?;
+    let (unit_index, unit_char) = s.char_indices().next_back().ok_or("missing unit")?;
+    let digits = &s[..unit_index];
     let value: i64 = digits
         .parse()
         .map_err(|_| format!("invalid duration value: {}", s))?;
@@ -437,6 +437,8 @@ mod tests {
         assert!(parse_compact_duration_ms("abc").is_err());
         assert!(parse_compact_duration_ms("10x").is_err());
         assert!(parse_compact_duration_ms("h").is_err());
+        assert!(parse_compact_duration_ms("10é").is_err());
+        assert!(parse_compact_duration_ms("é").is_err());
     }
 
     #[test]

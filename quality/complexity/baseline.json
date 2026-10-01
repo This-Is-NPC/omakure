@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "e08739bfef137b6bb4e9d6d1e10d3b8b534a9f3bfe4ac7dedacba8679e860bd9",
+  "canonical_sha256": "4101fa1e26d126124598a64e8de8b55e1bbf7e4220479fd65bf0f83117c3662a",
   "config_identity": "no-config",
   "files": [
     {
@@ -3452,12 +3452,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 27,
+        "invocations": 26,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 72,
-        "cyclomatic": 104
+        "cognitive": 62,
+        "cyclomatic": 99
       },
       "path": "src/operations/battery/git.rs",
       "source_class": "handwritten"
@@ -76263,8 +76263,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 25,
-      "cyclomatic": 25,
+      "cognitive": 12,
+      "cyclomatic": 9,
       "derived": {
         "identity": "crate::operations::battery::git::reject_unsafe_git_config_text",
         "macro_expansion": "not_measured",
@@ -76278,8 +76278,8 @@
       "name": "reject_unsafe_git_config_text",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 25,
-        "cyclomatic": 25,
+        "cognitive": 12,
+        "cyclomatic": 9,
         "kind": "function",
         "line": 513,
         "name": "reject_unsafe_git_config_text"
@@ -106108,6 +106108,58 @@
       },
       "path": "src/direct_service/tests/mod.rs",
       "signature": "fn assert_unmatched_acks<T: std::fmt::Debug + PartialEq, U>( fixtures: AckFixtures<'_>, expected: T, answers: &std::sync::mpsc::Receiver<U>, mut absorb: impl FnMut(&[u8], &str, &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::operations::battery::git::unsafe_git_config_section",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/git.rs",
+        "signature": "fn unsafe_git_config_section(section: &str) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::git::unsafe_git_config_section",
+      "kind": "function",
+      "line": 546,
+      "name": "unsafe_git_config_section",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 546,
+        "name": "unsafe_git_config_section"
+      },
+      "path": "src/operations/battery/git.rs",
+      "signature": "fn unsafe_git_config_section(section: &str) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::operations::battery::git::unsafe_git_config_key",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/git.rs",
+        "signature": "fn unsafe_git_config_key(section: &str, key: &str) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::git::unsafe_git_config_key",
+      "kind": "function",
+      "line": 553,
+      "name": "unsafe_git_config_key",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 553,
+        "name": "unsafe_git_config_key"
+      },
+      "path": "src/operations/battery/git.rs",
+      "signature": "fn unsafe_git_config_key(section: &str, key: &str) -> bool",
       "source_class": "handwritten"
     }
   ],

@@ -335,18 +335,69 @@ fn git_specs_disable_hooks_submodules_and_checkout_detached() {
 }
 
 #[test]
-fn local_git_config_cannot_override_http_containment() {
-    for config in [
-        "[http]\n\tfollowRedirects = true\n",
-        "[http \"https://example.test\"]\n\tcurloptResolve = example.test:443:127.0.0.1\n",
-        "[remote \"origin\"]\n\tproxy = http://127.0.0.1:8080\n",
+fn local_git_config_rejects_every_blocked_section_and_key_with_exact_error() {
+    for (config, offending_entry) in [
+        ("[include]\npath = /tmp/other", "include"),
+        (
+            "[includeIf \"gitdir:/tmp\"]\npath = /tmp/other",
+            "includeif \"gitdir:/tmp\"",
+        ),
+        ("[includeIf.extra]\npath = /tmp/other", "includeif.extra"),
+        ("[http]\n\tfollowRedirects = true", "http"),
+        (
+            "[http \"https://example.test\"]\n\tcurloptResolve = example.test:443:127.0.0.1",
+            "http \"https://example.test\"",
+        ),
+        ("[credential]\nHelper = value", "credential.helper"),
+        (
+            "[credential \"https://example.test\"]\nhelper = value",
+            "credential \"https://example.test\".helper",
+        ),
+        ("[core]\naskPass = value", "core.askpass"),
+        ("[core]\nsshCommand = value", "core.sshcommand"),
+        ("[core]\nworktree = value", "core.worktree"),
+        (
+            "[extensions]\nworktreeConfig = true",
+            "extensions.worktreeconfig",
+        ),
+        (
+            "[url \"https://example.test\"]\ninsteadOf = value",
+            "url \"https://example.test\".insteadof",
+        ),
+        (
+            "[remote \"origin\"]\n\tproxy = http://127.0.0.1:8080",
+            "remote \"origin\".proxy",
+        ),
+        (
+            "[remote \"origin\"]\nproxyAuthMethod = value",
+            "remote \"origin\".proxyauthmethod",
+        ),
     ] {
+        let error = reject_unsafe_git_config_text(config).unwrap_err();
+        assert_eq!(error.code, OperationErrorCode::Conflict, "{config}");
         assert_eq!(
-            reject_unsafe_git_config_text(config).unwrap_err().code,
-            OperationErrorCode::Conflict,
+            error.message,
+            format!("battery cache has unsafe local git config: {offending_entry}"),
             "{config}"
         );
     }
+}
+
+#[test]
+fn local_git_config_accepts_near_misses_and_ignores_comments() {
+    let config = "# [include]\n; [http]\n[includeExtra]\npath = /tmp/other\n[includeifExtra]\npath = /tmp/other\n[httpExtra]\nproxy = value\n[credential]\nuseHttpPath = true\n[core]\nhooksPath = /dev/null\n[extensions]\nobjectFormat = sha1\n[url \"https://example.test\"]\npushInsteadOf = value\n[remote \"origin\"]\nurl = https://example.test/repo.git\n";
+    assert_eq!(reject_unsafe_git_config_text(config), Ok(()));
+}
+
+#[test]
+fn local_git_config_reports_first_unsafe_entry() {
+    let config = "[core]\n  AskPass = helper\n[include]\npath = /tmp/other\n";
+    let error = reject_unsafe_git_config_text(config).unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::Conflict);
+    assert_eq!(
+        error.message,
+        "battery cache has unsafe local git config: core.askpass"
+    );
 }
 
 #[test]

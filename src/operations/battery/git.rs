@@ -519,16 +519,7 @@ pub(super) fn reject_unsafe_git_config_text(config: &str) -> OperationResult<()>
         }
         if line.starts_with('[') && line.ends_with(']') {
             section = line[1..line.len() - 1].trim().to_ascii_lowercase();
-            if section == "include"
-                || section.starts_with("includeif ")
-                || section.starts_with("includeif.")
-            {
-                return Err(OperationError::new(
-                    OperationErrorCode::Conflict,
-                    format!("battery cache has unsafe local git config: {section}"),
-                ));
-            }
-            if section == "http" || section.starts_with("http ") {
+            if unsafe_git_config_section(&section) {
                 return Err(OperationError::new(
                     OperationErrorCode::Conflict,
                     format!("battery cache has unsafe local git config: {section}"),
@@ -542,15 +533,7 @@ pub(super) fn reject_unsafe_git_config_text(config: &str) -> OperationResult<()>
             .unwrap_or(line)
             .trim()
             .to_ascii_lowercase();
-        let unsafe_key = ((section == "credential" || section.starts_with("credential "))
-            && key == "helper")
-            || (section == "core"
-                && (key == "askpass" || key == "sshcommand" || key == "worktree"))
-            || (section == "extensions" && key == "worktreeconfig")
-            || (section.starts_with("url ") && key == "insteadof")
-            || (section.starts_with("remote ")
-                && matches!(key.as_str(), "proxy" | "proxyauthmethod"));
-        if unsafe_key {
+        if unsafe_git_config_key(&section, &key) {
             return Err(OperationError::new(
                 OperationErrorCode::Conflict,
                 format!("battery cache has unsafe local git config: {section}.{key}"),
@@ -558,6 +541,24 @@ pub(super) fn reject_unsafe_git_config_text(config: &str) -> OperationResult<()>
         }
     }
     Ok(())
+}
+
+fn unsafe_git_config_section(section: &str) -> bool {
+    matches!(section, "include" | "http")
+        || section.starts_with("includeif ")
+        || section.starts_with("includeif.")
+        || section.starts_with("http ")
+}
+
+fn unsafe_git_config_key(section: &str, key: &str) -> bool {
+    match key {
+        "helper" => section == "credential" || section.starts_with("credential "),
+        "askpass" | "sshcommand" | "worktree" => section == "core",
+        "worktreeconfig" => section == "extensions",
+        "insteadof" => section.starts_with("url "),
+        "proxy" | "proxyauthmethod" => section.starts_with("remote "),
+        _ => false,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

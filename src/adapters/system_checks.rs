@@ -34,10 +34,11 @@ const MAX_INJECTED_PATH_BYTES: usize = 32 * 1024;
 /// Build a minimal PATH for spawning an already-resolved absolute executable.
 fn bounded_spawn_path(program: &Path) -> OsString {
     let mut paths = Vec::new();
-    if let Some(parent) = program.parent() {
-        if !parent.as_os_str().is_empty() {
-            paths.push(parent.to_path_buf());
-        }
+    if let Some(parent) = program
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        paths.push(parent.to_path_buf());
     }
 
     #[cfg(windows)]

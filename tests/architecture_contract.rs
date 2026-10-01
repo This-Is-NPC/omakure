@@ -18,6 +18,7 @@ enum Rule {
     Executor,
     GitProcess,
     HealthLifecycle,
+    BatteryFilesystem,
     OperationInput,
 }
 
@@ -204,6 +205,22 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if self.rule == Rule::BatteryFilesystem {
+            if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
+                let segments = Self::path_segments(path);
+                if segments.first().map(String::as_str) == Some("libc")
+                    && matches!(
+                        segments.last().map(String::as_str),
+                        Some("open" | "openat" | "renameat" | "linkat" | "unlinkat")
+                    )
+                {
+                    self.record(
+                        "ARCH-BATTERY-FS",
+                        "raw filesystem calls belong in adapters/fs",
+                    );
+                }
+            }
+        }
         if self.rule == Rule::GitProcess {
             if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
                 let segments = Self::path_segments(path);
@@ -252,6 +269,16 @@ impl<'ast> Visit<'ast> for ContractVisitor {
             }
         }
         visit::visit_expr_call(self, node);
+    }
+
+    fn visit_expr_unsafe(&mut self, node: &'ast syn::ExprUnsafe) {
+        if self.rule == Rule::BatteryFilesystem {
+            self.record(
+                "ARCH-BATTERY-FS",
+                "unsafe filesystem calls belong in adapters/fs",
+            );
+        }
+        visit::visit_expr_unsafe(self, node);
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
@@ -738,6 +765,31 @@ fn battery_git_operations_reject_process_execution() {
         .findings
         .iter()
         .any(|finding| finding.rule == "ARCH-GIT-PROCESS"));
+}
+
+#[test]
+fn battery_filesystem_syscalls_stay_in_adapters() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for path in source_files(&root.join("src/operations/battery")) {
+        let display = path.strip_prefix(root).unwrap().display().to_string();
+        let source = fs::read_to_string(&path).expect("read Battery operation source");
+        let contract = parse_contract(Rule::BatteryFilesystem, &display, &source);
+        assert!(
+            contract.findings.is_empty(),
+            "Battery filesystem boundary violations in {display}: {:?}",
+            contract.findings
+        );
+    }
+    for source in [
+        "fn install() { unsafe { libc::open(std::ptr::null(), 0); } }",
+        "fn install() { libc::renameat(0, std::ptr::null(), 0, std::ptr::null()); }",
+    ] {
+        let contract = parse_contract(Rule::BatteryFilesystem, "fixture:battery.rs", source);
+        assert!(contract
+            .findings
+            .iter()
+            .any(|finding| finding.rule == "ARCH-BATTERY-FS"));
+    }
 }
 
 #[test]

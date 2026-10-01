@@ -82,7 +82,7 @@ pub fn enqueue_run_with_access(
             script_content_hash: None,
         },
     )
-    .map_err(io_error_string)
+    .map_err(|error| io_error_string(error.to_string()))
 }
 
 /// Enqueue a run that a remote Conductor asked for.
@@ -157,5 +157,5 @@ pub fn enqueue_cue_run(
             script_content_hash: Some(authorized_content_hash.to_string()),
         },
     )
-    .map_err(io_error_string)
+    .map_err(|error| io_error_string(error.to_string()))
 }

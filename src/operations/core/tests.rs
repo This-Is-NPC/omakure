@@ -460,6 +460,33 @@ fn script_resolution_rejects_symlink_escape() {
 }
 
 #[test]
+fn duplicate_enqueue_preserves_io_error_code_and_message() {
+    let dir = TempDir::new().unwrap();
+    let ws = workspace_in(&dir);
+    write_script(ws.scripts_root(), "job.sh", &[]);
+    let request = EnqueueRunRequest {
+        script: "job".into(),
+        args: Vec::new(),
+        env: None,
+        secret_fields: Vec::new(),
+        run_id: Some("duplicate-run".into()),
+        actor: "agent".into(),
+        reason: None,
+        priority: 0,
+        timeout_ms: None,
+        parent_run_id: None,
+        cron_schedule_id: None,
+    };
+    enqueue_run(&ws, request.clone()).unwrap();
+    let error = enqueue_run(&ws, request).unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::IoFailed);
+    assert_eq!(
+        error.message,
+        "Insert run failed: UNIQUE constraint failed: runs.run_id"
+    );
+}
+
+#[test]
 fn enqueue_list_show_cancel_and_stats_share_runs_state_machine() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);

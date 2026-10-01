@@ -134,7 +134,9 @@ fn scheduled_queries_cover_missing_overlap_completion_errors_and_concurrency() {
     let last_error = last_scheduled_fire_ms(&broken, schedule_id).unwrap_err();
     assert!(last_error.contains("Query last scheduled fire failed"));
     let live_error = has_live_scheduled_run(&broken, schedule_id).unwrap_err();
-    assert!(live_error.contains("Query live scheduled run failed"));
+    assert!(live_error
+        .to_string()
+        .contains("Query live scheduled run failed"));
 
     let _ = fs::remove_dir_all(ws.root());
 }

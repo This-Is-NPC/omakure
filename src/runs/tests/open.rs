@@ -29,7 +29,17 @@ fn enqueue_rolls_back_row_when_metadata_write_fails() {
     let mut opts = enqueue_opts();
     opts.allowed_secret_refs = Some(vec!["secret://env/TOKEN".into()]);
     let error = enqueue(&conn, "/x/atomic.sh", &[], opts).unwrap_err();
-    assert!(error.contains("injected metadata failure"));
+    assert!(matches!(
+        &error,
+        RunsError::Sqlite {
+            operation: "Set run secret ref failed",
+            ..
+        }
+    ));
+    assert_eq!(
+        error.to_string(),
+        "Set run secret ref failed: injected metadata failure"
+    );
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM runs WHERE script_path = '/x/atomic.sh'",

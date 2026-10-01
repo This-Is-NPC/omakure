@@ -116,7 +116,7 @@ pub(super) fn map_transition_error(message: String) -> OperationError {
 fn map_trace_error(error: RunsError) -> OperationError {
     let code = match &error {
         RunsError::NotFound(_) => OperationErrorCode::NotFound,
-        RunsError::Sqlite { .. } => OperationErrorCode::IoFailed,
+        RunsError::Sqlite { .. } | RunsError::InvalidEnqueue(_) => OperationErrorCode::IoFailed,
     };
     OperationError::new(code, error.to_string())
 }

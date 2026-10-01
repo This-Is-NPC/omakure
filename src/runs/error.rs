@@ -4,6 +4,8 @@ use crate::util::sqlite::is_lock_contention;
 pub enum RunsError {
     #[error("not_found: {0}")]
     NotFound(String),
+    #[error("{0}")]
+    InvalidEnqueue(&'static str),
     #[error("{operation}: {source}")]
     Sqlite {
         operation: &'static str,

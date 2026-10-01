@@ -1,4 +1,5 @@
 use super::state::{RunState, RunStateSet, RunTrigger};
+use super::RunsError;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -143,7 +144,7 @@ pub fn last_scheduled_fire_ms(conn: &Connection, schedule_id: &str) -> Result<Op
 /// This is the scheduler's overlap guard. Terminal rows never block a later
 /// fire, while either in-flight state does, including a row that was queued
 /// but has not yet been claimed by a worker.
-pub fn has_live_scheduled_run(conn: &Connection, schedule_id: &str) -> Result<bool, String> {
+pub fn has_live_scheduled_run(conn: &Connection, schedule_id: &str) -> Result<bool, RunsError> {
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM runs
@@ -155,7 +156,10 @@ pub fn has_live_scheduled_run(conn: &Connection, schedule_id: &str) -> Result<bo
             ],
             |row| row.get(0),
         )
-        .map_err(|err| format!("Query live scheduled run failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Query live scheduled run failed",
+            source,
+        })?;
     Ok(count > 0)
 }
 

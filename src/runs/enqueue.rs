@@ -1,6 +1,7 @@
 use super::ids::generate_run_id;
 use super::query::{has_live_scheduled_run, RunRow};
 use super::state::{RunState, RunTrigger};
+use super::RunsError;
 use super::HEARTBEAT_MS;
 use crate::util::time::unix_millis;
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
@@ -13,7 +14,7 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBe
 /// `run_id` (typically via [`generate_run_id`]) and setting `state` to a
 /// legal value. Used by [`enqueue`] and [`start_inline`] internally and
 /// remains exposed for tests / future use.
-pub fn insert_run(conn: &Connection, row: &RunRow) -> Result<(), String> {
+pub fn insert_run(conn: &Connection, row: &RunRow) -> Result<(), RunsError> {
     conn.execute(
         "INSERT INTO runs (
             run_id, script_path, script_name, args_json, actor, reason,
@@ -49,7 +50,10 @@ pub fn insert_run(conn: &Connection, row: &RunRow) -> Result<(), String> {
             row.omakure_version,
         ],
     )
-    .map_err(|err| format!("Insert run failed: {}", err))?;
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Insert run failed",
+        source,
+    })?;
     Ok(())
 }
 
@@ -90,9 +94,14 @@ pub fn enqueue(
     script_path: &str,
     args: &[String],
     opts: EnqueueOptions,
-) -> Result<RunRow, String> {
-    let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
-        .map_err(|err| format!("Begin enqueue failed: {}", err))?;
+) -> Result<RunRow, RunsError> {
+    let transaction =
+        Transaction::new_unchecked(conn, TransactionBehavior::Immediate).map_err(|source| {
+            RunsError::Sqlite {
+                operation: "Begin enqueue failed",
+                source,
+            }
+        })?;
     let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
@@ -139,9 +148,10 @@ pub fn enqueue(
     if let Some(hash) = opts.script_content_hash.as_deref() {
         set_run_script_hash(&transaction, &row.run_id, hash)?;
     }
-    transaction
-        .commit()
-        .map_err(|err| format!("Commit enqueue failed: {}", err))?;
+    transaction.commit().map_err(|source| RunsError::Sqlite {
+        operation: "Commit enqueue failed",
+        source,
+    })?;
     Ok(row)
 }
 
@@ -157,16 +167,25 @@ pub fn enqueue_scheduled(
     script_path: &str,
     args: &[String],
     opts: EnqueueOptions,
-) -> Result<Option<RunRow>, String> {
+) -> Result<Option<RunRow>, RunsError> {
     if opts.trigger != RunTrigger::Scheduled {
-        return Err("Scheduled enqueue requires RunTrigger::Scheduled".to_string());
+        return Err(RunsError::InvalidEnqueue(
+            "Scheduled enqueue requires RunTrigger::Scheduled",
+        ));
     }
     let schedule_id = opts
         .cron_schedule_id
         .as_deref()
-        .ok_or_else(|| "Scheduled enqueue requires cron_schedule_id".to_string())?;
-    let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
-        .map_err(|err| format!("Begin scheduled enqueue failed: {}", err))?;
+        .ok_or(RunsError::InvalidEnqueue(
+            "Scheduled enqueue requires cron_schedule_id",
+        ))?;
+    let transaction =
+        Transaction::new_unchecked(conn, TransactionBehavior::Immediate).map_err(|source| {
+            RunsError::Sqlite {
+                operation: "Begin scheduled enqueue failed",
+                source,
+            }
+        })?;
     if has_live_scheduled_run(&transaction, schedule_id)? {
         return Ok(None);
     }
@@ -217,9 +236,10 @@ pub fn enqueue_scheduled(
     if let Some(hash) = opts.script_content_hash.as_deref() {
         set_run_script_hash(&transaction, &row.run_id, hash)?;
     }
-    transaction
-        .commit()
-        .map_err(|err| format!("Commit scheduled enqueue failed: {}", err))?;
+    transaction.commit().map_err(|source| RunsError::Sqlite {
+        operation: "Commit scheduled enqueue failed",
+        source,
+    })?;
     Ok(Some(row))
 }
 
@@ -231,13 +251,18 @@ pub fn enqueue_cue(
     script_path: &str,
     args: &[String],
     opts: EnqueueOptions,
-) -> Result<RunRow, String> {
+) -> Result<RunRow, RunsError> {
     if opts.trigger != RunTrigger::Cue {
-        return Err("Cue enqueue requires RunTrigger::Cue".to_string());
+        return Err(RunsError::InvalidEnqueue(
+            "Cue enqueue requires RunTrigger::Cue",
+        ));
     }
     let transaction = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|err| format!("Begin Cue enqueue failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Begin Cue enqueue failed",
+            source,
+        })?;
     let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
@@ -281,9 +306,10 @@ pub fn enqueue_cue(
     if let Some(hash) = opts.script_content_hash.as_deref() {
         set_run_script_hash(&transaction, &row.run_id, hash)?;
     }
-    transaction
-        .commit()
-        .map_err(|err| format!("Commit Cue enqueue failed: {}", err))?;
+    transaction.commit().map_err(|source| RunsError::Sqlite {
+        operation: "Commit Cue enqueue failed",
+        source,
+    })?;
     Ok(row)
 }
 
@@ -296,7 +322,7 @@ pub fn start_inline(
     args: &[String],
     worker_id: &str,
     opts: EnqueueOptions,
-) -> Result<RunRow, String> {
+) -> Result<RunRow, RunsError> {
     let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
@@ -346,35 +372,51 @@ pub fn start_inline(
     Ok(row)
 }
 
-pub fn set_run_env(conn: &Connection, run_id: &str, env_name: &str) -> Result<(), String> {
+pub fn set_run_env(conn: &Connection, run_id: &str, env_name: &str) -> Result<(), RunsError> {
     conn.execute(
         "INSERT INTO run_envs (run_id, env_name) VALUES (?, ?) \
          ON CONFLICT(run_id) DO UPDATE SET env_name = excluded.env_name",
         params![run_id, env_name],
     )
-    .map_err(|err| format!("Set run env failed: {}", err))?;
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Set run env failed",
+        source,
+    })?;
     Ok(())
 }
 
-pub fn get_run_env(conn: &Connection, run_id: &str) -> Result<Option<String>, String> {
+pub fn get_run_env(conn: &Connection, run_id: &str) -> Result<Option<String>, RunsError> {
     conn.query_row(
         "SELECT env_name FROM run_envs WHERE run_id = ?",
         [run_id],
         |row| row.get(0),
     )
     .optional()
-    .map_err(|err| format!("Get run env failed: {}", err))
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Get run env failed",
+        source,
+    })
 }
 
-pub fn set_run_secret_refs(conn: &Connection, run_id: &str, refs: &[String]) -> Result<(), String> {
+pub fn set_run_secret_refs(
+    conn: &Connection,
+    run_id: &str,
+    refs: &[String],
+) -> Result<(), RunsError> {
     conn.execute("DELETE FROM run_secret_refs WHERE run_id = ?", [run_id])
-        .map_err(|err| format!("Clear run secret refs failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Clear run secret refs failed",
+            source,
+        })?;
     if refs.is_empty() {
         conn.execute(
             "INSERT OR IGNORE INTO run_secret_refs (run_id, secret_ref) VALUES (?, '')",
             [run_id],
         )
-        .map_err(|err| format!("Set run secret ref policy failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Set run secret ref policy failed",
+            source,
+        })?;
         return Ok(());
     }
     for secret_ref in refs {
@@ -382,23 +424,37 @@ pub fn set_run_secret_refs(conn: &Connection, run_id: &str, refs: &[String]) -> 
             "INSERT OR IGNORE INTO run_secret_refs (run_id, secret_ref) VALUES (?, ?)",
             params![run_id, secret_ref],
         )
-        .map_err(|err| format!("Set run secret ref failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Set run secret ref failed",
+            source,
+        })?;
     }
     Ok(())
 }
 
-pub fn get_run_secret_refs(conn: &Connection, run_id: &str) -> Result<Option<Vec<String>>, String> {
+pub fn get_run_secret_refs(
+    conn: &Connection,
+    run_id: &str,
+) -> Result<Option<Vec<String>>, RunsError> {
     let mut stmt = conn
         .prepare("SELECT secret_ref FROM run_secret_refs WHERE run_id = ? ORDER BY secret_ref")
-        .map_err(|err| format!("Prepare run secret refs failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Prepare run secret refs failed",
+            source,
+        })?;
     let rows = stmt
         .query_map([run_id], |row| row.get(0))
-        .map_err(|err| format!("Query run secret refs failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Query run secret refs failed",
+            source,
+        })?;
     let mut refs = Vec::new();
     let mut has_policy = false;
     for row in rows {
-        let secret_ref: String =
-            row.map_err(|err| format!("Row run secret refs failed: {}", err))?;
+        let secret_ref: String = row.map_err(|source| RunsError::Sqlite {
+            operation: "Row run secret refs failed",
+            source,
+        })?;
         has_policy = true;
         if !secret_ref.is_empty() {
             refs.push(secret_ref);
@@ -421,22 +477,28 @@ pub fn set_run_script_hash(
     conn: &Connection,
     run_id: &str,
     content_hash: &str,
-) -> Result<(), String> {
+) -> Result<(), RunsError> {
     conn.execute(
         "INSERT INTO run_script_hashes (run_id, content_hash) VALUES (?, ?)",
         params![run_id, content_hash],
     )
     .map(|_| ())
-    .map_err(|err| format!("Set run script hash failed: {}", err))
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Set run script hash failed",
+        source,
+    })
 }
 
 /// The script bytes a run was authorized against, if any were recorded.
-pub fn get_run_script_hash(conn: &Connection, run_id: &str) -> Result<Option<String>, String> {
+pub fn get_run_script_hash(conn: &Connection, run_id: &str) -> Result<Option<String>, RunsError> {
     conn.query_row(
         "SELECT content_hash FROM run_script_hashes WHERE run_id = ?",
         [run_id],
         |row| row.get(0),
     )
     .optional()
-    .map_err(|err| format!("Query run script hash failed: {}", err))
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Query run script hash failed",
+        source,
+    })
 }

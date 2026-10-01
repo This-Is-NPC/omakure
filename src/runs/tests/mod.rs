@@ -8,6 +8,7 @@ use rusqlite::{params, Connection};
 use std::fs;
 use std::time::Duration;
 
+mod enqueue;
 mod ids;
 mod lifecycle;
 mod open;

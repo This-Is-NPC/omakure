@@ -638,6 +638,39 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
     }
 }
 
+#[test]
+fn config_masks_parent_sourced_secrets_and_credential_overrides() {
+    let workspace = support::TestWorkspace::new("config_masks_parent_secrets");
+    let envs = workspace.path().join(".omakure/envs");
+    fs::create_dir_all(&envs).expect("create managed env directory");
+    fs::write(envs.join("dev.conf"), "PLAIN=$AWS_SECRET_ACCESS_KEY\n").expect("write active env");
+    fs::write(envs.join("active"), "dev.conf\n").expect("select active env");
+
+    let output = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &["--json", "config"],
+        &[
+            ("AWS_SECRET_ACCESS_KEY", "parent-secret-value"),
+            (
+                "OMAKURE_REPO",
+                "https://user:secret@example.invalid/repo.git",
+            ),
+        ],
+    );
+    assert_success(&output);
+    let config = json(&output);
+    let keys = config["data"]["active_env_keys"]
+        .as_array()
+        .expect("active env keys");
+    assert!(keys
+        .iter()
+        .any(|key| key["key"] == "PLAIN" && key["value"] == "****"));
+    assert_eq!(config["data"]["env_overrides"]["OMAKURE_REPO"], "****");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("parent-secret-value"));
+    assert!(!stdout.contains("user:secret"));
+}
+
 #[cfg(windows)]
 #[test]
 fn serve_stop_gracefully_stops_a_foreground_process() {

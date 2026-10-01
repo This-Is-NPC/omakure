@@ -6,12 +6,195 @@ use super::pipes::{
 use super::{CancelFlag, ExecutionResult, ExecutionTerminal};
 use crate::adapters::script_runner::MultiScriptRunner;
 use crate::runs::{self, RunCompletion, RunRow, RunState};
+use crate::secrets::ResolvedArgs;
 use crate::workspace::Workspace;
+use std::path::PathBuf;
+use std::process::{Child, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+
+fn execution_error(terminal: ExecutionTerminal, error: String) -> ExecutionResult {
+    ExecutionResult {
+        terminal,
+        completion: RunCompletion {
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: None,
+            success: false,
+            error: Some(error),
+        },
+    }
+}
+
+fn resolve_run_args(
+    workspace: &Workspace,
+    row: &RunRow,
+    extra_env: &[(String, String)],
+) -> Result<(PathBuf, ResolvedArgs), ExecutionResult> {
+    let script_path = execution_script_path(workspace, row)?;
+    let row_args = parse_args_json(&row.args_json);
+    let secret_access = secret_access_for_row(workspace, row, &row_args)
+        .map_err(|error| execution_error(ExecutionTerminal::Failed, error))?;
+    let resolved_args = crate::secrets::resolve_args_with_access(
+        workspace,
+        &script_path,
+        &row_args,
+        extra_env,
+        &[],
+        &secret_access,
+    )
+    .map_err(|(field, message)| {
+        execution_error(
+            ExecutionTerminal::Failed,
+            format!("required field `{}` missing: {}", field, message),
+        )
+    })?;
+    crate::operations::core::check_required_fields(
+        workspace,
+        &script_path,
+        &resolved_args.persisted_args,
+    )
+    .map_err(|(field, message)| {
+        execution_error(
+            ExecutionTerminal::Failed,
+            format!("required field `{}` missing: {}", field, message),
+        )
+    })?;
+    Ok((script_path, resolved_args))
+}
+
+struct HeartbeatWatcher {
+    done: Arc<AtomicBool>,
+    cancelled: Arc<AtomicBool>,
+    handle: JoinHandle<()>,
+}
+
+impl HeartbeatWatcher {
+    fn start(workspace: &Workspace, row: &RunRow, cancel: Option<CancelFlag>) -> Self {
+        let done = Arc::new(AtomicBool::new(false));
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let stop_heartbeat = Arc::clone(&done);
+        let cancelled_signal = Arc::clone(&cancelled);
+        let workspace_clone = workspace.clone_for_executor();
+        let run_id_clone = row.run_id.clone();
+        let worker_id_clone = row
+            .worker_id
+            .clone()
+            .unwrap_or_else(|| "inline".to_string());
+        let handle = thread::spawn(move || {
+            let tick = Duration::from_millis(HEARTBEAT_TICK_MS);
+            while !stop_heartbeat.load(Ordering::SeqCst) {
+                if let Some(flag) = &cancel {
+                    if flag.load(Ordering::SeqCst) {
+                        cancelled_signal.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                }
+                if let Ok(conn) = runs::open(&workspace_clone) {
+                    match runs::heartbeat(&conn, &run_id_clone, &worker_id_clone) {
+                        Ok(Some(RunState::Running)) => {}
+                        Ok(_) => {
+                            cancelled_signal.store(true, Ordering::SeqCst);
+                            break;
+                        }
+                        Err(_) => {}
+                    }
+                }
+                thread::sleep(tick);
+            }
+        });
+        Self {
+            done,
+            cancelled,
+            handle,
+        }
+    }
+
+    fn stop(self) -> bool {
+        self.done.store(true, Ordering::SeqCst);
+        let _ = self.handle.join();
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
+
+fn kill_and_wait(child: &mut Child) -> Result<ExitStatus, String> {
+    let _ = child.kill();
+    child.wait().map_err(|error| error.to_string())
+}
+
+fn wait_for_child(
+    child: &mut Child,
+    cancelled: &AtomicBool,
+    timeout_ms: Option<i64>,
+) -> (Result<ExitStatus, String>, bool) {
+    let started = Instant::now();
+    let timeout = timeout_ms.map(|ms| Duration::from_millis(ms.max(0) as u64));
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return (Ok(status), false),
+            Ok(None) => {
+                if cancelled.load(Ordering::SeqCst) {
+                    return (kill_and_wait(child), false);
+                }
+                if timeout.is_some_and(|limit| started.elapsed() >= limit) {
+                    return (kill_and_wait(child), true);
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(error) => return (Err(format!("wait failed: {}", error)), false),
+        }
+    }
+}
+
+fn classify_outcome(
+    outcome: Result<ExitStatus, String>,
+    cancelled: bool,
+    timed_out: bool,
+    stdout: &str,
+    stderr: &str,
+    secrets: &[String],
+) -> ExecutionResult {
+    let stdout = crate::secrets::redact_text(stdout, secrets);
+    let stderr = crate::secrets::redact_text(stderr, secrets);
+    match outcome {
+        Ok(status) => {
+            let success = status.success();
+            let terminal = if timed_out {
+                ExecutionTerminal::TimedOut
+            } else if cancelled {
+                ExecutionTerminal::Cancelled
+            } else if success {
+                ExecutionTerminal::Completed
+            } else {
+                ExecutionTerminal::Failed
+            };
+            ExecutionResult {
+                terminal,
+                completion: RunCompletion {
+                    stdout,
+                    stderr,
+                    exit_code: status.code(),
+                    success,
+                    error: None,
+                },
+            }
+        }
+        Err(error) => ExecutionResult {
+            terminal: ExecutionTerminal::Errored,
+            completion: RunCompletion {
+                stdout,
+                stderr,
+                exit_code: None,
+                success: false,
+                error: Some(crate::secrets::redact_text(&error, secrets)),
+            },
+        },
+    }
+}
 
 /// Drive a single script through the state machine: spawn it, heartbeat,
 /// timeout, and react to external cancel. Caller is responsible for
@@ -38,72 +221,10 @@ pub fn execute_with_heartbeat_guarded(
     cancel: Option<CancelFlag>,
     spawn_guard: Option<crate::remote_cue::ExecutionGuard>,
 ) -> ExecutionResult {
-    // Resolve the script path. The row stores an absolute path; if the
-    // file does not exist (e.g. it was deleted between enqueue and
-    // claim), record an Errored result so the worker marks the row
-    // failed instead of crashing the daemon.
-    let script_path = match execution_script_path(workspace, row) {
-        Ok(path) => path,
+    let (script_path, resolved_args) = match resolve_run_args(workspace, row, &extra_env) {
+        Ok(prepared) => prepared,
         Err(result) => return result,
     };
-
-    // Validate the schema's required fields are satisfied (mirrors the
-    // pre-PR-#8 `--no-prompt` behavior). The worker is always non-
-    // interactive, so missing-required is a hard fail.
-    let row_args = parse_args_json(&row.args_json);
-    let secret_access = match secret_access_for_row(workspace, row, &row_args) {
-        Ok(access) => access,
-        Err(err) => {
-            return ExecutionResult {
-                terminal: ExecutionTerminal::Failed,
-                completion: RunCompletion {
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    exit_code: None,
-                    success: false,
-                    error: Some(err),
-                },
-            };
-        }
-    };
-    let resolved_args = match crate::secrets::resolve_args_with_access(
-        workspace,
-        &script_path,
-        &row_args,
-        &extra_env,
-        &[],
-        &secret_access,
-    ) {
-        Ok(resolved) => resolved,
-        Err((field, message)) => {
-            return ExecutionResult {
-                terminal: ExecutionTerminal::Failed,
-                completion: RunCompletion {
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    exit_code: None,
-                    success: false,
-                    error: Some(format!("required field `{}` missing: {}", field, message)),
-                },
-            };
-        }
-    };
-    if let Err((field, message)) = crate::operations::core::check_required_fields(
-        workspace,
-        &script_path,
-        &resolved_args.persisted_args,
-    ) {
-        return ExecutionResult {
-            terminal: ExecutionTerminal::Failed,
-            completion: RunCompletion {
-                stdout: String::new(),
-                stderr: String::new(),
-                exit_code: None,
-                success: false,
-                error: Some(format!("required field `{}` missing: {}", field, message)),
-            },
-        };
-    }
 
     let args = resolved_args.execution_args.clone();
     // Env-injection precedence (`docs/internal/env-injection-spec.md` §1): the
@@ -120,18 +241,7 @@ pub fn execute_with_heartbeat_guarded(
     let redaction_file = match write_redaction_file(workspace, &row.run_id, &resolved_args.secrets)
     {
         Ok(file) => file,
-        Err(err) => {
-            return ExecutionResult {
-                terminal: ExecutionTerminal::Errored,
-                completion: RunCompletion {
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    exit_code: None,
-                    success: false,
-                    error: Some(err),
-                },
-            };
-        }
+        Err(err) => return execution_error(ExecutionTerminal::Errored, err),
     };
     if let Some(file) = &redaction_file {
         env.push((
@@ -144,16 +254,10 @@ pub fn execute_with_heartbeat_guarded(
     let mut command = match MultiScriptRunner::build_command(&script_path, &args, &env) {
         Ok(cmd) => cmd,
         Err(err) => {
-            return ExecutionResult {
-                terminal: ExecutionTerminal::Errored,
-                completion: RunCompletion {
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    exit_code: None,
-                    success: false,
-                    error: Some(format!("build command failed: {}", err)),
-                },
-            };
+            return execution_error(
+                ExecutionTerminal::Errored,
+                format!("build command failed: {}", err),
+            )
         }
     };
 
@@ -162,16 +266,7 @@ pub fn execute_with_heartbeat_guarded(
     let mut child = match child_result {
         Ok(c) => c,
         Err(err) => {
-            return ExecutionResult {
-                terminal: ExecutionTerminal::Errored,
-                completion: RunCompletion {
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    exit_code: None,
-                    success: false,
-                    error: Some(format!("spawn failed: {}", err)),
-                },
-            };
+            return execution_error(ExecutionTerminal::Errored, format!("spawn failed: {}", err))
         }
     };
 
@@ -190,94 +285,10 @@ pub fn execute_with_heartbeat_guarded(
         spawn_pipe_reader_to_channel(h, stderr_tx);
     }
 
-    // Heartbeat thread: refresh the lease and check for external cancel
-    // every HEARTBEAT_TICK milliseconds. The thread exits when the main
-    // thread flips the local `done` flag.
-    let done = Arc::new(AtomicBool::new(false));
-    let cancelled_externally = Arc::new(AtomicBool::new(false));
-    let stop_heartbeat = Arc::clone(&done);
-    let cancelled_signal = Arc::clone(&cancelled_externally);
-    let workspace_clone = workspace.clone_for_executor();
-    let run_id_clone = row.run_id.clone();
-    let worker_id_clone = row
-        .worker_id
-        .clone()
-        .unwrap_or_else(|| "inline".to_string());
-    let cancel_for_thread = cancel.clone();
-    let heartbeat_handle = thread::spawn(move || {
-        // The heartbeat tick is intentionally short relative to
-        // HEARTBEAT_MS (60_000) so we react to cancel quickly. The
-        // tick controls cancel-detection latency, not lease validity.
-        let tick = Duration::from_millis(HEARTBEAT_TICK_MS);
-        while !stop_heartbeat.load(Ordering::SeqCst) {
-            if let Some(flag) = &cancel_for_thread {
-                if flag.load(Ordering::SeqCst) {
-                    cancelled_signal.store(true, Ordering::SeqCst);
-                    break;
-                }
-            }
-            if let Ok(conn) = runs::open(&workspace_clone) {
-                match runs::heartbeat(&conn, &run_id_clone, &worker_id_clone) {
-                    Ok(Some(RunState::Running)) => {}
-                    Ok(_) => {
-                        // Row is no longer ours (cancelled, or stolen,
-                        // or already terminal). Tell the main thread to
-                        // kill the child.
-                        cancelled_signal.store(true, Ordering::SeqCst);
-                        break;
-                    }
-                    Err(_) => {
-                        // Transient SQLite error: keep going. The lease
-                        // will eventually expire and another worker will
-                        // pick up the row.
-                    }
-                }
-            }
-            thread::sleep(tick);
-        }
-    });
-
-    // Per-job execution timeout watcher. Independent from the heartbeat
-    // because the user-facing `--timeout` governs business-time, not
-    // crash recovery.
-    let started = Instant::now();
-    let timeout = row
-        .timeout_ms
-        .map(|ms| Duration::from_millis(ms.max(0) as u64));
-    let timed_out = Arc::new(AtomicBool::new(false));
-    let mut killed = false;
-
-    // Poll the child periodically. Cannot use `child.wait()` directly
-    // because we need to interleave with the timeout / cancel checks.
-    let outcome_status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Ok(None) => {
-                if cancelled_externally.load(Ordering::SeqCst) {
-                    let _ = child.kill();
-                    killed = true;
-                    let status = child.wait();
-                    break status.map_err(|e| e.to_string());
-                }
-                if let Some(t) = timeout {
-                    if started.elapsed() >= t {
-                        timed_out.store(true, Ordering::SeqCst);
-                        let _ = child.kill();
-                        killed = true;
-                        let status = child.wait();
-                        break status.map_err(|e| e.to_string());
-                    }
-                }
-                thread::sleep(Duration::from_millis(50));
-            }
-            Err(err) => break Err(format!("wait failed: {}", err)),
-        }
-    };
-
-    // Stop the heartbeat thread before transitioning state. This
-    // ensures no straggler heartbeat overwrites the terminal state.
-    done.store(true, Ordering::SeqCst);
-    let _ = heartbeat_handle.join();
+    let heartbeat = HeartbeatWatcher::start(workspace, row, cancel);
+    let (outcome_status, timed_out) =
+        wait_for_child(&mut child, &heartbeat.cancelled, row.timeout_ms);
+    let cancelled = heartbeat.stop();
 
     // Drain pipe readers with a hard deadline. The reader threads
     // themselves are not joined: an orphaned grandchild process can
@@ -286,51 +297,12 @@ pub fn execute_with_heartbeat_guarded(
     let stdout_text = drain_channel(&stdout_rx, Duration::from_millis(PIPE_DRAIN_BUDGET_MS));
     let stderr_text = drain_channel(&stderr_rx, Duration::from_millis(PIPE_DRAIN_BUDGET_MS));
 
-    let cancelled = cancelled_externally.load(Ordering::SeqCst);
-    let timed_out = timed_out.load(Ordering::SeqCst);
-
-    let (terminal, completion) = match outcome_status {
-        Ok(status) => {
-            let exit_code = status.code();
-            let success = status.success();
-            let terminal = if timed_out {
-                ExecutionTerminal::TimedOut
-            } else if cancelled {
-                ExecutionTerminal::Cancelled
-            } else if success {
-                ExecutionTerminal::Completed
-            } else {
-                ExecutionTerminal::Failed
-            };
-            (
-                terminal,
-                RunCompletion {
-                    stdout: crate::secrets::redact_text(&stdout_text, &resolved_args.secrets),
-                    stderr: crate::secrets::redact_text(&stderr_text, &resolved_args.secrets),
-                    exit_code,
-                    success,
-                    error: None,
-                },
-            )
-        }
-        Err(err) => (
-            ExecutionTerminal::Errored,
-            RunCompletion {
-                stdout: crate::secrets::redact_text(&stdout_text, &resolved_args.secrets),
-                stderr: crate::secrets::redact_text(&stderr_text, &resolved_args.secrets),
-                exit_code: None,
-                success: false,
-                error: Some(crate::secrets::redact_text(&err, &resolved_args.secrets)),
-            },
-        ),
-    };
-
-    // Suppress unused warning when killed branch had no other side
-    // effect besides forcing the wait above.
-    let _ = killed;
-
-    ExecutionResult {
-        terminal,
-        completion,
-    }
+    classify_outcome(
+        outcome_status,
+        cancelled,
+        timed_out,
+        &stdout_text,
+        &stderr_text,
+        &resolved_args.secrets,
+    )
 }

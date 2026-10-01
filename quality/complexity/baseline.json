@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "4101fa1e26d126124598a64e8de8b55e1bbf7e4220479fd65bf0f83117c3662a",
+  "canonical_sha256": "a23431381fb435e9aaff7266549e6ce30e5965aae554ba8ec354d1dabd8d6c93",
   "config_identity": "no-config",
   "files": [
     {
@@ -4366,8 +4366,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 40,
-        "cyclomatic": 42
+        "cognitive": 33,
+        "cyclomatic": 46
       },
       "path": "src/run_executor/lifecycle.rs",
       "source_class": "handwritten"
@@ -94856,74 +94856,178 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat",
+        "identity": "crate::run_executor::lifecycle::execution_error",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/lifecycle.rs",
-        "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
+        "signature": "fn execution_error(terminal: ExecutionTerminal, error: String) -> ExecutionResult",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat",
+      "identity": "crate::run_executor::lifecycle::execution_error",
       "kind": "function",
-      "line": 25,
-      "name": "execute_with_heartbeat",
+      "line": 20,
+      "name": "execution_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 25,
-        "name": "execute_with_heartbeat"
+        "line": 20,
+        "name": "execution_error"
       },
       "path": "src/run_executor/lifecycle.rs",
-      "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 30,
-      "cyclomatic": 29,
-      "derived": {
-        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor/lifecycle.rs",
-        "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded",
-      "kind": "function",
-      "line": 34,
-      "name": "execute_with_heartbeat_guarded",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 30,
-        "cyclomatic": 29,
-        "kind": "function",
-        "line": 34,
-        "name": "execute_with_heartbeat_guarded"
-      },
-      "path": "src/run_executor/lifecycle.rs",
-      "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
+      "signature": "fn execution_error(terminal: ExecutionTerminal, error: String) -> ExecutionResult",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>",
+        "identity": "crate::run_executor::lifecycle::resolve_run_args",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/lifecycle.rs",
-        "signature": ".unwrap_or_else(|| \"inline\".to_string());",
+        "signature": "fn resolve_run_args( workspace: &Workspace, row: &RunRow, extra_env: &[(String, String)], ) -> Result<(PathBuf, ResolvedArgs), ExecutionResult>",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>",
+      "identity": "crate::run_executor::lifecycle::resolve_run_args",
+      "kind": "function",
+      "line": 33,
+      "name": "resolve_run_args",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 33,
+        "name": "resolve_run_args"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "fn resolve_run_args( workspace: &Workspace, row: &RunRow, extra_env: &[(String, String)], ) -> Result<(PathBuf, ResolvedArgs), ExecutionResult>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": ".map_err(|error| execution_error(ExecutionTerminal::Failed, error))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>",
       "kind": "closure",
-      "line": 205,
+      "line": 41,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 205,
+        "line": 41,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": ".map_err(|error| execution_error(ExecutionTerminal::Failed, error))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>@50#2",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": ".map_err(|(field, message)| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>@50#2",
+      "kind": "closure",
+      "line": 50,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 50,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": ".map_err(|(field, message)| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>@61#3",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": ".map_err(|(field, message)| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::resolve_run_args::<closure>@61#3",
+      "kind": "closure",
+      "line": 61,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 61,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": ".map_err(|(field, message)| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::start",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "fn start(workspace: &Workspace, row: &RunRow, cancel: Option<CancelFlag>) -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::start",
+      "kind": "method",
+      "line": 77,
+      "name": "start",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 77,
+        "name": "start"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "fn start(workspace: &Workspace, row: &RunRow, cancel: Option<CancelFlag>) -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::start::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": ".unwrap_or_else(|| \"inline\".to_string());",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::start::<closure>",
+      "kind": "closure",
+      "line": 87,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 87,
         "name": "<closure>"
       },
       "path": "src/run_executor/lifecycle.rs",
@@ -94934,104 +95038,260 @@
       "cognitive": 11,
       "cyclomatic": 8,
       "derived": {
-        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@207#2",
+        "identity": "crate::run_executor::lifecycle::start::<closure>@88#2",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/lifecycle.rs",
-        "signature": "let heartbeat_handle = thread::spawn(move || {",
+        "signature": "let handle = thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@207#2",
+      "identity": "crate::run_executor::lifecycle::start::<closure>@88#2",
       "kind": "closure",
-      "line": 207,
+      "line": 88,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 8,
         "kind": "closure",
-        "line": 207,
+        "line": 88,
         "name": "<closure>"
       },
       "path": "src/run_executor/lifecycle.rs",
-      "signature": "let heartbeat_handle = thread::spawn(move || {",
+      "signature": "let handle = thread::spawn(move || {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@246#3",
+        "identity": "crate::run_executor::lifecycle::stop",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/lifecycle.rs",
-        "signature": ".map(|ms| Duration::from_millis(ms.max(0) as u64));",
+        "signature": "fn stop(self) -> bool",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@246#3",
-      "kind": "closure",
-      "line": 246,
-      "name": "<closure>",
+      "identity": "crate::run_executor::lifecycle::stop",
+      "kind": "method",
+      "line": 117,
+      "name": "stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
-        "kind": "closure",
-        "line": 246,
-        "name": "<closure>"
+        "kind": "method",
+        "line": 117,
+        "name": "stop"
       },
       "path": "src/run_executor/lifecycle.rs",
-      "signature": ".map(|ms| Duration::from_millis(ms.max(0) as u64));",
+      "signature": "fn stop(self) -> bool",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@260#4",
+        "identity": "crate::run_executor::lifecycle::kill_and_wait",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/lifecycle.rs",
-        "signature": "break status.map_err(|e| e.to_string());",
+        "signature": "fn kill_and_wait(child: &mut Child) -> Result<ExitStatus, String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@260#4",
-      "kind": "closure",
-      "line": 260,
-      "name": "<closure>",
+      "identity": "crate::run_executor::lifecycle::kill_and_wait",
+      "kind": "function",
+      "line": 124,
+      "name": "kill_and_wait",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
-        "kind": "closure",
-        "line": 260,
-        "name": "<closure>"
+        "kind": "function",
+        "line": 124,
+        "name": "kill_and_wait"
       },
       "path": "src/run_executor/lifecycle.rs",
-      "signature": "break status.map_err(|e| e.to_string());",
+      "signature": "fn kill_and_wait(child: &mut Child) -> Result<ExitStatus, String>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@268#5",
+        "identity": "crate::run_executor::lifecycle::kill_and_wait::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/lifecycle.rs",
-        "signature": "break status.map_err(|e| e.to_string());",
+        "signature": "child.wait().map_err(|error| error.to_string())",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@268#5",
+      "identity": "crate::run_executor::lifecycle::kill_and_wait::<closure>",
       "kind": "closure",
-      "line": 268,
+      "line": 126,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 268,
+        "line": 126,
         "name": "<closure>"
       },
       "path": "src/run_executor/lifecycle.rs",
-      "signature": "break status.map_err(|e| e.to_string());",
+      "signature": "child.wait().map_err(|error| error.to_string())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 9,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::wait_for_child",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "fn wait_for_child( child: &mut Child, cancelled: &AtomicBool, timeout_ms: Option<i64>, ) -> (Result<ExitStatus, String>, bool)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::wait_for_child",
+      "kind": "function",
+      "line": 129,
+      "name": "wait_for_child",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 9,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 129,
+        "name": "wait_for_child"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "fn wait_for_child( child: &mut Child, cancelled: &AtomicBool, timeout_ms: Option<i64>, ) -> (Result<ExitStatus, String>, bool)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::wait_for_child::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "let timeout = timeout_ms.map(|ms| Duration::from_millis(ms.max(0) as u64));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::wait_for_child::<closure>",
+      "kind": "closure",
+      "line": 135,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 135,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "let timeout = timeout_ms.map(|ms| Duration::from_millis(ms.max(0) as u64));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::wait_for_child::<closure>@143#2",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "if timeout.is_some_and(|limit| started.elapsed() >= limit) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::wait_for_child::<closure>@143#2",
+      "kind": "closure",
+      "line": 143,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 143,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "if timeout.is_some_and(|limit| started.elapsed() >= limit) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::classify_outcome",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "fn classify_outcome( outcome: Result<ExitStatus, String>, cancelled: bool, timed_out: bool, stdout: &str, stderr: &str, secrets: &[String], ) -> ExecutionResult",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::classify_outcome",
+      "kind": "function",
+      "line": 153,
+      "name": "classify_outcome",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 153,
+        "name": "classify_outcome"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "fn classify_outcome( outcome: Result<ExitStatus, String>, cancelled: bool, timed_out: bool, stdout: &str, stderr: &str, secrets: &[String], ) -> ExecutionResult",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat",
+      "kind": "function",
+      "line": 208,
+      "name": "execute_with_heartbeat",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 208,
+        "name": "execute_with_heartbeat"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 12,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded",
+      "kind": "function",
+      "line": 217,
+      "name": "execute_with_heartbeat_guarded",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 12,
+        "kind": "function",
+        "line": 217,
+        "name": "execute_with_heartbeat_guarded"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
       "source_class": "handwritten"
     },
     {

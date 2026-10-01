@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "457cfc4d1411f875653990de0ceb67e97db1a685d39b5f3c126d228b48615512",
+  "canonical_sha256": "03d271e5951dc4f5cb77b7945acc9f67b48c2661e05e43c3b34232bd8759970f",
   "config_identity": "no-config",
   "files": [
     {
@@ -4712,12 +4712,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 78,
+        "invocations": 69,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 100,
-        "cyclomatic": 152
+        "cognitive": 88,
+        "cyclomatic": 141
       },
       "path": "src/secrets.rs",
       "source_class": "handwritten"
@@ -31791,7 +31791,7 @@
         "identity": "crate::cli::run::prepare_run_inputs::<closure>@113#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/run/mod.rs",
-        "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error))?;",
+        "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error.to_string()))?;",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::run::prepare_run_inputs::<closure>@113#2",
@@ -31807,7 +31807,7 @@
         "name": "<closure>"
       },
       "path": "src/cli/run/mod.rs",
-      "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error))?;",
+      "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error.to_string()))?;",
       "source_class": "handwritten"
     },
     {
@@ -105246,14 +105246,14 @@
       },
       "identity": "crate::secrets::parse",
       "kind": "method",
-      "line": 33,
+      "line": 45,
       "name": "parse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 33,
+        "line": 45,
         "name": "parse"
       },
       "path": "src/secrets.rs",
@@ -105272,14 +105272,14 @@
       },
       "identity": "crate::secrets::canonical",
       "kind": "method",
-      "line": 45,
+      "line": 57,
       "name": "canonical",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 45,
+        "line": 57,
         "name": "canonical"
       },
       "path": "src/secrets.rs",
@@ -105298,14 +105298,14 @@
       },
       "identity": "crate::secrets::new",
       "kind": "method",
-      "line": 63,
+      "line": 75,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 63,
+        "line": 75,
         "name": "new"
       },
       "path": "src/secrets.rs",
@@ -105324,14 +105324,14 @@
       },
       "identity": "crate::secrets::allow_all",
       "kind": "method",
-      "line": 78,
+      "line": 90,
       "name": "allow_all",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 78,
+        "line": 90,
         "name": "allow_all"
       },
       "path": "src/secrets.rs",
@@ -105350,14 +105350,14 @@
       },
       "identity": "crate::secrets::allow_all_non_env",
       "kind": "method",
-      "line": 88,
+      "line": 100,
       "name": "allow_all_non_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 88,
+        "line": 100,
         "name": "allow_all_non_env"
       },
       "path": "src/secrets.rs",
@@ -105376,14 +105376,14 @@
       },
       "identity": "crate::secrets::allow_all_non_env::<closure>",
       "kind": "closure",
-      "line": 103,
+      "line": 114,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 103,
+        "line": 114,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105402,14 +105402,14 @@
       },
       "identity": "crate::secrets::env_gated",
       "kind": "method",
-      "line": 115,
+      "line": 126,
       "name": "env_gated",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 115,
+        "line": 126,
         "name": "env_gated"
       },
       "path": "src/secrets.rs",
@@ -105417,8 +105417,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 5,
+      "cognitive": 3,
+      "cyclomatic": 4,
       "derived": {
         "identity": "crate::secrets::can_use",
         "macro_expansion": "not_measured",
@@ -105428,14 +105428,14 @@
       },
       "identity": "crate::secrets::can_use",
       "kind": "method",
-      "line": 119,
+      "line": 130,
       "name": "can_use",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 5,
+        "cognitive": 3,
+        "cyclomatic": 4,
         "kind": "method",
-        "line": 119,
+        "line": 130,
         "name": "can_use"
       },
       "path": "src/secrets.rs",
@@ -105443,8 +105443,34 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::secrets::has_use_scope",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "fn has_use_scope(&self) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::has_use_scope",
+      "kind": "method",
+      "line": 142,
+      "name": "has_use_scope",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 142,
+        "name": "has_use_scope"
+      },
+      "path": "src/secrets.rs",
+      "signature": "fn has_use_scope(&self) -> bool",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 4,
-      "cyclomatic": 6,
+      "cyclomatic": 5,
       "derived": {
         "identity": "crate::secrets::can_list_metadata",
         "macro_expansion": "not_measured",
@@ -105454,14 +105480,14 @@
       },
       "identity": "crate::secrets::can_list_metadata",
       "kind": "method",
-      "line": 135,
+      "line": 148,
       "name": "can_list_metadata",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
-        "cyclomatic": 6,
+        "cyclomatic": 5,
         "kind": "method",
-        "line": 135,
+        "line": 148,
         "name": "can_list_metadata"
       },
       "path": "src/secrets.rs",
@@ -105480,14 +105506,14 @@
       },
       "identity": "crate::secrets::ref_allowed",
       "kind": "method",
-      "line": 150,
+      "line": 160,
       "name": "ref_allowed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 150,
+        "line": 160,
         "name": "ref_allowed"
       },
       "path": "src/secrets.rs",
@@ -105506,14 +105532,14 @@
       },
       "identity": "crate::secrets::resolve_args_with_direct_secrets",
       "kind": "function",
-      "line": 180,
+      "line": 181,
       "name": "resolve_args_with_direct_secrets",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 180,
+        "line": 181,
         "name": "resolve_args_with_direct_secrets"
       },
       "path": "src/secrets.rs",
@@ -105532,14 +105558,14 @@
       },
       "identity": "crate::secrets::resolve_args_with_access",
       "kind": "function",
-      "line": 197,
+      "line": 198,
       "name": "resolve_args_with_access",
       "native": {
         "analyzer": "cccc",
         "cognitive": 20,
         "cyclomatic": 13,
         "kind": "function",
-        "line": 197,
+        "line": 198,
         "name": "resolve_args_with_access"
       },
       "path": "src/secrets.rs",
@@ -105558,14 +105584,14 @@
       },
       "identity": "crate::secrets::resolve_args_with_access::<closure>",
       "kind": "closure",
-      "line": 223,
+      "line": 224,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 223,
+        "line": 224,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105576,22 +105602,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::resolve_args_with_access::<closure>@227#2",
+        "identity": "crate::secrets::resolve_args_with_access::<closure>@228#2",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": ".unwrap_or_else(|| format!(\"--{}\", field.name));",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::resolve_args_with_access::<closure>@227#2",
+      "identity": "crate::secrets::resolve_args_with_access::<closure>@228#2",
       "kind": "closure",
-      "line": 227,
+      "line": 228,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 227,
+        "line": 228,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105602,22 +105628,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::resolve_args_with_access::<closure>@237#3",
+        "identity": "crate::secrets::resolve_args_with_access::<closure>@238#3",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": ".map_err(|err| (field.name.clone(), secret_error_message(err)))?",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::resolve_args_with_access::<closure>@237#3",
+      "identity": "crate::secrets::resolve_args_with_access::<closure>@238#3",
       "kind": "closure",
-      "line": 237,
+      "line": 238,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 237,
+        "line": 238,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105628,22 +105654,48 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::resolve_args_with_access::<closure>@267#4",
+        "identity": "crate::secrets::resolve_args_with_access::<closure>@244#4",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": ".any(|existing| existing == provider_ref)",
+        "signature": ".map(|secret_ref| secret_ref.canonical()),",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::resolve_args_with_access::<closure>@267#4",
+      "identity": "crate::secrets::resolve_args_with_access::<closure>@244#4",
       "kind": "closure",
-      "line": 267,
+      "line": 244,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 267,
+        "line": 244,
+        "name": "<closure>"
+      },
+      "path": "src/secrets.rs",
+      "signature": ".map(|secret_ref| secret_ref.canonical()),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::resolve_args_with_access::<closure>@269#5",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": ".any(|existing| existing == provider_ref)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::resolve_args_with_access::<closure>@269#5",
+      "kind": "closure",
+      "line": 269,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 269,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105654,22 +105706,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::resolve_args_with_access::<closure>@285#5",
+        "identity": "crate::secrets::resolve_args_with_access::<closure>@287#6",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": "if !value.value.is_empty() && !secrets.iter().any(|secret| secret == &value.value) {",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::resolve_args_with_access::<closure>@285#5",
+      "identity": "crate::secrets::resolve_args_with_access::<closure>@287#6",
       "kind": "closure",
-      "line": 285,
+      "line": 287,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 285,
+        "line": 287,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105688,14 +105740,14 @@
       },
       "identity": "crate::secrets::validate_queued_secret_args_reconstructable",
       "kind": "function",
-      "line": 298,
+      "line": 300,
       "name": "validate_queued_secret_args_reconstructable",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 298,
+        "line": 300,
         "name": "validate_queued_secret_args_reconstructable"
       },
       "path": "src/secrets.rs",
@@ -105714,14 +105766,14 @@
       },
       "identity": "crate::secrets::validate_queued_secret_args_reconstructable::<closure>",
       "kind": "closure",
-      "line": 308,
+      "line": 310,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 308,
+        "line": 310,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105732,26 +105784,52 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
+        "identity": "crate::secrets::validate_queued_secret_args_reconstructable::<closure>@314#2",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": ".unwrap_or_else(|| format!(\"--{}\", field.name));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::validate_queued_secret_args_reconstructable::<closure>@314#2",
+      "kind": "closure",
+      "line": 314,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 314,
+        "name": "<closure>"
+      },
+      "path": "src/secrets.rs",
+      "signature": ".unwrap_or_else(|| format!(\"--{}\", field.name));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
         "identity": "crate::secrets::parse_direct_secrets",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": "pub fn parse_direct_secrets(values: &[String]) -> Result<Vec<(String, String)>, String>",
+        "signature": "pub fn parse_direct_secrets( values: &[String], ) -> Result<Vec<(String, String)>, DirectSecretParseError>",
         "source_class": "handwritten"
       },
       "identity": "crate::secrets::parse_direct_secrets",
       "kind": "function",
-      "line": 325,
+      "line": 335,
       "name": "parse_direct_secrets",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 325,
+        "line": 335,
         "name": "parse_direct_secrets"
       },
       "path": "src/secrets.rs",
-      "signature": "pub fn parse_direct_secrets(values: &[String]) -> Result<Vec<(String, String)>, String>",
+      "signature": "pub fn parse_direct_secrets( values: &[String], ) -> Result<Vec<(String, String)>, DirectSecretParseError>",
       "source_class": "handwritten"
     },
     {
@@ -105766,14 +105844,14 @@
       },
       "identity": "crate::secrets::parse_direct_secrets::<closure>",
       "kind": "closure",
-      "line": 328,
+      "line": 340,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 328,
+        "line": 340,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105792,14 +105870,14 @@
       },
       "identity": "crate::secrets::redact_text",
       "kind": "function",
-      "line": 340,
+      "line": 352,
       "name": "redact_text",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 340,
+        "line": 352,
         "name": "redact_text"
       },
       "path": "src/secrets.rs",
@@ -105818,14 +105896,14 @@
       },
       "identity": "crate::secrets::redact_text::<closure>",
       "kind": "closure",
-      "line": 343,
+      "line": 355,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 343,
+        "line": 355,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105844,14 +105922,14 @@
       },
       "identity": "crate::secrets::secrets_env_value",
       "kind": "function",
-      "line": 346,
+      "line": 358,
       "name": "secrets_env_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 346,
+        "line": 358,
         "name": "secrets_env_value"
       },
       "path": "src/secrets.rs",
@@ -105859,8 +105937,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 6,
-      "cyclomatic": 4,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::secrets::secrets_from_env",
         "macro_expansion": "not_measured",
@@ -105870,14 +105948,14 @@
       },
       "identity": "crate::secrets::secrets_from_env",
       "kind": "function",
-      "line": 354,
+      "line": 366,
       "name": "secrets_from_env",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 4,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 354,
+        "line": 366,
         "name": "secrets_from_env"
       },
       "path": "src/secrets.rs",
@@ -105891,19 +105969,45 @@
         "identity": "crate::secrets::secrets_from_env::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": ".and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())",
+        "signature": ".and_then(|path| std::fs::read_to_string(path).ok())",
         "source_class": "handwritten"
       },
       "identity": "crate::secrets::secrets_from_env::<closure>",
       "kind": "closure",
-      "line": 364,
+      "line": 369,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 364,
+        "line": 369,
+        "name": "<closure>"
+      },
+      "path": "src/secrets.rs",
+      "signature": ".and_then(|path| std::fs::read_to_string(path).ok())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::secrets_from_env::<closure>@370#2",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": ".and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::secrets_from_env::<closure>@370#2",
+      "kind": "closure",
+      "line": 370,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 370,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105922,14 +106026,14 @@
       },
       "identity": "crate::secrets::find_arg_value",
       "kind": "function",
-      "line": 368,
+      "line": 374,
       "name": "find_arg_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 8,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 368,
+        "line": 374,
         "name": "find_arg_value"
       },
       "path": "src/secrets.rs",
@@ -105948,14 +106052,14 @@
       },
       "identity": "crate::secrets::find_arg_value::<closure>",
       "kind": "closure",
-      "line": 374,
+      "line": 380,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 374,
+        "line": 380,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -105974,14 +106078,14 @@
       },
       "identity": "crate::secrets::set_existing_arg_value",
       "kind": "function",
-      "line": 386,
+      "line": 392,
       "name": "set_existing_arg_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 386,
+        "line": 392,
         "name": "set_existing_arg_value"
       },
       "path": "src/secrets.rs",
@@ -106000,14 +106104,14 @@
       },
       "identity": "crate::secrets::env_value",
       "kind": "function",
-      "line": 402,
+      "line": 408,
       "name": "env_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 402,
+        "line": 408,
         "name": "env_value"
       },
       "path": "src/secrets.rs",
@@ -106026,14 +106130,14 @@
       },
       "identity": "crate::secrets::env_value::<closure>",
       "kind": "closure",
-      "line": 406,
+      "line": 412,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 406,
+        "line": 412,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106044,22 +106148,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::env_value::<closure>@407#2",
+        "identity": "crate::secrets::env_value::<closure>@413#2",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": ".or_else(|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::env_value::<closure>@407#2",
+      "identity": "crate::secrets::env_value::<closure>@413#2",
       "kind": "closure",
-      "line": 407,
+      "line": 413,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 407,
+        "line": 413,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106078,14 +106182,14 @@
       },
       "identity": "crate::secrets::env_value::<closure>::<closure>",
       "kind": "closure",
-      "line": 412,
+      "line": 418,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 412,
+        "line": 418,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106096,22 +106200,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::env_value::<closure>@414#3",
+        "identity": "crate::secrets::env_value::<closure>@420#3",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": ".map(|(_, value)| value.clone())",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::env_value::<closure>@414#3",
+      "identity": "crate::secrets::env_value::<closure>@420#3",
       "kind": "closure",
-      "line": 414,
+      "line": 420,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 414,
+        "line": 420,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106130,14 +106234,14 @@
       },
       "identity": "crate::secrets::direct_secret_value",
       "kind": "function",
-      "line": 417,
+      "line": 423,
       "name": "direct_secret_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 417,
+        "line": 423,
         "name": "direct_secret_value"
       },
       "path": "src/secrets.rs",
@@ -106156,18 +106260,44 @@
       },
       "identity": "crate::secrets::direct_secret_value::<closure>",
       "kind": "closure",
-      "line": 421,
+      "line": 427,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 421,
+        "line": 427,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
       "signature": ".find(|(key, _)| key == field_name)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::direct_secret_value::<closure>@428#2",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": ".or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::direct_secret_value::<closure>@428#2",
+      "kind": "closure",
+      "line": 428,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 428,
+        "name": "<closure>"
+      },
+      "path": "src/secrets.rs",
+      "signature": ".or_else(|| {",
       "source_class": "handwritten"
     },
     {
@@ -106182,14 +106312,14 @@
       },
       "identity": "crate::secrets::direct_secret_value::<closure>::<closure>",
       "kind": "closure",
-      "line": 427,
+      "line": 433,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 427,
+        "line": 433,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106197,8 +106327,34 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 3,
-      "cyclomatic": 4,
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::direct_secret_value::<closure>@435#3",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": ".map(|(_, value)| value.clone())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::direct_secret_value::<closure>@435#3",
+      "kind": "closure",
+      "line": 435,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 435,
+        "name": "<closure>"
+      },
+      "path": "src/secrets.rs",
+      "signature": ".map(|(_, value)| value.clone())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
       "derived": {
         "identity": "crate::secrets::resolve_secret_ref",
         "macro_expansion": "not_measured",
@@ -106208,14 +106364,14 @@
       },
       "identity": "crate::secrets::resolve_secret_ref",
       "kind": "function",
-      "line": 432,
+      "line": 438,
       "name": "resolve_secret_ref",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 4,
+        "cognitive": 2,
+        "cyclomatic": 3,
         "kind": "function",
-        "line": 432,
+        "line": 438,
         "name": "resolve_secret_ref"
       },
       "path": "src/secrets.rs",
@@ -106223,8 +106379,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 2,
-      "cyclomatic": 2,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::secrets::check_secret_access",
         "macro_expansion": "not_measured",
@@ -106234,18 +106390,44 @@
       },
       "identity": "crate::secrets::check_secret_access",
       "kind": "function",
-      "line": 458,
+      "line": 457,
       "name": "check_secret_access",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 2,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 458,
+        "line": 457,
         "name": "check_secret_access"
       },
       "path": "src/secrets.rs",
       "signature": "pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), String>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::check_secret_access::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "let secret_ref = SecretRef::parse(value).ok_or_else(|| \"invalid secret ref\".to_string())?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::check_secret_access::<closure>",
+      "kind": "closure",
+      "line": 458,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 458,
+        "name": "<closure>"
+      },
+      "path": "src/secrets.rs",
+      "signature": "let secret_ref = SecretRef::parse(value).ok_or_else(|| \"invalid secret ref\".to_string())?;",
       "source_class": "handwritten"
     },
     {
@@ -106260,14 +106442,14 @@
       },
       "identity": "crate::secrets::resolve_secret_value",
       "kind": "function",
-      "line": 472,
+      "line": 464,
       "name": "resolve_secret_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 472,
+        "line": 464,
         "name": "resolve_secret_value"
       },
       "path": "src/secrets.rs",
@@ -106286,14 +106468,14 @@
       },
       "identity": "crate::secrets::list_secret_metadata",
       "kind": "function",
-      "line": 493,
+      "line": 485,
       "name": "list_secret_metadata",
       "native": {
         "analyzer": "cccc",
         "cognitive": 23,
         "cyclomatic": 11,
         "kind": "function",
-        "line": 493,
+        "line": 485,
         "name": "list_secret_metadata"
       },
       "path": "src/secrets.rs",
@@ -106312,14 +106494,14 @@
       },
       "identity": "crate::secrets::list_secret_metadata::<closure>",
       "kind": "closure",
-      "line": 513,
+      "line": 505,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 513,
+        "line": 505,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106330,22 +106512,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::list_secret_metadata::<closure>@516#2",
+        "identity": "crate::secrets::list_secret_metadata::<closure>@508#2",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": "if path.extension().and_then(|e| e.to_str()) != Some(\"conf\") {",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::list_secret_metadata::<closure>@516#2",
+      "identity": "crate::secrets::list_secret_metadata::<closure>@508#2",
       "kind": "closure",
-      "line": 516,
+      "line": 508,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 516,
+        "line": 508,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106356,22 +106538,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::list_secret_metadata::<closure>@545#3",
+        "identity": "crate::secrets::list_secret_metadata::<closure>@537#3",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": "out.sort_by(|a, b| a.id.cmp(&b.id));",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::list_secret_metadata::<closure>@545#3",
+      "identity": "crate::secrets::list_secret_metadata::<closure>@537#3",
       "kind": "closure",
-      "line": 545,
+      "line": 537,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 545,
+        "line": 537,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106382,22 +106564,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::secrets::list_secret_metadata::<closure>@546#4",
+        "identity": "crate::secrets::list_secret_metadata::<closure>@538#4",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
         "signature": "out.dedup_by(|a, b| a.id == b.id);",
         "source_class": "handwritten"
       },
-      "identity": "crate::secrets::list_secret_metadata::<closure>@546#4",
+      "identity": "crate::secrets::list_secret_metadata::<closure>@538#4",
       "kind": "closure",
-      "line": 546,
+      "line": 538,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 546,
+        "line": 538,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106416,14 +106598,14 @@
       },
       "identity": "crate::secrets::resolve_env_secret",
       "kind": "function",
-      "line": 580,
+      "line": 542,
       "name": "resolve_env_secret",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 580,
+        "line": 542,
         "name": "resolve_env_secret"
       },
       "path": "src/secrets.rs",
@@ -106442,14 +106624,14 @@
       },
       "identity": "crate::secrets::resolve_file_secret",
       "kind": "function",
-      "line": 588,
+      "line": 550,
       "name": "resolve_file_secret",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 588,
+        "line": 550,
         "name": "resolve_file_secret"
       },
       "path": "src/secrets.rs",
@@ -106468,14 +106650,14 @@
       },
       "identity": "crate::secrets::resolve_file_secret::<closure>",
       "kind": "closure",
-      "line": 599,
+      "line": 561,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 599,
+        "line": 561,
         "name": "<closure>"
       },
       "path": "src/secrets.rs",
@@ -106494,14 +106676,14 @@
       },
       "identity": "crate::secrets::valid_provider_name",
       "kind": "function",
-      "line": 603,
+      "line": 565,
       "name": "valid_provider_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 603,
+        "line": 565,
         "name": "valid_provider_name"
       },
       "path": "src/secrets.rs",
@@ -106520,14 +106702,14 @@
       },
       "identity": "crate::secrets::secret_error_message",
       "kind": "function",
-      "line": 614,
+      "line": 576,
       "name": "secret_error_message",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 614,
+        "line": 576,
         "name": "secret_error_message"
       },
       "path": "src/secrets.rs",
@@ -106546,14 +106728,14 @@
       },
       "identity": "crate::secrets::script_with_secret",
       "kind": "function",
-      "line": 629,
+      "line": 592,
       "name": "script_with_secret",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 629,
+        "line": 592,
         "name": "script_with_secret"
       },
       "path": "src/secrets.rs",
@@ -106572,14 +106754,14 @@
       },
       "identity": "crate::secrets::secret_ref_parser_accepts_generic_secret_uri",
       "kind": "function",
-      "line": 646,
+      "line": 608,
       "name": "secret_ref_parser_accepts_generic_secret_uri",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 646,
+        "line": 608,
         "name": "secret_ref_parser_accepts_generic_secret_uri"
       },
       "path": "src/secrets.rs",
@@ -106598,18 +106780,44 @@
       },
       "identity": "crate::secrets::parse_direct_secrets_does_not_echo_invalid_secret_value",
       "kind": "function",
-      "line": 654,
+      "line": 616,
       "name": "parse_direct_secrets_does_not_echo_invalid_secret_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 654,
+        "line": 616,
         "name": "parse_direct_secrets_does_not_echo_invalid_secret_value"
       },
       "path": "src/secrets.rs",
       "signature": "fn parse_direct_secrets_does_not_echo_invalid_secret_value()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::secrets::parse_direct_secrets_rejects_empty_field_without_echoing_value",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "fn parse_direct_secrets_rejects_empty_field_without_echoing_value()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::parse_direct_secrets_rejects_empty_field_without_echoing_value",
+      "kind": "function",
+      "line": 628,
+      "name": "parse_direct_secrets_rejects_empty_field_without_echoing_value",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 628,
+        "name": "parse_direct_secrets_rejects_empty_field_without_echoing_value"
+      },
+      "path": "src/secrets.rs",
+      "signature": "fn parse_direct_secrets_rejects_empty_field_without_echoing_value()",
       "source_class": "handwritten"
     },
     {
@@ -106624,14 +106832,14 @@
       },
       "identity": "crate::secrets::env_provider_resolves_allowed_ref",
       "kind": "function",
-      "line": 685,
+      "line": 640,
       "name": "env_provider_resolves_allowed_ref",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 685,
+        "line": 640,
         "name": "env_provider_resolves_allowed_ref"
       },
       "path": "src/secrets.rs",
@@ -106650,14 +106858,14 @@
       },
       "identity": "crate::secrets::empty_env_secret_replaces_literal_ref_in_execution_args",
       "kind": "function",
-      "line": 713,
+      "line": 668,
       "name": "empty_env_secret_replaces_literal_ref_in_execution_args",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 713,
+        "line": 668,
         "name": "empty_env_secret_replaces_literal_ref_in_execution_args"
       },
       "path": "src/secrets.rs",
@@ -106676,14 +106884,14 @@
       },
       "identity": "crate::secrets::env_wildcard_requires_explicit_env_ref_but_rides_provider_refs",
       "kind": "function",
-      "line": 800,
+      "line": 707,
       "name": "env_wildcard_requires_explicit_env_ref_but_rides_provider_refs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 800,
+        "line": 707,
         "name": "env_wildcard_requires_explicit_env_ref_but_rides_provider_refs"
       },
       "path": "src/secrets.rs",
@@ -106702,14 +106910,14 @@
       },
       "identity": "crate::secrets::env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard",
       "kind": "function",
-      "line": 851,
+      "line": 758,
       "name": "env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 851,
+        "line": 758,
         "name": "env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard"
       },
       "path": "src/secrets.rs",
@@ -106728,14 +106936,14 @@
       },
       "identity": "crate::secrets::file_provider_resolves_allowed_managed_env_ref",
       "kind": "function",
-      "line": 875,
+      "line": 782,
       "name": "file_provider_resolves_allowed_managed_env_ref",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 875,
+        "line": 782,
         "name": "file_provider_resolves_allowed_managed_env_ref"
       },
       "path": "src/secrets.rs",
@@ -106754,14 +106962,14 @@
       },
       "identity": "crate::secrets::file_provider_rejects_symlinked_env_file",
       "kind": "function",
-      "line": 907,
+      "line": 814,
       "name": "file_provider_rejects_symlinked_env_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 907,
+        "line": 814,
         "name": "file_provider_rejects_symlinked_env_file"
       },
       "path": "src/secrets.rs",
@@ -106780,14 +106988,14 @@
       },
       "identity": "crate::secrets::provider_resolution_requires_secrets_use_scope",
       "kind": "function",
-      "line": 931,
+      "line": 838,
       "name": "provider_resolution_requires_secrets_use_scope",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 931,
+        "line": 838,
         "name": "provider_resolution_requires_secrets_use_scope"
       },
       "path": "src/secrets.rs",
@@ -106806,14 +107014,14 @@
       },
       "identity": "crate::secrets::provider_resolution_requires_acl_match",
       "kind": "function",
-      "line": 956,
+      "line": 863,
       "name": "provider_resolution_requires_acl_match",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 956,
+        "line": 863,
         "name": "provider_resolution_requires_acl_match"
       },
       "path": "src/secrets.rs",
@@ -106832,14 +107040,14 @@
       },
       "identity": "crate::secrets::missing_provider_ref_is_error_not_plaintext",
       "kind": "function",
-      "line": 981,
+      "line": 888,
       "name": "missing_provider_ref_is_error_not_plaintext",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 981,
+        "line": 888,
         "name": "missing_provider_ref_is_error_not_plaintext"
       },
       "path": "src/secrets.rs",
@@ -106858,14 +107066,14 @@
       },
       "identity": "crate::secrets::redaction_removes_provider_value_from_output_and_error_text",
       "kind": "function",
-      "line": 1001,
+      "line": 908,
       "name": "redaction_removes_provider_value_from_output_and_error_text",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1001,
+        "line": 908,
         "name": "redaction_removes_provider_value_from_output_and_error_text"
       },
       "path": "src/secrets.rs",
@@ -106884,14 +107092,14 @@
       },
       "identity": "crate::secrets::list_secret_metadata_never_includes_values",
       "kind": "function",
-      "line": 1033,
+      "line": 940,
       "name": "list_secret_metadata_never_includes_values",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1033,
+        "line": 940,
         "name": "list_secret_metadata_never_includes_values"
       },
       "path": "src/secrets.rs",
@@ -106910,14 +107118,14 @@
       },
       "identity": "crate::secrets::list_secret_metadata_respects_ref_acl_without_use_scope",
       "kind": "function",
-      "line": 1058,
+      "line": 964,
       "name": "list_secret_metadata_respects_ref_acl_without_use_scope",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1058,
+        "line": 964,
         "name": "list_secret_metadata_respects_ref_acl_without_use_scope"
       },
       "path": "src/secrets.rs",

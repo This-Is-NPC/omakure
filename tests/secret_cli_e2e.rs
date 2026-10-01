@@ -45,6 +45,34 @@ fn run_secret_json_and_history_redact_plaintext() {
 }
 
 #[test]
+fn run_rejects_malformed_direct_secrets_without_echoing_values() {
+    let workspace = support::TestWorkspace::new("invalid_direct_secret");
+    write_secret_echo_script(workspace.path(), "secret-run.sh");
+
+    for (argument, expected_message) in [
+        (
+            "raw_secret_value",
+            "invalid secret argument: expected FIELD=VALUE",
+        ),
+        (
+            " =raw_secret_value",
+            "invalid secret: field name cannot be empty",
+        ),
+    ] {
+        let output = support::workspace_command::<15>(
+            workspace.path(),
+            &["--json", "run", "secret-run.sh", "--secret", argument],
+        );
+        assert!(!output.status.success());
+        assert_no_plaintext(&output, "raw_secret_value");
+
+        let envelope = support::json_envelope(&output.stdout);
+        assert_eq!(envelope["error"]["code"], "invalid_argument");
+        assert_eq!(envelope["error"]["message"], expected_message);
+    }
+}
+
+#[test]
 fn env_lifecycle_masks_sensitive_values_without_stdout_or_stderr_leaks() {
     let workspace = support::TestWorkspace::new("secret_env");
     let api_key_param = format!("API_KEY={ENV_API_KEY}");

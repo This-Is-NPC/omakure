@@ -324,15 +324,25 @@ pub fn validate_queued_secret_args_reconstructable(
     Ok(())
 }
 
-pub fn parse_direct_secrets(values: &[String]) -> Result<Vec<(String, String)>, String> {
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum DirectSecretParseError {
+    #[error("invalid secret argument: expected FIELD=VALUE")]
+    MissingAssignment,
+    #[error("invalid secret: field name cannot be empty")]
+    EmptyField,
+}
+
+pub fn parse_direct_secrets(
+    values: &[String],
+) -> Result<Vec<(String, String)>, DirectSecretParseError> {
     values
         .iter()
         .map(|value| {
             let Some((field, secret)) = value.split_once('=') else {
-                return Err("invalid secret argument: expected FIELD=VALUE".to_string());
+                return Err(DirectSecretParseError::MissingAssignment);
             };
             if field.trim().is_empty() {
-                return Err("invalid secret: field name cannot be empty".to_string());
+                return Err(DirectSecretParseError::EmptyField);
             }
             Ok((field.to_string(), secret.to_string()))
         })
@@ -606,8 +616,24 @@ mod tests {
     fn parse_direct_secrets_does_not_echo_invalid_secret_value() {
         let err = parse_direct_secrets(&["raw_secret_without_field".into()]).unwrap_err();
 
-        assert_eq!(err, "invalid secret argument: expected FIELD=VALUE");
-        assert!(!err.contains("raw_secret_without_field"));
+        assert_eq!(err, DirectSecretParseError::MissingAssignment);
+        assert_eq!(
+            err.to_string(),
+            "invalid secret argument: expected FIELD=VALUE"
+        );
+        assert!(!err.to_string().contains("raw_secret_without_field"));
+    }
+
+    #[test]
+    fn parse_direct_secrets_rejects_empty_field_without_echoing_value() {
+        let err = parse_direct_secrets(&[" =raw_secret_value".into()]).unwrap_err();
+
+        assert_eq!(err, DirectSecretParseError::EmptyField);
+        assert_eq!(
+            err.to_string(),
+            "invalid secret: field name cannot be empty"
+        );
+        assert!(!err.to_string().contains("raw_secret_value"));
     }
 
     #[test]

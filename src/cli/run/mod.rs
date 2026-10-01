@@ -110,7 +110,7 @@ fn prepare_run_inputs(
     )
     .map_err(|error| (codes::INVALID_ARGUMENT, error.to_string()))?;
     let direct_secrets = crate::secrets::parse_direct_secrets(&options.secrets)
-        .map_err(|error| (codes::INVALID_ARGUMENT, error))?;
+        .map_err(|error| (codes::INVALID_ARGUMENT, error.to_string()))?;
     let resolved_args = crate::secrets::resolve_args_with_direct_secrets(
         workspace,
         script_path,

@@ -1,4 +1,5 @@
-use serde::Deserialize;
+use serde::{de::Error as _, Deserialize};
+use serde_json::Value;
 
 use crate::error::SchemaError;
 
@@ -9,9 +10,30 @@ pub fn parse_schema(output: &str) -> Result<Schema, SchemaError> {
     for (start, _) in output.match_indices('{') {
         let json = &output[start..];
         let mut deserializer = serde_json::Deserializer::from_str(json);
-        if let Ok(schema) = Schema::deserialize(&mut deserializer) {
-            schema.validate()?;
-            return Ok(schema);
+        match Schema::deserialize(&mut deserializer) {
+            Ok(schema) => {
+                let mut probe = serde_json::Deserializer::from_str(json);
+                let object = Value::deserialize(&mut probe)?;
+                if let Value::Object(object) = object {
+                    for section in ["Outputs", "Queue"] {
+                        if object.contains_key(section) {
+                            return Err(SchemaError::InvalidJson(serde_json::Error::custom(
+                                format!("unsupported schema section: {section}"),
+                            )));
+                        }
+                    }
+                }
+                schema.validate()?;
+                return Ok(schema);
+            }
+            Err(error) => {
+                let mut probe = serde_json::Deserializer::from_str(json);
+                if let Ok(Value::Object(object)) = Value::deserialize(&mut probe) {
+                    if object.contains_key("Name") && object.contains_key("Fields") {
+                        return Err(SchemaError::InvalidJson(error));
+                    }
+                }
+            }
         }
     }
 
@@ -100,6 +122,13 @@ Some output after"#;
         assert_eq!(schema.name, "test_script");
         assert_eq!(schema.description, Some("A test script".to_string()));
         assert!(schema.fields.is_empty());
+    }
+
+    #[test]
+    fn parse_schema_skips_unrelated_json_before_the_schema() {
+        let output = r#"{"event":"ready"}
+{"Name":"job","Fields":[]}"#;
+        assert_eq!(parse_schema(output).unwrap().name, "job");
     }
 
     #[test]

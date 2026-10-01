@@ -10,8 +10,8 @@ machine-owned single-process `node serve` service.
    overrides, debug defaults, and platform defaults.
 2. The shared filesystem repository scans supported script extensions while
    excluding metadata and `.omakureignore` matches.
-3. Each script may embed a PascalCase JSON schema. The schema describes fields,
-   outputs, queue cases, and an optional cron `Schedule`.
+3. Each script may embed a PascalCase JSON schema. The schema describes fields
+   and an optional cron `Schedule`.
 4. CLI commands and HTTP routes call the same operations. CLI output is human
    readable or the stable JSON envelope; HTTP adds authentication, policy, and
    status mapping.

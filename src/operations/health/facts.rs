@@ -5,7 +5,7 @@ use crate::health_plane::model::{RunFact, RunnerFact, RuntimeFact};
 use crate::health_plane::report::{
     opaque_run_id, sanitize_signal_run, HealthFactsSource, ProfileFacts, PulseFacts,
 };
-use crate::runs::{self, RunState, RunStateSet};
+use crate::runs::{self, RunState, RunStateSet, RunStore};
 use crate::workspace::Workspace;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -161,7 +161,7 @@ impl HealthFactsSource for NodeHealthFacts {
 
     fn pulse_facts(&self) -> PulseFacts {
         let uptime_seconds = self.started.elapsed().as_secs();
-        let Ok(connection) = runs::open(&self.workspace) else {
+        let Ok(store) = RunStore::open(&self.workspace) else {
             // The run log is unreadable. The contract has a state for exactly
             // this, and it is reported rather than guessed around.
             return PulseFacts {
@@ -176,7 +176,7 @@ impl HealthFactsSource for NodeHealthFacts {
                 uptime_seconds,
             };
         };
-        let stats = runs::stats(&connection).ok();
+        let stats = store.stats().ok();
         let count = |state: RunState| -> u64 {
             stats
                 .as_ref()
@@ -201,16 +201,16 @@ impl HealthFactsSource for NodeHealthFacts {
                 workers_busy,
                 workers_configured: self.workers_configured,
             },
-            last_run: last_terminal_run(&connection),
+            last_run: last_terminal_run(&store),
             uptime_seconds,
         }
     }
 
     fn terminal_runs(&self, limit: usize) -> Vec<RunFact> {
-        let Ok(connection) = runs::open(&self.workspace) else {
+        let Ok(store) = RunStore::open(&self.workspace) else {
             return Vec::new();
         };
-        terminal_runs(&connection, limit.min(SIGNAL_INBOX_CAPACITY as usize))
+        terminal_runs(&store, limit.min(SIGNAL_INBOX_CAPACITY as usize))
     }
 }
 
@@ -230,16 +230,13 @@ impl NodeHealthFacts {
 /// trigger, and the exit code cross this boundary. The script path, the
 /// arguments, stdout, stderr, the error text, the actor, and the worker id are
 /// all privacy class P1 and never leave the run log.
-fn last_terminal_run(connection: &rusqlite::Connection) -> Option<RunFact> {
+fn last_terminal_run(store: &RunStore) -> Option<RunFact> {
     let filters = runs::RunFilters {
         limit: Some(1),
         states: RunStateSet::Terminal.to_states(),
         ..runs::RunFilters::default()
     };
-    let row = runs::query_runs(connection, &filters)
-        .ok()?
-        .into_iter()
-        .next()?;
+    let row = store.query_runs(&filters).ok()?.into_iter().next()?;
     let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;
     let started_at = row
         .started_at
@@ -269,13 +266,13 @@ fn last_terminal_run(connection: &rusqlite::Connection) -> Option<RunFact> {
 /// stderr, the error text, the actor, and the worker id are privacy class P1
 /// and never leave the run log. A row that cannot be expressed inside the
 /// closed schema is dropped rather than guessed at.
-fn terminal_runs(connection: &rusqlite::Connection, limit: usize) -> Vec<RunFact> {
+fn terminal_runs(store: &RunStore, limit: usize) -> Vec<RunFact> {
     let filters = runs::RunFilters {
         limit: Some(limit as i64),
         states: RunStateSet::Terminal.to_states(),
         ..runs::RunFilters::default()
     };
-    let Ok(rows) = runs::query_runs(connection, &filters) else {
+    let Ok(rows) = store.query_runs(&filters) else {
         return Vec::new();
     };
     rows.into_iter()
@@ -469,6 +466,39 @@ fn version_token(banner: &str) -> String {
 mod tests {
     use super::*;
     use crate::test_support::workspace_in;
+
+    #[test]
+    fn an_empty_run_store_reports_idle_and_no_terminal_runs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let facts = NodeHealthFacts::new(workspace_in(&dir), "node".to_string(), 2, true);
+
+        let pulse = facts.pulse_facts();
+        assert_eq!(pulse.runner.state, "idle");
+        assert_eq!(pulse.runner.scheduler, "running");
+        assert_eq!(pulse.runner.queue_depth, 0);
+        assert_eq!(pulse.runner.workers_busy, 0);
+        assert_eq!(pulse.runner.workers_configured, 2);
+        assert!(pulse.last_run.is_none());
+        assert!(facts.terminal_runs(1).is_empty());
+    }
+
+    #[test]
+    fn an_unreadable_run_store_degrades_pulse_and_omits_terminal_runs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = workspace_in(&dir);
+        std::fs::remove_dir_all(workspace.history_dir()).expect("remove history directory");
+        std::fs::write(workspace.history_dir(), b"blocked").expect("block history directory");
+        let facts = NodeHealthFacts::new(workspace, "node".to_string(), 2, false);
+
+        let pulse = facts.pulse_facts();
+        assert_eq!(pulse.runner.state, "degraded");
+        assert_eq!(pulse.runner.scheduler, "disabled");
+        assert_eq!(pulse.runner.queue_depth, 0);
+        assert_eq!(pulse.runner.workers_busy, 0);
+        assert_eq!(pulse.runner.workers_configured, 2);
+        assert!(pulse.last_run.is_none());
+        assert!(facts.terminal_runs(1).is_empty());
+    }
 
     /// A wedged interpreter must not hold the Profile open.
     ///

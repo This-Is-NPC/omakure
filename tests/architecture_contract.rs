@@ -10,7 +10,7 @@ enum Rule {
     Http,
     HttpNodeDelivery,
     Catalog,
-    CoreRunQueriesStorage,
+    RunStoreBoundary,
     Domain,
     RunsSql,
     Executor,
@@ -91,14 +91,14 @@ impl ContractVisitor {
                 "node delivery handlers must call operations",
             );
         }
-        if self.rule == Rule::CoreRunQueriesStorage
+        if self.rule == Rule::RunStoreBoundary
             && (path.first().map(String::as_str) == Some("rusqlite")
                 || Self::starts_with(path, &["runs", "open"])
                 || Self::starts_with(path, &["crate", "runs", "open"]))
         {
             self.record(
-                "ARCH-CORE-RUN-QUERIES-STORAGE",
-                "core run queries must use the opaque runs store",
+                "ARCH-RUN-STORE-BOUNDARY",
+                "run operations must use the opaque runs store",
             );
         }
         if self.rule == Rule::Domain
@@ -495,19 +495,23 @@ fn production_architecture_boundaries_are_clean() {
         );
     }
 
-    let run_queries_path = src.join("operations/core/run_queries.rs");
-    let run_queries = fs::read_to_string(&run_queries_path).expect("read core run queries");
-    let contract = parse_contract(
-        Rule::CoreRunQueriesStorage,
-        "src/operations/core/run_queries.rs",
-        &run_queries,
-    );
-    assert!(
-        contract.findings.is_empty(),
-        "core run queries must use the opaque runs store: {:?}",
-        contract.findings
-    );
-    assert!(run_queries.contains("RunStore::open("));
+    for relative in [
+        "operations/core/run_queries.rs",
+        "operations/health/facts.rs",
+    ] {
+        let path = src.join(relative);
+        let source = fs::read_to_string(&path).expect("read run operation source");
+        let contract = parse_contract(Rule::RunStoreBoundary, relative, &source);
+        assert!(
+            contract.findings.is_empty(),
+            "run operations must use the opaque runs store in {relative}: {:?}",
+            contract.findings
+        );
+        assert!(
+            source.contains("RunStore::open("),
+            "{relative} must open RunStore"
+        );
+    }
 
     let direct = parse_contract(
         Rule::Executor,
@@ -592,17 +596,13 @@ fn shared_catalogs_do_not_depend_on_cli_adapters() {
 }
 
 #[test]
-fn core_run_queries_reject_direct_storage_handles() {
+fn run_operations_reject_direct_storage_handles() {
     for source in [
         "fn require_run(conn: &rusqlite::Connection) {}",
         "fn open_run_store(workspace: &Workspace) { runs::open(workspace); }",
     ] {
-        let contract = parse_contract(
-            Rule::CoreRunQueriesStorage,
-            "fixture:run_queries.rs",
-            source,
-        );
+        let contract = parse_contract(Rule::RunStoreBoundary, "fixture:run_operation.rs", source);
         assert_eq!(contract.findings.len(), 1);
-        assert_eq!(contract.findings[0].rule, "ARCH-CORE-RUN-QUERIES-STORAGE");
+        assert_eq!(contract.findings[0].rule, "ARCH-RUN-STORE-BOUNDARY");
     }
 }

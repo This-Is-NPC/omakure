@@ -24,7 +24,7 @@ pub use lifecycle::{
     record_cancelled_output, recover_abandoned_cue_runs, time_out, ClaimFilters, RunCompletion,
 };
 pub use open::open;
-pub use query::{get_run, last_scheduled_fire_ms, query_runs, stats, RunFilters, RunRow, RunStats};
+pub use query::{get_run, last_scheduled_fire_ms, RunFilters, RunRow, RunStats};
 pub use state::{RunState, RunStateSet, RunTrigger};
 pub(crate) use store::RunStore;
 #[cfg(test)]

@@ -3,8 +3,9 @@ use super::lifecycle::{acquire_lock, pid_file, release_lock};
 use super::lifecycle::{publish_windows_pid_file, read_windows_pid_file, WindowsPidFile};
 use super::logging::log_file;
 use super::scheduler::{build_args_from_defaults, scheduler_tick};
-use crate::runs::{self, RunTrigger};
+use crate::runs::{self, RunStore, RunTrigger};
 use crate::test_support::workspace_in;
+use crate::workspace::Workspace;
 use chrono::Utc;
 use std::fs;
 use std::io::Write;
@@ -31,6 +32,16 @@ fn write_script(dir: &Path, name: &str, schedule: Option<&str>) -> PathBuf {
     let mut f = fs::File::create(&path).unwrap();
     f.write_all(script.as_bytes()).unwrap();
     path
+}
+
+fn all_runs(workspace: &Workspace) -> Vec<runs::RunRow> {
+    RunStore::open(workspace)
+        .unwrap()
+        .query_runs(&runs::RunFilters {
+            states: runs::RunStateSet::All.to_states(),
+            ..Default::default()
+        })
+        .unwrap()
 }
 
 #[test]
@@ -67,15 +78,7 @@ fn tick_enqueues_scheduled_run_on_first_fire() {
     let fired = scheduler_tick(&ws, now).unwrap();
     assert_eq!(fired, 1, "exactly one scheduled script should have fired");
 
-    let conn = runs::open(&ws).unwrap();
-    let rows = runs::query_runs(
-        &conn,
-        &runs::RunFilters {
-            states: runs::RunStateSet::All.to_states(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let rows = all_runs(&ws);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].trigger, RunTrigger::Scheduled);
     assert!(rows[0]
@@ -144,15 +147,7 @@ fn concurrent_ticks_enqueue_one_scheduled_run() {
         "concurrent scheduler ticks must claim one fire"
     );
 
-    let conn = runs::open(&ws).unwrap();
-    let rows = runs::query_runs(
-        &conn,
-        &runs::RunFilters {
-            states: runs::RunStateSet::All.to_states(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let rows = all_runs(&ws);
     assert_eq!(rows.len(), 1);
 }
 #[test]
@@ -199,15 +194,7 @@ fn tick_persists_secret_ref_default_not_plaintext() {
     let fired = scheduler_tick(&ws, Utc::now()).unwrap();
     assert_eq!(fired, 1);
 
-    let conn = runs::open(&ws).unwrap();
-    let rows = runs::query_runs(
-        &conn,
-        &runs::RunFilters {
-            states: runs::RunStateSet::All.to_states(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let rows = all_runs(&ws);
     assert_eq!(rows.len(), 1);
     // Regression (audit #1936 finding 1): the cron path must persist the
     // secret:// ref, never the resolved plaintext, into args_json at rest.
@@ -237,15 +224,7 @@ fn tick_skips_fire_on_plaintext_secret_default() {
     let fired = scheduler_tick(&ws, Utc::now()).unwrap();
     assert_eq!(fired, 0, "plaintext secret default must not enqueue");
 
-    let conn = runs::open(&ws).unwrap();
-    let rows = runs::query_runs(
-        &conn,
-        &runs::RunFilters {
-            states: runs::RunStateSet::All.to_states(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let rows = all_runs(&ws);
     assert!(
         rows.is_empty(),
         "no run should be enqueued for a plaintext secret default"

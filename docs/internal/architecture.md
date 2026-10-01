@@ -121,7 +121,7 @@ verify workspace paths or host runtimes.
 | Errors | thiserror 2.0 | Typed domain and application errors |
 | Scheduling | cron 0.12, chrono 0.4, humantime 2.1 | Schedule parsing, next-fire calculation, duration flags |
 | Processes | signal-hook 0.3, daemonize 0.5 | Graceful workers and Unix daemon mode |
-| Script runtime | mlua 0.10 (`lua54`, `vendored`) | Embedded Lua host for `.lua` scripts |
+| Script runtime | mlua 0.12 (`lua54`, `vendored`) | Embedded Lua host for `.lua` scripts |
 | Tokens | argon2 0.5, subtle 2.6, sha2 0.10, rand 0.9 | Token hashing, constant-time comparison, digests, generation |
 | Identity and transport | k256 0.14, snow 0.10, curve25519-dalek 4.1 | BIP-340 identity, Noise XX sessions, X25519 key checks |
 | Resolution | hickory-resolver 0.25 | Bounded async static-peer DNS resolution |

@@ -40,7 +40,7 @@ usage_docs = { package = "usage-lib", version = "=6.6.0", git = "https://github.
 
 # Embedded Lua host. `vendored` builds the interpreter from source so a node
 # needs no system Lua; this keeps the shipped script runtime self-contained.
-mlua = { version = "0.10", features = ["lua54", "vendored"] }
+mlua = { version = "0.12.1", features = ["lua54", "vendored"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rusqlite = { version = "0.31", features = ["bundled"] }

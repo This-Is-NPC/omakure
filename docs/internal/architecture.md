@@ -182,7 +182,7 @@ src/
 │   ├── system_checks.rs     interpreter checks and bounded runtime version probes
 │   ├── fs/                  no-follow Unix file operations for Battery installs
 │   └── signals.rs           process shutdown signal registration
-├── ports/                   repository and environment interfaces
+├── ports/                   environment interface
 ├── error.rs                 schema and environment application errors
 ├── util/                    shared filesystem, process, path, encoding, and OS entropy helpers
 ├── app_meta.rs              package version constant

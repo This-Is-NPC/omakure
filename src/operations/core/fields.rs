@@ -1,5 +1,4 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
 use crate::workspace::Workspace;
 use std::path::Path;
 

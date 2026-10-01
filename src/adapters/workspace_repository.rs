@@ -1,6 +1,5 @@
 use crate::domain::{Schema, extract_schema_block, parse_schema};
 use crate::error::{AppResult, ScriptError};
-use crate::ports::{ScriptRepository, WorkspaceEntry, WorkspaceEntryKind};
 use crate::runtime::{ScriptKind, script_kind};
 
 use std::fs;
@@ -8,6 +7,19 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::util::fs::read_dir_or_empty;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceEntryKind {
+    Directory,
+    Script,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceEntry {
+    pub path: PathBuf,
+    pub kind: WorkspaceEntryKind,
+}
+
 pub struct FsWorkspaceRepository {
     root: PathBuf,
 }
@@ -16,10 +28,8 @@ impl FsWorkspaceRepository {
     pub fn new<P: Into<PathBuf>>(root: P) -> Self {
         Self { root: root.into() }
     }
-}
 
-impl ScriptRepository for FsWorkspaceRepository {
-    fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>> {
+    pub fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>> {
         let mut entries_out = Vec::new();
         let entries = read_dir_or_empty(dir)?;
         let ignore = IgnoreContext::load_for_dir(&self.root, dir);
@@ -55,14 +65,14 @@ impl ScriptRepository for FsWorkspaceRepository {
         Ok(entries_out)
     }
 
-    fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>> {
+    pub fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>> {
         let mut scripts = Vec::new();
         let mut ignore = IgnoreContext::load_for_dir(&self.root, &self.root);
         collect_scripts(&self.root, &mut ignore, &mut scripts)?;
         Ok(scripts)
     }
 
-    fn read_schema(&self, script: &Path) -> AppResult<Schema> {
+    pub fn read_schema(&self, script: &Path) -> AppResult<Schema> {
         let prefixes = match script_kind(script) {
             Some(ScriptKind::Bash) => vec!["#"],
             Some(ScriptKind::PowerShell) => vec!["#", ";"],

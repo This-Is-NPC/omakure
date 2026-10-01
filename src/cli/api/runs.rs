@@ -10,7 +10,6 @@ use super::state::{ApiCapability, ApiState};
 use crate::auth::AuthContext;
 use crate::operations::core;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
-use crate::ports::ScriptRepository;
 use axum::Extension;
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, RawQuery, State};

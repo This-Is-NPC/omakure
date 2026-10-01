@@ -1,5 +1,4 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
 use crate::redaction::redact_secret;
 use crate::workspace::Workspace;
 use std::collections::HashSet;

@@ -3,7 +3,6 @@ use crate::adapters::system_checks::{
     ensure_python_installed,
 };
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

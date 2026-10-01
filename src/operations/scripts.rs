@@ -1,5 +1,4 @@
-use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::{ScriptRepository, WorkspaceEntryKind};
+use crate::adapters::workspace_repository::{FsWorkspaceRepository, WorkspaceEntryKind};
 use crate::runtime::script_kind;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "d515f51eeea8ab4b63c7117b4a9c63d8ec105fccd8ef14399b1615407a9643e3",
+  "canonical_sha256": "3a707411776c69b206f3aa7403ca83721e73bc4b21623e4bf410ebc2e66dc949",
   "config_identity": "no-config",
   "files": [
     {
@@ -162,11 +162,11 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 57,
+        "invocations": 56,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 52,
+        "cognitive": 51,
         "cyclomatic": 113
       },
       "path": "src/adapters/workspace_repository.rs",
@@ -4222,12 +4222,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 3,
+        "invocations": 0,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 0,
-        "cyclomatic": 3
+        "cyclomatic": 0
       },
       "path": "src/ports/mod.rs",
       "source_class": "handwritten"
@@ -8599,23 +8599,23 @@
         "identity": "crate::adapters::workspace_repository::list_entries",
         "macro_expansion": "not_measured",
         "path": "src/adapters/workspace_repository.rs",
-        "signature": "fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>>",
+        "signature": "pub fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>>",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::workspace_repository::list_entries",
       "kind": "method",
-      "line": 22,
+      "line": 32,
       "name": "list_entries",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 8,
         "kind": "method",
-        "line": 22,
+        "line": 32,
         "name": "list_entries"
       },
       "path": "src/adapters/workspace_repository.rs",
-      "signature": "fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>>",
+      "signature": "pub fn list_entries(&self, dir: &Path) -> io::Result<Vec<WorkspaceEntry>>",
       "source_class": "handwritten"
     },
     {
@@ -8651,23 +8651,23 @@
         "identity": "crate::adapters::workspace_repository::list_scripts_recursive",
         "macro_expansion": "not_measured",
         "path": "src/adapters/workspace_repository.rs",
-        "signature": "fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>>",
+        "signature": "pub fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>>",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::workspace_repository::list_scripts_recursive",
       "kind": "method",
-      "line": 58,
+      "line": 68,
       "name": "list_scripts_recursive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 58,
+        "line": 68,
         "name": "list_scripts_recursive"
       },
       "path": "src/adapters/workspace_repository.rs",
-      "signature": "fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>>",
+      "signature": "pub fn list_scripts_recursive(&self) -> io::Result<Vec<PathBuf>>",
       "source_class": "handwritten"
     },
     {
@@ -8677,23 +8677,23 @@
         "identity": "crate::adapters::workspace_repository::read_schema",
         "macro_expansion": "not_measured",
         "path": "src/adapters/workspace_repository.rs",
-        "signature": "fn read_schema(&self, script: &Path) -> AppResult<Schema>",
+        "signature": "pub fn read_schema(&self, script: &Path) -> AppResult<Schema>",
         "source_class": "handwritten"
       },
       "identity": "crate::adapters::workspace_repository::read_schema",
       "kind": "method",
-      "line": 65,
+      "line": 75,
       "name": "read_schema",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 65,
+        "line": 75,
         "name": "read_schema"
       },
       "path": "src/adapters/workspace_repository.rs",
-      "signature": "fn read_schema(&self, script: &Path) -> AppResult<Schema>",
+      "signature": "pub fn read_schema(&self, script: &Path) -> AppResult<Schema>",
       "source_class": "handwritten"
     },
     {
@@ -93402,84 +93402,6 @@
       },
       "path": "src/ports/environment.rs",
       "signature": "fn test_env_file_clone()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::ports::test_script_repository_is_object_safe",
-        "macro_expansion": "not_measured",
-        "path": "src/ports/mod.rs",
-        "signature": "fn test_script_repository_is_object_safe()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::ports::test_script_repository_is_object_safe",
-      "kind": "function",
-      "line": 33,
-      "name": "test_script_repository_is_object_safe",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 33,
-        "name": "test_script_repository_is_object_safe"
-      },
-      "path": "src/ports/mod.rs",
-      "signature": "fn test_script_repository_is_object_safe()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::ports::test_script_repository_is_object_safe::_assert_object_safe",
-        "macro_expansion": "not_measured",
-        "path": "src/ports/mod.rs",
-        "signature": "fn _assert_object_safe(_: &dyn ScriptRepository)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::ports::test_script_repository_is_object_safe::_assert_object_safe",
-      "kind": "function",
-      "line": 34,
-      "name": "_assert_object_safe",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 34,
-        "name": "_assert_object_safe"
-      },
-      "path": "src/ports/mod.rs",
-      "signature": "fn _assert_object_safe(_: &dyn ScriptRepository)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::ports::test_workspace_entry_kind_equality",
-        "macro_expansion": "not_measured",
-        "path": "src/ports/mod.rs",
-        "signature": "fn test_workspace_entry_kind_equality()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::ports::test_workspace_entry_kind_equality",
-      "kind": "function",
-      "line": 38,
-      "name": "test_workspace_entry_kind_equality",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 38,
-        "name": "test_workspace_entry_kind_equality"
-      },
-      "path": "src/ports/mod.rs",
-      "signature": "fn test_workspace_entry_kind_equality()",
       "source_class": "handwritten"
     },
     {

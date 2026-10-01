@@ -6,7 +6,6 @@ use crate::cli::args::ServeArgs;
 #[cfg(windows)]
 use crate::cli::serve_windows::StopEvent;
 use crate::domain::{next_fire_after, parse_cron};
-use crate::ports::ScriptRepository;
 use crate::runs::{EnqueueOptions, RunStore, RunTrigger, RunsError};
 use crate::secrets;
 use crate::workspace::Workspace;

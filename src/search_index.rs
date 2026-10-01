@@ -1,5 +1,4 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
 use crate::util::path::logical_relative_path;
 use crate::util::sqlite::WalDatabase;
 use rusqlite::{Connection, TransactionBehavior, params, params_from_iter};

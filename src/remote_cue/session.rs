@@ -10,7 +10,6 @@ use super::{
     CUE_RETENTION_SECONDS, KIND_ACK, KIND_DISPATCH, MAX_CANONICAL_CUE_DISPATCH,
     MAX_RETAINED_CUE_RECORDS,
 };
-use crate::ports::ScriptRepository;
 use crate::util::entropy;
 use std::collections::VecDeque;
 

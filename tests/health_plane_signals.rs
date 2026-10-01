@@ -1157,15 +1157,15 @@ fn an_exhausted_signal_is_resent_on_the_next_session_and_stays_one_at_the_conduc
         let reporter = Arc::new(HealthReporter::new(Box::new(SharedFacts(Arc::clone(
             &facts,
         )))));
-        HealthSession::with_clock(
+        HealthSession::new(
             &performer_identity,
             &performer_registry,
             &conductor.local_node_id,
             &conductor_key,
             session_id,
             Some(reporter),
-            Arc::new(SharedClock(Arc::clone(&performer.clock))) as Arc<dyn HealthClock>,
         )
+        .with_clock(Arc::new(SharedClock(Arc::clone(&performer.clock))) as Arc<dyn HealthClock>)
     };
 
     let signal_id;

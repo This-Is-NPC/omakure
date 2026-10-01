@@ -257,15 +257,15 @@ fn settle(fixture: &Fixture, session: &mut HealthSession<'_>) {
 impl Fixture {
     fn session(&self, peer: &str, peer_key: [u8; 32]) -> HealthSession<'_> {
         let reporter = Arc::new(HealthReporter::new(Box::new(Arc::clone(&self.facts))));
-        HealthSession::with_clock(
+        HealthSession::new(
             &self.identity,
             &self.registry,
             peer,
             &peer_key,
             SESSION_ID,
             Some(reporter),
-            Arc::clone(&self.clock) as Arc<dyn HealthClock>,
         )
+        .with_clock(Arc::clone(&self.clock) as Arc<dyn HealthClock>)
     }
 
     fn conductor_session(&self) -> HealthSession<'_> {

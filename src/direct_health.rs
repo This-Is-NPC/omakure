@@ -158,28 +158,6 @@ impl<'a> HealthSession<'a> {
         session_id: [u8; 32],
         reporter: Option<Arc<HealthReporter>>,
     ) -> Self {
-        Self::with_clock(
-            identity,
-            registry,
-            remote_node_id,
-            remote_identity_key,
-            session_id,
-            reporter,
-            Arc::new(SystemHealthClock::new()),
-        )
-    }
-
-    /// Attach Health Plane carriage over an injected clock.
-    #[allow(clippy::too_many_arguments)]
-    pub fn with_clock(
-        identity: &'a NodeIdentity,
-        registry: &'a NodeRegistry,
-        remote_node_id: &str,
-        remote_identity_key: &[u8; 32],
-        session_id: [u8; 32],
-        reporter: Option<Arc<HealthReporter>>,
-        clock: Arc<dyn HealthClock>,
-    ) -> Self {
         Self {
             identity,
             registry,
@@ -187,7 +165,7 @@ impl<'a> HealthSession<'a> {
             remote_identity_key: *remote_identity_key,
             session_id,
             reporter,
-            clock,
+            clock: Arc::new(SystemHealthClock::new()),
             pending: None,
             profile_due: true,
             next_pulse: None,
@@ -197,6 +175,12 @@ impl<'a> HealthSession<'a> {
             signals_in_window: 0,
             outbox_rearmed: false,
         }
+    }
+
+    /// Use an injected clock for a newly attached Health session.
+    pub fn with_clock(mut self, clock: Arc<dyn HealthClock>) -> Self {
+        self.clock = clock;
+        self
     }
 
     /// The Wave 2 shared operations over this session's clock.
@@ -356,7 +340,7 @@ impl<'a> HealthSession<'a> {
     /// the 7-day expiry, and the `signals_dropped` counter. Nothing here
     /// writes a Health Plane row.
     fn harvest_run_signals(&self, reporter: &HealthReporter, granted: &[String]) {
-        if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {
+        if !has_signal_capability(granted) {
             // The Conductor has not granted `notifications`. A Performer that
             // reports Profile and Pulse but refuses Signals is an enforceable
             // posture the frozen contract names, so nothing is queued at all.
@@ -391,7 +375,7 @@ impl<'a> HealthSession<'a> {
 
     /// Send the oldest undelivered Signal, if the frozen budget allows it.
     fn send_next_signal(&mut self, granted: &[String], now: i64) -> Option<Vec<u8>> {
-        if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {
+        if !has_signal_capability(granted) {
             return None;
         }
         if !self.signal_budget_available(now) {
@@ -704,6 +688,10 @@ impl<'a> HealthSession<'a> {
             },
         }
     }
+}
+
+fn has_signal_capability(granted: &[String]) -> bool {
+    granted.iter().any(|entry| entry == CAPABILITY_SIGNAL)
 }
 
 /// The frozen transport-layer failure mapping.

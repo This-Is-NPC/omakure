@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "3cb2e2412c7e4d89adc8748d7b7e8699485c3346e3b3627306c88a7ce42fc406",
+  "canonical_sha256": "37d60c94de0280e325a3bcd6698d0a8debc6bb209f996f574a5e76e3b4bdfd08",
   "config_identity": "no-config",
   "files": [
     {
@@ -1622,7 +1622,7 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 47,
+        "cognitive": 45,
         "cyclomatic": 86
       },
       "path": "src/direct_health.rs",
@@ -37242,14 +37242,14 @@
       },
       "identity": "crate::direct_health::unix_seconds",
       "kind": "method",
-      "line": 91,
+      "line": 90,
       "name": "unix_seconds",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 91,
+        "line": 90,
         "name": "unix_seconds"
       },
       "path": "src/direct_health.rs",
@@ -37268,14 +37268,14 @@
       },
       "identity": "crate::direct_health::monotonic_millis",
       "kind": "method",
-      "line": 95,
+      "line": 94,
       "name": "monotonic_millis",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 95,
+        "line": 94,
         "name": "monotonic_millis"
       },
       "path": "src/direct_health.rs",
@@ -37294,14 +37294,14 @@
       },
       "identity": "crate::direct_health::new",
       "kind": "method",
-      "line": 154,
+      "line": 153,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 154,
+        "line": 153,
         "name": "new"
       },
       "path": "src/direct_health.rs",
@@ -37315,23 +37315,23 @@
         "identity": "crate::direct_health::with_clock",
         "macro_expansion": "not_measured",
         "path": "src/direct_health.rs",
-        "signature": "pub fn with_clock( identity: &'a NodeIdentity, registry: &'a NodeRegistry, remote_node_id: &str, remote_identity_key: &[u8",
+        "signature": "pub fn with_clock(mut self, clock: Arc<dyn HealthClock>) -> Self",
         "source_class": "handwritten"
       },
       "identity": "crate::direct_health::with_clock",
       "kind": "method",
-      "line": 175,
+      "line": 181,
       "name": "with_clock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 175,
+        "line": 181,
         "name": "with_clock"
       },
       "path": "src/direct_health.rs",
-      "signature": "pub fn with_clock( identity: &'a NodeIdentity, registry: &'a NodeRegistry, remote_node_id: &str, remote_identity_key: &[u8",
+      "signature": "pub fn with_clock(mut self, clock: Arc<dyn HealthClock>) -> Self",
       "source_class": "handwritten"
     },
     {
@@ -37346,14 +37346,14 @@
       },
       "identity": "crate::direct_health::plane",
       "kind": "method",
-      "line": 204,
+      "line": 187,
       "name": "plane",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 204,
+        "line": 187,
         "name": "plane"
       },
       "path": "src/direct_health.rs",
@@ -37372,14 +37372,14 @@
       },
       "identity": "crate::direct_health::handle_envelope",
       "kind": "method",
-      "line": 216,
+      "line": 199,
       "name": "handle_envelope",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 7,
         "kind": "method",
-        "line": 216,
+        "line": 199,
         "name": "handle_envelope"
       },
       "path": "src/direct_health.rs",
@@ -37387,8 +37387,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 11,
-      "cyclomatic": 11,
+      "cognitive": 9,
+      "cyclomatic": 10,
       "derived": {
         "identity": "crate::direct_health::tick",
         "macro_expansion": "not_measured",
@@ -37398,14 +37398,14 @@
       },
       "identity": "crate::direct_health::tick",
       "kind": "method",
-      "line": 294,
+      "line": 277,
       "name": "tick",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 11,
-        "cyclomatic": 11,
+        "cognitive": 9,
+        "cyclomatic": 10,
         "kind": "method",
-        "line": 294,
+        "line": 277,
         "name": "tick"
       },
       "path": "src/direct_health.rs",
@@ -37424,14 +37424,14 @@
       },
       "identity": "crate::direct_health::tick::<closure>",
       "kind": "closure",
-      "line": 304,
+      "line": 287,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 304,
+        "line": 287,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37442,26 +37442,52 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_health::tick::<closure>@340#2",
+        "identity": "crate::direct_health::tick::<closure>@325#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_health.rs",
-        "signature": "if self.next_pulse.is_none_or(|due| now >= due) {",
+        "signature": ".is_none_or(|due| now >= due)",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_health::tick::<closure>@340#2",
+      "identity": "crate::direct_health::tick::<closure>@325#2",
       "kind": "closure",
-      "line": 340,
+      "line": 325,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 340,
+        "line": 325,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
-      "signature": "if self.next_pulse.is_none_or(|due| now >= due) {",
+      "signature": ".is_none_or(|due| now >= due)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_health::tick::<closure>@326#3",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_health.rs",
+        "signature": ".then(|| reporter.pulse(&self.remote_node_id, &fresh_id(), now))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_health::tick::<closure>@326#3",
+      "kind": "closure",
+      "line": 326,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 326,
+        "name": "<closure>"
+      },
+      "path": "src/direct_health.rs",
+      "signature": ".then(|| reporter.pulse(&self.remote_node_id, &fresh_id(), now))",
       "source_class": "handwritten"
     },
     {
@@ -37476,44 +37502,18 @@
       },
       "identity": "crate::direct_health::harvest_run_signals",
       "kind": "method",
-      "line": 357,
+      "line": 342,
       "name": "harvest_run_signals",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 357,
+        "line": 342,
         "name": "harvest_run_signals"
       },
       "path": "src/direct_health.rs",
       "signature": "fn harvest_run_signals(&self, reporter: &HealthReporter, granted: &[String])",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_health::harvest_run_signals::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_health.rs",
-        "signature": "if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_health::harvest_run_signals::<closure>",
-      "kind": "closure",
-      "line": 358,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 358,
-        "name": "<closure>"
-      },
-      "path": "src/direct_health.rs",
-      "signature": "if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {",
       "source_class": "handwritten"
     },
     {
@@ -37528,14 +37528,14 @@
       },
       "identity": "crate::direct_health::send_next_signal",
       "kind": "method",
-      "line": 392,
+      "line": 377,
       "name": "send_next_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 392,
+        "line": 377,
         "name": "send_next_signal"
       },
       "path": "src/direct_health.rs",
@@ -37549,45 +37549,19 @@
         "identity": "crate::direct_health::send_next_signal::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/direct_health.rs",
-        "signature": "if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {",
+        "signature": ".filter(|entry| entry.target_node_id == self.remote_node_id)?;",
         "source_class": "handwritten"
       },
       "identity": "crate::direct_health::send_next_signal::<closure>",
       "kind": "closure",
-      "line": 393,
+      "line": 390,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 393,
-        "name": "<closure>"
-      },
-      "path": "src/direct_health.rs",
-      "signature": "if !granted.iter().any(|entry| entry == CAPABILITY_SIGNAL) {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_health::send_next_signal::<closure>@405#2",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_health.rs",
-        "signature": ".filter(|entry| entry.target_node_id == self.remote_node_id)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_health::send_next_signal::<closure>@405#2",
-      "kind": "closure",
-      "line": 405,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 405,
+        "line": 390,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37606,14 +37580,14 @@
       },
       "identity": "crate::direct_health::send_signal",
       "kind": "method",
-      "line": 414,
+      "line": 399,
       "name": "send_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 414,
+        "line": 399,
         "name": "send_signal"
       },
       "path": "src/direct_health.rs",
@@ -37632,14 +37606,14 @@
       },
       "identity": "crate::direct_health::signal_budget_available",
       "kind": "method",
-      "line": 445,
+      "line": 430,
       "name": "signal_budget_available",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 445,
+        "line": 430,
         "name": "signal_budget_available"
       },
       "path": "src/direct_health.rs",
@@ -37658,14 +37632,14 @@
       },
       "identity": "crate::direct_health::consume_signal_budget",
       "kind": "method",
-      "line": 454,
+      "line": 439,
       "name": "consume_signal_budget",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 454,
+        "line": 439,
         "name": "consume_signal_budget"
       },
       "path": "src/direct_health.rs",
@@ -37684,14 +37658,14 @@
       },
       "identity": "crate::direct_health::engaged",
       "kind": "method",
-      "line": 467,
+      "line": 452,
       "name": "engaged",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 467,
+        "line": 452,
         "name": "engaged"
       },
       "path": "src/direct_health.rs",
@@ -37710,14 +37684,14 @@
       },
       "identity": "crate::direct_health::retry_due",
       "kind": "method",
-      "line": 478,
+      "line": 463,
       "name": "retry_due",
       "native": {
         "analyzer": "cccc",
         "cognitive": 8,
         "cyclomatic": 10,
         "kind": "method",
-        "line": 478,
+        "line": 463,
         "name": "retry_due"
       },
       "path": "src/direct_health.rs",
@@ -37736,14 +37710,14 @@
       },
       "identity": "crate::direct_health::retry_due::<closure>",
       "kind": "closure",
-      "line": 506,
+      "line": 491,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 506,
+        "line": 491,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37754,22 +37728,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_health::retry_due::<closure>@526#2",
+        "identity": "crate::direct_health::retry_due::<closure>@511#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_health.rs",
         "signature": ".map(|message| message.payload),",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_health::retry_due::<closure>@526#2",
+      "identity": "crate::direct_health::retry_due::<closure>@511#2",
       "kind": "closure",
-      "line": 526,
+      "line": 511,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 526,
+        "line": 511,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37788,14 +37762,14 @@
       },
       "identity": "crate::direct_health::retry_signal",
       "kind": "method",
-      "line": 550,
+      "line": 535,
       "name": "retry_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 550,
+        "line": 535,
         "name": "retry_signal"
       },
       "path": "src/direct_health.rs",
@@ -37814,14 +37788,14 @@
       },
       "identity": "crate::direct_health::retry_signal::<closure>",
       "kind": "closure",
-      "line": 551,
+      "line": 536,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 551,
+        "line": 536,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37840,14 +37814,14 @@
       },
       "identity": "crate::direct_health::retry_signal::<closure>::<closure>",
       "kind": "closure",
-      "line": 555,
+      "line": 540,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 555,
+        "line": 540,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37858,22 +37832,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_health::retry_signal::<closure>@567#2",
+        "identity": "crate::direct_health::retry_signal::<closure>@552#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_health.rs",
         "signature": ".find(|entry| entry.signal_id == signal_id)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_health::retry_signal::<closure>@567#2",
+      "identity": "crate::direct_health::retry_signal::<closure>@552#2",
       "kind": "closure",
-      "line": 567,
+      "line": 552,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 567,
+        "line": 552,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37892,14 +37866,14 @@
       },
       "identity": "crate::direct_health::send",
       "kind": "method",
-      "line": 571,
+      "line": 556,
       "name": "send",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 571,
+        "line": 556,
         "name": "send"
       },
       "path": "src/direct_health.rs",
@@ -37918,14 +37892,14 @@
       },
       "identity": "crate::direct_health::sign",
       "kind": "method",
-      "line": 588,
+      "line": 573,
       "name": "sign",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 588,
+        "line": 573,
         "name": "sign"
       },
       "path": "src/direct_health.rs",
@@ -37944,14 +37918,14 @@
       },
       "identity": "crate::direct_health::sign::<closure>",
       "kind": "closure",
-      "line": 601,
+      "line": 586,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 601,
+        "line": 586,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -37970,14 +37944,14 @@
       },
       "identity": "crate::direct_health::sign_reply",
       "kind": "method",
-      "line": 604,
+      "line": 589,
       "name": "sign_reply",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 604,
+        "line": 589,
         "name": "sign_reply"
       },
       "path": "src/direct_health.rs",
@@ -37996,14 +37970,14 @@
       },
       "identity": "crate::direct_health::verify",
       "kind": "method",
-      "line": 611,
+      "line": 596,
       "name": "verify",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 611,
+        "line": 596,
         "name": "verify"
       },
       "path": "src/direct_health.rs",
@@ -38022,14 +37996,14 @@
       },
       "identity": "crate::direct_health::absorb_reply",
       "kind": "method",
-      "line": 624,
+      "line": 609,
       "name": "absorb_reply",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 6,
         "kind": "method",
-        "line": 624,
+        "line": 609,
         "name": "absorb_reply"
       },
       "path": "src/direct_health.rs",
@@ -38048,14 +38022,14 @@
       },
       "identity": "crate::direct_health::absorb_reply::<closure>",
       "kind": "closure",
-      "line": 640,
+      "line": 625,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 640,
+        "line": 625,
         "name": "<closure>"
       },
       "path": "src/direct_health.rs",
@@ -38074,18 +38048,96 @@
       },
       "identity": "crate::direct_health::authorization",
       "kind": "method",
-      "line": 657,
+      "line": 642,
       "name": "authorization",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 657,
+        "line": 642,
         "name": "authorization"
       },
       "path": "src/direct_health.rs",
       "signature": "fn authorization(&self) -> (LocalRole, Vec<String>)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::direct_health::audit_transport_failure",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_health.rs",
+        "signature": "fn audit_transport_failure( &self, kind: &str, byte_count: usize, error: TransportError, now: i64, ) -> HealthOutcome",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_health::audit_transport_failure",
+      "kind": "method",
+      "line": 662,
+      "name": "audit_transport_failure",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 662,
+        "name": "audit_transport_failure"
+      },
+      "path": "src/direct_health.rs",
+      "signature": "fn audit_transport_failure( &self, kind: &str, byte_count: usize, error: TransportError, now: i64, ) -> HealthOutcome",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_health::has_signal_capability",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_health.rs",
+        "signature": "fn has_signal_capability(granted: &[String]) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_health::has_signal_capability",
+      "kind": "function",
+      "line": 693,
+      "name": "has_signal_capability",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 693,
+        "name": "has_signal_capability"
+      },
+      "path": "src/direct_health.rs",
+      "signature": "fn has_signal_capability(granted: &[String]) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_health::has_signal_capability::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_health.rs",
+        "signature": "granted.iter().any(|entry| entry == CAPABILITY_SIGNAL)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_health::has_signal_capability::<closure>",
+      "kind": "closure",
+      "line": 694,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 694,
+        "name": "<closure>"
+      },
+      "path": "src/direct_health.rs",
+      "signature": "granted.iter().any(|entry| entry == CAPABILITY_SIGNAL)",
       "source_class": "handwritten"
     },
     {
@@ -38100,14 +38152,14 @@
       },
       "identity": "crate::direct_health::transport_failure_code",
       "kind": "function",
-      "line": 709,
+      "line": 700,
       "name": "transport_failure_code",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 709,
+        "line": 700,
         "name": "transport_failure_code"
       },
       "path": "src/direct_health.rs",
@@ -38126,14 +38178,14 @@
       },
       "identity": "crate::direct_health::fresh_id",
       "kind": "function",
-      "line": 718,
+      "line": 709,
       "name": "fresh_id",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 718,
+        "line": 709,
         "name": "fresh_id"
       },
       "path": "src/direct_health.rs",

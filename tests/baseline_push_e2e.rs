@@ -143,25 +143,6 @@ fn configure(
     std::fs::write(path, config).expect("write node config");
 }
 
-fn wait_for_standing_session(service: &support::HttpServer) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline {
-        let status = service.get("/v1/node/status");
-        if status.status == 200 {
-            let transport = status.json()["data"]["transport"].clone();
-            let expected = transport["expected_peer_count"].as_u64();
-            if expected.is_some_and(|expected| {
-                expected > 0
-                    && transport["expected_connected_peer_count"].as_u64() == Some(expected)
-            }) {
-                return true;
-            }
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    false
-}
-
 /// Two real nodes, trusted both ways, with a published baseline the Conductor
 /// holds the bodies for.
 ///
@@ -320,7 +301,7 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
     let performer_service = serve(fleet.performer.path());
     let conductor_service = serve(fleet.conductor.path());
     assert!(
-        wait_for_standing_session(&conductor_service),
+        support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session with the Performer"
     );
 
@@ -409,7 +390,7 @@ fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
     let performer_service = serve(fleet.performer.path());
     let conductor_service = serve(fleet.conductor.path());
     assert!(
-        wait_for_standing_session(&conductor_service),
+        support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session with the Performer"
     );
 

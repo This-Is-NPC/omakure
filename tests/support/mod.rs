@@ -102,6 +102,25 @@ fn init_node_with(
     assert("status", &run(workspace, &["status".to_string()]))
 }
 
+pub fn wait_for_standing_session(service: &HttpServer) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        let status = service.get("/v1/node/status");
+        if status.status == 200 {
+            let transport = status.json()["data"]["transport"].clone();
+            let expected = transport["expected_peer_count"].as_u64();
+            if expected.is_some_and(|expected| {
+                expected > 0
+                    && transport["expected_connected_peer_count"].as_u64() == Some(expected)
+            }) {
+                return true;
+            }
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+    false
+}
+
 fn run_node_with_paths(
     workspace: &Path,
     args: &[String],

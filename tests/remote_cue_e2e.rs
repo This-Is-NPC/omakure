@@ -370,26 +370,6 @@ fn derived_run_id(cue_id: &str) -> String {
     omakure::health_plane::report::opaque_run_id(&omakure::remote_cue::derive_run_id(cue_id))
 }
 
-/// Wait until every configured static peer is connected.
-fn wait_for_standing_session(service: &support::HttpServer) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline {
-        let status = service.get("/v1/node/status");
-        if status.status == 200 {
-            let transport = status.json()["data"]["transport"].clone();
-            let expected = transport["expected_peer_count"].as_u64();
-            if expected.is_some_and(|expected| {
-                expected > 0
-                    && transport["expected_connected_peer_count"].as_u64() == Some(expected)
-            }) {
-                return true;
-            }
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    false
-}
-
 /// Poll the Conductor's own Signal feed for a `run-completed` carrying this id.
 ///
 /// Read through the shipped CLI rather than the database, so what is asserted
@@ -487,7 +467,7 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
     // would fall back to the direct dial and pass for the wrong reason: the Cue
     // would arrive, but over the path this test exists to avoid.
     assert!(
-        wait_for_standing_session(&conductor_service),
+        support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session to the Performer"
     );
     assert_eq!(effect_count(&marker), 0, "nothing has run yet");

@@ -160,7 +160,7 @@ src/
 │   └── …                    one adapter per remaining verb (init, trace, token, update, …)
 ├── domain/                  pure schema, parsing, validation, scheduling
 ├── operations/              protocol-neutral CLI/HTTP behavior
-│   ├── core.rs              scripts, runs, queue, and workspace operations
+│   ├── core/                scripts, runs, queue, and workspace operations
 │   ├── config.rs            resolved config and environment diagnostics
 │   ├── doctor.rs            runtime and schema diagnostics
 │   ├── envs.rs              managed environment operations

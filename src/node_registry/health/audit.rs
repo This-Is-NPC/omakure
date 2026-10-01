@@ -4,34 +4,30 @@ use super::types::HealthAuditEvent;
 use crate::domain::health_plane::bounds::MAX_AUDIT_ROWS;
 use rusqlite::{Transaction, TransactionBehavior, params};
 
+/// Redacted metadata for one Health Plane audit outcome.
+#[derive(Clone, Copy)]
+pub(crate) struct HealthAuditRecord<'a> {
+    pub event_code: &'a str,
+    pub node_id: &'a str,
+    pub message_kind: &'a str,
+    pub byte_count: i64,
+    pub outcome: &'a str,
+    pub error_code: Option<u16>,
+    pub now: i64,
+}
+
 impl NodeRegistry {
     /// Append one redacted Health Plane audit row for an outcome decided before
     /// any storage was consulted.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn record_health_audit(
         &self,
-        event_code: &str,
-        node_id: &str,
-        message_kind: &str,
-        byte_count: i64,
-        outcome: &str,
-        error_code: Option<u16>,
-        now: i64,
+        record: HealthAuditRecord<'_>,
     ) -> Result<(), RegistryError> {
-        validate_node_id(node_id)?;
+        validate_node_id(record.node_id)?;
         self.with_mutating_connection(|connection| {
             let transaction =
                 connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            record_health_audit_tx(
-                &transaction,
-                event_code,
-                node_id,
-                message_kind,
-                byte_count,
-                outcome,
-                error_code,
-                now,
-            )?;
+            record_health_audit_tx(&transaction, record)?;
             transaction.commit()?;
             Ok(())
         })
@@ -71,23 +67,19 @@ impl NodeRegistry {
 /// Append one redacted Health Plane audit row. The row records only the stable
 /// code, the peer node ID, the message kind, and byte counts; it never records
 /// payload bytes, field values, signatures, or key material.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn record_health_audit_tx(
     transaction: &Transaction<'_>,
-    event_code: &str,
-    node_id: &str,
-    message_kind: &str,
-    byte_count: i64,
-    outcome: &str,
-    error_code: Option<u16>,
-    now: i64,
+    record: HealthAuditRecord<'_>,
 ) -> Result<(), RegistryError> {
-    if event_code.len() > 64 || message_kind.len() > 64 || outcome.len() > 32 {
+    if record.event_code.len() > 64 || record.message_kind.len() > 64 || record.outcome.len() > 32 {
         return Err(RegistryError::InvalidInput(
             "health audit metadata is invalid".to_string(),
         ));
     }
-    if error_code.is_some_and(|code| !(1000..=1999).contains(&code)) {
+    if record
+        .error_code
+        .is_some_and(|code| !(1000..=1999).contains(&code))
+    {
         return Err(RegistryError::InvalidInput(
             "health audit error code is out of range".to_string(),
         ));
@@ -107,13 +99,13 @@ pub(super) fn record_health_audit_tx(
          (event_code, node_id, message_kind, byte_count, outcome, error_code, occurred_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
-            event_code,
-            node_id,
-            message_kind,
-            byte_count,
-            outcome,
-            error_code,
-            now
+            record.event_code,
+            record.node_id,
+            record.message_kind,
+            record.byte_count,
+            record.outcome,
+            record.error_code,
+            record.now
         ],
     )?;
     Ok(())

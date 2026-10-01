@@ -15,6 +15,7 @@ mod prune;
 mod rows;
 mod types;
 
+pub(crate) use audit::HealthAuditRecord;
 pub(crate) use types::HealthApplyRequest;
 pub use types::{
     HealthAuditEvent, HealthAuthorization, HealthFeedPeer, HealthFeedSignal, HealthFleetPeer,

@@ -1,6 +1,6 @@
 use super::super::fields::decode_hex;
 use super::super::{NodeRegistry, PeerRole, PeerState, RegistryError};
-use super::audit::record_health_audit_tx;
+use super::audit::{HealthAuditRecord, record_health_audit_tx};
 use super::types::{HealthAuthorization, HealthPeerState};
 use crate::domain::health_plane::model::{
     HealthCode, HealthKind, ProfileSnapshot, PulseSnapshot, RunFact, RunnerFact, RuntimeFact,
@@ -310,13 +310,15 @@ fn quarantine_row_if_observed(
     if deleted == 1 {
         record_health_audit_tx(
             transaction,
-            "corrupt_row",
-            &row.node_id,
-            row.kind.wire(),
-            0,
-            "rejected",
-            Some(HealthCode::CorruptState.code()),
-            now,
+            HealthAuditRecord {
+                event_code: "corrupt_row",
+                node_id: &row.node_id,
+                message_kind: row.kind.wire(),
+                byte_count: 0,
+                outcome: "rejected",
+                error_code: Some(HealthCode::CorruptState.code()),
+                now,
+            },
         )?;
     }
     Ok(())

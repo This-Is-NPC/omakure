@@ -1,6 +1,6 @@
 use super::super::fields::validate_node_id;
 use super::super::{NodeRegistry, RegistryError};
-use super::audit::record_health_audit_tx;
+use super::audit::{HealthAuditRecord, record_health_audit_tx};
 use super::evaluate::evaluate;
 use super::rows::{authorization_in, decode_opaque_id};
 use super::types::{HealthApplyRequest, HealthAuthorization};
@@ -47,13 +47,15 @@ impl NodeRegistry {
             let decision = evaluate(&transaction, &request)?;
             record_health_audit_tx(
                 &transaction,
-                kind.wire(),
-                request.sender,
-                kind.wire(),
-                request.message_bytes,
-                decision.outcome(),
-                decision.code().map(HealthCode::code),
-                request.now,
+                HealthAuditRecord {
+                    event_code: kind.wire(),
+                    node_id: request.sender,
+                    message_kind: kind.wire(),
+                    byte_count: request.message_bytes,
+                    outcome: decision.outcome(),
+                    error_code: decision.code().map(HealthCode::code),
+                    now: request.now,
+                },
             )?;
             transaction.commit()?;
             Ok(decision)

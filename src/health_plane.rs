@@ -654,15 +654,16 @@ impl<'registry> HealthPlane<'registry> {
         now: i64,
     ) -> Result<(), RegistryError> {
         let kind_name = kind.map(HealthKind::wire).unwrap_or("unknown");
-        self.registry.record_health_audit(
-            kind_name,
-            sender,
-            kind_name,
-            byte_count,
-            outcome,
-            code.map(HealthCode::code),
-            now,
-        )
+        self.registry
+            .record_health_audit(crate::node_registry::health::HealthAuditRecord {
+                event_code: kind_name,
+                node_id: sender,
+                message_kind: kind_name,
+                byte_count,
+                outcome,
+                error_code: code.map(HealthCode::code),
+                now,
+            })
     }
 }
 

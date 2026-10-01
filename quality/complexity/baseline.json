@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "ff54b5467271d71a1a1b622f92207aa316ea94ef05cd93dc5736b7466bcbb0ba",
+  "canonical_sha256": "28625d49e370c2f58a6a11937e73d2d4df799d0c9a664516e21e45b76fb77da0",
   "config_identity": "no-config",
   "files": [
     {
@@ -69243,23 +69243,23 @@
         "identity": "crate::node_registry::health::audit::record_health_audit",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/health/audit.rs",
-        "signature": "pub(crate) fn record_health_audit( &self, event_code: &str, node_id: &str, message_kind: &str, byte_count: i64, outcome: &str, error_code: Option<u16>, now: i64, ) -> Result<(), RegistryError>",
+        "signature": "pub(crate) fn record_health_audit( &self, record: HealthAuditRecord<'_>, ) -> Result<(), RegistryError>",
         "source_class": "handwritten"
       },
       "identity": "crate::node_registry::health::audit::record_health_audit",
       "kind": "method",
-      "line": 11,
+      "line": 22,
       "name": "record_health_audit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 11,
+        "line": 22,
         "name": "record_health_audit"
       },
       "path": "src/node_registry/health/audit.rs",
-      "signature": "pub(crate) fn record_health_audit( &self, event_code: &str, node_id: &str, message_kind: &str, byte_count: i64, outcome: &str, error_code: Option<u16>, now: i64, ) -> Result<(), RegistryError>",
+      "signature": "pub(crate) fn record_health_audit( &self, record: HealthAuditRecord<'_>, ) -> Result<(), RegistryError>",
       "source_class": "handwritten"
     },
     {
@@ -70829,23 +70829,23 @@
         "identity": "crate::node_registry::health::audit::record_health_audit_tx",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/health/audit.rs",
-        "signature": "pub(super) fn record_health_audit_tx( transaction: &Transaction<'_>, event_code: &str, node_id: &str, message_kind: &str, byte_count: i64, outcome: &str, error_code: Option<u16>, now: i64, ) -> Result<(), RegistryError>",
+        "signature": "pub(super) fn record_health_audit_tx( transaction: &Transaction<'_>, record: HealthAuditRecord<'_>, ) -> Result<(), RegistryError>",
         "source_class": "handwritten"
       },
       "identity": "crate::node_registry::health::audit::record_health_audit_tx",
       "kind": "function",
-      "line": 75,
+      "line": 70,
       "name": "record_health_audit_tx",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 75,
+        "line": 70,
         "name": "record_health_audit_tx"
       },
       "path": "src/node_registry/health/audit.rs",
-      "signature": "pub(super) fn record_health_audit_tx( transaction: &Transaction<'_>, event_code: &str, node_id: &str, message_kind: &str, byte_count: i64, outcome: &str, error_code: Option<u16>, now: i64, ) -> Result<(), RegistryError>",
+      "signature": "pub(super) fn record_health_audit_tx( transaction: &Transaction<'_>, record: HealthAuditRecord<'_>, ) -> Result<(), RegistryError>",
       "source_class": "handwritten"
     },
     {

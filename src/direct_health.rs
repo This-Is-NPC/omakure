@@ -686,15 +686,17 @@ impl<'a> HealthSession<'a> {
         let wire = HealthKind::parse(kind)
             .map(HealthKind::wire)
             .unwrap_or("unknown");
-        match self.registry.record_health_audit(
-            wire,
-            &self.remote_node_id,
-            wire,
-            byte_count as i64,
-            "dropped",
-            Some(code.code()),
-            now,
-        ) {
+        match self
+            .registry
+            .record_health_audit(crate::node_registry::health::HealthAuditRecord {
+                event_code: wire,
+                node_id: &self.remote_node_id,
+                message_kind: wire,
+                byte_count: byte_count as i64,
+                outcome: "dropped",
+                error_code: Some(code.code()),
+                now,
+            }) {
             Ok(()) => HealthOutcome::Handled,
             Err(error) => HealthOutcome::Failed {
                 kind: kind.to_string(),

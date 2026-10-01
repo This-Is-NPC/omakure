@@ -1,6 +1,6 @@
 use super::super::fields::validate_node_id;
 use super::super::{NodeRegistry, RegistryError};
-use super::audit::record_health_audit_tx;
+use super::audit::{HealthAuditRecord, record_health_audit_tx};
 use super::rows::{decode_opaque_id, signal_from_row};
 use super::types::HealthOutboxEntry;
 use crate::domain::health_plane::bounds::{SIGNAL_OUTBOX_CAPACITY, SIGNAL_RETENTION_SECONDS};
@@ -87,13 +87,15 @@ impl NodeRegistry {
                 )?;
                 record_health_audit_tx(
                     &transaction,
-                    "outbox_overflow",
-                    &self.local_node_id,
-                    HealthKind::Signal.wire(),
-                    dropped,
-                    "dropped",
-                    Some(HealthCode::QueueFull.code()),
-                    now,
+                    HealthAuditRecord {
+                        event_code: "outbox_overflow",
+                        node_id: &self.local_node_id,
+                        message_kind: HealthKind::Signal.wire(),
+                        byte_count: dropped,
+                        outcome: "dropped",
+                        error_code: Some(HealthCode::QueueFull.code()),
+                        now,
+                    },
                 )?;
             }
             let sequence: i64 = transaction.query_row(

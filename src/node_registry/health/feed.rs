@@ -1,7 +1,7 @@
 use super::super::audit::lifecycle_trust_events_in;
 use super::super::fields::validate_node_id;
 use super::super::{NodeRegistry, RegistryError};
-use super::audit::record_health_audit_tx;
+use super::audit::{HealthAuditRecord, record_health_audit_tx};
 use super::rows::{
     CorruptHealthIdentity, CorruptHealthRow, active_trust_predicate, authorization_in,
     cleanup_corrupt_health_rows, health_peer_from_row, load_peer_state, read_profile_observational,
@@ -174,13 +174,15 @@ impl NodeRegistry {
                 )?;
                 record_health_audit_tx(
                     &transaction,
-                    "corrupt_row",
-                    node_id,
-                    HealthKind::Signal.wire(),
-                    0,
-                    "rejected",
-                    Some(HealthCode::CorruptState.code()),
-                    now,
+                    HealthAuditRecord {
+                        event_code: "corrupt_row",
+                        node_id,
+                        message_kind: HealthKind::Signal.wire(),
+                        byte_count: 0,
+                        outcome: "rejected",
+                        error_code: Some(HealthCode::CorruptState.code()),
+                        now,
+                    },
                 )?;
             }
             transaction.commit()?;
@@ -316,13 +318,15 @@ fn cleanup_corrupt_signal_rows(
         )?;
         record_health_audit_tx(
             transaction,
-            "corrupt_row",
-            node_id,
-            HealthKind::Signal.wire(),
-            0,
-            "rejected",
-            Some(HealthCode::CorruptState.code()),
-            now,
+            HealthAuditRecord {
+                event_code: "corrupt_row",
+                node_id,
+                message_kind: HealthKind::Signal.wire(),
+                byte_count: 0,
+                outcome: "rejected",
+                error_code: Some(HealthCode::CorruptState.code()),
+                now,
+            },
         )?;
     }
     Ok(())

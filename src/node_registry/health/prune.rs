@@ -1,5 +1,5 @@
 use super::super::{NodeRegistry, RegistryError};
-use super::audit::record_health_audit_tx;
+use super::audit::{HealthAuditRecord, record_health_audit_tx};
 use super::rows::active_trust_predicate;
 use super::types::HealthPruneReport;
 use crate::domain::health_plane::bounds::{
@@ -32,13 +32,15 @@ impl NodeRegistry {
                 delete_peer_health(&transaction, node_id)?;
                 record_health_audit_tx(
                     &transaction,
-                    "revocation_cleanup",
-                    node_id,
-                    "none",
-                    0,
-                    "purged",
-                    Some(HealthCode::Revoked.code()),
-                    now,
+                    HealthAuditRecord {
+                        event_code: "revocation_cleanup",
+                        node_id,
+                        message_kind: "none",
+                        byte_count: 0,
+                        outcome: "purged",
+                        error_code: Some(HealthCode::Revoked.code()),
+                        now,
+                    },
                 )?;
             }
             transaction.commit()?;

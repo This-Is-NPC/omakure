@@ -135,22 +135,25 @@ impl ActiveSession<'_, '_, '_, '_> {
 
     fn send_pending_cue(&mut self) -> Result<(), DirectServiceError> {
         // One Cue in flight per session.
-        if self.outbound_cue.is_none() {
-            if let Some(pending) = self.state.take_pending_cue(self.peer_node_id) {
-                let deadline = Instant::now() + IDLE_TIMEOUT;
-                match sign_pending_cue(self.identity, self.transport.session_id(), &pending) {
-                    Ok(encoded) => {
-                        write_bytes(
-                            self.stream,
-                            &self.transport.write(ENVELOPE_KIND, &encoded)?,
-                            deadline,
-                        )
-                        .map_err(error_to_transport)?;
-                        self.last_activity = Instant::now();
-                        self.outbound_cue = Some(OutboundCue::new(pending));
-                    }
-                    Err(_) => pending.answer(false, false, CueCode::InvalidMessage.code(), false),
+        if let Some(pending) = self
+            .outbound_cue
+            .is_none()
+            .then(|| self.state.take_pending_cue(self.peer_node_id))
+            .flatten()
+        {
+            let deadline = Instant::now() + IDLE_TIMEOUT;
+            match sign_pending_cue(self.identity, self.transport.session_id(), &pending) {
+                Ok(encoded) => {
+                    write_bytes(
+                        self.stream,
+                        &self.transport.write(ENVELOPE_KIND, &encoded)?,
+                        deadline,
+                    )
+                    .map_err(error_to_transport)?;
+                    self.last_activity = Instant::now();
+                    self.outbound_cue = Some(OutboundCue::new(pending));
                 }
+                Err(_) => pending.answer(false, false, CueCode::InvalidMessage.code(), false),
             }
         }
         Ok(())
@@ -158,36 +161,38 @@ impl ActiveSession<'_, '_, '_, '_> {
 
     fn send_pending_baseline(&mut self) -> Result<(), DirectServiceError> {
         // An answered slot remains available for late ack correlation.
-        if self
+        if let Some(pending) = self
             .outbound_baseline
             .as_ref()
             .is_none_or(OutboundBaseline::is_answered)
+            .then(|| self.state.take_pending_baseline(self.peer_node_id))
+            .flatten()
         {
-            if let Some(pending) = self.state.take_pending_baseline(self.peer_node_id) {
-                let deadline = Instant::now() + IDLE_TIMEOUT;
-                match sign_pending_baseline(self.identity, self.transport.session_id(), &pending) {
-                    Ok(encoded) => {
-                        write_bytes(
-                            self.stream,
-                            &self.transport.write(ENVELOPE_KIND, &encoded)?,
-                            deadline,
-                        )
-                        .map_err(error_to_transport)?;
-                        self.last_activity = Instant::now();
-                        self.outbound_baseline = Some(OutboundBaseline::new(pending));
-                    }
-                    Err(code) => pending.answer(false, false, code),
+            let deadline = Instant::now() + IDLE_TIMEOUT;
+            match sign_pending_baseline(self.identity, self.transport.session_id(), &pending) {
+                Ok(encoded) => {
+                    write_bytes(
+                        self.stream,
+                        &self.transport.write(ENVELOPE_KIND, &encoded)?,
+                        deadline,
+                    )
+                    .map_err(error_to_transport)?;
+                    self.last_activity = Instant::now();
+                    self.outbound_baseline = Some(OutboundBaseline::new(pending));
                 }
+                Err(code) => pending.answer(false, false, code),
             }
         }
         Ok(())
     }
 
     fn refresh_outbound(&mut self) {
-        if let Some(in_flight) = self.outbound_cue.as_mut() {
-            if in_flight.resolve(self.registry, self.peer_node_id) {
-                self.outbound_cue = None;
-            }
+        if self
+            .outbound_cue
+            .as_mut()
+            .is_some_and(|in_flight| in_flight.resolve(self.registry, self.peer_node_id))
+        {
+            self.outbound_cue = None;
         }
         if let Some(in_flight) = self.outbound_baseline.as_mut() {
             in_flight.expire_if_due();
@@ -328,20 +333,20 @@ impl ActiveSession<'_, '_, '_, '_> {
         body: &[u8],
         deadline: Instant,
     ) -> Result<(), DirectServiceError> {
-        if let Some(baseline) = self.baseline.as_mut() {
-            if baseline.handle_envelope(body, unix_seconds())
-                != crate::baseline_push::BaselineOutcome::NotBaseline
-            {
-                if let Some(reply) = baseline.take_reply() {
-                    write_bytes(
-                        self.stream,
-                        &self.transport.write(ENVELOPE_KIND, &reply)?,
-                        deadline,
-                    )
-                    .map_err(error_to_transport)?;
-                }
-                return Ok(());
+        if let Some(baseline) = self.baseline.as_mut().and_then(|baseline| {
+            (baseline.handle_envelope(body, unix_seconds())
+                != crate::baseline_push::BaselineOutcome::NotBaseline)
+                .then_some(baseline)
+        }) {
+            if let Some(reply) = baseline.take_reply() {
+                write_bytes(
+                    self.stream,
+                    &self.transport.write(ENVELOPE_KIND, &reply)?,
+                    deadline,
+                )
+                .map_err(error_to_transport)?;
             }
+            return Ok(());
         }
         if let Some(cue) = self.cue.as_mut() {
             match cue.handle_envelope(body, unix_seconds() as i64) {

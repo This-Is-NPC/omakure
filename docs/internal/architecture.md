@@ -270,9 +270,10 @@ src/
   key material, or capability. `src/direct_health.rs` is the only seam between
   the shipped session and `src/health_plane/`, which owns authorization,
   ordering, idempotency, capacity, retention, and every bound.
-  `src/operations/health.rs` projects the Conductor-local fleet-status and
+  `src/operations/health/` projects the Conductor-local fleet-status and
   Signal-feed reports that `omakure node health` / `node signals` and
-  `GET /v1/node/health` / `GET /v1/node/signals` both render. Health state is
+  `GET /v1/node/health` / `GET /v1/node/signals` both render. It also supplies
+  local Performer facts. Health state is
   written only by the authenticated node-to-node exchange; CLI and HTTP are read
   surfaces and have no write path. Every quantitative bound is frozen in
   `docs/internal/health-plane-contract.md` and asserted by

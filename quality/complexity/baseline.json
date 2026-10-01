@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "e3dd47b30beee6efc7770718edf5f657489f87eed5a0d2044d0141d7f78f149b",
+  "canonical_sha256": "340c30a957bd4ed4eda0535e59cbb2e5a9f1c0a4c680e0b8df4813ff66a6160b",
   "config_identity": "no-config",
   "files": [
     {
@@ -3788,14 +3788,56 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 29,
+        "invocations": 25,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 76,
-        "cyclomatic": 122
+        "cognitive": 43,
+        "cyclomatic": 85
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 2,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 11,
+        "cyclomatic": 19
+      },
+      "path": "src/operations/health/fleet.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 1,
+        "cyclomatic": 2
+      },
+      "path": "src/operations/health/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 2,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 8,
+        "cyclomatic": 12
+      },
+      "path": "src/operations/health/signals.rs",
       "source_class": "handwritten"
     },
     {
@@ -82573,236 +82615,28 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::fleet_status::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "nodes.retain(|node| node.trust_state == \"active\");",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::fleet_status::<closure>",
-      "kind": "closure",
-      "line": 137,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 137,
-        "name": "<closure>"
-      },
-      "path": "src/operations/health.rs",
-      "signature": "nodes.retain(|node| node.trust_state == \"active\");",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::fleet_status::<closure>@144#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "let seen: HashSet<String> = nodes.iter().map(|node| node.node_id.clone()).collect();",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::fleet_status::<closure>@144#2",
-      "kind": "closure",
-      "line": 144,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 144,
-        "name": "<closure>"
-      },
-      "path": "src/operations/health.rs",
-      "signature": "let seen: HashSet<String> = nodes.iter().map(|node| node.node_id.clone()).collect();",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::fleet_status::<closure>@177#3",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::fleet_status::<closure>@177#3",
-      "kind": "closure",
-      "line": 177,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 177,
-        "name": "<closure>"
-      },
-      "path": "src/operations/health.rs",
-      "signature": "nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::signal_feed::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "cursors.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::signal_feed::<closure>",
-      "kind": "closure",
-      "line": 319,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 319,
-        "name": "<closure>"
-      },
-      "path": "src/operations/health.rs",
-      "signature": "cursors.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::signal_feed::<closure>@340#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "gap: cursors.iter().any(|cursor| cursor.gap),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::signal_feed::<closure>@340#2",
-      "kind": "closure",
-      "line": 340,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 340,
-        "name": "<closure>"
-      },
-      "path": "src/operations/health.rs",
-      "signature": "gap: cursors.iter().any(|cursor| cursor.gap),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::reduce_to_newest",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "fn reduce_to_newest(entries: &mut Vec<SignalEntry>, limit: usize)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::reduce_to_newest",
-      "kind": "function",
-      "line": 353,
-      "name": "reduce_to_newest",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 353,
-        "name": "reduce_to_newest"
-      },
-      "path": "src/operations/health.rs",
-      "signature": "fn reduce_to_newest(entries: &mut Vec<SignalEntry>, limit: usize)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::reduce_to_newest::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "entries.sort_by(|left, right| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::reduce_to_newest::<closure>",
-      "kind": "closure",
-      "line": 354,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 354,
-        "name": "<closure>"
-      },
-      "path": "src/operations/health.rs",
-      "signature": "entries.sort_by(|left, right| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::health::reduce_to_newest::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": ".then_with(|| right.signal.signal_id.cmp(&left.signal.signal_id))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::health::reduce_to_newest::<closure>::<closure>",
-      "kind": "closure",
-      "line": 359,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 359,
-        "name": "<closure>"
-      },
-      "path": "src/operations/health.rs",
-      "signature": ".then_with(|| right.signal.signal_id.cmp(&left.signal.signal_id))",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 2,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::new",
+        "identity": "crate::operations::health::facts::new",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "pub(crate) fn new( workspace: Workspace, display_name: String, workers_configured: u64, scheduler_enabled: bool, ) -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::new",
+      "identity": "crate::operations::health::facts::new",
       "kind": "method",
-      "line": 409,
+      "line": 66,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 409,
+        "line": 66,
         "name": "new"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "pub(crate) fn new( workspace: Workspace, display_name: String, workers_configured: u64, scheduler_enabled: bool, ) -> Self",
       "source_class": "handwritten"
     },
@@ -82810,25 +82644,25 @@
       "cognitive": 4,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::operations::health::cached_baseline",
+        "identity": "crate::operations::health::facts::cached_baseline",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn cached_baseline(&self) -> BaselineFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::cached_baseline",
+      "identity": "crate::operations::health::facts::cached_baseline",
       "kind": "method",
-      "line": 433,
+      "line": 90,
       "name": "cached_baseline",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 4,
         "kind": "method",
-        "line": 433,
+        "line": 90,
         "name": "cached_baseline"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn cached_baseline(&self) -> BaselineFacts",
       "source_class": "handwritten"
     },
@@ -82836,25 +82670,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::operations::health::cached_runtimes",
+        "identity": "crate::operations::health::facts::cached_runtimes",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn cached_runtimes(&self) -> Vec<RuntimeFact>",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::cached_runtimes",
+      "identity": "crate::operations::health::facts::cached_runtimes",
       "kind": "method",
-      "line": 454,
+      "line": 111,
       "name": "cached_runtimes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 454,
+        "line": 111,
         "name": "cached_runtimes"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn cached_runtimes(&self) -> Vec<RuntimeFact>",
       "source_class": "handwritten"
     },
@@ -82862,25 +82696,25 @@
       "cognitive": 5,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::operations::health::profile_facts",
+        "identity": "crate::operations::health::facts::profile_facts",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn profile_facts(&self) -> ProfileFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::profile_facts",
+      "identity": "crate::operations::health::facts::profile_facts",
       "kind": "method",
-      "line": 468,
+      "line": 125,
       "name": "profile_facts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 7,
         "kind": "method",
-        "line": 468,
+        "line": 125,
         "name": "profile_facts"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn profile_facts(&self) -> ProfileFacts",
       "source_class": "handwritten"
     },
@@ -82888,25 +82722,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::profile_facts::<closure>",
+        "identity": "crate::operations::health::facts::profile_facts::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".any(|entry| entry == \"omarchy\");",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::profile_facts::<closure>",
+      "identity": "crate::operations::health::facts::profile_facts::<closure>",
       "kind": "closure",
-      "line": 476,
+      "line": 133,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 476,
+        "line": 133,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".any(|entry| entry == \"omarchy\");",
       "source_class": "handwritten"
     },
@@ -82914,25 +82748,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::operations::health::pulse_facts",
+        "identity": "crate::operations::health::facts::pulse_facts",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn pulse_facts(&self) -> PulseFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::pulse_facts",
+      "identity": "crate::operations::health::facts::pulse_facts",
       "kind": "method",
-      "line": 505,
+      "line": 162,
       "name": "pulse_facts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 505,
+        "line": 162,
         "name": "pulse_facts"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn pulse_facts(&self) -> PulseFacts",
       "source_class": "handwritten"
     },
@@ -82940,25 +82774,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::pulse_facts::count",
+        "identity": "crate::operations::health::facts::pulse_facts::count",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "let count = |state: RunState| -> u64 {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::pulse_facts::count",
+      "identity": "crate::operations::health::facts::pulse_facts::count",
       "kind": "closure",
-      "line": 523,
+      "line": 180,
       "name": "count",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 523,
+        "line": 180,
         "name": "count"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "let count = |state: RunState| -> u64 {",
       "source_class": "handwritten"
     },
@@ -82966,25 +82800,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::pulse_facts::count::<closure>",
+        "identity": "crate::operations::health::facts::pulse_facts::count::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".and_then(|stats| stats.counts_by_state.get(state.as_str()).copied())",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::pulse_facts::count::<closure>",
+      "identity": "crate::operations::health::facts::pulse_facts::count::<closure>",
       "kind": "closure",
-      "line": 526,
+      "line": 183,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 526,
+        "line": 183,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".and_then(|stats| stats.counts_by_state.get(state.as_str()).copied())",
       "source_class": "handwritten"
     },
@@ -82992,25 +82826,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::pulse_facts::count::<closure>@527#2",
+        "identity": "crate::operations::health::facts::pulse_facts::count::<closure>@184#2",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".and_then(|value| u64::try_from(value).ok())",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::pulse_facts::count::<closure>@527#2",
+      "identity": "crate::operations::health::facts::pulse_facts::count::<closure>@184#2",
       "kind": "closure",
-      "line": 527,
+      "line": 184,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 527,
+        "line": 184,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".and_then(|value| u64::try_from(value).ok())",
       "source_class": "handwritten"
     },
@@ -83018,25 +82852,25 @@
       "cognitive": 1,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::terminal_runs",
+        "identity": "crate::operations::health::facts::terminal_runs",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn terminal_runs(&self, limit: usize) -> Vec<RunFact>",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::terminal_runs",
+      "identity": "crate::operations::health::facts::terminal_runs",
       "kind": "method",
-      "line": 552,
+      "line": 209,
       "name": "terminal_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 552,
+        "line": 209,
         "name": "terminal_runs"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn terminal_runs(&self, limit: usize) -> Vec<RunFact>",
       "source_class": "handwritten"
     },
@@ -83044,25 +82878,25 @@
       "cognitive": 2,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::operations::health::scheduler_state",
+        "identity": "crate::operations::health::facts::scheduler_state",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn scheduler_state(&self) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::scheduler_state",
+      "identity": "crate::operations::health::facts::scheduler_state",
       "kind": "method",
-      "line": 561,
+      "line": 218,
       "name": "scheduler_state",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 561,
+        "line": 218,
         "name": "scheduler_state"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn scheduler_state(&self) -> String",
       "source_class": "handwritten"
     },
@@ -83070,25 +82904,25 @@
       "cognitive": 1,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::operations::health::last_terminal_run",
+        "identity": "crate::operations::health::facts::last_terminal_run",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn last_terminal_run(connection: &rusqlite::Connection) -> Option<RunFact>",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::last_terminal_run",
+      "identity": "crate::operations::health::facts::last_terminal_run",
       "kind": "function",
-      "line": 576,
+      "line": 233,
       "name": "last_terminal_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 576,
+        "line": 233,
         "name": "last_terminal_run"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn last_terminal_run(connection: &rusqlite::Connection) -> Option<RunFact>",
       "source_class": "handwritten"
     },
@@ -83096,25 +82930,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::last_terminal_run::<closure>",
+        "identity": "crate::operations::health::facts::last_terminal_run::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::last_terminal_run::<closure>",
+      "identity": "crate::operations::health::facts::last_terminal_run::<closure>",
       "kind": "closure",
-      "line": 586,
+      "line": 243,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 586,
+        "line": 243,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
       "source_class": "handwritten"
     },
@@ -83122,25 +82956,51 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::last_terminal_run::<closure>@589#3",
+        "identity": "crate::operations::health::facts::last_terminal_run::<closure>@243#2",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": ".map(|ms| ms / 1_000)",
+        "path": "src/operations/health/facts.rs",
+        "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::last_terminal_run::<closure>@589#3",
+      "identity": "crate::operations::health::facts::last_terminal_run::<closure>@243#2",
       "kind": "closure",
-      "line": 589,
+      "line": 243,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 589,
+        "line": 243,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
+      "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::facts::last_terminal_run::<closure>@246#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/facts.rs",
+        "signature": ".map(|ms| ms / 1_000)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::facts::last_terminal_run::<closure>@246#3",
+      "kind": "closure",
+      "line": 246,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 246,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/facts.rs",
       "signature": ".map(|ms| ms / 1_000)",
       "source_class": "handwritten"
     },
@@ -83148,25 +83008,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::last_terminal_run::<closure>@590#4",
+        "identity": "crate::operations::health::facts::last_terminal_run::<closure>@247#4",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".filter(|at| *at >= 1)",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::last_terminal_run::<closure>@590#4",
+      "identity": "crate::operations::health::facts::last_terminal_run::<closure>@247#4",
       "kind": "closure",
-      "line": 590,
+      "line": 247,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 590,
+        "line": 247,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".filter(|at| *at >= 1)",
       "source_class": "handwritten"
     },
@@ -83174,25 +83034,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::terminal_runs@615#2",
+        "identity": "crate::operations::health::facts::terminal_runs@272#2",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn terminal_runs(connection: &rusqlite::Connection, limit: usize) -> Vec<RunFact>",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::terminal_runs@615#2",
+      "identity": "crate::operations::health::facts::terminal_runs@272#2",
       "kind": "function",
-      "line": 615,
+      "line": 272,
       "name": "terminal_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 615,
+        "line": 272,
         "name": "terminal_runs"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn terminal_runs(connection: &rusqlite::Connection, limit: usize) -> Vec<RunFact>",
       "source_class": "handwritten"
     },
@@ -83200,25 +83060,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::terminal_runs::<closure>",
+        "identity": "crate::operations::health::facts::terminal_runs::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".filter_map(|row| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::terminal_runs::<closure>",
+      "identity": "crate::operations::health::facts::terminal_runs::<closure>",
       "kind": "closure",
-      "line": 625,
+      "line": 282,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 625,
+        "line": 282,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".filter_map(|row| {",
       "source_class": "handwritten"
     },
@@ -83226,25 +83086,51 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::terminal_runs::<closure>::<closure>",
+        "identity": "crate::operations::health::facts::terminal_runs::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::terminal_runs::<closure>::<closure>",
+      "identity": "crate::operations::health::facts::terminal_runs::<closure>::<closure>",
       "kind": "closure",
-      "line": 626,
+      "line": 283,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 626,
+        "line": 283,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
+      "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::facts::terminal_runs::<closure>::<closure>@283#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/facts.rs",
+        "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::facts::terminal_runs::<closure>::<closure>@283#2",
+      "kind": "closure",
+      "line": 283,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 283,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/facts.rs",
       "signature": "let finished_at = row.finished_at.map(|ms| ms / 1_000).filter(|at| *at >= 1)?;",
       "source_class": "handwritten"
     },
@@ -83252,25 +83138,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::operations::health::run_script_name",
+        "identity": "crate::operations::health::facts::run_script_name",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn run_script_name(script_name: Option<String>, script_path: &str) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::run_script_name",
+      "identity": "crate::operations::health::facts::run_script_name",
       "kind": "function",
-      "line": 651,
+      "line": 308,
       "name": "run_script_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 651,
+        "line": 308,
         "name": "run_script_name"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn run_script_name(script_name: Option<String>, script_path: &str) -> String",
       "source_class": "handwritten"
     },
@@ -83278,25 +83164,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::run_script_name::<closure>",
+        "identity": "crate::operations::health::facts::run_script_name::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "if let Some(name) = script_name.filter(|name| !name.trim().is_empty()) {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::run_script_name::<closure>",
+      "identity": "crate::operations::health::facts::run_script_name::<closure>",
       "kind": "closure",
-      "line": 652,
+      "line": 309,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 652,
+        "line": 309,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "if let Some(name) = script_name.filter(|name| !name.trim().is_empty()) {",
       "source_class": "handwritten"
     },
@@ -83304,25 +83190,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::run_script_name::<closure>@660#2",
+        "identity": "crate::operations::health::facts::run_script_name::<closure>@317#2",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".map(|(stem, _)| stem)",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::run_script_name::<closure>@660#2",
+      "identity": "crate::operations::health::facts::run_script_name::<closure>@317#2",
       "kind": "closure",
-      "line": 660,
+      "line": 317,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 660,
+        "line": 317,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".map(|(stem, _)| stem)",
       "source_class": "handwritten"
     },
@@ -83330,25 +83216,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::run_script_name::<closure>@661#3",
+        "identity": "crate::operations::health::facts::run_script_name::<closure>@318#3",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".filter(|stem| !stem.is_empty())",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::run_script_name::<closure>@661#3",
+      "identity": "crate::operations::health::facts::run_script_name::<closure>@318#3",
       "kind": "closure",
-      "line": 661,
+      "line": 318,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 661,
+        "line": 318,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".filter(|stem| !stem.is_empty())",
       "source_class": "handwritten"
     },
@@ -83356,25 +83242,25 @@
       "cognitive": 5,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::operations::health::read_os_release",
+        "identity": "crate::operations::health::facts::read_os_release",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn read_os_release() -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::read_os_release",
+      "identity": "crate::operations::health::facts::read_os_release",
       "kind": "function",
-      "line": 666,
+      "line": 323,
       "name": "read_os_release",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 666,
+        "line": 323,
         "name": "read_os_release"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn read_os_release() -> String",
       "source_class": "handwritten"
     },
@@ -83382,25 +83268,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::operations::health::os_release_value",
+        "identity": "crate::operations::health::facts::os_release_value",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn os_release_value(text: &str, key: &str) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::os_release_value",
+      "identity": "crate::operations::health::facts::os_release_value",
       "kind": "function",
-      "line": 681,
+      "line": 338,
       "name": "os_release_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 681,
+        "line": 338,
         "name": "os_release_value"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn os_release_value(text: &str, key: &str) -> String",
       "source_class": "handwritten"
     },
@@ -83408,25 +83294,25 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::operations::health::omarchy_channel",
+        "identity": "crate::operations::health::facts::omarchy_channel",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn omarchy_channel(is_omarchy: bool) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::omarchy_channel",
+      "identity": "crate::operations::health::facts::omarchy_channel",
       "kind": "function",
-      "line": 703,
+      "line": 360,
       "name": "omarchy_channel",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 703,
+        "line": 360,
         "name": "omarchy_channel"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn omarchy_channel(is_omarchy: bool) -> String",
       "source_class": "handwritten"
     },
@@ -83434,25 +83320,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::probe_runtimes",
+        "identity": "crate::operations::health::facts::probe_runtimes",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn probe_runtimes() -> Vec<RuntimeFact>",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::probe_runtimes",
+      "identity": "crate::operations::health::facts::probe_runtimes",
       "kind": "function",
-      "line": 714,
+      "line": 371,
       "name": "probe_runtimes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 714,
+        "line": 371,
         "name": "probe_runtimes"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn probe_runtimes() -> Vec<RuntimeFact>",
       "source_class": "handwritten"
     },
@@ -83460,25 +83346,25 @@
       "cognitive": 2,
       "cyclomatic": 5,
       "derived": {
-        "identity": "crate::operations::health::probe_runtimes::<closure>",
+        "identity": "crate::operations::health::facts::probe_runtimes::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".map(|name| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::probe_runtimes::<closure>",
+      "identity": "crate::operations::health::facts::probe_runtimes::<closure>",
       "kind": "closure",
-      "line": 717,
+      "line": 374,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 5,
         "kind": "closure",
-        "line": 717,
+        "line": 374,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".map(|name| {",
       "source_class": "handwritten"
     },
@@ -83486,25 +83372,25 @@
       "cognitive": 4,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::operations::health::probe_version",
+        "identity": "crate::operations::health::facts::probe_version",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn probe_version(program: &str, args: &[&str]) -> Option<String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::probe_version",
+      "identity": "crate::operations::health::facts::probe_version",
       "kind": "function",
-      "line": 757,
+      "line": 414,
       "name": "probe_version",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 757,
+        "line": 414,
         "name": "probe_version"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn probe_version(program: &str, args: &[&str]) -> Option<String>",
       "source_class": "handwritten"
     },
@@ -83512,25 +83398,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::version_token",
+        "identity": "crate::operations::health::facts::version_token",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn version_token(banner: &str) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::version_token",
+      "identity": "crate::operations::health::facts::version_token",
       "kind": "function",
-      "line": 799,
+      "line": 456,
       "name": "version_token",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 799,
+        "line": 456,
         "name": "version_token"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn version_token(banner: &str) -> String",
       "source_class": "handwritten"
     },
@@ -83538,25 +83424,25 @@
       "cognitive": 1,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::operations::health::version_token::<closure>",
+        "identity": "crate::operations::health::facts::version_token::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".split(|byte: char| byte.is_whitespace() || byte == '(' || byte == ')' || byte == ',')",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::version_token::<closure>",
+      "identity": "crate::operations::health::facts::version_token::<closure>",
       "kind": "closure",
-      "line": 801,
+      "line": 458,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 4,
         "kind": "closure",
-        "line": 801,
+        "line": 458,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".split(|byte: char| byte.is_whitespace() || byte == '(' || byte == ')' || byte == ',')",
       "source_class": "handwritten"
     },
@@ -83564,25 +83450,51 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::version_token::<closure>::<closure>",
+        "identity": "crate::operations::health::facts::version_token::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".find(|token| token.starts_with(|byte: char| byte.is_ascii_digit()) && token.contains('.'))",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::version_token::<closure>::<closure>",
+      "identity": "crate::operations::health::facts::version_token::<closure>::<closure>",
       "kind": "closure",
-      "line": 802,
+      "line": 459,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 802,
+        "line": 459,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
+      "signature": ".find(|token| token.starts_with(|byte: char| byte.is_ascii_digit()) && token.contains('.'))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::health::facts::version_token::<closure>@459#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/facts.rs",
+        "signature": ".find(|token| token.starts_with(|byte: char| byte.is_ascii_digit()) && token.contains('.'))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::facts::version_token::<closure>@459#2",
+      "kind": "closure",
+      "line": 459,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 459,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/facts.rs",
       "signature": ".find(|token| token.starts_with(|byte: char| byte.is_ascii_digit()) && token.contains('.'))",
       "source_class": "handwritten"
     },
@@ -83590,25 +83502,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::version_token::<closure>@803#3",
+        "identity": "crate::operations::health::facts::version_token::<closure>@460#3",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".map(|token| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::version_token::<closure>@803#3",
+      "identity": "crate::operations::health::facts::version_token::<closure>@460#3",
       "kind": "closure",
-      "line": 803,
+      "line": 460,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 803,
+        "line": 460,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".map(|token| {",
       "source_class": "handwritten"
     },
@@ -83616,25 +83528,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::version_token::<closure>::<closure>@805#2",
+        "identity": "crate::operations::health::facts::version_token::<closure>::<closure>@462#2",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": ".trim_end_matches(|byte: char| !byte.is_ascii_alphanumeric())",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::version_token::<closure>::<closure>@805#2",
+      "identity": "crate::operations::health::facts::version_token::<closure>::<closure>@462#2",
       "kind": "closure",
-      "line": 805,
+      "line": 462,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 805,
+        "line": 462,
         "name": "<closure>"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": ".trim_end_matches(|byte: char| !byte.is_ascii_alphanumeric())",
       "source_class": "handwritten"
     },
@@ -83642,25 +83554,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::a_runtime_that_will_not_answer_is_given_up_on",
+        "identity": "crate::operations::health::facts::a_runtime_that_will_not_answer_is_given_up_on",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn a_runtime_that_will_not_answer_is_given_up_on()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::a_runtime_that_will_not_answer_is_given_up_on",
+      "identity": "crate::operations::health::facts::a_runtime_that_will_not_answer_is_given_up_on",
       "kind": "function",
-      "line": 823,
+      "line": 480,
       "name": "a_runtime_that_will_not_answer_is_given_up_on",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 823,
+        "line": 480,
         "name": "a_runtime_that_will_not_answer_is_given_up_on"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn a_runtime_that_will_not_answer_is_given_up_on()",
       "source_class": "handwritten"
     },
@@ -83668,25 +83580,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::a_runtime_that_answers_is_still_read",
+        "identity": "crate::operations::health::facts::a_runtime_that_answers_is_still_read",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn a_runtime_that_answers_is_still_read()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::a_runtime_that_answers_is_still_read",
+      "identity": "crate::operations::health::facts::a_runtime_that_answers_is_still_read",
       "kind": "function",
-      "line": 840,
+      "line": 497,
       "name": "a_runtime_that_answers_is_still_read",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 840,
+        "line": 497,
         "name": "a_runtime_that_answers_is_still_read"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn a_runtime_that_answers_is_still_read()",
       "source_class": "handwritten"
     },
@@ -83694,25 +83606,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::os_release_values_are_unquoted_and_key_exact",
+        "identity": "crate::operations::health::facts::os_release_values_are_unquoted_and_key_exact",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn os_release_values_are_unquoted_and_key_exact()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::os_release_values_are_unquoted_and_key_exact",
+      "identity": "crate::operations::health::facts::os_release_values_are_unquoted_and_key_exact",
       "kind": "function",
-      "line": 846,
+      "line": 503,
       "name": "os_release_values_are_unquoted_and_key_exact",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 846,
+        "line": 503,
         "name": "os_release_values_are_unquoted_and_key_exact"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn os_release_values_are_unquoted_and_key_exact()",
       "source_class": "handwritten"
     },
@@ -83720,25 +83632,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::a_version_token_is_extracted_from_a_banner_and_never_a_path",
+        "identity": "crate::operations::health::facts::a_version_token_is_extracted_from_a_banner_and_never_a_path",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn a_version_token_is_extracted_from_a_banner_and_never_a_path()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::a_version_token_is_extracted_from_a_banner_and_never_a_path",
+      "identity": "crate::operations::health::facts::a_version_token_is_extracted_from_a_banner_and_never_a_path",
       "kind": "function",
-      "line": 855,
+      "line": 512,
       "name": "a_version_token_is_extracted_from_a_banner_and_never_a_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 855,
+        "line": 512,
         "name": "a_version_token_is_extracted_from_a_banner_and_never_a_path"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn a_version_token_is_extracted_from_a_banner_and_never_a_path()",
       "source_class": "handwritten"
     },
@@ -83746,25 +83658,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::the_omarchy_channel_is_empty_off_omarchy_and_named_on_it",
+        "identity": "crate::operations::health::facts::the_omarchy_channel_is_empty_off_omarchy_and_named_on_it",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn the_omarchy_channel_is_empty_off_omarchy_and_named_on_it()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::the_omarchy_channel_is_empty_off_omarchy_and_named_on_it",
+      "identity": "crate::operations::health::facts::the_omarchy_channel_is_empty_off_omarchy_and_named_on_it",
       "kind": "function",
-      "line": 867,
+      "line": 524,
       "name": "the_omarchy_channel_is_empty_off_omarchy_and_named_on_it",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 867,
+        "line": 524,
         "name": "the_omarchy_channel_is_empty_off_omarchy_and_named_on_it"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn the_omarchy_channel_is_empty_off_omarchy_and_named_on_it()",
       "source_class": "handwritten"
     },
@@ -83772,25 +83684,25 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::operations::health::a_run_script_name_is_a_name_and_never_a_path",
+        "identity": "crate::operations::health::facts::a_run_script_name_is_a_name_and_never_a_path",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn a_run_script_name_is_a_name_and_never_a_path()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::a_run_script_name_is_a_name_and_never_a_path",
+      "identity": "crate::operations::health::facts::a_run_script_name_is_a_name_and_never_a_path",
       "kind": "function",
-      "line": 873,
+      "line": 530,
       "name": "a_run_script_name_is_a_name_and_never_a_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 873,
+        "line": 530,
         "name": "a_run_script_name_is_a_name_and_never_a_path"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn a_run_script_name_is_a_name_and_never_a_path()",
       "source_class": "handwritten"
     },
@@ -83798,25 +83710,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk",
+        "identity": "crate::operations::health::facts::a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/facts.rs",
         "signature": "fn a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk",
+      "identity": "crate::operations::health::facts::a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk",
       "kind": "function",
-      "line": 909,
+      "line": 566,
       "name": "a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 909,
+        "line": 566,
         "name": "a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/facts.rs",
       "signature": "fn a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk()",
       "source_class": "handwritten"
     },
@@ -83824,52 +83736,416 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::equal_signal_timestamps_use_the_signal_id_tiebreak",
+        "identity": "crate::operations::health::facts::a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk::open",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
-        "signature": "fn equal_signal_timestamps_use_the_signal_id_tiebreak()",
+        "path": "src/operations/health/facts.rs",
+        "signature": "let open = || workspace_in(&dir);",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::equal_signal_timestamps_use_the_signal_id_tiebreak",
-      "kind": "function",
-      "line": 981,
-      "name": "equal_signal_timestamps_use_the_signal_id_tiebreak",
+      "identity": "crate::operations::health::facts::a_performer_reports_the_baseline_it_holds_and_the_one_on_its_disk::open",
+      "kind": "closure",
+      "line": 571,
+      "name": "open",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
-        "kind": "function",
-        "line": 981,
-        "name": "equal_signal_timestamps_use_the_signal_id_tiebreak"
+        "kind": "closure",
+        "line": 571,
+        "name": "open"
       },
-      "path": "src/operations/health.rs",
-      "signature": "fn equal_signal_timestamps_use_the_signal_id_tiebreak()",
+      "path": "src/operations/health/facts.rs",
+      "signature": "let open = || workspace_in(&dir);",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::operations::health::fleet::collect_active_fleet_nodes",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/fleet.rs",
+        "signature": "fn collect_active_fleet_nodes( plane: &HealthPlane<'_>, registry: &NodeRegistry, observed_at: i64, mut nodes: Vec<FleetNode>, ) -> OperationResult<Vec<FleetNode>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::fleet::collect_active_fleet_nodes",
+      "kind": "function",
+      "line": 56,
+      "name": "collect_active_fleet_nodes",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 56,
+        "name": "collect_active_fleet_nodes"
+      },
+      "path": "src/operations/health/fleet.rs",
+      "signature": "fn collect_active_fleet_nodes( plane: &HealthPlane<'_>, registry: &NodeRegistry, observed_at: i64, mut nodes: Vec<FleetNode>, ) -> OperationResult<Vec<FleetNode>>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::health::presence_counts_default_to_zero",
+        "identity": "crate::operations::health::fleet::collect_active_fleet_nodes::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/operations/health.rs",
+        "path": "src/operations/health/fleet.rs",
+        "signature": "nodes.retain(|node| node.trust_state == \"active\");",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::fleet::collect_active_fleet_nodes::<closure>",
+      "kind": "closure",
+      "line": 68,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 68,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/fleet.rs",
+      "signature": "nodes.retain(|node| node.trust_state == \"active\");",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::fleet::collect_active_fleet_nodes::<closure>@75#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/fleet.rs",
+        "signature": "let seen: HashSet<String> = nodes.iter().map(|node| node.node_id.clone()).collect();",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::fleet::collect_active_fleet_nodes::<closure>@75#2",
+      "kind": "closure",
+      "line": 75,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 75,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/fleet.rs",
+      "signature": "let seen: HashSet<String> = nodes.iter().map(|node| node.node_id.clone()).collect();",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::fleet::collect_active_fleet_nodes::<closure>@108#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/fleet.rs",
+        "signature": "nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::fleet::collect_active_fleet_nodes::<closure>@108#3",
+      "kind": "closure",
+      "line": 108,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 108,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/fleet.rs",
+      "signature": "nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 10,
+      "derived": {
+        "identity": "crate::operations::health::fleet::tally_fleet_counts",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/fleet.rs",
+        "signature": "fn tally_fleet_counts(nodes: &[FleetNode]) -> (PresenceCounts, BaselineCounts)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::fleet::tally_fleet_counts",
+      "kind": "function",
+      "line": 112,
+      "name": "tally_fleet_counts",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 10,
+        "kind": "function",
+        "line": 112,
+        "name": "tally_fleet_counts"
+      },
+      "path": "src/operations/health/fleet.rs",
+      "signature": "fn tally_fleet_counts(nodes: &[FleetNode]) -> (PresenceCounts, BaselineCounts)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::fleet::fleet_status",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/fleet.rs",
+        "signature": "pub fn fleet_status(registry: &NodeRegistry) -> OperationResult<FleetStatusReport>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::fleet::fleet_status",
+      "kind": "function",
+      "line": 143,
+      "name": "fleet_status",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 143,
+        "name": "fleet_status"
+      },
+      "path": "src/operations/health/fleet.rs",
+      "signature": "pub fn fleet_status(registry: &NodeRegistry) -> OperationResult<FleetStatusReport>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::fleet::presence_counts_default_to_zero",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/fleet.rs",
         "signature": "fn presence_counts_default_to_zero()",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::health::presence_counts_default_to_zero",
+      "identity": "crate::operations::health::fleet::presence_counts_default_to_zero",
       "kind": "function",
-      "line": 1019,
+      "line": 163,
       "name": "presence_counts_default_to_zero",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1019,
+        "line": 163,
         "name": "presence_counts_default_to_zero"
       },
-      "path": "src/operations/health.rs",
+      "path": "src/operations/health/fleet.rs",
       "signature": "fn presence_counts_default_to_zero()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::health::open_observational_registry",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/mod.rs",
+        "signature": "pub(crate) fn open_observational_registry(context: &NodeContext) -> OperationResult<NodeRegistry>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::open_observational_registry",
+      "kind": "function",
+      "line": 37,
+      "name": "open_observational_registry",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 37,
+        "name": "open_observational_registry"
+      },
+      "path": "src/operations/health/mod.rs",
+      "signature": "pub(crate) fn open_observational_registry(context: &NodeContext) -> OperationResult<NodeRegistry>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::operations::health::signals::signal_feed",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/signals.rs",
+        "signature": "pub fn signal_feed(registry: &NodeRegistry) -> OperationResult<SignalFeedReport>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::signals::signal_feed",
+      "kind": "function",
+      "line": 73,
+      "name": "signal_feed",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 8,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 73,
+        "name": "signal_feed"
+      },
+      "path": "src/operations/health/signals.rs",
+      "signature": "pub fn signal_feed(registry: &NodeRegistry) -> OperationResult<SignalFeedReport>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::signals::signal_feed::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/signals.rs",
+        "signature": "cursors.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::signals::signal_feed::<closure>",
+      "kind": "closure",
+      "line": 112,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 112,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/signals.rs",
+      "signature": "cursors.sort_by(|left, right| left.node_id.cmp(&right.node_id));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::signals::signal_feed::<closure>@131#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/signals.rs",
+        "signature": "gap: cursors.iter().any(|cursor| cursor.gap),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::signals::signal_feed::<closure>@131#2",
+      "kind": "closure",
+      "line": 131,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 131,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/signals.rs",
+      "signature": "gap: cursors.iter().any(|cursor| cursor.gap),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::signals::reduce_to_newest",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/signals.rs",
+        "signature": "fn reduce_to_newest(entries: &mut Vec<SignalEntry>, limit: usize)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::signals::reduce_to_newest",
+      "kind": "function",
+      "line": 144,
+      "name": "reduce_to_newest",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 144,
+        "name": "reduce_to_newest"
+      },
+      "path": "src/operations/health/signals.rs",
+      "signature": "fn reduce_to_newest(entries: &mut Vec<SignalEntry>, limit: usize)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::signals::reduce_to_newest::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/signals.rs",
+        "signature": "entries.sort_by(|left, right| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::signals::reduce_to_newest::<closure>",
+      "kind": "closure",
+      "line": 145,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 145,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/signals.rs",
+      "signature": "entries.sort_by(|left, right| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::signals::reduce_to_newest::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/signals.rs",
+        "signature": ".then_with(|| right.signal.signal_id.cmp(&left.signal.signal_id))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::signals::reduce_to_newest::<closure>::<closure>",
+      "kind": "closure",
+      "line": 150,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 150,
+        "name": "<closure>"
+      },
+      "path": "src/operations/health/signals.rs",
+      "signature": ".then_with(|| right.signal.signal_id.cmp(&left.signal.signal_id))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::health::signals::equal_signal_timestamps_use_the_signal_id_tiebreak",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/health/signals.rs",
+        "signature": "fn equal_signal_timestamps_use_the_signal_id_tiebreak()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::health::signals::equal_signal_timestamps_use_the_signal_id_tiebreak",
+      "kind": "function",
+      "line": 161,
+      "name": "equal_signal_timestamps_use_the_signal_id_tiebreak",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 161,
+        "name": "equal_signal_timestamps_use_the_signal_id_tiebreak"
+      },
+      "path": "src/operations/health/signals.rs",
+      "signature": "fn equal_signal_timestamps_use_the_signal_id_tiebreak()",
       "source_class": "handwritten"
     },
     {

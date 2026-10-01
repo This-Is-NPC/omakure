@@ -865,7 +865,7 @@ Production carriage is split deliberately: `src/direct_health.rs` is the only
 seam between the direct session and the protocol-neutral Health Plane,
 `src/health_plane/` owns validation and lifecycle rules,
 `src/node_registry/health/` owns persistence and retention, and
-`src/operations/health.rs` owns the read projection shared by CLI and HTTP.
+`src/operations/health/` owns the read projection shared by CLI and HTTP.
 
 No implementation may change the certificate, Noise handshake, frame format,
 inner control kinds, admission controller, or enrollment path without first

@@ -194,7 +194,6 @@ fn stand_up_fleet() -> Fleet {
         "performer",
         &["inventory-health", "notifications"],
         TRUST_AUDIT,
-        omakure::hex::encode,
     );
     support::trust_fleet_peer(
         performer,
@@ -203,7 +202,6 @@ fn stand_up_fleet() -> Fleet {
         "conductor",
         &["baseline-push", "inventory-health", "notifications"],
         TRUST_AUDIT,
-        omakure::hex::encode,
     );
 
     // The Conductor sends the bodies, so it must hold the same bytes the

@@ -113,9 +113,8 @@ pub fn trust_fleet_peer(
     role: &str,
     capabilities: &[&str],
     audit: (&str, &str),
-    encode_certificate: fn(&[u8]) -> String,
 ) {
-    let certificate = encode_certificate(
+    let certificate = omakure::hex::encode(
         &fs::read(peer_workspace.join(".node-state/transport.cert"))
             .expect("read peer transport certificate"),
     );

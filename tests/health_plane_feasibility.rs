@@ -35,6 +35,10 @@ const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 const ROLE_CONDUCTOR: i64 = 1;
 const ROLE_PERFORMER: i64 = 2;
 const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
+const TRUST_AUDIT: (&str, &str) = (
+    "health-plane-feasibility",
+    "health plane contract feasibility probe",
+);
 const CAPABILITY_SIGNAL: &str = "notifications";
 
 // ---------------------------------------------------------------------------
@@ -219,44 +223,6 @@ fn sign_health_envelope(
 // Node process helpers.
 // ---------------------------------------------------------------------------
 
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = omakure::hex::encode(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "health-plane-feasibility".to_string(),
-        "--reason".to_string(),
-        "health plane contract feasibility probe".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    let data = support::assert_node_success(&support::run_node(workspace, &args));
-    assert_eq!(data["state"], "active");
-}
-
 /// Complete a real production handshake and probe/ack round trip against the
 /// production listener, then hand back the live session.
 fn production_session(
@@ -403,19 +369,21 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
 
     // The Conductor trusts the Performer with both Health Plane capabilities;
     // the Performer trusts the Conductor with none.
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         performer.path(),
         &performer_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE, CAPABILITY_SIGNAL],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         performer.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &[],
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port().to_string();

@@ -44,6 +44,10 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
 const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
+const TRUST_AUDIT: (&str, &str) = (
+    "health-plane-transport",
+    "health plane wave 3 certification",
+);
 /// How long a bounded real wait may run before the certification fails.
 const REACH_TIMEOUT: Duration = Duration::from_secs(45);
 /// One frozen 60-second admission window plus slack, for a certification
@@ -59,46 +63,6 @@ const FLEET_REACH_TIMEOUT: Duration = Duration::from_secs(110);
 // ---------------------------------------------------------------------------
 // Node lifecycle helpers.
 // ---------------------------------------------------------------------------
-
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = omakure::hex::encode(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "health-plane-transport".to_string(),
-        "--reason".to_string(),
-        "health plane wave 3 certification".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    assert_eq!(
-        support::assert_node_success(&support::run_node(workspace, &args))["state"],
-        "active"
-    );
-}
 
 fn configure_direct(workspace: &Path, direct_port: u16, peer_node_id: &str, peer_port: u16) {
     configure_direct_peers(workspace, direct_port, &[(peer_node_id, peer_port)]);
@@ -698,26 +662,29 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     // The Conductor manages one Performer with the frozen Profile/Pulse
     // capability, and separately trusts a peer that never runs at all: that
     // peer is the "never seen" row the projection must still report.
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         performer.path(),
         &performer_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         bystander.path(),
         &bystander_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         performer.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port();
@@ -933,19 +900,21 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
 
     // One authorized Performer, and one peer trusted in the *conductor* role
     // that will try to report health it is not permitted to report.
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         performer.path(),
         &performer_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         manager.path(),
         &manager_status,
         "conductor",
         &[],
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port();
@@ -1341,33 +1310,37 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
     // One Conductor, two independently stateful Performers. Both are granted
     // the frozen Signal capability; only one of them will actually run work.
     let capabilities = [CAPABILITY_PROFILE_PULSE, CAPABILITY_SIGNAL];
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         worker.path(),
         &worker_status,
         "performer",
         &capabilities,
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         idle.path(),
         &idle_status,
         "performer",
         &capabilities,
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         worker.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &capabilities,
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         idle.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &capabilities,
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port();

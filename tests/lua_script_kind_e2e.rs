@@ -11,17 +11,15 @@
 //! `std::process::Command` from another, so re-proving cancel, heartbeat,
 //! redaction, or the queue-worker path for Lua would be theatre.
 
+mod support;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn omakure() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_omakure"))
-}
 
 /// Invoke the embedded host directly, the way `command_for_script_with_env`
 /// spawns it.
 fn host(script: &Path, args: &[&str]) -> Output {
-    Command::new(omakure())
+    Command::new(support::omakure_bin())
         .arg("--__omakure-lua-host")
         .arg(script)
         .args(args)
@@ -136,7 +134,7 @@ fn the_host_does_not_depend_on_a_system_lua() {
 
     // An empty PATH removes any chance of falling back to an installed
     // interpreter; the runtime is inside the binary or this fails.
-    let output = Command::new(omakure())
+    let output = Command::new(support::omakure_bin())
         .arg("--__omakure-lua-host")
         .arg(&script)
         .env("PATH", "")
@@ -170,7 +168,7 @@ fn a_per_job_timeout_kills_a_running_lua_script() {
         "local deadline = os.time() + 60\nwhile os.time() < deadline do end\n",
     );
 
-    let enqueue = Command::new(omakure())
+    let enqueue = Command::new(support::omakure_bin())
         .current_dir(dir.path())
         .args([
             "queue",
@@ -190,7 +188,7 @@ fn a_per_job_timeout_kills_a_running_lua_script() {
     );
 
     let started = std::time::Instant::now();
-    let worker = Command::new(omakure())
+    let worker = Command::new(support::omakure_bin())
         .current_dir(dir.path())
         .args(["queue", "worker", "--once", "--scripts-dir"])
         .arg(dir.path())
@@ -208,7 +206,7 @@ fn a_per_job_timeout_kills_a_running_lua_script() {
          on a script that would otherwise run for 60s"
     );
 
-    let stats = Command::new(omakure())
+    let stats = Command::new(support::omakure_bin())
         .current_dir(dir.path())
         .args(["queue", "stats", "--json", "--scripts-dir"])
         .arg(dir.path())

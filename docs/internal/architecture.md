@@ -156,7 +156,7 @@ src/
 │   ├── run/                synchronous execution entry point and tests
 │   ├── queue/               queue command dispatch, producers, and tests
 │   ├── history.rs           run and trace queries
-│   ├── serve.rs             standalone cron scheduler
+│   ├── serve/              standalone cron scheduler and lifecycle
 │   ├── env.rs               managed environment commands
 │   ├── battery.rs           Battery repository commands
 │   ├── help_ai.rs           clap-derived machine surface
@@ -174,7 +174,7 @@ src/
 │   ├── search.rs            indexed script search
 │   ├── battery/             sync, inspect, install, and provenance
 │   ├── node/                node status, trust, enrollment, and discovery
-│   ├── health.rs            fleet-status and Signal-feed projections
+│   ├── health/             fleet-status, Signal-feed, and local fact projections
 │   ├── cue.rs               Cue service dispatch validation and outcomes
 │   ├── baseline/            baseline delivery, install, status, and rollback
 │   └── worker.rs            queue worker lifecycle, Cue recovery, preflight, and finalization
@@ -200,13 +200,15 @@ src/
 ├── redaction.rs             output and trace redaction
 ├── node/                    node paths, platform rules, and state validation
 ├── node_identity.rs         BIP-340 machine identity and node ID derivation
+├── node_key.rs              shared private-key custody and file validation
 ├── node_registry/           node-owned trust and delivery persistence boundary
 │   └── health/              Health Plane reads and receive-order application
 ├── direct_transport/        Noise framing, certificates, envelopes, and replay limits
 ├── direct_service/          production direct listener, peer admission, and outboxes
 │   └── ack.rs               shared signed ACK verification for Cue and Baseline
 ├── direct_health.rs         Health Plane carriage over an established direct session
-├── health_plane/            protocol-neutral Health Plane operations
+├── health_plane.rs          Health Plane ingest, authorization, ordering, and fleet projection
+├── health_plane/            Health Plane schema, reporting, lifecycle, and tests
 │   ├── schema.rs            frozen wire schema
 │   ├── report/              Performer-side facts, reporting, payloads, sanitization, and IDs
 │   └── lifecycle.rs         enrolled/revoked lifecycle Signals
@@ -284,8 +286,10 @@ src/
   direct envelope — `health_profile`, `health_pulse`, `health_signal`,
   `health_ack`, `health_error` — and no new transport, signature construction,
   key material, or capability. `src/direct_health.rs` is the only seam between
-  the shipped session and `src/health_plane/`, which owns authorization,
-  ordering, idempotency, capacity, retention, and every bound.
+  the shipped session and `src/health_plane.rs`, which owns authorization,
+  ordering, idempotency, capacity, retention, and every bound. The companion
+  `src/health_plane/` directory holds its wire schema, reporting, and lifecycle
+  support.
   `src/operations/health/` projects the Conductor-local fleet-status and
   Signal-feed reports that `omakure node health` / `node signals` and
   `GET /v1/node/health` / `GET /v1/node/signals` both render. It also supplies

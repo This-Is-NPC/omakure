@@ -89,11 +89,12 @@ impl HeartbeatWatcher {
         let handle = thread::spawn(move || {
             let tick = Duration::from_millis(HEARTBEAT_TICK_MS);
             while !stop_heartbeat.load(Ordering::SeqCst) {
-                if let Some(flag) = &cancel {
-                    if flag.load(Ordering::SeqCst) {
-                        cancelled_signal.store(true, Ordering::SeqCst);
-                        break;
-                    }
+                if cancel
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(Ordering::SeqCst))
+                {
+                    cancelled_signal.store(true, Ordering::SeqCst);
+                    break;
                 }
                 if let Ok(conn) = runs::open(&workspace_clone) {
                     match runs::heartbeat(&conn, &run_id_clone, &worker_id_clone) {

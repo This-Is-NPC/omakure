@@ -227,11 +227,14 @@ fn rotate_retained(
     // A node installing its first baseline has nothing to roll back to, and
     // saying so by leaving the slot empty is what makes `rollback` refuse
     // rather than reinstall what is already there.
-    if let Some(outgoing) = rotation.current.1.as_ref() {
-        if let Err(error) = write_metadata_file(&previous_path, outgoing) {
-            rotation.restore();
-            return Err(error);
-        }
+    if let Some(error) = rotation
+        .current
+        .1
+        .as_ref()
+        .and_then(|outgoing| write_metadata_file(&previous_path, outgoing).err())
+    {
+        rotation.restore();
+        return Err(error);
     }
     if let Err(error) = write_metadata_file(&current_path, &serialized) {
         rotation.restore();

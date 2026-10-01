@@ -76,11 +76,11 @@ impl WalDatabase {
             match conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0)) {
                 Ok(mode) => break mode,
                 Err(source) => {
-                    if is_lock_contention(&source) {
-                        if let Some(delay) = delays.next() {
-                            std::thread::sleep(*delay);
-                            continue;
-                        }
+                    if let Some(delay) =
+                        is_lock_contention(&source).then(|| delays.next()).flatten()
+                    {
+                        std::thread::sleep(*delay);
+                        continue;
                     }
                     return Err(WalOpenError::Sqlite {
                         operation: "Enable WAL failed".to_string(),

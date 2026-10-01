@@ -300,13 +300,11 @@ fn restore_token_lease(
     lease: &mut Option<PrivateTokenLease>,
     error: OperationError,
 ) -> OperationError {
-    if let Some(lease) = lease.take() {
-        if lease.restore().is_err() {
-            return OperationError::new(
-                OperationErrorCode::EnrollmentDenied,
-                "bootstrap token could not be restored",
-            );
-        }
+    if lease.take().is_some_and(|lease| lease.restore().is_err()) {
+        return OperationError::new(
+            OperationErrorCode::EnrollmentDenied,
+            "bootstrap token could not be restored",
+        );
     }
     error
 }

@@ -1,5 +1,5 @@
 use crate::cli::args::{EnvArgs, EnvCommand, EnvCreateArgs, EnvRemoveArgs, EnvSetArgs};
-use crate::cli::emit::emit_operation_error;
+use crate::cli::emit::{default_operation_error_code, emit_operation_error};
 use crate::cli::json::{self, codes};
 use crate::operations::envs::{self, EnvParam};
 use crate::operations::{OperationError, OperationErrorCode};
@@ -180,11 +180,8 @@ fn parse_param(value: &str) -> Result<EnvParam, OperationError> {
 
 fn env_error_code(err: &OperationError) -> &'static str {
     match err.code {
-        OperationErrorCode::InvalidInput | OperationErrorCode::UnsafePath => {
-            codes::INVALID_ARGUMENT
-        }
-        OperationErrorCode::NotFound => codes::NOT_FOUND,
-        _ => codes::INTERNAL,
+        OperationErrorCode::UnsafePath => codes::INVALID_ARGUMENT,
+        _ => default_operation_error_code(err),
     }
 }
 

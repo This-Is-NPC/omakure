@@ -4,10 +4,10 @@ use crate::cli::args::{
     HistoryArgs, HistoryCommand, HistoryListArgs, HistoryShowArgs, HistoryTailArgs,
     HistoryTracesArgs,
 };
-use crate::cli::emit::{emit_error, emit_operation_error};
+use crate::cli::emit::{default_operation_error_code, emit_error, emit_operation_error};
 use crate::cli::json::{self, codes};
+use crate::operations::OperationErrorCode;
 use crate::operations::core::{self, ListRunsRequest, ListTracesRequest, ShowRunRequest};
-use crate::operations::{OperationError, OperationErrorCode};
 use crate::runs::{RunRow, RunStats, TraceRow, format_run_timestamp};
 use crate::workspace::Workspace;
 use serde::Serialize;
@@ -127,7 +127,7 @@ fn list(
 
     let rows = match core::list_runs(workspace, request) {
         Ok(rows) => rows,
-        Err(err) => return emit_operation_error(json_output, err, history_error_code),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
 
     if json_output {
@@ -170,7 +170,7 @@ fn show(
         },
     ) {
         Ok(row) => row,
-        Err(err) => return emit_operation_error(json_output, err, history_error_code),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
 
     if json_output {
@@ -265,7 +265,7 @@ fn tail(
 fn stats(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let stats = match core::run_stats(workspace) {
         Ok(s) => s,
-        Err(err) => return emit_operation_error(json_output, err, history_error_code),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
     if json_output {
         json::print_ok(stats);
@@ -318,7 +318,7 @@ fn traces(
                 format!("run not found: {}", run_id),
             );
         }
-        Err(err) => return emit_operation_error(json_output, err, history_error_code),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
 
     if json_output {
@@ -349,14 +349,6 @@ fn format_trace_row(trace: &TraceRow) -> String {
             "[{}] #{:<4} {:<5} {}  {}",
             when, trace.sequence, trace.level, trace.message, data
         )
-    }
-}
-
-fn history_error_code(err: &OperationError) -> &'static str {
-    match err.code {
-        OperationErrorCode::InvalidInput => codes::INVALID_ARGUMENT,
-        OperationErrorCode::NotFound => codes::NOT_FOUND,
-        _ => codes::INTERNAL,
     }
 }
 

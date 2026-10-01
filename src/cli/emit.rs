@@ -5,7 +5,7 @@
 //! `error: <msg>` on stderr, which agents reading `--json` must not see.
 
 use crate::cli::json;
-use crate::operations::OperationError;
+use crate::operations::{OperationError, OperationErrorCode};
 use std::error::Error;
 
 /// Report a failure under a stable [`json::codes`] code. Human mode returns
@@ -31,6 +31,14 @@ pub fn emit_operation_error(
     cli_code: fn(&OperationError) -> &'static str,
 ) -> Result<(), Box<dyn Error>> {
     emit_error(json_output, cli_code(&err), err.message)
+}
+
+pub(crate) fn default_operation_error_code(err: &OperationError) -> &'static str {
+    match err.code {
+        OperationErrorCode::InvalidInput => json::codes::INVALID_ARGUMENT,
+        OperationErrorCode::NotFound => json::codes::NOT_FOUND,
+        _ => json::codes::INTERNAL,
+    }
 }
 
 /// Report an operation failure under its own operation code. Human mode

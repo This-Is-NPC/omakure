@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "61d912f3f5c3e79c576b290dc584a22d24e1ea812c2c552adb5676523c819840",
+  "canonical_sha256": "71b9364812c519503b0679ed73f17c49593fd61f26d71f5cdd423529c0a332e9",
   "config_identity": "no-config",
   "files": [
     {
@@ -1058,12 +1058,26 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 5,
+        "cyclomatic": 10
+      },
+      "path": "src/cli/emit.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
         "invocations": 9,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 35,
-        "cyclomatic": 60
+        "cyclomatic": 59
       },
       "path": "src/cli/env.rs",
       "source_class": "handwritten"
@@ -1090,8 +1104,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 39,
-        "cyclomatic": 92
+        "cognitive": 38,
+        "cyclomatic": 89
       },
       "path": "src/cli/history.rs",
       "source_class": "handwritten"
@@ -1114,7 +1128,7 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 30,
+        "invocations": 32,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
@@ -1217,7 +1231,7 @@
       },
       "native": {
         "cognitive": 21,
-        "cyclomatic": 27
+        "cyclomatic": 26
       },
       "path": "src/cli/queue/producers.rs",
       "source_class": "handwritten"
@@ -25680,6 +25694,32 @@
     },
     {
       "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::cli::emit::default_operation_error_code",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/emit.rs",
+        "signature": "pub(crate) fn default_operation_error_code(err: &OperationError) -> &'static str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::emit::default_operation_error_code",
+      "kind": "function",
+      "line": 36,
+      "name": "default_operation_error_code",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 36,
+        "name": "default_operation_error_code"
+      },
+      "path": "src/cli/emit.rs",
+      "signature": "pub(crate) fn default_operation_error_code(err: &OperationError) -> &'static str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
       "cyclomatic": 10,
       "derived": {
         "identity": "crate::cli::env::run",
@@ -26664,32 +26704,6 @@
       },
       "path": "src/cli/history.rs",
       "signature": "fn format_trace_row(trace: &TraceRow) -> String",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::cli::history::history_error_code",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/history.rs",
-        "signature": "fn history_error_code(err: &OperationError) -> &'static str",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::history::history_error_code",
-      "kind": "function",
-      "line": 355,
-      "name": "history_error_code",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 3,
-        "kind": "function",
-        "line": 355,
-        "name": "history_error_code"
-      },
-      "path": "src/cli/history.rs",
-      "signature": "fn history_error_code(err: &OperationError) -> &'static str",
       "source_class": "handwritten"
     },
     {
@@ -31686,7 +31700,7 @@
     },
     {
       "cognitive": 1,
-      "cyclomatic": 3,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::cli::queue::producers::queue_error_code",
         "macro_expansion": "not_measured",
@@ -31701,7 +31715,7 @@
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
-        "cyclomatic": 3,
+        "cyclomatic": 2,
         "kind": "function",
         "line": 140,
         "name": "queue_error_code"
@@ -89073,7 +89087,7 @@
         "identity": "crate::operations::as_str",
         "macro_expansion": "not_measured",
         "path": "src/operations/mod.rs",
-        "signature": "pub fn as_str(self) -> &'static str",
+        "signature": "pub const fn as_str(self) -> &'static str",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::as_str",
@@ -89089,7 +89103,7 @@
         "name": "as_str"
       },
       "path": "src/operations/mod.rs",
-      "signature": "pub fn as_str(self) -> &'static str",
+      "signature": "pub const fn as_str(self) -> &'static str",
       "source_class": "handwritten"
     },
     {

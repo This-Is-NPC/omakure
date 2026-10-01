@@ -1,5 +1,5 @@
 use crate::cli::args::{QueueAddArgs, QueueCancelArgs, QueueDeadLetterArgs};
-use crate::cli::emit::{emit_error, emit_operation_error};
+use crate::cli::emit::{default_operation_error_code, emit_error, emit_operation_error};
 use crate::cli::json::{self, codes};
 use crate::operations::core::{self, CancelRunRequest, DeadLetterRunRequest, EnqueueRunRequest};
 use crate::operations::{OperationError, OperationErrorCode};
@@ -139,10 +139,7 @@ pub(super) fn parse_humantime_duration_ms(s: &str) -> Result<i64, QueueDurationE
 
 fn queue_error_code(err: &OperationError) -> &'static str {
     match err.code {
-        OperationErrorCode::InvalidInput
-        | OperationErrorCode::UnsafePath
-        | OperationErrorCode::Conflict => codes::INVALID_ARGUMENT,
-        OperationErrorCode::NotFound => codes::NOT_FOUND,
-        _ => codes::INTERNAL,
+        OperationErrorCode::UnsafePath | OperationErrorCode::Conflict => codes::INVALID_ARGUMENT,
+        _ => default_operation_error_code(err),
     }
 }

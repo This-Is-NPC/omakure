@@ -54,10 +54,8 @@ pub fn assert_git_url_host_public_literal(git_url: &str) -> OperationResult<()> 
             "battery git url has no host",
         )
     })?;
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        if ip_is_private(ip) {
-            return Err(private_git_host_error());
-        }
+    if host.parse::<std::net::IpAddr>().is_ok_and(ip_is_private) {
+        return Err(private_git_host_error());
     }
     Ok(())
 }
@@ -327,17 +325,19 @@ pub fn assert_local_battery_allowed(allow_local: bool, git_url: &str) -> Operati
 }
 
 pub(super) fn normalize_git_url(value: &str) -> OperationResult<String> {
-    if windows_verbatim_prefix(value).is_none() {
-        if let Some((scheme, _)) = value.split_once("://") {
-            let scheme = scheme.to_ascii_lowercase();
-            if matches!(scheme.as_str(), "https" | "http" | "file") {
-                return Ok(value.to_string());
-            }
-            return Err(OperationError::new(
-                OperationErrorCode::InvalidInput,
-                "battery git url scheme is not allowed",
-            ));
+    if let Some((scheme, _)) = windows_verbatim_prefix(value)
+        .is_none()
+        .then(|| value.split_once("://"))
+        .flatten()
+    {
+        let scheme = scheme.to_ascii_lowercase();
+        if matches!(scheme.as_str(), "https" | "http" | "file") {
+            return Ok(value.to_string());
         }
+        return Err(OperationError::new(
+            OperationErrorCode::InvalidInput,
+            "battery git url scheme is not allowed",
+        ));
     }
 
     let local_value = windows_verbatim_path(value);

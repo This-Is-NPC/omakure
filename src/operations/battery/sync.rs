@@ -135,17 +135,18 @@ fn sync_battery_with_access(
         let summary = registry.batteries[index].clone();
         write_registry(&paths.registry_path, &registry)?;
         // Ensure plaintext never lands in the registry file.
-        if let Some(auth) = &summary.auth {
+        if summary.auth.is_some() {
             let registry_text = fs::read_to_string(&paths.registry_path).unwrap_or_default();
-            if let Some(token) = askpass.as_ref().map(|a| a.token.as_str()) {
-                if !token.is_empty() && registry_text.contains(token) {
-                    return Err(OperationError::new(
-                        OperationErrorCode::Conflict,
-                        "refusing to persist resolved battery credentials",
-                    ));
-                }
+            if askpass
+                .as_ref()
+                .map(|askpass| askpass.token.as_str())
+                .is_some_and(|token| !token.is_empty() && registry_text.contains(token))
+            {
+                return Err(OperationError::new(
+                    OperationErrorCode::Conflict,
+                    "refusing to persist resolved battery credentials",
+                ));
             }
-            let _ = auth;
         }
         Ok(summary)
     })();

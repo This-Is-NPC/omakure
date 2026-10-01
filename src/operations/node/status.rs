@@ -37,11 +37,8 @@ pub struct PublicIdentity {
 pub struct PublicNodeConfig {
     pub display_name: String,
     pub api_bind: String,
-    pub network_mode: String,
-    pub relays: Vec<String>,
     pub static_peers: Vec<String>,
     pub direct_bind: Option<String>,
-    pub max_message_bytes: u64,
     pub enrollment: String,
     pub allow_remote_cues: bool,
     pub allow_baseline_push: bool,
@@ -335,11 +332,8 @@ pub(super) fn public_config(config: NodeConfig) -> PublicNodeConfig {
     PublicNodeConfig {
         display_name: config.node.display_name,
         api_bind: config.api.bind,
-        network_mode: config.network.mode,
-        relays: config.network.relays,
         static_peers: config.network.static_peers,
         direct_bind: config.network.direct_bind,
-        max_message_bytes: config.network.max_message_bytes,
         enrollment: config.trust.enrollment,
         allow_remote_cues: config.trust.allow_remote_cues,
         allow_baseline_push: config.trust.allow_baseline_push,

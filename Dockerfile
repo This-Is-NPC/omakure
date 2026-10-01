@@ -80,10 +80,7 @@ RUN apt-get update \
           'bind = "127.0.0.1:7878"' \
           '' \
           '[network]' \
-          'mode = "direct"' \
-          'relays = []' \
           'static_peers = []' \
-          'max_message_bytes = 1048576' \
           '' \
           '[trust]' \
           'enrollment = "disabled"' \

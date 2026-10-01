@@ -1578,13 +1578,12 @@ fn node_status_redacts_malformed_config_values_in_http_envelope() {
     let init = server.post_json("/v1/node/init", &json!({}));
     assert_eq!(init.status, 200, "body: {}", init.safe_body());
 
-    let secret = "relay-user-super-secret-value";
+    let secret = "static-peer-secret-value";
     let malformed = fs::read_to_string(&config)
         .expect("read initialized node config")
-        .replace("mode = \"direct\"", "mode = \"nostr\"")
         .replace(
-            "relays = []",
-            &format!("relays = [\"wss://user:{secret}@relay.example.test\"]"),
+            "static_peers = []",
+            &format!("static_peers = [\"{secret}\"]"),
         );
     fs::write(&config, malformed).expect("write malformed node config");
 

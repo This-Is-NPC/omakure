@@ -171,15 +171,11 @@ fn status_redacts_malformed_config_values() {
     let temp = TempDir::new().unwrap();
     let context = node_context(temp.path());
     initialize_node(&context, &NodeConfig::default()).unwrap();
-    let secret = "relay-user-super-secret-value";
-    let malformed = NodeConfig::default()
-        .to_toml()
-        .unwrap()
-        .replace("mode = \"direct\"", "mode = \"nostr\"")
-        .replace(
-            "relays = []",
-            &format!("relays = [\"wss://user:{secret}@relay.example.test\"]"),
-        );
+    let secret = "static-peer-secret-value";
+    let malformed = NodeConfig::default().to_toml().unwrap().replace(
+        "static_peers = []",
+        &format!("static_peers = [\"{secret}\"]"),
+    );
     std::fs::write(context.config_path(), malformed).unwrap();
 
     let error = public_node_status(&context).unwrap_err();

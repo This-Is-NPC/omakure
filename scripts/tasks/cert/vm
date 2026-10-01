@@ -543,11 +543,8 @@ display_name = "vm-cert-$role"
 bind = "127.0.0.1:7878"
 
 [network]
-mode = "direct"
-relays = []
 direct_bind = "0.0.0.0:7879"
 static_peers = [$peers]
-max_message_bytes = 1048576
 
 [trust]
 enrollment = "manual"

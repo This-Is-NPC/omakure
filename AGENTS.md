@@ -79,13 +79,14 @@ src/
 ├── main.rs, lib.rs, bin/    # binary entry, crate surface, doc/catalog generators
 ├── cli/                     # clap adapters (args, api, node_service, node, run,
 │                            #   queue, history, serve, env, battery, help_ai,
-│                            #   inventory, json, …)
+│                            #   command_metadata, json, …)
 ├── operations/              # protocol-neutral behavior shared by CLI and HTTP
 ├── domain/                  # pure schemas, parsing, validation, cron, node config
-├── adapters/, ports/          # filesystem/process adapters and interfaces
+├── adapters/                # filesystem and process adapters
 ├── runs/, run_executor/     # runs.sqlite state machine; shared child lifecycle
 ├── runtime.rs, search_index.rs, workspace.rs
 ├── auth/, policy.rs, secrets.rs, redaction.rs
+├── inventory/               # CLI command conversion and HTTP route inventory
 ├── cli_http_parity/, operation_catalog/  # versioned parity and operation catalogs
 ├── installer.rs             # standalone installer binary
 └── fleet planes:

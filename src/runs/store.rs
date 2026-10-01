@@ -90,6 +90,22 @@ impl RunStore {
         super::get_run_env(&self.connection, run_id)
     }
 
+    pub(crate) fn last_scheduled_fire_ms(
+        &self,
+        schedule_id: &str,
+    ) -> Result<Option<i64>, RunsError> {
+        super::last_scheduled_fire_ms(&self.connection, schedule_id)
+    }
+
+    pub(crate) fn enqueue_scheduled(
+        &self,
+        script_path: &str,
+        args: &[String],
+        options: EnqueueOptions,
+    ) -> Result<Option<RunRow>, RunsError> {
+        super::enqueue_scheduled(&self.connection, script_path, args, options)
+    }
+
     pub(crate) fn complete(
         &self,
         run_id: &str,

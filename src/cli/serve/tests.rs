@@ -89,6 +89,19 @@ fn tick_enqueues_scheduled_run_on_first_fire() {
 }
 
 #[test]
+fn tick_reports_run_store_open_failure_without_changing_error_text() {
+    let temp = TempDir::new().unwrap();
+    let workspace = workspace_in(&temp);
+    write_script(temp.path(), "scheduled.sh", Some("* * * * *"));
+    let history = workspace.history_dir();
+    fs::remove_dir_all(history).unwrap();
+    fs::write(history, "blocked").unwrap();
+
+    let error = scheduler_tick(&workspace, Utc::now()).unwrap_err();
+    assert!(error.starts_with("open runs.sqlite: Create history dir failed: "));
+}
+
+#[test]
 #[cfg(unix)]
 fn scheduler_rejects_reserved_metadata_aliases() {
     let tmp = TempDir::new().unwrap();

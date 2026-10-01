@@ -7,7 +7,7 @@ use crate::cli::args::ServeArgs;
 use crate::cli::serve_windows::StopEvent;
 use crate::domain::{next_fire_after, parse_cron};
 use crate::ports::ScriptRepository;
-use crate::runs::{self, EnqueueOptions, RunTrigger};
+use crate::runs::{EnqueueOptions, RunStore, RunTrigger};
 use crate::secrets;
 use crate::workspace::Workspace;
 use chrono::Utc;
@@ -135,7 +135,7 @@ pub(crate) fn scheduler_tick(
 ) -> Result<usize, String> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
     let scripts = scheduled_subjects(workspace, &repo)?;
-    let conn = runs::open(workspace).map_err(|e| format!("open runs.sqlite: {e}"))?;
+    let store = RunStore::open(workspace).map_err(|e| format!("open runs.sqlite: {e}"))?;
     let mut fired = 0usize;
     let log_path = log_file(workspace);
     for script in scripts {
@@ -174,7 +174,7 @@ pub(crate) fn scheduler_tick(
         let canonical_str = canonical.to_string_lossy().to_string();
         let schedule_id = format!("{}@{}", canonical_str, cron_expr);
 
-        let last_fire = match runs::last_scheduled_fire_ms(&conn, &schedule_id) {
+        let last_fire = match store.last_scheduled_fire_ms(&schedule_id) {
             Ok(last_fire) => last_fire,
             Err(err) => {
                 log_line(
@@ -242,7 +242,7 @@ pub(crate) fn scheduler_tick(
             allowed_secret_refs: Some(resolved.provider_refs),
             ..Default::default()
         };
-        match runs::enqueue_scheduled(&conn, &canonical_str, &resolved.persisted_args, opts) {
+        match store.enqueue_scheduled(&canonical_str, &resolved.persisted_args, opts) {
             Ok(Some(row)) => {
                 fired += 1;
                 log_line(

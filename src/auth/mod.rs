@@ -16,13 +16,17 @@ pub(crate) mod test_credential;
 mod tests;
 
 pub use append::append_token_entry;
+#[cfg(test)]
 pub use file::{load_tokens_file, parse_tokens_toml, MAX_TOKENS_PER_FILE};
 pub use reload::install_sighup_reload;
-pub use scope::{scope_allows, WILDCARD_SCOPE};
+pub use token::generate_token;
 #[cfg(test)]
 pub use token::test_token_plaintext;
-pub use token::{format_toml_entry, generate_token, hash_token, GeneratedToken, TOKEN_PREFIX};
-pub use types::{AuthContext, AuthError, AuthStatus, Authenticator, TokenRecord};
+#[cfg(test)]
+pub use token::{format_toml_entry, hash_token, TOKEN_PREFIX};
+#[cfg(test)]
+pub use types::TokenRecord;
+pub use types::{AuthContext, AuthError, AuthStatus, Authenticator};
 
 use std::path::Path;
 

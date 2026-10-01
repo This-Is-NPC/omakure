@@ -144,7 +144,8 @@ script kind; the removed TUI widget runtime is unrelated and stays removed.
 ```text
 src/
 ├── main.rs                  CLI parsing, workspace resolution, dispatch
-├── lib.rs                   crate surface shared by the binaries and tests
+├── lib.rs                   crate surface shared by the binaries and tests;
+│                            auth, key custody, secrets, and redaction stay crate scoped
 ├── bin/                     cli-reference, usage-kdl, usage-docs, operation-catalog generators
 ├── cli/                     command adapters and JSON output
 │   ├── args/                clap command tree and long-form help

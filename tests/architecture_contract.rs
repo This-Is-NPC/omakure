@@ -703,6 +703,38 @@ fn battery_git_operations_reject_process_execution() {
 }
 
 #[test]
+fn internal_security_modules_stay_crate_scoped() {
+    let source = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs"))
+        .expect("read crate surface");
+    let syntax = syn::parse_file(&source).expect("parse crate surface");
+    let mut expected: HashSet<&str> = [
+        "auth",
+        "baseline_publisher",
+        "enrollment_authority",
+        "redaction",
+        "secrets",
+    ]
+    .into_iter()
+    .collect();
+    for item in syntax.items {
+        let syn::Item::Mod(module) = item else {
+            continue;
+        };
+        let name = module.ident.to_string();
+        if expected.remove(name.as_str()) {
+            assert!(
+                matches!(module.vis, syn::Visibility::Restricted(ref visibility) if visibility.path.is_ident("crate")),
+                "{name} must remain crate scoped"
+            );
+        }
+    }
+    assert!(
+        expected.is_empty(),
+        "internal modules missing: {expected:?}"
+    );
+}
+
+#[test]
 fn lifecycle_projection_rejects_registry_types() {
     let contract = parse_contract(
         Rule::HealthLifecycle,

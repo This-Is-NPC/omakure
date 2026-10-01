@@ -1,12 +1,12 @@
 mod adapters;
 mod app_meta;
-pub mod auth;
+pub(crate) mod auth;
 /// The signed, versioned baseline artefact: the first thing this product puts
 /// on a node that is code rather than an order.
 pub mod baseline;
 /// Custody of the key that signs baselines, held apart from the key that
 /// enrols members.
-pub mod baseline_publisher;
+pub(crate) mod baseline_publisher;
 /// Deciding whether another node may put code on this one, and installing it
 /// when the answer is yes.
 pub mod baseline_push;
@@ -19,7 +19,7 @@ pub mod direct_transport;
 pub mod discovery;
 pub mod domain;
 pub mod enrollment;
-pub mod enrollment_authority;
+pub(crate) mod enrollment_authority;
 mod error;
 pub mod health_plane;
 /// Shared structural inventories for generated contracts.
@@ -34,7 +34,7 @@ pub mod operation_catalog;
 pub mod operations;
 mod policy;
 mod ports;
-pub mod redaction;
+pub(crate) mod redaction;
 /// The receive half of the Remote Cue plane: authorization only, no execution.
 pub mod remote_cue;
 mod run_executor;
@@ -54,7 +54,7 @@ mod runtime;
 /// the module is part of the crate's contract.
 pub use runtime::{LUA_HOST_ARG, LUA_HOST_FAILURE_EXIT};
 mod search_index;
-pub mod secrets;
+pub(crate) mod secrets;
 #[cfg(test)]
 mod test_support;
 mod util;

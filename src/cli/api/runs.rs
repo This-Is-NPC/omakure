@@ -17,6 +17,22 @@ use axum::response::Response;
 use axum::Extension;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::Arc;
+
+async fn run_blocking<T: Send + 'static>(
+    gate: Arc<tokio::sync::Semaphore>,
+    task: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, OperationError> {
+    let permit = gate.acquire_owned().await.map_err(|_| {
+        OperationError::new(OperationErrorCode::IoFailed, "run operation unavailable")
+    })?;
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        task()
+    })
+    .await
+    .map_err(|_| OperationError::new(OperationErrorCode::IoFailed, "run operation failed"))
+}
 
 #[derive(Debug, Deserialize)]
 struct EnqueueRunBody {
@@ -50,8 +66,15 @@ pub(super) async fn list_runs_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
-    let request = list_runs_request(raw_query.as_deref());
-    operation_response(request.and_then(|request| core::list_runs(&state.workspace, request)))
+    let request = match list_runs_request(raw_query.as_deref()) {
+        Ok(request) => request,
+        Err(err) => return operation_error_response(err),
+    };
+    let gate = Arc::clone(&state.run_operation_gate);
+    match run_blocking(gate, move || core::list_runs(&state.workspace, request)).await {
+        Ok(result) => operation_response(result),
+        Err(err) => operation_error_response(err),
+    }
 }
 
 pub(super) async fn show_run_handler(
@@ -136,6 +159,24 @@ pub(super) async fn enqueue_run_handler(
             return attach_audit_run_id(response, requested_run_id);
         }
     }
+    let gate = Arc::clone(&state.run_operation_gate);
+    let fallback_run_id = requested_run_id.clone();
+    match run_blocking(gate, move || {
+        enqueue_authorized(state, auth_ctx, body, requested_run_id)
+    })
+    .await
+    {
+        Ok(response) => response,
+        Err(err) => attach_audit_run_id(operation_error_response(err), fallback_run_id),
+    }
+}
+
+fn enqueue_authorized(
+    state: ApiState,
+    auth_ctx: AuthContext,
+    body: EnqueueRunBody,
+    requested_run_id: Option<String>,
+) -> Response {
     if let Some(response) = require_implicit_secret_capabilities(&state, &auth_ctx, &body) {
         return attach_audit_run_id(response, requested_run_id);
     }
@@ -340,4 +381,73 @@ fn list_traces_request(
         level: query_value(&pairs, "level"),
         since_sequence: query_i64(&pairs, "since_sequence")?,
     })
+}
+
+#[cfg(test)]
+mod blocking_tests {
+    use axum::body::Body;
+    use axum::http::{header, Request, StatusCode};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tower::ServiceExt;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn locked_list_runs_does_not_block_health_request() {
+        let dir = tempfile::tempdir().expect("workspace");
+        let workspace = crate::test_support::workspace_in(&dir);
+        let lock = crate::runs::open(&workspace).expect("runs database");
+        lock.execute_batch(
+            "PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; CREATE TABLE hold_lock(id INTEGER)",
+        )
+        .expect("hold the SQLite write lock");
+        let gate = Arc::new(tokio::sync::Semaphore::new(1));
+        let app = super::super::router::router_with_run_gate(workspace, Arc::clone(&gate));
+        let mut list = tokio::spawn({
+            let app = app.clone();
+            async move {
+                app.oneshot(
+                    Request::builder()
+                        .uri("/v1/runs")
+                        .header(
+                            header::AUTHORIZATION,
+                            format!("Bearer {}", crate::auth::test_credential::token()),
+                        )
+                        .body(Body::empty())
+                        .expect("list request"),
+                )
+                .await
+            }
+        });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while gate.available_permits() != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("list handler entered the blocking operation");
+        assert!(tokio::time::timeout(Duration::from_millis(100), &mut list)
+            .await
+            .is_err());
+        let response = tokio::time::timeout(
+            Duration::from_secs(1),
+            app.oneshot(
+                Request::builder()
+                    .uri("/v1/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            ),
+        )
+        .await
+        .expect("health request must remain responsive")
+        .expect("health response");
+        assert_eq!(response.status(), StatusCode::OK);
+        lock.execute_batch("ROLLBACK").expect("release SQLite lock");
+        drop(lock);
+        let list = tokio::time::timeout(Duration::from_secs(3), list)
+            .await
+            .expect("list request completed")
+            .expect("list task")
+            .expect("list response");
+        assert_eq!(list.status(), StatusCode::OK);
+    }
 }

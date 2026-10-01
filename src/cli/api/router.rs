@@ -28,6 +28,8 @@ use super::scripts::{
     list_scripts_handler, script_path_handler, search_handler, tree_path_handler, tree_root_handler,
 };
 use super::secrets::list_secrets_metadata_handler;
+#[cfg(test)]
+use super::state::MAX_CONCURRENT_RUN_OPERATIONS;
 use super::state::{ApiPolicy, ApiState, ReadinessGate};
 use super::status::{
     admin_status_handler, config_handler, doctor_handler, health, ready_handler, workspace_handler,
@@ -93,14 +95,33 @@ pub(crate) fn health_plane_router(
 
 #[cfg(test)]
 pub(super) fn router(workspace: Workspace) -> Router {
+    router_with_run_gate(
+        workspace,
+        Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_RUN_OPERATIONS)),
+    )
+}
+
+#[cfg(test)]
+pub(super) fn router_with_run_gate(
+    workspace: Workspace,
+    run_operation_gate: Arc<tokio::sync::Semaphore>,
+) -> Router {
     // Test convenience: wildcard scope plus unrestricted secret refs.
     // Production scope `*` still requires explicit `--secret-ref`.
-    router_with_policy(
+    let deploy = DeployPolicy::default();
+    let auth_gate = auth_verification_gate(&deploy);
+    router_with_transport(
         crate::auth::test_credential::authenticator(&["*"]),
         workspace,
         ApiPolicy::with_secret_refs(["*"]),
-        DeployPolicy::default(),
+        deploy,
         None,
+        None,
+        None,
+        None,
+        None,
+        auth_gate,
+        run_operation_gate,
         BODY_LIMIT_BYTES,
     )
 }
@@ -209,7 +230,18 @@ pub(super) fn router_with_policy(
 ) -> Router {
     let auth_gate = auth_verification_gate(&deploy);
     router_with_transport(
-        auth, workspace, policy, deploy, readiness, None, None, None, None, auth_gate, body_limit,
+        auth,
+        workspace,
+        policy,
+        deploy,
+        readiness,
+        None,
+        None,
+        None,
+        None,
+        auth_gate,
+        Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_RUN_OPERATIONS)),
+        body_limit,
     )
 }
 
@@ -227,6 +259,7 @@ pub(super) fn router_with_transport(
     cues: Option<crate::direct_service::CueDispatcher>,
     baselines: Option<crate::direct_service::BaselineDispatcher>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
+    run_operation_gate: Arc<tokio::sync::Semaphore>,
     body_limit: usize,
 ) -> Router {
     let state = ApiState {
@@ -240,6 +273,7 @@ pub(super) fn router_with_transport(
         cues,
         baselines,
         auth_verification_gate,
+        run_operation_gate,
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
     Router::new()

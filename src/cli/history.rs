@@ -105,12 +105,12 @@ fn list(
     let now = crate::util::time::unix_millis();
     let since_ms = match opts.since.as_deref().map(parse_compact_duration_ms) {
         Some(Ok(d)) => Some(now - d),
-        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
+        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
         None => None,
     };
     let until_ms = match opts.until.as_deref().map(parse_compact_duration_ms) {
         Some(Ok(d)) => Some(now - d),
-        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
+        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
         None => None,
     };
 
@@ -360,28 +360,40 @@ fn history_error_code(err: &OperationError) -> &'static str {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+enum DurationParseError {
+    #[error("empty duration")]
+    Empty,
+    #[error("invalid duration value: {0}")]
+    InvalidValue(String),
+    #[error("invalid duration unit: {0}")]
+    InvalidUnit(char),
+    #[error("duration overflow: {0}")]
+    Overflow(String),
+}
+
 /// Parse a single `<integer><s|m|h|d>` window such as `30s` or `7d` into
 /// milliseconds; compound humantime spellings are refused.
-fn parse_compact_duration_ms(s: &str) -> Result<i64, String> {
+fn parse_compact_duration_ms(s: &str) -> Result<i64, DurationParseError> {
     let s = s.trim();
-    if s.is_empty() {
-        return Err("empty duration".into());
-    }
-    let (unit_index, unit_char) = s.char_indices().next_back().ok_or("missing unit")?;
+    let (unit_index, unit_char) = s
+        .char_indices()
+        .next_back()
+        .ok_or(DurationParseError::Empty)?;
     let digits = &s[..unit_index];
     let value: i64 = digits
         .parse()
-        .map_err(|_| format!("invalid duration value: {}", s))?;
+        .map_err(|_| DurationParseError::InvalidValue(s.to_string()))?;
     let multiplier = match unit_char {
         's' => 1_000_i64,
         'm' => 60 * 1_000,
         'h' => 60 * 60 * 1_000,
         'd' => 24 * 60 * 60 * 1_000,
-        _ => return Err(format!("invalid duration unit: {}", unit_char)),
+        _ => return Err(DurationParseError::InvalidUnit(unit_char)),
     };
     value
         .checked_mul(multiplier)
-        .ok_or_else(|| format!("duration overflow: {}", s))
+        .ok_or_else(|| DurationParseError::Overflow(s.to_string()))
 }
 
 #[cfg(test)]
@@ -433,12 +445,44 @@ mod tests {
 
     #[test]
     fn parse_compact_duration_rejects_garbage() {
-        assert!(parse_compact_duration_ms("").is_err());
-        assert!(parse_compact_duration_ms("abc").is_err());
-        assert!(parse_compact_duration_ms("10x").is_err());
-        assert!(parse_compact_duration_ms("h").is_err());
-        assert!(parse_compact_duration_ms("10é").is_err());
-        assert!(parse_compact_duration_ms("é").is_err());
+        for (input, expected, message) in [
+            ("", DurationParseError::Empty, "empty duration"),
+            ("   ", DurationParseError::Empty, "empty duration"),
+            (
+                "abc",
+                DurationParseError::InvalidValue("abc".into()),
+                "invalid duration value: abc",
+            ),
+            (
+                "10x",
+                DurationParseError::InvalidUnit('x'),
+                "invalid duration unit: x",
+            ),
+            (
+                "h",
+                DurationParseError::InvalidValue("h".into()),
+                "invalid duration value: h",
+            ),
+            (
+                "10é",
+                DurationParseError::InvalidUnit('é'),
+                "invalid duration unit: é",
+            ),
+            (
+                "é",
+                DurationParseError::InvalidValue("é".into()),
+                "invalid duration value: é",
+            ),
+            (
+                "9223372036854775807d",
+                DurationParseError::Overflow("9223372036854775807d".into()),
+                "duration overflow: 9223372036854775807d",
+            ),
+        ] {
+            let error = parse_compact_duration_ms(input).unwrap_err();
+            assert_eq!(error, expected);
+            assert_eq!(error.to_string(), message);
+        }
     }
 
     #[test]
@@ -573,7 +617,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(err.to_string().contains("invalid duration"));
+        assert_eq!(err.to_string(), "invalid duration value: nope");
     }
 
     #[test]
@@ -753,7 +797,7 @@ mod tests {
             false,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("invalid duration"));
+        assert_eq!(err.to_string(), "invalid duration value: nope");
     }
 
     #[test]

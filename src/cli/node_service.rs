@@ -608,6 +608,13 @@ mod tests {
                 .to_string(),
             "discovery_secret_invalid"
         );
+        config.organization.discovery_secret_ref = "secret://prod/absent".to_string();
+        assert_eq!(
+            resolve_discovery_secret(&config, &workspace)
+                .unwrap_err()
+                .to_string(),
+            "discovery_secret_invalid"
+        );
     }
 
     #[test]

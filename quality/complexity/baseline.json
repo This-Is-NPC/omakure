@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "c71f454e960d007092d89766c903af81bc91c17942309407556c5446df5409b0",
+  "canonical_sha256": "7e14c43104038947e7136842b15a565993c3b456d886006f41966e2b60d598b4",
   "config_identity": "no-config",
   "files": [
     {
@@ -4698,12 +4698,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 82,
+        "invocations": 90,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 93,
-        "cyclomatic": 144
+        "cognitive": 80,
+        "cyclomatic": 142
       },
       "path": "src/secrets.rs",
       "source_class": "handwritten"
@@ -106807,29 +106807,29 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 4,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::secrets::resolve_secret_value",
         "macro_expansion": "not_measured",
         "path": "src/secrets.rs",
-        "signature": "pub fn resolve_secret_value( workspace: &Workspace, value: &str, access: &SecretAccess, ) -> Result<String, String>",
+        "signature": "pub fn resolve_secret_value( workspace: &Workspace, value: &str, access: &SecretAccess, ) -> Result<String, SecretResolveError>",
         "source_class": "handwritten"
       },
       "identity": "crate::secrets::resolve_secret_value",
       "kind": "function",
-      "line": 467,
+      "line": 464,
       "name": "resolve_secret_value",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 4,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 467,
+        "line": 464,
         "name": "resolve_secret_value"
       },
       "path": "src/secrets.rs",
-      "signature": "pub fn resolve_secret_value( workspace: &Workspace, value: &str, access: &SecretAccess, ) -> Result<String, String>",
+      "signature": "pub fn resolve_secret_value( workspace: &Workspace, value: &str, access: &SecretAccess, ) -> Result<String, SecretResolveError>",
       "source_class": "handwritten"
     },
     {

@@ -465,12 +465,8 @@ pub fn resolve_secret_value(
     workspace: &Workspace,
     value: &str,
     access: &SecretAccess,
-) -> Result<String, String> {
-    match resolve_secret_ref(workspace, value, access) {
-        Ok(Some(v)) => Ok(v),
-        Ok(None) => Err(SecretResolveError::NotFound.to_string()),
-        Err(err) => Err(err.to_string()),
-    }
+) -> Result<String, SecretResolveError> {
+    resolve_secret_ref(workspace, value, access)?.ok_or(SecretResolveError::NotFound)
 }
 
 /// Metadata-only inventory of secrets visible under `access` (never values).
@@ -680,6 +676,36 @@ mod tests {
         );
         assert_eq!(denied.to_string(), "secret ref is not allowed");
         assert!(!denied.to_string().contains("raw_secret_value"));
+    }
+
+    #[test]
+    fn resolve_secret_value_preserves_typed_errors_and_redacted_text() {
+        let temp = TempDir::new().unwrap();
+        let workspace = workspace_in(&temp);
+        let access = SecretAccess::new(["secrets:use"], ["secret://prod/allowed"]);
+
+        let invalid = resolve_secret_value(&workspace, "secret://", &access).unwrap_err();
+        assert_eq!(invalid, SecretResolveError::InvalidRef);
+        assert_eq!(invalid.to_string(), "invalid secret ref");
+
+        let denied = resolve_secret_value(&workspace, "secret://prod/raw_secret_value", &access)
+            .unwrap_err();
+        assert_eq!(
+            denied,
+            SecretResolveError::Denied("secret ref is not allowed".into())
+        );
+        assert_eq!(denied.to_string(), "secret ref is not allowed");
+        assert!(!denied.to_string().contains("raw_secret_value"));
+
+        let missing =
+            resolve_secret_value(&workspace, "secret://prod/allowed", &access).unwrap_err();
+        assert_eq!(missing, SecretResolveError::NotFound);
+        assert_eq!(missing.to_string(), "secret ref not found");
+
+        assert_eq!(
+            resolve_secret_value(&workspace, "literal-secret", &access).unwrap(),
+            "literal-secret"
+        );
     }
 
     #[test]

@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn token_resolution_preserves_forbidden_mapping_for_typed_secret_errors() {
+    let temp = TempDir::new().unwrap();
+    let workspace = workspace_in(&temp);
+    let access = SecretAccess::allow_all();
+
+    let invalid =
+        super::super::sync::resolve_battery_token(&workspace, "secret://", &access).unwrap_err();
+    assert_eq!(invalid.code, OperationErrorCode::Forbidden);
+    assert_eq!(
+        invalid.message,
+        "failed to resolve battery token_ref: invalid secret ref"
+    );
+
+    let missing =
+        super::super::sync::resolve_battery_token(&workspace, "secret://prod/absent", &access)
+            .unwrap_err();
+    assert_eq!(missing.code, OperationErrorCode::Forbidden);
+    assert_eq!(
+        missing.message,
+        "failed to resolve battery token_ref: secret ref not found"
+    );
+}
+
+#[test]
 fn sync_battery_is_idempotent_on_repeated_prepare_and_sync() {
     let repo = create_battery_repo();
     let dir = TempDir::new().unwrap();

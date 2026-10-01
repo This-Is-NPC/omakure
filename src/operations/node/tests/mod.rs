@@ -18,6 +18,7 @@ use std::sync::{Mutex, OnceLock};
 use tempfile::TempDir;
 
 mod bundle;
+mod discovery;
 mod errors;
 mod manual_enrollment;
 mod status;

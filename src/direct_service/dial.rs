@@ -1,7 +1,9 @@
 use super::connection::{ConnectionDirection, ConnectionState};
 use super::error::DirectServiceError;
 use super::resolver::Resolver;
-use super::session::{audit_error, error_to_transport, hold_session, peer_authorization};
+use super::session::{
+    audit_error, error_to_transport, hold_session, peer_authorization, SessionInputs,
+};
 use super::status::StaticPeer;
 use super::stream::{initiator_deadline, read_frame, set_stream_timeouts, time_until, write_bytes};
 use super::{RETRY_BACKOFF, RETRY_BACKOFF_CEILING, RETRY_JITTER_MAX};
@@ -284,14 +286,16 @@ pub(super) fn connect_and_hold(
     hold_session(
         &mut stream,
         &mut session,
-        state,
-        &identity,
-        &registry,
-        remote.node_id(),
-        remote.identity_key(),
-        Some(health),
-        Some(cue),
-        Some(baseline),
+        SessionInputs {
+            state,
+            identity: &identity,
+            registry: &registry,
+            peer_node_id: remote.node_id(),
+            peer_identity_key: remote.identity_key(),
+            health: Some(health),
+            cue: Some(cue),
+            baseline: Some(baseline),
+        },
     )
 }
 

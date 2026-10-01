@@ -18,6 +18,38 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+enum SessionStep {
+    Continue,
+    Stop,
+}
+
+struct ActiveSession<'a, 'health, 'cue, 'baseline> {
+    stream: &'a mut TcpStream,
+    transport: &'a mut TransportSession,
+    state: &'a Arc<ConnectionState>,
+    identity: &'a NodeIdentity,
+    registry: &'a NodeRegistry,
+    peer_node_id: &'a str,
+    peer_identity_key: &'a [u8; 32],
+    health: &'a mut HealthSession<'health>,
+    cue: &'a mut Option<crate::remote_cue::CueSession<'cue>>,
+    baseline: &'a mut Option<crate::baseline_push::BaselineSession<'baseline>>,
+    last_activity: Instant,
+    outbound_cue: Option<OutboundCue>,
+    outbound_baseline: Option<OutboundBaseline>,
+}
+
+pub(super) struct SessionInputs<'a, 'health, 'cue, 'baseline> {
+    pub(super) state: &'a Arc<ConnectionState>,
+    pub(super) identity: &'a NodeIdentity,
+    pub(super) registry: &'a NodeRegistry,
+    pub(super) peer_node_id: &'a str,
+    pub(super) peer_identity_key: &'a [u8; 32],
+    pub(super) health: Option<HealthSession<'health>>,
+    pub(super) cue: Option<crate::remote_cue::CueSession<'cue>>,
+    pub(super) baseline: Option<crate::baseline_push::BaselineSession<'baseline>>,
+}
+
 /// The single shared steady-state receive loop for both connection directions.
 ///
 /// With `health` absent the loop keeps its original behavior exactly: it
@@ -30,112 +62,155 @@ use std::time::{Duration, Instant};
 /// read so a cadence, a retry, a revocation, or a stop request is observed
 /// promptly; the tick never consumes bytes, so a partially arrived frame can
 /// never desynchronize the stream.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn hold_session(
     stream: &mut TcpStream,
     session: &mut TransportSession,
-    state: &Arc<ConnectionState>,
-    identity: &NodeIdentity,
-    registry: &NodeRegistry,
-    peer_node_id: &str,
-    peer_identity_key: &[u8; 32],
-    mut health: Option<HealthSession<'_>>,
-    mut cue: Option<crate::remote_cue::CueSession<'_>>,
-    mut baseline: Option<crate::baseline_push::BaselineSession<'_>>,
+    mut inputs: SessionInputs<'_, '_, '_, '_>,
 ) -> Result<(), DirectServiceError> {
-    if health.as_ref().is_some_and(|health| !health.engaged()) {
-        health = None;
+    if inputs
+        .health
+        .as_ref()
+        .is_some_and(|health| !health.engaged())
+    {
+        inputs.health = None;
     }
-    let Some(health) = health.as_mut() else {
-        return hold_session_idle(stream, session, state).map_err(Into::into);
+    let Some(health) = inputs.health.as_mut() else {
+        return hold_session_idle(stream, session, inputs.state).map_err(Into::into);
     };
     stream
         .set_read_timeout(Some(crate::direct_health::TICK))
         .map_err(|_| TransportError::Internal)?;
-    let mut last_activity = Instant::now();
-    let mut outbound_cue: Option<OutboundCue> = None;
-    let mut outbound_baseline: Option<OutboundBaseline> = None;
     // Anything still queued when this session ends must not wait out its
     // budget for a connection that is gone.
     let _drain = OutboxGuard {
-        state,
-        peer_node_id,
+        state: inputs.state,
+        peer_node_id: inputs.peer_node_id,
     };
-    while !state.stop.load(Ordering::SeqCst) {
-        // One Cue in flight per session, which is the bound the contract
-        // already freezes at `concurrent_cue_runs_per_peer = 1`.
-        if outbound_cue.is_none() {
-            if let Some(pending) = state.take_pending_cue(peer_node_id) {
+    let mut active = ActiveSession {
+        stream,
+        transport: session,
+        state: inputs.state,
+        identity: inputs.identity,
+        registry: inputs.registry,
+        peer_node_id: inputs.peer_node_id,
+        peer_identity_key: inputs.peer_identity_key,
+        health,
+        cue: &mut inputs.cue,
+        baseline: &mut inputs.baseline,
+        last_activity: Instant::now(),
+        outbound_cue: None,
+        outbound_baseline: None,
+    };
+    while !active.state.stop.load(Ordering::SeqCst) {
+        if matches!(active.step()?, SessionStep::Stop) {
+            return Ok(());
+        }
+    }
+    Ok(())
+}
+
+impl ActiveSession<'_, '_, '_, '_> {
+    fn step(&mut self) -> Result<SessionStep, DirectServiceError> {
+        self.send_pending_cue()?;
+        self.send_pending_baseline()?;
+        self.refresh_outbound();
+        self.send_health_tick()?;
+        match wait_readable(self.stream, crate::direct_health::TICK) {
+            Readiness::Readable => self.receive_frame(),
+            Readiness::Idle => {
+                // Withdrawal is checked even when no inbound frame arrives.
+                if let Some(error) = health_authorization_error(self.registry, self.peer_node_id) {
+                    return Err(error);
+                }
+                if self.last_activity.elapsed() >= IDLE_TIMEOUT {
+                    Ok(SessionStep::Stop)
+                } else {
+                    Ok(SessionStep::Continue)
+                }
+            }
+            Readiness::Closed => Ok(SessionStep::Stop),
+            Readiness::Failed(error) => Err(error.into()),
+        }
+    }
+
+    fn send_pending_cue(&mut self) -> Result<(), DirectServiceError> {
+        // One Cue in flight per session.
+        if self.outbound_cue.is_none() {
+            if let Some(pending) = self.state.take_pending_cue(self.peer_node_id) {
                 let deadline = Instant::now() + IDLE_TIMEOUT;
-                match sign_pending_cue(identity, session.session_id(), &pending) {
+                match sign_pending_cue(self.identity, self.transport.session_id(), &pending) {
                     Ok(encoded) => {
-                        write_bytes(stream, &session.write(ENVELOPE_KIND, &encoded)?, deadline)
-                            .map_err(error_to_transport)?;
-                        last_activity = Instant::now();
-                        outbound_cue = Some(OutboundCue::new(pending));
+                        write_bytes(
+                            self.stream,
+                            &self.transport.write(ENVELOPE_KIND, &encoded)?,
+                            deadline,
+                        )
+                        .map_err(error_to_transport)?;
+                        self.last_activity = Instant::now();
+                        self.outbound_cue = Some(OutboundCue::new(pending));
                     }
-                    // A Cue this node cannot even sign is answered rather than
-                    // dropped; the caller is waiting on the channel.
                     Err(_) => pending.answer(false, false, CueCode::InvalidMessage.code(), false),
                 }
             }
         }
-        // One baseline in flight per session. A second would put megabytes on
-        // the wire behind a message the peer has not answered yet, and the
-        // answer is what says whether the first one was even wanted.
-        if outbound_baseline
+        Ok(())
+    }
+
+    fn send_pending_baseline(&mut self) -> Result<(), DirectServiceError> {
+        // An answered slot remains available for late ack correlation.
+        if self
+            .outbound_baseline
             .as_ref()
             .is_none_or(OutboundBaseline::is_answered)
         {
-            if let Some(pending) = state.take_pending_baseline(peer_node_id) {
+            if let Some(pending) = self.state.take_pending_baseline(self.peer_node_id) {
                 let deadline = Instant::now() + IDLE_TIMEOUT;
-                match sign_pending_baseline(identity, session.session_id(), &pending) {
+                match sign_pending_baseline(self.identity, self.transport.session_id(), &pending) {
                     Ok(encoded) => {
-                        write_bytes(stream, &session.write(ENVELOPE_KIND, &encoded)?, deadline)
-                            .map_err(error_to_transport)?;
-                        last_activity = Instant::now();
-                        outbound_baseline = Some(OutboundBaseline::new(pending));
+                        write_bytes(
+                            self.stream,
+                            &self.transport.write(ENVELOPE_KIND, &encoded)?,
+                            deadline,
+                        )
+                        .map_err(error_to_transport)?;
+                        self.last_activity = Instant::now();
+                        self.outbound_baseline = Some(OutboundBaseline::new(pending));
                     }
-                    // Too large to carry, or unsignable. The caller is waiting
-                    // on the channel and must be told rather than left to time
-                    // out on something this node already knows the answer to.
                     Err(code) => pending.answer(false, false, code),
                 }
             }
         }
-        if let Some(in_flight) = outbound_cue.as_mut() {
-            if in_flight.resolve(registry, peer_node_id) {
-                outbound_cue = None;
+        Ok(())
+    }
+
+    fn refresh_outbound(&mut self) {
+        if let Some(in_flight) = self.outbound_cue.as_mut() {
+            if in_flight.resolve(self.registry, self.peer_node_id) {
+                self.outbound_cue = None;
             }
         }
-        if let Some(in_flight) = outbound_baseline.as_mut() {
+        if let Some(in_flight) = self.outbound_baseline.as_mut() {
             in_flight.expire_if_due();
         }
-        if let Some(outbound) = health.tick() {
+    }
+
+    fn send_health_tick(&mut self) -> Result<(), DirectServiceError> {
+        if let Some(outbound) = self.health.tick() {
             let deadline = Instant::now() + IDLE_TIMEOUT;
-            write_bytes(stream, &session.write(ENVELOPE_KIND, &outbound)?, deadline)
-                .map_err(error_to_transport)?;
-            last_activity = Instant::now();
+            write_bytes(
+                self.stream,
+                &self.transport.write(ENVELOPE_KIND, &outbound)?,
+                deadline,
+            )
+            .map_err(error_to_transport)?;
+            self.last_activity = Instant::now();
         }
-        match wait_readable(stream, crate::direct_health::TICK) {
-            Readiness::Readable => {}
-            Readiness::Idle => {
-                // An idle session still closes as soon as local authorization
-                // is withdrawn; no inbound frame is available to hand to
-                // HealthSession first.
-                if let Some(error) = health_authorization_error(registry, peer_node_id) {
-                    return Err(error);
-                }
-                if last_activity.elapsed() >= IDLE_TIMEOUT {
-                    return Ok(());
-                }
-                continue;
-            }
-            Readiness::Closed => return Ok(()),
-            Readiness::Failed(error) => return Err(error.into()),
-        }
+        Ok(())
+    }
+
+    fn receive_frame(&mut self) -> Result<SessionStep, DirectServiceError> {
         let deadline = Instant::now() + IDLE_TIMEOUT;
-        let encoded = match read_frame(stream, deadline) {
+        let encoded = match read_frame(self.stream, deadline) {
             Ok(encoded) => encoded,
             Err(DirectServiceError::Io(error))
                 if matches!(
@@ -143,7 +218,7 @@ pub(super) fn hold_session(
                     io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
                 ) =>
             {
-                return Ok(());
+                return Ok(SessionStep::Stop);
             }
             Err(error) => return Err(error_to_transport(error).into()),
         };
@@ -151,132 +226,143 @@ pub(super) fn hold_session(
         if frame.kind != 2 {
             return Err(TransportError::InvalidFrame.into());
         }
-        let message = session.read(&encoded)?;
-        last_activity = Instant::now();
-        if message.kind != ENVELOPE_KIND {
-            continue;
+        let message = self.transport.read(&encoded)?;
+        self.last_activity = Instant::now();
+        if message.kind == ENVELOPE_KIND {
+            self.handle_envelope(&message.body, deadline)?;
         }
-        // Readable frames get one and only one Health Plane ingest attempt
-        // before the proactive authorization close. In particular, a revoked
-        // peer's queued Health message records durable 1107 while the shared
-        // operations leave all Health state untouched.
-        let health_outcome = health.handle_envelope(&message.body);
-        if let Some(error) = health_authorization_error(registry, peer_node_id) {
+        Ok(SessionStep::Continue)
+    }
+
+    fn handle_envelope(
+        &mut self,
+        body: &[u8],
+        deadline: Instant,
+    ) -> Result<(), DirectServiceError> {
+        // Health ingest precedes the proactive local trust check, so a queued
+        // message from a revoked peer receives its durable health audit.
+        let outcome = self.health.handle_envelope(body);
+        if let Some(error) = health_authorization_error(self.registry, self.peer_node_id) {
             return Err(error);
         }
-        if let Some(in_flight) = outbound_cue.as_mut() {
-            match in_flight.absorb_ack(
-                &message.body,
-                peer_node_id,
-                peer_identity_key,
-                session.session_id(),
-            ) {
-                CueAckMatch::Other => {}
-                // The slot stays: the Cue is not finished until its outcome is
-                // read back from the registry. The envelope *is* finished, and
-                // handing it on is what audited an acceptance as malformed.
-                CueAckMatch::Accepted => continue,
-                CueAckMatch::Refused => {
-                    outbound_cue = None;
-                    continue;
-                }
-            }
+        if self.absorb_cue_ack(body) || self.absorb_baseline_ack(body) {
+            return Ok(());
         }
-        if let Some(in_flight) = outbound_baseline.as_mut() {
-            match in_flight.absorb_ack(
-                &message.body,
-                peer_node_id,
-                peer_identity_key,
-                session.session_id(),
-            ) {
-                BaselineAckMatch::Other => {}
-                BaselineAckMatch::Answered => {
-                    outbound_baseline = None;
-                    continue;
-                }
-                // The caller was told `answered: false` and has gone. This row
-                // is the only thing that can tell an operator the push landed
-                // anyway, which is the difference between "retry it" and
-                // "you already have it".
-                BaselineAckMatch::Late { accepted, code } => {
-                    let _ = registry.record_transport_audit(
-                        "baseline_answered_late",
-                        peer_node_id,
-                        Some(session.session_id()),
-                        None,
-                        0,
-                        if accepted { "accepted" } else { "rejected" },
-                        (!accepted).then_some(code),
-                    );
-                    outbound_baseline = None;
-                    continue;
-                }
-            }
-        }
-        match health_outcome {
-            // A non-health envelope used to be discarded here without a trace.
-            // Cue traffic is decided and audited instead; anything else keeps
-            // the original silence, so the dispatcher never becomes an oracle
-            // that answers unknown kinds.
-            HealthOutcome::NotHealth => {
-                if let Some(baseline) = baseline.as_mut() {
-                    // The same door the Cue plane came in by: one fall-through
-                    // from the Health dispatch, and each plane answers only for
-                    // its own kind namespace.
-                    if baseline.handle_envelope(&message.body, unix_seconds())
-                        != crate::baseline_push::BaselineOutcome::NotBaseline
-                    {
-                        if let Some(reply) = baseline.take_reply() {
-                            write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
-                                .map_err(error_to_transport)?;
-                        }
-                        continue;
-                    }
-                }
-                if let Some(cue) = cue.as_mut() {
-                    // The Cue session verifies the envelope against the same
-                    // handshake identity and session id the Health Plane uses;
-                    // nothing here decides anything.
-                    match cue.handle_envelope(&message.body, unix_seconds() as i64) {
-                        CueOutcome::EnqueueFailed(error) => {
-                            return Err(DirectServiceError::CueEnqueueFailed { error });
-                        }
-                        CueOutcome::Decided(_) | CueOutcome::Repeat => {
-                            if let Some(reply) = cue.take_reply() {
-                                write_bytes(
-                                    stream,
-                                    &session.write(ENVELOPE_KIND, &reply)?,
-                                    deadline,
-                                )
-                                .map_err(error_to_transport)?;
-                            }
-                        }
-                        CueOutcome::NotCue => {}
-                    }
-                }
-            }
+        match outcome {
+            HealthOutcome::NotHealth => self.dispatch_other_planes(body, deadline)?,
             HealthOutcome::Handled => {}
             HealthOutcome::Reply(reply) => {
-                write_bytes(stream, &session.write(ENVELOPE_KIND, &reply)?, deadline)
-                    .map_err(error_to_transport)?;
+                write_bytes(
+                    self.stream,
+                    &self.transport.write(ENVELOPE_KIND, &reply)?,
+                    deadline,
+                )
+                .map_err(error_to_transport)?;
             }
-            // Nothing goes back to the peer, as for any drop; the session
-            // goes on, because the failure was the registry's moment, not the
-            // peer's. What must not happen is what happened before: the
-            // message vanishing with no reply, no audit row, and no line.
             HealthOutcome::Failed { kind, error } => {
                 eprintln!(
                     "omakure.health_ingest_failure {}",
                     serde_json::json!({
-                        "peer": peer_node_id,
+                        "peer": self.peer_node_id,
                         "kind": kind,
                         "error": error,
                     })
                 );
             }
         }
+        Ok(())
     }
-    Ok(())
+
+    fn absorb_cue_ack(&mut self, body: &[u8]) -> bool {
+        let Some(in_flight) = self.outbound_cue.as_mut() else {
+            return false;
+        };
+        match in_flight.absorb_ack(
+            body,
+            self.peer_node_id,
+            self.peer_identity_key,
+            self.transport.session_id(),
+        ) {
+            CueAckMatch::Other => false,
+            CueAckMatch::Accepted => true,
+            CueAckMatch::Refused => {
+                self.outbound_cue = None;
+                true
+            }
+        }
+    }
+
+    fn absorb_baseline_ack(&mut self, body: &[u8]) -> bool {
+        let Some(in_flight) = self.outbound_baseline.as_mut() else {
+            return false;
+        };
+        match in_flight.absorb_ack(
+            body,
+            self.peer_node_id,
+            self.peer_identity_key,
+            self.transport.session_id(),
+        ) {
+            BaselineAckMatch::Other => false,
+            BaselineAckMatch::Answered => {
+                self.outbound_baseline = None;
+                true
+            }
+            BaselineAckMatch::Late { accepted, code } => {
+                let _ = self.registry.record_transport_audit(
+                    "baseline_answered_late",
+                    self.peer_node_id,
+                    Some(self.transport.session_id()),
+                    None,
+                    0,
+                    if accepted { "accepted" } else { "rejected" },
+                    (!accepted).then_some(code),
+                );
+                self.outbound_baseline = None;
+                true
+            }
+        }
+    }
+
+    fn dispatch_other_planes(
+        &mut self,
+        body: &[u8],
+        deadline: Instant,
+    ) -> Result<(), DirectServiceError> {
+        if let Some(baseline) = self.baseline.as_mut() {
+            if baseline.handle_envelope(body, unix_seconds())
+                != crate::baseline_push::BaselineOutcome::NotBaseline
+            {
+                if let Some(reply) = baseline.take_reply() {
+                    write_bytes(
+                        self.stream,
+                        &self.transport.write(ENVELOPE_KIND, &reply)?,
+                        deadline,
+                    )
+                    .map_err(error_to_transport)?;
+                }
+                return Ok(());
+            }
+        }
+        if let Some(cue) = self.cue.as_mut() {
+            match cue.handle_envelope(body, unix_seconds() as i64) {
+                CueOutcome::EnqueueFailed(error) => {
+                    return Err(DirectServiceError::CueEnqueueFailed { error });
+                }
+                CueOutcome::Decided(_) | CueOutcome::Repeat => {
+                    if let Some(reply) = cue.take_reply() {
+                        write_bytes(
+                            self.stream,
+                            &self.transport.write(ENVELOPE_KIND, &reply)?,
+                            deadline,
+                        )
+                        .map_err(error_to_transport)?;
+                    }
+                }
+                CueOutcome::NotCue => {}
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The pre-Health-Plane steady-state loop.

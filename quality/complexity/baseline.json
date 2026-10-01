@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "61d9a5278f6342f0c1f92a1841b68abd2b26545edde5b4b363ba09e1f45ae2b7",
+  "canonical_sha256": "8151a46b0eb807a0acfd49169624e206d55b56562b3df89a25c260622373e9df",
   "config_identity": "no-config",
   "files": [
     {
@@ -1814,12 +1814,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 5,
+        "invocations": 6,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 106,
-        "cyclomatic": 82
+        "cognitive": 72,
+        "cyclomatic": 93
       },
       "path": "src/direct_service/session.rs",
       "source_class": "handwritten"
@@ -40707,6 +40707,32 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::direct_service::listener::drop",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": "fn drop(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::drop",
+      "kind": "method",
+      "line": 142,
+      "name": "drop",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 142,
+        "name": "drop"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": "fn drop(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
@@ -40759,6 +40785,188 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 9,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::direct_service::listener::serve_connection",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": "fn serve_connection( connection: QueuedConnection, context: &NodeContext, state: &Arc<ConnectionState>, ) -> Result<(), DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::serve_connection",
+      "kind": "function",
+      "line": 171,
+      "name": "serve_connection",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 9,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 171,
+        "name": "serve_connection"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": "fn serve_connection( connection: QueuedConnection, context: &NodeContext, state: &Arc<ConnectionState>, ) -> Result<(), DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::listener::serve_connection::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::serve_connection::<closure>",
+      "kind": "closure",
+      "line": 182,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 182,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::direct_service::listener::serve_connection::<closure>@189#2",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": "let result = (|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::serve_connection::<closure>@189#2",
+      "kind": "closure",
+      "line": 189,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 5,
+        "kind": "closure",
+        "line": 189,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": "let result = (|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": ".is_some_and(|peer| peer.state == PeerState::Revoked)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>",
+      "kind": "closure",
+      "line": 221,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 221,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": ".is_some_and(|peer| peer.state == PeerState::Revoked)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@249#2",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": ".is_none_or(|peer| peer.state != PeerState::Active)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@249#2",
+      "kind": "closure",
+      "line": 249,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 249,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": ".is_none_or(|peer| peer.state != PeerState::Active)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@330#3",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@330#3",
+      "kind": "closure",
+      "line": 330,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 330,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@342#4",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/listener.rs",
+        "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@342#4",
+      "kind": "closure",
+      "line": 342,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 342,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/listener.rs",
+      "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 11,
       "cyclomatic": 8,
       "derived": {
@@ -40770,14 +40978,14 @@
       },
       "identity": "crate::direct_service::dial::dialer_loop",
       "kind": "function",
-      "line": 27,
+      "line": 29,
       "name": "dialer_loop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 27,
+        "line": 29,
         "name": "dialer_loop"
       },
       "path": "src/direct_service/dial.rs",
@@ -40796,14 +41004,14 @@
       },
       "identity": "crate::direct_service::dial::dialer_loop::<closure>",
       "kind": "closure",
-      "line": 49,
+      "line": 51,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 49,
+        "line": 51,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -40822,14 +41030,14 @@
       },
       "identity": "crate::direct_service::dial::is_fatal_connection_error",
       "kind": "function",
-      "line": 74,
+      "line": 76,
       "name": "is_fatal_connection_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 74,
+        "line": 76,
         "name": "is_fatal_connection_error"
       },
       "path": "src/direct_service/dial.rs",
@@ -40848,14 +41056,14 @@
       },
       "identity": "crate::direct_service::dial::retry_backoff",
       "kind": "function",
-      "line": 90,
+      "line": 92,
       "name": "retry_backoff",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 90,
+        "line": 92,
         "name": "retry_backoff"
       },
       "path": "src/direct_service/dial.rs",
@@ -40874,14 +41082,14 @@
       },
       "identity": "crate::direct_service::dial::retry_backoff::<closure>",
       "kind": "closure",
-      "line": 93,
+      "line": 95,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 93,
+        "line": 95,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -40892,22 +41100,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::retry_backoff::<closure>@94#2",
+        "identity": "crate::direct_service::dial::retry_backoff::<closure>@96#2",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
         "signature": ".and_then(|factor| RETRY_BACKOFF[0].checked_mul(factor))",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::retry_backoff::<closure>@94#2",
+      "identity": "crate::direct_service::dial::retry_backoff::<closure>@96#2",
       "kind": "closure",
-      "line": 94,
+      "line": 96,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 94,
+        "line": 96,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -40926,14 +41134,14 @@
       },
       "identity": "crate::direct_service::dial::retry_jitter",
       "kind": "function",
-      "line": 99,
+      "line": 101,
       "name": "retry_jitter",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 99,
+        "line": 101,
         "name": "retry_jitter"
       },
       "path": "src/direct_service/dial.rs",
@@ -40952,14 +41160,14 @@
       },
       "identity": "crate::direct_service::dial::sleep_or_stop",
       "kind": "function",
-      "line": 103,
+      "line": 105,
       "name": "sleep_or_stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 103,
+        "line": 105,
         "name": "sleep_or_stop"
       },
       "path": "src/direct_service/dial.rs",
@@ -40967,8 +41175,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 6,
-      "cyclomatic": 6,
+      "cognitive": 7,
+      "cyclomatic": 7,
       "derived": {
         "identity": "crate::direct_service::dial::connect_and_hold",
         "macro_expansion": "not_measured",
@@ -40978,14 +41186,14 @@
       },
       "identity": "crate::direct_service::dial::connect_and_hold",
       "kind": "function",
-      "line": 112,
+      "line": 114,
       "name": "connect_and_hold",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 6,
+        "cognitive": 7,
+        "cyclomatic": 7,
         "kind": "function",
-        "line": 112,
+        "line": 114,
         "name": "connect_and_hold"
       },
       "path": "src/direct_service/dial.rs",
@@ -41004,32 +41212,6 @@
       },
       "identity": "crate::direct_service::dial::connect_and_hold::<closure>",
       "kind": "closure",
-      "line": 155,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 155,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/dial.rs",
-      "signature": "let identity = NodeIdentity::load_existing(context).map_err(|_| TransportError::Internal)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@157#2",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/dial.rs",
-        "signature": "LocalTransport::load_existing(context, &identity).map_err(|_| TransportError::Internal)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@157#2",
-      "kind": "closure",
       "line": 157,
       "name": "<closure>",
       "native": {
@@ -41041,6 +41223,32 @@
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
+      "signature": "let identity = NodeIdentity::load_existing(context).map_err(|_| TransportError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@159#2",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": "LocalTransport::load_existing(context, &identity).map_err(|_| TransportError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@159#2",
+      "kind": "closure",
+      "line": 159,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 159,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/dial.rs",
       "signature": "LocalTransport::load_existing(context, &identity).map_err(|_| TransportError::Internal)?;",
       "source_class": "handwritten"
     },
@@ -41048,22 +41256,126 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@270#7",
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@161#3",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/dial.rs",
-        "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+        "signature": ".map_err(|_| TransportError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@270#7",
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@161#3",
       "kind": "closure",
-      "line": 270,
+      "line": 161,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 270,
+        "line": 161,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/dial.rs",
+      "signature": ".map_err(|_| TransportError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@164#4",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": ".map_err(|_| TransportError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@164#4",
+      "kind": "closure",
+      "line": 164,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 164,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/dial.rs",
+      "signature": ".map_err(|_| TransportError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@189#5",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": ".map_err(|_| TransportError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@189#5",
+      "kind": "closure",
+      "line": 189,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 189,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/dial.rs",
+      "signature": ".map_err(|_| TransportError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@253#6",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": ".map_err(|_| TransportError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@253#6",
+      "kind": "closure",
+      "line": 253,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 253,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/dial.rs",
+      "signature": ".map_err(|_| TransportError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@272#7",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@272#7",
+      "kind": "closure",
+      "line": 272,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 272,
         "name": "<closure>"
       },
       "path": "src/direct_service/dial.rs",
@@ -41071,29 +41383,107 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 95,
-      "cyclomatic": 49,
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::dial::connect_and_hold::<closure>@284#8",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::connect_and_hold::<closure>@284#8",
+      "kind": "closure",
+      "line": 284,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 284,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/dial.rs",
+      "signature": ".map(|root| crate::workspace::Workspace::new(root.clone())),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::direct_service::dial::probe",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": "pub fn probe( endpoint: SocketAddr, expected_node_id: &str, context: &NodeContext, ) -> Result<(), DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::probe",
+      "kind": "function",
+      "line": 302,
+      "name": "probe",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 302,
+        "name": "probe"
+      },
+      "path": "src/direct_service/dial.rs",
+      "signature": "pub fn probe( endpoint: SocketAddr, expected_node_id: &str, context: &NodeContext, ) -> Result<(), DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::dial::probe::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/dial.rs",
+        "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::dial::probe::<closure>",
+      "kind": "closure",
+      "line": 312,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 312,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/dial.rs",
+      "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
       "derived": {
         "identity": "crate::direct_service::session::hold_session",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/session.rs",
-        "signature": "pub(super) fn hold_session( stream: &mut TcpStream, session: &mut TransportSession, state: &Arc<ConnectionState>, identity: &NodeIdentity, registry: &NodeRegistry, peer_node_id: &str, peer_identity_key: &[u8",
+        "signature": "pub(super) fn hold_session( stream: &mut TcpStream, session: &mut TransportSession, mut inputs: SessionInputs<'_, '_, '_, '_>, ) -> Result<(), DirectServiceError>",
         "source_class": "handwritten"
       },
       "identity": "crate::direct_service::session::hold_session",
       "kind": "function",
-      "line": 34,
+      "line": 65,
       "name": "hold_session",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 95,
-        "cyclomatic": 49,
+        "cognitive": 4,
+        "cyclomatic": 4,
         "kind": "function",
-        "line": 34,
+        "line": 65,
         "name": "hold_session"
       },
       "path": "src/direct_service/session.rs",
-      "signature": "pub(super) fn hold_session( stream: &mut TcpStream, session: &mut TransportSession, state: &Arc<ConnectionState>, identity: &NodeIdentity, registry: &NodeRegistry, peer_node_id: &str, peer_identity_key: &[u8",
+      "signature": "pub(super) fn hold_session( stream: &mut TcpStream, session: &mut TransportSession, mut inputs: SessionInputs<'_, '_, '_, '_>, ) -> Result<(), DirectServiceError>",
       "source_class": "handwritten"
     },
     {
@@ -41103,23 +41493,517 @@
         "identity": "crate::direct_service::session::hold_session::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/direct_service/session.rs",
-        "signature": "if health.as_ref().is_some_and(|health| !health.engaged()) {",
+        "signature": ".is_some_and(|health| !health.engaged())",
         "source_class": "handwritten"
       },
       "identity": "crate::direct_service::session::hold_session::<closure>",
       "kind": "closure",
-      "line": 46,
+      "line": 73,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 46,
+        "line": 73,
         "name": "<closure>"
       },
       "path": "src/direct_service/session.rs",
-      "signature": "if health.as_ref().is_some_and(|health| !health.engaged()) {",
+      "signature": ".is_some_and(|health| !health.engaged())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::session::hold_session::<closure>@82#2",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": ".map_err(|_| TransportError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::hold_session::<closure>@82#2",
+      "kind": "closure",
+      "line": 82,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 82,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": ".map_err(|_| TransportError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::direct_service::session::step",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn step(&mut self) -> Result<SessionStep, DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::step",
+      "kind": "method",
+      "line": 113,
+      "name": "step",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 7,
+        "kind": "method",
+        "line": 113,
+        "name": "step"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn step(&mut self) -> Result<SessionStep, DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::direct_service::session::send_pending_cue",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn send_pending_cue(&mut self) -> Result<(), DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::send_pending_cue",
+      "kind": "method",
+      "line": 136,
+      "name": "send_pending_cue",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 136,
+        "name": "send_pending_cue"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn send_pending_cue(&mut self) -> Result<(), DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::direct_service::session::send_pending_baseline",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn send_pending_baseline(&mut self) -> Result<(), DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::send_pending_baseline",
+      "kind": "method",
+      "line": 159,
+      "name": "send_pending_baseline",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 159,
+        "name": "send_pending_baseline"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn send_pending_baseline(&mut self) -> Result<(), DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::direct_service::session::refresh_outbound",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn refresh_outbound(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::refresh_outbound",
+      "kind": "method",
+      "line": 186,
+      "name": "refresh_outbound",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 186,
+        "name": "refresh_outbound"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn refresh_outbound(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::direct_service::session::send_health_tick",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn send_health_tick(&mut self) -> Result<(), DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::send_health_tick",
+      "kind": "method",
+      "line": 197,
+      "name": "send_health_tick",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 197,
+        "name": "send_health_tick"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn send_health_tick(&mut self) -> Result<(), DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::direct_service::session::receive_frame",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn receive_frame(&mut self) -> Result<SessionStep, DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::receive_frame",
+      "kind": "method",
+      "line": 211,
+      "name": "receive_frame",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 6,
+        "kind": "method",
+        "line": 211,
+        "name": "receive_frame"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn receive_frame(&mut self) -> Result<SessionStep, DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 8,
+      "derived": {
+        "identity": "crate::direct_service::session::handle_envelope",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn handle_envelope( &mut self, body: &[u8], deadline: Instant, ) -> Result<(), DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::handle_envelope",
+      "kind": "method",
+      "line": 237,
+      "name": "handle_envelope",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 8,
+        "kind": "method",
+        "line": 237,
+        "name": "handle_envelope"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn handle_envelope( &mut self, body: &[u8], deadline: Instant, ) -> Result<(), DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::direct_service::session::absorb_cue_ack",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn absorb_cue_ack(&mut self, body: &[u8]) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::absorb_cue_ack",
+      "kind": "method",
+      "line": 276,
+      "name": "absorb_cue_ack",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 276,
+        "name": "absorb_cue_ack"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn absorb_cue_ack(&mut self, body: &[u8]) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::direct_service::session::absorb_baseline_ack",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn absorb_baseline_ack(&mut self, body: &[u8]) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::absorb_baseline_ack",
+      "kind": "method",
+      "line": 295,
+      "name": "absorb_baseline_ack",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 295,
+        "name": "absorb_baseline_ack"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn absorb_baseline_ack(&mut self, body: &[u8]) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 12,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::direct_service::session::dispatch_other_planes",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn dispatch_other_planes( &mut self, body: &[u8], deadline: Instant, ) -> Result<(), DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::dispatch_other_planes",
+      "kind": "method",
+      "line": 326,
+      "name": "dispatch_other_planes",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 12,
+        "cyclomatic": 9,
+        "kind": "method",
+        "line": 326,
+        "name": "dispatch_other_planes"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn dispatch_other_planes( &mut self, body: &[u8], deadline: Instant, ) -> Result<(), DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::direct_service::session::hold_session_idle",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn hold_session_idle( stream: &mut TcpStream, session: &mut TransportSession, state: &Arc<ConnectionState>, ) -> Result<(), TransportError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::hold_session_idle",
+      "kind": "function",
+      "line": 369,
+      "name": "hold_session_idle",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 8,
+        "cyclomatic": 9,
+        "kind": "function",
+        "line": 369,
+        "name": "hold_session_idle"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn hold_session_idle( stream: &mut TcpStream, session: &mut TransportSession, state: &Arc<ConnectionState>, ) -> Result<(), TransportError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::session::hold_session_idle::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": ".map_err(|_| TransportError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::hold_session_idle::<closure>",
+      "kind": "closure",
+      "line": 376,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 376,
+        "name": "<closure>"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": ".map_err(|_| TransportError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 8,
+      "derived": {
+        "identity": "crate::direct_service::session::drain_until_hangup",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "pub(super) fn drain_until_hangup(stream: &mut TcpStream)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::drain_until_hangup",
+      "kind": "function",
+      "line": 427,
+      "name": "drain_until_hangup",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 8,
+        "kind": "function",
+        "line": 427,
+        "name": "drain_until_hangup"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "pub(super) fn drain_until_hangup(stream: &mut TcpStream)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::direct_service::session::wait_readable",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "pub(super) fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::wait_readable",
+      "kind": "function",
+      "line": 446,
+      "name": "wait_readable",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 446,
+        "name": "wait_readable"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "pub(super) fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::direct_service::session::error_to_transport",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "pub(super) fn error_to_transport(error: DirectServiceError) -> TransportError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::error_to_transport",
+      "kind": "function",
+      "line": 469,
+      "name": "error_to_transport",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 469,
+        "name": "error_to_transport"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "pub(super) fn error_to_transport(error: DirectServiceError) -> TransportError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::session::peer_authorization",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "pub(super) fn peer_authorization( peer: &TransportPeer, ) -> ( &str, &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::peer_authorization",
+      "kind": "function",
+      "line": 479,
+      "name": "peer_authorization",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 479,
+        "name": "peer_authorization"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "pub(super) fn peer_authorization( peer: &TransportPeer, ) -> ( &str, &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::direct_service::session::health_authorization_error",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "fn health_authorization_error( registry: &NodeRegistry, peer_node_id: &str, ) -> Option<DirectServiceError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::health_authorization_error",
+      "kind": "function",
+      "line": 497,
+      "name": "health_authorization_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 497,
+        "name": "health_authorization_error"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "fn health_authorization_error( registry: &NodeRegistry, peer_node_id: &str, ) -> Option<DirectServiceError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::direct_service::session::audit_error",
+        "macro_expansion": "not_measured",
+        "path": "src/direct_service/session.rs",
+        "signature": "pub(super) fn audit_error( registry: &NodeRegistry, node_id: &str, session_id: Option<&[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::direct_service::session::audit_error",
+      "kind": "function",
+      "line": 513,
+      "name": "audit_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 513,
+        "name": "audit_error"
+      },
+      "path": "src/direct_service/session.rs",
+      "signature": "pub(super) fn audit_error( registry: &NodeRegistry, node_id: &str, session_id: Option<&[u8",
       "source_class": "handwritten"
     },
     {
@@ -41747,188 +42631,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 6,
-      "cyclomatic": 6,
-      "derived": {
-        "identity": "crate::direct_service::session::hold_session_idle",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/session.rs",
-        "signature": "fn hold_session_idle( stream: &mut TcpStream, session: &mut TransportSession, state: &Arc<ConnectionState>, ) -> Result<(), TransportError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::session::hold_session_idle",
-      "kind": "function",
-      "line": 283,
-      "name": "hold_session_idle",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 6,
-        "kind": "function",
-        "line": 283,
-        "name": "hold_session_idle"
-      },
-      "path": "src/direct_service/session.rs",
-      "signature": "fn hold_session_idle( stream: &mut TcpStream, session: &mut TransportSession, state: &Arc<ConnectionState>, ) -> Result<(), TransportError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::session::hold_session_idle::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/session.rs",
-        "signature": ".map_err(|_| TransportError::Internal)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::session::hold_session_idle::<closure>",
-      "kind": "closure",
-      "line": 290,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 290,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/session.rs",
-      "signature": ".map_err(|_| TransportError::Internal)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 7,
-      "cyclomatic": 8,
-      "derived": {
-        "identity": "crate::direct_service::session::drain_until_hangup",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/session.rs",
-        "signature": "pub(super) fn drain_until_hangup(stream: &mut TcpStream)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::session::drain_until_hangup",
-      "kind": "function",
-      "line": 341,
-      "name": "drain_until_hangup",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 7,
-        "cyclomatic": 8,
-        "kind": "function",
-        "line": 341,
-        "name": "drain_until_hangup"
-      },
-      "path": "src/direct_service/session.rs",
-      "signature": "pub(super) fn drain_until_hangup(stream: &mut TcpStream)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 6,
-      "derived": {
-        "identity": "crate::direct_service::session::wait_readable",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/session.rs",
-        "signature": "pub(super) fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::session::wait_readable",
-      "kind": "function",
-      "line": 360,
-      "name": "wait_readable",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 6,
-        "kind": "function",
-        "line": 360,
-        "name": "wait_readable"
-      },
-      "path": "src/direct_service/session.rs",
-      "signature": "pub(super) fn wait_readable(stream: &TcpStream, tick: Duration) -> Readiness",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::direct_service::session::error_to_transport",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/session.rs",
-        "signature": "pub(super) fn error_to_transport(error: DirectServiceError) -> TransportError",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::session::error_to_transport",
-      "kind": "function",
-      "line": 383,
-      "name": "error_to_transport",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 3,
-        "kind": "function",
-        "line": 383,
-        "name": "error_to_transport"
-      },
-      "path": "src/direct_service/session.rs",
-      "signature": "pub(super) fn error_to_transport(error: DirectServiceError) -> TransportError",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 4,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::direct_service::dial::probe",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/dial.rs",
-        "signature": "pub fn probe( endpoint: SocketAddr, expected_node_id: &str, context: &NodeContext, ) -> Result<(), DirectServiceError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::dial::probe",
-      "kind": "function",
-      "line": 298,
-      "name": "probe",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 5,
-        "kind": "function",
-        "line": 298,
-        "name": "probe"
-      },
-      "path": "src/direct_service/dial.rs",
-      "signature": "pub fn probe( endpoint: SocketAddr, expected_node_id: &str, context: &NodeContext, ) -> Result<(), DirectServiceError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::dial::probe::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/dial.rs",
-        "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::dial::probe::<closure>",
-      "kind": "closure",
-      "line": 308,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 308,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/dial.rs",
-      "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -42215,136 +42917,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 5,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::direct_service::listener::serve_connection",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/listener.rs",
-        "signature": "fn serve_connection( connection: QueuedConnection, context: &NodeContext, state: &Arc<ConnectionState>, ) -> Result<(), DirectServiceError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::listener::serve_connection",
-      "kind": "function",
-      "line": 171,
-      "name": "serve_connection",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 5,
-        "kind": "function",
-        "line": 171,
-        "name": "serve_connection"
-      },
-      "path": "src/direct_service/listener.rs",
-      "signature": "fn serve_connection( connection: QueuedConnection, context: &NodeContext, state: &Arc<ConnectionState>, ) -> Result<(), DirectServiceError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::listener::serve_connection::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/listener.rs",
-        "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::listener::serve_connection::<closure>",
-      "kind": "closure",
-      "line": 182,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 182,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/listener.rs",
-      "signature": "set_stream_timeouts(&stream, deadline).map_err(|_| io::Error::from(io::ErrorKind::Other))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 5,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::direct_service::listener::serve_connection::<closure>@189#2",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/listener.rs",
-        "signature": "let result = (|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::listener::serve_connection::<closure>@189#2",
-      "kind": "closure",
-      "line": 189,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 5,
-        "kind": "closure",
-        "line": 189,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/listener.rs",
-      "signature": "let result = (|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/listener.rs",
-        "signature": ".is_some_and(|peer| peer.state == PeerState::Revoked)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>",
-      "kind": "closure",
-      "line": 221,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 221,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/listener.rs",
-      "signature": ".is_some_and(|peer| peer.state == PeerState::Revoked)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@249#2",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/listener.rs",
-        "signature": ".is_none_or(|peer| peer.state != PeerState::Active)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::listener::serve_connection::<closure>::<closure>@249#2",
-      "kind": "closure",
-      "line": 249,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 249,
-        "name": "<closure>"
-      },
-      "path": "src/direct_service/listener.rs",
-      "signature": ".is_none_or(|peer| peer.state != PeerState::Active)",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 3,
       "cyclomatic": 5,
       "derived": {
@@ -42472,58 +43044,6 @@
       },
       "path": "src/direct_service/enrollment.rs",
       "signature": "LocalTransport::load_existing(context, identity).map_err(|_| TransportError::Internal)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::session::peer_authorization",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/session.rs",
-        "signature": "pub(super) fn peer_authorization( peer: &TransportPeer, ) -> ( &str, &[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::session::peer_authorization",
-      "kind": "function",
-      "line": 393,
-      "name": "peer_authorization",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 393,
-        "name": "peer_authorization"
-      },
-      "path": "src/direct_service/session.rs",
-      "signature": "pub(super) fn peer_authorization( peer: &TransportPeer, ) -> ( &str, &[u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::direct_service::session::audit_error",
-        "macro_expansion": "not_measured",
-        "path": "src/direct_service/session.rs",
-        "signature": "pub(super) fn audit_error( registry: &NodeRegistry, node_id: &str, session_id: Option<&[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::direct_service::session::audit_error",
-      "kind": "function",
-      "line": 427,
-      "name": "audit_error",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 427,
-        "name": "audit_error"
-      },
-      "path": "src/direct_service/session.rs",
-      "signature": "pub(super) fn audit_error( registry: &NodeRegistry, node_id: &str, session_id: Option<&[u8",
       "source_class": "handwritten"
     },
     {

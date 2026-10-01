@@ -2,7 +2,7 @@ use super::admission::{AdmissionController, AdmissionReservation, AdmissionState
 use super::connection::{ConnectionDirection, ConnectionState};
 use super::enrollment::serve_enrollment_request;
 use super::error::DirectServiceError;
-use super::session::{drain_until_hangup, hold_session, peer_authorization};
+use super::session::{drain_until_hangup, hold_session, peer_authorization, SessionInputs};
 use super::stream::{read_frame, set_stream_timeouts, write_bytes};
 use super::{DIRECT_QUEUE_CAPACITY, DIRECT_WORKERS, HANDSHAKE_TIMEOUT, UNKNOWN_NODE_ID};
 use crate::direct_health::HealthSession;
@@ -344,14 +344,16 @@ fn serve_connection(
         hold_session(
             &mut stream,
             &mut session,
-            state,
-            &identity,
-            &registry,
-            remote.node_id(),
-            remote.identity_key(),
-            Some(health),
-            Some(cue),
-            Some(baseline),
+            SessionInputs {
+                state,
+                identity: &identity,
+                registry: &registry,
+                peer_node_id: remote.node_id(),
+                peer_identity_key: remote.identity_key(),
+                health: Some(health),
+                cue: Some(cue),
+                baseline: Some(baseline),
+            },
         )?;
         Ok(())
     })();

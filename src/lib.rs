@@ -33,7 +33,6 @@ pub mod node_transport;
 pub mod operation_catalog;
 pub mod operations;
 mod policy;
-mod ports;
 pub(crate) mod redaction;
 /// The receive half of the Remote Cue plane: authorization only, no execution.
 pub mod remote_cue;

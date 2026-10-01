@@ -3,7 +3,6 @@ use crate::adapters::environments::{
     should_mask_env_value,
 };
 use crate::app_meta;
-use crate::ports::EnvironmentRepository;
 use crate::runtime::{python_program, resolve_interpreter};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};

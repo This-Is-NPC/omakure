@@ -1,6 +1,5 @@
 use crate::adapters::environments::FsEnvironmentRepository;
 use crate::error::{AppError, EnvironmentError};
-use crate::ports::EnvironmentRepository;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

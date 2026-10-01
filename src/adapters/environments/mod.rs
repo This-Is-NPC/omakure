@@ -3,8 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{AppResult, EnvironmentError};
-pub use crate::ports::{EnvFile, EnvironmentConfig};
-use crate::ports::{EnvPreview, EnvironmentRepository};
 use crate::util::fs::{read_dir_or_empty, read_file_if_exists};
 use files::{ensure_env_path_safe, write_active_atomic, write_env_params_atomic};
 use layers::{parse_env_defaults, parse_env_pairs_raw, parse_env_preview};
@@ -18,6 +16,18 @@ pub(crate) use layers::{read_managed_env_defaults, resolve_active_env, resolve_r
 pub(crate) use values::{is_sensitive_key, should_mask_env_value};
 
 pub(crate) const MASKED_ENV_VALUE: &str = "****";
+
+#[derive(Debug, Clone)]
+pub(crate) struct EnvironmentConfig {
+    pub active: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct EnvFile {
+    pub name: String,
+}
+
+type EnvPreview = Vec<(String, String)>;
 
 pub struct FsEnvironmentRepository {
     envs_dir: PathBuf,
@@ -55,10 +65,8 @@ impl FsEnvironmentRepository {
         ensure_env_path_safe(&self.envs_dir, &path, must_exist)?;
         Ok(path)
     }
-}
 
-impl EnvironmentRepository for FsEnvironmentRepository {
-    fn list_env_files(&self) -> AppResult<Vec<EnvFile>> {
+    pub(crate) fn list_env_files(&self) -> AppResult<Vec<EnvFile>> {
         let mut entries = Vec::new();
         let dir = read_dir_or_empty(&self.envs_dir).map_err(|err| {
             EnvironmentError::ReadFailed(format!(
@@ -94,7 +102,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         Ok(entries)
     }
 
-    fn load_environment_config(&self) -> AppResult<EnvironmentConfig> {
+    pub(crate) fn load_environment_config(&self) -> AppResult<EnvironmentConfig> {
         let active = load_active_env_name(&self.envs_dir)?;
         if let Some(name) = &active {
             let path = self.envs_dir.join(name);
@@ -110,7 +118,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         Ok(EnvironmentConfig { active })
     }
 
-    fn set_active_env(&self, name: Option<&str>) -> AppResult<()> {
+    pub(crate) fn set_active_env(&self, name: Option<&str>) -> AppResult<()> {
         fs::create_dir_all(&self.envs_dir).map_err(|err| {
             EnvironmentError::WriteFailed(format!(
                 "Failed to create environments dir {}: {}",
@@ -147,7 +155,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         Ok(())
     }
 
-    fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview> {
+    pub(crate) fn load_env_preview(&self, path: &Path) -> AppResult<EnvPreview> {
         let contents = fs::read_to_string(path).map_err(|err| {
             EnvironmentError::ReadFailed(format!(
                 "Failed to read environment file {}: {}",
@@ -158,7 +166,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         Ok(parse_env_preview(&contents))
     }
 
-    fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
+    pub(crate) fn create_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
         let path = self.env_path_for_name(name, false)?;
         if path.exists() {
             return Err(EnvironmentError::WriteFailed(format!(
@@ -170,17 +178,17 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         write_env_params_atomic(&path, params)
     }
 
-    fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview> {
+    pub(crate) fn load_env_preview_by_name(&self, name: &str) -> AppResult<EnvPreview> {
         let path = self.env_path_for_name(name, true)?;
         self.load_env_preview(&path)
     }
 
-    fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
+    pub(crate) fn replace_env(&self, name: &str, params: &[(&str, &str)]) -> AppResult<()> {
         let path = self.env_path_for_name(name, true)?;
         write_env_params_atomic(&path, params)
     }
 
-    fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()> {
+    pub(crate) fn set_env_param(&self, name: &str, key: &str, value: &str) -> AppResult<()> {
         validate_env_key(key)?;
         let path = self.env_path_for_name(name, true)?;
         let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {
@@ -201,7 +209,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         write_env_params_atomic(&path, &refs)
     }
 
-    fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()> {
+    pub(crate) fn remove_env_param(&self, name: &str, key: &str) -> AppResult<()> {
         validate_env_key(key)?;
         let path = self.env_path_for_name(name, true)?;
         let mut params = parse_env_pairs_raw(&fs::read_to_string(&path).map_err(|err| {
@@ -219,7 +227,7 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         write_env_params_atomic(&path, &refs)
     }
 
-    fn activate_env(&self, name: &str) -> AppResult<()> {
+    pub(crate) fn activate_env(&self, name: &str) -> AppResult<()> {
         let path = self.env_path_for_name(name, true)?;
         let file_name = path
             .file_name()
@@ -230,11 +238,11 @@ impl EnvironmentRepository for FsEnvironmentRepository {
         write_active_atomic(&self.envs_dir.join("active"), file_name)
     }
 
-    fn deactivate_env(&self) -> AppResult<()> {
+    pub(crate) fn deactivate_env(&self) -> AppResult<()> {
         self.set_active_env(None)
     }
 
-    fn delete_env(&self, name: &str) -> AppResult<()> {
+    pub(crate) fn delete_env(&self, name: &str) -> AppResult<()> {
         let path = self.env_path_for_name(name, true)?;
         fs::remove_file(&path).map_err(|err| {
             EnvironmentError::WriteFailed(format!(

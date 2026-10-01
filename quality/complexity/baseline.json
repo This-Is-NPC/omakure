@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "4684996168c1314215f30af21ae9e09ad9646d12364d20c4e66e7ed824b095dd",
+  "canonical_sha256": "4a60895848c2554b1686296837335a4cdce55c14ed6f7bd6e8c270d4a1b7cbce",
   "config_identity": "no-config",
   "files": [
     {
@@ -1184,7 +1184,7 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 7,
+        "invocations": 5,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
@@ -1198,7 +1198,7 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 63,
+        "invocations": 68,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
@@ -30699,6 +30699,84 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::cli::queue::producers::parse_humantime_duration_ms",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/producers.rs",
+        "signature": "pub(super) fn parse_humantime_duration_ms(s: &str) -> Result<i64, QueueDurationError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::producers::parse_humantime_duration_ms",
+      "kind": "function",
+      "line": 127,
+      "name": "parse_humantime_duration_ms",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 127,
+        "name": "parse_humantime_duration_ms"
+      },
+      "path": "src/cli/queue/producers.rs",
+      "signature": "pub(super) fn parse_humantime_duration_ms(s: &str) -> Result<i64, QueueDurationError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::queue::producers::parse_humantime_duration_ms::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/producers.rs",
+        "signature": "let dur = humantime::parse_duration(trimmed).map_err(|source| QueueDurationError::Invalid {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::producers::parse_humantime_duration_ms::<closure>",
+      "kind": "closure",
+      "line": 129,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 129,
+        "name": "<closure>"
+      },
+      "path": "src/cli/queue/producers.rs",
+      "signature": "let dur = humantime::parse_duration(trimmed).map_err(|source| QueueDurationError::Invalid {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::cli::queue::producers::queue_error_code",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/producers.rs",
+        "signature": "fn queue_error_code(err: &OperationError) -> &'static str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::producers::queue_error_code",
+      "kind": "function",
+      "line": 140,
+      "name": "queue_error_code",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 140,
+        "name": "queue_error_code"
+      },
+      "path": "src/cli/queue/producers.rs",
+      "signature": "fn queue_error_code(err: &OperationError) -> &'static str",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 4,
       "cyclomatic": 4,
       "derived": {
@@ -31066,26 +31144,52 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::queue::producers::parse_humantime_duration_ms::<closure>",
+        "identity": "crate::cli::queue::tests::make_completion",
         "macro_expansion": "not_measured",
-        "path": "src/cli/queue/producers.rs",
-        "signature": ".map_err(|err| format!(\"invalid duration `{}`: {}\", trimmed, err))?;",
+        "path": "src/cli/queue/tests.rs",
+        "signature": "fn make_completion(stdout: &str, stderr: &str, exit: Option<i32>, ok: bool) -> RunCompletion",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::queue::producers::parse_humantime_duration_ms::<closure>",
-      "kind": "closure",
-      "line": 118,
-      "name": "<closure>",
+      "identity": "crate::cli::queue::tests::make_completion",
+      "kind": "function",
+      "line": 11,
+      "name": "make_completion",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
-        "kind": "closure",
-        "line": 118,
-        "name": "<closure>"
+        "kind": "function",
+        "line": 11,
+        "name": "make_completion"
       },
-      "path": "src/cli/queue/producers.rs",
-      "signature": ".map_err(|err| format!(\"invalid duration `{}`: {}\", trimmed, err))?;",
+      "path": "src/cli/queue/tests.rs",
+      "signature": "fn make_completion(stdout: &str, stderr: &str, exit: Option<i32>, ok: bool) -> RunCompletion",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::queue::tests::write_schema_bash_script",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/tests.rs",
+        "signature": "fn write_schema_bash_script( workspace: &Workspace, name: &str, schema_json: &str, body: &str, ) -> PathBuf",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::tests::write_schema_bash_script",
+      "kind": "function",
+      "line": 22,
+      "name": "write_schema_bash_script",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 22,
+        "name": "write_schema_bash_script"
+      },
+      "path": "src/cli/queue/tests.rs",
+      "signature": "fn write_schema_bash_script( workspace: &Workspace, name: &str, schema_json: &str, body: &str, ) -> PathBuf",
       "source_class": "handwritten"
     },
     {
@@ -31118,26 +31222,26 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::queue::tests::parse_duration_ms_rejects_garbage",
+        "identity": "crate::cli::queue::tests::parse_duration_ms_distinguishes_invalid_text_and_overflow",
         "macro_expansion": "not_measured",
         "path": "src/cli/queue/tests.rs",
-        "signature": "fn parse_duration_ms_rejects_garbage()",
+        "signature": "fn parse_duration_ms_distinguishes_invalid_text_and_overflow()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::queue::tests::parse_duration_ms_rejects_garbage",
+      "identity": "crate::cli::queue::tests::parse_duration_ms_distinguishes_invalid_text_and_overflow",
       "kind": "function",
       "line": 46,
-      "name": "parse_duration_ms_rejects_garbage",
+      "name": "parse_duration_ms_distinguishes_invalid_text_and_overflow",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
         "line": 46,
-        "name": "parse_duration_ms_rejects_garbage"
+        "name": "parse_duration_ms_distinguishes_invalid_text_and_overflow"
       },
       "path": "src/cli/queue/tests.rs",
-      "signature": "fn parse_duration_ms_rejects_garbage()",
+      "signature": "fn parse_duration_ms_distinguishes_invalid_text_and_overflow()",
       "source_class": "handwritten"
     },
     {
@@ -31152,14 +31256,14 @@
       },
       "identity": "crate::cli::queue::tests::add_success_enqueues_row_with_timeout",
       "kind": "function",
-      "line": 52,
+      "line": 60,
       "name": "add_success_enqueues_row_with_timeout",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 52,
+        "line": 60,
         "name": "add_success_enqueues_row_with_timeout"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31178,14 +31282,14 @@
       },
       "identity": "crate::cli::queue::tests::add_invalid_timeout_returns_error",
       "kind": "function",
-      "line": 90,
+      "line": 98,
       "name": "add_invalid_timeout_returns_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 90,
+        "line": 98,
         "name": "add_invalid_timeout_returns_error"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31204,14 +31308,14 @@
       },
       "identity": "crate::cli::queue::tests::cancel_missing_run_returns_not_found",
       "kind": "function",
-      "line": 114,
+      "line": 124,
       "name": "cancel_missing_run_returns_not_found",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 114,
+        "line": 124,
         "name": "cancel_missing_run_returns_not_found"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31230,14 +31334,14 @@
       },
       "identity": "crate::cli::queue::tests::cancel_terminal_row_returns_invalid_argument",
       "kind": "function",
-      "line": 132,
+      "line": 142,
       "name": "cancel_terminal_row_returns_invalid_argument",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 132,
+        "line": 142,
         "name": "cancel_terminal_row_returns_invalid_argument"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31256,14 +31360,14 @@
       },
       "identity": "crate::cli::queue::tests::dead_letter_failed_row_promotes_state",
       "kind": "function",
-      "line": 167,
+      "line": 177,
       "name": "dead_letter_failed_row_promotes_state",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 167,
+        "line": 177,
         "name": "dead_letter_failed_row_promotes_state"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31282,14 +31386,14 @@
       },
       "identity": "crate::cli::queue::tests::dead_letter_completed_row_returns_invalid_argument",
       "kind": "function",
-      "line": 220,
+      "line": 230,
       "name": "dead_letter_completed_row_returns_invalid_argument",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 220,
+        "line": 230,
         "name": "dead_letter_completed_row_returns_invalid_argument"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31308,14 +31412,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_actor_filter_claims_only_matching_jobs",
       "kind": "function",
-      "line": 255,
+      "line": 265,
       "name": "worker_actor_filter_claims_only_matching_jobs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 255,
+        "line": 265,
         "name": "worker_actor_filter_claims_only_matching_jobs"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31334,14 +31438,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_drains_one_queued_job_then_exits_with_once",
       "kind": "function",
-      "line": 302,
+      "line": 312,
       "name": "worker_drains_one_queued_job_then_exits_with_once",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 302,
+        "line": 312,
         "name": "worker_drains_one_queued_job_then_exits_with_once"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31360,14 +31464,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_injects_active_env_into_script",
       "kind": "function",
-      "line": 341,
+      "line": 351,
       "name": "worker_injects_active_env_into_script",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 341,
+        "line": 351,
         "name": "worker_injects_active_env_into_script"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31386,14 +31490,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_fails_queued_run_when_stored_env_disappears_before_execution",
       "kind": "function",
-      "line": 385,
+      "line": 395,
       "name": "worker_fails_queued_run_when_stored_env_disappears_before_execution",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 385,
+        "line": 395,
         "name": "worker_fails_queued_run_when_stored_env_disappears_before_execution"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31412,14 +31516,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_resolves_secret_from_active_env_and_assembles_arg",
       "kind": "function",
-      "line": 433,
+      "line": 443,
       "name": "worker_resolves_secret_from_active_env_and_assembles_arg",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 433,
+        "line": 443,
         "name": "worker_resolves_secret_from_active_env_and_assembles_arg"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31438,14 +31542,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_uses_queued_env_metadata_instead_of_later_active_env",
       "kind": "function",
-      "line": 479,
+      "line": 489,
       "name": "worker_uses_queued_env_metadata_instead_of_later_active_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 479,
+        "line": 489,
         "name": "worker_uses_queued_env_metadata_instead_of_later_active_env"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31464,14 +31568,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_denies_secret_ref_added_to_env_after_enqueue",
       "kind": "function",
-      "line": 527,
+      "line": 537,
       "name": "worker_denies_secret_ref_added_to_env_after_enqueue",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 527,
+        "line": 537,
         "name": "worker_denies_secret_ref_added_to_env_after_enqueue"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31490,14 +31594,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_fails_provider_ref_run_when_secret_policy_is_missing",
       "kind": "function",
-      "line": 577,
+      "line": 587,
       "name": "worker_fails_provider_ref_run_when_secret_policy_is_missing",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 577,
+        "line": 587,
         "name": "worker_fails_provider_ref_run_when_secret_policy_is_missing"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31516,14 +31620,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_timeout_marks_row_timed_out",
       "kind": "function",
-      "line": 631,
+      "line": 641,
       "name": "worker_timeout_marks_row_timed_out",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 631,
+        "line": 641,
         "name": "worker_timeout_marks_row_timed_out"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31542,14 +31646,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_runs_script_that_calls_omakure_trace_via_subprocess",
       "kind": "function",
-      "line": 667,
+      "line": 677,
       "name": "worker_runs_script_that_calls_omakure_trace_via_subprocess",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 667,
+        "line": 677,
         "name": "worker_runs_script_that_calls_omakure_trace_via_subprocess"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31568,14 +31672,14 @@
       },
       "identity": "crate::cli::queue::tests::locate_omakure_binary",
       "kind": "function",
-      "line": 722,
+      "line": 732,
       "name": "locate_omakure_binary",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 722,
+        "line": 732,
         "name": "locate_omakure_binary"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31594,14 +31698,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_concurrency_two_drains_two_jobs_in_parallel",
       "kind": "function",
-      "line": 738,
+      "line": 748,
       "name": "worker_concurrency_two_drains_two_jobs_in_parallel",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 738,
+        "line": 748,
         "name": "worker_concurrency_two_drains_two_jobs_in_parallel"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31620,14 +31724,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_concurrency_two_drains_two_jobs_in_parallel::<closure>",
       "kind": "closure",
-      "line": 772,
+      "line": 782,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 772,
+        "line": 782,
         "name": "<closure>"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31646,14 +31750,14 @@
       },
       "identity": "crate::cli::queue::tests::stats_prints_total_and_state_breakdown",
       "kind": "function",
-      "line": 789,
+      "line": 799,
       "name": "stats_prints_total_and_state_breakdown",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 789,
+        "line": 799,
         "name": "stats_prints_total_and_state_breakdown"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31672,14 +31776,14 @@
       },
       "identity": "crate::cli::queue::tests::cancel_queued_run_prints_cancelled_line",
       "kind": "function",
-      "line": 799,
+      "line": 809,
       "name": "cancel_queued_run_prints_cancelled_line",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 799,
+        "line": 809,
         "name": "cancel_queued_run_prints_cancelled_line"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31698,14 +31802,14 @@
       },
       "identity": "crate::cli::queue::tests::dead_letter_missing_run_returns_not_found",
       "kind": "function",
-      "line": 831,
+      "line": 841,
       "name": "dead_letter_missing_run_returns_not_found",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 831,
+        "line": 841,
         "name": "dead_letter_missing_run_returns_not_found"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31724,14 +31828,14 @@
       },
       "identity": "crate::cli::queue::tests::run_dispatches_subcommands",
       "kind": "function",
-      "line": 847,
+      "line": 857,
       "name": "run_dispatches_subcommands",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 847,
+        "line": 857,
         "name": "run_dispatches_subcommands"
       },
       "path": "src/cli/queue/tests.rs",
@@ -31750,14 +31854,14 @@
       },
       "identity": "crate::cli::queue::tests::worker_with_concurrency_and_once_drains_queue",
       "kind": "function",
-      "line": 870,
+      "line": 880,
       "name": "worker_with_concurrency_and_once_drains_queue",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 870,
+        "line": 880,
         "name": "worker_with_concurrency_and_once_drains_queue"
       },
       "path": "src/cli/queue/tests.rs",

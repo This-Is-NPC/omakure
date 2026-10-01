@@ -15,7 +15,7 @@ pub(super) fn add(
         None => None,
         Some(s) => match parse_humantime_duration_ms(s) {
             Ok(ms) => Some(ms),
-            Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
+            Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
         },
     };
 
@@ -112,13 +112,27 @@ pub(super) fn stats(workspace: &Workspace, json_output: bool) -> Result<(), Box<
     Ok(())
 }
 
-pub(super) fn parse_humantime_duration_ms(s: &str) -> Result<i64, String> {
+#[derive(Debug, thiserror::Error)]
+pub(super) enum QueueDurationError {
+    #[error("invalid duration `{input}`: {source}")]
+    Invalid {
+        input: String,
+        #[source]
+        source: humantime::DurationError,
+    },
+    #[error("duration too large: {0}")]
+    TooLarge(String),
+}
+
+pub(super) fn parse_humantime_duration_ms(s: &str) -> Result<i64, QueueDurationError> {
     let trimmed = s.trim();
-    let dur = humantime::parse_duration(trimmed)
-        .map_err(|err| format!("invalid duration `{}`: {}", trimmed, err))?;
+    let dur = humantime::parse_duration(trimmed).map_err(|source| QueueDurationError::Invalid {
+        input: trimmed.to_string(),
+        source,
+    })?;
     let ms = dur.as_millis();
     if ms > i64::MAX as u128 {
-        return Err(format!("duration too large: {}", trimmed));
+        return Err(QueueDurationError::TooLarge(trimmed.to_string()));
     }
     Ok(ms as i64)
 }

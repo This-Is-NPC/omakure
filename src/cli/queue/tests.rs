@@ -1,4 +1,4 @@
-use super::producers::parse_humantime_duration_ms;
+use super::producers::{parse_humantime_duration_ms, QueueDurationError};
 use super::*;
 use crate::cli::args::{QueueAddArgs, QueueCancelArgs, QueueDeadLetterArgs, QueueWorkerArgs};
 use crate::runs::{self, enqueue, EnqueueOptions, RunCompletion, RunState};
@@ -43,8 +43,16 @@ fn parse_duration_ms_recognizes_humantime_units() {
 }
 
 #[test]
-fn parse_duration_ms_rejects_garbage() {
-    assert!(parse_humantime_duration_ms("not a duration").is_err());
+fn parse_duration_ms_distinguishes_invalid_text_and_overflow() {
+    let invalid = parse_humantime_duration_ms("  not a duration  ").unwrap_err();
+    assert!(matches!(invalid, QueueDurationError::Invalid { .. }));
+    assert!(invalid
+        .to_string()
+        .starts_with("invalid duration `not a duration`: "));
+
+    let overflow = parse_humantime_duration_ms("  106751991168d  ").unwrap_err();
+    assert!(matches!(overflow, QueueDurationError::TooLarge(_)));
+    assert_eq!(overflow.to_string(), "duration too large: 106751991168d");
 }
 
 #[test]
@@ -106,7 +114,9 @@ fn add_invalid_timeout_returns_error() {
     )
     .unwrap_err();
 
-    assert!(err.to_string().contains("not found") || err.to_string().contains("invalid duration"));
+    assert!(err
+        .to_string()
+        .starts_with("invalid duration `definitely-not-a-duration`: "));
     let _ = fs::remove_dir_all(ws.root());
 }
 

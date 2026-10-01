@@ -209,7 +209,16 @@ impl NodeConfig {
         if self.version != NODE_CONFIG_VERSION {
             return Err(NodeConfigError::UnsupportedVersion(self.version));
         }
+        self.validate_basic_fields()?;
+        self.validate_network_settings()?;
+        self.validate_enrollment_settings()?;
+        self.validate_discovery_settings()?;
+        self.validate_authorities()?;
+        self.validate_baseline_publishers()?;
+        self.validate_bootstrap_hashes()
+    }
 
+    fn validate_basic_fields(&self) -> Result<(), NodeConfigError> {
         validate_text(
             "node.display_name",
             &self.node.display_name,
@@ -225,6 +234,10 @@ impl NodeConfig {
         validate_text("api.bind", &self.api.bind, MAX_BIND_BYTES, false)?;
         validate_bind(&self.api.bind)?;
 
+        Ok(())
+    }
+
+    fn validate_network_settings(&self) -> Result<(), NodeConfigError> {
         if self.network.static_peers.len() > MAX_NODE_CONFIG_STATIC_PEERS {
             return Err(NodeConfigError::Invalid(
                 "network.static_peers has too many entries".to_string(),
@@ -253,6 +266,10 @@ impl NodeConfig {
             validate_direct_bind(bind)?;
         }
 
+        Ok(())
+    }
+
+    fn validate_enrollment_settings(&self) -> Result<(), NodeConfigError> {
         validate_text(
             "trust.enrollment",
             &self.trust.enrollment,
@@ -274,6 +291,10 @@ impl NodeConfig {
                 "remote capabilities require enrollment to be enabled".to_string(),
             ));
         }
+        Ok(())
+    }
+
+    fn validate_discovery_settings(&self) -> Result<(), NodeConfigError> {
         validate_secret_ref(&self.organization.discovery_secret_ref)?;
         if self.discovery.port != crate::discovery::DISCOVERY_PORT {
             return Err(NodeConfigError::Invalid(
@@ -292,6 +313,10 @@ impl NodeConfig {
                 "discovery.multicast_addr must use the frozen discovery group".to_string(),
             ));
         }
+        Ok(())
+    }
+
+    fn validate_authorities(&self) -> Result<(), NodeConfigError> {
         if self.trust.authorities.len() > MAX_AUTHORITY_KEYS {
             return Err(NodeConfigError::Invalid(
                 "trust.authorities has too many entries".to_string(),
@@ -307,6 +332,10 @@ impl NodeConfig {
                 ));
             }
         }
+        Ok(())
+    }
+
+    fn validate_baseline_publishers(&self) -> Result<(), NodeConfigError> {
         if self.trust.baseline_publishers.len() > MAX_AUTHORITY_KEYS {
             return Err(NodeConfigError::Invalid(
                 "trust.baseline_publishers has too many entries".to_string(),
@@ -329,6 +358,10 @@ impl NodeConfig {
                 ));
             }
         }
+        Ok(())
+    }
+
+    fn validate_bootstrap_hashes(&self) -> Result<(), NodeConfigError> {
         if self.trust.enrollment == "signed-bundle" {
             if self.trust.authorities.is_empty() {
                 return Err(NodeConfigError::Invalid(
@@ -657,6 +690,79 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("endpoints"));
+    }
+
+    #[test]
+    fn validation_checks_all_peer_syntax_before_duplicates_and_direct_bind() {
+        let first_id = "a".repeat(64);
+        let mut config = NodeConfig::default();
+        config.network.static_peers = vec![
+            format!("omk1_{first_id}@127.0.0.1:7879"),
+            format!("omk1_{first_id}@127.0.0.1:7880"),
+            "invalid-id@127.0.0.1:7881".to_string(),
+        ];
+        config.network.direct_bind = Some("invalid-bind".to_string());
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid(
+                "static peer `invalid-id@127.0.0.1:7881` has an invalid node id".to_string()
+            )
+        );
+
+        config.network.static_peers.pop();
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid(
+                "network.static_peers contains duplicate node ids".to_string()
+            )
+        );
+
+        config.network.static_peers.pop();
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("network.direct_bind must be a socket address".to_string())
+        );
+    }
+
+    #[test]
+    fn validation_checks_discovery_and_keys_before_signed_bundle_hashes() {
+        let mut config = NodeConfig::default();
+        config.trust.enrollment = "signed-bundle".to_string();
+        config.discovery.port = 0;
+        config.trust.authorities = vec![EnrollmentAuthority {
+            key_id: "invalid".to_string(),
+            public_key: "b".repeat(64),
+            revoked: false,
+        }];
+        config.trust.baseline_publishers = vec![TrustedBaselinePublisher {
+            key_id: "invalid".to_string(),
+            public_key: "b".repeat(64),
+            revoked: false,
+        }];
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid(
+                "discovery.port must use the frozen discovery port".to_string()
+            )
+        );
+
+        config.discovery.port = crate::discovery::DISCOVERY_PORT;
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("trust.authorities.key_id is invalid".to_string())
+        );
+
+        config.trust.authorities[0].key_id = "a".repeat(32);
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("trust.baseline_publishers.key_id is invalid".to_string())
+        );
+
+        config.trust.baseline_publishers[0].key_id = "c".repeat(32);
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("trust.bootstrap_token_hash is invalid".to_string())
+        );
     }
 
     #[test]

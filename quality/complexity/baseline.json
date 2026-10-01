@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "8151a46b0eb807a0acfd49169624e206d55b56562b3df89a25c260622373e9df",
+  "canonical_sha256": "0357551588c92668299fd5f5464379424bd8c804cd8add642eac016fa6bea213",
   "config_identity": "no-config",
   "files": [
     {
@@ -2248,12 +2248,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 52,
+        "invocations": 64,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 57,
-        "cyclomatic": 88
+        "cyclomatic": 97
       },
       "path": "src/domain/node_config.rs",
       "source_class": "handwritten"
@@ -49376,14 +49376,14 @@
       },
       "identity": "crate::domain::node_config::default",
       "kind": "method",
-      "line": 161,
+      "line": 156,
       "name": "default",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 161,
+        "line": 156,
         "name": "default"
       },
       "path": "src/domain/node_config.rs",
@@ -49394,22 +49394,22 @@
       "cognitive": 1,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::domain::node_config::default@174#2",
+        "identity": "crate::domain::node_config::default@167#2",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
         "signature": "fn default() -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::domain::node_config::default@174#2",
+      "identity": "crate::domain::node_config::default@167#2",
       "kind": "method",
-      "line": 174,
+      "line": 167,
       "name": "default",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 174,
+        "line": 167,
         "name": "default"
       },
       "path": "src/domain/node_config.rs",
@@ -49428,14 +49428,14 @@
       },
       "identity": "crate::domain::node_config::parse",
       "kind": "method",
-      "line": 209,
+      "line": 201,
       "name": "parse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 209,
+        "line": 201,
         "name": "parse"
       },
       "path": "src/domain/node_config.rs",
@@ -49454,14 +49454,14 @@
       },
       "identity": "crate::domain::node_config::parse::<closure>",
       "kind": "closure",
-      "line": 211,
+      "line": 203,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 211,
+        "line": 203,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49469,8 +49469,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 28,
-      "cyclomatic": 24,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::domain::node_config::validate",
         "macro_expansion": "not_measured",
@@ -49484,8 +49484,8 @@
       "name": "validate",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 28,
-        "cyclomatic": 24,
+        "cognitive": 1,
+        "cyclomatic": 2,
         "kind": "method",
         "line": 208,
         "name": "validate"
@@ -49498,26 +49498,208 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::domain::node_config::validate::<closure>",
+        "identity": "crate::domain::node_config::validate_basic_fields",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validate_basic_fields(&self) -> Result<(), NodeConfigError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validate_basic_fields",
+      "kind": "method",
+      "line": 221,
+      "name": "validate_basic_fields",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 221,
+        "name": "validate_basic_fields"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validate_basic_fields(&self) -> Result<(), NodeConfigError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::domain::node_config::validate_network_settings",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validate_network_settings(&self) -> Result<(), NodeConfigError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validate_network_settings",
+      "kind": "method",
+      "line": 240,
+      "name": "validate_network_settings",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 8,
+        "cyclomatic": 7,
+        "kind": "method",
+        "line": 240,
+        "name": "validate_network_settings"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validate_network_settings(&self) -> Result<(), NodeConfigError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::domain::node_config::validate_enrollment_settings",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validate_enrollment_settings(&self) -> Result<(), NodeConfigError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validate_enrollment_settings",
+      "kind": "method",
+      "line": 272,
+      "name": "validate_enrollment_settings",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 272,
+        "name": "validate_enrollment_settings"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validate_enrollment_settings(&self) -> Result<(), NodeConfigError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::domain::node_config::validate_discovery_settings",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validate_discovery_settings(&self) -> Result<(), NodeConfigError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validate_discovery_settings",
+      "kind": "method",
+      "line": 297,
+      "name": "validate_discovery_settings",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 297,
+        "name": "validate_discovery_settings"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validate_discovery_settings(&self) -> Result<(), NodeConfigError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::domain::node_config::validate_discovery_settings::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
         "signature": ".map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::domain::node_config::validate::<closure>",
+      "identity": "crate::domain::node_config::validate_discovery_settings::<closure>",
       "kind": "closure",
-      "line": 328,
+      "line": 308,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 328,
+        "line": 308,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
       "signature": ".map_err(|_| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::domain::node_config::validate_authorities",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validate_authorities(&self) -> Result<(), NodeConfigError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validate_authorities",
+      "kind": "method",
+      "line": 319,
+      "name": "validate_authorities",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 319,
+        "name": "validate_authorities"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validate_authorities(&self) -> Result<(), NodeConfigError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::domain::node_config::validate_baseline_publishers",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validate_baseline_publishers(&self) -> Result<(), NodeConfigError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validate_baseline_publishers",
+      "kind": "method",
+      "line": 338,
+      "name": "validate_baseline_publishers",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 4,
+        "kind": "method",
+        "line": 338,
+        "name": "validate_baseline_publishers"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validate_baseline_publishers(&self) -> Result<(), NodeConfigError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::domain::node_config::validate_bootstrap_hashes",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validate_bootstrap_hashes(&self) -> Result<(), NodeConfigError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validate_bootstrap_hashes",
+      "kind": "method",
+      "line": 364,
+      "name": "validate_bootstrap_hashes",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 364,
+        "name": "validate_bootstrap_hashes"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validate_bootstrap_hashes(&self) -> Result<(), NodeConfigError>",
       "source_class": "handwritten"
     },
     {
@@ -49532,14 +49714,14 @@
       },
       "identity": "crate::domain::node_config::to_toml",
       "kind": "method",
-      "line": 399,
+      "line": 391,
       "name": "to_toml",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 399,
+        "line": 391,
         "name": "to_toml"
       },
       "path": "src/domain/node_config.rs",
@@ -49558,14 +49740,14 @@
       },
       "identity": "crate::domain::node_config::to_toml::<closure>",
       "kind": "closure",
-      "line": 401,
+      "line": 393,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 401,
+        "line": 393,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49584,14 +49766,14 @@
       },
       "identity": "crate::domain::node_config::parse_node_config",
       "kind": "function",
-      "line": 405,
+      "line": 397,
       "name": "parse_node_config",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 405,
+        "line": 397,
         "name": "parse_node_config"
       },
       "path": "src/domain/node_config.rs",
@@ -49610,14 +49792,14 @@
       },
       "identity": "crate::domain::node_config::validate_text",
       "kind": "function",
-      "line": 409,
+      "line": 401,
       "name": "validate_text",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 409,
+        "line": 401,
         "name": "validate_text"
       },
       "path": "src/domain/node_config.rs",
@@ -49636,14 +49818,14 @@
       },
       "identity": "crate::domain::node_config::validate_lower_hex",
       "kind": "function",
-      "line": 426,
+      "line": 418,
       "name": "validate_lower_hex",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 426,
+        "line": 418,
         "name": "validate_lower_hex"
       },
       "path": "src/domain/node_config.rs",
@@ -49662,14 +49844,14 @@
       },
       "identity": "crate::domain::node_config::validate_bind",
       "kind": "function",
-      "line": 437,
+      "line": 425,
       "name": "validate_bind",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 437,
+        "line": 425,
         "name": "validate_bind"
       },
       "path": "src/domain/node_config.rs",
@@ -49688,14 +49870,14 @@
       },
       "identity": "crate::domain::node_config::validate_bind::<closure>",
       "kind": "closure",
-      "line": 439,
+      "line": 427,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 439,
+        "line": 427,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49714,14 +49896,14 @@
       },
       "identity": "crate::domain::node_config::validate_direct_bind",
       "kind": "function",
-      "line": 448,
+      "line": 436,
       "name": "validate_direct_bind",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 448,
+        "line": 436,
         "name": "validate_direct_bind"
       },
       "path": "src/domain/node_config.rs",
@@ -49740,14 +49922,14 @@
       },
       "identity": "crate::domain::node_config::validate_direct_bind::<closure>",
       "kind": "closure",
-      "line": 449,
+      "line": 437,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 449,
+        "line": 437,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49766,14 +49948,14 @@
       },
       "identity": "crate::domain::node_config::validate_static_peer",
       "kind": "function",
-      "line": 494,
+      "line": 448,
       "name": "validate_static_peer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 494,
+        "line": 448,
         "name": "validate_static_peer"
       },
       "path": "src/domain/node_config.rs",
@@ -49792,14 +49974,14 @@
       },
       "identity": "crate::domain::node_config::validate_static_peer::<closure>",
       "kind": "closure",
-      "line": 431,
+      "line": 464,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 431,
+        "line": 464,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49818,14 +50000,14 @@
       },
       "identity": "crate::domain::node_config::validate_host_port",
       "kind": "function",
-      "line": 436,
+      "line": 469,
       "name": "validate_host_port",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 436,
+        "line": 469,
         "name": "validate_host_port"
       },
       "path": "src/domain/node_config.rs",
@@ -49844,14 +50026,14 @@
       },
       "identity": "crate::domain::node_config::validate_host_port::<closure>",
       "kind": "closure",
-      "line": 442,
+      "line": 475,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 442,
+        "line": 475,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49862,22 +50044,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::domain::node_config::validate_host_port::<closure>@457#2",
+        "identity": "crate::domain::node_config::validate_host_port::<closure>@490#2",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
         "signature": "let port: u16 = port.parse().map_err(|_| \"invalid port\")?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::domain::node_config::validate_host_port::<closure>@457#2",
+      "identity": "crate::domain::node_config::validate_host_port::<closure>@490#2",
       "kind": "closure",
-      "line": 457,
+      "line": 490,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 457,
+        "line": 490,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49888,22 +50070,22 @@
       "cognitive": 1,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::domain::node_config::validate_host_port::<closure>@463#3",
+        "identity": "crate::domain::node_config::validate_host_port::<closure>@496#3",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
         "signature": ".any(|byte| byte.is_ascii_whitespace() || byte == b'/' || byte == b'@')",
         "source_class": "handwritten"
       },
-      "identity": "crate::domain::node_config::validate_host_port::<closure>@463#3",
+      "identity": "crate::domain::node_config::validate_host_port::<closure>@496#3",
       "kind": "closure",
-      "line": 463,
+      "line": 496,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "closure",
-        "line": 463,
+        "line": 496,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49922,14 +50104,14 @@
       },
       "identity": "crate::domain::node_config::validate_secret_ref",
       "kind": "function",
-      "line": 590,
+      "line": 503,
       "name": "validate_secret_ref",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 590,
+        "line": 503,
         "name": "validate_secret_ref"
       },
       "path": "src/domain/node_config.rs",
@@ -49948,14 +50130,14 @@
       },
       "identity": "crate::domain::node_config::is_ref_component",
       "kind": "function",
-      "line": 622,
+      "line": 535,
       "name": "is_ref_component",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 622,
+        "line": 535,
         "name": "is_ref_component"
       },
       "path": "src/domain/node_config.rs",
@@ -49974,14 +50156,14 @@
       },
       "identity": "crate::domain::node_config::is_ref_component::<closure>",
       "kind": "closure",
-      "line": 625,
+      "line": 538,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 625,
+        "line": 538,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -50000,14 +50182,14 @@
       },
       "identity": "crate::domain::node_config::valid_toml",
       "kind": "function",
-      "line": 632,
+      "line": 545,
       "name": "valid_toml",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 632,
+        "line": 545,
         "name": "valid_toml"
       },
       "path": "src/domain/node_config.rs",
@@ -50026,14 +50208,14 @@
       },
       "identity": "crate::domain::node_config::default_config_is_the_frozen_safe_baseline",
       "kind": "function",
-      "line": 637,
+      "line": 550,
       "name": "default_config_is_the_frozen_safe_baseline",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 637,
+        "line": 550,
         "name": "default_config_is_the_frozen_safe_baseline"
       },
       "path": "src/domain/node_config.rs",
@@ -50052,14 +50234,14 @@
       },
       "identity": "crate::domain::node_config::strict_parser_rejects_unknown_missing_duplicate_and_future_fields",
       "kind": "function",
-      "line": 643,
+      "line": 556,
       "name": "strict_parser_rejects_unknown_missing_duplicate_and_future_fields",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 643,
+        "line": 556,
         "name": "strict_parser_rejects_unknown_missing_duplicate_and_future_fields"
       },
       "path": "src/domain/node_config.rs",
@@ -50078,14 +50260,14 @@
       },
       "identity": "crate::domain::node_config::parser_rejects_invalid_types_and_trailing_data",
       "kind": "function",
-      "line": 656,
+      "line": 570,
       "name": "parser_rejects_invalid_types_and_trailing_data",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 656,
+        "line": 570,
         "name": "parser_rejects_invalid_types_and_trailing_data"
       },
       "path": "src/domain/node_config.rs",
@@ -50104,14 +50286,14 @@
       },
       "identity": "crate::domain::node_config::validation_rejects_malformed_and_duplicated_baseline_publishers",
       "kind": "function",
-      "line": 666,
+      "line": 580,
       "name": "validation_rejects_malformed_and_duplicated_baseline_publishers",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 666,
+        "line": 580,
         "name": "validation_rejects_malformed_and_duplicated_baseline_publishers"
       },
       "path": "src/domain/node_config.rs",
@@ -50130,14 +50312,14 @@
       },
       "identity": "crate::domain::node_config::validation_rejects_malformed_and_duplicated_baseline_publishers::entry",
       "kind": "closure",
-      "line": 667,
+      "line": 581,
       "name": "entry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 667,
+        "line": 581,
         "name": "entry"
       },
       "path": "src/domain/node_config.rs",
@@ -50156,14 +50338,14 @@
       },
       "identity": "crate::domain::node_config::baseline_push_is_off_and_names_nobody_by_default",
       "kind": "function",
-      "line": 718,
+      "line": 632,
       "name": "baseline_push_is_off_and_names_nobody_by_default",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 718,
+        "line": 632,
         "name": "baseline_push_is_off_and_names_nobody_by_default"
       },
       "path": "src/domain/node_config.rs",
@@ -50182,14 +50364,14 @@
       },
       "identity": "crate::domain::node_config::validation_rejects_unsafe_network_and_secret_values",
       "kind": "function",
-      "line": 725,
+      "line": 639,
       "name": "validation_rejects_unsafe_network_and_secret_values",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 725,
+        "line": 639,
         "name": "validation_rejects_unsafe_network_and_secret_values"
       },
       "path": "src/domain/node_config.rs",
@@ -50208,14 +50390,14 @@
       },
       "identity": "crate::domain::node_config::validation_accepts_canonical_peer_and_secret_ref",
       "kind": "function",
-      "line": 628,
+      "line": 661,
       "name": "validation_accepts_canonical_peer_and_secret_ref",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 628,
+        "line": 661,
         "name": "validation_accepts_canonical_peer_and_secret_ref"
       },
       "path": "src/domain/node_config.rs",
@@ -50234,18 +50416,70 @@
       },
       "identity": "crate::domain::node_config::validation_rejects_duplicate_static_peer_ids_and_endpoints",
       "kind": "function",
-      "line": 758,
+      "line": 670,
       "name": "validation_rejects_duplicate_static_peer_ids_and_endpoints",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 758,
+        "line": 670,
         "name": "validation_rejects_duplicate_static_peer_ids_and_endpoints"
       },
       "path": "src/domain/node_config.rs",
       "signature": "fn validation_rejects_duplicate_static_peer_ids_and_endpoints()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::domain::node_config::validation_checks_all_peer_syntax_before_duplicates_and_direct_bind",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validation_checks_all_peer_syntax_before_duplicates_and_direct_bind()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validation_checks_all_peer_syntax_before_duplicates_and_direct_bind",
+      "kind": "function",
+      "line": 696,
+      "name": "validation_checks_all_peer_syntax_before_duplicates_and_direct_bind",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 696,
+        "name": "validation_checks_all_peer_syntax_before_duplicates_and_direct_bind"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validation_checks_all_peer_syntax_before_duplicates_and_direct_bind()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::domain::node_config::validation_checks_discovery_and_keys_before_signed_bundle_hashes",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/node_config.rs",
+        "signature": "fn validation_checks_discovery_and_keys_before_signed_bundle_hashes()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::node_config::validation_checks_discovery_and_keys_before_signed_bundle_hashes",
+      "kind": "function",
+      "line": 728,
+      "name": "validation_checks_discovery_and_keys_before_signed_bundle_hashes",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 728,
+        "name": "validation_checks_discovery_and_keys_before_signed_bundle_hashes"
+      },
+      "path": "src/domain/node_config.rs",
+      "signature": "fn validation_checks_discovery_and_keys_before_signed_bundle_hashes()",
       "source_class": "handwritten"
     },
     {
@@ -50260,14 +50494,14 @@
       },
       "identity": "crate::domain::node_config::validation_rejects_unbounded_public_config_values",
       "kind": "function",
-      "line": 784,
+      "line": 769,
       "name": "validation_rejects_unbounded_public_config_values",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 784,
+        "line": 769,
         "name": "validation_rejects_unbounded_public_config_values"
       },
       "path": "src/domain/node_config.rs",
@@ -50286,14 +50520,14 @@
       },
       "identity": "crate::domain::node_config::public_model_contains_no_identity_or_resolved_secret_fields",
       "kind": "function",
-      "line": 816,
+      "line": 792,
       "name": "public_model_contains_no_identity_or_resolved_secret_fields",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 816,
+        "line": 792,
         "name": "public_model_contains_no_identity_or_resolved_secret_fields"
       },
       "path": "src/domain/node_config.rs",

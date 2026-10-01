@@ -51,6 +51,7 @@ const REACH_TIMEOUT: Duration = Duration::from_secs(45);
 /// One frozen 60-second admission window plus slack, for a certification
 /// client that has to share a source address with a reconnecting fleet.
 const ADMISSION_WINDOW_TIMEOUT: Duration = Duration::from_secs(90);
+const ADMISSION_RETRY_INTERVAL: Duration = Duration::from_secs(2);
 /// The bounded wait the three-node certification uses. It runs one more
 /// service than the two-node suite and shares a host with every other suite,
 /// so it waits longer - but still strictly inside the frozen 120-second
@@ -406,11 +407,12 @@ fn production_session_within_admission_window(
         {
             return session;
         }
+        let remaining = deadline.saturating_duration_since(Instant::now());
         assert!(
-            Instant::now() < deadline,
+            !remaining.is_zero(),
             "the production listener never admitted a session within {ADMISSION_WINDOW_TIMEOUT:?}"
         );
-        std::thread::sleep(Duration::from_secs(2));
+        std::thread::sleep(ADMISSION_RETRY_INTERVAL.min(remaining));
     }
 }
 

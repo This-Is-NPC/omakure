@@ -227,12 +227,13 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
     );
 
     // Give any duplicate a chance to appear before asserting there is none.
-    std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(
-        effect_count(&marker),
-        1,
-        "an authorized Cue must run the script exactly once"
-    );
+    support::assert_throughout(Duration::from_secs(2), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            1,
+            "an authorized Cue must run the script exactly once"
+        );
+    });
 
     // The correlation half: the Conductor derives the run id it will see from
     // the cue id it minted, with no message carrying a correlation field. The
@@ -279,12 +280,13 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
             ],
         ),
     );
-    std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(
-        effect_count(&marker),
-        1,
-        "retrying with the same cue id must not run the script twice"
-    );
+    support::assert_throughout(Duration::from_secs(2), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            1,
+            "retrying with the same cue id must not run the script twice"
+        );
+    });
     assert_eq!(
         redispatched["cue_id"].as_str(),
         Some(first_cue_id.as_str()),
@@ -460,12 +462,13 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         wait_for_effect(&marker, 1),
         "the declared script never ran on the Performer"
     );
-    std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(
-        effect_count(&marker),
-        1,
-        "one Cue is still exactly one run, whichever path carried it"
-    );
+    support::assert_throughout(Duration::from_secs(2), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            1,
+            "one Cue is still exactly one run, whichever path carried it"
+        );
+    });
 }
 
 /// The refusal half, on the same real topology.

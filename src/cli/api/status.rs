@@ -1,5 +1,6 @@
 use super::bearer::{require_capability, require_scope};
-use super::respond::operation_response;
+use super::blocking::{operation_response_bounded, run_bounded};
+use super::respond::operation_error_response;
 use super::state::{ApiCapability, ApiState};
 use crate::auth::{self, AuthContext};
 use crate::cli::json;
@@ -13,6 +14,7 @@ use axum::Extension;
 use axum::Json;
 use serde::Serialize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -108,12 +110,17 @@ pub(super) async fn admin_status_handler(
             },
         ),
     };
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    let auth = match run_bounded("admin status", gate, move || state.auth.status()).await {
+        Ok(auth) => auth,
+        Err(err) => return operation_error_response(err),
+    };
     (
         StatusCode::OK,
         Json(json::ok_envelope(AdminStatusResponse {
             ready,
             readiness,
-            auth: state.auth.status(),
+            auth,
         })),
     )
         .into_response()
@@ -126,7 +133,11 @@ pub(super) async fn workspace_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ConfigRead) {
         return response;
     }
-    operation_response(core::workspace_summary(&state.workspace))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    operation_response_bounded("workspace", gate, move || {
+        core::workspace_summary(&state.workspace)
+    })
+    .await
 }
 
 pub(super) async fn config_handler(
@@ -136,7 +147,11 @@ pub(super) async fn config_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ConfigRead) {
         return response;
     }
-    operation_response(config_ops::redacted_config_summary(&state.workspace))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    operation_response_bounded("config", gate, move || {
+        config_ops::redacted_config_summary(&state.workspace)
+    })
+    .await
 }
 
 pub(super) async fn doctor_handler(
@@ -146,5 +161,9 @@ pub(super) async fn doctor_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ConfigRead) {
         return response;
     }
-    operation_response(doctor_ops::doctor_report(&state.workspace))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    operation_response_bounded("doctor", gate, move || {
+        doctor_ops::doctor_report(&state.workspace)
+    })
+    .await
 }

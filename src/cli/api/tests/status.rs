@@ -1,5 +1,25 @@
 use super::*;
 
+#[tokio::test(flavor = "current_thread")]
+async fn blocked_status_work_keeps_health_and_readiness_available() {
+    let dir = TempDir::new().unwrap();
+    let workspace = crate::test_support::workspace_in(&dir);
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    gate.close();
+    let app = super::super::router::router_with_blocking_gate(workspace, gate);
+
+    for path in ["/v1/doctor", "/v1/admin/status"] {
+        let response = app.clone().oneshot(authed_request(path)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(response_json(response).await["error"]["code"], "io_failed");
+    }
+
+    for path in ["/v1/health", "/v1/ready"] {
+        let response = app.clone().oneshot(authed_request(path)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
+
 #[tokio::test]
 async fn health_works_without_token() {
     let dir = TempDir::new().unwrap();

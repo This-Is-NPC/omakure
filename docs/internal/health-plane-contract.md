@@ -171,7 +171,7 @@ Performer and replaces it in place.
 | `runtimes[].version` | string | 0..=32 bytes, `` (empty) or `[0-9A-Za-z][0-9A-Za-z._+-]{0,31}`; MUST be empty when `available` is `false` |
 
 The frozen capability allow-list is unchanged from the transport contract and
-from `SUPPORTED_CAPABILITIES` in `src/node_registry/` and `src/enrollment.rs`:
+from `CAPABILITY_ALLOWLIST` in `src/domain/capability.rs`:
 `backup-orchestration`, `baseline-push`, `inventory-health`,
 `lost-device-revocation`, `notifications`, `remote-run`,
 `ssh-credential-rotation`.

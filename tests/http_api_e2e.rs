@@ -13,8 +13,6 @@ const QUEUE_SECRET: &str = "http-queue-secret-provider-plain-value";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RouteCoverage {
     Covered(&'static str),
-    #[allow(dead_code)]
-    Excluded(&'static str),
 }
 
 /// Inventory of every `(method, route)` declared by `src/cli/api/router.rs`.
@@ -266,7 +264,7 @@ fn http_route_inventory_maps_all_current_router_entries() {
     assert!(HTTP_ROUTE_COVERAGE_NOTES
         .iter()
         .all(|(_, coverage)| match coverage {
-            RouteCoverage::Covered(note) | RouteCoverage::Excluded(note) => !note.trim().is_empty(),
+            RouteCoverage::Covered(note) => !note.trim().is_empty(),
         }));
 }
 

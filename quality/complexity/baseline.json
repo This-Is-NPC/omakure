@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "42923570cf6951071e5b50ee9c8bf165a71ae7d1d5c9f7e6b854c49b0ade86d7",
+  "canonical_sha256": "a2dabf04453c1a4f592576cd597a836b34e5602c493194e84883fb87691d3e85",
   "config_identity": "no-config",
   "files": [
     {
@@ -4712,12 +4712,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 69,
+        "invocations": 77,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 88,
-        "cyclomatic": 141
+        "cognitive": 94,
+        "cyclomatic": 148
       },
       "path": "src/secrets.rs",
       "source_class": "handwritten"
@@ -106821,6 +106821,32 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::secrets::run_with_isolated_env",
+        "macro_expansion": "not_measured",
+        "path": "src/secrets.rs",
+        "signature": "fn run_with_isolated_env(key: &str, value: &str) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::secrets::run_with_isolated_env",
+      "kind": "function",
+      "line": 596,
+      "name": "run_with_isolated_env",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 596,
+        "name": "run_with_isolated_env"
+      },
+      "path": "src/secrets.rs",
+      "signature": "fn run_with_isolated_env(key: &str, value: &str) -> bool",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -106832,14 +106858,14 @@
       },
       "identity": "crate::secrets::script_with_secret",
       "kind": "function",
-      "line": 592,
+      "line": 630,
       "name": "script_with_secret",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 592,
+        "line": 630,
         "name": "script_with_secret"
       },
       "path": "src/secrets.rs",
@@ -106858,14 +106884,14 @@
       },
       "identity": "crate::secrets::secret_ref_parser_accepts_generic_secret_uri",
       "kind": "function",
-      "line": 608,
+      "line": 646,
       "name": "secret_ref_parser_accepts_generic_secret_uri",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 608,
+        "line": 646,
         "name": "secret_ref_parser_accepts_generic_secret_uri"
       },
       "path": "src/secrets.rs",
@@ -106884,14 +106910,14 @@
       },
       "identity": "crate::secrets::parse_direct_secrets_does_not_echo_invalid_secret_value",
       "kind": "function",
-      "line": 616,
+      "line": 654,
       "name": "parse_direct_secrets_does_not_echo_invalid_secret_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 616,
+        "line": 654,
         "name": "parse_direct_secrets_does_not_echo_invalid_secret_value"
       },
       "path": "src/secrets.rs",
@@ -106910,14 +106936,14 @@
       },
       "identity": "crate::secrets::parse_direct_secrets_rejects_empty_field_without_echoing_value",
       "kind": "function",
-      "line": 628,
+      "line": 666,
       "name": "parse_direct_secrets_rejects_empty_field_without_echoing_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 628,
+        "line": 666,
         "name": "parse_direct_secrets_rejects_empty_field_without_echoing_value"
       },
       "path": "src/secrets.rs",
@@ -106925,8 +106951,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::secrets::env_provider_resolves_allowed_ref",
         "macro_expansion": "not_measured",
@@ -106936,14 +106962,14 @@
       },
       "identity": "crate::secrets::env_provider_resolves_allowed_ref",
       "kind": "function",
-      "line": 640,
+      "line": 678,
       "name": "env_provider_resolves_allowed_ref",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
+        "cognitive": 1,
+        "cyclomatic": 2,
         "kind": "function",
-        "line": 640,
+        "line": 678,
         "name": "env_provider_resolves_allowed_ref"
       },
       "path": "src/secrets.rs",
@@ -106951,8 +106977,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::secrets::empty_env_secret_replaces_literal_ref_in_execution_args",
         "macro_expansion": "not_measured",
@@ -106962,14 +106988,14 @@
       },
       "identity": "crate::secrets::empty_env_secret_replaces_literal_ref_in_execution_args",
       "kind": "function",
-      "line": 668,
+      "line": 707,
       "name": "empty_env_secret_replaces_literal_ref_in_execution_args",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
+        "cognitive": 1,
+        "cyclomatic": 2,
         "kind": "function",
-        "line": 668,
+        "line": 707,
         "name": "empty_env_secret_replaces_literal_ref_in_execution_args"
       },
       "path": "src/secrets.rs",
@@ -106977,8 +107003,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::secrets::env_wildcard_requires_explicit_env_ref_but_rides_provider_refs",
         "macro_expansion": "not_measured",
@@ -106988,14 +107014,14 @@
       },
       "identity": "crate::secrets::env_wildcard_requires_explicit_env_ref_but_rides_provider_refs",
       "kind": "function",
-      "line": 707,
+      "line": 747,
       "name": "env_wildcard_requires_explicit_env_ref_but_rides_provider_refs",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
+        "cognitive": 1,
+        "cyclomatic": 2,
         "kind": "function",
-        "line": 707,
+        "line": 747,
         "name": "env_wildcard_requires_explicit_env_ref_but_rides_provider_refs"
       },
       "path": "src/secrets.rs",
@@ -107003,8 +107029,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::secrets::env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard",
         "macro_expansion": "not_measured",
@@ -107014,14 +107040,14 @@
       },
       "identity": "crate::secrets::env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard",
       "kind": "function",
-      "line": 758,
+      "line": 799,
       "name": "env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
+        "cognitive": 1,
+        "cyclomatic": 2,
         "kind": "function",
-        "line": 758,
+        "line": 799,
         "name": "env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard"
       },
       "path": "src/secrets.rs",
@@ -107040,14 +107066,14 @@
       },
       "identity": "crate::secrets::file_provider_resolves_allowed_managed_env_ref",
       "kind": "function",
-      "line": 782,
+      "line": 824,
       "name": "file_provider_resolves_allowed_managed_env_ref",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 782,
+        "line": 824,
         "name": "file_provider_resolves_allowed_managed_env_ref"
       },
       "path": "src/secrets.rs",
@@ -107066,14 +107092,14 @@
       },
       "identity": "crate::secrets::file_provider_rejects_symlinked_env_file",
       "kind": "function",
-      "line": 814,
+      "line": 856,
       "name": "file_provider_rejects_symlinked_env_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 814,
+        "line": 856,
         "name": "file_provider_rejects_symlinked_env_file"
       },
       "path": "src/secrets.rs",
@@ -107092,14 +107118,14 @@
       },
       "identity": "crate::secrets::provider_resolution_requires_secrets_use_scope",
       "kind": "function",
-      "line": 838,
+      "line": 880,
       "name": "provider_resolution_requires_secrets_use_scope",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 838,
+        "line": 880,
         "name": "provider_resolution_requires_secrets_use_scope"
       },
       "path": "src/secrets.rs",
@@ -107118,14 +107144,14 @@
       },
       "identity": "crate::secrets::provider_resolution_requires_acl_match",
       "kind": "function",
-      "line": 863,
+      "line": 905,
       "name": "provider_resolution_requires_acl_match",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 863,
+        "line": 905,
         "name": "provider_resolution_requires_acl_match"
       },
       "path": "src/secrets.rs",
@@ -107144,14 +107170,14 @@
       },
       "identity": "crate::secrets::missing_provider_ref_is_error_not_plaintext",
       "kind": "function",
-      "line": 888,
+      "line": 930,
       "name": "missing_provider_ref_is_error_not_plaintext",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 888,
+        "line": 930,
         "name": "missing_provider_ref_is_error_not_plaintext"
       },
       "path": "src/secrets.rs",
@@ -107170,14 +107196,14 @@
       },
       "identity": "crate::secrets::redaction_removes_provider_value_from_output_and_error_text",
       "kind": "function",
-      "line": 908,
+      "line": 950,
       "name": "redaction_removes_provider_value_from_output_and_error_text",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 908,
+        "line": 950,
         "name": "redaction_removes_provider_value_from_output_and_error_text"
       },
       "path": "src/secrets.rs",
@@ -107196,14 +107222,14 @@
       },
       "identity": "crate::secrets::list_secret_metadata_never_includes_values",
       "kind": "function",
-      "line": 940,
+      "line": 982,
       "name": "list_secret_metadata_never_includes_values",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 940,
+        "line": 982,
         "name": "list_secret_metadata_never_includes_values"
       },
       "path": "src/secrets.rs",
@@ -107222,14 +107248,14 @@
       },
       "identity": "crate::secrets::list_secret_metadata_respects_ref_acl_without_use_scope",
       "kind": "function",
-      "line": 964,
+      "line": 1006,
       "name": "list_secret_metadata_respects_ref_acl_without_use_scope",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 964,
+        "line": 1006,
         "name": "list_secret_metadata_respects_ref_acl_without_use_scope"
       },
       "path": "src/secrets.rs",

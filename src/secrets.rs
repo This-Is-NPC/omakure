@@ -587,7 +587,45 @@ mod tests {
     use crate::test_support::workspace_in;
     use crate::workspace::Workspace;
     use std::fs;
+    use std::process::Command;
     use tempfile::TempDir;
+
+    const ISOLATED_ENV_TEST: &str = "OMAKURE_SECRETS_TEST_CHILD";
+    const ISOLATED_ENV_MARKER: &str = "omakure_secrets_isolated_child_ran";
+
+    fn run_with_isolated_env(key: &str, value: &str) -> bool {
+        let current_thread = std::thread::current();
+        let test_name = current_thread.name().expect("named test thread");
+        if let Some(selected) = std::env::var_os(ISOLATED_ENV_TEST) {
+            assert_eq!(selected.to_str(), Some(test_name));
+            assert!(matches!(std::env::var(key), Ok(actual) if actual == value));
+            println!("{ISOLATED_ENV_MARKER}");
+            return true;
+        }
+        let output = Command::new(std::env::current_exe().expect("test executable"))
+            .args(["--exact", test_name, "--nocapture"])
+            .env(ISOLATED_ENV_TEST, test_name)
+            .env(key, value)
+            .output()
+            .expect("run isolated secret test");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if !value.is_empty() {
+            assert!(
+                !stdout.contains(value),
+                "isolated secret test leaked stdout"
+            );
+            assert!(
+                !String::from_utf8_lossy(&output.stderr).contains(value),
+                "isolated secret test leaked stderr"
+            );
+        }
+        assert!(
+            stdout.contains(ISOLATED_ENV_MARKER),
+            "isolated secret test did not run"
+        );
+        assert!(output.status.success(), "isolated secret test failed");
+        false
+    }
 
     fn script_with_secret(tmp: &TempDir) -> (Workspace, std::path::PathBuf) {
         let workspace = workspace_in(tmp);
@@ -638,9 +676,11 @@ mod tests {
 
     #[test]
     fn env_provider_resolves_allowed_ref() {
+        if !run_with_isolated_env("OMAKURE_TEST_SECRET_REF", "from_process_env") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_SECRET_REF", "from_process_env");
 
         let resolved = resolve_args_with_access(
             &workspace,
@@ -661,14 +701,15 @@ mod tests {
             vec!["--token", "secret://env/OMAKURE_TEST_SECRET_REF"]
         );
         assert_eq!(resolved.secrets, vec!["from_process_env"]);
-        std::env::remove_var("OMAKURE_TEST_SECRET_REF");
     }
 
     #[test]
     fn empty_env_secret_replaces_literal_ref_in_execution_args() {
+        if !run_with_isolated_env("OMAKURE_TEST_EMPTY_SECRET", "") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_EMPTY_SECRET", "");
 
         let resolved = resolve_args_with_access(
             &workspace,
@@ -700,14 +741,15 @@ mod tests {
         );
         // An empty value must not enter the redaction list.
         assert!(resolved.secrets.is_empty());
-        std::env::remove_var("OMAKURE_TEST_EMPTY_SECRET");
     }
 
     #[test]
     fn env_wildcard_requires_explicit_env_ref_but_rides_provider_refs() {
+        if !run_with_isolated_env("OMAKURE_TEST_F6_ENV", "env_value") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_F6_ENV", "env_value");
         fs::write(workspace.envs_dir().join("prod.conf"), "TOKEN=file_value\n").unwrap();
 
         // Wildcard WITHOUT an explicit env ref: env reads are denied even though
@@ -751,14 +793,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resolved_env.execution_args, vec!["--token", "env_value"]);
-        std::env::remove_var("OMAKURE_TEST_F6_ENV");
     }
 
     #[test]
     fn env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard() {
+        if !run_with_isolated_env("OMAKURE_TEST_A4_ENV", "leaked_value") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_A4_ENV", "leaked_value");
 
         // Even with `secret://env/*` in the allow-list, the env gate must not
         // grant blanket env access under the wildcard.
@@ -775,7 +818,6 @@ mod tests {
         assert_eq!(err.0, "TOKEN");
         assert!(err.1.contains("not allowed"));
         assert!(!err.1.contains("leaked_value"));
-        std::env::remove_var("OMAKURE_TEST_A4_ENV");
     }
 
     #[test]

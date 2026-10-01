@@ -20,7 +20,7 @@ mod sanitize;
 #[cfg(test)]
 mod tests;
 
-pub use ids::{hex_lower, opaque_run_id, run_signal_id};
+pub use ids::{opaque_run_id, run_signal_id};
 pub use payload::{ack_payload, error_payload, signal_encoded_bytes, signal_payload};
 pub use reporter::HealthReporter;
 pub use sanitize::sanitize_signal_run;

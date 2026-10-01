@@ -718,7 +718,7 @@ fn transport_failure_code(error: TransportError) -> HealthCode {
 fn fresh_id() -> String {
     let mut bytes = [0u8; 16];
     OsRng.fill_bytes(&mut bytes);
-    crate::health_plane::report::hex_lower(&bytes)
+    crate::util::hex::encode(&bytes)
 }
 
 #[cfg(test)]

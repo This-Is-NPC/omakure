@@ -29,8 +29,8 @@
 
 use super::bounds::{MAX_SAFE_INTEGER, SIGNAL_INBOX_CAPACITY, SIGNAL_RETENTION_SECONDS};
 use super::model::{SignalKind, SignalRecord};
-use super::report::hex_lower;
 use crate::node_registry::{AuditEvent, PeerState};
+use crate::util::hex;
 use sha2::{Digest, Sha256};
 
 /// Domain separator for the stable Conductor-local `signal_id`.
@@ -114,7 +114,7 @@ fn local_signal_id(audit_id: i64, kind: SignalKind, node_id: &str) -> String {
         ]
         .concat(),
     );
-    hex_lower(&digest[..16])
+    hex::encode(&digest[..16])
 }
 
 /// Parse the registry's RFC-3339 UTC audit timestamp into Unix seconds.

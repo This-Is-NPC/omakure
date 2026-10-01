@@ -1,3 +1,4 @@
+use crate::util::hex;
 use sha2::{Digest, Sha256};
 
 /// Domain separator for the opaque Health Plane run identifier.
@@ -34,21 +35,11 @@ pub fn run_signal_id(run_id: &str) -> String {
         ]
         .concat(),
     );
-    hex_lower(&digest[..16])
+    hex::encode(&digest[..16])
 }
 
 /// Map a shipped run id onto the frozen 16-byte opaque identifier.
 pub fn opaque_run_id(run_id: &str) -> String {
     let digest = Sha256::digest([RUN_ID_DOMAIN, run_id.as_bytes()].concat());
-    hex_lower(&digest[..16])
-}
-
-/// Lowercase hex, the only encoding the frozen schema accepts for opaque ids.
-pub fn hex_lower(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(char::from_digit((byte >> 4) as u32, 16).unwrap_or('0'));
-        out.push(char::from_digit((byte & 0x0f) as u32, 16).unwrap_or('0'));
-    }
-    out
+    hex::encode(&digest[..16])
 }

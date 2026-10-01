@@ -90,7 +90,7 @@ fn validates_set_equality() {
 #[test]
 fn rejects_wildcards() {
     let mut manifest = valid();
-    manifest.entries[0].http_ids[0] = "GET /v1/tree/*path".into();
+    manifest.entries[0].http_ids[0] = "GET /v1/tree/{*path}".into();
     let (cli_ids, http_ids) = inventory();
     assert!(matches!(
         manifest.validate(SurfaceInventory {
@@ -359,12 +359,14 @@ fn validate_current_and_route_normalization_cover_live_contract() {
     assert_eq!(manifest.entries.len(), 72);
     assert_eq!(
         http_ids(&[
-            (" get ", "v1/tree/*path/"),
+            (" get ", "v1/tree/{*path}/"),
+            ("GET", "/v1/envs/{name}/"),
             ("POST", "/v1/health///"),
             ("", "/"),
         ]),
         vec![
             "GET /v1/tree/:path".to_string(),
+            "GET /v1/envs/:name".to_string(),
             "POST /v1/health".to_string(),
             " /".to_string(),
         ]

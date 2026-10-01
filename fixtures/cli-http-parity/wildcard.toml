@@ -5,7 +5,7 @@ entry_id = "wildcard"
 class = "http-only"
 operation_family = "fixture"
 docs_anchor = "wildcard"
-http_ids = ["GET /v1/tree/*path"]
+http_ids = ["GET /v1/tree/{*path}"]
 rationale = "fixture"
 [entries.adapter_only]
 auth = "fixture"

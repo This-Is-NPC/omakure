@@ -64,7 +64,7 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("scripts_search_tree_family_routes"),
     ),
     (
-        ("GET", "/v1/tree/*path"),
+        ("GET", "/v1/tree/{*path}"),
         RouteCoverage::Covered("scripts_search_tree_family_routes"),
     ),
     (
@@ -72,7 +72,7 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("scripts_search_tree_family_routes"),
     ),
     (
-        ("GET", "/v1/scripts/*script_id"),
+        ("GET", "/v1/scripts/{*script_id}"),
         RouteCoverage::Covered("scripts_search_tree_family_routes (+ /schema /content)"),
     ),
     (
@@ -88,31 +88,31 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("GET", "/v1/envs/:name"),
+        ("GET", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("PUT", "/v1/envs/:name"),
+        ("PUT", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("PATCH", "/v1/envs/:name"),
+        ("PATCH", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("DELETE", "/v1/envs/:name"),
+        ("DELETE", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("POST", "/v1/envs/:name/activate"),
+        ("POST", "/v1/envs/{name}/activate"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("PUT", "/v1/envs/:name/params/:key"),
+        ("PUT", "/v1/envs/{name}/params/{key}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("DELETE", "/v1/envs/:name/params/:key"),
+        ("DELETE", "/v1/envs/{name}/params/{key}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
@@ -124,19 +124,19 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("runs_queue_family_routes + secret tests"),
     ),
     (
-        ("GET", "/v1/runs/:run_id"),
+        ("GET", "/v1/runs/{run_id}"),
         RouteCoverage::Covered("runs_queue_family_routes + secret tests"),
     ),
     (
-        ("GET", "/v1/runs/:run_id/traces"),
+        ("GET", "/v1/runs/{run_id}/traces"),
         RouteCoverage::Covered("runs_queue_family_routes"),
     ),
     (
-        ("POST", "/v1/runs/:run_id/cancel"),
+        ("POST", "/v1/runs/{run_id}/cancel"),
         RouteCoverage::Covered("runs_queue_family_routes"),
     ),
     (
-        ("POST", "/v1/runs/:run_id/dead-letter"),
+        ("POST", "/v1/runs/{run_id}/dead-letter"),
         RouteCoverage::Covered("runs_queue_family_routes"),
     ),
     (
@@ -152,26 +152,26 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("GET", "/v1/batteries/:battery_id"),
+        ("GET", "/v1/batteries/{battery_id}"),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("DELETE", "/v1/batteries/:battery_id"),
+        ("DELETE", "/v1/batteries/{battery_id}"),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("GET", "/v1/batteries/:battery_id/scripts"),
+        ("GET", "/v1/batteries/{battery_id}/scripts"),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
         (
             "POST",
-            "/v1/batteries/:battery_id/scripts/:script_id/install",
+            "/v1/batteries/{battery_id}/scripts/{script_id}/install",
         ),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("POST", "/v1/batteries/:battery_id/sync"),
+        ("POST", "/v1/batteries/{battery_id}/sync"),
         RouteCoverage::Covered(
             "batteries_family_routes (https-only validation; no remote network)",
         ),
@@ -229,11 +229,11 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_enrollment_routes"),
     ),
     (
-        ("POST", "/v1/node/enrollments/:node_id/approve"),
+        ("POST", "/v1/node/enrollments/{node_id}/approve"),
         RouteCoverage::Covered("node_enrollment_routes"),
     ),
     (
-        ("POST", "/v1/node/enrollments/:node_id/reject"),
+        ("POST", "/v1/node/enrollments/{node_id}/reject"),
         RouteCoverage::Covered("node_enrollment_routes"),
     ),
     (
@@ -241,11 +241,11 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("signed_bundle_enrollment_routes"),
     ),
     (
-        ("PATCH", "/v1/node/peers/:node_id/capabilities"),
+        ("PATCH", "/v1/node/peers/{node_id}/capabilities"),
         RouteCoverage::Covered("node_management_routes"),
     ),
     (
-        ("POST", "/v1/node/peers/:node_id/revoke"),
+        ("POST", "/v1/node/peers/{node_id}/revoke"),
         RouteCoverage::Covered("node_management_routes"),
     ),
 ];

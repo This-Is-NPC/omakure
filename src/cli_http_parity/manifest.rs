@@ -355,7 +355,13 @@ fn normalize_route(path: &str) -> String {
     path.split('/')
         .map(|segment| {
             segment
-                .strip_prefix('*')
+                .strip_prefix("{*")
+                .and_then(|name| name.strip_suffix('}'))
+                .or_else(|| {
+                    segment
+                        .strip_prefix('{')
+                        .and_then(|name| name.strip_suffix('}'))
+                })
                 .map_or_else(|| segment.to_string(), |name| format!(":{name}"))
         })
         .collect::<Vec<_>>()

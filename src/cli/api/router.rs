@@ -250,29 +250,29 @@ pub(super) fn router_with_transport(
         .route("/v1/workspace", get(workspace_handler))
         .route("/v1/search", get(search_handler))
         .route("/v1/tree", get(tree_root_handler))
-        .route("/v1/tree/*path", get(tree_path_handler))
+        .route("/v1/tree/{*path}", get(tree_path_handler))
         .route("/v1/scripts", get(list_scripts_handler))
-        .route("/v1/scripts/*script_id", get(script_path_handler))
+        .route("/v1/scripts/{*script_id}", get(script_path_handler))
         .route("/v1/envs", get(list_envs_handler).post(create_env_handler))
         .route("/v1/envs/active", delete(deactivate_env_handler))
         .route(
-            "/v1/envs/:name",
+            "/v1/envs/{name}",
             get(show_env_handler)
                 .put(put_env_handler)
                 .patch(patch_env_handler)
                 .delete(delete_env_handler),
         )
-        .route("/v1/envs/:name/activate", post(activate_env_handler))
+        .route("/v1/envs/{name}/activate", post(activate_env_handler))
         .route(
-            "/v1/envs/:name/params/:key",
+            "/v1/envs/{name}/params/{key}",
             put(set_env_param_handler).delete(delete_env_param_handler),
         )
         .route("/v1/runs", get(list_runs_handler).post(enqueue_run_handler))
-        .route("/v1/runs/:run_id", get(show_run_handler))
-        .route("/v1/runs/:run_id/traces", get(list_traces_handler))
-        .route("/v1/runs/:run_id/cancel", post(cancel_run_handler))
+        .route("/v1/runs/{run_id}", get(show_run_handler))
+        .route("/v1/runs/{run_id}/traces", get(list_traces_handler))
+        .route("/v1/runs/{run_id}/cancel", post(cancel_run_handler))
         .route(
-            "/v1/runs/:run_id/dead-letter",
+            "/v1/runs/{run_id}/dead-letter",
             post(dead_letter_run_handler),
         )
         .route("/v1/queue/stats", get(queue_stats_handler))
@@ -281,18 +281,21 @@ pub(super) fn router_with_transport(
             get(list_batteries_handler).post(add_battery_handler),
         )
         .route(
-            "/v1/batteries/:battery_id",
+            "/v1/batteries/{battery_id}",
             get(inspect_battery_handler).delete(remove_battery_handler),
         )
         .route(
-            "/v1/batteries/:battery_id/scripts",
+            "/v1/batteries/{battery_id}/scripts",
             get(list_battery_scripts_handler),
         )
         .route(
-            "/v1/batteries/:battery_id/scripts/:script_id/install",
+            "/v1/batteries/{battery_id}/scripts/{script_id}/install",
             post(install_battery_script_handler),
         )
-        .route("/v1/batteries/:battery_id/sync", post(sync_battery_handler))
+        .route(
+            "/v1/batteries/{battery_id}/sync",
+            post(sync_battery_handler),
+        )
         .route("/v1/secrets", get(list_secrets_metadata_handler))
         .route("/v1/node/status", get(node_status_handler))
         .route("/v1/node/discovery", get(node_discovery_handler))
@@ -312,11 +315,11 @@ pub(super) fn router_with_transport(
             get(node_enrollments_handler).post(node_enrollment_stage_handler),
         )
         .route(
-            "/v1/node/enrollments/:node_id/approve",
+            "/v1/node/enrollments/{node_id}/approve",
             post(node_enrollment_approve_handler),
         )
         .route(
-            "/v1/node/enrollments/:node_id/reject",
+            "/v1/node/enrollments/{node_id}/reject",
             post(node_enrollment_reject_handler),
         )
         .route(
@@ -326,10 +329,10 @@ pub(super) fn router_with_transport(
             )),
         )
         .route(
-            "/v1/node/peers/:node_id/capabilities",
+            "/v1/node/peers/{node_id}/capabilities",
             axum::routing::patch(node_capabilities_handler),
         )
-        .route("/v1/node/peers/:node_id/revoke", post(node_revoke_handler))
+        .route("/v1/node/peers/{node_id}/revoke", post(node_revoke_handler))
         .fallback(protected_not_found)
         .layer(axum::extract::DefaultBodyLimit::max(body_limit))
         .layer(middleware::from_fn_with_state(

@@ -116,7 +116,7 @@ verify workspace paths or host runtimes.
 | CLI | clap 4.5, clap_complete 4.5 | Commands, help, and completions |
 | Serialization | serde, serde_json, toml 0.8, serde_urlencoded 0.7 | Schemas, envelopes, config, policy, HTTP query strings |
 | Canonical JSON | serde_jcs 0.2 | RFC 8785 bytes for signed envelopes and Health reports |
-| HTTP | axum 0.7, tokio 1, tower 0.5 | Authenticated management API |
+| HTTP | axum 0.8, tokio 1, tower 0.5 | Authenticated management API |
 | Storage | rusqlite 0.31, bundled SQLite | Runs, queue state, traces, search index, node registry |
 | Errors | thiserror 2.0 | Typed domain and application errors |
 | Scheduling | cron 0.12, chrono 0.4, humantime 2.1 | Schedule parsing, next-fire calculation, duration flags |

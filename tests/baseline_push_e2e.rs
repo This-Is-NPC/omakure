@@ -19,17 +19,6 @@ use std::time::{Duration, Instant};
 
 const ORGANIZATION: &str = "baseline-e2e-fleet";
 
-fn init_node(workspace: &Path) -> Value {
-    support::assert_node_success_named(
-        "init",
-        &support::run_node_checked_signal(workspace, &["init".to_string()]),
-    );
-    support::assert_node_success_named(
-        "status",
-        &support::run_node_checked_signal(workspace, &["status".to_string()]),
-    )
-}
-
 fn serve(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
@@ -199,7 +188,7 @@ fn stand_up_fleet() -> Fleet {
     let conductor = conductor_dir.path();
     let performer = performer_dir.path();
 
-    init_node(publisher);
+    support::init_node_checked_signal(publisher);
     configure(
         publisher,
         support::unique_loopback_port(),
@@ -243,8 +232,8 @@ fn stand_up_fleet() -> Fleet {
         .expect("baseline id")
         .to_string();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()

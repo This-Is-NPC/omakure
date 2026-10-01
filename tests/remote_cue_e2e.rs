@@ -23,17 +23,6 @@ const CUE_EFFECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// own tick, so this is deliberately looser than the effect timeout.
 const SIGNAL_TIMEOUT: Duration = Duration::from_secs(90);
 
-fn init_node(workspace: &Path) -> Value {
-    support::assert_node_success_named(
-        "init",
-        &support::run_node_checked_signal(workspace, &["init".to_string()]),
-    );
-    support::assert_node_success_named(
-        "status",
-        &support::run_node_checked_signal(workspace, &["status".to_string()]),
-    )
-}
-
 fn serve(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
@@ -214,8 +203,8 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
     let conductor_port = support::unique_loopback_port();
     let performer_port = support::unique_loopback_port();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
 
     let marker = performer.join("effects.log");
@@ -450,8 +439,8 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
     let conductor_port = support::unique_loopback_port();
     let performer_port = support::unique_loopback_port();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let conductor_id = conductor_status["identity"]["node_id"].as_str().unwrap();
     let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
 
@@ -563,8 +552,8 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
     let conductor_port = support::unique_loopback_port();
     let performer_port = support::unique_loopback_port();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
 
     let marker = performer.join("effects.log");

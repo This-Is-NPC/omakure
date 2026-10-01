@@ -9,7 +9,7 @@
 //!
 //! Two real `node serve` processes, real transport, no mocks.
 
-mod support;
+pub mod support;
 
 use std::path::Path;
 use std::time::{Duration, Instant};

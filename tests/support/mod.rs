@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod bin;
 pub mod direct_client;
 mod frame;

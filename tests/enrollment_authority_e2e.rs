@@ -8,7 +8,7 @@
 //! These drive the shipped `omakure node authority` verbs against real nodes
 //! and then hand the result to the real apply path.
 
-mod support;
+pub mod support;
 
 use serde_json::Value;
 use std::path::Path;

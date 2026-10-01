@@ -1,4 +1,4 @@
-mod support;
+pub mod support;
 
 use rusqlite::Connection;
 use serde_json::Value;

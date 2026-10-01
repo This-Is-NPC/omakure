@@ -3,7 +3,7 @@
 //! Family modules own real probes; this file owns deterministic fixture setup,
 //! adapter invocation and registry aggregation.
 
-mod support;
+pub mod support;
 
 #[path = "behavioral_parity/battery.rs"]
 mod battery;

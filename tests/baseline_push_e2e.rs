@@ -9,7 +9,7 @@
 //!
 //! Two real `node serve` processes, real transport, no mocks.
 
-mod support;
+pub mod support;
 
 use serde_json::Value;
 use std::path::Path;

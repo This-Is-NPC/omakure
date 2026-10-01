@@ -13,7 +13,7 @@
 
 #[path = "support/health_ids.rs"]
 mod health_ids;
-mod support;
+pub mod support;
 
 use health_ids::{hex16, peer_identity};
 

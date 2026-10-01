@@ -15,7 +15,7 @@
 //! These assertions provide regression coverage for the production listener and
 //! transport compatibility that the shipped Health Plane relies on.
 
-mod support;
+pub mod support;
 
 use omakure::direct_transport::{
     ENVELOPE_KIND, HandshakeRole, NoiseHandshake, TransportCertificate, TransportSession,

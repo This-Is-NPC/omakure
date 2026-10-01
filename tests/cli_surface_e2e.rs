@@ -1,4 +1,4 @@
-mod support;
+pub mod support;
 
 use serde_json::Value;
 use std::fs;

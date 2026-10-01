@@ -1,4 +1,4 @@
-mod support;
+pub mod support;
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};

@@ -11,7 +11,7 @@
 //! `std::process::Command` from another, so re-proving cancel, heartbeat,
 //! redaction, or the queue-worker path for Lua would be theatre.
 
-mod support;
+pub mod support;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

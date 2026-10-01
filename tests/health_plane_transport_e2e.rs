@@ -18,7 +18,7 @@
 //!   boundary seconds. No test sleeps for ten minutes and no window is
 //!   approximated.
 
-mod support;
+pub mod support;
 
 use omakure::direct_transport::{
     ENVELOPE_KIND, HandshakeRole, NoiseHandshake, TransportSession, sign_health_envelope,

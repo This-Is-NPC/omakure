@@ -1,4 +1,4 @@
-mod support;
+pub mod support;
 
 #[cfg(unix)]
 #[test]

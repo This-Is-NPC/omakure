@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "163d6cfa0e559138bec265098fb531da87cf7120b23c728ad9a8ec81316b219b",
+  "canonical_sha256": "f282c32368e38bc6c4db8c3c6d07e25526dfd21f5393df5349c3f2da34f86377",
   "config_identity": "no-config",
   "files": [
     {
@@ -1394,11 +1394,11 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 34,
+        "invocations": 36,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 25,
+        "cognitive": 23,
         "cyclomatic": 52
       },
       "path": "src/cli/serve_autostart.rs",
@@ -34864,14 +34864,14 @@
       },
       "identity": "crate::cli::serve_autostart::install",
       "kind": "function",
-      "line": 24,
+      "line": 54,
       "name": "install",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 24,
+        "line": 54,
         "name": "install"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -34890,14 +34890,14 @@
       },
       "identity": "crate::cli::serve_autostart::uninstall",
       "kind": "function",
-      "line": 36,
+      "line": 66,
       "name": "uninstall",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 36,
+        "line": 66,
         "name": "uninstall"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -34916,14 +34916,14 @@
       },
       "identity": "crate::cli::serve_autostart::status",
       "kind": "function",
-      "line": 48,
+      "line": 78,
       "name": "status",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 48,
+        "line": 78,
         "name": "status"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -34942,14 +34942,14 @@
       },
       "identity": "crate::cli::serve_autostart::unsupported",
       "kind": "function",
-      "line": 61,
+      "line": 91,
       "name": "unsupported",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 61,
+        "line": 91,
         "name": "unsupported"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -34968,14 +34968,14 @@
       },
       "identity": "crate::cli::serve_autostart::path_hash",
       "kind": "function",
-      "line": 79,
+      "line": 111,
       "name": "path_hash",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 79,
+        "line": 111,
         "name": "path_hash"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -34994,14 +34994,14 @@
       },
       "identity": "crate::cli::serve_autostart::unit_name",
       "kind": "function",
-      "line": 88,
+      "line": 121,
       "name": "unit_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 88,
+        "line": 121,
         "name": "unit_name"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35020,14 +35020,14 @@
       },
       "identity": "crate::cli::serve_autostart::unit_name::<closure>",
       "kind": "closure",
-      "line": 90,
+      "line": 123,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 90,
+        "line": 123,
         "name": "<closure>"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35041,49 +35041,23 @@
         "identity": "crate::cli::serve_autostart::unit_dir",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_autostart.rs",
-        "signature": "fn unit_dir() -> Result<PathBuf, String>",
+        "signature": "fn unit_dir() -> Result<PathBuf, AutostartError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_autostart::unit_dir",
       "kind": "function",
-      "line": 94,
+      "line": 128,
       "name": "unit_dir",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 94,
+        "line": 128,
         "name": "unit_dir"
       },
       "path": "src/cli/serve_autostart.rs",
-      "signature": "fn unit_dir() -> Result<PathBuf, String>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::serve_autostart::unit_dir::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/serve_autostart.rs",
-        "signature": "let home = std::env::var_os(\"HOME\").ok_or_else(|| \"HOME is not set\".to_string())?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::serve_autostart::unit_dir::<closure>",
-      "kind": "closure",
-      "line": 95,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 95,
-        "name": "<closure>"
-      },
-      "path": "src/cli/serve_autostart.rs",
-      "signature": "let home = std::env::var_os(\"HOME\").ok_or_else(|| \"HOME is not set\".to_string())?;",
+      "signature": "fn unit_dir() -> Result<PathBuf, AutostartError>",
       "source_class": "handwritten"
     },
     {
@@ -35093,23 +35067,23 @@
         "identity": "crate::cli::serve_autostart::unit_path",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_autostart.rs",
-        "signature": "fn unit_path(workspace: &Workspace) -> Result<PathBuf, String>",
+        "signature": "fn unit_path(workspace: &Workspace) -> Result<PathBuf, AutostartError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_autostart::unit_path",
       "kind": "function",
-      "line": 99,
+      "line": 134,
       "name": "unit_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 99,
+        "line": 134,
         "name": "unit_path"
       },
       "path": "src/cli/serve_autostart.rs",
-      "signature": "fn unit_path(workspace: &Workspace) -> Result<PathBuf, String>",
+      "signature": "fn unit_path(workspace: &Workspace) -> Result<PathBuf, AutostartError>",
       "source_class": "handwritten"
     },
     {
@@ -35119,49 +35093,23 @@
         "identity": "crate::cli::serve_autostart::current_binary",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_autostart.rs",
-        "signature": "fn current_binary() -> Result<PathBuf, String>",
+        "signature": "fn current_binary() -> Result<PathBuf, AutostartError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_autostart::current_binary",
       "kind": "function",
-      "line": 103,
+      "line": 139,
       "name": "current_binary",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 103,
+        "line": 139,
         "name": "current_binary"
       },
       "path": "src/cli/serve_autostart.rs",
-      "signature": "fn current_binary() -> Result<PathBuf, String>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::serve_autostart::current_binary::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/serve_autostart.rs",
-        "signature": "std::env::current_exe().map_err(|e| format!(\"current_exe: {e}\"))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::serve_autostart::current_binary::<closure>",
-      "kind": "closure",
-      "line": 104,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 104,
-        "name": "<closure>"
-      },
-      "path": "src/cli/serve_autostart.rs",
-      "signature": "std::env::current_exe().map_err(|e| format!(\"current_exe: {e}\"))",
+      "signature": "fn current_binary() -> Result<PathBuf, AutostartError>",
       "source_class": "handwritten"
     },
     {
@@ -35171,23 +35119,23 @@
         "identity": "crate::cli::serve_autostart::render_unit",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_autostart.rs",
-        "signature": "fn render_unit(workspace: &Workspace) -> Result<String, String>",
+        "signature": "fn render_unit(workspace: &Workspace) -> Result<String, AutostartError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_autostart::render_unit",
       "kind": "function",
-      "line": 107,
+      "line": 144,
       "name": "render_unit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 107,
+        "line": 144,
         "name": "render_unit"
       },
       "path": "src/cli/serve_autostart.rs",
-      "signature": "fn render_unit(workspace: &Workspace) -> Result<String, String>",
+      "signature": "fn render_unit(workspace: &Workspace) -> Result<String, AutostartError>",
       "source_class": "handwritten"
     },
     {
@@ -35197,23 +35145,23 @@
         "identity": "crate::cli::serve_autostart::render_unit::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_autostart.rs",
-        "signature": ".map_err(|e| format!(\"canonicalize workspace {}: {e}\", workspace.root().display()))?;",
+        "signature": "let canonical = std::fs::canonicalize(workspace.root()).map_err(|source| {",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_autostart::render_unit::<closure>",
       "kind": "closure",
-      "line": 109,
+      "line": 145,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 109,
+        "line": 145,
         "name": "<closure>"
       },
       "path": "src/cli/serve_autostart.rs",
-      "signature": ".map_err(|e| format!(\"canonicalize workspace {}: {e}\", workspace.root().display()))?;",
+      "signature": "let canonical = std::fs::canonicalize(workspace.root()).map_err(|source| {",
       "source_class": "handwritten"
     },
     {
@@ -35228,14 +35176,14 @@
       },
       "identity": "crate::cli::serve_autostart::install_linux",
       "kind": "function",
-      "line": 135,
+      "line": 176,
       "name": "install_linux",
       "native": {
         "analyzer": "cccc",
         "cognitive": 9,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 135,
+        "line": 176,
         "name": "install_linux"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35254,14 +35202,14 @@
       },
       "identity": "crate::cli::serve_autostart::uninstall_linux",
       "kind": "function",
-      "line": 192,
+      "line": 233,
       "name": "uninstall_linux",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 192,
+        "line": 233,
         "name": "uninstall_linux"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35280,14 +35228,14 @@
       },
       "identity": "crate::cli::serve_autostart::status_linux",
       "kind": "function",
-      "line": 229,
+      "line": 270,
       "name": "status_linux",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 229,
+        "line": 270,
         "name": "status_linux"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35301,23 +35249,75 @@
         "identity": "crate::cli::serve_autostart::systemctl",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_autostart.rs",
-        "signature": "fn systemctl(args: &[&str]) -> Result<(), String>",
+        "signature": "fn systemctl(args: &[&str]) -> Result<(), AutostartError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_autostart::systemctl",
       "kind": "function",
-      "line": 261,
+      "line": 302,
       "name": "systemctl",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 261,
+        "line": 302,
         "name": "systemctl"
       },
       "path": "src/cli/serve_autostart.rs",
-      "signature": "fn systemctl(args: &[&str]) -> Result<(), String>",
+      "signature": "fn systemctl(args: &[&str]) -> Result<(), AutostartError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve_autostart::systemctl::owned_args",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve_autostart.rs",
+        "signature": "let owned_args = || args.iter().map(|arg| (*arg).to_string()).collect();",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve_autostart::systemctl::owned_args",
+      "kind": "closure",
+      "line": 303,
+      "name": "owned_args",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 303,
+        "name": "owned_args"
+      },
+      "path": "src/cli/serve_autostart.rs",
+      "signature": "let owned_args = || args.iter().map(|arg| (*arg).to_string()).collect();",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve_autostart::systemctl::owned_args::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve_autostart.rs",
+        "signature": "let owned_args = || args.iter().map(|arg| (*arg).to_string()).collect();",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve_autostart::systemctl::owned_args::<closure>",
+      "kind": "closure",
+      "line": 303,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 303,
+        "name": "<closure>"
+      },
+      "path": "src/cli/serve_autostart.rs",
+      "signature": "let owned_args = || args.iter().map(|arg| (*arg).to_string()).collect();",
       "source_class": "handwritten"
     },
     {
@@ -35327,23 +35327,23 @@
         "identity": "crate::cli::serve_autostart::systemctl::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_autostart.rs",
-        "signature": ".map_err(|e| format!(\"systemctl --user {args:?}: {e}\"))?;",
+        "signature": ".map_err(|source| AutostartError::SystemctlIo {",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_autostart::systemctl::<closure>",
       "kind": "closure",
-      "line": 266,
+      "line": 308,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 266,
+        "line": 308,
         "name": "<closure>"
       },
       "path": "src/cli/serve_autostart.rs",
-      "signature": ".map_err(|e| format!(\"systemctl --user {args:?}: {e}\"))?;",
+      "signature": ".map_err(|source| AutostartError::SystemctlIo {",
       "source_class": "handwritten"
     },
     {
@@ -35358,14 +35358,14 @@
       },
       "identity": "crate::cli::serve_autostart::systemctl_is_active",
       "kind": "function",
-      "line": 278,
+      "line": 323,
       "name": "systemctl_is_active",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 278,
+        "line": 323,
         "name": "systemctl_is_active"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35384,14 +35384,14 @@
       },
       "identity": "crate::cli::serve_autostart::systemctl_is_active::<closure>",
       "kind": "closure",
-      "line": 282,
+      "line": 327,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 282,
+        "line": 327,
         "name": "<closure>"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35410,14 +35410,14 @@
       },
       "identity": "crate::cli::serve_autostart::systemctl_is_enabled",
       "kind": "function",
-      "line": 287,
+      "line": 332,
       "name": "systemctl_is_enabled",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 287,
+        "line": 332,
         "name": "systemctl_is_enabled"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35436,14 +35436,14 @@
       },
       "identity": "crate::cli::serve_autostart::systemctl_is_enabled::<closure>",
       "kind": "closure",
-      "line": 291,
+      "line": 336,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 291,
+        "line": 336,
         "name": "<closure>"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35462,14 +35462,14 @@
       },
       "identity": "crate::cli::serve_autostart::unit_name_is_stable_for_same_path",
       "kind": "function",
-      "line": 323,
+      "line": 354,
       "name": "unit_name_is_stable_for_same_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 323,
+        "line": 354,
         "name": "unit_name_is_stable_for_same_path"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35488,14 +35488,14 @@
       },
       "identity": "crate::cli::serve_autostart::unit_name_differs_per_workspace",
       "kind": "function",
-      "line": 334,
+      "line": 365,
       "name": "unit_name_differs_per_workspace",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 334,
+        "line": 365,
         "name": "unit_name_differs_per_workspace"
       },
       "path": "src/cli/serve_autostart.rs",
@@ -35514,18 +35514,70 @@
       },
       "identity": "crate::cli::serve_autostart::render_unit_contains_workspace_and_binary",
       "kind": "function",
-      "line": 343,
+      "line": 374,
       "name": "render_unit_contains_workspace_and_binary",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 343,
+        "line": 374,
         "name": "render_unit_contains_workspace_and_binary"
       },
       "path": "src/cli/serve_autostart.rs",
       "signature": "fn render_unit_contains_workspace_and_binary()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve_autostart::render_unit_preserves_canonicalization_error_context",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve_autostart.rs",
+        "signature": "fn render_unit_preserves_canonicalization_error_context()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve_autostart::render_unit_preserves_canonicalization_error_context",
+      "kind": "function",
+      "line": 387,
+      "name": "render_unit_preserves_canonicalization_error_context",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 387,
+        "name": "render_unit_preserves_canonicalization_error_context"
+      },
+      "path": "src/cli/serve_autostart.rs",
+      "signature": "fn render_unit_preserves_canonicalization_error_context()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve_autostart::systemctl_errors_preserve_command_and_stderr_text",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve_autostart.rs",
+        "signature": "fn systemctl_errors_preserve_command_and_stderr_text()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve_autostart::systemctl_errors_preserve_command_and_stderr_text",
+      "kind": "function",
+      "line": 405,
+      "name": "systemctl_errors_preserve_command_and_stderr_text",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 405,
+        "name": "systemctl_errors_preserve_command_and_stderr_text"
+      },
+      "path": "src/cli/serve_autostart.rs",
+      "signature": "fn systemctl_errors_preserve_command_and_stderr_text()",
       "source_class": "handwritten"
     },
     {

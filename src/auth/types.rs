@@ -27,6 +27,7 @@ pub struct TokenRecord {
 
 #[derive(Debug, Clone)]
 struct TokenStore {
+    #[cfg(any(unix, test))]
     path: PathBuf,
     tokens: Vec<TokenRecord>,
 }
@@ -62,7 +63,11 @@ impl Authenticator {
         let path = path.into();
         let tokens = load_tokens_file(&path)?;
         Ok(Self {
-            inner: Arc::new(RwLock::new(TokenStore { path, tokens })),
+            inner: Arc::new(RwLock::new(TokenStore {
+                #[cfg(any(unix, test))]
+                path,
+                tokens,
+            })),
             reload_status: Arc::new(RwLock::new(AuthReloadStatus::default())),
         })
     }
@@ -87,6 +92,7 @@ impl Authenticator {
     }
 
     /// Reload tokens from disk. On failure, keeps the last valid set and returns Err.
+    #[cfg(any(unix, test))]
     pub fn reload(&self) -> Result<(), AuthError> {
         let mut guard = self.inner.write().expect("auth lock");
         let now_ms = crate::util::time::unix_millis();
@@ -144,6 +150,7 @@ impl fmt::Display for AuthError {
 impl std::error::Error for AuthError {}
 
 impl AuthError {
+    #[cfg(any(unix, test))]
     pub(super) fn status_message(&self) -> &'static str {
         match self {
             Self::Io(_) => "tokens file I/O error",

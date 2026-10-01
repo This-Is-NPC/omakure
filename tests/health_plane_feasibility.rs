@@ -29,7 +29,6 @@ use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::{Command, Output};
 use std::time::Duration;
 
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
@@ -225,40 +224,9 @@ fn sign_health_envelope(
 // Node process helpers.
 // ---------------------------------------------------------------------------
 
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let state = workspace.join(".node-state");
-    let config = workspace.join("node.toml");
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(state)
-        .arg("--node-config")
-        .arg(config)
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", support::api_token())
-        .output()
-        .expect("run node command")
-}
-
-fn assert_success(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node command failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
-    envelope["data"].clone()
-}
-
 fn init_node(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["init".to_string()]));
-    assert_success(&run_node(workspace, &["status".to_string()]))
+    support::assert_node_success(&support::run_node(workspace, &["init".to_string()]));
+    support::assert_node_success(&support::run_node(workspace, &["status".to_string()]))
 }
 
 fn trust_peer(
@@ -295,7 +263,7 @@ fn trust_peer(
         args.push("--capability".to_string());
         args.push((*capability).to_string());
     }
-    let data = assert_success(&run_node(workspace, &args));
+    let data = support::assert_node_success(&support::run_node(workspace, &args));
     assert_eq!(data["state"], "active");
 }
 
@@ -638,7 +606,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     let exit = conductor_server.terminate();
     support::assert_terminated(exit);
 
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         conductor.path(),
         &[
             "capabilities".to_string(),
@@ -662,7 +630,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     );
 
     // 6. Revocation through the production CLI denies every kind.
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         conductor.path(),
         &[
             "revoke".to_string(),

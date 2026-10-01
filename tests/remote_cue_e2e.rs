@@ -13,7 +13,6 @@ mod support;
 
 use serde_json::Value;
 use std::path::Path;
-use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
 /// A Cue that is going to be authorized should be decided in well under this.
@@ -22,45 +21,15 @@ const CUE_EFFECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// own tick, so this is deliberately looser than the effect timeout.
 const SIGNAL_TIMEOUT: Duration = Duration::from_secs(90);
 
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let output = Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", support::api_token())
-        .output()
-        .expect("run node command");
-    // Carried on the failure message: a test that only reports "a node command
-    // failed" costs a bisect every time it goes red.
-    assert!(
-        output.status.code().is_some(),
-        "node {args:?} was killed by a signal"
-    );
-    output
-}
-
-fn assert_success_named(label: &str, output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node {label} failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "node {label} envelope: {envelope}");
-    envelope["data"].clone()
-}
-
 fn init_node(workspace: &Path) -> Value {
-    assert_success_named("init", &run_node(workspace, &["init".to_string()]));
-    assert_success_named("status", &run_node(workspace, &["status".to_string()]))
+    support::assert_node_success_named(
+        "init",
+        &support::run_node_checked_signal(workspace, &["init".to_string()]),
+    );
+    support::assert_node_success_named(
+        "status",
+        &support::run_node_checked_signal(workspace, &["status".to_string()]),
+    )
 }
 
 fn serve(workspace: &Path) -> support::HttpServer {
@@ -114,7 +83,10 @@ fn trust_peer(
         args.push((*capability).to_string());
     }
     assert_eq!(
-        assert_success_named("trust", &run_node(workspace, &args))["state"],
+        support::assert_node_success_named(
+            "trust",
+            &support::run_node_checked_signal(workspace, &args)
+        )["state"],
         "active"
     );
 }
@@ -280,9 +252,9 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
 
     assert_eq!(effect_count(&marker), 0, "nothing has run yet");
 
-    let dispatched = assert_success_named(
+    let dispatched = support::assert_node_success_named(
         "cue",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),
@@ -352,9 +324,9 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         .as_str()
         .expect("the dispatcher must return the minted cue id")
         .to_string();
-    let redispatched = assert_success_named(
+    let redispatched = support::assert_node_success_named(
         "cue-retry",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),
@@ -396,7 +368,10 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         wait_for_signal(conductor, &expected),
         "the Conductor's own Signal feed must show the outcome it correlated. \
          expected={expected} feed={}",
-        assert_success_named("signals", &run_node(conductor, &["signals".to_string()]))
+        support::assert_node_success_named(
+            "signals",
+            &support::run_node_checked_signal(conductor, &["signals".to_string()])
+        )
     );
 }
 
@@ -440,7 +415,7 @@ fn wait_for_standing_session(service: &support::HttpServer) -> bool {
 fn wait_for_signal(conductor: &Path, expected_run_id: &str) -> bool {
     let deadline = Instant::now() + SIGNAL_TIMEOUT;
     while Instant::now() < deadline {
-        let feed = run_node(conductor, &["signals".to_string()]);
+        let feed = support::run_node_checked_signal(conductor, &["signals".to_string()]);
         if feed.status.success() {
             let envelope = support::json_envelope(&feed.stdout);
             if let Some(signals) = envelope["data"]["signals"].as_array() {
@@ -530,9 +505,9 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
     );
     assert_eq!(effect_count(&marker), 0, "nothing has run yet");
 
-    let dispatched = assert_success_named(
+    let dispatched = support::assert_node_success_named(
         "cue",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),
@@ -618,9 +593,9 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
     let _performer_service = serve(performer);
     let _conductor_service = serve(conductor);
 
-    assert_success_named(
+    support::assert_node_success_named(
         "cue",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),

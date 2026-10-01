@@ -6,7 +6,7 @@ use snow::{params::NoiseParams, Builder};
 use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 use std::time::{Duration, Instant};
 
 use omakure::direct_transport::{
@@ -17,31 +17,6 @@ use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 
 const HANDSHAKE_IO_TIMEOUT: Duration = Duration::from_secs(10);
-
-fn node_args(workspace: &Path) -> (String, String) {
-    (
-        workspace.join(".node-state").to_string_lossy().into_owned(),
-        workspace.join("node.toml").to_string_lossy().into_owned(),
-    )
-}
-
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let (state, config) = node_args(workspace);
-    let mut command = Command::new(support::omakure_bin());
-    command
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(state)
-        .arg("--node-config")
-        .arg(config)
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", support::api_token());
-    command.output().expect("run node command")
-}
 
 fn json(output: &Output) -> Value {
     support::json_envelope(&output.stdout)
@@ -61,7 +36,7 @@ fn assert_success(output: &Output) {
 }
 
 fn init_node(workspace: &Path) {
-    let output = run_node(workspace, &["init".to_string()]);
+    let output = support::run_node_with_lossy_paths(workspace, &["init".to_string()]);
     assert_success(&output);
 }
 
@@ -73,7 +48,7 @@ fn enable_manual_enrollment(workspace: &Path) {
 }
 
 fn status_node(workspace: &Path) -> Value {
-    let output = run_node(workspace, &["status".to_string()]);
+    let output = support::run_node_with_lossy_paths(workspace, &["status".to_string()]);
     assert_success(&output);
     json(&output)["data"].clone()
 }
@@ -100,7 +75,7 @@ fn trust_node(workspace: &Path, peer_workspace: &Path, peer: &Value) {
         "pretrusted transport peer".to_string(),
         "--confirmed".to_string(),
     ];
-    let output = run_node(workspace, &args);
+    let output = support::run_node_with_lossy_paths(workspace, &args);
     assert_success(&output);
     assert_eq!(json(&output)["data"]["state"], "active");
 }
@@ -196,7 +171,7 @@ fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpSe
 }
 
 fn probe(workspace: &Path, endpoint: &str, peer_node_id: &str) -> Output {
-    run_node(
+    support::run_node_with_lossy_paths(
         workspace,
         &[
             "direct-probe".to_string(),
@@ -614,7 +589,7 @@ fn direct_transport_post_reset_old_identity_rejected() {
         registry_snapshot(initiator.path())
     };
 
-    assert_success(&run_node(
+    assert_success(&support::run_node_with_lossy_paths(
         target.path(),
         &["reset".to_string(), "--confirmed".to_string()],
     ));
@@ -952,7 +927,7 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
         Duration::from_secs(15),
     );
 
-    let request = run_node(
+    let request = support::run_node_with_lossy_paths(
         candidate.path(),
         &[
             "enroll".into(),
@@ -981,7 +956,7 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
-    let approve = run_node(
+    let approve = support::run_node_with_lossy_paths(
         target.path(),
         &[
             "enroll".into(),
@@ -1177,7 +1152,7 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
 }
 
 fn revoke_node(workspace: &Path, peer_node_id: &str) {
-    let output = run_node(
+    let output = support::run_node_with_lossy_paths(
         workspace,
         &[
             "revoke".to_string(),

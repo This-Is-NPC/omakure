@@ -22,8 +22,7 @@ use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::{NodeRegistry, PeerState};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -75,8 +74,9 @@ impl Node {
     fn start() -> Self {
         let temp = TempDir::new().expect("temp workspace");
         let workspace = temp.path().to_path_buf();
-        assert_success(&run_node(&workspace, &["init".to_string()]));
-        let status = assert_success(&run_node(&workspace, &["status".to_string()]));
+        support::assert_node_success(&support::run_node(&workspace, &["init".to_string()]));
+        let status =
+            support::assert_node_success(&support::run_node(&workspace, &["status".to_string()]));
         let local_node_id = status["identity"]["node_id"]
             .as_str()
             .expect("local node id")
@@ -113,35 +113,6 @@ impl Node {
     }
 }
 
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", support::api_token())
-        .output()
-        .expect("run node command")
-}
-
-fn assert_success(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node command failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
-    envelope["data"].clone()
-}
-
 fn peer_identity(seed: u8) -> (String, String) {
     let key = k256::schnorr::SigningKey::from_slice(&[seed; 32]).expect("test scalar");
     let xonly = key.verifying_key().to_bytes();
@@ -169,13 +140,13 @@ fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> Strin
         args.push("--capability".to_string());
         args.push((*capability).to_string());
     }
-    let data = assert_success(&run_node(&node.workspace, &args));
+    let data = support::assert_node_success(&support::run_node(&node.workspace, &args));
     assert_eq!(data["state"], "active");
     node_id
 }
 
 fn revoke_peer(node: &Node, node_id: &str) {
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         &node.workspace,
         &[
             "revoke".to_string(),
@@ -486,7 +457,8 @@ fn revocation_stops_reporting_and_purges_derived_state_only() {
         .expect("authorization")
         .expect("retained identity");
     assert_eq!(authorization.state, PeerState::Revoked);
-    let peers = assert_success(&run_node(&node.workspace, &["peers".to_string()]));
+    let peers =
+        support::assert_node_success(&support::run_node(&node.workspace, &["peers".to_string()]));
     assert!(
         peers.to_string().contains("revoked"),
         "the revocation must remain visible to the operator: {peers}"

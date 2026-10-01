@@ -39,7 +39,7 @@ use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -59,38 +59,9 @@ const FLEET_REACH_TIMEOUT: Duration = Duration::from_secs(110);
 // Node lifecycle helpers.
 // ---------------------------------------------------------------------------
 
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", support::api_token())
-        .output()
-        .expect("run node command")
-}
-
-fn assert_success(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node command failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
-    envelope["data"].clone()
-}
-
 fn init_node(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["init".to_string()]));
-    assert_success(&run_node(workspace, &["status".to_string()]))
+    support::assert_node_success(&support::run_node(workspace, &["init".to_string()]));
+    support::assert_node_success(&support::run_node(workspace, &["status".to_string()]))
 }
 
 fn trust_peer(
@@ -128,7 +99,7 @@ fn trust_peer(
         args.push((*capability).to_string());
     }
     assert_eq!(
-        assert_success(&run_node(workspace, &args))["state"],
+        support::assert_node_success(&support::run_node(workspace, &args))["state"],
         "active"
     );
 }
@@ -189,7 +160,7 @@ fn fleet_status_http(server: &support::HttpServer) -> Value {
 }
 
 fn fleet_status_cli(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["health".to_string()]))
+    support::assert_node_success(&support::run_node(workspace, &["health".to_string()]))
 }
 
 fn signal_feed_http(server: &support::HttpServer) -> Value {
@@ -199,7 +170,7 @@ fn signal_feed_http(server: &support::HttpServer) -> Value {
 }
 
 fn signal_feed_cli(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["signals".to_string()]))
+    support::assert_node_success(&support::run_node(workspace, &["signals".to_string()]))
 }
 
 /// Every Signal in the feed reported by one source with one kind.
@@ -957,7 +928,7 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
 
     // 6. Revocation is immediate: the peer leaves the projection at once and
     //    its Health Plane state is purged, without touching the other peer.
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         conductor.path(),
         &[
             "revoke".to_string(),
@@ -1257,7 +1228,7 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
     let _ = stream.shutdown(std::net::Shutdown::Both);
 
     // 10. Revocation: the same authorized Performer, once revoked, is dropped.
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         conductor.path(),
         &[
             "revoke".to_string(),

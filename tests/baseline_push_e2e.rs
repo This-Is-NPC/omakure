@@ -13,48 +13,19 @@ mod support;
 
 use serde_json::Value;
 use std::path::Path;
-use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
 const ORGANIZATION: &str = "baseline-e2e-fleet";
 
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let output = Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", support::api_token())
-        .output()
-        .expect("run node command");
-    assert!(
-        output.status.code().is_some(),
-        "node {args:?} was killed by a signal"
-    );
-    output
-}
-
-fn assert_success_named(label: &str, output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node {label} failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "node {label} envelope: {envelope}");
-    envelope["data"].clone()
-}
-
 fn init_node(workspace: &Path) -> Value {
-    assert_success_named("init", &run_node(workspace, &["init".to_string()]));
-    assert_success_named("status", &run_node(workspace, &["status".to_string()]))
+    support::assert_node_success_named(
+        "init",
+        &support::run_node_checked_signal(workspace, &["init".to_string()]),
+    );
+    support::assert_node_success_named(
+        "status",
+        &support::run_node_checked_signal(workspace, &["status".to_string()]),
+    )
 }
 
 fn serve(workspace: &Path) -> support::HttpServer {
@@ -106,7 +77,10 @@ fn trust_peer(
         args.push((*capability).to_string());
     }
     assert_eq!(
-        assert_success_named("trust", &run_node(workspace, &args))["state"],
+        support::assert_node_success_named(
+            "trust",
+            &support::run_node_checked_signal(workspace, &args)
+        )["state"],
         "active"
     );
 }
@@ -235,9 +209,9 @@ fn stand_up_fleet() -> Fleet {
         false,
         None,
     );
-    let key = assert_success_named(
+    let key = support::assert_node_success_named(
         "baseline create-key",
-        &run_node(
+        &support::run_node_checked_signal(
             publisher,
             &["baseline".to_string(), "create-key".to_string()],
         ),
@@ -248,9 +222,9 @@ fn stand_up_fleet() -> Fleet {
     write_baseline_script(publisher, "base-a.sh", "base-a v1");
     write_baseline_script(publisher, "base-b.sh", "base-b v1");
     let manifest_path = publisher.join("base-v1.omb");
-    let published = assert_success_named(
+    let published = support::assert_node_success_named(
         "baseline publish",
-        &run_node(
+        &support::run_node_checked_signal(
             publisher,
             &[
                 "baseline".to_string(),
@@ -363,9 +337,9 @@ fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
         "the Conductor never established its standing session with the Performer"
     );
 
-    let pushed = assert_success_named(
+    let pushed = support::assert_node_success_named(
         "baseline push",
-        &run_node(
+        &support::run_node_checked_signal(
             fleet.conductor.path(),
             &[
                 "baseline".to_string(),

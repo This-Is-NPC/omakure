@@ -2,6 +2,7 @@
 
 use serde_json::Value;
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -54,6 +55,80 @@ pub fn workspace_command_with_env<const TIMEOUT_SECS: u64>(
         command.env(key, value);
     }
     command_with_timeout(&mut command, Duration::from_secs(TIMEOUT_SECS))
+}
+
+pub fn run_node(workspace: &Path, args: &[String]) -> Output {
+    run_node_with_paths(
+        workspace,
+        args,
+        workspace.join(".node-state"),
+        workspace.join("node.toml"),
+    )
+}
+
+pub fn run_node_with_lossy_paths(workspace: &Path, args: &[String]) -> Output {
+    let state = workspace.join(".node-state").to_string_lossy().into_owned();
+    let config = workspace.join("node.toml").to_string_lossy().into_owned();
+    run_node_with_paths(workspace, args, state, config)
+}
+
+pub fn run_node_checked_signal(workspace: &Path, args: &[String]) -> Output {
+    let output = run_node(workspace, args);
+    assert!(
+        output.status.code().is_some(),
+        "node {args:?} was killed by a signal"
+    );
+    output
+}
+
+fn run_node_with_paths(
+    workspace: &Path,
+    args: &[String],
+    state: impl AsRef<OsStr>,
+    config: impl AsRef<OsStr>,
+) -> Output {
+    omakure_command()
+        .arg("--scripts-dir")
+        .arg(workspace)
+        .arg("--json")
+        .arg("node")
+        .arg("--node-state-dir")
+        .arg(state)
+        .arg("--node-config")
+        .arg(config)
+        .args(args)
+        .env("OMAKURE_NODE_TEST_MODE", "1")
+        .env("OMAKURE_API_TOKEN", api_token())
+        .output()
+        .expect("run node command")
+}
+
+pub fn assert_node_success(output: &Output) -> Value {
+    assert_node_success_with_label(output, None)
+}
+
+pub fn assert_node_success_named(label: &str, output: &Output) -> Value {
+    assert_node_success_with_label(output, Some(label))
+}
+
+fn assert_node_success_with_label(output: &Output, label: Option<&str>) -> Value {
+    let command_label = label.map_or_else(
+        || "node command".to_string(),
+        |label| format!("node {label}"),
+    );
+    assert!(
+        output.status.success(),
+        "{command_label} failed: stdout={:?} stderr={:?}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let envelope = json_envelope(&output.stdout);
+    let envelope_label = label.map_or_else(
+        || "envelope".to_string(),
+        |label| format!("node {label} envelope"),
+    );
+    assert_eq!(envelope["ok"], true, "{envelope_label}: {envelope}");
+    envelope["data"].clone()
 }
 
 pub fn assert_success(output: &Output) {

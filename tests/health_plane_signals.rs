@@ -31,8 +31,7 @@ use omakure::node_registry::NodeRegistry;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -74,8 +73,9 @@ impl Node {
     fn start() -> Self {
         let temp = TempDir::new().expect("temp workspace");
         let workspace = temp.path().to_path_buf();
-        assert_success(&run_node(&workspace, &["init".to_string()]));
-        let status = assert_success(&run_node(&workspace, &["status".to_string()]));
+        support::assert_node_success(&support::run_node(&workspace, &["init".to_string()]));
+        let status =
+            support::assert_node_success(&support::run_node(&workspace, &["status".to_string()]));
         let local_node_id = status["identity"]["node_id"]
             .as_str()
             .expect("local node id")
@@ -141,35 +141,6 @@ fn open_plane<'a>(node: &Node, registry: &'a NodeRegistry) -> HealthPlane<'a> {
     HealthPlane::with_clock(registry, Box::new(SharedClock(Arc::clone(&node.clock))))
 }
 
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", support::api_token())
-        .output()
-        .expect("run node command")
-}
-
-fn assert_success(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node command failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
-    envelope["data"].clone()
-}
-
 /// The frozen node identifier construction, reused verbatim.
 fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
     let mut digest = Sha256::new();
@@ -213,7 +184,7 @@ fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> Strin
         args.push("--capability".to_string());
         args.push((*capability).to_string());
     }
-    let data = assert_success(&run_node(&node.workspace, &args));
+    let data = support::assert_node_success(&support::run_node(&node.workspace, &args));
     assert_eq!(data["state"], "active");
     node_id
 }
@@ -239,12 +210,12 @@ fn trust_real_peer(node: &Node, peer: &Node, role: &str, capabilities: &[&str]) 
         args.push("--capability".to_string());
         args.push((*capability).to_string());
     }
-    let data = assert_success(&run_node(&node.workspace, &args));
+    let data = support::assert_node_success(&support::run_node(&node.workspace, &args));
     assert_eq!(data["state"], "active");
 }
 
 fn revoke_peer(node: &Node, node_id: &str) {
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         &node.workspace,
         &[
             "revoke".to_string(),
@@ -580,7 +551,10 @@ fn revocation_blocks_later_remote_signals_and_keeps_the_local_revocation_signal(
 
     // The revoked peer is no longer part of the fleet, so its retained Health
     // Plane rows stop reporting at once.
-    let feed = assert_success(&run_node(&node.workspace, &["signals".to_string()]));
+    let feed = support::assert_node_success(&support::run_node(
+        &node.workspace,
+        &["signals".to_string()],
+    ));
     assert_eq!(feed["signals"].as_array().expect("signals").len(), 2);
     for signal in feed["signals"].as_array().expect("signals") {
         assert_eq!(signal["source"], "local");
@@ -1372,7 +1346,10 @@ fn the_signal_read_surface_is_bounded_newest_first_and_carries_no_private_field(
     drop(plane);
     drop(registry);
 
-    let feed = assert_success(&run_node(&node.workspace, &["signals".to_string()]));
+    let feed = support::assert_node_success(&support::run_node(
+        &node.workspace,
+        &["signals".to_string()],
+    ));
     assert_eq!(feed["local_node_id"], node.local_node_id);
     assert_eq!(feed["retention_seconds"], SIGNAL_RETENTION_SECONDS);
     assert_eq!(feed["limit"], SIGNAL_INBOX_CAPACITY);

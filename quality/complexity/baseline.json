@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "5648b86a2bab7da577f320e167262194701c41cca4fde535561532569a3a5bc5",
+  "canonical_sha256": "8314051ae68df4c1542ecc474c59743fc4167efe0fcd191e1ab073c6a108196c",
   "config_identity": "no-config",
   "files": [
     {
@@ -3480,12 +3480,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 26,
+        "invocations": 25,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 62,
-        "cyclomatic": 99
+        "cognitive": 36,
+        "cyclomatic": 95
       },
       "path": "src/operations/battery/git.rs",
       "source_class": "handwritten"
@@ -77413,8 +77413,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 12,
-      "cyclomatic": 9,
+      "cognitive": 3,
+      "cyclomatic": 3,
       "derived": {
         "identity": "crate::operations::battery::git::reject_unsafe_git_config_text",
         "macro_expansion": "not_measured",
@@ -77424,14 +77424,14 @@
       },
       "identity": "crate::operations::battery::git::reject_unsafe_git_config_text",
       "kind": "function",
-      "line": 513,
+      "line": 439,
       "name": "reject_unsafe_git_config_text",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 12,
-        "cyclomatic": 9,
+        "cognitive": 3,
+        "cyclomatic": 3,
         "kind": "function",
-        "line": 513,
+        "line": 439,
         "name": "reject_unsafe_git_config_text"
       },
       "path": "src/operations/battery/git.rs",
@@ -77439,29 +77439,107 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 4,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::operations::battery::git::unsafe_git_config_entry",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/git.rs",
+        "signature": "fn unsafe_git_config_entry(section: &mut String, raw_line: &str) -> Option<String>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::git::unsafe_git_config_entry",
+      "kind": "function",
+      "line": 452,
+      "name": "unsafe_git_config_entry",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 452,
+        "name": "unsafe_git_config_entry"
+      },
+      "path": "src/operations/battery/git.rs",
+      "signature": "fn unsafe_git_config_entry(section: &mut String, raw_line: &str) -> Option<String>",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::battery::git::reject_unsafe_git_config_text::<closure>",
+        "identity": "crate::operations::battery::git::unsafe_git_config_entry::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/battery/git.rs",
-        "signature": ".map(|(key, _)| key)",
+        "signature": "return unsafe_git_config_section(section).then(|| section.clone());",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::battery::git::reject_unsafe_git_config_text::<closure>",
+      "identity": "crate::operations::battery::git::unsafe_git_config_entry::<closure>",
       "kind": "closure",
-      "line": 541,
+      "line": 459,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 541,
+        "line": 459,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/git.rs",
+      "signature": "return unsafe_git_config_section(section).then(|| section.clone());",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::git::unsafe_git_config_entry::<closure>@463#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/git.rs",
+        "signature": ".map(|(key, _)| key)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::git::unsafe_git_config_entry::<closure>@463#2",
+      "kind": "closure",
+      "line": 463,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 463,
         "name": "<closure>"
       },
       "path": "src/operations/battery/git.rs",
       "signature": ".map(|(key, _)| key)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::git::unsafe_git_config_entry::<closure>@467#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/git.rs",
+        "signature": "unsafe_git_config_key(section, &key).then(|| format!(\"{section}.{key}\"))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::git::unsafe_git_config_entry::<closure>@467#3",
+      "kind": "closure",
+      "line": 467,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 467,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/git.rs",
+      "signature": "unsafe_git_config_key(section, &key).then(|| format!(\"{section}.{key}\"))",
       "source_class": "handwritten"
     },
     {

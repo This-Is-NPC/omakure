@@ -439,34 +439,32 @@ pub(super) fn reject_unsafe_local_git_config(cache_path: &Path) -> OperationResu
 pub(super) fn reject_unsafe_git_config_text(config: &str) -> OperationResult<()> {
     let mut section = String::new();
     for raw_line in config.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            section = line[1..line.len() - 1].trim().to_ascii_lowercase();
-            if unsafe_git_config_section(&section) {
-                return Err(OperationError::new(
-                    OperationErrorCode::Conflict,
-                    format!("battery cache has unsafe local git config: {section}"),
-                ));
-            }
-            continue;
-        }
-        let key = line
-            .split_once('=')
-            .map(|(key, _)| key)
-            .unwrap_or(line)
-            .trim()
-            .to_ascii_lowercase();
-        if unsafe_git_config_key(&section, &key) {
+        if let Some(entry) = unsafe_git_config_entry(&mut section, raw_line) {
             return Err(OperationError::new(
                 OperationErrorCode::Conflict,
-                format!("battery cache has unsafe local git config: {section}.{key}"),
+                format!("battery cache has unsafe local git config: {entry}"),
             ));
         }
     }
     Ok(())
+}
+
+fn unsafe_git_config_entry(section: &mut String, raw_line: &str) -> Option<String> {
+    let line = raw_line.trim();
+    if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+        return None;
+    }
+    if line.starts_with('[') && line.ends_with(']') {
+        *section = line[1..line.len() - 1].trim().to_ascii_lowercase();
+        return unsafe_git_config_section(section).then(|| section.clone());
+    }
+    let key = line
+        .split_once('=')
+        .map(|(key, _)| key)
+        .unwrap_or(line)
+        .trim()
+        .to_ascii_lowercase();
+    unsafe_git_config_key(section, &key).then(|| format!("{section}.{key}"))
 }
 
 fn unsafe_git_config_section(section: &str) -> bool {

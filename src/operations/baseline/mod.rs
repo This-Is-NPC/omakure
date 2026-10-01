@@ -25,6 +25,7 @@
 mod install;
 mod publish;
 mod record;
+mod service;
 
 fn map_baseline_error(error: crate::baseline::BaselineError) -> crate::operations::OperationError {
     crate::operations::OperationError::new(
@@ -39,6 +40,10 @@ pub use record::{
     installed_baseline, installed_baseline_path, observed_baseline_id, retained_current_path,
     retained_previous, retained_previous_path, InstalledBaseline, RetainedBaseline,
     BASELINE_SCRIPT_MODE,
+};
+pub use service::{
+    prepare_service_push, push_prepared_service, rollback_local_baseline, BaselineServiceOutcome,
+    BaselineServiceRequest, PreparedBaselinePush,
 };
 
 #[cfg(test)]

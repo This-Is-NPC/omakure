@@ -2,6 +2,7 @@ pub mod baseline;
 pub mod battery;
 pub mod config;
 pub mod core;
+pub mod cue;
 pub mod doctor;
 pub mod envs;
 pub mod health;
@@ -9,6 +10,7 @@ pub mod node;
 pub(crate) mod path;
 pub mod scripts;
 pub mod search;
+mod service_delivery;
 pub(crate) mod worker;
 
 use serde::Serialize;

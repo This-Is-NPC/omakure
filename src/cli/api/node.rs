@@ -7,14 +7,13 @@ use super::state::{ApiCapability, ApiState};
 use super::SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES;
 use crate::auth::AuthContext;
 use crate::operations::node as node_ops;
+use crate::operations::{baseline as baseline_ops, cue as cue_ops};
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
-use crate::util::hex;
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
 use axum::Extension;
 use serde::Deserialize;
-use std::time::Duration;
 
 #[derive(Debug, Default, Deserialize)]
 struct NodeInitializeBody {}
@@ -481,71 +480,31 @@ pub(super) async fn node_cue_handler(
         Ok(body) => body,
         Err(error) => return operation_error_response(error),
     };
-    if body
-        .cue_id
-        .as_ref()
-        .is_some_and(|cue_id| !crate::remote_cue::is_well_formed_cue_id(cue_id))
-    {
-        return operation_error_response(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            "cue id must be 32 lowercase hexadecimal characters",
-        ));
-    }
-    let Some(dispatcher) = state.cues.clone() else {
-        return operation_error_response(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            "no direct transport is running, so there is no session to carry a cue",
-        ));
+    let prepared = match cue_ops::prepare_service_dispatch(
+        state.cues.clone(),
+        cue_ops::CueServiceRequest {
+            peer_node_id: body.peer_node_id,
+            script: body.script,
+            reason: body.reason,
+            wait_seconds: body.wait_seconds,
+            cue_id: body.cue_id,
+        },
+    ) {
+        Ok(prepared) => prepared,
+        Err(error) => return operation_error_response(error),
     };
-    // "No session with that peer" is a different fact from a refusal, and is
-    // reported as one so a caller can reach that peer another way instead of
-    // reading it as a verdict.
-    if !dispatcher.has_session(&body.peer_node_id) {
-        return operation_error_response(OperationError::new(
-            OperationErrorCode::NotFound,
-            "this node holds no session with that peer",
-        ));
-    }
-    let wait = Duration::from_secs(u64::from(body.wait_seconds.min(MAX_CUE_WAIT_SECONDS)));
     // The dispatch blocks on the session thread, so it must not hold a runtime
     // worker for its whole budget.
-    let dispatched = run_bounded_with_join(
+    let result = run_bounded_with_join(
         "cue dispatch",
         state.blocking_operation_gate,
-        move || {
-            dispatcher.dispatch(
-                &body.peer_node_id,
-                &body.script,
-                &body.reason,
-                wait,
-                body.cue_id.as_deref(),
-            )
-        },
+        move || cue_ops::dispatch_prepared_service(prepared),
         |_| OperationError::new(OperationErrorCode::IoFailed, "cue dispatch task failed"),
     )
-    .await;
-    let result = match dispatched {
-        Ok(Ok(outcome)) => Ok(serde_json::json!({
-            "dispatched": true,
-            "via": "service",
-            "cue_id": outcome.cue_id,
-            "expected_run_id": outcome.expected_run_id,
-            "answered": outcome.answered,
-            "accepted": outcome.accepted,
-            "code": outcome.code,
-            "outcome_seen": outcome.outcome_seen,
-        })),
-        Ok(Err(error)) => Err(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            format!("cue dispatch failed: {error}"),
-        )),
-        Err(error) => Err(error),
-    };
+    .await
+    .and_then(|result| result);
     operation_response(result)
 }
-
-/// The ceiling on how long one request may hold a connection waiting.
-const MAX_CUE_WAIT_SECONDS: u32 = 600;
 
 /// Hand one already-signed baseline to the session this service holds.
 ///
@@ -567,58 +526,28 @@ pub(super) async fn node_baseline_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    let Some(dispatcher) = state.baselines.clone() else {
-        return operation_error_response(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            "no direct transport is running, so there is no session to carry a baseline",
-        ));
+    let prepared = match baseline_ops::prepare_service_push(
+        state.baselines.clone(),
+        baseline_ops::BaselineServiceRequest {
+            peer_node_id: body.peer_node_id,
+            manifest: body.manifest,
+            scripts: body.scripts,
+            wait_seconds: body.wait_seconds,
+        },
+    ) {
+        Ok(prepared) => prepared,
+        Err(error) => return operation_error_response(error),
     };
-    // "No session with that peer" is a different fact from a refusal, and is
-    // reported as one so a caller can reach that peer another way instead of
-    // reading it as a verdict.
-    if !dispatcher.has_session(&body.peer_node_id) {
-        return operation_error_response(OperationError::new(
-            OperationErrorCode::NotFound,
-            "this node holds no session with that peer",
-        ));
-    }
-    let (Some(manifest), Some(scripts)) = (
-        decode_lower_hex(&body.manifest),
-        body.scripts
-            .iter()
-            .map(|body| decode_lower_hex(body))
-            .collect::<Option<Vec<_>>>(),
-    ) else {
-        return operation_error_response(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            "the manifest and every script body must be lowercase hex",
-        ));
-    };
-    let wait = Duration::from_secs(u64::from(body.wait_seconds.min(MAX_CUE_WAIT_SECONDS)));
     // The push blocks on the session thread, so it must not hold a runtime
     // worker for its whole budget.
-    let pushed = run_bounded_with_join(
+    let result = run_bounded_with_join(
         "baseline push",
         state.blocking_operation_gate,
-        move || dispatcher.push_baseline(&body.peer_node_id, &manifest, &scripts, wait),
+        move || baseline_ops::push_prepared_service(prepared),
         |_| OperationError::new(OperationErrorCode::IoFailed, "baseline push task failed"),
     )
-    .await;
-    let result = match pushed {
-        Ok(Ok(outcome)) => Ok(serde_json::json!({
-            "pushed": true,
-            "via": "service",
-            "baseline_id": outcome.baseline_id,
-            "answered": outcome.answered,
-            "accepted": outcome.accepted,
-            "code": outcome.code,
-        })),
-        Ok(Err(error)) => Err(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            format!("baseline push failed: {error}"),
-        )),
-        Err(error) => Err(error),
-    };
+    .await
+    .and_then(|result| result);
     operation_response(result)
 }
 
@@ -654,24 +583,15 @@ pub(super) async fn node_baseline_rollback_handler(
         };
     operation_response_bounded("node", state.blocking_operation_gate, move || {
         node_context().and_then(|context| {
-            let policy = crate::baseline_push::read_policy(&context);
-            crate::operations::baseline::rollback_baseline(
+            baseline_ops::rollback_local_baseline(
                 &state.workspace,
-                &policy,
+                &context,
                 body.confirmed,
                 crate::direct_transport::unix_seconds() as i64,
             )
         })
     })
     .await
-}
-
-/// Decode lowercase hex, refusing upper case so one artefact has one spelling.
-fn decode_lower_hex(value: &str) -> Option<Vec<u8>> {
-    if !hex::is_lower(value) {
-        return None;
-    }
-    hex::decode(value)
 }
 
 pub(super) async fn node_revoke_handler(

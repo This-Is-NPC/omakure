@@ -170,7 +170,8 @@ src/
 │   ├── battery/             sync, inspect, install, and provenance
 │   ├── node/                node status, trust, enrollment, and discovery
 │   ├── health.rs            fleet-status and Signal-feed projections
-│   ├── baseline.rs          baseline push, status, and rollback
+│   ├── cue.rs               Cue service dispatch validation and outcomes
+│   ├── baseline/            baseline delivery, install, status, and rollback
 │   └── worker.rs            queue claiming, Cue preflight, and run finalization
 ├── adapters/                filesystem, process, environment, and checks
 │   ├── git.rs               isolated Git process execution and bounded probes

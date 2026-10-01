@@ -4,24 +4,13 @@ use crate::cli::json;
 use crate::domain::NodeConfig;
 use crate::node::{NodeContext, NodeError, NodePathOverrides};
 use crate::operations::node as node_ops;
+use crate::operations::{baseline as baseline_ops, cue as cue_ops};
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::util::hex;
 use std::error::Error;
 use std::fs;
 use std::io::Read;
 use std::time::Duration;
-
-const CUE_ID_INVALID_MESSAGE: &str = "cue id must be 32 lowercase hexadecimal characters";
-
-fn validate_cue_id(cue_id: Option<&str>) -> Result<(), OperationError> {
-    if cue_id.is_some_and(|id| !crate::remote_cue::is_well_formed_cue_id(id)) {
-        return Err(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            CUE_ID_INVALID_MESSAGE,
-        ));
-    }
-    Ok(())
-}
 
 /// The local status read that explains a failed probe is a loopback lookup, not
 /// a remote wait, so it gets a short budget of its own.
@@ -42,7 +31,7 @@ fn dispatch_cue(
     scripts_dir: &std::path::Path,
     args: crate::cli::args::NodeCueArgs,
 ) -> OperationResult<serde_json::Value> {
-    validate_cue_id(args.cue_id.as_deref())?;
+    cue_ops::validate_cue_id(args.cue_id.as_deref())?;
     if !args.direct {
         match dispatch_cue_via_service(context, scripts_dir, &args) {
             Ok(data) => return Ok(data),
@@ -195,10 +184,9 @@ fn dispatch_baseline(
             // The same policy the receive path reads, from this node's own
             // config, so a rollback can never be more permissive than the push
             // that installed the set would be if it arrived today.
-            let policy = crate::baseline_push::read_policy(context);
-            crate::operations::baseline::rollback_baseline(
+            baseline_ops::rollback_local_baseline(
                 &workspace,
-                &policy,
+                context,
                 rollback.confirmed,
                 crate::util::time::unix_seconds() as i64,
             )

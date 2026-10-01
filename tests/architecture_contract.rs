@@ -8,6 +8,7 @@ use syn::{ExprCall, ExprPath, ImplItemFn, ItemFn, ItemUse, Lit, Path as SynPath,
 enum Rule {
     #[default]
     Http,
+    HttpNodeDelivery,
     Domain,
     RunsSql,
     Executor,
@@ -70,6 +71,20 @@ impl ContractVisitor {
         }
         if self.rule == Rule::Http && path.first().map(String::as_str) == Some("rusqlite") {
             self.record("ARCH-HTTP-SQLITE", "HTTP must not access SQLite directly");
+        }
+        if self.rule == Rule::HttpNodeDelivery
+            && [
+                ["crate", "remote_cue"],
+                ["crate", "baseline_push"],
+                ["crate", "direct_service"],
+            ]
+            .into_iter()
+            .any(|prefix| Self::starts_with(path, &prefix))
+        {
+            self.record(
+                "ARCH-HTTP-NODE-DELIVERY",
+                "node delivery handlers must call operations",
+            );
         }
         if self.rule == Rule::Domain
             && (Self::starts_with(path, &["std", "fs"])
@@ -413,6 +428,27 @@ fn production_architecture_boundaries_are_clean() {
         );
     }
 
+    let node_handler_path = src.join("cli/api/node.rs");
+    let node_handler = fs::read_to_string(&node_handler_path).expect("read node HTTP handler");
+    let delivery = parse_contract(Rule::HttpNodeDelivery, "src/cli/api/node.rs", &node_handler);
+    assert!(
+        delivery.findings.is_empty(),
+        "node delivery HTTP boundary violations: {:?}",
+        delivery.findings
+    );
+    for operation in [
+        "cue_ops::prepare_service_dispatch",
+        "cue_ops::dispatch_prepared_service",
+        "baseline_ops::prepare_service_push",
+        "baseline_ops::push_prepared_service",
+        "baseline_ops::rollback_local_baseline",
+    ] {
+        assert!(
+            node_handler.contains(operation),
+            "node HTTP handler must call {operation}"
+        );
+    }
+
     for path in source_files(&src.join("domain")) {
         let display = path.strip_prefix(root).unwrap().display().to_string();
         let source = fs::read_to_string(&path).expect("read domain source");
@@ -485,4 +521,19 @@ fn production_architecture_boundaries_are_clean() {
         scheduler.executor_calls.is_empty(),
         "scheduler must enqueue only"
     );
+}
+
+#[test]
+fn node_delivery_contract_rejects_direct_protocol_calls() {
+    for module in ["remote_cue", "baseline_push", "direct_service"] {
+        let source = format!("fn handler() {{ let _ = crate::{module}::read_policy; }}");
+        let contract = parse_contract(Rule::HttpNodeDelivery, "fixture:node.rs", &source);
+        assert!(
+            contract
+                .findings
+                .iter()
+                .any(|finding| finding.rule == "ARCH-HTTP-NODE-DELIVERY"),
+            "direct {module} call was not rejected"
+        );
+    }
 }

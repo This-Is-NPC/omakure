@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "779130087219dfc3b9709157088294c9f87a28b6d0fd38204a0b602eccd0a56e",
+  "canonical_sha256": "5648b86a2bab7da577f320e167262194701c41cca4fde535561532569a3a5bc5",
   "config_identity": "no-config",
   "files": [
     {
@@ -3424,6 +3424,20 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
+        "invocations": 8,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 2,
+        "cyclomatic": 11
+      },
+      "path": "src/operations/baseline/service.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
         "invocations": 37,
         "score_inclusion": "native_source_ast_only"
       },
@@ -3844,6 +3858,20 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
+        "invocations": 5,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 2,
+        "cyclomatic": 9
+      },
+      "path": "src/operations/cue.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
         "invocations": 10,
         "score_inclusion": "native_source_ast_only"
       },
@@ -4146,6 +4174,20 @@
         "cyclomatic": 13
       },
       "path": "src/operations/search.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 3,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 3
+      },
+      "path": "src/operations/service_delivery.rs",
       "source_class": "handwritten"
     },
     {
@@ -17415,8 +17457,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 8,
+      "cognitive": 3,
+      "cyclomatic": 6,
       "derived": {
         "identity": "crate::cli::api::node::node_cue_handler",
         "macro_expansion": "not_measured",
@@ -17426,14 +17468,14 @@
       },
       "identity": "crate::cli::api::node::node_cue_handler",
       "kind": "function",
-      "line": 429,
+      "line": 470,
       "name": "node_cue_handler",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 8,
+        "cognitive": 3,
+        "cyclomatic": 6,
         "kind": "function",
-        "line": 429,
+        "line": 470,
         "name": "node_cue_handler"
       },
       "path": "src/cli/api/node.rs",
@@ -17467,8 +17509,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 8,
+      "cognitive": 3,
+      "cyclomatic": 6,
       "derived": {
         "identity": "crate::cli::api::node::node_baseline_handler",
         "macro_expansion": "not_measured",
@@ -17478,14 +17520,14 @@
       },
       "identity": "crate::cli::api::node::node_baseline_handler",
       "kind": "function",
-      "line": 513,
+      "line": 516,
       "name": "node_baseline_handler",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 8,
+        "cognitive": 3,
+        "cyclomatic": 6,
         "kind": "function",
-        "line": 513,
+        "line": 516,
         "name": "node_baseline_handler"
       },
       "path": "src/cli/api/node.rs",
@@ -17594,32 +17636,6 @@
       },
       "path": "src/cli/api/node.rs",
       "signature": "operation_response(node_context().and_then(|context| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::cli::api::node::decode_lower_hex",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/api/node.rs",
-        "signature": "fn decode_lower_hex(value: &str) -> Option<Vec<u8>>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::api::node::decode_lower_hex",
-      "kind": "function",
-      "line": 623,
-      "name": "decode_lower_hex",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "function",
-        "line": 623,
-        "name": "decode_lower_hex"
-      },
-      "path": "src/cli/api/node.rs",
-      "signature": "fn decode_lower_hex(value: &str) -> Option<Vec<u8>>",
       "source_class": "handwritten"
     },
     {
@@ -73159,6 +73175,240 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::baseline::service::prepare_service_push",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": "pub fn prepare_service_push( dispatcher: Option<BaselineDispatcher>, request: BaselineServiceRequest, ) -> OperationResult<PreparedBaselinePush>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::prepare_service_push",
+      "kind": "function",
+      "line": 37,
+      "name": "prepare_service_push",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 37,
+        "name": "prepare_service_push"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": "pub fn prepare_service_push( dispatcher: Option<BaselineDispatcher>, request: BaselineServiceRequest, ) -> OperationResult<PreparedBaselinePush>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::baseline::service::prepare_service_push::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": "let dispatcher = dispatcher.ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::prepare_service_push::<closure>",
+      "kind": "closure",
+      "line": 41,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 41,
+        "name": "<closure>"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": "let dispatcher = dispatcher.ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::baseline::service::prepare_service_push::<closure>@55#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": ".map(|body| decode_lower_hex(body))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::prepare_service_push::<closure>@55#2",
+      "kind": "closure",
+      "line": 55,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 55,
+        "name": "<closure>"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": ".map(|body| decode_lower_hex(body))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::baseline::service::push_prepared_service",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": "pub fn push_prepared_service( prepared: PreparedBaselinePush, ) -> OperationResult<BaselineServiceOutcome>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::push_prepared_service",
+      "kind": "function",
+      "line": 72,
+      "name": "push_prepared_service",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 72,
+        "name": "push_prepared_service"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": "pub fn push_prepared_service( prepared: PreparedBaselinePush, ) -> OperationResult<BaselineServiceOutcome>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::baseline::service::push_prepared_service::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": ".map_err(|error| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::push_prepared_service::<closure>",
+      "kind": "closure",
+      "line": 83,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 83,
+        "name": "<closure>"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": ".map_err(|error| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::baseline::service::rollback_local_baseline",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": "pub fn rollback_local_baseline( workspace: &Workspace, context: &NodeContext, confirmed: bool, now: i64, ) -> OperationResult<InstalledBaseline>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::rollback_local_baseline",
+      "kind": "function",
+      "line": 99,
+      "name": "rollback_local_baseline",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 99,
+        "name": "rollback_local_baseline"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": "pub fn rollback_local_baseline( workspace: &Workspace, context: &NodeContext, confirmed: bool, now: i64, ) -> OperationResult<InstalledBaseline>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::baseline::service::decode_lower_hex",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": "fn decode_lower_hex(value: &str) -> Option<Vec<u8>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::decode_lower_hex",
+      "kind": "function",
+      "line": 109,
+      "name": "decode_lower_hex",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 109,
+        "name": "decode_lower_hex"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": "fn decode_lower_hex(value: &str) -> Option<Vec<u8>>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::baseline::service::unavailable_transport_precedes_payload_decoding",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": "fn unavailable_transport_precedes_payload_decoding()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::unavailable_transport_precedes_payload_decoding",
+      "kind": "function",
+      "line": 121,
+      "name": "unavailable_transport_precedes_payload_decoding",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 121,
+        "name": "unavailable_transport_precedes_payload_decoding"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": "fn unavailable_transport_precedes_payload_decoding()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::baseline::service::lowercase_hex_rejects_uppercase_and_odd_length",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/baseline/service.rs",
+        "signature": "fn lowercase_hex_rejects_uppercase_and_odd_length()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::baseline::service::lowercase_hex_rejects_uppercase_and_odd_length",
+      "kind": "function",
+      "line": 141,
+      "name": "lowercase_hex_rejects_uppercase_and_odd_length",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 141,
+        "name": "lowercase_hex_rejects_uppercase_and_odd_length"
+      },
+      "path": "src/operations/baseline/service.rs",
+      "signature": "fn lowercase_hex_rejects_uppercase_and_odd_length()",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -83325,6 +83575,188 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::cue::validate_cue_id",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/cue.rs",
+        "signature": "pub fn validate_cue_id(cue_id: Option<&str>) -> OperationResult<()>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::cue::validate_cue_id",
+      "kind": "function",
+      "line": 9,
+      "name": "validate_cue_id",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 9,
+        "name": "validate_cue_id"
+      },
+      "path": "src/operations/cue.rs",
+      "signature": "pub fn validate_cue_id(cue_id: Option<&str>) -> OperationResult<()>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::cue::validate_cue_id::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/cue.rs",
+        "signature": "if cue_id.is_some_and(|id| !crate::remote_cue::is_well_formed_cue_id(id)) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::cue::validate_cue_id::<closure>",
+      "kind": "closure",
+      "line": 10,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 10,
+        "name": "<closure>"
+      },
+      "path": "src/operations/cue.rs",
+      "signature": "if cue_id.is_some_and(|id| !crate::remote_cue::is_well_formed_cue_id(id)) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::cue::prepare_service_dispatch",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/cue.rs",
+        "signature": "pub fn prepare_service_dispatch( dispatcher: Option<CueDispatcher>, request: CueServiceRequest, ) -> OperationResult<PreparedCueDispatch>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::cue::prepare_service_dispatch",
+      "kind": "function",
+      "line": 45,
+      "name": "prepare_service_dispatch",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 45,
+        "name": "prepare_service_dispatch"
+      },
+      "path": "src/operations/cue.rs",
+      "signature": "pub fn prepare_service_dispatch( dispatcher: Option<CueDispatcher>, request: CueServiceRequest, ) -> OperationResult<PreparedCueDispatch>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::cue::prepare_service_dispatch::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/cue.rs",
+        "signature": "let dispatcher = dispatcher.ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::cue::prepare_service_dispatch::<closure>",
+      "kind": "closure",
+      "line": 50,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 50,
+        "name": "<closure>"
+      },
+      "path": "src/operations/cue.rs",
+      "signature": "let dispatcher = dispatcher.ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::cue::dispatch_prepared_service",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/cue.rs",
+        "signature": "pub fn dispatch_prepared_service( prepared: PreparedCueDispatch, ) -> OperationResult<CueServiceOutcome>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::cue::dispatch_prepared_service",
+      "kind": "function",
+      "line": 67,
+      "name": "dispatch_prepared_service",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 67,
+        "name": "dispatch_prepared_service"
+      },
+      "path": "src/operations/cue.rs",
+      "signature": "pub fn dispatch_prepared_service( prepared: PreparedCueDispatch, ) -> OperationResult<CueServiceOutcome>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::cue::dispatch_prepared_service::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/cue.rs",
+        "signature": ".map_err(|error| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::cue::dispatch_prepared_service::<closure>",
+      "kind": "closure",
+      "line": 80,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 80,
+        "name": "<closure>"
+      },
+      "path": "src/operations/cue.rs",
+      "signature": ".map_err(|error| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::cue::invalid_cue_id_precedes_unavailable_transport",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/cue.rs",
+        "signature": "fn invalid_cue_id_precedes_unavailable_transport()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::cue::invalid_cue_id_precedes_unavailable_transport",
+      "kind": "function",
+      "line": 103,
+      "name": "invalid_cue_id_precedes_unavailable_transport",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 103,
+        "name": "invalid_cue_id_precedes_unavailable_transport"
+      },
+      "path": "src/operations/cue.rs",
+      "signature": "fn invalid_cue_id_precedes_unavailable_transport()",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -90576,6 +91008,84 @@
       },
       "path": "src/operations/search.rs",
       "signature": "fn search_scripts_empty_query_returns_indexed_scripts()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::service_delivery::bounded_wait",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/service_delivery.rs",
+        "signature": "pub(super) fn bounded_wait(seconds: u32) -> Duration",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::service_delivery::bounded_wait",
+      "kind": "function",
+      "line": 6,
+      "name": "bounded_wait",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 6,
+        "name": "bounded_wait"
+      },
+      "path": "src/operations/service_delivery.rs",
+      "signature": "pub(super) fn bounded_wait(seconds: u32) -> Duration",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::service_delivery::no_session_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/service_delivery.rs",
+        "signature": "pub(super) fn no_session_error() -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::service_delivery::no_session_error",
+      "kind": "function",
+      "line": 10,
+      "name": "no_session_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 10,
+        "name": "no_session_error"
+      },
+      "path": "src/operations/service_delivery.rs",
+      "signature": "pub(super) fn no_session_error() -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::service_delivery::service_wait_is_capped_at_ten_minutes",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/service_delivery.rs",
+        "signature": "fn service_wait_is_capped_at_ten_minutes()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::service_delivery::service_wait_is_capped_at_ten_minutes",
+      "kind": "function",
+      "line": 22,
+      "name": "service_wait_is_capped_at_ten_minutes",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 22,
+        "name": "service_wait_is_capped_at_ten_minutes"
+      },
+      "path": "src/operations/service_delivery.rs",
+      "signature": "fn service_wait_is_capped_at_ten_minutes()",
       "source_class": "handwritten"
     },
     {

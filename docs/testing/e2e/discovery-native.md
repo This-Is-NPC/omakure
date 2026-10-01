@@ -5,7 +5,7 @@
 ## Source
 
 - `tests/discovery_udp_e2e.rs`
-- Discovery implementation and limits in `src/discovery.rs`
+- Discovery implementation and limits in `src/discovery/`
 
 ## Run
 

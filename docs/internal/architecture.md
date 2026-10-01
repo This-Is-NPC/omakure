@@ -205,7 +205,7 @@ src/
 ├── baseline_push/           receive half of baseline delivery, install, and rollback
 ├── baseline_publisher.rs    custody of the key that signs a baseline
 ├── enrollment_authority.rs  custody of the key that mints fleet membership
-├── discovery.rs             bounded trust-neutral LAN discovery
+├── discovery/              bounded trust-neutral LAN discovery
 ├── enrollment.rs            manual and signed-bundle enrollment records
 ├── node_transport.rs        node-owned transport state and static peers
 └── installer.rs             standalone installer binary

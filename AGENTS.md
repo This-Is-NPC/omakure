@@ -92,7 +92,7 @@ src/
     ├── node/, node_identity.rs, node_transport.rs  # node state and identity
     ├── node_registry/ (+ health/)        # node.sqlite trust/health persistence
     ├── direct_transport/, direct_service/  # Noise transport and listener
-    ├── discovery.rs                      # trust-neutral LAN discovery
+    ├── discovery/                       # trust-neutral LAN discovery
     ├── enrollment.rs, enrollment_authority.rs  # manual/signed enrollment
     ├── health_plane/, direct_health.rs   # Health Plane domain and carriage
     ├── remote_cue/                       # Cue plane receive half

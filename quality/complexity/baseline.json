@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "fc6147ad2bd49ad0b87f7e899a5cfc0541aa60d24a38cd0deb1b787f57841eb4",
+  "canonical_sha256": "e3dd47b30beee6efc7770718edf5f657489f87eed5a0d2044d0141d7f78f149b",
   "config_identity": "no-config",
   "files": [
     {
@@ -2108,14 +2108,70 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 31,
+        "invocations": 0,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 138,
-        "cyclomatic": 164
+        "cognitive": 31,
+        "cyclomatic": 52
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/discovery/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 1,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 83,
+        "cyclomatic": 62
+      },
+      "path": "src/discovery/service.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 18,
+        "cyclomatic": 26
+      },
+      "path": "src/discovery/snapshot.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 28,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 2,
+        "cyclomatic": 10
+      },
+      "path": "src/discovery/tests.rs",
       "source_class": "handwritten"
     },
     {
@@ -46770,25 +46826,25 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::discovery::create",
+        "identity": "crate::discovery::beacon::create",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "pub fn create( identity: &NodeIdentity, direct_port: u16, beacon_id: [u8",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::create",
+      "identity": "crate::discovery::beacon::create",
       "kind": "method",
-      "line": 100,
+      "line": 23,
       "name": "create",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 100,
+        "line": 23,
         "name": "create"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "pub fn create( identity: &NodeIdentity, direct_port: u16, beacon_id: [u8",
       "source_class": "handwritten"
     },
@@ -46796,25 +46852,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::create::<closure>",
+        "identity": "crate::discovery::beacon::create::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": ".map_err(|_| DiscoveryError::IdentityMismatch)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::create::<closure>",
+      "identity": "crate::discovery::beacon::create::<closure>",
       "kind": "closure",
-      "line": 116,
+      "line": 39,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 116,
+        "line": 39,
         "name": "<closure>"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": ".map_err(|_| DiscoveryError::IdentityMismatch)?;",
       "source_class": "handwritten"
     },
@@ -46822,25 +46878,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::create::<closure>@138#2",
+        "identity": "crate::discovery::beacon::create::<closure>@61#2",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": ".map_err(|_| DiscoveryError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::create::<closure>@138#2",
+      "identity": "crate::discovery::beacon::create::<closure>@61#2",
       "kind": "closure",
-      "line": 138,
+      "line": 61,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 138,
+        "line": 61,
         "name": "<closure>"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": ".map_err(|_| DiscoveryError::Internal)?;",
       "source_class": "handwritten"
     },
@@ -46848,25 +46904,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::encode",
+        "identity": "crate::discovery::beacon::encode",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "pub fn encode(&self) -> Result<Vec<u8>, DiscoveryError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::encode",
+      "identity": "crate::discovery::beacon::encode",
       "kind": "method",
-      "line": 143,
+      "line": 66,
       "name": "encode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 143,
+        "line": 66,
         "name": "encode"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "pub fn encode(&self) -> Result<Vec<u8>, DiscoveryError>",
       "source_class": "handwritten"
     },
@@ -46874,25 +46930,25 @@
       "cognitive": 13,
       "cyclomatic": 11,
       "derived": {
-        "identity": "crate::discovery::parse",
+        "identity": "crate::discovery::beacon::parse",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "pub fn parse(bytes: &[u8]) -> Result<Self, DiscoveryError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::parse",
+      "identity": "crate::discovery::beacon::parse",
       "kind": "method",
-      "line": 150,
+      "line": 73,
       "name": "parse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 13,
         "cyclomatic": 11,
         "kind": "method",
-        "line": 150,
+        "line": 73,
         "name": "parse"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "pub fn parse(bytes: &[u8]) -> Result<Self, DiscoveryError>",
       "source_class": "handwritten"
     },
@@ -46900,25 +46956,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::parse::<closure>",
+        "identity": "crate::discovery::beacon::parse::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::parse::<closure>",
+      "identity": "crate::discovery::beacon::parse::<closure>",
       "kind": "closure",
-      "line": 183,
+      "line": 106,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 183,
+        "line": 106,
         "name": "<closure>"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?",
       "source_class": "handwritten"
     },
@@ -46926,13 +46982,247 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::parse::<closure>@190#2",
+        "identity": "crate::discovery::beacon::parse::<closure>@113#2",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::parse::<closure>@190#2",
+      "identity": "crate::discovery::beacon::parse::<closure>@113#2",
+      "kind": "closure",
+      "line": 113,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 113,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::beacon::parse::<closure>@117#3",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::parse::<closure>@117#3",
+      "kind": "closure",
+      "line": 117,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 117,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::beacon::parse::<closure>@127#4",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::parse::<closure>@127#4",
+      "kind": "closure",
+      "line": 127,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 127,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::beacon::parse::<closure>@135#5",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::parse::<closure>@135#5",
+      "kind": "closure",
+      "line": 135,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 135,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::discovery::beacon::verify",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": "pub fn verify(&self, now: u64, secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::verify",
+      "kind": "method",
+      "line": 151,
+      "name": "verify",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 7,
+        "kind": "method",
+        "line": 151,
+        "name": "verify"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": "pub fn verify(&self, now: u64, secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::beacon::verify::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": ".map_err(|_| DiscoveryError::IdentityMismatch)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::verify::<closure>",
+      "kind": "closure",
+      "line": 174,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 174,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": ".map_err(|_| DiscoveryError::IdentityMismatch)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::beacon::verify::<closure>@176#2",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": "Signature::from_slice(&self.signature).map_err(|_| DiscoveryError::SignatureInvalid)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::verify::<closure>@176#2",
+      "kind": "closure",
+      "line": 176,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 176,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": "Signature::from_slice(&self.signature).map_err(|_| DiscoveryError::SignatureInvalid)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::beacon::verify::<closure>@180#3",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": ".map_err(|_| DiscoveryError::SignatureInvalid)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::verify::<closure>@180#3",
+      "kind": "closure",
+      "line": 180,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 180,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": ".map_err(|_| DiscoveryError::SignatureInvalid)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::discovery::beacon::validate_shape",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": "fn validate_shape(&self) -> Result<(), DiscoveryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::validate_shape",
+      "kind": "method",
+      "line": 183,
+      "name": "validate_shape",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 7,
+        "kind": "method",
+        "line": 183,
+        "name": "validate_shape"
+      },
+      "path": "src/discovery/beacon.rs",
+      "signature": "fn validate_shape(&self) -> Result<(), DiscoveryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::beacon::validate_shape::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/beacon.rs",
+        "signature": ".is_some_and(|proof| proof == [0; PROOF_BYTES])",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::beacon::validate_shape::<closure>",
       "kind": "closure",
       "line": 190,
       "name": "<closure>",
@@ -46944,163 +47234,7 @@
         "line": 190,
         "name": "<closure>"
       },
-      "path": "src/discovery.rs",
-      "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 7,
-      "cyclomatic": 7,
-      "derived": {
-        "identity": "crate::discovery::verify",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn verify(&self, now: u64, secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::verify",
-      "kind": "method",
-      "line": 228,
-      "name": "verify",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 7,
-        "cyclomatic": 7,
-        "kind": "method",
-        "line": 228,
-        "name": "verify"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn verify(&self, now: u64, secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::verify::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".map_err(|_| DiscoveryError::IdentityMismatch)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::verify::<closure>",
-      "kind": "closure",
-      "line": 250,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 250,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".map_err(|_| DiscoveryError::IdentityMismatch)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::verify::<closure>@252#2",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "Signature::from_slice(&self.signature).map_err(|_| DiscoveryError::SignatureInvalid)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::verify::<closure>@252#2",
-      "kind": "closure",
-      "line": 252,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 252,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "Signature::from_slice(&self.signature).map_err(|_| DiscoveryError::SignatureInvalid)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::verify::<closure>@256#3",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".map_err(|_| DiscoveryError::SignatureInvalid)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::verify::<closure>@256#3",
-      "kind": "closure",
-      "line": 256,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 256,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".map_err(|_| DiscoveryError::SignatureInvalid)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 3,
-      "cyclomatic": 7,
-      "derived": {
-        "identity": "crate::discovery::validate_shape",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn validate_shape(&self) -> Result<(), DiscoveryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::validate_shape",
-      "kind": "method",
-      "line": 259,
-      "name": "validate_shape",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 7,
-        "kind": "method",
-        "line": 259,
-        "name": "validate_shape"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn validate_shape(&self) -> Result<(), DiscoveryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::validate_shape::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".is_some_and(|proof| proof == [0; PROOF_BYTES])",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::validate_shape::<closure>",
-      "kind": "closure",
-      "line": 266,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 266,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": ".is_some_and(|proof| proof == [0; PROOF_BYTES])",
       "source_class": "handwritten"
     },
@@ -47108,25 +47242,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::discovery::unsigned_bytes",
+        "identity": "crate::discovery::beacon::unsigned_bytes",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "fn unsigned_bytes(&self) -> Vec<u8>",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::unsigned_bytes",
+      "identity": "crate::discovery::beacon::unsigned_bytes",
       "kind": "method",
-      "line": 276,
+      "line": 201,
       "name": "unsigned_bytes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 276,
+        "line": 201,
         "name": "unsigned_bytes"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "fn unsigned_bytes(&self) -> Vec<u8>",
       "source_class": "handwritten"
     },
@@ -47134,935 +47268,77 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::proof_input",
+        "identity": "crate::discovery::beacon::proof_input",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "fn proof_input(&self) -> Vec<u8>",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::proof_input",
+      "identity": "crate::discovery::beacon::proof_input",
       "kind": "method",
-      "line": 295,
+      "line": 220,
       "name": "proof_input",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 295,
+        "line": 220,
         "name": "proof_input"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "fn proof_input(&self) -> Vec<u8>",
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::default",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn default() -> Self",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::default",
-      "kind": "method",
-      "line": 347,
-      "name": "default",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 347,
-        "name": "default"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn default() -> Self",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 4,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::new",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn new( settings: &DiscoverySettings, supported: bool, listening: bool, multicast: bool, broadcast: bool, secret: bool, ) -> Self",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::new",
-      "kind": "method",
-      "line": 387,
-      "name": "new",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 387,
-        "name": "new"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn new( settings: &DiscoverySettings, supported: bool, listening: bool, multicast: bool, broadcast: bool, secret: bool, ) -> Self",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::public_status",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn public_status(&mut self, include_addresses: bool, now: u64) -> DiscoveryStatus",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::public_status",
-      "kind": "method",
-      "line": 416,
-      "name": "public_status",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 416,
-        "name": "public_status"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn public_status(&mut self, include_addresses: bool, now: u64) -> DiscoveryStatus",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::public_status::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".map(|candidate| DiscoveryCandidate {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::public_status::<closure>",
-      "kind": "closure",
-      "line": 421,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 421,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".map(|candidate| DiscoveryCandidate {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::public_status::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "address: include_addresses.then(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::public_status::<closure>::<closure>",
-      "kind": "closure",
-      "line": 429,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 429,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "address: include_addresses.then(|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::public_status::<closure>@434#2",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "candidates.sort_by(|a, b| a.node_id.cmp(&b.node_id).then(a.address.cmp(&b.address)));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::public_status::<closure>@434#2",
-      "kind": "closure",
-      "line": 434,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 434,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "candidates.sort_by(|a, b| a.node_id.cmp(&b.node_id).then(a.address.cmp(&b.address)));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 8,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::discovery::accept",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn accept(&mut self, beacon: Beacon, source_ip: IpAddr, now: u64, instant: Instant)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::accept",
-      "kind": "method",
-      "line": 440,
-      "name": "accept",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 8,
-        "cyclomatic": 5,
-        "kind": "method",
-        "line": 440,
-        "name": "accept"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn accept(&mut self, beacon: Beacon, source_ip: IpAddr, now: u64, instant: Instant)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::accept::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".filter(|candidate| candidate.node_id == beacon.node_id)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::accept::<closure>",
-      "kind": "closure",
-      "line": 455,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 455,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".filter(|candidate| candidate.node_id == beacon.node_id)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 4,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::discovery::admit_source",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn admit_source(&mut self, source: IpAddr, now: Instant) -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::admit_source",
-      "kind": "method",
-      "line": 482,
-      "name": "admit_source",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 5,
-        "kind": "method",
-        "line": 482,
-        "name": "admit_source"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn admit_source(&mut self, source: IpAddr, now: Instant) -> bool",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::admit_source::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "let source_rate = self.sources.entry(source).or_insert_with(|| SourceRate {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::admit_source::<closure>",
-      "kind": "closure",
-      "line": 490,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 490,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "let source_rate = self.sources.entry(source).or_insert_with(|| SourceRate {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::prune",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn prune(&mut self, now: u64, instant: Instant)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::prune",
-      "kind": "method",
-      "line": 503,
-      "name": "prune",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 503,
-        "name": "prune"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn prune(&mut self, now: u64, instant: Instant)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::prune::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".retain(|_, candidate| candidate.expires_at > now);",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::prune::<closure>",
-      "kind": "closure",
-      "line": 505,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 505,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".retain(|_, candidate| candidate.expires_at > now);",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::discovery::prune_rates",
+        "identity": "crate::discovery::beacon::validate_secret",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn prune_rates(&mut self, now: Instant)",
+        "path": "src/discovery/beacon.rs",
+        "signature": "pub(super) fn validate_secret(secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::prune_rates",
-      "kind": "method",
-      "line": 510,
-      "name": "prune_rates",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "method",
-        "line": 510,
-        "name": "prune_rates"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn prune_rates(&mut self, now: Instant)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::prune_rates::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::prune_rates::<closure>",
-      "kind": "closure",
-      "line": 514,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 514,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::discovery::prune_rates::<closure>@518#2",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "self.sources.retain(|_, source| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::prune_rates::<closure>@518#2",
-      "kind": "closure",
-      "line": 518,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "closure",
-        "line": 518,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "self.sources.retain(|_, source| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::prune_rates::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::prune_rates::<closure>::<closure>",
-      "kind": "closure",
-      "line": 522,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 522,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 11,
-      "cyclomatic": 11,
-      "derived": {
-        "identity": "crate::discovery::start",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn start( settings: DiscoverySettings, context: NodeContext, direct_port: Option<u16>, secret: Option<String>, ) -> Result<Self, DiscoveryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::start",
-      "kind": "method",
-      "line": 540,
-      "name": "start",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 11,
-        "cyclomatic": 11,
-        "kind": "method",
-        "line": 540,
-        "name": "start"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn start( settings: DiscoverySettings, context: NodeContext, direct_port: Option<u16>, secret: Option<String>, ) -> Result<Self, DiscoveryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::start::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".map_err(|_| DiscoveryError::Internal)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::start::<closure>",
-      "kind": "closure",
-      "line": 562,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 562,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".map_err(|_| DiscoveryError::Internal)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 3,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::discovery::start::<closure>@581#4",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".filter_map(|interface| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::start::<closure>@581#4",
-      "kind": "closure",
-      "line": 581,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 3,
-        "kind": "closure",
-        "line": 581,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".filter_map(|interface| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::start::<closure>@596#5",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "let broadcast = settings.broadcast && send_sockets.iter().any(|sender| sender.broadcast);",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::start::<closure>@596#5",
-      "kind": "closure",
-      "line": 596,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 596,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "let broadcast = settings.broadcast && send_sockets.iter().any(|sender| sender.broadcast);",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::start::<closure>@601#6",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "NodeIdentity::load_existing(&context).map_err(|_| DiscoveryError::Internal)?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::start::<closure>@601#6",
-      "kind": "closure",
-      "line": 601,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 601,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "NodeIdentity::load_existing(&context).map_err(|_| DiscoveryError::Internal)?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::start::<closure>@615#7",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".spawn(move || {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::start::<closure>@615#7",
-      "kind": "closure",
-      "line": 615,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 615,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".spawn(move || {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::disabled",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn disabled(settings: DiscoverySettings, supported: bool) -> Self",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::disabled",
-      "kind": "method",
-      "line": 638,
-      "name": "disabled",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 638,
-        "name": "disabled"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn disabled(settings: DiscoverySettings, supported: bool) -> Self",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::status_without_service",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn status_without_service( settings: &DiscoverySettings, supported: bool, secret_configured: bool, ) -> DiscoveryStatus",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::status_without_service",
-      "kind": "method",
-      "line": 648,
-      "name": "status_without_service",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 648,
-        "name": "status_without_service"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn status_without_service( settings: &DiscoverySettings, supported: bool, secret_configured: bool, ) -> DiscoveryStatus",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::status",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn status(&self) -> DiscoveryStatusHandle",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::status",
-      "kind": "method",
-      "line": 656,
-      "name": "status",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 656,
-        "name": "status"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn status(&self) -> DiscoveryStatusHandle",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::discovery::stop",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn stop(&mut self)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::stop",
-      "kind": "method",
-      "line": 660,
-      "name": "stop",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "method",
-        "line": 660,
-        "name": "stop"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn stop(&mut self)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::drop",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn drop(&mut self)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::drop",
-      "kind": "method",
-      "line": 672,
-      "name": "drop",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 672,
-        "name": "drop"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn drop(&mut self)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 51,
-      "cyclomatic": 16,
-      "derived": {
-        "identity": "crate::discovery::discovery_loop",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn discovery_loop( socket: UdpSocket, settings: DiscoverySettings, identity: NodeIdentity, direct_port: Option<u16>, secret: Option<String>, send_sockets: Vec<InterfaceSocket>, multicast_addr: Ipv4Addr, multicast: bool, broadcast: bool, stop: Arc<AtomicBool>, status: DiscoveryStatusHandle, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::discovery_loop",
+      "identity": "crate::discovery::beacon::validate_secret",
       "kind": "function",
-      "line": 680,
-      "name": "discovery_loop",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 51,
-        "cyclomatic": 16,
-        "kind": "function",
-        "line": 680,
-        "name": "discovery_loop"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn discovery_loop( socket: UdpSocket, settings: DiscoverySettings, identity: NodeIdentity, direct_port: Option<u16>, secret: Option<String>, send_sockets: Vec<InterfaceSocket>, multicast_addr: Ipv4Addr, multicast: bool, broadcast: bool, stop: Arc<AtomicBool>, status: DiscoveryStatusHandle, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 4,
-      "cyclomatic": 6,
-      "derived": {
-        "identity": "crate::discovery::process_datagram",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn process_datagram( bytes: &[u8], source: SocketAddr, secret: &Option<String>, status: &DiscoveryStatusHandle, local_node_id: Option<&str>, )",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::process_datagram",
-      "kind": "function",
-      "line": 764,
-      "name": "process_datagram",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 6,
-        "kind": "function",
-        "line": 764,
-        "name": "process_datagram"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn process_datagram( bytes: &[u8], source: SocketAddr, secret: &Option<String>, status: &DiscoveryStatusHandle, local_node_id: Option<&str>, )",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::process_datagram::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "if local_node_id.is_some_and(|node_id| node_id == beacon.node_id) {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::process_datagram::<closure>",
-      "kind": "closure",
-      "line": 794,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 794,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": "if local_node_id.is_some_and(|node_id| node_id == beacon.node_id) {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 12,
-      "cyclomatic": 8,
-      "derived": {
-        "identity": "crate::discovery::local_ipv4_interfaces",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn local_ipv4_interfaces() -> Vec<InterfaceAddress>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::local_ipv4_interfaces",
-      "kind": "function",
-      "line": 813,
-      "name": "local_ipv4_interfaces",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 12,
-        "cyclomatic": 8,
-        "kind": "function",
-        "line": 813,
-        "name": "local_ipv4_interfaces"
-      },
-      "path": "src/discovery.rs",
-      "signature": "fn local_ipv4_interfaces() -> Vec<InterfaceAddress>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::local_ipv4_interfaces::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": ".any(|entry: &InterfaceAddress| entry.address == address)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::local_ipv4_interfaces::<closure>",
-      "kind": "closure",
-      "line": 853,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 853,
-        "name": "<closure>"
-      },
-      "path": "src/discovery.rs",
-      "signature": ".any(|entry: &InterfaceAddress| entry.address == address)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::discovery::platform_supported",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "pub fn platform_supported() -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::platform_supported",
-      "kind": "function",
-      "line": 871,
-      "name": "platform_supported",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 871,
-        "name": "platform_supported"
-      },
-      "path": "src/discovery.rs",
-      "signature": "pub fn platform_supported() -> bool",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::discovery::validate_secret",
-        "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
-        "signature": "fn validate_secret(secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::discovery::validate_secret",
-      "kind": "function",
-      "line": 875,
+      "line": 229,
       "name": "validate_secret",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 875,
+        "line": 229,
         "name": "validate_secret"
       },
-      "path": "src/discovery.rs",
-      "signature": "fn validate_secret(secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
+      "path": "src/discovery/beacon.rs",
+      "signature": "pub(super) fn validate_secret(secret: Option<&[u8]>) -> Result<(), DiscoveryError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::discovery::validate_secret::<closure>",
+        "identity": "crate::discovery::beacon::validate_secret::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "if secret.is_some_and(|value| value.is_empty() || value.len() > MAX_DISCOVERY_SECRET_BYTES) {",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::validate_secret::<closure>",
+      "identity": "crate::discovery::beacon::validate_secret::<closure>",
       "kind": "closure",
-      "line": 876,
+      "line": 230,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 876,
+        "line": 230,
         "name": "<closure>"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "if secret.is_some_and(|value| value.is_empty() || value.len() > MAX_DISCOVERY_SECRET_BYTES) {",
       "source_class": "handwritten"
     },
@@ -48070,25 +47346,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::read_u64",
+        "identity": "crate::discovery::beacon::read_u64",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "fn read_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, DiscoveryError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::read_u64",
+      "identity": "crate::discovery::beacon::read_u64",
       "kind": "function",
-      "line": 882,
+      "line": 236,
       "name": "read_u64",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 882,
+        "line": 236,
         "name": "read_u64"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "fn read_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, DiscoveryError>",
       "source_class": "handwritten"
     },
@@ -48096,25 +47372,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::read_u64::<closure>",
+        "identity": "crate::discovery::beacon::read_u64::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?,",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::read_u64::<closure>",
+      "identity": "crate::discovery::beacon::read_u64::<closure>",
       "kind": "closure",
-      "line": 891,
+      "line": 245,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 891,
+        "line": 245,
         "name": "<closure>"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?,",
       "source_class": "handwritten"
     },
@@ -48122,51 +47398,1013 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::discovery::hmac_sha256",
+        "identity": "crate::discovery::beacon::hmac_sha256",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/beacon.rs",
         "signature": "fn hmac_sha256(secret: &[u8], message: &[u8]) -> [u8",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::hmac_sha256",
+      "identity": "crate::discovery::beacon::hmac_sha256",
       "kind": "function",
-      "line": 927,
+      "line": 249,
       "name": "hmac_sha256",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 927,
+        "line": 249,
         "name": "hmac_sha256"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/beacon.rs",
       "signature": "fn hmac_sha256(secret: &[u8], message: &[u8]) -> [u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 11,
+      "cyclomatic": 11,
+      "derived": {
+        "identity": "crate::discovery::service::start",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "pub fn start( settings: DiscoverySettings, context: NodeContext, direct_port: Option<u16>, secret: Option<String>, ) -> Result<Self, DiscoveryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start",
+      "kind": "method",
+      "line": 23,
+      "name": "start",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 11,
+        "cyclomatic": 11,
+        "kind": "method",
+        "line": 23,
+        "name": "start"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "pub fn start( settings: DiscoverySettings, context: NodeContext, direct_port: Option<u16>, secret: Option<String>, ) -> Result<Self, DiscoveryError>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::test_identity",
+        "identity": "crate::discovery::service::start::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/service.rs",
+        "signature": ".map_err(|_| DiscoveryError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>",
+      "kind": "closure",
+      "line": 45,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 45,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": ".map_err(|_| DiscoveryError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::start::<closure>@48#2",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": ".map_err(|_| DiscoveryError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>@48#2",
+      "kind": "closure",
+      "line": 48,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 48,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": ".map_err(|_| DiscoveryError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::start::<closure>@52#3",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>@52#3",
+      "kind": "closure",
+      "line": 52,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 52,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::discovery::service::start::<closure>@64#4",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": ".filter_map(|interface| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>@64#4",
+      "kind": "closure",
+      "line": 64,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 3,
+        "kind": "closure",
+        "line": 64,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": ".filter_map(|interface| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::start::<closure>@79#5",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "let broadcast = settings.broadcast && send_sockets.iter().any(|sender| sender.broadcast);",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>@79#5",
+      "kind": "closure",
+      "line": 79,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 79,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "let broadcast = settings.broadcast && send_sockets.iter().any(|sender| sender.broadcast);",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::start::<closure>@84#6",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "NodeIdentity::load_existing(&context).map_err(|_| DiscoveryError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>@84#6",
+      "kind": "closure",
+      "line": 84,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 84,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "NodeIdentity::load_existing(&context).map_err(|_| DiscoveryError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::start::<closure>@98#7",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": ".spawn(move || {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>@98#7",
+      "kind": "closure",
+      "line": 98,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 98,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": ".spawn(move || {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::start::<closure>@113#8",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": ".map_err(|_| DiscoveryError::Internal)?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::start::<closure>@113#8",
+      "kind": "closure",
+      "line": 113,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 113,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": ".map_err(|_| DiscoveryError::Internal)?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::disabled",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "pub fn disabled(settings: DiscoverySettings, supported: bool) -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::disabled",
+      "kind": "method",
+      "line": 121,
+      "name": "disabled",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 121,
+        "name": "disabled"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "pub fn disabled(settings: DiscoverySettings, supported: bool) -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::status_without_service",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "pub fn status_without_service( settings: &DiscoverySettings, supported: bool, secret_configured: bool, ) -> DiscoveryStatus",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::status_without_service",
+      "kind": "method",
+      "line": 131,
+      "name": "status_without_service",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 131,
+        "name": "status_without_service"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "pub fn status_without_service( settings: &DiscoverySettings, supported: bool, secret_configured: bool, ) -> DiscoveryStatus",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::status",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "pub fn status(&self) -> DiscoveryStatusHandle",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::status",
+      "kind": "method",
+      "line": 139,
+      "name": "status",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 139,
+        "name": "status"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "pub fn status(&self) -> DiscoveryStatusHandle",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::discovery::service::stop",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "pub fn stop(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::stop",
+      "kind": "method",
+      "line": 143,
+      "name": "stop",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 143,
+        "name": "stop"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "pub fn stop(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::drop",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "fn drop(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::drop",
+      "kind": "method",
+      "line": 155,
+      "name": "drop",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 155,
+        "name": "drop"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "fn drop(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 51,
+      "cyclomatic": 16,
+      "derived": {
+        "identity": "crate::discovery::service::discovery_loop",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "fn discovery_loop( socket: UdpSocket, settings: DiscoverySettings, identity: NodeIdentity, direct_port: Option<u16>, secret: Option<String>, send_sockets: Vec<InterfaceSocket>, multicast_addr: Ipv4Addr, multicast: bool, broadcast: bool, stop: Arc<AtomicBool>, status: DiscoveryStatusHandle, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::discovery_loop",
+      "kind": "function",
+      "line": 163,
+      "name": "discovery_loop",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 51,
+        "cyclomatic": 16,
+        "kind": "function",
+        "line": 163,
+        "name": "discovery_loop"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "fn discovery_loop( socket: UdpSocket, settings: DiscoverySettings, identity: NodeIdentity, direct_port: Option<u16>, secret: Option<String>, send_sockets: Vec<InterfaceSocket>, multicast_addr: Ipv4Addr, multicast: bool, broadcast: bool, stop: Arc<AtomicBool>, status: DiscoveryStatusHandle, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::discovery::service::process_datagram",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "pub(super) fn process_datagram( bytes: &[u8], source: SocketAddr, secret: &Option<String>, status: &DiscoveryStatusHandle, local_node_id: Option<&str>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::process_datagram",
+      "kind": "function",
+      "line": 247,
+      "name": "process_datagram",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 247,
+        "name": "process_datagram"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "pub(super) fn process_datagram( bytes: &[u8], source: SocketAddr, secret: &Option<String>, status: &DiscoveryStatusHandle, local_node_id: Option<&str>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::process_datagram::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "if local_node_id.is_some_and(|node_id| node_id == beacon.node_id) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::process_datagram::<closure>",
+      "kind": "closure",
+      "line": 277,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 277,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "if local_node_id.is_some_and(|node_id| node_id == beacon.node_id) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 12,
+      "cyclomatic": 8,
+      "derived": {
+        "identity": "crate::discovery::service::local_ipv4_interfaces",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "fn local_ipv4_interfaces() -> Vec<InterfaceAddress>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::local_ipv4_interfaces",
+      "kind": "function",
+      "line": 296,
+      "name": "local_ipv4_interfaces",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 12,
+        "cyclomatic": 8,
+        "kind": "function",
+        "line": 296,
+        "name": "local_ipv4_interfaces"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "fn local_ipv4_interfaces() -> Vec<InterfaceAddress>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::local_ipv4_interfaces::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": ".any(|entry: &InterfaceAddress| entry.address == address)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::local_ipv4_interfaces::<closure>",
+      "kind": "closure",
+      "line": 336,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 336,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": ".any(|entry: &InterfaceAddress| entry.address == address)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::local_ipv4_interfaces@350#2",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "fn local_ipv4_interfaces() -> Vec<InterfaceAddress>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::local_ipv4_interfaces@350#2",
+      "kind": "function",
+      "line": 350,
+      "name": "local_ipv4_interfaces",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 350,
+        "name": "local_ipv4_interfaces"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "fn local_ipv4_interfaces() -> Vec<InterfaceAddress>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::service::platform_supported",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "pub fn platform_supported() -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::platform_supported",
+      "kind": "function",
+      "line": 354,
+      "name": "platform_supported",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 354,
+        "name": "platform_supported"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "pub fn platform_supported() -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::default",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "fn default() -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::default",
+      "kind": "method",
+      "line": 51,
+      "name": "default",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 51,
+        "name": "default"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "fn default() -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::new",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "pub(super) fn new( settings: &DiscoverySettings, supported: bool, listening: bool, multicast: bool, broadcast: bool, secret: bool, ) -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::new",
+      "kind": "method",
+      "line": 91,
+      "name": "new",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 91,
+        "name": "new"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "pub(super) fn new( settings: &DiscoverySettings, supported: bool, listening: bool, multicast: bool, broadcast: bool, secret: bool, ) -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::public_status",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "pub fn public_status(&mut self, include_addresses: bool, now: u64) -> DiscoveryStatus",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::public_status",
+      "kind": "method",
+      "line": 120,
+      "name": "public_status",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 120,
+        "name": "public_status"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "pub fn public_status(&mut self, include_addresses: bool, now: u64) -> DiscoveryStatus",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::public_status::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": ".map(|candidate| DiscoveryCandidate {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::public_status::<closure>",
+      "kind": "closure",
+      "line": 125,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 125,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": ".map(|candidate| DiscoveryCandidate {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::public_status::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "address: include_addresses.then(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::public_status::<closure>::<closure>",
+      "kind": "closure",
+      "line": 133,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 133,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "address: include_addresses.then(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::public_status::<closure>@138#2",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "candidates.sort_by(|a, b| a.node_id.cmp(&b.node_id).then(a.address.cmp(&b.address)));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::public_status::<closure>@138#2",
+      "kind": "closure",
+      "line": 138,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 138,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "candidates.sort_by(|a, b| a.node_id.cmp(&b.node_id).then(a.address.cmp(&b.address)));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::discovery::snapshot::accept",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "pub(super) fn accept(&mut self, beacon: Beacon, source_ip: IpAddr, now: u64, instant: Instant)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::accept",
+      "kind": "method",
+      "line": 144,
+      "name": "accept",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 8,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 144,
+        "name": "accept"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "pub(super) fn accept(&mut self, beacon: Beacon, source_ip: IpAddr, now: u64, instant: Instant)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::accept::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": ".filter(|candidate| candidate.node_id == beacon.node_id)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::accept::<closure>",
+      "kind": "closure",
+      "line": 159,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 159,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": ".filter(|candidate| candidate.node_id == beacon.node_id)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::discovery::snapshot::admit_source",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "pub(super) fn admit_source(&mut self, source: IpAddr, now: Instant) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::admit_source",
+      "kind": "method",
+      "line": 186,
+      "name": "admit_source",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 186,
+        "name": "admit_source"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "pub(super) fn admit_source(&mut self, source: IpAddr, now: Instant) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::admit_source::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "let source_rate = self.sources.entry(source).or_insert_with(|| SourceRate {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::admit_source::<closure>",
+      "kind": "closure",
+      "line": 194,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 194,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "let source_rate = self.sources.entry(source).or_insert_with(|| SourceRate {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::prune",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "pub(super) fn prune(&mut self, now: u64, instant: Instant)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::prune",
+      "kind": "method",
+      "line": 207,
+      "name": "prune",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 207,
+        "name": "prune"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "pub(super) fn prune(&mut self, now: u64, instant: Instant)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::prune::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": ".retain(|_, candidate| candidate.expires_at > now);",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::prune::<closure>",
+      "kind": "closure",
+      "line": 209,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 209,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": ".retain(|_, candidate| candidate.expires_at > now);",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::discovery::snapshot::prune_rates",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "fn prune_rates(&mut self, now: Instant)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::prune_rates",
+      "kind": "method",
+      "line": 214,
+      "name": "prune_rates",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 214,
+        "name": "prune_rates"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "fn prune_rates(&mut self, now: Instant)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::prune_rates::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::prune_rates::<closure>",
+      "kind": "closure",
+      "line": 218,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 218,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::discovery::snapshot::prune_rates::<closure>@222#2",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": "self.sources.retain(|_, source| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::prune_rates::<closure>@222#2",
+      "kind": "closure",
+      "line": 222,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 222,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": "self.sources.retain(|_, source| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::snapshot::prune_rates::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/snapshot.rs",
+        "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::snapshot::prune_rates::<closure>::<closure>",
+      "kind": "closure",
+      "line": 226,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 226,
+        "name": "<closure>"
+      },
+      "path": "src/discovery/snapshot.rs",
+      "signature": ".is_some_and(|seen| now.duration_since(*seen) >= RATE_WINDOW)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::discovery::tests::test_identity",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/tests.rs",
         "signature": "fn test_identity() -> (TempDir, NodeIdentity)",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::test_identity",
+      "identity": "crate::discovery::tests::test_identity",
       "kind": "function",
-      "line": 973,
+      "line": 12,
       "name": "test_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 973,
+        "line": 12,
         "name": "test_identity"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn test_identity() -> (TempDir, NodeIdentity)",
       "source_class": "handwritten"
     },
@@ -48174,25 +48412,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::beacon_round_trip_verifies_identity_and_optional_secret",
+        "identity": "crate::discovery::tests::beacon_round_trip_verifies_identity_and_optional_secret",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/tests.rs",
         "signature": "fn beacon_round_trip_verifies_identity_and_optional_secret()",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::beacon_round_trip_verifies_identity_and_optional_secret",
+      "identity": "crate::discovery::tests::beacon_round_trip_verifies_identity_and_optional_secret",
       "kind": "function",
-      "line": 994,
+      "line": 22,
       "name": "beacon_round_trip_verifies_identity_and_optional_secret",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 994,
+        "line": 22,
         "name": "beacon_round_trip_verifies_identity_and_optional_secret"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn beacon_round_trip_verifies_identity_and_optional_secret()",
       "source_class": "handwritten"
     },
@@ -48200,25 +48438,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::beacon_rejects_mutations_and_expiry",
+        "identity": "crate::discovery::tests::beacon_rejects_mutations_and_expiry",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/tests.rs",
         "signature": "fn beacon_rejects_mutations_and_expiry()",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::beacon_rejects_mutations_and_expiry",
+      "identity": "crate::discovery::tests::beacon_rejects_mutations_and_expiry",
       "kind": "function",
-      "line": 1013,
+      "line": 41,
       "name": "beacon_rejects_mutations_and_expiry",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1013,
+        "line": 41,
         "name": "beacon_rejects_mutations_and_expiry"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn beacon_rejects_mutations_and_expiry()",
       "source_class": "handwritten"
     },
@@ -48226,25 +48464,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::discovery::admission_and_candidate_storage_are_bounded",
+        "identity": "crate::discovery::tests::admission_and_candidate_storage_are_bounded",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/tests.rs",
         "signature": "fn admission_and_candidate_storage_are_bounded()",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::admission_and_candidate_storage_are_bounded",
+      "identity": "crate::discovery::tests::admission_and_candidate_storage_are_bounded",
       "kind": "function",
-      "line": 1064,
+      "line": 92,
       "name": "admission_and_candidate_storage_are_bounded",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1064,
+        "line": 92,
         "name": "admission_and_candidate_storage_are_bounded"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn admission_and_candidate_storage_are_bounded()",
       "source_class": "handwritten"
     },
@@ -48252,25 +48490,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::discovery::malformed_flood_is_rate_limited_before_identity_work",
+        "identity": "crate::discovery::tests::malformed_flood_is_rate_limited_before_identity_work",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/tests.rs",
         "signature": "fn malformed_flood_is_rate_limited_before_identity_work()",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::malformed_flood_is_rate_limited_before_identity_work",
+      "identity": "crate::discovery::tests::malformed_flood_is_rate_limited_before_identity_work",
       "kind": "function",
-      "line": 1076,
+      "line": 104,
       "name": "malformed_flood_is_rate_limited_before_identity_work",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1076,
+        "line": 104,
         "name": "malformed_flood_is_rate_limited_before_identity_work"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn malformed_flood_is_rate_limited_before_identity_work()",
       "source_class": "handwritten"
     },
@@ -48278,25 +48516,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::spoof_secret_mismatch_and_stale_beacons_never_become_candidates",
+        "identity": "crate::discovery::tests::spoof_secret_mismatch_and_stale_beacons_never_become_candidates",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/tests.rs",
         "signature": "fn spoof_secret_mismatch_and_stale_beacons_never_become_candidates()",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::spoof_secret_mismatch_and_stale_beacons_never_become_candidates",
+      "identity": "crate::discovery::tests::spoof_secret_mismatch_and_stale_beacons_never_become_candidates",
       "kind": "function",
-      "line": 1094,
+      "line": 122,
       "name": "spoof_secret_mismatch_and_stale_beacons_never_become_candidates",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1094,
+        "line": 122,
         "name": "spoof_secret_mismatch_and_stale_beacons_never_become_candidates"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn spoof_secret_mismatch_and_stale_beacons_never_become_candidates()",
       "source_class": "handwritten"
     },
@@ -48304,25 +48542,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::status_redacts_addresses_by_default_and_expires_candidates",
+        "identity": "crate::discovery::tests::status_redacts_addresses_by_default_and_expires_candidates",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/tests.rs",
         "signature": "fn status_redacts_addresses_by_default_and_expires_candidates()",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::status_redacts_addresses_by_default_and_expires_candidates",
+      "identity": "crate::discovery::tests::status_redacts_addresses_by_default_and_expires_candidates",
       "kind": "function",
-      "line": 1135,
+      "line": 162,
       "name": "status_redacts_addresses_by_default_and_expires_candidates",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1135,
+        "line": 162,
         "name": "status_redacts_addresses_by_default_and_expires_candidates"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn status_redacts_addresses_by_default_and_expires_candidates()",
       "source_class": "handwritten"
     },
@@ -48330,25 +48568,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::platform_support_is_explicit",
+        "identity": "crate::discovery::tests::platform_support_is_explicit",
         "macro_expansion": "not_measured",
-        "path": "src/discovery.rs",
+        "path": "src/discovery/tests.rs",
         "signature": "fn platform_support_is_explicit()",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::platform_support_is_explicit",
+      "identity": "crate::discovery::tests::platform_support_is_explicit",
       "kind": "function",
-      "line": 1161,
+      "line": 188,
       "name": "platform_support_is_explicit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1161,
+        "line": 188,
         "name": "platform_support_is_explicit"
       },
-      "path": "src/discovery.rs",
+      "path": "src/discovery/tests.rs",
       "signature": "fn platform_support_is_explicit()",
       "source_class": "handwritten"
     },

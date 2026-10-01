@@ -68,6 +68,16 @@ impl RunStore {
         trace::query_traces(&self.connection, run_id, level, since_sequence)
     }
 
+    pub(crate) fn insert_trace(
+        &mut self,
+        run_id: &str,
+        level: TraceLevel,
+        message: &str,
+        data_json: Option<&str>,
+    ) -> Result<TraceRow, RunsError> {
+        super::insert_trace(&mut self.connection, run_id, level, message, data_json)
+    }
+
     pub(crate) fn stats(&self) -> Result<RunStats, RunsError> {
         query::stats(&self.connection)
     }

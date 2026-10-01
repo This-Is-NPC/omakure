@@ -223,8 +223,9 @@ src/
 - `domain/` is I/O-free. `operations/` owns validation and stable errors;
   CLI and HTTP only parse/render requests and responses.
 - `runs/` is the sole owner of `runs.sqlite`. Core run queries, enqueue
-  operations, local Health facts, peer revocation, queue workers, and the
-  standalone scheduler, and direct CLI runs use an opaque `RunStore` handle.
+  operations, local Health facts, peer revocation, queue workers, the
+  standalone scheduler, direct CLI runs, and CLI trace writes use an opaque
+  `RunStore` handle.
   Core queries map typed run errors at the operation boundary. The state
   machine allows `queued`, `running`, `completed`, `failed`, `cancelled`,
   `timed_out`, and `dead_letter` with a closed transition graph.

@@ -1384,6 +1384,50 @@ echo traced"##,
     assert_success(&delete);
 }
 
+#[test]
+fn trace_cli_redacts_runtime_secret_file_values() {
+    let workspace = support::TestWorkspace::new("trace_redacts");
+    let script = workspace.write_schema_script("trace.sh", "trace_fixture", "echo ready");
+    support::set_executable(&script);
+    let run_id = "rid-trace-secret";
+    let queued = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "queue", "add", "trace.sh", "--run-id", run_id],
+    );
+    assert_success(&queued);
+
+    let redaction_file = workspace.path().join("redact.json");
+    fs::write(&redaction_file, r#"["trace_secret_value"]"#).expect("write redaction file");
+    let written = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &[
+            "trace",
+            "saw trace_secret_value",
+            "--data",
+            r#"{"token":"trace_secret_value"}"#,
+        ],
+        &[
+            ("OMAKURE_RUN_ID", run_id),
+            (
+                "OMAKURE_REDACT_SECRETS_FILE",
+                redaction_file.to_str().expect("UTF-8 redaction path"),
+            ),
+        ],
+    );
+    assert_success(&written);
+
+    let traces = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "history", "traces", run_id],
+    );
+    assert_success(&traces);
+    let payload = json(&traces);
+    let rows = payload["data"].as_array().expect("trace rows");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["message"], "saw <redacted>");
+    assert_eq!(rows[0]["data_json"], r#"{"token":"<redacted>"}"#);
+}
+
 #[cfg(unix)]
 #[test]
 fn battery_lifecycle_subcommands_work_against_local_repo() {

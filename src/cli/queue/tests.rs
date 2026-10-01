@@ -628,10 +628,10 @@ fn worker_fails_provider_ref_run_when_secret_policy_is_missing() {
     let conn = runs::open(&ws).unwrap();
     let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
     assert_eq!(after.state, RunState::Failed);
-    assert!(after
-        .error
-        .unwrap_or_default()
-        .contains("secret provider policy missing"));
+    assert_eq!(
+        after.error.as_deref(),
+        Some("secret provider policy missing for queued run")
+    );
     assert!(!after.stdout.contains("policy_secret"));
     assert!(!marker.exists());
     let _ = fs::remove_dir_all(ws.root());

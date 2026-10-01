@@ -121,6 +121,10 @@ fn a_cue_run_with_no_recorded_hash_does_not_execute() {
     let result = execute_with_heartbeat(&ws, &row, vec![], None);
 
     assert_eq!(result.terminal, ExecutionTerminal::Failed);
+    assert_eq!(
+        result.completion.error.as_deref(),
+        Some("no authorized script content was recorded for this remote run")
+    );
     assert!(
         !result.completion.stdout.contains("unconstrained"),
         "an unconstrained remote run must not reach the child process"

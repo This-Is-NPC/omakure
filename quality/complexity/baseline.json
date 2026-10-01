@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "138b1757ee5a1da308a01ba63b99da18e63fd6b7abd10e060d8bd759a76bc305",
+  "canonical_sha256": "577670853d716f0d05345e1180d7b4906401bf6c39cca2528a3a71ff436f06d3",
   "config_identity": "no-config",
   "files": [
     {
@@ -4390,12 +4390,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 3,
+        "invocations": 1,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 7,
-        "cyclomatic": 26
+        "cyclomatic": 24
       },
       "path": "src/run_executor/admission.rs",
       "source_class": "handwritten"
@@ -96120,14 +96120,14 @@
       },
       "identity": "crate::run_executor::admission::execution_script_path",
       "kind": "function",
-      "line": 8,
+      "line": 24,
       "name": "execution_script_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 8,
+        "line": 24,
         "name": "execution_script_path"
       },
       "path": "src/run_executor/admission.rs",
@@ -96146,14 +96146,14 @@
       },
       "identity": "crate::run_executor::admission::execution_script_path::<closure>",
       "kind": "closure",
-      "line": 20,
+      "line": 36,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 20,
+        "line": 36,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",
@@ -96164,26 +96164,26 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::admission::execution_script_path::<closure>@22#2",
+        "identity": "crate::run_executor::admission::execution_script_path::<closure>@38#2",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/admission.rs",
-        "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error))?;",
+        "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error.to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::admission::execution_script_path::<closure>@22#2",
+      "identity": "crate::run_executor::admission::execution_script_path::<closure>@38#2",
       "kind": "closure",
-      "line": 22,
+      "line": 38,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 22,
+        "line": 38,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",
-      "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error))?;",
+      "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error.to_string()))?;",
       "source_class": "handwritten"
     },
     {
@@ -96198,14 +96198,14 @@
       },
       "identity": "crate::run_executor::admission::script_admission_failure",
       "kind": "function",
-      "line": 26,
+      "line": 42,
       "name": "script_admission_failure",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 26,
+        "line": 42,
         "name": "script_admission_failure"
       },
       "path": "src/run_executor/admission.rs",
@@ -96219,23 +96219,23 @@
         "identity": "crate::run_executor::admission::check_cue_script_unchanged",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/admission.rs",
-        "signature": "fn check_cue_script_unchanged( workspace: &Workspace, row: &RunRow, script_path: &Path, ) -> Result<(), String>",
+        "signature": "fn check_cue_script_unchanged( workspace: &Workspace, row: &RunRow, script_path: &Path, ) -> Result<(), AdmissionError>",
         "source_class": "handwritten"
       },
       "identity": "crate::run_executor::admission::check_cue_script_unchanged",
       "kind": "function",
-      "line": 57,
+      "line": 73,
       "name": "check_cue_script_unchanged",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 57,
+        "line": 73,
         "name": "check_cue_script_unchanged"
       },
       "path": "src/run_executor/admission.rs",
-      "signature": "fn check_cue_script_unchanged( workspace: &Workspace, row: &RunRow, script_path: &Path, ) -> Result<(), String>",
+      "signature": "fn check_cue_script_unchanged( workspace: &Workspace, row: &RunRow, script_path: &Path, ) -> Result<(), AdmissionError>",
       "source_class": "handwritten"
     },
     {
@@ -96250,70 +96250,18 @@
       },
       "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>",
       "kind": "closure",
-      "line": 66,
+      "line": 82,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 66,
+        "line": 82,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",
       "signature": ".and_then(|conn| runs::get_run_script_hash(&conn, &row.run_id))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@67#2",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor/admission.rs",
-        "signature": ".map_err(|err| format!(\"authorized script content lookup failed: {err}\"))?",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@67#2",
-      "kind": "closure",
-      "line": 67,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 67,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor/admission.rs",
-      "signature": ".map_err(|err| format!(\"authorized script content lookup failed: {err}\"))?",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@68#3",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor/admission.rs",
-        "signature": ".ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@68#3",
-      "kind": "closure",
-      "line": 68,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 68,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor/admission.rs",
-      "signature": ".ok_or_else(|| {",
       "source_class": "handwritten"
     },
     {
@@ -96323,23 +96271,23 @@
         "identity": "crate::run_executor::admission::secret_access_for_row",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/admission.rs",
-        "signature": "pub(super) fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, String>",
+        "signature": "pub(super) fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, AdmissionError>",
         "source_class": "handwritten"
       },
       "identity": "crate::run_executor::admission::secret_access_for_row",
       "kind": "function",
-      "line": 81,
+      "line": 92,
       "name": "secret_access_for_row",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 81,
+        "line": 92,
         "name": "secret_access_for_row"
       },
       "path": "src/run_executor/admission.rs",
-      "signature": "pub(super) fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, String>",
+      "signature": "pub(super) fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, AdmissionError>",
       "source_class": "handwritten"
     },
     {
@@ -96354,14 +96302,14 @@
       },
       "identity": "crate::run_executor::admission::secret_access_for_row::<closure>",
       "kind": "closure",
-      "line": 86,
+      "line": 97,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 86,
+        "line": 97,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",
@@ -96380,14 +96328,14 @@
       },
       "identity": "crate::run_executor::admission::secret_access_for_row::<closure>::<closure>",
       "kind": "closure",
-      "line": 90,
+      "line": 101,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 90,
+        "line": 101,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",
@@ -96398,22 +96346,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@94#2",
+        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@105#2",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/admission.rs",
         "signature": ".and_then(|conn| runs::get_run_secret_refs(&conn, &row.run_id))",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@94#2",
+      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@105#2",
       "kind": "closure",
-      "line": 94,
+      "line": 105,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 94,
+        "line": 105,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",
@@ -96424,22 +96372,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@108#3",
+        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@115#3",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/admission.rs",
         "signature": ".any(|secret_ref| secret_ref == runs::ALLOW_ALL_SECRET_REFS_POLICY)",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@108#3",
+      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@115#3",
       "kind": "closure",
-      "line": 108,
+      "line": 115,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 108,
+        "line": 115,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",
@@ -96458,14 +96406,14 @@
       },
       "identity": "crate::run_executor::admission::parse_args_json",
       "kind": "function",
-      "line": 119,
+      "line": 126,
       "name": "parse_args_json",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 119,
+        "line": 126,
         "name": "parse_args_json"
       },
       "path": "src/run_executor/admission.rs",
@@ -96484,14 +96432,14 @@
       },
       "identity": "crate::run_executor::admission::parse_args_json::<closure>",
       "kind": "closure",
-      "line": 120,
+      "line": 127,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 120,
+        "line": 127,
         "name": "<closure>"
       },
       "path": "src/run_executor/admission.rs",

@@ -1,7 +1,23 @@
 use super::{ExecutionResult, ExecutionTerminal};
-use crate::runs::{self, RunCompletion, RunRow, RunTrigger};
+use crate::runs::{self, RunCompletion, RunRow, RunTrigger, RunsError};
 use crate::workspace::Workspace;
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, thiserror::Error)]
+pub(super) enum AdmissionError {
+    #[error("authorized script content lookup failed: {0}")]
+    ScriptHashLookup(#[source] RunsError),
+    #[error("no authorized script content was recorded for this remote run")]
+    ScriptHashMissing,
+    #[error("the script changed after this remote run was authorized; it was not executed")]
+    ScriptChanged,
+    #[error("the authorized script could not be read at execution time")]
+    ScriptUnreadable,
+    #[error("secret provider policy missing for queued run")]
+    SecretPolicyMissing,
+    #[error("secret provider policy lookup failed: {0}")]
+    SecretPolicyLookup(#[source] RunsError),
+}
 
 /// Enqueue-time validation cannot authorize a path forever: a queued or
 /// scheduled script may have been replaced with a link into Battery cache.
@@ -19,7 +35,7 @@ pub(super) fn execution_script_path(
     let path = crate::operations::core::canonical_script_path(path, workspace.scripts_root())
         .map_err(|error| script_admission_failure(ExecutionTerminal::Errored, error.to_string()))?;
     check_cue_script_unchanged(workspace, row, &path)
-        .map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error))?;
+        .map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error.to_string()))?;
     Ok(path)
 }
 
@@ -58,23 +74,18 @@ fn check_cue_script_unchanged(
     workspace: &Workspace,
     row: &RunRow,
     script_path: &Path,
-) -> Result<(), String> {
+) -> Result<(), AdmissionError> {
     if row.trigger != RunTrigger::Cue {
         return Ok(());
     }
     let recorded = runs::open(workspace)
         .and_then(|conn| runs::get_run_script_hash(&conn, &row.run_id))
-        .map_err(|err| format!("authorized script content lookup failed: {err}"))?
-        .ok_or_else(|| {
-            "no authorized script content was recorded for this remote run".to_string()
-        })?;
+        .map_err(AdmissionError::ScriptHashLookup)?
+        .ok_or(AdmissionError::ScriptHashMissing)?;
     match crate::remote_cue::content_hash(script_path) {
         Some(current) if current == recorded => Ok(()),
-        Some(_) => Err(
-            "the script changed after this remote run was authorized; it was not executed"
-                .to_string(),
-        ),
-        None => Err("the authorized script could not be read at execution time".to_string()),
+        Some(_) => Err(AdmissionError::ScriptChanged),
+        None => Err(AdmissionError::ScriptUnreadable),
     }
 }
 
@@ -82,7 +93,7 @@ pub(super) fn secret_access_for_row(
     workspace: &Workspace,
     row: &RunRow,
     args: &[String],
-) -> Result<crate::secrets::SecretAccess, String> {
+) -> Result<crate::secrets::SecretAccess, AdmissionError> {
     let has_provider_ref = args.iter().any(|arg| {
         arg.starts_with("secret://")
             || arg
@@ -94,13 +105,9 @@ pub(super) fn secret_access_for_row(
         .and_then(|conn| runs::get_run_secret_refs(&conn, &row.run_id))
     {
         Ok(Some(refs)) => refs,
-        Ok(None) if has_provider_ref => {
-            return Err("secret provider policy missing for queued run".to_string())
-        }
+        Ok(None) if has_provider_ref => return Err(AdmissionError::SecretPolicyMissing),
         Ok(None) => return Ok(crate::secrets::SecretAccess::allow_all()),
-        Err(err) if has_provider_ref => {
-            return Err(format!("secret provider policy lookup failed: {err}"))
-        }
+        Err(err) if has_provider_ref => return Err(AdmissionError::SecretPolicyLookup(err)),
         Err(_) => return Ok(crate::secrets::SecretAccess::allow_all()),
     };
     if refs

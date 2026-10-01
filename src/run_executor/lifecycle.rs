@@ -39,7 +39,7 @@ fn resolve_run_args(
     let script_path = execution_script_path(workspace, row)?;
     let row_args = parse_args_json(&row.args_json);
     let secret_access = secret_access_for_row(workspace, row, &row_args)
-        .map_err(|error| execution_error(ExecutionTerminal::Failed, error))?;
+        .map_err(|error| execution_error(ExecutionTerminal::Failed, error.to_string()))?;
     let resolved_args = crate::secrets::resolve_args_with_access(
         workspace,
         &script_path,

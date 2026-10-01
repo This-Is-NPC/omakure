@@ -5,6 +5,18 @@ use crate::node_registry::health::HealthAuthorization;
 use crate::node_registry::{PeerRole, PeerState};
 use crate::util::hex;
 use std::fs::{File, OpenOptions};
+use std::io;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ExecutionLockError {
+    #[error("cannot prepare Cue execution lock: {0}")]
+    Prepare(#[source] crate::node::NodeError),
+    #[error("cannot open Cue execution lock: {0}")]
+    Open(#[source] io::Error),
+    #[error("cannot acquire Cue execution lock: {0}")]
+    Acquire(#[source] io::Error),
+}
 
 /// Serialize authorization changes with the final worker check and process spawn.
 pub struct ExecutionGuard {
@@ -12,13 +24,16 @@ pub struct ExecutionGuard {
 }
 
 impl ExecutionGuard {
-    pub fn acquire(context: &crate::node::NodeContext, actor: &str) -> Result<Self, String> {
+    pub fn acquire(
+        context: &crate::node::NodeContext,
+        actor: &str,
+    ) -> Result<Self, ExecutionLockError> {
         use fs2::FileExt;
         use sha2::{Digest, Sha256};
 
         context
             .ensure_state_directory()
-            .map_err(|error| format!("cannot prepare Cue execution lock: {error}"))?;
+            .map_err(ExecutionLockError::Prepare)?;
         let digest = Sha256::digest(actor.as_bytes());
         let path = context
             .state_dir()
@@ -29,9 +44,8 @@ impl ExecutionGuard {
             .create(true)
             .truncate(false)
             .open(path)
-            .map_err(|error| format!("cannot open Cue execution lock: {error}"))?;
-        file.lock_exclusive()
-            .map_err(|error| format!("cannot acquire Cue execution lock: {error}"))?;
+            .map_err(ExecutionLockError::Open)?;
+        file.lock_exclusive().map_err(ExecutionLockError::Acquire)?;
         Ok(Self { _file: file })
     }
 }

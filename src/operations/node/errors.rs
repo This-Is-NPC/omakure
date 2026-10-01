@@ -4,6 +4,11 @@ use crate::enrollment::EnrollmentError;
 use crate::node::NodeError;
 use crate::node_identity::NodeIdentityError;
 use crate::node_registry::RegistryError;
+use crate::remote_cue::ExecutionLockError;
+
+pub(super) fn map_execution_lock_error(error: ExecutionLockError) -> OperationError {
+    OperationError::new(OperationErrorCode::IoFailed, error.to_string())
+}
 
 pub(super) fn map_enrollment_error(error: EnrollmentError) -> OperationError {
     let code = match error {

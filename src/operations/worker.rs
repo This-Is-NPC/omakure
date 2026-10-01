@@ -179,7 +179,7 @@ fn execute_and_finalize(
         let guard = match crate::remote_cue::ExecutionGuard::acquire(context, &row.actor) {
             Ok(guard) => guard,
             Err(error) => {
-                cancel_without_execution(workspace, row, error);
+                cancel_without_execution(workspace, row, error.to_string());
                 return;
             }
         };

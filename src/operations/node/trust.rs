@@ -1,5 +1,5 @@
 use super::super::{OperationError, OperationErrorCode, OperationResult};
-use super::errors::{map_identity_error, map_registry_error};
+use super::errors::{map_execution_lock_error, map_identity_error, map_registry_error};
 use super::require_confirmation;
 use super::status::open_initialized_registry;
 use crate::node::NodeContext;
@@ -124,7 +124,7 @@ pub fn update_peer_capabilities(
 ) -> OperationResult<PublicPeer> {
     require_confirmation(request.confirmed)?;
     let _guard = crate::remote_cue::ExecutionGuard::acquire(context, &request.node_id)
-        .map_err(|error| OperationError::new(OperationErrorCode::IoFailed, error))?;
+        .map_err(map_execution_lock_error)?;
     let registry = open_initialized_registry(context)?;
     registry
         .update_peer_capabilities(
@@ -152,7 +152,7 @@ pub fn revoke_peer(
 ) -> OperationResult<PublicPeer> {
     require_confirmation(request.confirmed)?;
     let _guard = crate::remote_cue::ExecutionGuard::acquire(context, &request.node_id)
-        .map_err(|error| OperationError::new(OperationErrorCode::IoFailed, error))?;
+        .map_err(map_execution_lock_error)?;
     let registry = open_initialized_registry(context)?;
     if registry
         .peer(&request.node_id)
@@ -206,7 +206,7 @@ pub fn reconcile_revoked_cue_runs(
     let mut cancelled = Vec::new();
     for actor in revoked {
         let _guard = crate::remote_cue::ExecutionGuard::acquire(context, &actor)
-            .map_err(|error| OperationError::new(OperationErrorCode::IoFailed, error))?;
+            .map_err(map_execution_lock_error)?;
         let rows = crate::runs::cancel_cue_runs_for_actor(&conn, &actor).map_err(|error| {
             OperationError::new(
                 OperationErrorCode::IoFailed,

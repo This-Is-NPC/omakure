@@ -1,5 +1,39 @@
 use super::*;
 
+#[test]
+fn cue_execution_lock_prepare_failure_preserves_operation_error() {
+    let temp = TempDir::new().unwrap();
+    let context = node_context(temp.path());
+    fs::write(context.state_dir(), "not a directory").unwrap();
+
+    assert!(matches!(
+        crate::remote_cue::ExecutionGuard::acquire(&context, "omk1_test"),
+        Err(crate::remote_cue::ExecutionLockError::Prepare(
+            crate::node::NodeError::UnexpectedFileType(_)
+        ))
+    ));
+
+    let error = update_peer_capabilities(
+        &context,
+        CapabilityUpdateRequest {
+            node_id: "omk1_test".into(),
+            capabilities: Vec::new(),
+            actor: "operator".into(),
+            reason: "test".into(),
+            confirmed: true,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::IoFailed);
+    assert_eq!(
+        error.message,
+        format!(
+            "cannot prepare Cue execution lock: node path has unexpected file type: {}",
+            context.state_dir().display()
+        )
+    );
+}
+
 /// A conflict must say which conflict it is.
 ///
 /// "This peer is already trusted" and "this peer was revoked and cannot be

@@ -24,7 +24,7 @@ pub(crate) struct StopEvent {
 }
 
 impl StopEvent {
-    pub(crate) fn is_signaled(&self) -> Result<bool, String> {
+    pub(crate) fn is_signaled(&self) -> Result<bool, WaitError> {
         wait_for(&self.handle, 0)
     }
 }
@@ -34,7 +34,7 @@ pub(crate) struct ProcessHandle {
 }
 
 impl ProcessHandle {
-    pub(crate) fn wait(&self, timeout: std::time::Duration) -> Result<bool, String> {
+    pub(crate) fn wait(&self, timeout: std::time::Duration) -> Result<bool, WaitError> {
         wait_for(
             &self.handle,
             timeout.as_millis().min(u32::MAX as u128) as u32,
@@ -50,22 +50,38 @@ fn owned(handle: HANDLE) -> OwnedHandle {
     unsafe { OwnedHandle::from_raw_handle(handle) }
 }
 
-fn wait_for(handle: &OwnedHandle, milliseconds: u32) -> Result<bool, String> {
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum WaitError {
+    #[error("WaitForSingleObject failed with Windows error {code}")]
+    Failed { code: u32 },
+    #[error("WaitForSingleObject returned unexpected status {status}")]
+    UnexpectedStatus { status: u32 },
+}
+
+fn wait_for(handle: &OwnedHandle, milliseconds: u32) -> Result<bool, WaitError> {
     let result = unsafe { WaitForSingleObject(handle.as_raw_handle(), milliseconds) };
     match result {
         WAIT_OBJECT_0 => Ok(true),
         WAIT_TIMEOUT => Ok(false),
-        WAIT_FAILED => Err(last_error("WaitForSingleObject")),
-        other => Err(format!(
-            "WaitForSingleObject returned unexpected status {other}"
-        )),
+        WAIT_FAILED => Err(WaitError::Failed {
+            code: unsafe { GetLastError() },
+        }),
+        status => Err(WaitError::UnexpectedStatus { status }),
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ProcessProbeError {
+    #[error("OpenProcess({pid}) failed with Windows error {code}")]
+    OpenProcess { pid: u32, code: u32 },
+    #[error(transparent)]
+    Wait(#[from] WaitError),
 }
 
 pub(crate) enum ProcessProbe {
     Live(ProcessHandle),
     Dead,
-    Indeterminate(String),
+    Indeterminate(ProcessProbeError),
 }
 
 pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
@@ -81,9 +97,7 @@ pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
         return if error == ERROR_INVALID_PARAMETER {
             ProcessProbe::Dead
         } else {
-            ProcessProbe::Indeterminate(format!(
-                "OpenProcess({pid}) failed with Windows error {error}"
-            ))
+            ProcessProbe::Indeterminate(ProcessProbeError::OpenProcess { pid, code: error })
         };
     }
 
@@ -93,7 +107,7 @@ pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
     match process.wait(std::time::Duration::ZERO) {
         Ok(true) => ProcessProbe::Dead,
         Ok(false) => ProcessProbe::Live(process),
-        Err(error) => ProcessProbe::Indeterminate(error),
+        Err(error) => ProcessProbe::Indeterminate(error.into()),
     }
 }
 
@@ -187,6 +201,22 @@ mod tests {
     #[test]
     fn invalid_process_id_is_dead() {
         assert!(matches!(probe_process(u32::MAX), ProcessProbe::Dead));
+    }
+
+    #[test]
+    fn probe_and_wait_errors_keep_native_status_context() {
+        assert_eq!(
+            ProcessProbeError::OpenProcess { pid: 42, code: 5 }.to_string(),
+            "OpenProcess(42) failed with Windows error 5"
+        );
+        assert_eq!(
+            ProcessProbeError::Wait(WaitError::Failed { code: 6 }).to_string(),
+            "WaitForSingleObject failed with Windows error 6"
+        );
+        assert_eq!(
+            WaitError::UnexpectedStatus { status: 7 }.to_string(),
+            "WaitForSingleObject returned unexpected status 7"
+        );
     }
 
     #[test]

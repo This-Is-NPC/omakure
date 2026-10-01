@@ -1,8 +1,12 @@
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 use std::ptr;
+
+pub(crate) fn open_existing_file_read(path: &Path) -> io::Result<File> {
+    OpenOptions::new().read(true).open(path)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct WindowsFileIdentity {

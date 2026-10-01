@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "71b9364812c519503b0679ed73f17c49593fd61f26d71f5cdd423529c0a332e9",
+  "canonical_sha256": "de8b8dac64c8d1f215d1678e32c2863383c50a352da97dcd935cd2ea00753289",
   "config_identity": "no-config",
   "files": [
     {
@@ -3466,12 +3466,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 14,
+        "invocations": 13,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 10,
-        "cyclomatic": 27
+        "cyclomatic": 25
       },
       "path": "src/operations/battery/files.rs",
       "source_class": "handwritten"
@@ -4866,12 +4866,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 7,
+        "invocations": 9,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 15,
-        "cyclomatic": 22
+        "cyclomatic": 24
       },
       "path": "src/adapters/fs/unix.rs",
       "source_class": "handwritten"
@@ -4885,7 +4885,7 @@
       },
       "native": {
         "cognitive": 13,
-        "cyclomatic": 20
+        "cyclomatic": 21
       },
       "path": "src/adapters/fs/windows.rs",
       "source_class": "handwritten"
@@ -81518,6 +81518,32 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
+        "identity": "crate::operations::battery::files::copy_reader_to_file::<closure>@34#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": ".map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::copy_reader_to_file::<closure>@34#3",
+      "kind": "closure",
+      "line": 34,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 34,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": ".map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
         "identity": "crate::operations::battery::files::open_existing_file_no_follow",
         "macro_expansion": "not_measured",
         "path": "src/operations/battery/files.rs",
@@ -81526,14 +81552,14 @@
       },
       "identity": "crate::operations::battery::files::open_existing_file_no_follow",
       "kind": "function",
-      "line": 43,
+      "line": 42,
       "name": "open_existing_file_no_follow",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 43,
+        "line": 42,
         "name": "open_existing_file_no_follow"
       },
       "path": "src/operations/battery/files.rs",
@@ -81547,23 +81573,283 @@
         "identity": "crate::operations::battery::files::open_existing_file_no_follow::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/battery/files.rs",
-        "signature": ".map_err(|err| {",
+        "signature": "let file = crate::adapters::fs::open_existing_file_read(path).map_err(|err| {",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::battery::files::open_existing_file_no_follow::<closure>",
       "kind": "closure",
-      "line": 50,
+      "line": 43,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 50,
+        "line": 43,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "let file = crate::adapters::fs::open_existing_file_read(path).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::battery::files::ensure_opened_regular_file",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": "pub(super) fn ensure_opened_regular_file(file: &File) -> OperationResult<()>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::ensure_opened_regular_file",
+      "kind": "function",
+      "line": 58,
+      "name": "ensure_opened_regular_file",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 58,
+        "name": "ensure_opened_regular_file"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "pub(super) fn ensure_opened_regular_file(file: &File) -> OperationResult<()>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::ensure_opened_regular_file::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": "let meta = file.metadata().map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::ensure_opened_regular_file::<closure>",
+      "kind": "closure",
+      "line": 59,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 59,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "let meta = file.metadata().map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": "pub(super) fn replace_file_atomically( path: &Path, contents: &[u8], label: &str, ) -> OperationResult<()>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically",
+      "kind": "function",
+      "line": 74,
+      "name": "replace_file_atomically",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 74,
+        "name": "replace_file_atomically"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "pub(super) fn replace_file_atomically( path: &Path, contents: &[u8], label: &str, ) -> OperationResult<()>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": "let parent = path.parent().ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>",
+      "kind": "closure",
+      "line": 79,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 79,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "let parent = path.parent().ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@87#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": ".and_then(|name| name.to_str())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@87#2",
+      "kind": "closure",
+      "line": 87,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 87,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": ".and_then(|name| name.to_str())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@102#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": ".and_then(|_| file.sync_all())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@102#3",
+      "kind": "closure",
+      "line": 102,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 102,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": ".and_then(|_| file.sync_all())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@103#4",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": ".map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@103#4",
+      "kind": "closure",
+      "line": 103,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 103,
         "name": "<closure>"
       },
       "path": "src/operations/battery/files.rs",
       "signature": ".map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@121#5",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": "|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@121#5",
+      "kind": "closure",
+      "line": 121,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 121,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@130#6",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": "fs::rename(&tmp_path, path).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@130#6",
+      "kind": "closure",
+      "line": 130,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 130,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "fs::rename(&tmp_path, path).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@140#7",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/battery/files.rs",
+        "signature": "fs::rename(&tmp_path, path).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@140#7",
+      "kind": "closure",
+      "line": 140,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 140,
+        "name": "<closure>"
+      },
+      "path": "src/operations/battery/files.rs",
+      "signature": "fs::rename(&tmp_path, path).map_err(|err| {",
       "source_class": "handwritten"
     },
     {
@@ -81798,162 +82084,6 @@
       },
       "path": "src/operations/battery/fs_unix.rs",
       "signature": "std::ffi::CString::new(value.as_bytes()).map_err(|_| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::files::open_existing_file_no_follow::<closure>@64#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/files.rs",
-        "signature": "let file = OpenOptions::new().read(true).open(path).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::files::open_existing_file_no_follow::<closure>@64#2",
-      "kind": "closure",
-      "line": 64,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 64,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/files.rs",
-      "signature": "let file = OpenOptions::new().read(true).open(path).map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::operations::battery::files::ensure_opened_regular_file",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/files.rs",
-        "signature": "pub(super) fn ensure_opened_regular_file(file: &File) -> OperationResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::files::ensure_opened_regular_file",
-      "kind": "function",
-      "line": 74,
-      "name": "ensure_opened_regular_file",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 74,
-        "name": "ensure_opened_regular_file"
-      },
-      "path": "src/operations/battery/files.rs",
-      "signature": "pub(super) fn ensure_opened_regular_file(file: &File) -> OperationResult<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::files::ensure_opened_regular_file::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/files.rs",
-        "signature": "let meta = file.metadata().map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::files::ensure_opened_regular_file::<closure>",
-      "kind": "closure",
-      "line": 75,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 75,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/files.rs",
-      "signature": "let meta = file.metadata().map_err(|err| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/files.rs",
-        "signature": "let parent = path.parent().ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>",
-      "kind": "closure",
-      "line": 95,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 95,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/files.rs",
-      "signature": "let parent = path.parent().ok_or_else(|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@118#3",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/files.rs",
-        "signature": ".and_then(|_| file.sync_all())",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@118#3",
-      "kind": "closure",
-      "line": 118,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 118,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/files.rs",
-      "signature": ".and_then(|_| file.sync_all())",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@146#6",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/battery/files.rs",
-        "signature": "fs::rename(&tmp_path, path).map_err(|err| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::battery::files::replace_file_atomically::<closure>@146#6",
-      "kind": "closure",
-      "line": 146,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 146,
-        "name": "<closure>"
-      },
-      "path": "src/operations/battery/files.rs",
-      "signature": "fs::rename(&tmp_path, path).map_err(|err| {",
       "source_class": "handwritten"
     },
     {
@@ -113610,14 +113740,14 @@
       },
       "identity": "crate::adapters::fs::unix::cstring",
       "kind": "function",
-      "line": 14,
+      "line": 16,
       "name": "cstring",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 14,
+        "line": 16,
         "name": "cstring"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113636,18 +113766,44 @@
       },
       "identity": "crate::adapters::fs::unix::cstring::<closure>",
       "kind": "closure",
-      "line": 15,
+      "line": 17,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 15,
+        "line": 17,
         "name": "<closure>"
       },
       "path": "src/adapters/fs/unix.rs",
       "signature": "CString::new(value.as_bytes()).map_err(|_| FsError::Nul)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::open_existing_file_read",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn open_existing_file_read(path: &Path) -> io::Result<File>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::open_existing_file_read",
+      "kind": "function",
+      "line": 20,
+      "name": "open_existing_file_read",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 20,
+        "name": "open_existing_file_read"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn open_existing_file_read(path: &Path) -> io::Result<File>",
       "source_class": "handwritten"
     },
     {
@@ -113662,14 +113818,14 @@
       },
       "identity": "crate::adapters::fs::unix::open_dir_no_follow",
       "kind": "function",
-      "line": 18,
+      "line": 27,
       "name": "open_dir_no_follow",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 18,
+        "line": 27,
         "name": "open_dir_no_follow"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113688,14 +113844,14 @@
       },
       "identity": "crate::adapters::fs::unix::create_new_file_at",
       "kind": "function",
-      "line": 32,
+      "line": 41,
       "name": "create_new_file_at",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 32,
+        "line": 41,
         "name": "create_new_file_at"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113714,14 +113870,14 @@
       },
       "identity": "crate::adapters::fs::unix::open_existing_file_at_no_follow",
       "kind": "function",
-      "line": 48,
+      "line": 57,
       "name": "open_existing_file_at_no_follow",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 48,
+        "line": 57,
         "name": "open_existing_file_at_no_follow"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113740,14 +113896,14 @@
       },
       "identity": "crate::adapters::fs::unix::renameat_file",
       "kind": "function",
-      "line": 66,
+      "line": 75,
       "name": "renameat_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 66,
+        "line": 75,
         "name": "renameat_file"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113766,14 +113922,14 @@
       },
       "identity": "crate::adapters::fs::unix::linkat_file",
       "kind": "function",
-      "line": 84,
+      "line": 93,
       "name": "linkat_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 84,
+        "line": 93,
         "name": "linkat_file"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113792,14 +113948,14 @@
       },
       "identity": "crate::adapters::fs::unix::unlinkat_file",
       "kind": "function",
-      "line": 103,
+      "line": 112,
       "name": "unlinkat_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 103,
+        "line": 112,
         "name": "unlinkat_file"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113818,14 +113974,14 @@
       },
       "identity": "crate::adapters::fs::unix::mkdir_private",
       "kind": "function",
-      "line": 114,
+      "line": 123,
       "name": "mkdir_private",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 114,
+        "line": 123,
         "name": "mkdir_private"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113844,14 +114000,14 @@
       },
       "identity": "crate::adapters::fs::unix::effective_owner",
       "kind": "function",
-      "line": 123,
+      "line": 132,
       "name": "effective_owner",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 123,
+        "line": 132,
         "name": "effective_owner"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113870,14 +114026,14 @@
       },
       "identity": "crate::adapters::fs::unix::user_id_by_name",
       "kind": "function",
-      "line": 128,
+      "line": 137,
       "name": "user_id_by_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 128,
+        "line": 137,
         "name": "user_id_by_name"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113896,14 +114052,14 @@
       },
       "identity": "crate::adapters::fs::unix::group_id_by_name",
       "kind": "function",
-      "line": 148,
+      "line": 157,
       "name": "group_id_by_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 148,
+        "line": 157,
         "name": "group_id_by_name"
       },
       "path": "src/adapters/fs/unix.rs",
@@ -113922,18 +114078,70 @@
       },
       "identity": "crate::adapters::fs::unix::no_follow_open_rejects_symlinks_and_nul_components",
       "kind": "function",
-      "line": 173,
+      "line": 183,
       "name": "no_follow_open_rejects_symlinks_and_nul_components",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 173,
+        "line": 183,
         "name": "no_follow_open_rejects_symlinks_and_nul_components"
       },
       "path": "src/adapters/fs/unix.rs",
       "signature": "fn no_follow_open_rejects_symlinks_and_nul_components()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::path_open_rejects_final_symlink_and_reads_regular_file",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "fn path_open_rejects_final_symlink_and_reads_regular_file()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::path_open_rejects_final_symlink_and_reads_regular_file",
+      "kind": "function",
+      "line": 212,
+      "name": "path_open_rejects_final_symlink_and_reads_regular_file",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 212,
+        "name": "path_open_rejects_final_symlink_and_reads_regular_file"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "fn path_open_rejects_final_symlink_and_reads_regular_file()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::open_existing_file_read",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn open_existing_file_read(path: &Path) -> io::Result<File>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::open_existing_file_read",
+      "kind": "function",
+      "line": 7,
+      "name": "open_existing_file_read",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 7,
+        "name": "open_existing_file_read"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn open_existing_file_read(path: &Path) -> io::Result<File>",
       "source_class": "handwritten"
     },
     {
@@ -113948,14 +114156,14 @@
       },
       "identity": "crate::adapters::fs::windows::file_identity",
       "kind": "function",
-      "line": 29,
+      "line": 33,
       "name": "file_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 29,
+        "line": 33,
         "name": "file_identity"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -113974,14 +114182,14 @@
       },
       "identity": "crate::adapters::fs::windows::has_reparse_point",
       "kind": "function",
-      "line": 43,
+      "line": 47,
       "name": "has_reparse_point",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 43,
+        "line": 47,
         "name": "has_reparse_point"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114000,14 +114208,14 @@
       },
       "identity": "crate::adapters::fs::windows::named",
       "kind": "method",
-      "line": 65,
+      "line": 69,
       "name": "named",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 65,
+        "line": 69,
         "name": "named"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114026,14 +114234,14 @@
       },
       "identity": "crate::adapters::fs::windows::from_handle",
       "kind": "method",
-      "line": 87,
+      "line": 91,
       "name": "from_handle",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 87,
+        "line": 91,
         "name": "from_handle"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114052,14 +114260,14 @@
       },
       "identity": "crate::adapters::fs::windows::has_dacl",
       "kind": "method",
-      "line": 108,
+      "line": 112,
       "name": "has_dacl",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 108,
+        "line": 112,
         "name": "has_dacl"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114078,14 +114286,14 @@
       },
       "identity": "crate::adapters::fs::windows::ace_count",
       "kind": "method",
-      "line": 112,
+      "line": 116,
       "name": "ace_count",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 112,
+        "line": 116,
         "name": "ace_count"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114104,14 +114312,14 @@
       },
       "identity": "crate::adapters::fs::windows::allowed_sids",
       "kind": "method",
-      "line": 136,
+      "line": 140,
       "name": "allowed_sids",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 136,
+        "line": 140,
         "name": "allowed_sids"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114130,14 +114338,14 @@
       },
       "identity": "crate::adapters::fs::windows::owner_is_system",
       "kind": "method",
-      "line": 162,
+      "line": 166,
       "name": "owner_is_system",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "method",
-        "line": 162,
+        "line": 166,
         "name": "owner_is_system"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114156,14 +114364,14 @@
       },
       "identity": "crate::adapters::fs::windows::ace",
       "kind": "method",
-      "line": 167,
+      "line": 171,
       "name": "ace",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "method",
-        "line": 167,
+        "line": 171,
         "name": "ace"
       },
       "path": "src/adapters/fs/windows.rs",
@@ -114182,14 +114390,14 @@
       },
       "identity": "crate::adapters::fs::windows::drop",
       "kind": "method",
-      "line": 201,
+      "line": 205,
       "name": "drop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 201,
+        "line": 205,
         "name": "drop"
       },
       "path": "src/adapters/fs/windows.rs",

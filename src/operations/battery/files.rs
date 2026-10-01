@@ -39,33 +39,17 @@ pub(super) fn copy_reader_to_file(input: &mut dyn Read, mut output: File) -> Ope
         })
 }
 
-#[cfg(unix)]
 pub(super) fn open_existing_file_no_follow(path: &Path) -> OperationResult<File> {
-    use std::os::unix::fs::OpenOptionsExt;
-
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(|err| {
-            let code = if err.raw_os_error() == Some(libc::ELOOP) {
-                OperationErrorCode::UnsafePath
-            } else {
-                OperationErrorCode::IoFailed
-            };
-            OperationError::new(code, format!("failed to open battery script: {err}"))
-        })?;
-    ensure_opened_regular_file(&file)?;
-    Ok(file)
-}
-
-#[cfg(not(unix))]
-pub(super) fn open_existing_file_no_follow(path: &Path) -> OperationResult<File> {
-    let file = OpenOptions::new().read(true).open(path).map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::IoFailed,
-            format!("failed to open battery script: {err}"),
-        )
+    let file = crate::adapters::fs::open_existing_file_read(path).map_err(|err| {
+        #[cfg(unix)]
+        let code = if err.raw_os_error() == Some(libc::ELOOP) {
+            OperationErrorCode::UnsafePath
+        } else {
+            OperationErrorCode::IoFailed
+        };
+        #[cfg(not(unix))]
+        let code = OperationErrorCode::IoFailed;
+        OperationError::new(code, format!("failed to open battery script: {err}"))
     })?;
     ensure_opened_regular_file(&file)?;
     Ok(file)

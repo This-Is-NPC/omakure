@@ -328,6 +328,12 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        if self.rule == Rule::BatteryFilesystem && node.method == "custom_flags" {
+            self.record(
+                "ARCH-BATTERY-FS",
+                "platform filesystem flags belong in adapters/fs",
+            );
+        }
         if self.rule == Rule::GitProcess
             && matches!(
                 node.method.to_string().as_str(),
@@ -907,6 +913,7 @@ fn battery_filesystem_syscalls_stay_in_adapters() {
     for source in [
         "fn install() { unsafe { libc::open(std::ptr::null(), 0); } }",
         "fn install() { libc::renameat(0, std::ptr::null(), 0, std::ptr::null()); }",
+        "fn install() { std::fs::OpenOptions::new().custom_flags(0).open(\"script\"); }",
     ] {
         let contract = parse_contract(Rule::BatteryFilesystem, "fixture:battery.rs", source);
         assert!(

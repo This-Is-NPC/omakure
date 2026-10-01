@@ -1,8 +1,10 @@
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 #[derive(Debug)]
@@ -13,6 +15,13 @@ pub(crate) enum FsError {
 
 fn cstring(value: &OsStr) -> Result<CString, FsError> {
     CString::new(value.as_bytes()).map_err(|_| FsError::Nul)
+}
+
+pub(crate) fn open_existing_file_read(path: &Path) -> io::Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
 }
 
 pub(crate) fn open_dir_no_follow(path: &Path) -> Result<File, FsError> {
@@ -167,6 +176,7 @@ pub(crate) fn group_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
     use std::os::unix::fs::symlink;
 
     #[test]
@@ -196,5 +206,25 @@ mod tests {
             std::fs::read_to_string(directory.join("target")).unwrap(),
             "safe"
         );
+    }
+
+    #[test]
+    fn path_open_rejects_final_symlink_and_reads_regular_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("target");
+        let link = temp.path().join("link");
+        std::fs::write(&target, "safe").unwrap();
+        symlink(&target, &link).unwrap();
+
+        assert_eq!(
+            open_existing_file_read(&link).unwrap_err().raw_os_error(),
+            Some(libc::ELOOP)
+        );
+        let mut contents = String::new();
+        open_existing_file_read(&target)
+            .unwrap()
+            .read_to_string(&mut contents)
+            .unwrap();
+        assert_eq!(contents, "safe");
     }
 }

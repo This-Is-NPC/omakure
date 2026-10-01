@@ -118,6 +118,22 @@ fn symlink_scripts_are_rejected() {
 
 #[cfg(unix)]
 #[test]
+fn opened_script_rejects_final_symlink_with_unsafe_path_error() {
+    use std::os::unix::fs::symlink;
+
+    let dir = TempDir::new().unwrap();
+    let target = dir.path().join("target.sh");
+    let link = dir.path().join("link.sh");
+    fs::write(&target, valid_schema_script()).unwrap();
+    symlink(&target, &link).unwrap();
+
+    let error = super::super::files::open_existing_file_no_follow(&link).unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::UnsafePath);
+    assert!(error.message.starts_with("failed to open battery script: "));
+}
+
+#[cfg(unix)]
+#[test]
 fn manifest_symlink_is_rejected() {
     use std::os::unix::fs::symlink;
 

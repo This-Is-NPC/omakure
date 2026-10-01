@@ -1,27 +1,16 @@
 use super::bearer::require_capability;
-use super::blocking::run_bounded;
-use super::respond::{operation_error_response, operation_response, parse_json_body};
+use super::blocking::operation_response_bounded;
+use super::respond::{operation_error_response, parse_json_body};
 use super::state::{ApiCapability, ApiState};
 use crate::auth::AuthContext;
 use crate::operations::envs as env_ops;
-use crate::operations::{OperationError, OperationErrorCode, OperationResult};
+use crate::operations::{OperationError, OperationErrorCode};
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, State};
 use axum::response::Response;
 use axum::Extension;
 use serde::Deserialize;
-use serde::Serialize;
 use std::sync::Arc;
-
-async fn env_operation_response<T: Serialize + Send + 'static>(
-    gate: Arc<tokio::sync::Semaphore>,
-    task: impl FnOnce() -> OperationResult<T> + Send + 'static,
-) -> Response {
-    let result = run_bounded("environment", gate, task)
-        .await
-        .and_then(std::convert::identity);
-    operation_response(result)
-}
 
 #[derive(Debug, Deserialize)]
 struct EnvBody {
@@ -43,7 +32,10 @@ pub(super) async fn list_envs_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || env_ops::list_envs(&state.workspace)).await
+    operation_response_bounded("environment", gate, move || {
+        env_ops::list_envs(&state.workspace)
+    })
+    .await
 }
 
 fn env_params_forbid_secret_refs(
@@ -103,7 +95,7 @@ pub(super) async fn create_env_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || {
+    operation_response_bounded("environment", gate, move || {
         env_ops::create_env(&state.workspace, &name, &body.params)
     })
     .await
@@ -118,7 +110,10 @@ pub(super) async fn show_env_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || env_ops::show_env(&state.workspace, &name)).await
+    operation_response_bounded("environment", gate, move || {
+        env_ops::show_env(&state.workspace, &name)
+    })
+    .await
 }
 
 pub(super) async fn put_env_handler(
@@ -144,7 +139,7 @@ pub(super) async fn put_env_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || {
+    operation_response_bounded("environment", gate, move || {
         match env_ops::replace_env(&state.workspace, &name, &body.params) {
             Err(err) if err.code == OperationErrorCode::NotFound => {
                 env_ops::create_env(&state.workspace, &name, &body.params)
@@ -178,7 +173,7 @@ pub(super) async fn patch_env_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || {
+    operation_response_bounded("environment", gate, move || {
         for param in body.params {
             env_ops::set_param(&state.workspace, &name, &param.key, &param.value)?;
         }
@@ -202,7 +197,10 @@ pub(super) async fn delete_env_handler(
         ));
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || env_ops::delete_env(&state.workspace, &name)).await
+    operation_response_bounded("environment", gate, move || {
+        env_ops::delete_env(&state.workspace, &name)
+    })
+    .await
 }
 
 pub(super) async fn set_env_param_handler(
@@ -229,7 +227,7 @@ pub(super) async fn set_env_param_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || {
+    operation_response_bounded("environment", gate, move || {
         env_ops::set_param(&state.workspace, &name, &key, &body.value)
     })
     .await
@@ -250,7 +248,7 @@ pub(super) async fn delete_env_param_handler(
         ));
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || {
+    operation_response_bounded("environment", gate, move || {
         env_ops::remove_param(&state.workspace, &name, &key)
     })
     .await
@@ -271,7 +269,10 @@ pub(super) async fn activate_env_handler(
         ));
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || env_ops::activate_env(&state.workspace, &name)).await
+    operation_response_bounded("environment", gate, move || {
+        env_ops::activate_env(&state.workspace, &name)
+    })
+    .await
 }
 
 pub(super) async fn deactivate_env_handler(
@@ -288,5 +289,8 @@ pub(super) async fn deactivate_env_handler(
         ));
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    env_operation_response(gate, move || env_ops::deactivate_env(&state.workspace)).await
+    operation_response_bounded("environment", gate, move || {
+        env_ops::deactivate_env(&state.workspace)
+    })
+    .await
 }

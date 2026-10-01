@@ -1,5 +1,5 @@
 use super::bearer::{require_capability, require_scope};
-use super::blocking::{run_bounded, run_bounded_with_join};
+use super::blocking::{operation_response_bounded, run_bounded_with_join};
 use super::query::{query_bool, query_pairs};
 use super::respond::{operation_error_response, operation_response, parse_json_body};
 use super::state::{ApiCapability, ApiState};
@@ -12,18 +12,7 @@ use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
 use axum::Extension;
 use serde::Deserialize;
-use serde::Serialize;
 use std::sync::Arc;
-
-async fn battery_operation_response<T: Serialize + Send + 'static>(
-    gate: Arc<tokio::sync::Semaphore>,
-    task: impl FnOnce() -> OperationResult<T> + Send + 'static,
-) -> Response {
-    let result = run_bounded("battery", gate, task)
-        .await
-        .and_then(std::convert::identity);
-    operation_response(result)
-}
 
 #[derive(Debug, Deserialize)]
 struct AddBatteryBody {
@@ -58,7 +47,10 @@ pub(super) async fn list_batteries_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    battery_operation_response(gate, move || battery_ops::list_batteries(&state.workspace)).await
+    operation_response_bounded("battery", gate, move || {
+        battery_ops::list_batteries(&state.workspace)
+    })
+    .await
 }
 
 pub(super) async fn add_battery_handler(
@@ -128,7 +120,7 @@ pub(super) async fn add_battery_handler(
         }
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    battery_operation_response(gate, move || {
+    operation_response_bounded("battery", gate, move || {
         battery_ops::add_battery(
             &state.workspace,
             battery_ops::AddBatteryRequest {
@@ -208,7 +200,7 @@ pub(super) async fn inspect_battery_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    battery_operation_response(gate, move || {
+    operation_response_bounded("battery", gate, move || {
         require_https_battery_source(&state.workspace, &battery_id)?;
         battery_ops::inspect_battery(
             &state.workspace,
@@ -227,7 +219,7 @@ pub(super) async fn list_battery_scripts_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    battery_operation_response(gate, move || {
+    operation_response_bounded("battery", gate, move || {
         require_https_battery_source(&state.workspace, &battery_id)?;
         battery_ops::list_battery_scripts(
             &state.workspace,
@@ -254,7 +246,7 @@ pub(super) async fn install_battery_script_handler(
             Err(err) => return operation_error_response(err),
         };
     let gate = Arc::clone(&state.blocking_operation_gate);
-    battery_operation_response(gate, move || {
+    operation_response_bounded("battery", gate, move || {
         require_https_battery_source(&state.workspace, &battery_id)?;
         battery_ops::install_battery_script(
             &state.workspace,
@@ -287,7 +279,7 @@ pub(super) async fn remove_battery_handler(
         Err(err) => return operation_error_response(err),
     };
     let gate = Arc::clone(&state.blocking_operation_gate);
-    battery_operation_response(gate, move || {
+    operation_response_bounded("battery", gate, move || {
         battery_ops::remove_battery(&state.workspace, request)
     })
     .await

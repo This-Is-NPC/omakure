@@ -1,5 +1,5 @@
 use super::bearer::require_capability;
-use super::blocking::{run_bounded, run_bounded_with_join};
+use super::blocking::{operation_response_bounded, run_bounded_with_join};
 use super::query::{query_pairs, query_value, query_values};
 use super::respond::{operation_error_response, operation_response};
 use super::state::{ApiCapability, ApiState};
@@ -11,7 +11,6 @@ use crate::operations::{OperationError, OperationErrorCode};
 use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
 use axum::Extension;
-use serde::Serialize;
 use std::sync::Arc;
 
 pub(super) const MAX_SEARCH_QUERY_LEN: usize = 256;
@@ -19,16 +18,6 @@ pub(super) const MAX_SEARCH_QUERY_LEN: usize = 256;
 pub(super) const MAX_SEARCH_TAGS: usize = 16;
 
 pub(super) const MAX_SEARCH_TAG_LEN: usize = 64;
-
-async fn script_operation_response<T: Serialize + Send + 'static>(
-    gate: Arc<tokio::sync::Semaphore>,
-    task: impl FnOnce() -> crate::operations::OperationResult<T> + Send + 'static,
-) -> Response {
-    let result = run_bounded("script", gate, task)
-        .await
-        .and_then(std::convert::identity);
-    operation_response(result)
-}
 
 pub(super) async fn search_handler(
     State(state): State<ApiState>,
@@ -104,7 +93,10 @@ pub(super) async fn list_scripts_handler(
         Err(err) => return operation_error_response(err),
     };
     let gate = Arc::clone(&state.blocking_operation_gate);
-    script_operation_response(gate, move || core::list_scripts(&state.workspace, request)).await
+    operation_response_bounded("script", gate, move || {
+        core::list_scripts(&state.workspace, request)
+    })
+    .await
 }
 
 async fn describe_script_handler(
@@ -116,7 +108,7 @@ async fn describe_script_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    script_operation_response(gate, move || {
+    operation_response_bounded("script", gate, move || {
         core::describe_script(
             &state.workspace,
             core::DescribeScriptRequest { script: script_id },
@@ -134,7 +126,7 @@ async fn script_schema_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    script_operation_response(gate, move || {
+    operation_response_bounded("script", gate, move || {
         core::describe_script(
             &state.workspace,
             core::DescribeScriptRequest { script: script_id },
@@ -176,7 +168,7 @@ async fn script_content_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    script_operation_response(gate, move || {
+    operation_response_bounded("script", gate, move || {
         scripts_ops::read_script_content(
             &state.workspace,
             scripts_ops::ReadScriptContentRequest { script: script_id },
@@ -194,7 +186,7 @@ pub(super) async fn tree_root_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    script_operation_response(gate, move || {
+    operation_response_bounded("script", gate, move || {
         scripts_ops::list_tree(
             &state.workspace,
             scripts_ops::ListTreeRequest { path: None },
@@ -213,7 +205,7 @@ pub(super) async fn tree_path_handler(
         return response;
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
-    script_operation_response(gate, move || {
+    operation_response_bounded("script", gate, move || {
         scripts_ops::list_tree(
             &state.workspace,
             scripts_ops::ListTreeRequest { path: Some(path) },

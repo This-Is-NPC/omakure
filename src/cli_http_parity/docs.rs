@@ -1,5 +1,5 @@
 use super::model::{Manifest, ManifestError, ParityClass};
-use crate::cli::inventory::normalize_generated_text;
+use crate::inventory::normalize_generated_text;
 use std::collections::BTreeMap;
 
 pub fn render_markdown(manifest: &Manifest) -> String {

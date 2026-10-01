@@ -15,9 +15,9 @@ enum RouteCoverage {
     Covered(&'static str),
 }
 
-/// Inventory of every `(method, route)` declared by `src/cli/api/router.rs`.
+/// Inventory of every `(method, route)` declared by `src/inventory/routes.rs`.
 /// Coverage notes stay here; the route list itself is parsed from
-/// `HTTP_ROUTE_INVENTORY` markers in `src/cli/api/router.rs`.
+/// `HTTP_ROUTE_INVENTORY` markers in `src/inventory/routes.rs`.
 ///
 /// Coverage-guarantee boundary: this is a DRIFT TRIPWIRE. The keys are asserted
 /// to equal `HTTP_ROUTE_INVENTORY` (and that inventory is asserted equal to the
@@ -259,7 +259,7 @@ fn http_route_inventory_maps_all_current_router_entries() {
         .collect();
     assert_eq!(
         notes, from_source,
-        "HTTP_ROUTE_COVERAGE_NOTES must match HTTP_ROUTE_INVENTORY in src/cli/api/router.rs"
+        "HTTP_ROUTE_COVERAGE_NOTES must match HTTP_ROUTE_INVENTORY in src/inventory/routes.rs"
     );
     assert!(HTTP_ROUTE_COVERAGE_NOTES
         .iter()
@@ -269,8 +269,8 @@ fn http_route_inventory_maps_all_current_router_entries() {
 }
 
 fn parse_http_route_inventory_from_source() -> Vec<(&'static str, &'static str)> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli/api/router.rs");
-    let source = fs::read_to_string(&path).expect("read src/cli/api/router.rs");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory/routes.rs");
+    let source = fs::read_to_string(&path).expect("read src/inventory/routes.rs");
     let start = source
         .find("// OMAKURE_HTTP_ROUTE_INVENTORY_START")
         .expect("inventory start marker");
@@ -1457,7 +1457,7 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
 /// `node:read` capability rather than by any new scheme.
 #[test]
 fn no_http_route_can_write_health_plane_state() {
-    let health_routes: Vec<_> = omakure::cli::api::HTTP_ROUTE_INVENTORY
+    let health_routes: Vec<_> = omakure::inventory::HTTP_ROUTE_INVENTORY
         .iter()
         .filter(|(_, route)| route.contains("node/health") || route.contains("node/signals"))
         .collect();

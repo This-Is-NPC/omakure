@@ -9,6 +9,7 @@ enum Rule {
     #[default]
     Http,
     HttpNodeDelivery,
+    Catalog,
     Domain,
     RunsSql,
     Executor,
@@ -68,6 +69,9 @@ impl ContractVisitor {
                 "ARCH-HTTP-CLI",
                 "HTTP must call operations, not CLI adapters",
             );
+        }
+        if self.rule == Rule::Catalog && Self::starts_with(path, &["crate", "cli"]) {
+            self.record("ARCH-CATALOG-CLI", "catalogs must use shared inventories");
         }
         if self.rule == Rule::Http && path.first().map(String::as_str) == Some("rusqlite") {
             self.record("ARCH-HTTP-SQLITE", "HTTP must not access SQLite directly");
@@ -536,4 +540,28 @@ fn node_delivery_contract_rejects_direct_protocol_calls() {
             "direct {module} call was not rejected"
         );
     }
+}
+
+#[test]
+fn shared_catalogs_do_not_depend_on_cli_adapters() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for module in ["cli_http_parity", "operation_catalog"] {
+        for path in source_files(&root.join("src").join(module)) {
+            let display = path.strip_prefix(root).unwrap().display().to_string();
+            let source = fs::read_to_string(&path).expect("read catalog source");
+            let contract = parse_contract(Rule::Catalog, &display, &source);
+            assert!(
+                contract.findings.is_empty(),
+                "catalog boundary violations in {display}: {:?}",
+                contract.findings
+            );
+        }
+    }
+    let contract = parse_contract(
+        Rule::Catalog,
+        "fixture:catalog.rs",
+        "use crate::cli::args::Cli;",
+    );
+    assert_eq!(contract.findings.len(), 1);
+    assert_eq!(contract.findings[0].rule, "ARCH-CATALOG-CLI");
 }

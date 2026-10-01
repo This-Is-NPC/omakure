@@ -154,7 +154,6 @@ src/
 │   ├── env.rs               managed environment commands
 │   ├── battery.rs           Battery repository commands
 │   ├── help_ai.rs           clap-derived machine surface
-│   ├── inventory.rs         Clap command inventory and generated CLI reference
 │   ├── node.rs              node, trust, enrollment, health, and baseline commands
 │   ├── json.rs              stable envelope and error codes
 │   └── …                    one adapter per remaining verb (init, trace, token, update, …)
@@ -181,6 +180,7 @@ src/
 ├── error.rs                 schema and environment application errors
 ├── util/                    shared filesystem, process, and encoding helpers
 ├── app_meta.rs              package version constant
+├── inventory/               Clap-derived command inventory, CLI reference, and HTTP routes
 ├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog/       versioned metadata, validation, rendering, and tests
 ├── runs/                    SQLite state machine and structured traces

@@ -25,7 +25,6 @@ mod status;
 
 pub(crate) use boot::{auth_verification_gate, prepare_api_boot, serve_http};
 pub(crate) use router::health_plane_router;
-pub use router::HTTP_ROUTE_INVENTORY;
 pub(crate) use state::ReadinessGate;
 
 const SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES: usize = 32 * 1024;

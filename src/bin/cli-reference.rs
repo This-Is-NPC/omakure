@@ -1,6 +1,6 @@
 //! Generate and check the deterministic Clap-derived CLI reference.
 
-use omakure::cli::inventory::{normalize_generated_text, render_cli_reference};
+use omakure::inventory::{normalize_generated_text, render_cli_reference};
 use std::env;
 use std::fs;
 use std::path::Path;

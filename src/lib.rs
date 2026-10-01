@@ -22,6 +22,8 @@ pub mod enrollment;
 pub mod enrollment_authority;
 mod error;
 pub mod health_plane;
+/// Shared structural inventories for generated contracts.
+pub mod inventory;
 pub mod node;
 pub mod node_identity;
 mod node_key;

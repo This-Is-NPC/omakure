@@ -3,13 +3,14 @@ use super::boot::{prepare_api_boot, validate_bind, ApiConfigError};
 use super::respond::operation_error_response;
 use super::router::{
     router, router_with_auth, router_with_deploy, router_with_health_plane, router_with_policy,
-    shared_test_health_registry, BODY_LIMIT_BYTES, HTTP_ROUTE_INVENTORY,
+    shared_test_health_registry, BODY_LIMIT_BYTES,
 };
 use super::scripts::{MAX_SEARCH_QUERY_LEN, MAX_SEARCH_TAGS, MAX_SEARCH_TAG_LEN};
 use super::state::{ApiPolicy, ReadinessGate};
 use crate::app_meta;
 use crate::auth::{self, test_credential, AuthContext, Authenticator};
 use crate::cli::args::ApiArgs;
+use crate::inventory::HTTP_ROUTE_INVENTORY;
 use crate::operations::battery as battery_ops;
 use crate::operations::envs as env_ops;
 use crate::operations::{OperationError, OperationErrorCode};

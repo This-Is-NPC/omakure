@@ -1,5 +1,5 @@
-use omakure::cli::inventory::{normalize_generated_text, render_cli_reference};
 use omakure::cli_http_parity::{check_docs_freshness, checked_manifest};
+use omakure::inventory::{normalize_generated_text, render_cli_reference};
 use std::fs;
 use std::path::{Path, PathBuf};
 

@@ -31,16 +31,16 @@ pub fn checked_manifest() -> Result<Manifest, ManifestError> {
 }
 
 pub fn current_cli_ids() -> Vec<String> {
-    crate::cli::inventory::command_inventory()
+    crate::inventory::command_inventory()
         .into_iter()
         .filter(|command| command.subcommands.is_empty())
         .map(|command| command.id)
         .collect()
 }
 
-/// Current HTTP IDs supplied by the router-owned route inventory.
+/// Current HTTP IDs supplied by the shared route inventory.
 pub fn current_http_ids() -> Vec<String> {
-    http_ids(crate::cli::api::HTTP_ROUTE_INVENTORY)
+    http_ids(crate::inventory::HTTP_ROUTE_INVENTORY)
 }
 /// Validate the checked-in manifest against both live structural inventories.
 pub fn validate_current() -> Result<Manifest, ManifestError> {

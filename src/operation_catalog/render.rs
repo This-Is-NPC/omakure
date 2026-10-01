@@ -1,5 +1,5 @@
 use super::*;
-use crate::cli::inventory::normalize_generated_text;
+use crate::inventory::normalize_generated_text;
 use serde::Serialize;
 
 pub fn render_markdown(catalog: &Catalog) -> String {

@@ -5,6 +5,12 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
 cd "$root"
 export MISE_PROJECT_ROOT="$root"
 
+build_only=0
+if [[ "${1:-}" == --build-only ]]; then
+    build_only=1
+    shift
+fi
+
 die() {
     printf 'check:platform:windows: %s\n' "$1" >&2
     exit 2
@@ -17,10 +23,12 @@ case "$target" in
     *) die "unsupported Windows target: $target" ;;
 esac
 
-printf 'check:platform:windows: native tests (%s)\n' "$target"
-CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
-printf 'check:platform:windows: all-target check (%s)\n' "$target"
-CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/atomic/check-all-targets"
+if (( !build_only )); then
+    printf 'check:platform:windows: native tests (%s)\n' "$target"
+    CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
+    printf 'check:platform:windows: all-target check (%s)\n' "$target"
+    CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/atomic/check-all-targets"
+fi
 if [[ "${RUSTFLAGS:-}" != *'+crt-static'* ]]; then
     export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=+crt-static"
 fi

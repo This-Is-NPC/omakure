@@ -55,9 +55,10 @@ always-run cleanup removes the test container and named volumes, then fails if
 any listed container, network, or volume remains.
 
 Each CI/release platform matrix job has a 60-minute job bound. The selected
-platform script forwards its target to native tests, release build,
-`binary-smoke`, and (for musl) `musl-static`; the workflow package step handles
-the per-target artifact, while `package:release` is the local
+platform script forwards its target to native tests on GNU/macOS/Windows in CI,
+release build, `binary-smoke`, and (for musl) `musl-static`. Release jobs pass
+`--build-only` to avoid repeating CI tests. The workflow
+package step handles the per-target artifact, while `package:release` is the local
 suite/package-release route and is not a substitute for matrix artifact
 packaging.
 

@@ -127,7 +127,7 @@ jobs:
           CC_aarch64_unknown_linux_musl: musl-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: ./scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} --build-only "${{ matrix.target }}"
 
       - name: Package
         shell: bash

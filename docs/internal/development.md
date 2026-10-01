@@ -39,7 +39,11 @@ An atomic under `scripts/tasks/atomic/` performs one operation. A suite under
 `scripts/tasks/suite/` aggregates atomics or retained certification scripts.
 The four platform suites under `scripts/tasks/check/platform/` are
 `linux-gnu`, `linux-musl`, `macos`, and `windows`; each validates its target
-runner and delegates tests/builds/smoke to the canonical atomics and suites.
+runner and delegates builds and smoke checks to the canonical atomics and
+suites. Native Linux GNU, macOS, and Windows cells also run the test suite;
+Linux musl cells build and verify the static release binary without repeating
+the native Linux GNU tests. Release jobs use `--build-only` on those platform
+scripts so tagged builds do not repeat CI's native tests.
 Neither check gate duplicates the other.
 
 Fast is intentionally limited to shell/YAML/static contract fixtures,
@@ -227,10 +231,11 @@ operations, state transitions, redaction, and runtime resolution.
 
 ## Release checks
 
-CI and release jobs invoke the matrix-selected platform suite, which owns
-native tests, target builds, static-link verification, and binary smoke. The
-workflow files retain packaging/archive assertions but do not duplicate those
-commands. Release archives are produced once per target and reuse the same
-platform routing as CI. Before changing a command contract, run `omakure
+CI jobs invoke the matrix-selected platform suite with native tests where
+applicable. Release jobs use the same route with `--build-only` for target
+builds, static-link verification, and binary smoke. The workflow files retain
+packaging/archive assertions but do not duplicate those commands. Release
+archives are produced once per target and reuse the same platform routing as
+CI. Before changing a command contract, run `omakure
 help-ai` from the built binary and update `docs/ai-interface.md`,
 `docs/cli-http-parity.md`, and the relevant tests.

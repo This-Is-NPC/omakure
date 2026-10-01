@@ -1184,11 +1184,20 @@ fn bounded_and_packaging_atomics_own_shared_interfaces() {
 
 #[test]
 fn ci_and_release_platform_steps_delegate_to_matrix_platform_scripts() {
-    for workflow_path in [".github/workflows/ci.yml", ".github/workflows/release.yml"] {
+    for (workflow_path, invocation) in [
+        (
+            ".github/workflows/ci.yml",
+            "run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\"",
+        ),
+        (
+            ".github/workflows/release.yml",
+            "run: ./scripts/tasks/check/platform/${{ matrix.platform }} --build-only \"${{ matrix.target }}\"",
+        ),
+    ] {
         let workflow = read(workflow_path);
         let step = workflow_step(&workflow, "Run platform checks");
         assert!(
-            step.contains("run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\""),
+            step.contains(invocation),
             "{workflow_path} platform step must invoke the matrix-selected platform script"
         );
         for line in step.lines() {
@@ -1207,6 +1216,41 @@ fn ci_and_release_platform_steps_delegate_to_matrix_platform_scripts() {
             }
         }
     }
+}
+
+#[test]
+fn release_platform_mode_skips_native_tests_but_keeps_build_and_smoke() {
+    for platform in ["linux-gnu", "macos", "windows"] {
+        let script = read(&format!("scripts/tasks/check/platform/{platform}"));
+        assert!(script.contains("if [[ \"${1:-}\" == --build-only ]]; then"));
+        assert!(script.contains("if (( !build_only )); then"));
+        assert!(script.contains("scripts/tasks/suite/native-tests"));
+        assert!(script.contains("scripts/tasks/atomic/build-release"));
+        assert!(script.contains("scripts/tasks/atomic/binary-smoke"));
+    }
+}
+
+#[test]
+fn musl_platform_builds_and_smokes_without_repeating_native_tests() {
+    let musl = read("scripts/tasks/check/platform/linux-musl");
+    assert!(musl.contains("if [[ \"${1:-}\" == --build-only ]]; then"));
+    assert!(!musl.contains("scripts/tasks/suite/native-tests"));
+    for command in [
+        "\"$root/scripts/tasks/atomic/build-release\" --target-triple \"$target\"",
+        "\"$root/scripts/tasks/atomic/musl-static\" \"$target\"",
+        "\"$root/scripts/tasks/atomic/binary-smoke\" \"$target\"",
+    ] {
+        assert!(
+            musl.contains(command),
+            "musl platform must invoke {command}"
+        );
+    }
+    let linux_gnu = read("scripts/tasks/check/platform/linux-gnu");
+    assert!(
+        linux_gnu
+            .contains("CARGO_BUILD_TARGET=\"$target\" \"$root/scripts/tasks/suite/native-tests\""),
+        "native Linux GNU cells must retain their target-specific test suite"
+    );
 }
 
 fn workflow_step(workflow: &str, name: &str) -> String {

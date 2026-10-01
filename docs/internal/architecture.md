@@ -65,8 +65,9 @@ caller:
 - `.githooks/pre-commit` and `.githooks/pre-push` route exactly to fast and
   full. Every Mise `run` entry points to one existing executable script;
   composition is kept in these shell layers, not inline in `mise.toml`.
-- CI and release matrix jobs invoke
-  `scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"`.
+- CI and release matrix jobs invoke the selected
+  `scripts/tasks/check/platform/${{ matrix.platform }}` route. Release adds
+  `--build-only` so native tests run in CI only.
   Packaging remains an archive assertion around the same platform build; it
   does not reproduce test/build/static-link/smoke commands in workflow YAML.
 

@@ -5,6 +5,12 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
 cd "$root"
 export MISE_PROJECT_ROOT="$root"
 
+build_only=0
+if [[ "${1:-}" == --build-only ]]; then
+    build_only=1
+    shift
+fi
+
 die() {
     printf 'check:platform:macos: %s\n' "$1" >&2
     exit 2
@@ -47,8 +53,10 @@ tmpdir_owner_group="$(stat -f '%u:%g' "$physical_tmpdir")"
 }
 export TMPDIR="$physical_tmpdir"
 
-printf 'check:platform:macos: native tests (%s)\n' "$target"
-CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
+if (( !build_only )); then
+    printf 'check:platform:macos: native tests (%s)\n' "$target"
+    CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
+fi
 printf 'check:platform:macos: release build (%s)\n' "$target"
 "$root/scripts/tasks/atomic/build-release" --target-triple "$target"
 printf 'check:platform:macos: binary smoke (%s)\n' "$target"

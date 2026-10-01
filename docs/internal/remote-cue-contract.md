@@ -285,7 +285,7 @@ run-id derivation domain. `runs.run_id` is a `TEXT PRIMARY KEY`
 than starting a second run.
 
 The Conductor computes the expected `opaque_run_id`
-(`src/health_plane/report.rs:517`) from the `cue_id` it sent, so correlation
+(`src/health_plane/report/ids.rs`) from the `cue_id` it sent, so correlation
 needs no new field on any message.
 
 ## The At-Most-Once Rule

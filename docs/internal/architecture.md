@@ -198,7 +198,7 @@ src/
 │   ├── model.rs             Profile, Pulse, and the closed Signal kinds
 │   ├── schema.rs            frozen wire schema
 │   ├── bounds.rs            frozen size and rate bounds
-│   ├── report.rs            Performer-side reporting
+│   ├── report/              Performer-side facts, reporting, payloads, sanitization, and IDs
 │   └── lifecycle.rs         enrolled/revoked lifecycle Signals
 ├── remote_cue/              receive half of the Cue plane and its refusal codes
 ├── baseline.rs              signed baseline manifest: the versioned set a fleet ships

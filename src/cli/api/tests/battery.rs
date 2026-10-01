@@ -1,6 +1,48 @@
 use super::*;
 
 #[tokio::test]
+async fn battery_registration_checks_security_before_blocking_capacity() {
+    let dir = TempDir::new().unwrap();
+    let workspace = crate::test_support::workspace_in(&dir);
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    gate.close();
+    let app = super::super::router::router_with_blocking_gate(workspace, gate);
+
+    let invalid_url = app
+        .clone()
+        .oneshot(authed_json_request(
+            "/v1/batteries",
+            r#"{"name":"bad","git_url":"http://example.com/repo.git"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(invalid_url.status(), StatusCode::BAD_REQUEST);
+
+    let private_auth = app
+        .clone()
+        .oneshot(authed_json_request(
+            "/v1/batteries",
+            r#"{"name":"private","git_url":"https://example.com/repo.git","token_ref":"secret://prod/token"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(private_auth.status(), StatusCode::FORBIDDEN);
+
+    let unavailable = app
+        .oneshot(authed_json_request(
+            "/v1/batteries",
+            r#"{"name":"public","git_url":"https://example.com/repo.git"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(unavailable.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        response_json(unavailable).await["error"]["code"],
+        "io_failed"
+    );
+}
+
+#[tokio::test]
 async fn mutating_battery_routes_require_battery_write_capability() {
     let dir = TempDir::new().unwrap();
     let workspace = crate::test_support::workspace_in(&dir);

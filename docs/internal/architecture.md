@@ -286,7 +286,8 @@ src/
   `src/operations/health/` projects the Conductor-local fleet-status and
   Signal-feed reports that `omakure node health` / `node signals` and
   `GET /v1/node/health` / `GET /v1/node/signals` both render. It also supplies
-  local Performer facts. Health state is
+  local Performer facts. Local lifecycle Signals consume a P0 trust-transition
+  view that excludes audit actor and reason. Health state is
   written only by the authenticated node-to-node exchange; CLI and HTTP are read
   surfaces and have no write path. Every quantitative bound is frozen in
   `docs/internal/health-plane-contract.md` and asserted by

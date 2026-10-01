@@ -17,6 +17,7 @@ enum Rule {
     RunsSql,
     Executor,
     GitProcess,
+    HealthLifecycle,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -76,6 +77,14 @@ impl ContractVisitor {
         }
         if self.rule == Rule::Catalog && Self::starts_with(path, &["crate", "cli"]) {
             self.record("ARCH-CATALOG-CLI", "catalogs must use shared inventories");
+        }
+        if self.rule == Rule::HealthLifecycle
+            && Self::starts_with(path, &["crate", "node_registry"])
+        {
+            self.record(
+                "ARCH-HEALTH-LIFECYCLE-REGISTRY",
+                "lifecycle projection must consume domain transition values",
+            );
         }
         if self.rule == Rule::Http && path.first().map(String::as_str) == Some("rusqlite") {
             self.record("ARCH-HTTP-SQLITE", "HTTP must not access SQLite directly");
@@ -458,6 +467,18 @@ fn production_architecture_boundaries_are_clean() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = root.join("src");
 
+    let lifecycle = fs::read_to_string(src.join("health_plane/lifecycle.rs")).unwrap();
+    let lifecycle_contract = parse_contract(
+        Rule::HealthLifecycle,
+        "src/health_plane/lifecycle.rs",
+        &lifecycle,
+    );
+    assert!(
+        lifecycle_contract.findings.is_empty(),
+        "Health lifecycle projection depends on registry: {:?}",
+        lifecycle_contract.findings
+    );
+
     let battery_git = fs::read_to_string(src.join("operations/battery/git.rs")).unwrap();
     let git_process = parse_contract(
         Rule::GitProcess,
@@ -679,4 +700,15 @@ fn battery_git_operations_reject_process_execution() {
         .findings
         .iter()
         .any(|finding| finding.rule == "ARCH-GIT-PROCESS"));
+}
+
+#[test]
+fn lifecycle_projection_rejects_registry_types() {
+    let contract = parse_contract(
+        Rule::HealthLifecycle,
+        "fixture:lifecycle.rs",
+        "use crate::node_registry::AuditEvent;",
+    );
+    assert_eq!(contract.findings.len(), 1);
+    assert_eq!(contract.findings[0].rule, "ARCH-HEALTH-LIFECYCLE-REGISTRY");
 }

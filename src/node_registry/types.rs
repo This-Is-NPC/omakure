@@ -1,5 +1,6 @@
 use super::error::RegistryError;
 use crate::domain::health_plane::bounds::{ROLE_CONDUCTOR, ROLE_PERFORMER};
+use crate::domain::health_plane::model::{LifecycleState, LifecycleTransition};
 use crate::enrollment::EnrollmentRole;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +62,14 @@ pub enum PeerState {
 }
 
 impl PeerState {
+    fn lifecycle_state(self) -> LifecycleState {
+        match self {
+            Self::Active => LifecycleState::Active,
+            Self::Revoked => LifecycleState::Revoked,
+            Self::Pending | Self::Suspended => LifecycleState::Other,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Pending => "pending",
@@ -176,4 +185,51 @@ pub struct AuditEvent {
     pub actor: String,
     pub reason: String,
     pub occurred_at: String,
+}
+
+impl AuditEvent {
+    pub(crate) fn lifecycle_transition(&self) -> LifecycleTransition<'_> {
+        LifecycleTransition {
+            id: self.id,
+            node_id: &self.node_id,
+            from_state: self.from_state.map(PeerState::lifecycle_state),
+            to_state: self.to_state.map(PeerState::lifecycle_state),
+            occurred_at: chrono::DateTime::parse_from_rfc3339(&self.occurred_at)
+                .ok()
+                .map(|time| time.timestamp()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+
+    #[test]
+    fn audit_transition_view_excludes_private_fields_and_preserves_timestamp_validation() {
+        let mut audit = AuditEvent {
+            id: 7,
+            event_type: "peer_transition".into(),
+            node_id: format!("omk1_{}", "a".repeat(64)),
+            from_state: Some(PeerState::Pending),
+            to_state: Some(PeerState::Active),
+            actor: "/home/operator/secret-path".into(),
+            reason: "secret://vault/token AWS_SECRET=abc".into(),
+            occurred_at: "2023-11-14T22:13:20Z".into(),
+        };
+        let view = audit.lifecycle_transition();
+        assert_eq!(view.from_state, Some(LifecycleState::Other));
+        assert_eq!(view.to_state, Some(LifecycleState::Active));
+        assert_eq!(view.occurred_at, Some(1_700_000_000));
+        let signals = crate::health_plane::lifecycle::project([view], 1_700_000_000, 1);
+        assert_eq!(signals.len(), 1);
+        let encoded = serde_json::to_string(&signals).unwrap();
+        assert!(!encoded.contains("secret://"));
+        assert!(!encoded.contains("AWS_SECRET"));
+        assert!(!encoded.contains("/home/operator"));
+
+        audit.occurred_at = "invalid".into();
+        let invalid = audit.lifecycle_transition();
+        assert!(crate::health_plane::lifecycle::project([invalid], 1_700_000_000, 1).is_empty());
+    }
 }

@@ -412,7 +412,13 @@ impl<'registry> HealthPlane<'registry> {
             .collect();
         Ok(FleetSignalFeed {
             observed_at,
-            local: lifecycle::project(&feed.lifecycle, observed_at, limit),
+            local: lifecycle::project(
+                feed.lifecycle
+                    .iter()
+                    .map(|event| event.lifecycle_transition()),
+                observed_at,
+                limit,
+            ),
             nodes,
             signals,
         })
@@ -433,7 +439,11 @@ impl<'registry> HealthPlane<'registry> {
     pub fn local_signals(&self, limit: usize) -> Result<Vec<SignalRecord>, RegistryError> {
         let now = self.clock.unix_seconds();
         let events = self.registry.lifecycle_trust_events(usize::MAX)?;
-        Ok(lifecycle::project(&events, now, limit))
+        Ok(lifecycle::project(
+            events.iter().map(|event| event.lifecycle_transition()),
+            now,
+            limit,
+        ))
     }
 
     /// The read-only authorization projection for one peer.

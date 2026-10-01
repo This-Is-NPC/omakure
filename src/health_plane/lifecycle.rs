@@ -22,14 +22,12 @@
 //!   and Health Plane audit rows. This module writes nothing at all, so no
 //!   code path from a Signal can reach identity, trust, or revocation.
 //!
-//! Only three fields of an audit row are read: the affected `node_id`, the
-//! transition, and the timestamp. The `actor` and `reason` columns are free
-//! text and are privacy class P1; they are never read here and can never reach
-//! a Signal.
+//! The transition view carries only the audit row id, affected `node_id`,
+//! transition, and timestamp. The `actor` and `reason` columns are privacy
+//! class P1 and cannot enter the projection or reach a Signal.
 
 use super::bounds::{MAX_SAFE_INTEGER, SIGNAL_INBOX_CAPACITY, SIGNAL_RETENTION_SECONDS};
-use super::model::{SignalKind, SignalRecord};
-use crate::node_registry::{AuditEvent, PeerState};
+use super::model::{LifecycleState, LifecycleTransition, SignalKind, SignalRecord};
 use crate::util::hex;
 use sha2::{Digest, Sha256};
 
@@ -42,11 +40,15 @@ const LOCAL_SIGNAL_ID_DOMAIN: &[u8] = b"omakure/health-local-signal-id/v1\0";
 
 /// Project one bounded page of Conductor-local lifecycle Signals.
 ///
-/// `events` is the newest-first trust-transition projection the registry
+/// `events` is the newest-first trust-transition view the registry
 /// returns. The result is newest first, bounded by the frozen per-peer Signal
 /// capacity, and contains nothing older than the frozen Signal retention
 /// window: the Health Plane keeps a small bounded feed, never history.
-pub fn project(events: &[AuditEvent], now: i64, limit: usize) -> Vec<SignalRecord> {
+pub fn project<'a>(
+    events: impl IntoIterator<Item = LifecycleTransition<'a>>,
+    now: i64,
+    limit: usize,
+) -> Vec<SignalRecord> {
     let limit = limit.min(SIGNAL_INBOX_CAPACITY as usize);
     let floor = now.saturating_sub(SIGNAL_RETENTION_SECONDS);
     let mut signals = Vec::with_capacity(limit);
@@ -54,10 +56,10 @@ pub fn project(events: &[AuditEvent], now: i64, limit: usize) -> Vec<SignalRecor
         if signals.len() == limit {
             break;
         }
-        let Some(kind) = lifecycle_kind(event) else {
+        let Some(kind) = lifecycle_kind(&event) else {
             continue;
         };
-        let Some(occurred_at) = occurred_at_seconds(&event.occurred_at) else {
+        let Some(occurred_at) = event.occurred_at else {
             continue;
         };
         if occurred_at < floor || occurred_at < 1 {
@@ -77,8 +79,8 @@ pub fn project(events: &[AuditEvent], now: i64, limit: usize) -> Vec<SignalRecor
             occurred_at,
             run: None,
             sequence,
-            signal_id: local_signal_id(event.id, kind, &event.node_id),
-            subject: Some(event.node_id.clone()),
+            signal_id: local_signal_id(event.id, kind, event.node_id),
+            subject: Some(event.node_id.to_string()),
         });
     }
     signals
@@ -90,12 +92,12 @@ pub fn project(events: &[AuditEvent], now: i64, limit: usize) -> Vec<SignalRecor
 /// revocation is `revoked`. A row whose `from_state` already equals the target
 /// is not a transition and produces nothing, so a repeated write can never
 /// manufacture a second lifecycle Signal.
-fn lifecycle_kind(event: &AuditEvent) -> Option<SignalKind> {
+fn lifecycle_kind(event: &LifecycleTransition<'_>) -> Option<SignalKind> {
     match event.to_state? {
-        PeerState::Active if event.from_state != Some(PeerState::Active) => {
+        LifecycleState::Active if event.from_state != Some(LifecycleState::Active) => {
             Some(SignalKind::Enrolled)
         }
-        PeerState::Revoked if event.from_state != Some(PeerState::Revoked) => {
+        LifecycleState::Revoked if event.from_state != Some(LifecycleState::Revoked) => {
             Some(SignalKind::Revoked)
         }
         _ => None,
@@ -117,12 +119,6 @@ fn local_signal_id(audit_id: i64, kind: SignalKind, node_id: &str) -> String {
     hex::encode(&digest[..16])
 }
 
-/// Parse the registry's RFC-3339 UTC audit timestamp into Unix seconds.
-fn occurred_at_seconds(value: &str) -> Option<i64> {
-    let parsed = chrono::DateTime::parse_from_rfc3339(value).ok()?;
-    Some(parsed.timestamp())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,46 +129,39 @@ mod tests {
 
     fn event(
         id: i64,
-        node_id: &str,
-        from_state: Option<PeerState>,
-        to_state: Option<PeerState>,
+        node_id: &'static str,
+        from_state: Option<LifecycleState>,
+        to_state: Option<LifecycleState>,
         occurred_at: i64,
-    ) -> AuditEvent {
-        AuditEvent {
+    ) -> LifecycleTransition<'static> {
+        LifecycleTransition {
             id,
-            event_type: "peer_transition".to_string(),
-            node_id: node_id.to_string(),
+            node_id,
             from_state,
             to_state,
-            // `actor` and `reason` are privacy class P1. They are deliberately
-            // hostile here so the projection is proven never to read them.
-            actor: "/home/operator/secret-path".to_string(),
-            reason: "secret://vault/token AWS_SECRET=abc /etc/shadow".to_string(),
-            occurred_at: chrono::DateTime::from_timestamp(occurred_at, 0)
-                .expect("timestamp")
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            occurred_at: Some(occurred_at),
         }
     }
 
     #[test]
     fn activation_and_revocation_project_onto_the_two_local_signal_kinds() {
-        let events = vec![
+        let events = [
             event(
                 2,
                 PEER,
-                Some(PeerState::Active),
-                Some(PeerState::Revoked),
+                Some(LifecycleState::Active),
+                Some(LifecycleState::Revoked),
                 NOW - 10,
             ),
             event(
                 1,
                 PEER,
-                Some(PeerState::Pending),
-                Some(PeerState::Active),
+                Some(LifecycleState::Other),
+                Some(LifecycleState::Active),
                 NOW - 20,
             ),
         ];
-        let signals = project(&events, NOW, 64);
+        let signals = project(events.iter().copied(), NOW, 64);
         assert_eq!(signals.len(), 2);
         assert_eq!(signals[0].kind, SignalKind::Revoked);
         assert_eq!(signals[0].sequence, 2);
@@ -184,31 +173,31 @@ mod tests {
 
     #[test]
     fn a_non_transition_row_produces_no_signal() {
-        let events = vec![
+        let events = [
             event(
                 3,
                 PEER,
-                Some(PeerState::Active),
-                Some(PeerState::Active),
+                Some(LifecycleState::Active),
+                Some(LifecycleState::Active),
                 NOW,
             ),
             event(
                 4,
                 PEER,
-                Some(PeerState::Revoked),
-                Some(PeerState::Revoked),
+                Some(LifecycleState::Revoked),
+                Some(LifecycleState::Revoked),
                 NOW,
             ),
-            event(5, PEER, Some(PeerState::Pending), None, NOW),
+            event(5, PEER, Some(LifecycleState::Other), None, NOW),
             event(
                 6,
                 PEER,
-                Some(PeerState::Pending),
-                Some(PeerState::Suspended),
+                Some(LifecycleState::Other),
+                Some(LifecycleState::Other),
                 NOW,
             ),
         ];
-        assert!(project(&events, NOW, 64).is_empty());
+        assert!(project(events.iter().copied(), NOW, 64).is_empty());
     }
 
     #[test]
@@ -216,35 +205,35 @@ mod tests {
         let one = event(
             7,
             PEER,
-            Some(PeerState::Pending),
-            Some(PeerState::Active),
+            Some(LifecycleState::Other),
+            Some(LifecycleState::Active),
             NOW,
         );
         let again = event(
             7,
             PEER,
-            Some(PeerState::Pending),
-            Some(PeerState::Active),
+            Some(LifecycleState::Other),
+            Some(LifecycleState::Active),
             NOW,
         );
         let other_row = event(
             8,
             PEER,
-            Some(PeerState::Pending),
-            Some(PeerState::Active),
+            Some(LifecycleState::Other),
+            Some(LifecycleState::Active),
             NOW,
         );
         let other_node = event(
             7,
             OTHER,
-            Some(PeerState::Pending),
-            Some(PeerState::Active),
+            Some(LifecycleState::Other),
+            Some(LifecycleState::Active),
             NOW,
         );
-        let first = project(&[one], NOW, 64).remove(0).signal_id;
-        assert_eq!(first, project(&[again], NOW, 64).remove(0).signal_id);
-        assert_ne!(first, project(&[other_row], NOW, 64).remove(0).signal_id);
-        assert_ne!(first, project(&[other_node], NOW, 64).remove(0).signal_id);
+        let first = project([one], NOW, 64).remove(0).signal_id;
+        assert_eq!(first, project([again], NOW, 64).remove(0).signal_id);
+        assert_ne!(first, project([other_row], NOW, 64).remove(0).signal_id);
+        assert_ne!(first, project([other_node], NOW, 64).remove(0).signal_id);
         assert_eq!(first.len(), 32);
         assert!(crate::util::hex::is_lower(&first));
     }
@@ -256,59 +245,34 @@ mod tests {
             events.push(event(
                 201 - id,
                 PEER,
-                Some(PeerState::Pending),
-                Some(PeerState::Active),
+                Some(LifecycleState::Other),
+                Some(LifecycleState::Active),
                 NOW - id,
             ));
         }
         assert_eq!(
-            project(&events, NOW, 1_000).len(),
+            project(events.iter().copied(), NOW, 1_000).len(),
             SIGNAL_INBOX_CAPACITY as usize
         );
 
-        let expired = vec![
+        let expired = [
             event(
                 9,
                 PEER,
-                Some(PeerState::Pending),
-                Some(PeerState::Active),
+                Some(LifecycleState::Other),
+                Some(LifecycleState::Active),
                 NOW - SIGNAL_RETENTION_SECONDS - 1,
             ),
             event(
                 10,
                 PEER,
-                Some(PeerState::Pending),
-                Some(PeerState::Active),
+                Some(LifecycleState::Other),
+                Some(LifecycleState::Active),
                 NOW - SIGNAL_RETENTION_SECONDS,
             ),
         ];
-        let retained = project(&expired, NOW, 64);
+        let retained = project(expired.iter().copied(), NOW, 64);
         assert_eq!(retained.len(), 1);
         assert_eq!(retained[0].sequence, 10);
-    }
-
-    #[test]
-    fn no_privacy_class_one_field_can_reach_a_projected_signal() {
-        let events = vec![event(
-            11,
-            PEER,
-            Some(PeerState::Pending),
-            Some(PeerState::Active),
-            NOW,
-        )];
-        let signals = project(&events, NOW, 64);
-        let encoded = serde_json::to_string(&signals).expect("signals serialize");
-        for forbidden in [
-            "secret://",
-            "AWS_SECRET",
-            "/home/operator",
-            "/etc/shadow",
-            "peer_transition",
-        ] {
-            assert!(
-                !encoded.contains(forbidden),
-                "projected Signal leaked {forbidden}: {encoded}"
-            );
-        }
     }
 }

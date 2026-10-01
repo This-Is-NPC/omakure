@@ -14,6 +14,25 @@ use super::bounds::{
 };
 use serde::{Deserialize, Serialize};
 
+/// The trust states relevant to Conductor-local lifecycle Signals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecycleState {
+    Active,
+    Revoked,
+    Other,
+}
+
+/// The bounded trust-audit view needed to project one local Signal.
+/// Audit actor and reason are intentionally absent from this P0 view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LifecycleTransition<'a> {
+    pub id: i64,
+    pub node_id: &'a str,
+    pub from_state: Option<LifecycleState>,
+    pub to_state: Option<LifecycleState>,
+    pub occurred_at: Option<i64>,
+}
+
 /// The frozen Health Plane rejection codes, `1101..=1115`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HealthCode {

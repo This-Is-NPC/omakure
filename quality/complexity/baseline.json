@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "17a00ae2dc1bab263695ceffa46a4687ac72f569c505a50160915fe02b077e84",
+  "canonical_sha256": "b343228a13dfae3b3cba839be1e1bf9502a0eae5e8bddffe4614d3966f050241",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -2095,14 +2095,84 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 88,
+        "invocations": 0,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 52,
-        "cyclomatic": 130
+        "cognitive": 1,
+        "cyclomatic": 4
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/ids.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/health_plane/report/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 8,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 2,
+        "cyclomatic": 9
+      },
+      "path": "src/health_plane/report/payload.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 15,
+        "cyclomatic": 25
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 29,
+        "cyclomatic": 47
+      },
+      "path": "src/health_plane/report/sanitize.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 79,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 3,
+        "cyclomatic": 42
+      },
+      "path": "src/health_plane/report/tests.rs",
       "source_class": "handwritten"
     },
     {
@@ -54650,470 +54720,28 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::new",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn new(facts: Box<dyn HealthFactsSource>) -> Self",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::new",
-      "kind": "method",
-      "line": 151,
-      "name": "new",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 151,
-        "name": "new"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn new(facts: Box<dyn HealthFactsSource>) -> Self",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::pulse_interval_seconds",
+        "identity": "crate::health_plane::report::ids::run_signal_id",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub const fn pulse_interval_seconds() -> i64",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::pulse_interval_seconds",
-      "kind": "method",
-      "line": 159,
-      "name": "pulse_interval_seconds",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 159,
-        "name": "pulse_interval_seconds"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub const fn pulse_interval_seconds() -> i64",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::health_plane::report::profile",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn profile( &self, target: &str, message_id: &str, granted: &[String], now: i64, ) -> ProfileMessage",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::profile",
-      "kind": "method",
-      "line": 168,
-      "name": "profile",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "method",
-        "line": 168,
-        "name": "profile"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn profile( &self, target: &str, message_id: &str, granted: &[String], now: i64, ) -> ProfileMessage",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::profile_changed",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn profile_changed(&self, granted: &[String]) -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::profile_changed",
-      "kind": "method",
-      "line": 195,
-      "name": "profile_changed",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 195,
-        "name": "profile_changed"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn profile_changed(&self, granted: &[String]) -> bool",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::health_plane::report::pulse",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn pulse(&self, target: &str, message_id: &str, now: i64) -> Option<PulseMessage>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::pulse",
-      "kind": "method",
-      "line": 208,
-      "name": "pulse",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "method",
-        "line": 208,
-        "name": "pulse"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn pulse(&self, target: &str, message_id: &str, now: i64) -> Option<PulseMessage>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 10,
-      "cyclomatic": 7,
-      "derived": {
-        "identity": "crate::health_plane::report::run_signals",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn run_signals(&self) -> Vec<RunFact>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::run_signals",
-      "kind": "method",
-      "line": 236,
-      "name": "run_signals",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 10,
-        "cyclomatic": 7,
-        "kind": "method",
-        "line": 236,
-        "name": "run_signals"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn run_signals(&self) -> Vec<RunFact>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::health_plane::report::seed_run_watermark",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn seed_run_watermark(&self)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::seed_run_watermark",
-      "kind": "method",
-      "line": 276,
-      "name": "seed_run_watermark",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "method",
-        "line": 276,
-        "name": "seed_run_watermark"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn seed_run_watermark(&self)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::sanitized_terminal_runs",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn sanitized_terminal_runs(&self, capacity: usize) -> Vec<RunFact>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::sanitized_terminal_runs",
-      "kind": "method",
-      "line": 287,
-      "name": "sanitized_terminal_runs",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 287,
-        "name": "sanitized_terminal_runs"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn sanitized_terminal_runs(&self, capacity: usize) -> Vec<RunFact>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::sanitized_terminal_runs::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": ".filter_map(|mut run| sanitize_signal_run(&mut run).then_some(run))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::sanitized_terminal_runs::<closure>",
-      "kind": "closure",
-      "line": 292,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 292,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": ".filter_map(|mut run| sanitize_signal_run(&mut run).then_some(run))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::sanitized_terminal_runs::<closure>@294#2",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "runs.sort_by(|left, right| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::sanitized_terminal_runs::<closure>@294#2",
-      "kind": "closure",
-      "line": 294,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 294,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "runs.sort_by(|left, right| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::sanitized_terminal_runs::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": ".then_with(|| left.run_id.cmp(&right.run_id))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::sanitized_terminal_runs::<closure>::<closure>",
-      "kind": "closure",
-      "line": 297,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 297,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": ".then_with(|| left.run_id.cmp(&right.run_id))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::seed_watermark",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn seed_watermark(state: &mut ReporterState, runs: &[RunFact], capacity: usize)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::seed_watermark",
-      "kind": "function",
-      "line": 305,
-      "name": "seed_watermark",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 305,
-        "name": "seed_watermark"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn seed_watermark(state: &mut ReporterState, runs: &[RunFact], capacity: usize)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::seed_watermark::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "let newest = runs.last().map(|run| run.finished_at).unwrap_or(0);",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::seed_watermark::<closure>",
-      "kind": "closure",
-      "line": 306,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 306,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "let newest = runs.last().map(|run| run.finished_at).unwrap_or(0);",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::seed_watermark::<closure>@310#2",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": ".filter(|run| run.finished_at == newest)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::seed_watermark::<closure>@310#2",
-      "kind": "closure",
-      "line": 310,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 310,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": ".filter(|run| run.finished_at == newest)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::seed_watermark::<closure>@311#3",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": ".map(|run| run.run_id.clone())",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::seed_watermark::<closure>@311#3",
-      "kind": "closure",
-      "line": 311,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 311,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": ".map(|run| run.run_id.clone())",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::health_plane::report::signal_payload",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn signal_payload(target: &str, message_id: &str, signal: &SignalRecord) -> Value",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::signal_payload",
-      "kind": "function",
-      "line": 323,
-      "name": "signal_payload",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 323,
-        "name": "signal_payload"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn signal_payload(target: &str, message_id: &str, signal: &SignalRecord) -> Value",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::signal_encoded_bytes",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn signal_encoded_bytes(target: &str, signal: &SignalRecord) -> i64",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::signal_encoded_bytes",
-      "kind": "function",
-      "line": 358,
-      "name": "signal_encoded_bytes",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 358,
-        "name": "signal_encoded_bytes"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn signal_encoded_bytes(target: &str, signal: &SignalRecord) -> i64",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::run_signal_id",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/ids.rs",
         "signature": "pub fn run_signal_id(run_id: &str) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::run_signal_id",
+      "identity": "crate::health_plane::report::ids::run_signal_id",
       "kind": "function",
-      "line": 385,
+      "line": 25,
       "name": "run_signal_id",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 385,
+        "line": 25,
         "name": "run_signal_id"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/ids.rs",
       "signature": "pub fn run_signal_id(run_id: &str) -> String",
       "source_class": "handwritten"
     },
@@ -55121,233 +54749,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_signal_run",
+        "identity": "crate::health_plane::report::ids::opaque_run_id",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn sanitize_signal_run(run: &mut RunFact) -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::sanitize_signal_run",
-      "kind": "function",
-      "line": 405,
-      "name": "sanitize_signal_run",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 405,
-        "name": "sanitize_signal_run"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn sanitize_signal_run(run: &mut RunFact) -> bool",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::sanitize_signal_run::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": ".filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::sanitize_signal_run::<closure>",
-      "kind": "closure",
-      "line": 411,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 411,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": ".filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::health_plane::report::run_fact_is_valid",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn run_fact_is_valid(run: &RunFact) -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::run_fact_is_valid",
-      "kind": "function",
-      "line": 416,
-      "name": "run_fact_is_valid",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 5,
-        "kind": "function",
-        "line": 416,
-        "name": "run_fact_is_valid"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn run_fact_is_valid(run: &RunFact) -> bool",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::profile_payload",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn profile_payload( target: &str, message_id: &str, facts: &ProfileFacts, profile_revision: u64, ) -> Value",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::profile_payload",
-      "kind": "function",
-      "line": 437,
-      "name": "profile_payload",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 437,
-        "name": "profile_payload"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn profile_payload( target: &str, message_id: &str, facts: &ProfileFacts, profile_revision: u64, ) -> Value",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::profile_payload::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": ".map(|runtime| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::profile_payload::<closure>",
-      "kind": "closure",
-      "line": 446,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 446,
-        "name": "<closure>"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": ".map(|runtime| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::health_plane::report::pulse_payload",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn pulse_payload( target: &str, message_id: &str, facts: &PulseFacts, profile_revision: u64, sequence: u64, ) -> Value",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::pulse_payload",
-      "kind": "function",
-      "line": 478,
-      "name": "pulse_payload",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 478,
-        "name": "pulse_payload"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn pulse_payload( target: &str, message_id: &str, facts: &PulseFacts, profile_revision: u64, sequence: u64, ) -> Value",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::ack_payload",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn ack_payload(target: &str, message_id: &str, acked_message_id: &str, cursor: u64) -> Value",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::ack_payload",
-      "kind": "function",
-      "line": 519,
-      "name": "ack_payload",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 519,
-        "name": "ack_payload"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn ack_payload(target: &str, message_id: &str, acked_message_id: &str, cursor: u64) -> Value",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::error_payload",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "pub fn error_payload( target: &str, message_id: &str, acked_message_id: &str, code: super::model::HealthCode, ) -> Value",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::health_plane::report::error_payload",
-      "kind": "function",
-      "line": 534,
-      "name": "error_payload",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 534,
-        "name": "error_payload"
-      },
-      "path": "src/health_plane/report.rs",
-      "signature": "pub fn error_payload( target: &str, message_id: &str, acked_message_id: &str, code: super::model::HealthCode, ) -> Value",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::health_plane::report::opaque_run_id",
-        "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/ids.rs",
         "signature": "pub fn opaque_run_id(run_id: &str) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::opaque_run_id",
+      "identity": "crate::health_plane::report::ids::opaque_run_id",
       "kind": "function",
-      "line": 554,
+      "line": 41,
       "name": "opaque_run_id",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 554,
+        "line": 41,
         "name": "opaque_run_id"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/ids.rs",
       "signature": "pub fn opaque_run_id(run_id: &str) -> String",
       "source_class": "handwritten"
     },
@@ -55355,77 +54775,727 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::health_plane::report::hex_lower",
+        "identity": "crate::health_plane::report::ids::hex_lower",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/ids.rs",
         "signature": "pub fn hex_lower(bytes: &[u8]) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::hex_lower",
+      "identity": "crate::health_plane::report::ids::hex_lower",
       "kind": "function",
-      "line": 560,
+      "line": 47,
       "name": "hex_lower",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 560,
+        "line": 47,
         "name": "hex_lower"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/ids.rs",
       "signature": "pub fn hex_lower(bytes: &[u8]) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::health_plane::report::payload::signal_payload",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/payload.rs",
+        "signature": "pub fn signal_payload(target: &str, message_id: &str, signal: &SignalRecord) -> Value",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::payload::signal_payload",
+      "kind": "function",
+      "line": 25,
+      "name": "signal_payload",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 25,
+        "name": "signal_payload"
+      },
+      "path": "src/health_plane/report/payload.rs",
+      "signature": "pub fn signal_payload(target: &str, message_id: &str, signal: &SignalRecord) -> Value",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_capabilities",
+        "identity": "crate::health_plane::report::payload::signal_encoded_bytes",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn sanitize_capabilities(granted: &[String]) -> Vec<String>",
+        "path": "src/health_plane/report/payload.rs",
+        "signature": "pub fn signal_encoded_bytes(target: &str, signal: &SignalRecord) -> i64",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_capabilities",
+      "identity": "crate::health_plane::report::payload::signal_encoded_bytes",
       "kind": "function",
-      "line": 570,
-      "name": "sanitize_capabilities",
+      "line": 60,
+      "name": "signal_encoded_bytes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 570,
-        "name": "sanitize_capabilities"
+        "line": 60,
+        "name": "signal_encoded_bytes"
       },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn sanitize_capabilities(granted: &[String]) -> Vec<String>",
+      "path": "src/health_plane/report/payload.rs",
+      "signature": "pub fn signal_encoded_bytes(target: &str, signal: &SignalRecord) -> i64",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_capabilities::<closure>",
+        "identity": "crate::health_plane::report::payload::profile_payload",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": ".filter(|entry| CAPABILITY_ALLOWLIST.contains(&entry.as_str()))",
+        "path": "src/health_plane/report/payload.rs",
+        "signature": "pub(super) fn profile_payload( target: &str, message_id: &str, facts: &ProfileFacts, profile_revision: u64, ) -> Value",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_capabilities::<closure>",
+      "identity": "crate::health_plane::report::payload::profile_payload",
+      "kind": "function",
+      "line": 83,
+      "name": "profile_payload",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 83,
+        "name": "profile_payload"
+      },
+      "path": "src/health_plane/report/payload.rs",
+      "signature": "pub(super) fn profile_payload( target: &str, message_id: &str, facts: &ProfileFacts, profile_revision: u64, ) -> Value",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::payload::profile_payload::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/payload.rs",
+        "signature": ".map(|runtime| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::payload::profile_payload::<closure>",
       "kind": "closure",
-      "line": 573,
+      "line": 92,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 573,
+        "line": 92,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/payload.rs",
+      "signature": ".map(|runtime| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::health_plane::report::payload::pulse_payload",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/payload.rs",
+        "signature": "pub(super) fn pulse_payload( target: &str, message_id: &str, facts: &PulseFacts, profile_revision: u64, sequence: u64, ) -> Value",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::payload::pulse_payload",
+      "kind": "function",
+      "line": 124,
+      "name": "pulse_payload",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 124,
+        "name": "pulse_payload"
+      },
+      "path": "src/health_plane/report/payload.rs",
+      "signature": "pub(super) fn pulse_payload( target: &str, message_id: &str, facts: &PulseFacts, profile_revision: u64, sequence: u64, ) -> Value",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::payload::ack_payload",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/payload.rs",
+        "signature": "pub fn ack_payload(target: &str, message_id: &str, acked_message_id: &str, cursor: u64) -> Value",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::payload::ack_payload",
+      "kind": "function",
+      "line": 165,
+      "name": "ack_payload",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 165,
+        "name": "ack_payload"
+      },
+      "path": "src/health_plane/report/payload.rs",
+      "signature": "pub fn ack_payload(target: &str, message_id: &str, acked_message_id: &str, cursor: u64) -> Value",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::payload::error_payload",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/payload.rs",
+        "signature": "pub fn error_payload( target: &str, message_id: &str, acked_message_id: &str, code: HealthCode, ) -> Value",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::payload::error_payload",
+      "kind": "function",
+      "line": 180,
+      "name": "error_payload",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 180,
+        "name": "error_payload"
+      },
+      "path": "src/health_plane/report/payload.rs",
+      "signature": "pub fn error_payload( target: &str, message_id: &str, acked_message_id: &str, code: HealthCode, ) -> Value",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::new",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "pub fn new(facts: Box<dyn HealthFactsSource>) -> Self",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::new",
+      "kind": "method",
+      "line": 44,
+      "name": "new",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 44,
+        "name": "new"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "pub fn new(facts: Box<dyn HealthFactsSource>) -> Self",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::pulse_interval_seconds",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "pub const fn pulse_interval_seconds() -> i64",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::pulse_interval_seconds",
+      "kind": "method",
+      "line": 52,
+      "name": "pulse_interval_seconds",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 52,
+        "name": "pulse_interval_seconds"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "pub const fn pulse_interval_seconds() -> i64",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::profile",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "pub fn profile( &self, target: &str, message_id: &str, granted: &[String], now: i64, ) -> ProfileMessage",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::profile",
+      "kind": "method",
+      "line": 61,
+      "name": "profile",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "method",
+        "line": 61,
+        "name": "profile"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "pub fn profile( &self, target: &str, message_id: &str, granted: &[String], now: i64, ) -> ProfileMessage",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::profile_changed",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "pub fn profile_changed(&self, granted: &[String]) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::profile_changed",
+      "kind": "method",
+      "line": 88,
+      "name": "profile_changed",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 88,
+        "name": "profile_changed"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "pub fn profile_changed(&self, granted: &[String]) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::pulse",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "pub fn pulse(&self, target: &str, message_id: &str, now: i64) -> Option<PulseMessage>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::pulse",
+      "kind": "method",
+      "line": 101,
+      "name": "pulse",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 101,
+        "name": "pulse"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "pub fn pulse(&self, target: &str, message_id: &str, now: i64) -> Option<PulseMessage>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 10,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::run_signals",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "pub fn run_signals(&self) -> Vec<RunFact>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::run_signals",
+      "kind": "method",
+      "line": 129,
+      "name": "run_signals",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 10,
+        "cyclomatic": 7,
+        "kind": "method",
+        "line": 129,
+        "name": "run_signals"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "pub fn run_signals(&self) -> Vec<RunFact>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::seed_run_watermark",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "pub fn seed_run_watermark(&self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::seed_run_watermark",
+      "kind": "method",
+      "line": 169,
+      "name": "seed_run_watermark",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 169,
+        "name": "seed_run_watermark"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "pub fn seed_run_watermark(&self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "fn sanitized_terminal_runs(&self, capacity: usize) -> Vec<RunFact>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs",
+      "kind": "method",
+      "line": 180,
+      "name": "sanitized_terminal_runs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 180,
+        "name": "sanitized_terminal_runs"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "fn sanitized_terminal_runs(&self, capacity: usize) -> Vec<RunFact>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": ".filter_map(|mut run| sanitize_signal_run(&mut run).then_some(run))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs::<closure>",
+      "kind": "closure",
+      "line": 185,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 185,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": ".filter_map(|mut run| sanitize_signal_run(&mut run).then_some(run))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs::<closure>@187#2",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "runs.sort_by(|left, right| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs::<closure>@187#2",
+      "kind": "closure",
+      "line": 187,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 187,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "runs.sort_by(|left, right| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": ".then_with(|| left.run_id.cmp(&right.run_id))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::sanitized_terminal_runs::<closure>::<closure>",
+      "kind": "closure",
+      "line": 190,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 190,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": ".then_with(|| left.run_id.cmp(&right.run_id))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::seed_watermark",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "fn seed_watermark(state: &mut ReporterState, runs: &[RunFact], capacity: usize)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::seed_watermark",
+      "kind": "function",
+      "line": 198,
+      "name": "seed_watermark",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 198,
+        "name": "seed_watermark"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "fn seed_watermark(state: &mut ReporterState, runs: &[RunFact], capacity: usize)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::seed_watermark::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": "let newest = runs.last().map(|run| run.finished_at).unwrap_or(0);",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::seed_watermark::<closure>",
+      "kind": "closure",
+      "line": 199,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 199,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": "let newest = runs.last().map(|run| run.finished_at).unwrap_or(0);",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::seed_watermark::<closure>@203#2",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": ".filter(|run| run.finished_at == newest)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::seed_watermark::<closure>@203#2",
+      "kind": "closure",
+      "line": 203,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 203,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": ".filter(|run| run.finished_at == newest)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::reporter::seed_watermark::<closure>@204#3",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/reporter.rs",
+        "signature": ".map(|run| run.run_id.clone())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::reporter::seed_watermark::<closure>@204#3",
+      "kind": "closure",
+      "line": 204,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 204,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/reporter.rs",
+      "signature": ".map(|run| run.run_id.clone())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::sanitize::sanitize_signal_run",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/sanitize.rs",
+        "signature": "pub fn sanitize_signal_run(run: &mut RunFact) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::sanitize::sanitize_signal_run",
+      "kind": "function",
+      "line": 16,
+      "name": "sanitize_signal_run",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 16,
+        "name": "sanitize_signal_run"
+      },
+      "path": "src/health_plane/report/sanitize.rs",
+      "signature": "pub fn sanitize_signal_run(run: &mut RunFact) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::sanitize::sanitize_signal_run::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/sanitize.rs",
+        "signature": ".filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::sanitize::sanitize_signal_run::<closure>",
+      "kind": "closure",
+      "line": 22,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 22,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/sanitize.rs",
+      "signature": ".filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::health_plane::report::sanitize::run_fact_is_valid",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/sanitize.rs",
+        "signature": "fn run_fact_is_valid(run: &RunFact) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::sanitize::run_fact_is_valid",
+      "kind": "function",
+      "line": 27,
+      "name": "run_fact_is_valid",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 27,
+        "name": "run_fact_is_valid"
+      },
+      "path": "src/health_plane/report/sanitize.rs",
+      "signature": "fn run_fact_is_valid(run: &RunFact) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::sanitize::sanitize_capabilities",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/sanitize.rs",
+        "signature": "pub(super) fn sanitize_capabilities(granted: &[String]) -> Vec<String>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::sanitize::sanitize_capabilities",
+      "kind": "function",
+      "line": 45,
+      "name": "sanitize_capabilities",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 45,
+        "name": "sanitize_capabilities"
+      },
+      "path": "src/health_plane/report/sanitize.rs",
+      "signature": "pub(super) fn sanitize_capabilities(granted: &[String]) -> Vec<String>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::sanitize::sanitize_capabilities::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/sanitize.rs",
+        "signature": ".filter(|entry| CAPABILITY_ALLOWLIST.contains(&entry.as_str()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::sanitize::sanitize_capabilities::<closure>",
+      "kind": "closure",
+      "line": 48,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 48,
+        "name": "<closure>"
+      },
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": ".filter(|entry| CAPABILITY_ALLOWLIST.contains(&entry.as_str()))",
       "source_class": "handwritten"
     },
@@ -55433,51 +55503,51 @@
       "cognitive": 10,
       "cyclomatic": 10,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_profile",
+        "identity": "crate::health_plane::report::sanitize::sanitize_profile",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn sanitize_profile(facts: &mut ProfileFacts)",
+        "path": "src/health_plane/report/sanitize.rs",
+        "signature": "pub(super) fn sanitize_profile(facts: &mut ProfileFacts)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_profile",
+      "identity": "crate::health_plane::report::sanitize::sanitize_profile",
       "kind": "function",
-      "line": 581,
+      "line": 56,
       "name": "sanitize_profile",
       "native": {
         "analyzer": "cccc",
         "cognitive": 10,
         "cyclomatic": 10,
         "kind": "function",
-        "line": 581,
+        "line": 56,
         "name": "sanitize_profile"
       },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn sanitize_profile(facts: &mut ProfileFacts)",
+      "path": "src/health_plane/report/sanitize.rs",
+      "signature": "pub(super) fn sanitize_profile(facts: &mut ProfileFacts)",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_profile::<closure>",
+        "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": ".is_some_and(|byte| !byte.is_ascii_alphanumeric())",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_profile::<closure>",
+      "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>",
       "kind": "closure",
-      "line": 606,
+      "line": 81,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 606,
+        "line": 81,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": ".is_some_and(|byte| !byte.is_ascii_alphanumeric())",
       "source_class": "handwritten"
     },
@@ -55485,25 +55555,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_profile::<closure>@630#2",
+        "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>@105#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": "facts.runtimes.retain(|runtime| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_profile::<closure>@630#2",
+      "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>@105#2",
       "kind": "closure",
-      "line": 630,
+      "line": 105,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 630,
+        "line": 105,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": "facts.runtimes.retain(|runtime| {",
       "source_class": "handwritten"
     },
@@ -55511,25 +55581,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_profile::<closure>@633#3",
+        "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>@108#3",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": "facts.runtimes.sort_by(|left, right| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_profile::<closure>@633#3",
+      "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>@108#3",
       "kind": "closure",
-      "line": 633,
+      "line": 108,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 633,
+        "line": 108,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": "facts.runtimes.sort_by(|left, right| {",
       "source_class": "handwritten"
     },
@@ -55537,25 +55607,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_profile::<closure>::<closure>",
+        "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": ".then_with(|| left.name.cmp(&right.name))",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_profile::<closure>::<closure>",
+      "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>::<closure>",
       "kind": "closure",
-      "line": 636,
+      "line": 111,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 636,
+        "line": 111,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": ".then_with(|| left.name.cmp(&right.name))",
       "source_class": "handwritten"
     },
@@ -55563,25 +55633,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_profile::<closure>@640#4",
+        "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>@115#4",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": ".dedup_by(|left, right| left.name == right.name);",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_profile::<closure>@640#4",
+      "identity": "crate::health_plane::report::sanitize::sanitize_profile::<closure>@115#4",
       "kind": "closure",
-      "line": 640,
+      "line": 115,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 640,
+        "line": 115,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": ".dedup_by(|left, right| left.name == right.name);",
       "source_class": "handwritten"
     },
@@ -55589,25 +55659,25 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::health_plane::report::clamp_baseline_id",
+        "identity": "crate::health_plane::report::sanitize::clamp_baseline_id",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": "fn clamp_baseline_id(value: &mut String)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::clamp_baseline_id",
+      "identity": "crate::health_plane::report::sanitize::clamp_baseline_id",
       "kind": "function",
-      "line": 655,
+      "line": 130,
       "name": "clamp_baseline_id",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 655,
+        "line": 130,
         "name": "clamp_baseline_id"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": "fn clamp_baseline_id(value: &mut String)",
       "source_class": "handwritten"
     },
@@ -55615,51 +55685,51 @@
       "cognitive": 4,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_pulse",
+        "identity": "crate::health_plane::report::sanitize::sanitize_pulse",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
-        "signature": "fn sanitize_pulse(facts: &mut PulseFacts)",
+        "path": "src/health_plane/report/sanitize.rs",
+        "signature": "pub(super) fn sanitize_pulse(facts: &mut PulseFacts)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_pulse",
+      "identity": "crate::health_plane::report::sanitize::sanitize_pulse",
       "kind": "function",
-      "line": 665,
+      "line": 136,
       "name": "sanitize_pulse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 665,
+        "line": 136,
         "name": "sanitize_pulse"
       },
-      "path": "src/health_plane/report.rs",
-      "signature": "fn sanitize_pulse(facts: &mut PulseFacts)",
+      "path": "src/health_plane/report/sanitize.rs",
+      "signature": "pub(super) fn sanitize_pulse(facts: &mut PulseFacts)",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sanitize_pulse::<closure>",
+        "identity": "crate::health_plane::report::sanitize::sanitize_pulse::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": ".filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sanitize_pulse::<closure>",
+      "identity": "crate::health_plane::report::sanitize::sanitize_pulse::<closure>",
       "kind": "closure",
-      "line": 691,
+      "line": 162,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 691,
+        "line": 162,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": ".filter(|code| (MIN_EXIT_CODE..=MAX_EXIT_CODE).contains(code));",
       "source_class": "handwritten"
     },
@@ -55667,25 +55737,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::runtime_rank",
+        "identity": "crate::health_plane::report::sanitize::runtime_rank",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": "fn runtime_rank(name: &str) -> usize",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::runtime_rank",
+      "identity": "crate::health_plane::report::sanitize::runtime_rank",
       "kind": "function",
-      "line": 701,
+      "line": 172,
       "name": "runtime_rank",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 701,
+        "line": 172,
         "name": "runtime_rank"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": "fn runtime_rank(name: &str) -> usize",
       "source_class": "handwritten"
     },
@@ -55693,25 +55763,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::runtime_rank::<closure>",
+        "identity": "crate::health_plane::report::sanitize::runtime_rank::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": ".position(|candidate| *candidate == name)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::runtime_rank::<closure>",
+      "identity": "crate::health_plane::report::sanitize::runtime_rank::<closure>",
       "kind": "closure",
-      "line": 704,
+      "line": 175,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 704,
+        "line": 175,
         "name": "<closure>"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": ".position(|candidate| *candidate == name)",
       "source_class": "handwritten"
     },
@@ -55719,25 +55789,25 @@
       "cognitive": 11,
       "cyclomatic": 9,
       "derived": {
-        "identity": "crate::health_plane::report::clamp",
+        "identity": "crate::health_plane::report::sanitize::clamp",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/sanitize.rs",
         "signature": "fn clamp(value: &str, max: usize, extra: &str, allow_empty: bool) -> String",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::clamp",
+      "identity": "crate::health_plane::report::sanitize::clamp",
       "kind": "function",
-      "line": 714,
+      "line": 185,
       "name": "clamp",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 9,
         "kind": "function",
-        "line": 714,
+        "line": 185,
         "name": "clamp"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/sanitize.rs",
       "signature": "fn clamp(value: &str, max: usize, extra: &str, allow_empty: bool) -> String",
       "source_class": "handwritten"
     },
@@ -55745,25 +55815,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::profile_facts",
+        "identity": "crate::health_plane::report::tests::profile_facts",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn profile_facts(&self) -> ProfileFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::profile_facts",
+      "identity": "crate::health_plane::report::tests::profile_facts",
       "kind": "method",
-      "line": 751,
+      "line": 21,
       "name": "profile_facts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 751,
+        "line": 21,
         "name": "profile_facts"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn profile_facts(&self) -> ProfileFacts",
       "source_class": "handwritten"
     },
@@ -55771,25 +55841,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::pulse_facts",
+        "identity": "crate::health_plane::report::tests::pulse_facts",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn pulse_facts(&self) -> PulseFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::pulse_facts",
+      "identity": "crate::health_plane::report::tests::pulse_facts",
       "kind": "method",
-      "line": 755,
+      "line": 25,
       "name": "pulse_facts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 755,
+        "line": 25,
         "name": "pulse_facts"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn pulse_facts(&self) -> PulseFacts",
       "source_class": "handwritten"
     },
@@ -55797,25 +55867,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::terminal_runs",
+        "identity": "crate::health_plane::report::tests::terminal_runs",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn terminal_runs(&self, limit: usize) -> Vec<RunFact>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::terminal_runs",
+      "identity": "crate::health_plane::report::tests::terminal_runs",
       "kind": "method",
-      "line": 759,
+      "line": 29,
       "name": "terminal_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 759,
+        "line": 29,
         "name": "terminal_runs"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn terminal_runs(&self, limit: usize) -> Vec<RunFact>",
       "source_class": "handwritten"
     },
@@ -55823,25 +55893,51 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sample_profile",
+        "identity": "crate::health_plane::report::tests::newest_runs",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
+        "signature": "fn newest_runs(terminal: &Mutex<Vec<RunFact>>, limit: usize) -> Vec<RunFact>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::health_plane::report::tests::newest_runs",
+      "kind": "function",
+      "line": 34,
+      "name": "newest_runs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 34,
+        "name": "newest_runs"
+      },
+      "path": "src/health_plane/report/tests.rs",
+      "signature": "fn newest_runs(terminal: &Mutex<Vec<RunFact>>, limit: usize) -> Vec<RunFact>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::health_plane::report::tests::sample_profile",
+        "macro_expansion": "not_measured",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn sample_profile() -> ProfileFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sample_profile",
+      "identity": "crate::health_plane::report::tests::sample_profile",
       "kind": "function",
-      "line": 766,
+      "line": 40,
       "name": "sample_profile",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 766,
+        "line": 40,
         "name": "sample_profile"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn sample_profile() -> ProfileFacts",
       "source_class": "handwritten"
     },
@@ -55849,25 +55945,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::sample_pulse",
+        "identity": "crate::health_plane::report::tests::sample_pulse",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn sample_pulse() -> PulseFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::sample_pulse",
+      "identity": "crate::health_plane::report::tests::sample_pulse",
       "kind": "function",
-      "line": 794,
+      "line": 68,
       "name": "sample_pulse",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 794,
+        "line": 68,
         "name": "sample_pulse"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn sample_pulse() -> PulseFacts",
       "source_class": "handwritten"
     },
@@ -55875,25 +55971,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::reporter",
+        "identity": "crate::health_plane::report::tests::reporter",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn reporter(profile: ProfileFacts, pulse: PulseFacts) -> HealthReporter",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::reporter",
+      "identity": "crate::health_plane::report::tests::reporter",
       "kind": "function",
-      "line": 808,
+      "line": 82,
       "name": "reporter",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 808,
+        "line": 82,
         "name": "reporter"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn reporter(profile: ProfileFacts, pulse: PulseFacts) -> HealthReporter",
       "source_class": "handwritten"
     },
@@ -55901,25 +55997,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::push",
+        "identity": "crate::health_plane::report::tests::push",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn push(&self, run: RunFact)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::push",
+      "identity": "crate::health_plane::report::tests::push",
       "kind": "method",
-      "line": 824,
+      "line": 98,
       "name": "push",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 824,
+        "line": 98,
         "name": "push"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn push(&self, run: RunFact)",
       "source_class": "handwritten"
     },
@@ -55927,25 +56023,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::profile_facts@829#2",
+        "identity": "crate::health_plane::report::tests::profile_facts@104#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn profile_facts(&self) -> ProfileFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::profile_facts@829#2",
+      "identity": "crate::health_plane::report::tests::profile_facts@104#2",
       "kind": "method",
-      "line": 829,
+      "line": 104,
       "name": "profile_facts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 829,
+        "line": 104,
         "name": "profile_facts"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn profile_facts(&self) -> ProfileFacts",
       "source_class": "handwritten"
     },
@@ -55953,25 +56049,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::pulse_facts@833#2",
+        "identity": "crate::health_plane::report::tests::pulse_facts@108#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn pulse_facts(&self) -> PulseFacts",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::pulse_facts@833#2",
+      "identity": "crate::health_plane::report::tests::pulse_facts@108#2",
       "kind": "method",
-      "line": 833,
+      "line": 108,
       "name": "pulse_facts",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 833,
+        "line": 108,
         "name": "pulse_facts"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn pulse_facts(&self) -> PulseFacts",
       "source_class": "handwritten"
     },
@@ -55979,25 +56075,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::terminal_runs@837#2",
+        "identity": "crate::health_plane::report::tests::terminal_runs@112#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn terminal_runs(&self, limit: usize) -> Vec<RunFact>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::terminal_runs@837#2",
+      "identity": "crate::health_plane::report::tests::terminal_runs@112#2",
       "kind": "method",
-      "line": 837,
+      "line": 112,
       "name": "terminal_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 837,
+        "line": 112,
         "name": "terminal_runs"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn terminal_runs(&self, limit: usize) -> Vec<RunFact>",
       "source_class": "handwritten"
     },
@@ -56005,25 +56101,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::run_fact",
+        "identity": "crate::health_plane::report::tests::run_fact",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn run_fact(run_id: &str, script: &str, finished_at: i64) -> RunFact",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::run_fact",
+      "identity": "crate::health_plane::report::tests::run_fact",
       "kind": "function",
-      "line": 845,
+      "line": 117,
       "name": "run_fact",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 845,
+        "line": 117,
         "name": "run_fact"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn run_fact(run_id: &str, script: &str, finished_at: i64) -> RunFact",
       "source_class": "handwritten"
     },
@@ -56031,25 +56127,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::profile_payload_validates_against_the_frozen_closed_schema",
+        "identity": "crate::health_plane::report::tests::profile_payload_validates_against_the_frozen_closed_schema",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn profile_payload_validates_against_the_frozen_closed_schema()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::profile_payload_validates_against_the_frozen_closed_schema",
+      "identity": "crate::health_plane::report::tests::profile_payload_validates_against_the_frozen_closed_schema",
       "kind": "function",
-      "line": 858,
+      "line": 130,
       "name": "profile_payload_validates_against_the_frozen_closed_schema",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 858,
+        "line": 130,
         "name": "profile_payload_validates_against_the_frozen_closed_schema"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn profile_payload_validates_against_the_frozen_closed_schema()",
       "source_class": "handwritten"
     },
@@ -56057,25 +56153,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::pulse_payload_validates_and_binds_emitted_at_to_created_at",
+        "identity": "crate::health_plane::report::tests::pulse_payload_validates_and_binds_emitted_at_to_created_at",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn pulse_payload_validates_and_binds_emitted_at_to_created_at()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::pulse_payload_validates_and_binds_emitted_at_to_created_at",
+      "identity": "crate::health_plane::report::tests::pulse_payload_validates_and_binds_emitted_at_to_created_at",
       "kind": "function",
-      "line": 874,
+      "line": 146,
       "name": "pulse_payload_validates_and_binds_emitted_at_to_created_at",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 874,
+        "line": 146,
         "name": "pulse_payload_validates_and_binds_emitted_at_to_created_at"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn pulse_payload_validates_and_binds_emitted_at_to_created_at()",
       "source_class": "handwritten"
     },
@@ -56083,25 +56179,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::pulse_sequence_is_strictly_increasing_within_one_second",
+        "identity": "crate::health_plane::report::tests::pulse_sequence_is_strictly_increasing_within_one_second",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn pulse_sequence_is_strictly_increasing_within_one_second()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::pulse_sequence_is_strictly_increasing_within_one_second",
+      "identity": "crate::health_plane::report::tests::pulse_sequence_is_strictly_increasing_within_one_second",
       "kind": "function",
-      "line": 886,
+      "line": 158,
       "name": "pulse_sequence_is_strictly_increasing_within_one_second",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 886,
+        "line": 158,
         "name": "pulse_sequence_is_strictly_increasing_within_one_second"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn pulse_sequence_is_strictly_increasing_within_one_second()",
       "source_class": "handwritten"
     },
@@ -56109,25 +56205,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::profile_revision_only_advances_on_material_change",
+        "identity": "crate::health_plane::report::tests::profile_revision_only_advances_on_material_change",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn profile_revision_only_advances_on_material_change()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::profile_revision_only_advances_on_material_change",
+      "identity": "crate::health_plane::report::tests::profile_revision_only_advances_on_material_change",
       "kind": "function",
-      "line": 894,
+      "line": 166,
       "name": "profile_revision_only_advances_on_material_change",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 894,
+        "line": 166,
         "name": "profile_revision_only_advances_on_material_change"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn profile_revision_only_advances_on_material_change()",
       "source_class": "handwritten"
     },
@@ -56135,25 +56231,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::profile_revision_floors_above_the_previous_revision_when_the_clock_stalls",
+        "identity": "crate::health_plane::report::tests::profile_revision_floors_above_the_previous_revision_when_the_clock_stalls",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn profile_revision_floors_above_the_previous_revision_when_the_clock_stalls()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::profile_revision_floors_above_the_previous_revision_when_the_clock_stalls",
+      "identity": "crate::health_plane::report::tests::profile_revision_floors_above_the_previous_revision_when_the_clock_stalls",
       "kind": "function",
-      "line": 911,
+      "line": 183,
       "name": "profile_revision_floors_above_the_previous_revision_when_the_clock_stalls",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 911,
+        "line": 183,
         "name": "profile_revision_floors_above_the_previous_revision_when_the_clock_stalls"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn profile_revision_floors_above_the_previous_revision_when_the_clock_stalls()",
       "source_class": "handwritten"
     },
@@ -56161,25 +56257,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::hostile_facts_are_clamped_into_the_frozen_grammar",
+        "identity": "crate::health_plane::report::tests::hostile_facts_are_clamped_into_the_frozen_grammar",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn hostile_facts_are_clamped_into_the_frozen_grammar()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::hostile_facts_are_clamped_into_the_frozen_grammar",
+      "identity": "crate::health_plane::report::tests::hostile_facts_are_clamped_into_the_frozen_grammar",
       "kind": "function",
-      "line": 919,
+      "line": 191,
       "name": "hostile_facts_are_clamped_into_the_frozen_grammar",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 919,
+        "line": 191,
         "name": "hostile_facts_are_clamped_into_the_frozen_grammar"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn hostile_facts_are_clamped_into_the_frozen_grammar()",
       "source_class": "handwritten"
     },
@@ -56187,25 +56283,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::health_plane::report::an_unreadable_baseline_identity_is_cleared_rather_than_carried",
+        "identity": "crate::health_plane::report::tests::an_unreadable_baseline_identity_is_cleared_rather_than_carried",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn an_unreadable_baseline_identity_is_cleared_rather_than_carried()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::an_unreadable_baseline_identity_is_cleared_rather_than_carried",
+      "identity": "crate::health_plane::report::tests::an_unreadable_baseline_identity_is_cleared_rather_than_carried",
       "kind": "function",
-      "line": 955,
+      "line": 227,
       "name": "an_unreadable_baseline_identity_is_cleared_rather_than_carried",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 955,
+        "line": 227,
         "name": "an_unreadable_baseline_identity_is_cleared_rather_than_carried"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn an_unreadable_baseline_identity_is_cleared_rather_than_carried()",
       "source_class": "handwritten"
     },
@@ -56213,25 +56309,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted",
+        "identity": "crate::health_plane::report::tests::capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted",
+      "identity": "crate::health_plane::report::tests::capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted",
       "kind": "function",
-      "line": 1008,
+      "line": 280,
       "name": "capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1008,
+        "line": 280,
         "name": "capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn capabilities_outside_the_frozen_allow_list_are_dropped_and_sorted()",
       "source_class": "handwritten"
     },
@@ -56239,25 +56335,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::an_invalid_last_run_is_dropped_rather_than_reported",
+        "identity": "crate::health_plane::report::tests::an_invalid_last_run_is_dropped_rather_than_reported",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn an_invalid_last_run_is_dropped_rather_than_reported()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::an_invalid_last_run_is_dropped_rather_than_reported",
+      "identity": "crate::health_plane::report::tests::an_invalid_last_run_is_dropped_rather_than_reported",
       "kind": "function",
-      "line": 1028,
+      "line": 300,
       "name": "an_invalid_last_run_is_dropped_rather_than_reported",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1028,
+        "line": 300,
         "name": "an_invalid_last_run_is_dropped_rather_than_reported"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn an_invalid_last_run_is_dropped_rather_than_reported()",
       "source_class": "handwritten"
     },
@@ -56265,25 +56361,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::an_opaque_run_id_is_stable_and_contract_shaped",
+        "identity": "crate::health_plane::report::tests::an_opaque_run_id_is_stable_and_contract_shaped",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn an_opaque_run_id_is_stable_and_contract_shaped()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::an_opaque_run_id_is_stable_and_contract_shaped",
+      "identity": "crate::health_plane::report::tests::an_opaque_run_id_is_stable_and_contract_shaped",
       "kind": "function",
-      "line": 1047,
+      "line": 319,
       "name": "an_opaque_run_id_is_stable_and_contract_shaped",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1047,
+        "line": 319,
         "name": "an_opaque_run_id_is_stable_and_contract_shaped"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn an_opaque_run_id_is_stable_and_contract_shaped()",
       "source_class": "handwritten"
     },
@@ -56291,25 +56387,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::a_mapped_last_run_survives_validation",
+        "identity": "crate::health_plane::report::tests::a_mapped_last_run_survives_validation",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_mapped_last_run_survives_validation()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_mapped_last_run_survives_validation",
+      "identity": "crate::health_plane::report::tests::a_mapped_last_run_survives_validation",
       "kind": "function",
-      "line": 1059,
+      "line": 329,
       "name": "a_mapped_last_run_survives_validation",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1059,
+        "line": 329,
         "name": "a_mapped_last_run_survives_validation"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_mapped_last_run_survives_validation()",
       "source_class": "handwritten"
     },
@@ -56317,25 +56413,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::ack_and_error_payloads_validate_against_the_frozen_schema",
+        "identity": "crate::health_plane::report::tests::ack_and_error_payloads_validate_against_the_frozen_schema",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn ack_and_error_payloads_validate_against_the_frozen_schema()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::ack_and_error_payloads_validate_against_the_frozen_schema",
+      "identity": "crate::health_plane::report::tests::ack_and_error_payloads_validate_against_the_frozen_schema",
       "kind": "function",
-      "line": 1079,
+      "line": 349,
       "name": "ack_and_error_payloads_validate_against_the_frozen_schema",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1079,
+        "line": 349,
         "name": "ack_and_error_payloads_validate_against_the_frozen_schema"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn ack_and_error_payloads_validate_against_the_frozen_schema()",
       "source_class": "handwritten"
     },
@@ -56343,25 +56439,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::runner_counts_are_clamped_to_the_frozen_ranges",
+        "identity": "crate::health_plane::report::tests::runner_counts_are_clamped_to_the_frozen_ranges",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn runner_counts_are_clamped_to_the_frozen_ranges()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::runner_counts_are_clamped_to_the_frozen_ranges",
+      "identity": "crate::health_plane::report::tests::runner_counts_are_clamped_to_the_frozen_ranges",
       "kind": "function",
-      "line": 1092,
+      "line": 362,
       "name": "runner_counts_are_clamped_to_the_frozen_ranges",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1092,
+        "line": 362,
         "name": "runner_counts_are_clamped_to_the_frozen_ranges"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn runner_counts_are_clamped_to_the_frozen_ranges()",
       "source_class": "handwritten"
     },
@@ -56369,25 +56465,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::unsorted_and_duplicated_runtimes_are_normalized",
+        "identity": "crate::health_plane::report::tests::unsorted_and_duplicated_runtimes_are_normalized",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn unsorted_and_duplicated_runtimes_are_normalized()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::unsorted_and_duplicated_runtimes_are_normalized",
+      "identity": "crate::health_plane::report::tests::unsorted_and_duplicated_runtimes_are_normalized",
       "kind": "function",
-      "line": 1113,
+      "line": 383,
       "name": "unsorted_and_duplicated_runtimes_are_normalized",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1113,
+        "line": 383,
         "name": "unsorted_and_duplicated_runtimes_are_normalized"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn unsorted_and_duplicated_runtimes_are_normalized()",
       "source_class": "handwritten"
     },
@@ -56395,25 +56491,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::a_run_without_a_script_name_is_unrepresentable_and_is_dropped",
+        "identity": "crate::health_plane::report::tests::a_run_without_a_script_name_is_unrepresentable_and_is_dropped",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_run_without_a_script_name_is_unrepresentable_and_is_dropped()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_run_without_a_script_name_is_unrepresentable_and_is_dropped",
+      "identity": "crate::health_plane::report::tests::a_run_without_a_script_name_is_unrepresentable_and_is_dropped",
       "kind": "function",
-      "line": 1146,
+      "line": 416,
       "name": "a_run_without_a_script_name_is_unrepresentable_and_is_dropped",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1146,
+        "line": 416,
         "name": "a_run_without_a_script_name_is_unrepresentable_and_is_dropped"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_run_without_a_script_name_is_unrepresentable_and_is_dropped()",
       "source_class": "handwritten"
     },
@@ -56421,25 +56517,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::health_plane::report::a_signal_payload_validates_against_the_frozen_closed_schema",
+        "identity": "crate::health_plane::report::tests::a_signal_payload_validates_against_the_frozen_closed_schema",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_signal_payload_validates_against_the_frozen_closed_schema()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_signal_payload_validates_against_the_frozen_closed_schema",
+      "identity": "crate::health_plane::report::tests::a_signal_payload_validates_against_the_frozen_closed_schema",
       "kind": "function",
-      "line": 1178,
+      "line": 448,
       "name": "a_signal_payload_validates_against_the_frozen_closed_schema",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1178,
+        "line": 448,
         "name": "a_signal_payload_validates_against_the_frozen_closed_schema"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_signal_payload_validates_against_the_frozen_closed_schema()",
       "source_class": "handwritten"
     },
@@ -56447,25 +56543,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::a_lifecycle_signal_payload_validates_and_carries_no_run",
+        "identity": "crate::health_plane::report::tests::a_lifecycle_signal_payload_validates_and_carries_no_run",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_lifecycle_signal_payload_validates_and_carries_no_run()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_lifecycle_signal_payload_validates_and_carries_no_run",
+      "identity": "crate::health_plane::report::tests::a_lifecycle_signal_payload_validates_and_carries_no_run",
       "kind": "function",
-      "line": 1203,
+      "line": 473,
       "name": "a_lifecycle_signal_payload_validates_and_carries_no_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1203,
+        "line": 473,
         "name": "a_lifecycle_signal_payload_validates_and_carries_no_run"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_lifecycle_signal_payload_validates_and_carries_no_run()",
       "source_class": "handwritten"
     },
@@ -56473,25 +56569,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::the_measured_signal_size_stays_inside_the_frozen_stored_row_cap",
+        "identity": "crate::health_plane::report::tests::the_measured_signal_size_stays_inside_the_frozen_stored_row_cap",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn the_measured_signal_size_stays_inside_the_frozen_stored_row_cap()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::the_measured_signal_size_stays_inside_the_frozen_stored_row_cap",
+      "identity": "crate::health_plane::report::tests::the_measured_signal_size_stays_inside_the_frozen_stored_row_cap",
       "kind": "function",
-      "line": 1219,
+      "line": 489,
       "name": "the_measured_signal_size_stays_inside_the_frozen_stored_row_cap",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1219,
+        "line": 489,
         "name": "the_measured_signal_size_stays_inside_the_frozen_stored_row_cap"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn the_measured_signal_size_stays_inside_the_frozen_stored_row_cap()",
       "source_class": "handwritten"
     },
@@ -56499,25 +56595,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::a_run_signal_id_is_stable_per_run_and_distinct_across_runs",
+        "identity": "crate::health_plane::report::tests::a_run_signal_id_is_stable_per_run_and_distinct_across_runs",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_run_signal_id_is_stable_per_run_and_distinct_across_runs()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_run_signal_id_is_stable_per_run_and_distinct_across_runs",
+      "identity": "crate::health_plane::report::tests::a_run_signal_id_is_stable_per_run_and_distinct_across_runs",
       "kind": "function",
-      "line": 1244,
+      "line": 514,
       "name": "a_run_signal_id_is_stable_per_run_and_distinct_across_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1244,
+        "line": 514,
         "name": "a_run_signal_id_is_stable_per_run_and_distinct_across_runs"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_run_signal_id_is_stable_per_run_and_distinct_across_runs()",
       "source_class": "handwritten"
     },
@@ -56525,25 +56621,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::the_first_harvest_seeds_the_watermark_and_never_replays_history",
+        "identity": "crate::health_plane::report::tests::the_first_harvest_seeds_the_watermark_and_never_replays_history",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn the_first_harvest_seeds_the_watermark_and_never_replays_history()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::the_first_harvest_seeds_the_watermark_and_never_replays_history",
+      "identity": "crate::health_plane::report::tests::the_first_harvest_seeds_the_watermark_and_never_replays_history",
       "kind": "function",
-      "line": 1256,
+      "line": 524,
       "name": "the_first_harvest_seeds_the_watermark_and_never_replays_history",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1256,
+        "line": 524,
         "name": "the_first_harvest_seeds_the_watermark_and_never_replays_history"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn the_first_harvest_seeds_the_watermark_and_never_replays_history()",
       "source_class": "handwritten"
     },
@@ -56551,25 +56647,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::a_new_terminal_run_is_harvested_exactly_once",
+        "identity": "crate::health_plane::report::tests::a_new_terminal_run_is_harvested_exactly_once",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_new_terminal_run_is_harvested_exactly_once()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_new_terminal_run_is_harvested_exactly_once",
+      "identity": "crate::health_plane::report::tests::a_new_terminal_run_is_harvested_exactly_once",
       "kind": "function",
-      "line": 1274,
+      "line": 542,
       "name": "a_new_terminal_run_is_harvested_exactly_once",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1274,
+        "line": 542,
         "name": "a_new_terminal_run_is_harvested_exactly_once"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_new_terminal_run_is_harvested_exactly_once()",
       "source_class": "handwritten"
     },
@@ -56577,25 +56673,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::a_run_finishing_after_an_explicit_seed_is_still_reported",
+        "identity": "crate::health_plane::report::tests::a_run_finishing_after_an_explicit_seed_is_still_reported",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_run_finishing_after_an_explicit_seed_is_still_reported()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_run_finishing_after_an_explicit_seed_is_still_reported",
+      "identity": "crate::health_plane::report::tests::a_run_finishing_after_an_explicit_seed_is_still_reported",
       "kind": "function",
-      "line": 1291,
+      "line": 559,
       "name": "a_run_finishing_after_an_explicit_seed_is_still_reported",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1291,
+        "line": 559,
         "name": "a_run_finishing_after_an_explicit_seed_is_still_reported"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_run_finishing_after_an_explicit_seed_is_still_reported()",
       "source_class": "handwritten"
     },
@@ -56603,25 +56699,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::seeding_again_never_consumes_a_pending_outcome",
+        "identity": "crate::health_plane::report::tests::seeding_again_never_consumes_a_pending_outcome",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn seeding_again_never_consumes_a_pending_outcome()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::seeding_again_never_consumes_a_pending_outcome",
+      "identity": "crate::health_plane::report::tests::seeding_again_never_consumes_a_pending_outcome",
       "kind": "function",
-      "line": 1323,
+      "line": 591,
       "name": "seeding_again_never_consumes_a_pending_outcome",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1323,
+        "line": 591,
         "name": "seeding_again_never_consumes_a_pending_outcome"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn seeding_again_never_consumes_a_pending_outcome()",
       "source_class": "handwritten"
     },
@@ -56629,25 +56725,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::concurrent_terminal_runs_in_one_second_each_produce_one_signal",
+        "identity": "crate::health_plane::report::tests::concurrent_terminal_runs_in_one_second_each_produce_one_signal",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn concurrent_terminal_runs_in_one_second_each_produce_one_signal()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::concurrent_terminal_runs_in_one_second_each_produce_one_signal",
+      "identity": "crate::health_plane::report::tests::concurrent_terminal_runs_in_one_second_each_produce_one_signal",
       "kind": "function",
-      "line": 1339,
+      "line": 607,
       "name": "concurrent_terminal_runs_in_one_second_each_produce_one_signal",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1339,
+        "line": 607,
         "name": "concurrent_terminal_runs_in_one_second_each_produce_one_signal"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn concurrent_terminal_runs_in_one_second_each_produce_one_signal()",
       "source_class": "handwritten"
     },
@@ -56655,25 +56751,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped",
+        "identity": "crate::health_plane::report::tests::a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped",
+      "identity": "crate::health_plane::report::tests::a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped",
       "kind": "function",
-      "line": 1362,
+      "line": 630,
       "name": "a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1362,
+        "line": 630,
         "name": "a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn a_harvested_run_is_clamped_into_the_frozen_grammar_or_dropped()",
       "source_class": "handwritten"
     },
@@ -56681,25 +56777,25 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::health_plane::report::the_harvest_is_bounded_by_the_frozen_outbox_capacity",
+        "identity": "crate::health_plane::report::tests::the_harvest_is_bounded_by_the_frozen_outbox_capacity",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn the_harvest_is_bounded_by_the_frozen_outbox_capacity()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::the_harvest_is_bounded_by_the_frozen_outbox_capacity",
+      "identity": "crate::health_plane::report::tests::the_harvest_is_bounded_by_the_frozen_outbox_capacity",
       "kind": "function",
-      "line": 1385,
+      "line": 653,
       "name": "the_harvest_is_bounded_by_the_frozen_outbox_capacity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 1385,
+        "line": 653,
         "name": "the_harvest_is_bounded_by_the_frozen_outbox_capacity"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn the_harvest_is_bounded_by_the_frozen_outbox_capacity()",
       "source_class": "handwritten"
     },
@@ -56707,25 +56803,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::report::an_unavailable_runtime_never_reports_a_version",
+        "identity": "crate::health_plane::report::tests::an_unavailable_runtime_never_reports_a_version",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/report.rs",
+        "path": "src/health_plane/report/tests.rs",
         "signature": "fn an_unavailable_runtime_never_reports_a_version()",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::report::an_unavailable_runtime_never_reports_a_version",
+      "identity": "crate::health_plane::report::tests::an_unavailable_runtime_never_reports_a_version",
       "kind": "function",
-      "line": 1403,
+      "line": 671,
       "name": "an_unavailable_runtime_never_reports_a_version",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1403,
+        "line": 671,
         "name": "an_unavailable_runtime_never_reports_a_version"
       },
-      "path": "src/health_plane/report.rs",
+      "path": "src/health_plane/report/tests.rs",
       "signature": "fn an_unavailable_runtime_never_reports_a_version()",
       "source_class": "handwritten"
     },

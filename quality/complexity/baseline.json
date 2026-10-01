@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "a2dabf04453c1a4f592576cd597a836b34e5602c493194e84883fb87691d3e85",
+  "canonical_sha256": "a8129af4857f4f87424830f99bae313860a0e19b5e4a283a1ae52dfd02d2a954",
   "config_identity": "no-config",
   "files": [
     {
@@ -2276,12 +2276,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 20,
+        "invocations": 26,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 35,
-        "cyclomatic": 30
+        "cognitive": 32,
+        "cyclomatic": 38
       },
       "path": "src/domain/parsing.rs",
       "source_class": "handwritten"
@@ -50594,14 +50594,14 @@
       },
       "identity": "crate::domain::parsing::parse_schema",
       "kind": "function",
-      "line": 8,
+      "line": 9,
       "name": "parse_schema",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 8,
+        "line": 9,
         "name": "parse_schema"
       },
       "path": "src/domain/parsing.rs",
@@ -50609,8 +50609,34 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 26,
-      "cyclomatic": 12,
+      "cognitive": 5,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::domain::parsing::parse_schema_candidate",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/parsing.rs",
+        "signature": "fn parse_schema_candidate(json: &str) -> Result<Option<Schema>, SchemaError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::parsing::parse_schema_candidate",
+      "kind": "function",
+      "line": 19,
+      "name": "parse_schema_candidate",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 19,
+        "name": "parse_schema_candidate"
+      },
+      "path": "src/domain/parsing.rs",
+      "signature": "fn parse_schema_candidate(json: &str) -> Result<Option<Schema>, SchemaError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 10,
+      "cyclomatic": 6,
       "derived": {
         "identity": "crate::domain::parsing::extract_schema_block",
         "macro_expansion": "not_measured",
@@ -50620,18 +50646,44 @@
       },
       "identity": "crate::domain::parsing::extract_schema_block",
       "kind": "function",
-      "line": 22,
+      "line": 41,
       "name": "extract_schema_block",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 26,
-        "cyclomatic": 12,
+        "cognitive": 10,
+        "cyclomatic": 6,
         "kind": "function",
-        "line": 22,
+        "line": 41,
         "name": "extract_schema_block"
       },
       "path": "src/domain/parsing.rs",
       "signature": "pub fn extract_schema_block(contents: &str, prefixes: &[&str]) -> Result<String, SchemaError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::domain::parsing::consume_schema_comment",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/parsing.rs",
+        "signature": "fn consume_schema_comment( commented: &str, in_block: &mut bool, buffer: &mut String, ) -> Result<Option<String>, SchemaError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::parsing::consume_schema_comment",
+      "kind": "function",
+      "line": 61,
+      "name": "consume_schema_comment",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 8,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 61,
+        "name": "consume_schema_comment"
+      },
+      "path": "src/domain/parsing.rs",
+      "signature": "fn consume_schema_comment( commented: &str, in_block: &mut bool, buffer: &mut String, ) -> Result<Option<String>, SchemaError>",
       "source_class": "handwritten"
     },
     {
@@ -50646,14 +50698,14 @@
       },
       "identity": "crate::domain::parsing::strip_comment_prefix",
       "kind": "function",
-      "line": 56,
+      "line": 87,
       "name": "strip_comment_prefix",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 56,
+        "line": 87,
         "name": "strip_comment_prefix"
       },
       "path": "src/domain/parsing.rs",
@@ -50672,14 +50724,14 @@
       },
       "identity": "crate::domain::parsing::make_schema_json",
       "kind": "function",
-      "line": 74,
+      "line": 105,
       "name": "make_schema_json",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 74,
+        "line": 105,
         "name": "make_schema_json"
       },
       "path": "src/domain/parsing.rs",
@@ -50698,14 +50750,14 @@
       },
       "identity": "crate::domain::parsing::comment_block",
       "kind": "function",
-      "line": 83,
+      "line": 114,
       "name": "comment_block",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 83,
+        "line": 114,
         "name": "comment_block"
       },
       "path": "src/domain/parsing.rs",
@@ -50724,14 +50776,14 @@
       },
       "identity": "crate::domain::parsing::comment_block::<closure>",
       "kind": "closure",
-      "line": 85,
+      "line": 116,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 85,
+        "line": 116,
         "name": "<closure>"
       },
       "path": "src/domain/parsing.rs",
@@ -50750,18 +50802,44 @@
       },
       "identity": "crate::domain::parsing::test_parse_schema_valid",
       "kind": "function",
-      "line": 91,
+      "line": 122,
       "name": "test_parse_schema_valid",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 91,
+        "line": 122,
         "name": "test_parse_schema_valid"
       },
       "path": "src/domain/parsing.rs",
       "signature": "fn test_parse_schema_valid()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::domain::parsing::parse_schema_skips_unrelated_json_before_the_schema",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/parsing.rs",
+        "signature": "fn parse_schema_skips_unrelated_json_before_the_schema()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::parsing::parse_schema_skips_unrelated_json_before_the_schema",
+      "kind": "function",
+      "line": 137,
+      "name": "parse_schema_skips_unrelated_json_before_the_schema",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 137,
+        "name": "parse_schema_skips_unrelated_json_before_the_schema"
+      },
+      "path": "src/domain/parsing.rs",
+      "signature": "fn parse_schema_skips_unrelated_json_before_the_schema()",
       "source_class": "handwritten"
     },
     {
@@ -50776,14 +50854,14 @@
       },
       "identity": "crate::domain::parsing::test_parse_schema_with_fields",
       "kind": "function",
-      "line": 106,
+      "line": 144,
       "name": "test_parse_schema_with_fields",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 106,
+        "line": 144,
         "name": "test_parse_schema_with_fields"
       },
       "path": "src/domain/parsing.rs",
@@ -50802,14 +50880,14 @@
       },
       "identity": "crate::domain::parsing::test_parse_schema_not_found",
       "kind": "function",
-      "line": 126,
+      "line": 164,
       "name": "test_parse_schema_not_found",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 126,
+        "line": 164,
         "name": "test_parse_schema_not_found"
       },
       "path": "src/domain/parsing.rs",
@@ -50828,14 +50906,14 @@
       },
       "identity": "crate::domain::parsing::test_extract_schema_block_hash_prefix",
       "kind": "function",
-      "line": 133,
+      "line": 171,
       "name": "test_extract_schema_block_hash_prefix",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 133,
+        "line": 171,
         "name": "test_extract_schema_block_hash_prefix"
       },
       "path": "src/domain/parsing.rs",
@@ -50854,14 +50932,14 @@
       },
       "identity": "crate::domain::parsing::test_extract_schema_block_semicolon_prefix",
       "kind": "function",
-      "line": 145,
+      "line": 183,
       "name": "test_extract_schema_block_semicolon_prefix",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 145,
+        "line": 183,
         "name": "test_extract_schema_block_semicolon_prefix"
       },
       "path": "src/domain/parsing.rs",
@@ -50880,14 +50958,14 @@
       },
       "identity": "crate::domain::parsing::test_extract_schema_block_missing_prefix_line",
       "kind": "function",
-      "line": 157,
+      "line": 195,
       "name": "test_extract_schema_block_missing_prefix_line",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 157,
+        "line": 195,
         "name": "test_extract_schema_block_missing_prefix_line"
       },
       "path": "src/domain/parsing.rs",
@@ -50906,14 +50984,14 @@
       },
       "identity": "crate::domain::parsing::test_extract_schema_block_empty",
       "kind": "function",
-      "line": 167,
+      "line": 205,
       "name": "test_extract_schema_block_empty",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 167,
+        "line": 205,
         "name": "test_extract_schema_block_empty"
       },
       "path": "src/domain/parsing.rs",
@@ -50932,18 +51010,70 @@
       },
       "identity": "crate::domain::parsing::test_extract_schema_block_not_found",
       "kind": "function",
-      "line": 174,
+      "line": 212,
       "name": "test_extract_schema_block_not_found",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 174,
+        "line": 212,
         "name": "test_extract_schema_block_not_found"
       },
       "path": "src/domain/parsing.rs",
       "signature": "fn test_extract_schema_block_not_found()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::domain::parsing::extract_schema_block_ignores_end_before_start_and_returns_first_block",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/parsing.rs",
+        "signature": "fn extract_schema_block_ignores_end_before_start_and_returns_first_block()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::parsing::extract_schema_block_ignores_end_before_start_and_returns_first_block",
+      "kind": "function",
+      "line": 219,
+      "name": "extract_schema_block_ignores_end_before_start_and_returns_first_block",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 219,
+        "name": "extract_schema_block_ignores_end_before_start_and_returns_first_block"
+      },
+      "path": "src/domain/parsing.rs",
+      "signature": "fn extract_schema_block_ignores_end_before_start_and_returns_first_block()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::domain::parsing::extract_schema_block_skips_unprefixed_blank_lines_but_reports_code_line",
+        "macro_expansion": "not_measured",
+        "path": "src/domain/parsing.rs",
+        "signature": "fn extract_schema_block_skips_unprefixed_blank_lines_but_reports_code_line()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::domain::parsing::extract_schema_block_skips_unprefixed_blank_lines_but_reports_code_line",
+      "kind": "function",
+      "line": 225,
+      "name": "extract_schema_block_skips_unprefixed_blank_lines_but_reports_code_line",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 225,
+        "name": "extract_schema_block_skips_unprefixed_blank_lines_but_reports_code_line"
+      },
+      "path": "src/domain/parsing.rs",
+      "signature": "fn extract_schema_block_skips_unprefixed_blank_lines_but_reports_code_line()",
       "source_class": "handwritten"
     },
     {

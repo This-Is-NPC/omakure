@@ -44,22 +44,8 @@ pub fn extract_schema_block(contents: &str, prefixes: &[&str]) -> Result<String,
 
     for (index, line) in contents.lines().enumerate() {
         if let Some(commented) = strip_comment_prefix(line, prefixes) {
-            let trimmed = commented.trim();
-            if !in_block && trimmed == "OMAKURE_SCHEMA_START" {
-                in_block = true;
-                continue;
-            }
-            if in_block && trimmed == "OMAKURE_SCHEMA_END" {
-                if buffer.trim().is_empty() {
-                    return Err(SchemaError::EmptyBlock);
-                }
-                return Ok(buffer);
-            }
-            if in_block {
-                if !buffer.is_empty() {
-                    buffer.push('\n');
-                }
-                buffer.push_str(commented);
+            if let Some(block) = consume_schema_comment(commented, &mut in_block, &mut buffer)? {
+                return Ok(block);
             }
         } else if in_block {
             if line.trim().is_empty() {
@@ -70,6 +56,32 @@ pub fn extract_schema_block(contents: &str, prefixes: &[&str]) -> Result<String,
     }
 
     Err(SchemaError::BlockNotFound)
+}
+
+fn consume_schema_comment(
+    commented: &str,
+    in_block: &mut bool,
+    buffer: &mut String,
+) -> Result<Option<String>, SchemaError> {
+    let trimmed = commented.trim();
+    if !*in_block {
+        if trimmed == "OMAKURE_SCHEMA_START" {
+            *in_block = true;
+        }
+        return Ok(None);
+    }
+    if trimmed == "OMAKURE_SCHEMA_END" {
+        return if buffer.trim().is_empty() {
+            Err(SchemaError::EmptyBlock)
+        } else {
+            Ok(Some(std::mem::take(buffer)))
+        };
+    }
+    if !buffer.is_empty() {
+        buffer.push('\n');
+    }
+    buffer.push_str(commented);
+    Ok(None)
 }
 
 fn strip_comment_prefix<'a>(line: &'a str, prefixes: &[&str]) -> Option<&'a str> {
@@ -201,5 +213,23 @@ Some output after"#;
         let contents = "# Just some code\necho hello";
         let result = extract_schema_block(contents, &["#"]);
         assert!(matches!(result.unwrap_err(), SchemaError::BlockNotFound));
+    }
+
+    #[test]
+    fn extract_schema_block_ignores_end_before_start_and_returns_first_block() {
+        let contents = "# OMAKURE_SCHEMA_END\n# OMAKURE_SCHEMA_START\n# first\n# OMAKURE_SCHEMA_END\n# OMAKURE_SCHEMA_START\n# second\n# OMAKURE_SCHEMA_END";
+        assert_eq!(extract_schema_block(contents, &["#"]).unwrap(), "first");
+    }
+
+    #[test]
+    fn extract_schema_block_skips_unprefixed_blank_lines_but_reports_code_line() {
+        let valid = "# OMAKURE_SCHEMA_START\n\n# value\n# OMAKURE_SCHEMA_END";
+        assert_eq!(extract_schema_block(valid, &["#"]).unwrap(), "value");
+
+        let invalid = "# OMAKURE_SCHEMA_START\n\nvalue\n# OMAKURE_SCHEMA_END";
+        assert!(matches!(
+            extract_schema_block(invalid, &["#"]),
+            Err(SchemaError::MissingCommentPrefix { line: 3 })
+        ));
     }
 }

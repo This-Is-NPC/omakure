@@ -497,6 +497,7 @@ fn production_architecture_boundaries_are_clean() {
 
     for relative in [
         "operations/core/run_queries.rs",
+        "operations/core/enqueue.rs",
         "operations/health/facts.rs",
     ] {
         let path = src.join(relative);

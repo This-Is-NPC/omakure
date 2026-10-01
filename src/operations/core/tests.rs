@@ -487,14 +487,22 @@ fn duplicate_enqueue_preserves_io_error_code_and_message() {
 }
 
 #[test]
-fn unreadable_runs_workspace_preserves_io_code_and_text() {
+fn unreadable_runs_workspace_preserves_io_code_and_text_across_paths() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);
+    write_script(ws.scripts_root(), "deploy.sh", &[]);
     std::fs::remove_dir_all(ws.history_dir()).unwrap();
     std::fs::write(ws.history_dir(), "blocking file").unwrap();
     let error = list_runs(&ws, ListRunsRequest::default()).unwrap_err();
     assert_eq!(error.code, OperationErrorCode::IoFailed);
     assert!(error.message.starts_with("Create history dir failed: "));
+
+    let manual = enqueue_run(&ws, cue_request()).unwrap_err();
+    let cue = enqueue_cue_run(&ws, cue_request(), "authorized-hash").unwrap_err();
+    assert_eq!(manual.code, OperationErrorCode::IoFailed);
+    assert_eq!(cue.code, OperationErrorCode::IoFailed);
+    assert_eq!(manual.message, error.message);
+    assert_eq!(cue.message, error.message);
 }
 
 #[test]

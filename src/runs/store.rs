@@ -1,3 +1,4 @@
+use super::enqueue::EnqueueOptions;
 use super::lifecycle;
 use super::open;
 use super::query::{self, RunFilters, RunRow, RunStats};
@@ -16,6 +17,24 @@ impl RunStore {
         Ok(Self {
             connection: open::open(workspace)?,
         })
+    }
+
+    pub(crate) fn enqueue(
+        &self,
+        script_path: &str,
+        args: &[String],
+        options: EnqueueOptions,
+    ) -> Result<RunRow, RunsError> {
+        super::enqueue(&self.connection, script_path, args, options)
+    }
+
+    pub(crate) fn enqueue_cue(
+        &mut self,
+        script_path: &str,
+        args: &[String],
+        options: EnqueueOptions,
+    ) -> Result<RunRow, RunsError> {
+        super::enqueue_cue(&mut self.connection, script_path, args, options)
     }
 
     pub(crate) fn query_runs(&self, filters: &RunFilters) -> Result<Vec<RunRow>, RunsError> {

@@ -3,7 +3,7 @@ use super::script_path::resolve_script_path;
 use super::types::EnqueueRunRequest;
 use crate::app_meta;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
-use crate::runs::{self, EnqueueOptions, RunRow};
+use crate::runs::{self, EnqueueOptions, RunRow, RunStore};
 use crate::workspace::Workspace;
 
 pub fn enqueue_run(workspace: &Workspace, request: EnqueueRunRequest) -> OperationResult<RunRow> {
@@ -61,28 +61,28 @@ pub fn enqueue_run_with_access(
             format!("required field `{}` is missing: {}", field, message),
         )
     })?;
-    let conn = runs::open(workspace).map_err(io_error_runs)?;
-    runs::enqueue(
-        &conn,
-        canonical.to_string_lossy().as_ref(),
-        &resolved_args.persisted_args,
-        EnqueueOptions {
-            run_id: request.run_id,
-            actor: request.actor,
-            reason: request.reason,
-            priority: request.priority,
-            timeout_ms: request.timeout_ms,
-            parent_run_id: request.parent_run_id,
-            cron_schedule_id: request.cron_schedule_id,
-            script_name: None,
-            omakure_version: app_meta::APP_VERSION.to_string(),
-            trigger: runs::RunTrigger::Manual,
-            env_name: request.env,
-            allowed_secret_refs: Some(resolved_args.provider_refs),
-            script_content_hash: None,
-        },
-    )
-    .map_err(io_error_runs)
+    let store = RunStore::open(workspace).map_err(io_error_runs)?;
+    store
+        .enqueue(
+            canonical.to_string_lossy().as_ref(),
+            &resolved_args.persisted_args,
+            EnqueueOptions {
+                run_id: request.run_id,
+                actor: request.actor,
+                reason: request.reason,
+                priority: request.priority,
+                timeout_ms: request.timeout_ms,
+                parent_run_id: request.parent_run_id,
+                cron_schedule_id: request.cron_schedule_id,
+                script_name: None,
+                omakure_version: app_meta::APP_VERSION.to_string(),
+                trigger: runs::RunTrigger::Manual,
+                env_name: request.env,
+                allowed_secret_refs: Some(resolved_args.provider_refs),
+                script_content_hash: None,
+            },
+        )
+        .map_err(io_error_runs)
 }
 
 /// Enqueue a run that a remote Conductor asked for.
@@ -136,26 +136,26 @@ pub fn enqueue_cue_run(
         )
     })?;
 
-    let mut conn = runs::open(workspace).map_err(io_error_runs)?;
-    runs::enqueue_cue(
-        &mut conn,
-        canonical.to_string_lossy().as_ref(),
-        &resolved_args.persisted_args,
-        EnqueueOptions {
-            run_id: request.run_id,
-            actor: request.actor,
-            reason: request.reason,
-            priority: request.priority,
-            timeout_ms: request.timeout_ms,
-            parent_run_id: None,
-            cron_schedule_id: None,
-            script_name: Some(script_name),
-            omakure_version: app_meta::APP_VERSION.to_string(),
-            trigger: runs::RunTrigger::Cue,
-            env_name: None,
-            allowed_secret_refs: Some(Vec::new()),
-            script_content_hash: Some(authorized_content_hash.to_string()),
-        },
-    )
-    .map_err(io_error_runs)
+    let mut store = RunStore::open(workspace).map_err(io_error_runs)?;
+    store
+        .enqueue_cue(
+            canonical.to_string_lossy().as_ref(),
+            &resolved_args.persisted_args,
+            EnqueueOptions {
+                run_id: request.run_id,
+                actor: request.actor,
+                reason: request.reason,
+                priority: request.priority,
+                timeout_ms: request.timeout_ms,
+                parent_run_id: None,
+                cron_schedule_id: None,
+                script_name: Some(script_name),
+                omakure_version: app_meta::APP_VERSION.to_string(),
+                trigger: runs::RunTrigger::Cue,
+                env_name: None,
+                allowed_secret_refs: Some(Vec::new()),
+                script_content_hash: Some(authorized_content_hash.to_string()),
+            },
+        )
+        .map_err(io_error_runs)
 }

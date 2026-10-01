@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "723238c6edb09a6ebcf0be518fb2739f643d7696fd42c4dbfece71a09dd1c48e",
+  "canonical_sha256": "022583085448d96400f9a0fbdeb80801f3f6ae4004afda4702dc8fe0d4466ace",
   "config_identity": "no-config",
   "files": [
     {
@@ -21062,26 +21062,26 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::api::tests::router::http_route_inventory_matches_router_with_policy_registrations",
+        "identity": "crate::cli::api::tests::router::http_route_inventory_matches_router_with_state_registrations",
         "macro_expansion": "not_measured",
         "path": "src/cli/api/tests/router.rs",
-        "signature": "fn http_route_inventory_matches_router_with_policy_registrations()",
+        "signature": "fn http_route_inventory_matches_router_with_state_registrations()",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::api::tests::router::http_route_inventory_matches_router_with_policy_registrations",
+      "identity": "crate::cli::api::tests::router::http_route_inventory_matches_router_with_state_registrations",
       "kind": "function",
       "line": 16,
-      "name": "http_route_inventory_matches_router_with_policy_registrations",
+      "name": "http_route_inventory_matches_router_with_state_registrations",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
         "line": 16,
-        "name": "http_route_inventory_matches_router_with_policy_registrations"
+        "name": "http_route_inventory_matches_router_with_state_registrations"
       },
       "path": "src/cli/api/tests/router.rs",
-      "signature": "fn http_route_inventory_matches_router_with_policy_registrations()",
+      "signature": "fn http_route_inventory_matches_router_with_state_registrations()",
       "source_class": "handwritten"
     },
     {

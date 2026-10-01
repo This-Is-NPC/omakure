@@ -1,6 +1,6 @@
 /// Canonical `(method, path)` inventory for the HTTP management API.
 ///
-/// Keep this list in lockstep with `router_with_policy`. Black-box E2E tests
+/// Keep this list in lockstep with `router_with_state`. Black-box E2E tests
 /// compare the markers below with router registrations so route drift fails
 /// the suite.
 // OMAKURE_HTTP_ROUTE_INVENTORY_START

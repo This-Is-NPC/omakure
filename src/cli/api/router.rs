@@ -29,18 +29,20 @@ use super::scripts::{
     list_scripts_handler, script_path_handler, search_handler, tree_path_handler, tree_root_handler,
 };
 use super::secrets::list_secrets_metadata_handler;
+use super::state::ApiState;
 #[cfg(test)]
 use super::state::MAX_CONCURRENT_BLOCKING_OPERATIONS;
-use super::state::{ApiPolicy, ApiState, ReadinessGate};
+#[cfg(test)]
+use super::state::{ApiPolicy, ReadinessGate};
 use super::status::{
     admin_status_handler, config_handler, doctor_handler, health, ready_handler, workspace_handler,
 };
 use crate::auth::Authenticator;
-use crate::direct_service::TransportStatusHandle;
 use crate::node_registry::NodeRegistry;
 #[cfg(test)]
 use crate::operations::node as node_ops;
 use crate::policy::DeployPolicy;
+#[cfg(test)]
 use crate::workspace::Workspace;
 use axum::Router;
 use axum::body::Body;
@@ -140,19 +142,21 @@ pub(super) fn router_with_blocking_gate(
     // Production scope `*` still requires explicit `--secret-ref`.
     let deploy = DeployPolicy::default();
     let auth_gate = auth_verification_gate(&deploy);
-    router_with_transport(
-        crate::auth::test_credential::authenticator(&["*"]),
-        workspace,
-        ApiPolicy::with_secret_refs(["*"]),
-        deploy,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        auth_gate,
-        blocking_operation_gate,
+    router_with_state(
+        ApiState {
+            auth: crate::auth::test_credential::authenticator(&["*"]),
+            workspace,
+            policy: ApiPolicy::with_secret_refs(["*"]),
+            deploy,
+            readiness: None,
+            transport: None,
+            discovery: None,
+            cues: None,
+            baselines: None,
+            bootstrap_token_path: None,
+            auth_verification_gate: auth_gate,
+            blocking_operation_gate,
+        },
         BODY_LIMIT_BYTES,
     )
 }
@@ -193,57 +197,28 @@ pub(super) fn router_with_policy(
     body_limit: usize,
 ) -> Router {
     let auth_gate = auth_verification_gate(&deploy);
-    router_with_transport(
-        auth,
-        workspace,
-        policy,
-        deploy,
-        readiness,
-        None,
-        None,
-        None,
-        None,
-        None,
-        auth_gate,
-        Arc::new(tokio::sync::Semaphore::new(
-            MAX_CONCURRENT_BLOCKING_OPERATIONS,
-        )),
+    router_with_state(
+        ApiState {
+            auth,
+            workspace,
+            policy,
+            deploy,
+            readiness,
+            transport: None,
+            discovery: None,
+            cues: None,
+            baselines: None,
+            bootstrap_token_path: None,
+            auth_verification_gate: auth_gate,
+            blocking_operation_gate: Arc::new(tokio::sync::Semaphore::new(
+                MAX_CONCURRENT_BLOCKING_OPERATIONS,
+            )),
+        },
         body_limit,
     )
 }
 
-// Keep transport and discovery handles explicit so test routers cannot hide
-// runtime status behind global state.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn router_with_transport(
-    auth: Authenticator,
-    workspace: Workspace,
-    policy: ApiPolicy,
-    deploy: DeployPolicy,
-    readiness: Option<Arc<ReadinessGate>>,
-    transport: Option<TransportStatusHandle>,
-    discovery: Option<crate::discovery::DiscoveryStatusHandle>,
-    cues: Option<crate::direct_service::CueDispatcher>,
-    baselines: Option<crate::direct_service::BaselineDispatcher>,
-    bootstrap_token_path: Option<std::path::PathBuf>,
-    auth_verification_gate: Arc<tokio::sync::Semaphore>,
-    blocking_operation_gate: Arc<tokio::sync::Semaphore>,
-    body_limit: usize,
-) -> Router {
-    let state = ApiState {
-        auth,
-        workspace,
-        policy,
-        deploy,
-        readiness,
-        transport,
-        discovery,
-        cues,
-        baselines,
-        bootstrap_token_path,
-        auth_verification_gate,
-        blocking_operation_gate,
-    };
+pub(super) fn router_with_state(state: ApiState, body_limit: usize) -> Router {
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
     Router::new()
         .route("/v1/health", get(health))

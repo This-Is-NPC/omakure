@@ -13,7 +13,7 @@ fn http_route_inventory_is_non_empty_and_unique() {
 }
 
 #[test]
-fn http_route_inventory_matches_router_with_policy_registrations() {
+fn http_route_inventory_matches_router_with_state_registrations() {
     let source = include_str!("../router.rs");
     let mut from_router = parse_router_route_registrations(source);
     // Health-plane routes register on `health_plane_router` and nest under `/v1/node`.
@@ -29,8 +29,8 @@ fn http_route_inventory_matches_router_with_policy_registrations() {
 
 fn parse_router_route_registrations(source: &str) -> Vec<(&str, &str)> {
     let start = source
-        .find("fn router_with_policy(")
-        .expect("router_with_policy");
+        .find("fn router_with_state(")
+        .expect("router_with_state");
     let after = &source[start..];
     let router_start = after.find("Router::new()").expect("Router::new");
     let block = &after[router_start..];
@@ -91,7 +91,7 @@ fn parse_router_route_registrations(source: &str) -> Vec<(&str, &str)> {
     }
     assert!(
         !routes.is_empty(),
-        "parsed zero .route() registrations from router_with_policy"
+        "parsed zero .route() registrations from router_with_state"
     );
     routes
 }

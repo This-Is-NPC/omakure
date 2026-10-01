@@ -98,13 +98,13 @@ pub(crate) fn unit_name(workspace: &Workspace) -> String {
     format!("omakure-{:016x}.service", path_hash(&canonical))
 }
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 fn unit_dir() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_string())?;
     Ok(PathBuf::from(home).join(".config/systemd/user"))
 }
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 fn unit_path(workspace: &Workspace) -> Result<PathBuf, String> {
     Ok(unit_dir()?.join(unit_name(workspace)))
 }

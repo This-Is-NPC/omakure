@@ -22,7 +22,7 @@ mod support;
 
 use omakure::direct_transport::{
     sign_health_envelope, sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
-    TransportCertificate, TransportSession, ENVELOPE_KIND,
+    TransportSession, ENVELOPE_KIND,
 };
 use omakure::health_plane::bounds::{
     MAX_AGE_SECONDS, MAX_CANONICAL_PROFILE, MAX_FUTURE_SKEW_SECONDS,
@@ -245,43 +245,6 @@ fn wait_for_presence_within(
 // Raw production client, for the adversary half.
 // ---------------------------------------------------------------------------
 
-fn node_material(workspace: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
-    let context = NodeContext::resolve_for(
-        NodePlatform::current(),
-        NodePathOverrides::new(
-            Some(workspace.join(".node-state")),
-            Some(workspace.join("node.toml")),
-        ),
-        true,
-        None,
-        None,
-        None,
-    )
-    .expect("resolve node context");
-    let identity = NodeIdentity::load_existing(&context).expect("load node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
-    let certificate = TransportCertificate::from_bytes(
-        &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
-    )
-    .expect("parse transport certificate");
-    (identity, private, certificate)
-}
-
-fn read_frame(stream: &mut TcpStream) -> Vec<u8> {
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).expect("read frame prefix");
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream
-        .read_exact(&mut encoded[4..])
-        .expect("read frame body");
-    encoded
-}
-
 /// Complete a real production handshake and probe/ack round trip, then hand
 /// back the live session.
 fn production_session(
@@ -290,7 +253,7 @@ fn production_session(
     remote_node_id: &str,
     remote_identity_key: &[u8; 32],
 ) -> (TcpStream, TransportSession, NodeIdentity) {
-    let (identity, private, certificate) = node_material(workspace);
+    let (identity, private, certificate) = support::direct_client::node_material(workspace);
     let mut handshake = NoiseHandshake::new(HandshakeRole::Initiator, private, certificate)
         .expect("build production Noise handshake");
     let mut stream = TcpStream::connect(endpoint).expect("connect production listener");
@@ -303,7 +266,7 @@ fn production_session(
     stream
         .write_all(&handshake.write_next().expect("message 1"))
         .expect("send message 1");
-    let response = read_frame(&mut stream);
+    let response = support::direct_client::read_frame(&mut stream);
     handshake
         .read_next(&response, unix_seconds())
         .expect("read message 2");
@@ -319,7 +282,7 @@ fn production_session(
         .write(ENVELOPE_KIND, &probe.encoded())
         .expect("encrypt probe");
     stream.write_all(&frame).expect("send probe");
-    let ack_frame = read_frame(&mut stream);
+    let ack_frame = support::direct_client::read_frame(&mut stream);
     let ack = session.read(&ack_frame).expect("decrypt ack");
     verify_envelope(
         &ack.body,
@@ -341,7 +304,7 @@ fn try_production_session(
     remote_node_id: &str,
     remote_identity_key: &[u8; 32],
 ) -> Option<(TcpStream, TransportSession, NodeIdentity)> {
-    let (identity, private, certificate) = node_material(workspace);
+    let (identity, private, certificate) = support::direct_client::node_material(workspace);
     let mut handshake = NoiseHandshake::new(HandshakeRole::Initiator, private, certificate).ok()?;
     let mut stream = TcpStream::connect(endpoint).ok()?;
     stream

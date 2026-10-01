@@ -21,12 +21,11 @@ use omakure::direct_transport::{
     sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake, TransportCertificate,
     TransportSession, ENVELOPE_KIND,
 };
-use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::TcpStream;
 use std::path::Path;
 use std::time::Duration;
@@ -258,43 +257,6 @@ fn trust_peer(
     assert_eq!(data["state"], "active");
 }
 
-fn node_material(workspace: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
-    let context = NodeContext::resolve_for(
-        NodePlatform::current(),
-        NodePathOverrides::new(
-            Some(workspace.join(".node-state")),
-            Some(workspace.join("node.toml")),
-        ),
-        true,
-        None,
-        None,
-        None,
-    )
-    .expect("resolve node context");
-    let identity = NodeIdentity::load_existing(&context).expect("load node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
-    let certificate = TransportCertificate::from_bytes(
-        &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
-    )
-    .expect("parse transport certificate");
-    (identity, private, certificate)
-}
-
-fn read_frame(stream: &mut TcpStream) -> Vec<u8> {
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).expect("read frame prefix");
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream
-        .read_exact(&mut encoded[4..])
-        .expect("read frame body");
-    encoded
-}
-
 /// Complete a real production handshake and probe/ack round trip against the
 /// production listener, then hand back the live session.
 fn production_session(
@@ -317,7 +279,7 @@ fn production_session(
     stream
         .write_all(&handshake.write_next().expect("message 1"))
         .expect("send message 1");
-    let response = read_frame(&mut stream);
+    let response = support::direct_client::read_frame(&mut stream);
     handshake
         .read_next(&response, unix_seconds())
         .expect("read message 2");
@@ -334,7 +296,7 @@ fn production_session(
         .expect("encrypt probe");
     stream.write_all(&frame).expect("send probe");
 
-    let ack_frame = read_frame(&mut stream);
+    let ack_frame = support::direct_client::read_frame(&mut stream);
     let ack = session.read(&ack_frame).expect("decrypt ack");
     assert_eq!(ack.kind, ENVELOPE_KIND);
     verify_envelope(
@@ -477,7 +439,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
 
     // 1. Reach the production listener over the real handshake and probe path.
     let (performer_identity, performer_private, performer_certificate) =
-        node_material(performer.path());
+        support::direct_client::node_material(performer.path());
     let (mut stream, mut session) = production_session(
         &endpoint,
         performer_private,

@@ -13,7 +13,6 @@ use omakure::direct_transport::{
     sign_probe, unix_seconds, Frame, HandshakeRole, NoiseHandshake, TransportCertificate,
     TransportSession, ENVELOPE_KIND, NOISE_NAME, PROLOGUE,
 };
-use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 
 const HANDSHAKE_IO_TIMEOUT: Duration = Duration::from_secs(10);
@@ -329,45 +328,6 @@ fn send_raw(endpoint: &str, bytes: &[u8]) {
     let _ = stream.shutdown(Shutdown::Write);
 }
 
-fn node_material(workspace: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
-    let context = NodeContext::resolve_for(
-        NodePlatform::current(),
-        NodePathOverrides::new(
-            Some(workspace.join(".node-state")),
-            Some(workspace.join("node.toml")),
-        ),
-        true,
-        None,
-        None,
-        None,
-    )
-    .expect("resolve node context");
-    let identity = NodeIdentity::load_existing(&context).expect("load node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
-    let certificate = TransportCertificate::from_bytes(
-        &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
-    )
-    .expect("parse transport certificate");
-    (identity, private, certificate)
-}
-
-fn read_frame(stream: &mut TcpStream) -> Vec<u8> {
-    use std::io::Read;
-
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).expect("read frame prefix");
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream
-        .read_exact(&mut encoded[4..])
-        .expect("read frame body");
-    encoded
-}
-
 fn send_handshake_frame(stream: &mut TcpStream, message_number: u8, message: &[u8]) {
     stream
         .write_all(
@@ -401,7 +361,8 @@ fn custom_certificate_handshake(endpoint: &str, private: [u8; 32], certificate: 
         .expect("write Noise message 1");
     send_handshake_frame(&mut stream, 1, &message[..length]);
 
-    let response = Frame::parse(&read_frame(&mut stream)).expect("parse Noise message 2");
+    let response = Frame::parse(&support::direct_client::read_frame(&mut stream))
+        .expect("parse Noise message 2");
     assert_eq!(response.message_number().expect("message 2 number"), 2);
     let mut payload = vec![0_u8; 4096];
     handshake
@@ -434,7 +395,7 @@ fn valid_session(
     stream
         .write_all(&handshake.write_next().expect("write production message 1"))
         .expect("send production message 1");
-    let response = read_frame(&mut stream);
+    let response = support::direct_client::read_frame(&mut stream);
     handshake
         .read_next(&response, unix_seconds())
         .expect("read production message 2");
@@ -658,7 +619,8 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
     );
     let endpoint = format!("127.0.0.1:{target_port}");
     wait_until_direct_accepts(&endpoint);
-    let (initiator_identity, private, valid_certificate) = node_material(initiator.path());
+    let (initiator_identity, private, valid_certificate) =
+        support::direct_client::node_material(initiator.path());
 
     let now = unix_seconds();
     let expired_certificate = TransportCertificate::issue(
@@ -742,7 +704,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         [0x31; 16],
         false,
     );
-    let ack = read_frame(&mut replay_stream);
+    let ack = support::direct_client::read_frame(&mut replay_stream);
     replay_session
         .read(&ack)
         .expect("read production probe ack");

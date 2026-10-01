@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+pub mod direct_client;
+mod frame;
+
 use serde_json::Value;
 use std::collections::HashSet;
 use std::ffi::OsStr;

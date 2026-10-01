@@ -35,10 +35,11 @@ impl NodeRegistry {
     ) -> Result<HealthDecision, RegistryError> {
         validate_node_id(request.sender)?;
         let kind = request.payload.body.kind();
-        if let Some(cap) = kind.max_stored_bytes() {
-            if request.message_bytes > cap {
-                return Ok(HealthDecision::Rejected(HealthCode::MessageTooLarge));
-            }
+        if kind
+            .max_stored_bytes()
+            .is_some_and(|cap| request.message_bytes > cap)
+        {
+            return Ok(HealthDecision::Rejected(HealthCode::MessageTooLarge));
         }
         self.with_mutating_connection(|connection| {
             let transaction =

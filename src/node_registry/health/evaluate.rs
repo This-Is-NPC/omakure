@@ -24,10 +24,13 @@ pub(super) fn evaluate(
         return Ok(HealthDecision::Rejected(code));
     }
     let mut state = load_peer_state(transaction, request.sender)?;
-    if let Some(existing) = state.as_ref() {
-        if let Some(code) = rate_check(transaction, existing, kind, request.now)? {
-            return Ok(HealthDecision::Rejected(code));
-        }
+    if let Some(code) = state
+        .as_ref()
+        .map(|existing| rate_check(transaction, existing, kind, request.now))
+        .transpose()?
+        .flatten()
+    {
+        return Ok(HealthDecision::Rejected(code));
     }
     let message_id = decode_opaque_id(&request.payload.message_id)?;
     if replayed_message(transaction, &message_id)? {
@@ -104,14 +107,13 @@ fn authorize_sender(
     }
 
     // Step 9: capability, read from the local registry only.
-    if let Some(required) = kind.required_capability() {
-        if !authorization
+    if kind.required_capability().is_some_and(|required| {
+        !authorization
             .capabilities
             .iter()
             .any(|entry| entry == required)
-        {
-            return Ok(Err(HealthCode::MissingCapability));
-        }
+    }) {
+        return Ok(Err(HealthCode::MissingCapability));
     }
 
     Ok(Ok(stored_role))
@@ -354,12 +356,12 @@ fn rate_check(
         HealthKind::Signal if minute_signals >= MAX_SIGNALS_PER_PEER_PER_MINUTE => {
             return Ok(Some(HealthCode::RateLimited))
         }
-        HealthKind::Pulse => {
-            if let Some(last_pulse_at) = state.last_pulse_at {
-                if now.saturating_sub(last_pulse_at) < MIN_PULSE_INTERVAL_SECONDS {
-                    return Ok(Some(HealthCode::RateLimited));
-                }
-            }
+        HealthKind::Pulse
+            if state.last_pulse_at.is_some_and(|last_pulse_at| {
+                now.saturating_sub(last_pulse_at) < MIN_PULSE_INTERVAL_SECONDS
+            }) =>
+        {
+            return Ok(Some(HealthCode::RateLimited));
         }
         _ => {}
     }

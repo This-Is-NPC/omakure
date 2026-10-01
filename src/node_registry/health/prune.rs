@@ -25,10 +25,8 @@ impl NodeRegistry {
                     active_trust_predicate("h.node_id")
                 );
                 let mut statement = transaction.prepare(&statement)?;
-                let rows = statement
-                    .query_map([], |row| row.get::<_, String>(0))?
-                    .collect::<Result<Vec<_>, _>>()?;
-                rows
+                let mapped_rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+                mapped_rows.collect::<Result<Vec<_>, _>>()?
             };
             for node_id in &stale {
                 delete_peer_health(&transaction, node_id)?;
@@ -97,10 +95,8 @@ fn prune_tx(transaction: &Transaction<'_>, now: i64) -> Result<HealthPruneReport
     let peers: Vec<String> = {
         let mut statement = transaction
             .prepare("SELECT node_id FROM health_signals GROUP BY node_id HAVING COUNT(*) > ?1")?;
-        let rows = statement
-            .query_map(params![SIGNAL_INBOX_CAPACITY], |row| row.get(0))?
-            .collect::<Result<Vec<_>, _>>()?;
-        rows
+        let mapped_rows = statement.query_map(params![SIGNAL_INBOX_CAPACITY], |row| row.get(0))?;
+        mapped_rows.collect::<Result<Vec<_>, _>>()?
     };
     for node_id in peers {
         report.evicted_signals += transaction.execute(

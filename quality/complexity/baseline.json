@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "52785c48a64be46658b55abad1e68f60a8ea947faf6f7e55bc4cc80a6666c5c3",
+  "canonical_sha256": "0d52609f4401740032bcee0ae242ef0a9b4f7844bf3a4222b57ccc3fc2e51686",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -2067,12 +2067,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 65,
+        "invocations": 52,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 86,
-        "cyclomatic": 126
+        "cognitive": 57,
+        "cyclomatic": 88
       },
       "path": "src/domain/node_config.rs",
       "source_class": "handwritten"
@@ -48332,8 +48332,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 34,
-      "cyclomatic": 30,
+      "cognitive": 28,
+      "cyclomatic": 24,
       "derived": {
         "identity": "crate::domain::node_config::validate",
         "macro_expansion": "not_measured",
@@ -48343,14 +48343,14 @@
       },
       "identity": "crate::domain::node_config::validate",
       "kind": "method",
-      "line": 216,
+      "line": 208,
       "name": "validate",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 34,
-        "cyclomatic": 30,
+        "cognitive": 28,
+        "cyclomatic": 24,
         "kind": "method",
-        "line": 216,
+        "line": 208,
         "name": "validate"
       },
       "path": "src/domain/node_config.rs",
@@ -48618,84 +48618,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 6,
-      "cyclomatic": 8,
-      "derived": {
-        "identity": "crate::domain::node_config::validate_relay",
-        "macro_expansion": "not_measured",
-        "path": "src/domain/node_config.rs",
-        "signature": "fn validate_relay(value: &str) -> Result<(), NodeConfigError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::domain::node_config::validate_relay",
-      "kind": "function",
-      "line": 460,
-      "name": "validate_relay",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 8,
-        "kind": "function",
-        "line": 460,
-        "name": "validate_relay"
-      },
-      "path": "src/domain/node_config.rs",
-      "signature": "fn validate_relay(value: &str) -> Result<(), NodeConfigError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::domain::node_config::validate_relay::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/domain/node_config.rs",
-        "signature": "if rest.is_empty() || rest.bytes().any(|byte| byte.is_ascii_whitespace()) {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::domain::node_config::validate_relay::<closure>",
-      "kind": "closure",
-      "line": 471,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 471,
-        "name": "<closure>"
-      },
-      "path": "src/domain/node_config.rs",
-      "signature": "if rest.is_empty() || rest.bytes().any(|byte| byte.is_ascii_whitespace()) {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::domain::node_config::validate_relay::<closure>@483#2",
-        "macro_expansion": "not_measured",
-        "path": "src/domain/node_config.rs",
-        "signature": "validate_relay_authority(authority).map_err(|reason| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::domain::node_config::validate_relay::<closure>@483#2",
-      "kind": "closure",
-      "line": 483,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 483,
-        "name": "<closure>"
-      },
-      "path": "src/domain/node_config.rs",
-      "signature": "validate_relay_authority(authority).map_err(|reason| {",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
@@ -48728,153 +48650,49 @@
         "identity": "crate::domain::node_config::validate_static_peer::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
-        "signature": "validate_host_port(endpoint, true).map_err(|reason| {",
+        "signature": "validate_host_port(endpoint).map_err(|reason| {",
         "source_class": "handwritten"
       },
       "identity": "crate::domain::node_config::validate_static_peer::<closure>",
       "kind": "closure",
-      "line": 510,
+      "line": 431,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 510,
+        "line": 431,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
-      "signature": "validate_host_port(endpoint, true).map_err(|reason| {",
+      "signature": "validate_host_port(endpoint).map_err(|reason| {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 10,
-      "cyclomatic": 7,
-      "derived": {
-        "identity": "crate::domain::node_config::validate_relay_authority",
-        "macro_expansion": "not_measured",
-        "path": "src/domain/node_config.rs",
-        "signature": "fn validate_relay_authority(value: &str) -> Result<(), &'static str>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::domain::node_config::validate_relay_authority",
-      "kind": "function",
-      "line": 515,
-      "name": "validate_relay_authority",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 10,
-        "cyclomatic": 7,
-        "kind": "function",
-        "line": 515,
-        "name": "validate_relay_authority"
-      },
-      "path": "src/domain/node_config.rs",
-      "signature": "fn validate_relay_authority(value: &str) -> Result<(), &'static str>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::domain::node_config::validate_relay_authority::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/domain/node_config.rs",
-        "signature": "if port.parse::<u16>().ok().filter(|port| *port != 0).is_none() {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::domain::node_config::validate_relay_authority::<closure>",
-      "kind": "closure",
-      "line": 525,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 525,
-        "name": "<closure>"
-      },
-      "path": "src/domain/node_config.rs",
-      "signature": "if port.parse::<u16>().ok().filter(|port| *port != 0).is_none() {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::domain::node_config::validate_host",
-        "macro_expansion": "not_measured",
-        "path": "src/domain/node_config.rs",
-        "signature": "fn validate_host(value: &str) -> Result<(), &'static str>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::domain::node_config::validate_host",
-      "kind": "function",
-      "line": 537,
-      "name": "validate_host",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "function",
-        "line": 537,
-        "name": "validate_host"
-      },
-      "path": "src/domain/node_config.rs",
-      "signature": "fn validate_host(value: &str) -> Result<(), &'static str>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::domain::node_config::validate_host::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/domain/node_config.rs",
-        "signature": ".any(|byte| byte.is_ascii_whitespace() || byte == b'/' || byte == b'@')",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::domain::node_config::validate_host::<closure>",
-      "kind": "closure",
-      "line": 541,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 3,
-        "kind": "closure",
-        "line": 541,
-        "name": "<closure>"
-      },
-      "path": "src/domain/node_config.rs",
-      "signature": ".any(|byte| byte.is_ascii_whitespace() || byte == b'/' || byte == b'@')",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 11,
-      "cyclomatic": 9,
+      "cyclomatic": 8,
       "derived": {
         "identity": "crate::domain::node_config::validate_host_port",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
-        "signature": "fn validate_host_port(value: &str, allow_bracketed_ipv6: bool) -> Result<(), &'static str>",
+        "signature": "fn validate_host_port(value: &str) -> Result<(), &'static str>",
         "source_class": "handwritten"
       },
       "identity": "crate::domain::node_config::validate_host_port",
       "kind": "function",
-      "line": 548,
+      "line": 436,
       "name": "validate_host_port",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 11,
-        "cyclomatic": 9,
+        "cognitive": 10,
+        "cyclomatic": 8,
         "kind": "function",
-        "line": 548,
+        "line": 436,
         "name": "validate_host_port"
       },
       "path": "src/domain/node_config.rs",
-      "signature": "fn validate_host_port(value: &str, allow_bracketed_ipv6: bool) -> Result<(), &'static str>",
+      "signature": "fn validate_host_port(value: &str) -> Result<(), &'static str>",
       "source_class": "handwritten"
     },
     {
@@ -48889,14 +48707,14 @@
       },
       "identity": "crate::domain::node_config::validate_host_port::<closure>",
       "kind": "closure",
-      "line": 554,
+      "line": 442,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 554,
+        "line": 442,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -48907,22 +48725,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::domain::node_config::validate_host_port::<closure>@569#2",
+        "identity": "crate::domain::node_config::validate_host_port::<closure>@457#2",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
         "signature": "let port: u16 = port.parse().map_err(|_| \"invalid port\")?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::domain::node_config::validate_host_port::<closure>@569#2",
+      "identity": "crate::domain::node_config::validate_host_port::<closure>@457#2",
       "kind": "closure",
-      "line": 569,
+      "line": 457,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 569,
+        "line": 457,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -48933,22 +48751,22 @@
       "cognitive": 1,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::domain::node_config::validate_host_port::<closure>@573#3",
+        "identity": "crate::domain::node_config::validate_host_port::<closure>@463#3",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
         "signature": ".any(|byte| byte.is_ascii_whitespace() || byte == b'/' || byte == b'@')",
         "source_class": "handwritten"
       },
-      "identity": "crate::domain::node_config::validate_host_port::<closure>@573#3",
+      "identity": "crate::domain::node_config::validate_host_port::<closure>@463#3",
       "kind": "closure",
-      "line": 573,
+      "line": 463,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "closure",
-        "line": 573,
+        "line": 463,
         "name": "<closure>"
       },
       "path": "src/domain/node_config.rs",
@@ -49245,26 +49063,26 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::domain::node_config::validation_accepts_canonical_peer_relay_and_secret_ref",
+        "identity": "crate::domain::node_config::validation_accepts_canonical_peer_and_secret_ref",
         "macro_expansion": "not_measured",
         "path": "src/domain/node_config.rs",
-        "signature": "fn validation_accepts_canonical_peer_relay_and_secret_ref()",
+        "signature": "fn validation_accepts_canonical_peer_and_secret_ref()",
         "source_class": "handwritten"
       },
-      "identity": "crate::domain::node_config::validation_accepts_canonical_peer_relay_and_secret_ref",
+      "identity": "crate::domain::node_config::validation_accepts_canonical_peer_and_secret_ref",
       "kind": "function",
-      "line": 747,
-      "name": "validation_accepts_canonical_peer_relay_and_secret_ref",
+      "line": 628,
+      "name": "validation_accepts_canonical_peer_and_secret_ref",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 747,
-        "name": "validation_accepts_canonical_peer_relay_and_secret_ref"
+        "line": 628,
+        "name": "validation_accepts_canonical_peer_and_secret_ref"
       },
       "path": "src/domain/node_config.rs",
-      "signature": "fn validation_accepts_canonical_peer_relay_and_secret_ref()",
+      "signature": "fn validation_accepts_canonical_peer_and_secret_ref()",
       "source_class": "handwritten"
     },
     {

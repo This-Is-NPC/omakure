@@ -35,20 +35,25 @@
 //! `absolute_path_resolution_is_deterministic` proves the robust alternative
 //! runs the shim deterministically.
 
-#![cfg(unix)]
-
+#[cfg(unix)]
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::process::Command;
 
+#[cfg(unix)]
 use omakure::{generated_executable_tempdir, write_generated_executable};
 
+#[cfg(unix)]
 const MARKER: &str = "SPIKE_SHIM_MARKER";
 
 /// Write an executable shim named `python3` into `dir` that prints [`MARKER`]
 /// and ignores its arguments, so a marker in stdout unambiguously means the
 /// shim (not the system interpreter) ran.
+#[cfg(unix)]
 fn write_python3_shim(dir: &Path) -> PathBuf {
     let final_path = dir.join("python3");
     let body = format!("#!/bin/sh\necho {MARKER}\n");
@@ -60,6 +65,7 @@ fn write_python3_shim(dir: &Path) -> PathBuf {
 /// Minimal which-style lookup: return the first executable file named `program`
 /// found by scanning the colon-separated `path` string left-to-right. This is a
 /// spike-local stand-in for the resolver task 1755 will implement in `runtime`.
+#[cfg(unix)]
 fn which_in_path(program: &str, path: &str) -> Option<PathBuf> {
     for dir in path.split(':').filter(|d| !d.is_empty()) {
         let candidate = Path::new(dir).join(program);
@@ -85,6 +91,7 @@ fn which_in_path(program: &str, path: &str) -> Option<PathBuf> {
 ///     real interpreter dir) -> the spawn fails with `NotFound`, proving the
 ///     **parent** `PATH` is NOT consulted as a fallback.
 #[test]
+#[cfg(unix)]
 fn env_path_redirects_program_name_resolution() {
     let shim_dir = generated_executable_tempdir().unwrap();
     write_python3_shim(shim_dir.path());
@@ -121,6 +128,7 @@ fn env_path_redirects_program_name_resolution() {
 /// This must run the shim deterministically without relying on any name-lookup
 /// behavior of `Command`.
 #[test]
+#[cfg(unix)]
 fn absolute_path_resolution_is_deterministic() {
     let shim_dir = generated_executable_tempdir().unwrap();
     let shim = write_python3_shim(shim_dir.path());
@@ -149,3 +157,8 @@ fn absolute_path_resolution_is_deterministic() {
         "absolute-path spawn must run the shim deterministically, got {stdout:?}"
     );
 }
+
+#[cfg(windows)]
+#[test]
+#[ignore = "Unix shell fixture and executable mode checks do not apply on Windows"]
+fn unix_path_resolution_spike() {}

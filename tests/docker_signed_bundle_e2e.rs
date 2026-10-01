@@ -9,6 +9,7 @@ mod hex_support;
 use k256::schnorr::SigningKey;
 use omakure::enrollment::{self, EnrollmentRole, SignedEnrollmentBundle};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -60,6 +61,7 @@ fn compose_project() -> &'static str {
 struct ComposeGuard {
     root: PathBuf,
     _files: TempDir,
+    compose_env: BTreeMap<&'static str, PathBuf>,
     finalized: bool,
     /// The autojoin target's pre-placed bootstrap pair. The operator provisioned
     /// both machines, so the authority knows them.
@@ -70,6 +72,12 @@ struct ComposeGuard {
 
 impl ComposeGuard {
     fn new() -> Self {
+        let guard = Self::prepare();
+        guard.start(false);
+        guard
+    }
+
+    fn prepare() -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let files = TempDir::new().expect("create signed-bundle E2E files");
         let authority_private = [2_u8; 32];
@@ -119,11 +127,6 @@ impl ComposeGuard {
             ("OMAKURE_SIGNED_AUTHORITY_TOKEN", &authority_token_path),
             ("OMAKURE_SIGNED_TARGET_A_TOKEN", &target_a_token_path),
             ("OMAKURE_SIGNED_TARGET_B_TOKEN", &target_b_token_path),
-        ];
-        for (name, path) in paths {
-            std::env::set_var(name, path);
-        }
-        for (name, path) in [
             (
                 "OMAKURE_SIGNED_AUTHORITY_TOKENS",
                 &authority_management.tokens,
@@ -139,9 +142,11 @@ impl ComposeGuard {
                 &target_b_management.tokens,
             ),
             ("OMAKURE_SIGNED_TARGET_B_CURL", &target_b_management.curl),
-        ] {
-            std::env::set_var(name, path);
-        }
+        ];
+        let mut compose_env: BTreeMap<_, _> = paths
+            .into_iter()
+            .map(|(name, path)| (name, path.to_path_buf()))
+            .collect();
         // The autojoin target. Its config is written *after* the authority
         // creates its key, because there is no key to name until then.
         let autojoin_token = "autojoin-signed-bundle-token-01234567".to_string();
@@ -156,13 +161,19 @@ impl ComposeGuard {
         write_private_token(&autojoin_token_path, &autojoin_token);
         let autojoin_config = files.path().join("autojoin.toml");
         fs::write(&autojoin_config, []).expect("create autojoin config placeholder");
-        std::env::set_var("OMAKURE_SIGNED_AUTOJOIN_CONFIG", &autojoin_config);
-        std::env::set_var("OMAKURE_SIGNED_AUTOJOIN_TOKEN", &autojoin_token_path);
-        std::env::set_var(
-            "OMAKURE_SIGNED_AUTOJOIN_TOKENS",
-            &autojoin_management.tokens,
+        compose_env.extend(
+            [
+                ("OMAKURE_SIGNED_AUTOJOIN_CONFIG", &autojoin_config),
+                ("OMAKURE_SIGNED_AUTOJOIN_TOKEN", &autojoin_token_path),
+                (
+                    "OMAKURE_SIGNED_AUTOJOIN_TOKENS",
+                    &autojoin_management.tokens,
+                ),
+                ("OMAKURE_SIGNED_AUTOJOIN_CURL", &autojoin_management.curl),
+            ]
+            .into_iter()
+            .map(|(name, path)| (name, path.to_path_buf())),
         );
-        std::env::set_var("OMAKURE_SIGNED_AUTOJOIN_CURL", &autojoin_management.curl);
 
         let bundle_paths = [
             ("OMAKURE_SIGNED_AUTHORITY_A_BUNDLE", "authority-a.bundle"),
@@ -170,27 +181,26 @@ impl ComposeGuard {
             ("OMAKURE_SIGNED_TARGET_B_BUNDLE", "target-b.bundle"),
         ];
         for (name, file) in bundle_paths {
-            std::env::set_var(name, files.path().join(file));
+            compose_env.insert(name, files.path().join(file));
             fs::write(files.path().join(file), []).expect("create bundle placeholder");
         }
-        let guard = Self {
+        Self {
             root,
             _files: files,
+            compose_env,
             finalized: false,
             autojoin_token,
             autojoin_nonce,
             autojoin_config,
-        };
-        guard.start();
-        guard
+        }
     }
 
-    fn start(&self) {
-        if std::env::var_os("OMAKURE_E2E_INDUCE_PARTIAL_UP").is_some() {
-            let partial = compose(&self.root, &["up", "--build", "-d", "signed-authority"]);
+    fn start(&self, induce_partial_up: bool) {
+        if induce_partial_up {
+            let partial = compose(self, &["up", "--build", "-d", "signed-authority"]);
             assert!(partial.status.success(), "partial Compose setup failed");
             let failed = compose(
-                &self.root,
+                self,
                 &[
                     "up",
                     "--build",
@@ -206,7 +216,7 @@ impl ComposeGuard {
             panic!("induced partial-up failure");
         }
         let output = compose(
-            &self.root,
+            self,
             &[
                 "up",
                 "--build",
@@ -224,7 +234,7 @@ impl ComposeGuard {
     }
 
     fn finalize(mut self) {
-        if let Err(error) = cleanup(&self.root) {
+        if let Err(error) = cleanup(&self) {
             panic!("signed-bundle Docker cleanup failed: {error}");
         }
         self.finalized = true;
@@ -234,20 +244,20 @@ impl ComposeGuard {
 impl Drop for ComposeGuard {
     fn drop(&mut self) {
         if !self.finalized {
-            if let Err(error) = cleanup(&self.root) {
+            if let Err(error) = cleanup(self) {
                 eprintln!("signed-bundle Docker cleanup after panic failed: {error}");
             }
         }
     }
 }
 
-fn cleanup(root: &Path) -> Result<(), String> {
+fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
     let mut failures = Vec::new();
     // `--profile autojoin` is load-bearing: without it `down` leaves the
     // profile's containers, volumes and network behind, and the leak check
     // below reports it as a failure -- which is how this was found.
     let down = compose(
-        root,
+        guard,
         &[
             "--profile",
             "autojoin",
@@ -299,7 +309,7 @@ fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
 
 #[cfg(test)]
 mod cleanup_tests {
-    use super::cleanup_result;
+    use super::{cleanup_result, compose_command, ComposeGuard, COMPOSE_OPERATION_TIMEOUT};
 
     #[test]
     fn cleanup_reports_all_failures() {
@@ -308,17 +318,34 @@ mod cleanup_tests {
         assert!(error.contains("down failed"));
         assert!(error.contains("container remains"));
     }
+
+    #[test]
+    fn compose_paths_are_set_only_on_child_commands() {
+        let inherited = std::env::var_os("OMAKURE_SIGNED_AUTHORITY_CONFIG");
+        let mut guard = ComposeGuard::prepare();
+        guard.finalized = true;
+        let command = compose_command(&guard, COMPOSE_OPERATION_TIMEOUT);
+        let compose_file = include_str!("../ci/compose/compose.signed-bundle.e2e.yaml");
+        assert_eq!(guard.compose_env.len(), 19);
+        assert_eq!(command.get_envs().count(), guard.compose_env.len());
+        for key in guard.compose_env.keys() {
+            assert!(compose_file.contains(key), "Compose does not use {key}");
+        }
+        assert_eq!(
+            std::env::var_os("OMAKURE_SIGNED_AUTHORITY_CONFIG"),
+            inherited
+        );
+    }
 }
 
 #[test]
 #[ignore]
 fn cleanup_after_induced_partial_up() {
-    std::env::set_var("OMAKURE_E2E_INDUCE_PARTIAL_UP", "1");
-    let result = std::panic::catch_unwind(ComposeGuard::new);
-    std::env::remove_var("OMAKURE_E2E_INDUCE_PARTIAL_UP");
+    let guard = ComposeGuard::prepare();
+    let result = std::panic::catch_unwind(|| guard.start(true));
     assert!(result.is_err(), "induced partial-up should fail");
-    cleanup(&PathBuf::from(env!("CARGO_MANIFEST_DIR")))
-        .expect("induced partial-up cleanup should leave no resources");
+    cleanup(&guard).expect("induced partial-up cleanup should leave no resources");
+    guard.finalize();
 }
 
 fn safe_stderr(output: &Output) -> String {
@@ -335,29 +362,25 @@ fn safe_generation_stderr(output: &Output) -> String {
     stderr
 }
 
-fn compose(root: &Path, args: &[&str]) -> Output {
-    bounded_command_within("docker", compose_timeout(args))
-        .current_dir(root)
-        .args(["compose", "-f", COMPOSE_FILE, "-p", compose_project()])
+fn compose_command(guard: &ComposeGuard, budget: &str) -> Command {
+    let mut command = bounded_command_within("docker", budget);
+    command
+        .current_dir(&guard.root)
+        .envs(&guard.compose_env)
+        .args(["compose", "-f", COMPOSE_FILE, "-p", compose_project()]);
+    command
+}
+
+fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
+    compose_command(guard, compose_timeout(args))
         .args(args)
         .output()
         .expect("run Docker Compose")
 }
 
-fn exec(service: &str, args: &[&str]) -> Output {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    bounded_command("docker")
-        .current_dir(root)
-        .args([
-            "compose",
-            "-f",
-            COMPOSE_FILE,
-            "-p",
-            compose_project(),
-            "exec",
-            "-T",
-            service,
-        ])
+fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
+    compose_command(guard, COMPOSE_OPERATION_TIMEOUT)
+        .args(["exec", "-T", service])
         .args(args)
         .output()
         .expect("run Docker Compose exec")
@@ -376,16 +399,9 @@ fn write_private_token(path: &Path, token: &str) {
     fs::set_permissions(path, permissions).expect("set bootstrap token permissions");
 }
 
-fn copy_to_container(service: &str, source: &Path, destination: &str) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let output = bounded_command("docker")
-        .current_dir(root)
+fn copy_to_container(guard: &ComposeGuard, service: &str, source: &Path, destination: &str) {
+    let output = compose_command(guard, COMPOSE_OPERATION_TIMEOUT)
         .args([
-            "compose",
-            "-f",
-            COMPOSE_FILE,
-            "-p",
-            compose_project(),
             "cp",
             source.to_str().expect("UTF-8 test path"),
             &format!("{service}:{destination}"),
@@ -483,8 +499,9 @@ discovery_secret_ref = ""
     )
 }
 
-fn status(service: &str) -> Value {
+fn status(guard: &ComposeGuard, service: &str) -> Value {
     let output = exec(
+        guard,
         service,
         &[
             "curl",
@@ -506,13 +523,13 @@ fn status(service: &str) -> Value {
     serde_json::from_slice(&output.stdout).expect("node status JSON")
 }
 
-fn wait_for_status() {
+fn wait_for_status(guard: &ComposeGuard) {
     let deadline = Instant::now() + Duration::from_secs(60);
     while Instant::now() < deadline {
         if ["signed-authority", "signed-target-a", "signed-target-b"]
             .iter()
             .all(|service| {
-                let output = exec(service, &["omakure", "--json", "node", "status"]);
+                let output = exec(guard, service, &["omakure", "--json", "node", "status"]);
                 output.status.success()
             })
         {
@@ -520,11 +537,8 @@ fn wait_for_status() {
         }
         thread::sleep(Duration::from_millis(250));
     }
-    let ps = compose(&PathBuf::from(env!("CARGO_MANIFEST_DIR")), &["ps"]);
-    let logs = compose(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-        &["logs", "--no-color", "signed-target-a"],
-    );
+    let ps = compose(guard, &["ps"]);
+    let logs = compose(guard, &["logs", "--no-color", "signed-target-a"]);
     panic!(
         "signed-bundle containers did not become ready; ps={} logs={}",
         String::from_utf8_lossy(&ps.stdout),
@@ -543,16 +557,9 @@ fn identity(status: &Value) -> (&str, &str) {
     )
 }
 
-fn copy_certificate(service: &str, destination: &Path) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let output = bounded_command("docker")
-        .current_dir(root)
+fn copy_certificate(guard: &ComposeGuard, service: &str, destination: &Path) {
+    let output = compose_command(guard, COMPOSE_OPERATION_TIMEOUT)
         .args([
-            "compose",
-            "-f",
-            COMPOSE_FILE,
-            "-p",
-            compose_project(),
             "cp",
             &format!("{service}:/var/lib/omakure/transport.cert"),
             destination.to_str().expect("UTF-8 certificate path"),
@@ -562,9 +569,8 @@ fn copy_certificate(service: &str, destination: &Path) {
     assert!(output.status.success(), "certificate copy failed");
 }
 
-fn container_ip(service: &str) -> String {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let id = compose(&root, &["ps", "-q", service]);
+fn container_ip(guard: &ComposeGuard, service: &str) -> String {
+    let id = compose(guard, &["ps", "-q", service]);
     assert!(id.status.success(), "locate Docker service failed");
     let id = String::from_utf8_lossy(&id.stdout).trim().to_string();
     let output = bounded_command("docker")
@@ -613,8 +619,15 @@ fn bundle(
     .encode()
 }
 
-fn apply(service: &str, bundle_path: &str, token_path: &str, nonce: &[u8; 16]) -> Output {
+fn apply(
+    guard: &ComposeGuard,
+    service: &str,
+    bundle_path: &str,
+    token_path: &str,
+    nonce: &[u8; 16],
+) -> Output {
     exec(
+        guard,
         service,
         &[
             "omakure",
@@ -635,19 +648,19 @@ fn apply(service: &str, bundle_path: &str, token_path: &str, nonce: &[u8; 16]) -
 #[test]
 #[ignore = "requires Docker and runs isolated authority plus two fresh targets"]
 fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
-    let compose_guard = ComposeGuard::new();
-    wait_for_status();
-    let authority_status = status("signed-authority");
-    let target_a_status = status("signed-target-a");
-    let target_b_status = status("signed-target-b");
+    let mut compose_guard = ComposeGuard::new();
+    wait_for_status(&compose_guard);
+    let authority_status = status(&compose_guard, "signed-authority");
+    let target_a_status = status(&compose_guard, "signed-target-a");
+    let target_b_status = status(&compose_guard, "signed-target-b");
     let (authority_id, authority_key) = identity(&authority_status);
     let (target_a_id, target_a_key) = identity(&target_a_status);
     let (target_b_id, _target_b_key) = identity(&target_b_status);
     let files = compose_guard._files.path();
     let authority_cert_path = files.join("authority.cert");
     let target_a_cert_path = files.join("target-a.cert");
-    copy_certificate("signed-authority", &authority_cert_path);
-    copy_certificate("signed-target-a", &target_a_cert_path);
+    copy_certificate(&compose_guard, "signed-authority", &authority_cert_path);
+    copy_certificate(&compose_guard, "signed-target-a", &target_a_cert_path);
     let authority_cert = fs::read(&authority_cert_path).expect("authority certificate");
     let target_a_cert = fs::read(&target_a_cert_path).expect("target A certificate");
     let private_key = [2_u8; 32];
@@ -721,15 +734,21 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     )
     .unwrap();
 
-    let before_target_a = status("signed-target-a")["data"]["trust"].clone();
+    let before_target_a = status(&compose_guard, "signed-target-a")["data"]["trust"].clone();
     for (name, bytes) in [
         ("wrong-org.bundle", wrong_org_bundle),
         ("expired.bundle", expired_bundle),
     ] {
         let path = files.join(name);
         fs::write(&path, bytes).unwrap();
-        copy_to_container("signed-target-a", &path, &format!("/tmp/{name}"));
+        copy_to_container(
+            &compose_guard,
+            "signed-target-a",
+            &path,
+            &format!("/tmp/{name}"),
+        );
         assert!(!apply(
+            &compose_guard,
             "signed-target-a",
             &format!("/tmp/{name}"),
             "/run/secrets/bootstrap-token/bootstrap.token",
@@ -737,9 +756,13 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         )
         .status
         .success());
-        assert_eq!(status("signed-target-a")["data"]["trust"], before_target_a);
+        assert_eq!(
+            status(&compose_guard, "signed-target-a")["data"]["trust"],
+            before_target_a
+        );
     }
     let target_a = apply(
+        &compose_guard,
         "signed-target-a",
         "/run/secrets/target-a.bundle",
         "/run/secrets/bootstrap-token/bootstrap.token",
@@ -752,6 +775,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         String::from_utf8_lossy(&target_a.stderr)
     );
     assert!(exec(
+        &compose_guard,
         "signed-target-a",
         &[
             "/bin/sh",
@@ -762,6 +786,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .status
     .success());
     assert!(apply(
+        &compose_guard,
         "signed-authority",
         "/run/secrets/target-a.bundle",
         "/run/secrets/bootstrap-token/bootstrap.token",
@@ -772,8 +797,14 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
 
     let cross = files.join("cross.bundle");
     fs::write(&cross, &target_a_bundle).unwrap();
-    copy_to_container("signed-target-b", &cross, "/tmp/cross.bundle");
+    copy_to_container(
+        &compose_guard,
+        "signed-target-b",
+        &cross,
+        "/tmp/cross.bundle",
+    );
     assert!(exec(
+        &compose_guard,
         "signed-target-b",
         &[
             "/bin/sh",
@@ -784,6 +815,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .status
     .success());
     assert!(!apply(
+        &compose_guard,
         "signed-target-b",
         "/tmp/cross.bundle",
         "/run/secrets/bootstrap-token/bootstrap.token",
@@ -792,10 +824,11 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .status
     .success());
     assert_eq!(
-        status("signed-target-b")["data"]["trust"]["active_peer_count"],
+        status(&compose_guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
         0
     );
     assert!(exec(
+        &compose_guard,
         "signed-target-b",
         &[
             "/bin/sh",
@@ -806,6 +839,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .status
     .success());
     assert!(!apply(
+        &compose_guard,
         "signed-target-b",
         "/tmp/cross.bundle",
         "/run/secrets/bootstrap-token/bootstrap.token",
@@ -816,27 +850,32 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
 
     let second_manager_path = files.join("target-b-second-manager.bundle");
     copy_to_container(
+        &compose_guard,
         "signed-target-b",
         &second_manager_path,
         "/tmp/target-b-second-manager.bundle",
     );
-    let first = thread::spawn(|| {
-        apply(
-            "signed-target-b",
-            "/run/secrets/target-b.bundle",
-            "/run/secrets/bootstrap-token/bootstrap.token",
-            &[10; 16],
-        )
+    let results = thread::scope(|scope| {
+        let first = scope.spawn(|| {
+            apply(
+                &compose_guard,
+                "signed-target-b",
+                "/run/secrets/target-b.bundle",
+                "/run/secrets/bootstrap-token/bootstrap.token",
+                &[10; 16],
+            )
+        });
+        let second = scope.spawn(|| {
+            apply(
+                &compose_guard,
+                "signed-target-b",
+                "/tmp/target-b-second-manager.bundle",
+                "/run/secrets/bootstrap-token/bootstrap.token",
+                &[10; 16],
+            )
+        });
+        [first.join().unwrap(), second.join().unwrap()]
     });
-    let second = thread::spawn(|| {
-        apply(
-            "signed-target-b",
-            "/tmp/target-b-second-manager.bundle",
-            "/run/secrets/bootstrap-token/bootstrap.token",
-            &[10; 16],
-        )
-    });
-    let results = [first.join().unwrap(), second.join().unwrap()];
     assert_eq!(
         results
             .iter()
@@ -845,10 +884,11 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         1
     );
     assert_eq!(
-        status("signed-target-b")["data"]["trust"]["active_peer_count"],
+        status(&compose_guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
         1
     );
     assert!(exec(
+        &compose_guard,
         "signed-target-b",
         &[
             "/bin/sh",
@@ -859,8 +899,9 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .status
     .success());
 
-    let authority_endpoint = format!("{}:7988", container_ip("signed-authority"));
+    let authority_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-authority"));
     let probe = exec(
+        &compose_guard,
         "signed-target-a",
         &[
             "omakure",
@@ -879,8 +920,9 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         String::from_utf8_lossy(&probe.stdout),
         String::from_utf8_lossy(&probe.stderr)
     );
-    let target_a_endpoint = format!("{}:7988", container_ip("signed-target-a"));
+    let target_a_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-target-a"));
     let reverse_probe = exec(
+        &compose_guard,
         "signed-authority",
         &[
             "omakure",
@@ -911,31 +953,32 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     )
     .replace("revoked = false", "revoked = true");
     fs::write(&target_a_config, revoked_config).unwrap();
-    std::env::set_var(
+    compose_guard.compose_env.insert(
         "OMAKURE_SIGNED_TARGET_A_TOKEN",
         files.join("target-a-revoked.bootstrap"),
     );
     let token_refreshed = compose(
-        &compose_guard.root,
+        &compose_guard,
         &["run", "--rm", "--no-deps", "signed-target-a-token-init"],
     );
     assert!(token_refreshed.status.success(), "refresh token failed");
     let refreshed = compose(
-        &compose_guard.root,
+        &compose_guard,
         &["run", "--rm", "--no-deps", "signed-target-a-config-init"],
     );
     assert!(
         refreshed.status.success(),
         "refresh revoked authority config failed"
     );
-    let restarted = compose(&compose_guard.root, &["restart", "signed-target-a"]);
+    let restarted = compose(&compose_guard, &["restart", "signed-target-a"]);
     assert!(
         restarted.status.success(),
         "restart after authority revocation failed"
     );
-    wait_for_status();
-    let authority_endpoint = format!("{}:7988", container_ip("signed-authority"));
+    wait_for_status(&compose_guard);
+    let authority_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-authority"));
     let post_restart_probe = exec(
+        &compose_guard,
         "signed-target-a",
         &[
             "omakure",
@@ -954,8 +997,9 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         String::from_utf8_lossy(&post_restart_probe.stdout),
         String::from_utf8_lossy(&post_restart_probe.stderr)
     );
-    let target_a_endpoint = format!("{}:7988", container_ip("signed-target-a"));
+    let target_a_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-target-a"));
     let post_restart_reverse_probe = exec(
+        &compose_guard,
         "signed-authority",
         &[
             "omakure",
@@ -974,7 +1018,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         String::from_utf8_lossy(&post_restart_reverse_probe.stdout),
         String::from_utf8_lossy(&post_restart_reverse_probe.stderr)
     );
-    let before = status("signed-target-a")["data"]["trust"].clone();
+    let before = status(&compose_guard, "signed-target-a")["data"]["trust"].clone();
     let revoked_bundle = bundle(
         &private_key,
         [7; 16],
@@ -988,11 +1032,13 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     let revoked_bundle_path = files.join("revoked.bundle");
     fs::write(&revoked_bundle_path, revoked_bundle).unwrap();
     copy_to_container(
+        &compose_guard,
         "signed-target-a",
         &revoked_bundle_path,
         "/tmp/revoked.bundle",
     );
     assert!(!apply(
+        &compose_guard,
         "signed-target-a",
         "/tmp/revoked.bundle",
         "/run/secrets/bootstrap-token/bootstrap.token",
@@ -1001,6 +1047,7 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .status
     .success());
     assert!(exec(
+        &compose_guard,
         "signed-target-a",
         &[
             "/bin/sh",
@@ -1010,7 +1057,10 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     )
     .status
     .success());
-    assert_eq!(status("signed-target-a")["data"]["trust"], before);
+    assert_eq!(
+        status(&compose_guard, "signed-target-a")["data"]["trust"],
+        before
+    );
     compose_guard.finalize();
 }
 
@@ -1038,10 +1088,11 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
 #[ignore = "requires Docker and runs an isolated authority plus a fresh target"]
 fn a_provisioned_machine_joins_with_no_command_run_on_it() {
     let guard = ComposeGuard::new();
-    wait_for_status();
+    wait_for_status(&guard);
 
     // 1. The fleet creates its authority. Nothing could be issued before this.
     let created = exec(
+        &guard,
         "signed-authority",
         &[
             "omakure",
@@ -1077,7 +1128,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
 
     // 3. The machine boots. From here on nothing is typed into it.
     let up = compose(
-        &guard.root,
+        &guard,
         &["--profile", "autojoin", "up", "-d", "signed-autojoin"],
     );
     assert!(
@@ -1089,8 +1140,8 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
     // 4. The fleet learns its identity the way a manager would -- over the
     //    network, from the authority container. Waiting is done by polling that
     //    same network path, not by sleeping and hoping.
-    wait_for_autojoin();
-    let status = autojoin_get("/v1/node/status");
+    wait_for_autojoin(&guard);
+    let status = autojoin_get(&guard, "/v1/node/status");
     let target_id = status["data"]["identity"]["node_id"]
         .as_str()
         .expect("the fresh node generated an identity on first start")
@@ -1104,6 +1155,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
 
     // 5. The fleet issues membership for that identity.
     let issued = exec(
+        &guard,
         "signed-authority",
         &[
             "omakure",
@@ -1133,6 +1185,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
 
     // 6. And delivers it.
     let applied = autojoin_post(
+        &guard,
         "/v1/node/enrollment/bundle",
         &serde_json::json!({
             "bundle_hex": bundle_hex,
@@ -1145,7 +1198,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
     );
 
     // 7. Observed from the target's own view, not from the reply we just read.
-    let peers = autojoin_get("/v1/node/peers");
+    let peers = autojoin_get(&guard, "/v1/node/peers");
     let joined = peers["data"]
         .as_array()
         .expect("peer list")
@@ -1165,7 +1218,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
     // second is the one that finds the tombstone already reconciled.
     for attempt in 1..=2 {
         let restart = compose(
-            &guard.root,
+            &guard,
             &["--profile", "autojoin", "restart", "signed-autojoin"],
         );
         assert!(
@@ -1173,8 +1226,8 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
             "restart {attempt} failed: {}",
             safe_stderr(&restart)
         );
-        wait_for_autojoin();
-        let peers = autojoin_get("/v1/node/peers");
+        wait_for_autojoin(&guard);
+        let peers = autojoin_get(&guard, "/v1/node/peers");
         assert!(
             peers["data"]
                 .as_array()
@@ -1187,12 +1240,13 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
 
     // Snapshot before the refusal, so the comparison after it is against a
     // different reading rather than against itself.
-    let before_replay = autojoin_get("/v1/node/peers")["data"].clone();
+    let before_replay = autojoin_get(&guard, "/v1/node/peers")["data"].clone();
 
     // 9. A second delivery of the same bundle is refused, and refused *to the
     //    caller* rather than swallowed. Under this model nobody is unwatched:
     //    the fleet that pushed is the fleet that reads the answer.
     let replay = exec(
+        &guard,
         "signed-authority",
         &[
             "curl",
@@ -1227,7 +1281,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
 
     // And the refusal changed nothing.
     assert_eq!(
-        autojoin_get("/v1/node/peers")["data"],
+        autojoin_get(&guard, "/v1/node/peers")["data"],
         before_replay,
         "a refused delivery must leave trust exactly as it was"
     );
@@ -1237,10 +1291,11 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
 ///
 /// Deliberately the same path the test then uses. A readiness check that took a
 /// different route could go green while the route under test stayed shut.
-fn wait_for_autojoin() {
+fn wait_for_autojoin(guard: &ComposeGuard) {
     let deadline = Instant::now() + Duration::from_secs(90);
     while Instant::now() < deadline {
         let output = exec(
+            guard,
             "signed-authority",
             &[
                 "curl",
@@ -1258,10 +1313,7 @@ fn wait_for_autojoin() {
         }
         thread::sleep(Duration::from_millis(500));
     }
-    let logs = compose(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-        &["logs", "--no-color", "signed-autojoin"],
-    );
+    let logs = compose(guard, &["logs", "--no-color", "signed-autojoin"]);
     panic!(
         "the autojoin target never answered: {}",
         String::from_utf8_lossy(&logs.stdout)
@@ -1271,8 +1323,9 @@ fn wait_for_autojoin() {
 /// Read the autojoin target's API **from the authority container**.
 ///
 /// Never `docker exec` against the target. That constraint is the test.
-fn autojoin_get(path: &str) -> Value {
+fn autojoin_get(guard: &ComposeGuard, path: &str) -> Value {
     let output = exec(
+        guard,
         "signed-authority",
         &[
             "curl",
@@ -1294,9 +1347,10 @@ fn autojoin_get(path: &str) -> Value {
     serde_json::from_slice(&output.stdout).expect("autojoin JSON")
 }
 
-fn autojoin_post(path: &str, body: &Value) -> Value {
+fn autojoin_post(guard: &ComposeGuard, path: &str, body: &Value) -> Value {
     let body = body.to_string();
     let output = exec(
+        guard,
         "signed-authority",
         &[
             "curl",

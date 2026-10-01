@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "d533c66a8b1b1598b5699cc3c41e146c19d5802fae0279a76881fb2324095ce6",
+  "canonical_sha256": "0cd57fcef856514e5c955aa2cc00e9674307e55b555cfcdf7b37a0672e882d99",
   "config_identity": "no-config",
   "files": [
     {
@@ -1324,12 +1324,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 26,
+        "invocations": 23,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 38,
-        "cyclomatic": 70
+        "cyclomatic": 71
       },
       "path": "src/cli/serve/lifecycle.rs",
       "source_class": "handwritten"
@@ -1380,12 +1380,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 54,
+        "invocations": 61,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 2,
-        "cyclomatic": 25
+        "cyclomatic": 26
       },
       "path": "src/cli/serve/tests.rs",
       "source_class": "handwritten"
@@ -1408,12 +1408,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 13,
+        "invocations": 12,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 18,
-        "cyclomatic": 33
+        "cognitive": 17,
+        "cyclomatic": 31
       },
       "path": "src/cli/serve_windows.rs",
       "source_class": "handwritten"
@@ -33481,7 +33481,7 @@
         "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
-        "signature": "pub(super) fn publish_windows_pid_file( path: &Path, identity: &WindowsPidFile, ) -> Result<(), String>",
+        "signature": "pub(super) fn publish_windows_pid_file( path: &Path, identity: &WindowsPidFile, ) -> Result<(), WindowsPidPublicationError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file",
@@ -33497,7 +33497,7 @@
         "name": "publish_windows_pid_file"
       },
       "path": "src/cli/serve/lifecycle.rs",
-      "signature": "pub(super) fn publish_windows_pid_file( path: &Path, identity: &WindowsPidFile, ) -> Result<(), String>",
+      "signature": "pub(super) fn publish_windows_pid_file( path: &Path, identity: &WindowsPidFile, ) -> Result<(), WindowsPidPublicationError>",
       "source_class": "handwritten"
     },
     {
@@ -33507,45 +33507,45 @@
         "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
-        "signature": ".ok_or_else(|| \"stop-event identity has no publication token\".to_string())?;",
+        "signature": ".map_or(identity.stop_event.as_str(), |(_, token)| token);",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>",
       "kind": "closure",
-      "line": 187,
+      "line": 186,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 187,
+        "line": 186,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
-      "signature": ".ok_or_else(|| \"stop-event identity has no publication token\".to_string())?;",
+      "signature": ".map_or(identity.stop_event.as_str(), |(_, token)| token);",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>@189#2",
+        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>@188#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": "let result = (|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>@189#2",
+      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>@188#2",
       "kind": "closure",
-      "line": 189,
+      "line": 188,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 189,
+        "line": 188,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33559,45 +33559,45 @@
         "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
-        "signature": ".map_err(|error| format!(\"create {}: {error}\", temp_path.display()))?;",
+        "signature": ".map_err(|source| WindowsPidPublicationError::Create {",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>",
       "kind": "closure",
-      "line": 194,
+      "line": 193,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 194,
+        "line": 193,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
-      "signature": ".map_err(|error| format!(\"create {}: {error}\", temp_path.display()))?;",
+      "signature": ".map_err(|source| WindowsPidPublicationError::Create {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@196#2",
+        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@198#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": ".and_then(|_| file.sync_all())",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@196#2",
+      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@198#2",
       "kind": "closure",
-      "line": 196,
+      "line": 198,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 196,
+        "line": 198,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33608,74 +33608,74 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@197#3",
+        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@199#3",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
-        "signature": ".map_err(|error| format!(\"flush {}: {error}\", temp_path.display()))?;",
+        "signature": ".map_err(|source| WindowsPidPublicationError::Flush {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@197#3",
+      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@199#3",
       "kind": "closure",
-      "line": 197,
+      "line": 199,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 197,
+        "line": 199,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
-      "signature": ".map_err(|error| format!(\"flush {}: {error}\", temp_path.display()))?;",
+      "signature": ".map_err(|source| WindowsPidPublicationError::Flush {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@200#4",
+        "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@204#4",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
-        "signature": ".map_err(|error| format!(\"publish {}: {error}\", path.display()))",
+        "signature": "serve_windows::publish_exclusive(&temp_path, path).map_err(|source| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@200#4",
+      "identity": "crate::cli::serve::lifecycle::publish_windows_pid_file::<closure>::<closure>@204#4",
       "kind": "closure",
-      "line": 200,
+      "line": 204,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 200,
+        "line": 204,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
-      "signature": ".map_err(|error| format!(\"publish {}: {error}\", path.display()))",
+      "signature": "serve_windows::publish_exclusive(&temp_path, path).map_err(|source| {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 6,
       "cyclomatic": 8,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::acquire_lock@209#2",
+        "identity": "crate::cli::serve::lifecycle::acquire_lock@241#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": "pub(super) fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::acquire_lock@209#2",
+      "identity": "crate::cli::serve::lifecycle::acquire_lock@241#2",
       "kind": "function",
-      "line": 209,
+      "line": 241,
       "name": "acquire_lock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 209,
+        "line": 241,
         "name": "acquire_lock"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33686,26 +33686,52 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::acquire_lock::<closure>@212#3",
+        "identity": "crate::cli::serve::lifecycle::acquire_lock::<closure>@244#3",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": "let existing = read_windows_pid_file(&path).map_err(|error| error.to_string())?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::acquire_lock::<closure>@212#3",
+      "identity": "crate::cli::serve::lifecycle::acquire_lock::<closure>@244#3",
       "kind": "closure",
-      "line": 212,
+      "line": 244,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 212,
+        "line": 244,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
       "signature": "let existing = read_windows_pid_file(&path).map_err(|error| error.to_string())?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve::lifecycle::acquire_lock::<closure>@290#4",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve/lifecycle.rs",
+        "signature": "publish_windows_pid_file(&path, &identity).map_err(|error| error.to_string())?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve::lifecycle::acquire_lock::<closure>@290#4",
+      "kind": "closure",
+      "line": 290,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 290,
+        "name": "<closure>"
+      },
+      "path": "src/cli/serve/lifecycle.rs",
+      "signature": "publish_windows_pid_file(&path, &identity).map_err(|error| error.to_string())?;",
       "source_class": "handwritten"
     },
     {
@@ -33720,14 +33746,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::release_lock",
       "kind": "function",
-      "line": 266,
+      "line": 298,
       "name": "release_lock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 266,
+        "line": 298,
         "name": "release_lock"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33738,22 +33764,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::release_lock@271#2",
+        "identity": "crate::cli::serve::lifecycle::release_lock@303#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": "pub(super) fn release_lock(workspace: &Workspace, expected: &WindowsPidFile)",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::release_lock@271#2",
+      "identity": "crate::cli::serve::lifecycle::release_lock@303#2",
       "kind": "function",
-      "line": 271,
+      "line": 303,
       "name": "release_lock",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 271,
+        "line": 303,
         "name": "release_lock"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33772,14 +33798,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::read_pid",
       "kind": "function",
-      "line": 276,
+      "line": 308,
       "name": "read_pid",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 276,
+        "line": 308,
         "name": "read_pid"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33798,14 +33824,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::read_pid::<closure>",
       "kind": "closure",
-      "line": 279,
+      "line": 311,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 279,
+        "line": 311,
         "name": "<closure>"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33824,14 +33850,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::process_alive",
       "kind": "function",
-      "line": 283,
+      "line": 315,
       "name": "process_alive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 283,
+        "line": 315,
         "name": "process_alive"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33850,14 +33876,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::send_sigterm",
       "kind": "function",
-      "line": 295,
+      "line": 327,
       "name": "send_sigterm",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 295,
+        "line": 327,
         "name": "send_sigterm"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33876,14 +33902,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::stop",
       "kind": "function",
-      "line": 304,
+      "line": 336,
       "name": "stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 9,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 304,
+        "line": 336,
         "name": "stop"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33894,22 +33920,22 @@
       "cognitive": 7,
       "cyclomatic": 12,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::stop@352#2",
+        "identity": "crate::cli::serve::lifecycle::stop@384#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": "fn stop(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>>",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::stop@352#2",
+      "identity": "crate::cli::serve::lifecycle::stop@384#2",
       "kind": "function",
-      "line": 352,
+      "line": 384,
       "name": "stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 352,
+        "line": 384,
         "name": "stop"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33928,14 +33954,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::detach_and_run",
       "kind": "function",
-      "line": 439,
+      "line": 471,
       "name": "detach_and_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 439,
+        "line": 471,
         "name": "detach_and_run"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33946,22 +33972,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::lifecycle::detach_and_run@475#2",
+        "identity": "crate::cli::serve::lifecycle::detach_and_run@507#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/lifecycle.rs",
         "signature": "fn detach_and_run( _workspace: Workspace, _args: ServeArgs, json_output: bool, ) -> Result<(), Box<dyn Error>>",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::lifecycle::detach_and_run@475#2",
+      "identity": "crate::cli::serve::lifecycle::detach_and_run@507#2",
       "kind": "function",
-      "line": 475,
+      "line": 507,
       "name": "detach_and_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 475,
+        "line": 507,
         "name": "detach_and_run"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -33980,14 +34006,14 @@
       },
       "identity": "crate::cli::serve::lifecycle::run_foreground",
       "kind": "function",
-      "line": 487,
+      "line": 519,
       "name": "run_foreground",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 487,
+        "line": 519,
         "name": "run_foreground"
       },
       "path": "src/cli/serve/lifecycle.rs",
@@ -34318,14 +34344,14 @@
       },
       "identity": "crate::cli::serve::tests::write_script",
       "kind": "function",
-      "line": 21,
+      "line": 22,
       "name": "write_script",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 21,
+        "line": 22,
         "name": "write_script"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34344,14 +34370,14 @@
       },
       "identity": "crate::cli::serve::tests::all_runs",
       "kind": "function",
-      "line": 41,
+      "line": 42,
       "name": "all_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 41,
+        "line": 42,
         "name": "all_runs"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34370,14 +34396,14 @@
       },
       "identity": "crate::cli::serve::tests::build_args_emits_flag_and_default",
       "kind": "function",
-      "line": 52,
+      "line": 53,
       "name": "build_args_emits_flag_and_default",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 52,
+        "line": 53,
         "name": "build_args_emits_flag_and_default"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34396,14 +34422,14 @@
       },
       "identity": "crate::cli::serve::tests::build_args_skips_fields_without_default",
       "kind": "function",
-      "line": 62,
+      "line": 63,
       "name": "build_args_skips_fields_without_default",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 62,
+        "line": 63,
         "name": "build_args_skips_fields_without_default"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34422,14 +34448,14 @@
       },
       "identity": "crate::cli::serve::tests::tick_enqueues_scheduled_run_on_first_fire",
       "kind": "function",
-      "line": 72,
+      "line": 73,
       "name": "tick_enqueues_scheduled_run_on_first_fire",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 72,
+        "line": 73,
         "name": "tick_enqueues_scheduled_run_on_first_fire"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34448,14 +34474,14 @@
       },
       "identity": "crate::cli::serve::tests::tick_reports_run_store_open_failure_without_changing_error_text",
       "kind": "function",
-      "line": 96,
+      "line": 97,
       "name": "tick_reports_run_store_open_failure_without_changing_error_text",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 96,
+        "line": 97,
         "name": "tick_reports_run_store_open_failure_without_changing_error_text"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34474,14 +34500,14 @@
       },
       "identity": "crate::cli::serve::tests::scheduler_rejects_reserved_metadata_aliases",
       "kind": "function",
-      "line": 113,
+      "line": 114,
       "name": "scheduler_rejects_reserved_metadata_aliases",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 113,
+        "line": 114,
         "name": "scheduler_rejects_reserved_metadata_aliases"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34500,14 +34526,14 @@
       },
       "identity": "crate::cli::serve::tests::tick_skips_disabled_schedule",
       "kind": "function",
-      "line": 126,
+      "line": 127,
       "name": "tick_skips_disabled_schedule",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 126,
+        "line": 127,
         "name": "tick_skips_disabled_schedule"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34526,14 +34552,14 @@
       },
       "identity": "crate::cli::serve::tests::concurrent_ticks_enqueue_one_scheduled_run",
       "kind": "function",
-      "line": 143,
+      "line": 144,
       "name": "concurrent_ticks_enqueue_one_scheduled_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 143,
+        "line": 144,
         "name": "concurrent_ticks_enqueue_one_scheduled_run"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34552,14 +34578,14 @@
       },
       "identity": "crate::cli::serve::tests::concurrent_ticks_enqueue_one_scheduled_run::<closure>",
       "kind": "closure",
-      "line": 153,
+      "line": 154,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 153,
+        "line": 154,
         "name": "<closure>"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34570,22 +34596,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::serve::tests::concurrent_ticks_enqueue_one_scheduled_run::<closure>@157#2",
+        "identity": "crate::cli::serve::tests::concurrent_ticks_enqueue_one_scheduled_run::<closure>@158#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve/tests.rs",
         "signature": "let second = thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::serve::tests::concurrent_ticks_enqueue_one_scheduled_run::<closure>@157#2",
+      "identity": "crate::cli::serve::tests::concurrent_ticks_enqueue_one_scheduled_run::<closure>@158#2",
       "kind": "closure",
-      "line": 157,
+      "line": 158,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 157,
+        "line": 158,
         "name": "<closure>"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34604,14 +34630,14 @@
       },
       "identity": "crate::cli::serve::tests::tick_logs_malformed_schema_and_continues",
       "kind": "function",
-      "line": 174,
+      "line": 175,
       "name": "tick_logs_malformed_schema_and_continues",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 174,
+        "line": 175,
         "name": "tick_logs_malformed_schema_and_continues"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34630,14 +34656,14 @@
       },
       "identity": "crate::cli::serve::tests::tick_skips_when_previous_run_still_in_flight",
       "kind": "function",
-      "line": 191,
+      "line": 192,
       "name": "tick_skips_when_previous_run_still_in_flight",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 191,
+        "line": 192,
         "name": "tick_skips_when_previous_run_still_in_flight"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34656,14 +34682,14 @@
       },
       "identity": "crate::cli::serve::tests::tick_skips_fire_on_plaintext_secret_default",
       "kind": "function",
-      "line": 205,
+      "line": 206,
       "name": "tick_skips_fire_on_plaintext_secret_default",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 205,
+        "line": 206,
         "name": "tick_skips_fire_on_plaintext_secret_default"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34682,14 +34708,14 @@
       },
       "identity": "crate::cli::serve::tests::acquire_lock_rejects_when_live_pid_present",
       "kind": "function",
-      "line": 228,
+      "line": 229,
       "name": "acquire_lock_rejects_when_live_pid_present",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 228,
+        "line": 229,
         "name": "acquire_lock_rejects_when_live_pid_present"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34708,14 +34734,14 @@
       },
       "identity": "crate::cli::serve::tests::acquire_lock_reports_create_failure_with_path",
       "kind": "function",
-      "line": 247,
+      "line": 248,
       "name": "acquire_lock_reports_create_failure_with_path",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 247,
+        "line": 248,
         "name": "acquire_lock_reports_create_failure_with_path"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34734,14 +34760,14 @@
       },
       "identity": "crate::cli::serve::tests::acquire_lock_reclaims_stale_pid",
       "kind": "function",
-      "line": 264,
+      "line": 265,
       "name": "acquire_lock_reclaims_stale_pid",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 264,
+        "line": 265,
         "name": "acquire_lock_reclaims_stale_pid"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34760,14 +34786,14 @@
       },
       "identity": "crate::cli::serve::tests::windows_acquire_lock_reclaims_dead_pid_with_event_identity",
       "kind": "function",
-      "line": 275,
+      "line": 276,
       "name": "windows_acquire_lock_reclaims_dead_pid_with_event_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 275,
+        "line": 276,
         "name": "windows_acquire_lock_reclaims_dead_pid_with_event_identity"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34786,14 +34812,14 @@
       },
       "identity": "crate::cli::serve::tests::windows_malformed_or_partial_pid_files_are_preserved",
       "kind": "function",
-      "line": 291,
+      "line": 292,
       "name": "windows_malformed_or_partial_pid_files_are_preserved",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 291,
+        "line": 292,
         "name": "windows_malformed_or_partial_pid_files_are_preserved"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34812,14 +34838,14 @@
       },
       "identity": "crate::cli::serve::tests::windows_pid_file_read_error_keeps_path_and_source",
       "kind": "function",
-      "line": 326,
+      "line": 327,
       "name": "windows_pid_file_read_error_keeps_path_and_source",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 326,
+        "line": 327,
         "name": "windows_pid_file_read_error_keeps_path_and_source"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34838,14 +34864,14 @@
       },
       "identity": "crate::cli::serve::tests::windows_release_does_not_delete_a_replacement_identity",
       "kind": "function",
-      "line": 343,
+      "line": 344,
       "name": "windows_release_does_not_delete_a_replacement_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 343,
+        "line": 344,
         "name": "windows_release_does_not_delete_a_replacement_identity"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34864,14 +34890,14 @@
       },
       "identity": "crate::cli::serve::tests::windows_release_deletes_only_the_published_identity",
       "kind": "function",
-      "line": 367,
+      "line": 368,
       "name": "windows_release_deletes_only_the_published_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 367,
+        "line": 368,
         "name": "windows_release_deletes_only_the_published_identity"
       },
       "path": "src/cli/serve/tests.rs",
@@ -34890,18 +34916,44 @@
       },
       "identity": "crate::cli::serve::tests::windows_pid_publication_is_complete_and_exclusive",
       "kind": "function",
-      "line": 387,
+      "line": 388,
       "name": "windows_pid_publication_is_complete_and_exclusive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 387,
+        "line": 388,
         "name": "windows_pid_publication_is_complete_and_exclusive"
       },
       "path": "src/cli/serve/tests.rs",
       "signature": "fn windows_pid_publication_is_complete_and_exclusive()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve::tests::windows_pid_publication_reports_create_failure",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve/tests.rs",
+        "signature": "fn windows_pid_publication_reports_create_failure()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve::tests::windows_pid_publication_reports_create_failure",
+      "kind": "function",
+      "line": 421,
+      "name": "windows_pid_publication_reports_create_failure",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 421,
+        "name": "windows_pid_publication_reports_create_failure"
+      },
+      "path": "src/cli/serve/tests.rs",
+      "signature": "fn windows_pid_publication_reports_create_failure()",
       "source_class": "handwritten"
     },
     {
@@ -35644,14 +35696,14 @@
       },
       "identity": "crate::cli::serve_windows::is_stop_event_name",
       "kind": "function",
-      "line": 14,
+      "line": 17,
       "name": "is_stop_event_name",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 14,
+        "line": 17,
         "name": "is_stop_event_name"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35670,14 +35722,14 @@
       },
       "identity": "crate::cli::serve_windows::is_stop_event_name::<closure>",
       "kind": "closure",
-      "line": 16,
+      "line": 19,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 16,
+        "line": 19,
         "name": "<closure>"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35696,14 +35748,14 @@
       },
       "identity": "crate::cli::serve_windows::is_stop_event_name::<closure>::<closure>",
       "kind": "closure",
-      "line": 16,
+      "line": 19,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 16,
+        "line": 19,
         "name": "<closure>"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35711,7 +35763,7 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
+      "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
         "identity": "crate::cli::serve_windows::is_signaled",
@@ -35722,14 +35774,14 @@
       },
       "identity": "crate::cli::serve_windows::is_signaled",
       "kind": "method",
-      "line": 24,
+      "line": 27,
       "name": "is_signaled",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
+        "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 24,
+        "line": 27,
         "name": "is_signaled"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35737,7 +35789,7 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
+      "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
         "identity": "crate::cli::serve_windows::wait",
@@ -35748,18 +35800,70 @@
       },
       "identity": "crate::cli::serve_windows::wait",
       "kind": "method",
-      "line": 50,
+      "line": 37,
       "name": "wait",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
+        "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 50,
+        "line": 37,
         "name": "wait"
       },
       "path": "src/cli/serve_windows.rs",
       "signature": "pub(crate) fn wait(&self, timeout: std::time::Duration) -> Result<bool, String>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve_windows::owned",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve_windows.rs",
+        "signature": "fn owned(handle: HANDLE) -> OwnedHandle",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve_windows::owned",
+      "kind": "function",
+      "line": 47,
+      "name": "owned",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 47,
+        "name": "owned"
+      },
+      "path": "src/cli/serve_windows.rs",
+      "signature": "fn owned(handle: HANDLE) -> OwnedHandle",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::serve_windows::wait_for",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/serve_windows.rs",
+        "signature": "fn wait_for(handle: &OwnedHandle, milliseconds: u32) -> Result<bool, String>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::serve_windows::wait_for",
+      "kind": "function",
+      "line": 53,
+      "name": "wait_for",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 53,
+        "name": "wait_for"
+      },
+      "path": "src/cli/serve_windows.rs",
+      "signature": "fn wait_for(handle: &OwnedHandle, milliseconds: u32) -> Result<bool, String>",
       "source_class": "handwritten"
     },
     {
@@ -35774,14 +35878,14 @@
       },
       "identity": "crate::cli::serve_windows::probe_process",
       "kind": "function",
-      "line": 78,
+      "line": 71,
       "name": "probe_process",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 78,
+        "line": 71,
         "name": "probe_process"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35800,14 +35904,14 @@
       },
       "identity": "crate::cli::serve_windows::create_stop_event",
       "kind": "function",
-      "line": 105,
+      "line": 100,
       "name": "create_stop_event",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 105,
+        "line": 100,
         "name": "create_stop_event"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35826,14 +35930,14 @@
       },
       "identity": "crate::cli::serve_windows::open_stop_event",
       "kind": "function",
-      "line": 126,
+      "line": 122,
       "name": "open_stop_event",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 126,
+        "line": 122,
         "name": "open_stop_event"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35852,14 +35956,14 @@
       },
       "identity": "crate::cli::serve_windows::signal_stop",
       "kind": "function",
-      "line": 143,
+      "line": 141,
       "name": "signal_stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 143,
+        "line": 141,
         "name": "signal_stop"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35878,14 +35982,14 @@
       },
       "identity": "crate::cli::serve_windows::signal_stop::<closure>",
       "kind": "closure",
-      "line": 144,
+      "line": 142,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "closure",
-        "line": 144,
+        "line": 142,
         "name": "<closure>"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35899,23 +36003,23 @@
         "identity": "crate::cli::serve_windows::publish_exclusive",
         "macro_expansion": "not_measured",
         "path": "src/cli/serve_windows.rs",
-        "signature": "pub(crate) fn publish_exclusive( from: &std::path::Path, to: &std::path::Path, ) -> Result<(), String>",
+        "signature": "pub(crate) fn publish_exclusive( from: &std::path::Path, to: &std::path::Path, ) -> Result<(), PublishExclusiveError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::serve_windows::publish_exclusive",
       "kind": "function",
-      "line": 154,
+      "line": 152,
       "name": "publish_exclusive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 154,
+        "line": 152,
         "name": "publish_exclusive"
       },
       "path": "src/cli/serve_windows.rs",
-      "signature": "pub(crate) fn publish_exclusive( from: &std::path::Path, to: &std::path::Path, ) -> Result<(), String>",
+      "signature": "pub(crate) fn publish_exclusive( from: &std::path::Path, to: &std::path::Path, ) -> Result<(), PublishExclusiveError>",
       "source_class": "handwritten"
     },
     {
@@ -35930,14 +36034,14 @@
       },
       "identity": "crate::cli::serve_windows::last_error",
       "kind": "function",
-      "line": 181,
+      "line": 170,
       "name": "last_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 181,
+        "line": 170,
         "name": "last_error"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35956,14 +36060,14 @@
       },
       "identity": "crate::cli::serve_windows::current_process_is_live",
       "kind": "function",
-      "line": 191,
+      "line": 180,
       "name": "current_process_is_live",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 191,
+        "line": 180,
         "name": "current_process_is_live"
       },
       "path": "src/cli/serve_windows.rs",
@@ -35982,14 +36086,14 @@
       },
       "identity": "crate::cli::serve_windows::invalid_process_id_is_dead",
       "kind": "function",
-      "line": 199,
+      "line": 188,
       "name": "invalid_process_id_is_dead",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 199,
+        "line": 188,
         "name": "invalid_process_id_is_dead"
       },
       "path": "src/cli/serve_windows.rs",
@@ -36008,14 +36112,14 @@
       },
       "identity": "crate::cli::serve_windows::named_event_round_trip_is_native_and_manual_reset",
       "kind": "function",
-      "line": 204,
+      "line": 193,
       "name": "named_event_round_trip_is_native_and_manual_reset",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 204,
+        "line": 193,
         "name": "named_event_round_trip_is_native_and_manual_reset"
       },
       "path": "src/cli/serve_windows.rs",

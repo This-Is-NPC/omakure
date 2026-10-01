@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "022583085448d96400f9a0fbdeb80801f3f6ae4004afda4702dc8fe0d4466ace",
+  "canonical_sha256": "ff54b5467271d71a1a1b622f92207aa316ea94ef05cd93dc5736b7466bcbb0ba",
   "config_identity": "no-config",
   "files": [
     {
@@ -2360,12 +2360,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 16,
+        "invocations": 10,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 0,
-        "cyclomatic": 8
+        "cyclomatic": 4
       },
       "path": "src/error.rs",
       "source_class": "handwritten"
@@ -53900,58 +53900,6 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::error::from",
-        "macro_expansion": "not_measured",
-        "path": "src/error.rs",
-        "signature": "fn from(msg: String) -> Self",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::error::from",
-      "kind": "method",
-      "line": 95,
-      "name": "from",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 95,
-        "name": "from"
-      },
-      "path": "src/error.rs",
-      "signature": "fn from(msg: String) -> Self",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::error::from@101#2",
-        "macro_expansion": "not_measured",
-        "path": "src/error.rs",
-        "signature": "fn from(msg: &str) -> Self",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::error::from@101#2",
-      "kind": "method",
-      "line": 101,
-      "name": "from",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 101,
-        "name": "from"
-      },
-      "path": "src/error.rs",
-      "signature": "fn from(msg: &str) -> Self",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
         "identity": "crate::error::test_app_error_display",
         "macro_expansion": "not_measured",
         "path": "src/error.rs",
@@ -54004,32 +53952,6 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::error::test_app_error_from_string",
-        "macro_expansion": "not_measured",
-        "path": "src/error.rs",
-        "signature": "fn test_app_error_from_string()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::error::test_app_error_from_string",
-      "kind": "function",
-      "line": 129,
-      "name": "test_app_error_from_string",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 129,
-        "name": "test_app_error_from_string"
-      },
-      "path": "src/error.rs",
-      "signature": "fn test_app_error_from_string()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
         "identity": "crate::error::test_app_error_from_io",
         "macro_expansion": "not_measured",
         "path": "src/error.rs",
@@ -54050,32 +53972,6 @@
       },
       "path": "src/error.rs",
       "signature": "fn test_app_error_from_io()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::error::test_app_error_from_owned_string",
-        "macro_expansion": "not_measured",
-        "path": "src/error.rs",
-        "signature": "fn test_app_error_from_owned_string()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::error::test_app_error_from_owned_string",
-      "kind": "function",
-      "line": 143,
-      "name": "test_app_error_from_owned_string",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 143,
-        "name": "test_app_error_from_owned_string"
-      },
-      "path": "src/error.rs",
-      "signature": "fn test_app_error_from_owned_string()",
       "source_class": "handwritten"
     },
     {

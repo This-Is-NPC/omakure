@@ -1,6 +1,40 @@
 use super::*;
 
 #[tokio::test]
+async fn env_body_validation_precedes_blocking_capacity() {
+    let dir = TempDir::new().unwrap();
+    let workspace = crate::test_support::workspace_in(&dir);
+    let envs_dir = workspace.envs_dir().to_path_buf();
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    gate.close();
+    let app = super::super::router::router_with_blocking_gate(workspace, gate);
+
+    for body in [r#"{"name": "prod""#, r#"{"params": []}"#] {
+        let response = app
+            .clone()
+            .oneshot(authed_json_request("/v1/envs", body))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response_json(response).await["error"]["code"],
+            "invalid_input"
+        );
+    }
+
+    let response = app
+        .oneshot(authed_json_request(
+            "/v1/envs",
+            r#"{"name":"prod","params":[]}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response_json(response).await["error"]["code"], "io_failed");
+    assert!(!envs_dir.join("prod.conf").exists());
+}
+
+#[tokio::test]
 async fn env_endpoints_round_trip_and_redact_values() {
     let dir = TempDir::new().unwrap();
     let workspace = crate::test_support::workspace_in(&dir);

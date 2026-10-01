@@ -1,14 +1,27 @@
 use super::bearer::require_capability;
+use super::blocking::run_bounded;
 use super::respond::{operation_error_response, operation_response, parse_json_body};
 use super::state::{ApiCapability, ApiState};
 use crate::auth::AuthContext;
 use crate::operations::envs as env_ops;
-use crate::operations::{OperationError, OperationErrorCode};
+use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, State};
 use axum::response::Response;
 use axum::Extension;
 use serde::Deserialize;
+use serde::Serialize;
+use std::sync::Arc;
+
+async fn env_operation_response<T: Serialize + Send + 'static>(
+    gate: Arc<tokio::sync::Semaphore>,
+    task: impl FnOnce() -> OperationResult<T> + Send + 'static,
+) -> Response {
+    let result = run_bounded("environment", gate, task)
+        .await
+        .and_then(std::convert::identity);
+    operation_response(result)
+}
 
 #[derive(Debug, Deserialize)]
 struct EnvBody {
@@ -29,7 +42,8 @@ pub(super) async fn list_envs_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvRead) {
         return response;
     }
-    operation_response(env_ops::list_envs(&state.workspace))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || env_ops::list_envs(&state.workspace)).await
 }
 
 fn env_params_forbid_secret_refs(
@@ -88,7 +102,11 @@ pub(super) async fn create_env_handler(
     if let Some(response) = env_params_forbid_secret_refs(&state.deploy, &body.params) {
         return response;
     }
-    operation_response(env_ops::create_env(&state.workspace, &name, &body.params))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || {
+        env_ops::create_env(&state.workspace, &name, &body.params)
+    })
+    .await
 }
 
 pub(super) async fn show_env_handler(
@@ -99,7 +117,8 @@ pub(super) async fn show_env_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnvRead) {
         return response;
     }
-    operation_response(env_ops::show_env(&state.workspace, &name))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || env_ops::show_env(&state.workspace, &name)).await
 }
 
 pub(super) async fn put_env_handler(
@@ -124,13 +143,16 @@ pub(super) async fn put_env_handler(
     if let Some(response) = env_params_forbid_secret_refs(&state.deploy, &body.params) {
         return response;
     }
-    let result = match env_ops::replace_env(&state.workspace, &name, &body.params) {
-        Err(err) if err.code == OperationErrorCode::NotFound => {
-            env_ops::create_env(&state.workspace, &name, &body.params)
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || {
+        match env_ops::replace_env(&state.workspace, &name, &body.params) {
+            Err(err) if err.code == OperationErrorCode::NotFound => {
+                env_ops::create_env(&state.workspace, &name, &body.params)
+            }
+            other => other,
         }
-        other => other,
-    };
-    operation_response(result)
+    })
+    .await
 }
 
 pub(super) async fn patch_env_handler(
@@ -155,12 +177,14 @@ pub(super) async fn patch_env_handler(
     if let Some(response) = env_params_forbid_secret_refs(&state.deploy, &body.params) {
         return response;
     }
-    for param in body.params {
-        if let Err(err) = env_ops::set_param(&state.workspace, &name, &param.key, &param.value) {
-            return operation_error_response(err);
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || {
+        for param in body.params {
+            env_ops::set_param(&state.workspace, &name, &param.key, &param.value)?;
         }
-    }
-    operation_response(Ok(()))
+        Ok(())
+    })
+    .await
 }
 
 pub(super) async fn delete_env_handler(
@@ -177,7 +201,8 @@ pub(super) async fn delete_env_handler(
             "policy envs.http_manage=false",
         ));
     }
-    operation_response(env_ops::delete_env(&state.workspace, &name))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || env_ops::delete_env(&state.workspace, &name)).await
 }
 
 pub(super) async fn set_env_param_handler(
@@ -203,12 +228,11 @@ pub(super) async fn set_env_param_handler(
     if let Some(response) = env_value_forbid_secret_ref(&state.deploy, &body.value) {
         return response;
     }
-    operation_response(env_ops::set_param(
-        &state.workspace,
-        &name,
-        &key,
-        &body.value,
-    ))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || {
+        env_ops::set_param(&state.workspace, &name, &key, &body.value)
+    })
+    .await
 }
 
 pub(super) async fn delete_env_param_handler(
@@ -225,7 +249,11 @@ pub(super) async fn delete_env_param_handler(
             "policy envs.http_manage=false",
         ));
     }
-    operation_response(env_ops::remove_param(&state.workspace, &name, &key))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || {
+        env_ops::remove_param(&state.workspace, &name, &key)
+    })
+    .await
 }
 
 pub(super) async fn activate_env_handler(
@@ -242,7 +270,8 @@ pub(super) async fn activate_env_handler(
             "policy envs.http_manage=false",
         ));
     }
-    operation_response(env_ops::activate_env(&state.workspace, &name))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || env_ops::activate_env(&state.workspace, &name)).await
 }
 
 pub(super) async fn deactivate_env_handler(
@@ -258,5 +287,6 @@ pub(super) async fn deactivate_env_handler(
             "policy envs.http_manage=false",
         ));
     }
-    operation_response(env_ops::deactivate_env(&state.workspace))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    env_operation_response(gate, move || env_ops::deactivate_env(&state.workspace)).await
 }

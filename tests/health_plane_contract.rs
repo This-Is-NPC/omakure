@@ -13,6 +13,9 @@
 //! `verify_envelope`, which proves the Health Plane is carriable without any
 //! change to the frozen identity construction.
 
+#[path = "support/hex.rs"]
+mod hex_support;
+
 use k256::schnorr::{signature::hazmat::PrehashSigner, SigningKey};
 use omakure::direct_transport::{envelope_nonce, verify_envelope, TransportError};
 use serde_json::{json, Map, Value};
@@ -287,10 +290,6 @@ impl Kind {
 // Frozen construction helpers
 // ---------------------------------------------------------------------------
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 fn unhex(value: &str) -> Vec<u8> {
     assert!(value.len().is_multiple_of(2), "hex length must be even");
     (0..value.len() / 2)
@@ -318,7 +317,10 @@ fn x_only_public_key(scalar_hex: &str) -> [u8; 32] {
 fn node_id(scalar_hex: &str) -> String {
     let mut input = b"omakure/node-id/v1\0".to_vec();
     input.extend_from_slice(&x_only_public_key(scalar_hex));
-    format!("omk1_{}", hex(Sha256::digest(input).as_slice()))
+    format!(
+        "omk1_{}",
+        hex_support::encode(Sha256::digest(input).as_slice())
+    )
 }
 
 /// Build the frozen seven-field direct envelope and sign it with the frozen
@@ -362,11 +364,11 @@ fn encode(canonical_bytes: &[u8], signature: &[u8]) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 
 fn nonce_hex(seed: u8) -> String {
-    hex(&[seed; 16])
+    hex_support::encode(&[seed; 16])
 }
 
 fn message_id(seed: u8) -> String {
-    hex(&[seed; 16])
+    hex_support::encode(&[seed; 16])
 }
 
 fn performer_id() -> String {
@@ -1418,7 +1420,7 @@ fn fixture_pins_every_frozen_bound() {
     assert_eq!(integer(&fixture, "envelope_version"), 1);
     assert_eq!(
         text(&fixture, "envelope_signature_domain_hex"),
-        hex(ENVELOPE_DOMAIN)
+        hex_support::encode(ENVELOPE_DOMAIN)
     );
     assert_eq!(
         integer(&fixture, "registry_schema_version"),
@@ -1672,13 +1674,13 @@ fn reference_vectors_are_canonical_and_verify_through_the_production_path() {
         let signature = &encoded[encoded.len() - SIGNATURE_BYTES..];
 
         assert_eq!(
-            hex(canonical_bytes),
+            hex_support::encode(canonical_bytes),
             vector["canonical_hex"].as_str().expect("canonical hex"),
             "{} canonical bytes drifted",
             kind.wire()
         );
         assert_eq!(
-            hex(signature),
+            hex_support::encode(signature),
             vector["signature_hex"].as_str().expect("signature hex"),
             "{} signature drifted",
             kind.wire()
@@ -1784,7 +1786,7 @@ fn full_reporting_sequence_advances_state_exactly_once() {
         receiver.now = BASE_NOW + sequence * NOMINAL_PULSE_INTERVAL_SECONDS;
         let created = receiver.now;
         let mut payload = pulse_payload(&conductor, sequence, created);
-        payload["message_id"] = Value::from(hex(&[0x60 + sequence as u8; 16]));
+        payload["message_id"] = Value::from(hex_support::encode(&[0x60 + sequence as u8; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Pulse.wire(),
@@ -1802,7 +1804,7 @@ fn full_reporting_sequence_advances_state_exactly_once() {
 
     for sequence in 1..=4_u64 {
         let mut payload = signal_payload(&conductor, sequence, 0xb0 + sequence as u8);
-        payload["message_id"] = Value::from(hex(&[0x70 + sequence as u8; 16]));
+        payload["message_id"] = Value::from(hex_support::encode(&[0x70 + sequence as u8; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Signal.wire(),
@@ -2108,7 +2110,7 @@ fn every_contracted_adversarial_case_is_rejected_with_its_stable_code() {
         let mut receiver = Receiver::conductor();
         assert_eq!(receiver.accept(&reference_message(Kind::Signal)), Ok(1));
         let mut payload = signal_payload(&conductor, 2, 0xb1);
-        payload["message_id"] = Value::from(hex(&[0x99; 16]));
+        payload["message_id"] = Value::from(hex_support::encode(&[0x99; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Signal.wire(),
@@ -2130,7 +2132,7 @@ fn every_contracted_adversarial_case_is_rejected_with_its_stable_code() {
         assert_eq!(receiver.accept(&reference_message(Kind::Pulse)), Ok(0));
         receiver.now = BASE_NOW + MIN_PULSE_INTERVAL_SECONDS;
         let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
-        payload["message_id"] = Value::from(hex(&[0x98; 16]));
+        payload["message_id"] = Value::from(hex_support::encode(&[0x98; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Pulse.wire(),
@@ -2150,7 +2152,7 @@ fn every_contracted_adversarial_case_is_rejected_with_its_stable_code() {
     {
         let mut receiver = Receiver::conductor();
         let mut payload = signal_payload(&conductor, 2, 0xb2);
-        payload["message_id"] = Value::from(hex(&[0x97; 16]));
+        payload["message_id"] = Value::from(hex_support::encode(&[0x97; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Signal.wire(),
@@ -2170,7 +2172,7 @@ fn every_contracted_adversarial_case_is_rejected_with_its_stable_code() {
     {
         let mut receiver = Receiver::conductor();
         let mut payload = signal_payload(&conductor, REORDER_BUFFER_ENTRIES + 2, 0xb3);
-        payload["message_id"] = Value::from(hex(&[0x96; 16]));
+        payload["message_id"] = Value::from(hex_support::encode(&[0x96; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Signal.wire(),
@@ -2476,10 +2478,13 @@ fn regenerate_health_plane_vectors() {
         println!("[[vectors]]");
         println!("kind = \"{}\"", kind.wire());
         println!("canonical_bytes = {}", canonical_bytes.len());
-        println!("canonical_hex = \"{}\"", hex(canonical_bytes));
+        println!(
+            "canonical_hex = \"{}\"",
+            hex_support::encode(canonical_bytes)
+        );
         println!(
             "signature_hex = \"{}\"",
-            hex(&encoded[encoded.len() - SIGNATURE_BYTES..])
+            hex_support::encode(&encoded[encoded.len() - SIGNATURE_BYTES..])
         );
         println!();
     }

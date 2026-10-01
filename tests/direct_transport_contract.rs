@@ -1,4 +1,7 @@
 use curve25519_dalek::{constants::X25519_BASEPOINT, montgomery::MontgomeryPoint};
+#[path = "support/hex.rs"]
+mod hex_support;
+
 use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
@@ -46,7 +49,7 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
     );
     assert_eq!(
         fixture["noise_prologue_hex"].as_str(),
-        Some(hex(PROLOGUE).as_str())
+        Some(hex_support::encode(PROLOGUE).as_str())
     );
 
     let candidates = fixture["candidates"]
@@ -195,10 +198,10 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
     .map(|field| fixture[field].as_str().unwrap())
     .collect::<Vec<_>>();
     for (actual, expected) in actual_messages.iter().zip(expected_messages) {
-        assert_eq!(hex(actual), expected);
+        assert_eq!(hex_support::encode(actual), expected);
     }
     assert_eq!(
-        hex(initiator.get_handshake_hash()),
+        hex_support::encode(initiator.get_handshake_hash()),
         fixture["payload_handshake_hash_hex"].as_str().unwrap()
     );
     assert_eq!(
@@ -217,7 +220,7 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
         .write_message(b"public-vector-envelope", &mut ciphertext)
         .unwrap();
     assert_eq!(
-        hex(&ciphertext[..length]),
+        hex_support::encode(&ciphertext[..length]),
         fixture["payload_data_ciphertext_hex"].as_str().unwrap()
     );
     let mut plaintext = [0_u8; 4096];
@@ -230,7 +233,7 @@ fn owner_selected_contract_freezes_contract_and_public_vectors() {
         .write_message(b"public-vector-reply", &mut ciphertext)
         .unwrap();
     assert_eq!(
-        hex(&ciphertext[..length]),
+        hex_support::encode(&ciphertext[..length]),
         fixture["payload_reply_ciphertext_hex"].as_str().unwrap()
     );
 }
@@ -285,7 +288,7 @@ fn canonical_signed_direct_envelope_is_verified_inside_noise() {
         &canonical,
     );
     assert_eq!(
-        hex(&signature),
+        hex_support::encode(&signature),
         fixture["direct_envelope_signature_hex"].as_str().unwrap()
     );
     verify_bip340(
@@ -391,7 +394,7 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
                 assert!(x25519_adapter_check(&probe, &public).is_err())
             }
             "nonzero" => assert_eq!(
-                hex(&x25519_adapter_check(&probe, &public).unwrap()),
+                hex_support::encode(&x25519_adapter_check(&probe, &public).unwrap()),
                 vector["expected_shared_hex"].as_str().unwrap()
             ),
             other => panic!("unknown X25519 vector result {other}"),
@@ -423,7 +426,7 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
     let production_manual = production_manual_request(&fixture, initiator_vector);
     assert_eq!(production_manual, bytes(&fixture, "manual_request_hex"));
     assert_eq!(
-        hex(&production_manual[production_manual.len() - 64..]),
+        hex_support::encode(&production_manual[production_manual.len() - 64..]),
         fixture["manual_signature_hex"].as_str().unwrap()
     );
     let parsed_manual = ManualEnrollmentRequest::decode(&production_manual).unwrap();
@@ -1373,7 +1376,10 @@ fn verify_bip340(
 fn node_id_from_public(public_key: &[u8]) -> String {
     let mut input = b"omakure/node-id/v1\0".to_vec();
     input.extend_from_slice(public_key);
-    format!("omk1_{}", hex(Sha256::digest(input).as_slice()))
+    format!(
+        "omk1_{}",
+        hex_support::encode(Sha256::digest(input).as_slice())
+    )
 }
 
 fn role_result(value: u8) -> &'static str {
@@ -1681,8 +1687,4 @@ fn decode_hex(value: &str) -> Vec<u8> {
         .step_by(2)
         .map(|index| u8::from_str_radix(&value[index..index + 2], 16).unwrap())
         .collect()
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }

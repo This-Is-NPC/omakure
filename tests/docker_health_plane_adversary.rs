@@ -18,6 +18,9 @@
 //! Run with:
 //! `cargo test --test docker_health_plane_adversary -- --ignored --nocapture`
 
+#[path = "support/hex.rs"]
+mod hex_support;
+
 use omakure::direct_transport::{
     sign_health_envelope, sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
     TransportCertificate, TransportSession, ENVELOPE_KIND,
@@ -496,12 +499,8 @@ fn decode_key(hex: &str) -> [u8; 32] {
         .unwrap_or_else(|_| panic!("expected a 32-byte key, got {} bytes", bytes.len()))
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 fn message_id(seed: u8) -> String {
-    hex(&[seed; 16])
+    hex_support::encode(&[seed; 16])
 }
 
 /// What one live exchange observed on the session.
@@ -679,12 +678,12 @@ fn signal_payload(
             "run": {
                 "exit_code": 0,
                 "finished_at": occurred_at,
-                "run_id": hex(&[signal_seed; 16]),
+                "run_id": hex_support::encode(&[signal_seed; 16]),
                 "script": "adversary",
                 "state": "completed"
             },
             "sequence": sequence,
-            "signal_id": hex(&[signal_seed; 16]),
+            "signal_id": hex_support::encode(&[signal_seed; 16]),
             "subject": null
         }
     })
@@ -1365,10 +1364,10 @@ fn spoofed_envelope(
     let envelope = json!({
         "created_at": created_at,
         "kind": kind,
-        "nonce": hex(&nonce),
+        "nonce": hex_support::encode(&nonce),
         "payload": payload,
         "sender": sender,
-        "session_id": hex(session_id),
+        "session_id": hex_support::encode(session_id),
         "version": 1,
     });
     let mut encoded = serde_jcs::to_vec(&envelope).expect("canonicalize the spoofed envelope");

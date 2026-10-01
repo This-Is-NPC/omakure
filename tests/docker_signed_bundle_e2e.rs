@@ -3,6 +3,9 @@
 //! Run with:
 //! `cargo test --test docker_signed_bundle_e2e -- --ignored --nocapture`
 
+#[path = "support/hex.rs"]
+mod hex_support;
+
 use k256::schnorr::SigningKey;
 use omakure::enrollment::{self, EnrollmentRole, SignedEnrollmentBundle};
 use serde_json::Value;
@@ -71,8 +74,8 @@ impl ComposeGuard {
         let files = TempDir::new().expect("create signed-bundle E2E files");
         let authority_private = [2_u8; 32];
         let authority = SigningKey::from_slice(&authority_private).expect("authority key");
-        let authority_id = hex(&[8; 16]);
-        let authority_public = hex(authority.verifying_key().to_bytes().as_slice());
+        let authority_id = hex_support::encode(&[8; 16]);
+        let authority_public = hex_support::encode(authority.verifying_key().to_bytes().as_slice());
         let authority_token = "authority-signed-bundle-token-0123456789".to_string();
         let target_a_token = "target-a-signed-bundle-token-0123456".to_string();
         let target_b_token = "target-b-signed-bundle-token-0123456".to_string();
@@ -475,8 +478,8 @@ bootstrap_nonce_hash = "{}"
 id = "omakure"
 discovery_secret_ref = ""
 "#,
-        hex(&enrollment::hash_bootstrap_token(token.as_bytes())),
-        hex(&enrollment::hash_bootstrap_nonce(nonce)),
+        hex_support::encode(&enrollment::hash_bootstrap_token(token.as_bytes())),
+        hex_support::encode(&enrollment::hash_bootstrap_nonce(nonce)),
     )
 }
 
@@ -624,7 +627,7 @@ fn apply(service: &str, bundle_path: &str, token_path: &str, nonce: &[u8; 16]) -
             "--bootstrap-token-file",
             token_path,
             "--bootstrap-nonce",
-            &hex(nonce),
+            &hex_support::encode(nonce),
         ],
     )
 }
@@ -900,8 +903,13 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     let target_a_config = files.join("target-a.toml");
     let revoked_token = "target-a-revoked-authority-token-0123";
     write_private_token(&files.join("target-a-revoked.bootstrap"), revoked_token);
-    let revoked_config = signed_config(&hex(&[8; 16]), authority_key, revoked_token, &[9; 16])
-        .replace("revoked = false", "revoked = true");
+    let revoked_config = signed_config(
+        &hex_support::encode(&[8; 16]),
+        authority_key,
+        revoked_token,
+        &[9; 16],
+    )
+    .replace("revoked = false", "revoked = true");
     fs::write(&target_a_config, revoked_config).unwrap();
     std::env::set_var(
         "OMAKURE_SIGNED_TARGET_A_TOKEN",
@@ -1004,10 +1012,6 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     .success());
     assert_eq!(status("signed-target-a")["data"]["trust"], before);
     compose_guard.finalize();
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -1132,7 +1136,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
         "/v1/node/enrollment/bundle",
         &serde_json::json!({
             "bundle_hex": bundle_hex,
-            "bootstrap_nonce": hex(&guard.autojoin_nonce),
+            "bootstrap_nonce": hex_support::encode(&guard.autojoin_nonce),
         }),
     );
     assert_eq!(
@@ -1203,7 +1207,7 @@ fn a_provisioned_machine_joins_with_no_command_run_on_it() {
             "--data",
             &serde_json::json!({
                 "bundle_hex": bundle_hex,
-                "bootstrap_nonce": hex(&guard.autojoin_nonce),
+                "bootstrap_nonce": hex_support::encode(&guard.autojoin_nonce),
             })
             .to_string(),
             "http://signed-autojoin:7878/v1/node/enrollment/bundle",

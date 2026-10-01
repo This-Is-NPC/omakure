@@ -15,6 +15,8 @@
 //! These assertions provide regression coverage for the production listener and
 //! transport compatibility that the shipped Health Plane relies on.
 
+#[path = "support/hex.rs"]
+mod hex_support;
 mod support;
 
 use omakure::direct_transport::{
@@ -112,16 +114,12 @@ fn trust_row(workspace: &Path, node_id: &str) -> Option<TrustRow> {
 // Health Plane message construction, mirroring the frozen envelope exactly.
 // ---------------------------------------------------------------------------
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 fn canonical(value: &Value) -> Vec<u8> {
     serde_jcs::to_vec(value).expect("canonical JSON")
 }
 
 fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
-    let message_id = hex(&[seed; 16]);
+    let message_id = hex_support::encode(&[seed; 16]);
     match kind {
         "health_profile" => json!({
             "health_version": 1,
@@ -172,7 +170,7 @@ fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
                 "occurred_at": 0,
                 "run": Value::Null,
                 "sequence": 1,
-                "signal_id": hex(&[seed ^ 0xff; 16]),
+                "signal_id": hex_support::encode(&[seed ^ 0xff; 16]),
                 "subject": target
             }
         }),
@@ -203,10 +201,10 @@ fn sign_health_envelope(
     let envelope = json!({
         "created_at": now,
         "kind": kind,
-        "nonce": hex(&nonce),
+        "nonce": hex_support::encode(&nonce),
         "payload": payload,
         "sender": sender,
-        "session_id": hex(session.session_id()),
+        "session_id": hex_support::encode(session.session_id()),
         "version": 1,
     });
     let canonical_bytes = canonical(&envelope);
@@ -236,7 +234,7 @@ fn trust_peer(
     role: &str,
     capabilities: &[&str],
 ) {
-    let certificate = hex(
+    let certificate = hex_support::encode(
         &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
             .expect("read peer transport certificate"),
     );
@@ -445,7 +443,10 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     derivation.extend_from_slice(&identity_key_bytes(&performer_status));
     assert_eq!(
         performer_id,
-        format!("omk1_{}", hex(Sha256::digest(derivation).as_slice()))
+        format!(
+            "omk1_{}",
+            hex_support::encode(Sha256::digest(derivation).as_slice())
+        )
     );
 
     // The Conductor trusts the Performer with both Health Plane capabilities;

@@ -16,6 +16,9 @@
 //! future change to either one breaks this test instead of silently widening
 //! what a remote caller can reach.
 
+#[path = "support/hex.rs"]
+mod hex_support;
+
 use k256::schnorr::{signature::hazmat::PrehashSigner, SigningKey};
 use omakure::direct_transport::{envelope_nonce, verify_envelope};
 use omakure::health_plane::model::{RunFact, RunnerFact};
@@ -34,10 +37,6 @@ const CUE_VERSION: u64 = 1;
 /// Published test scalar 1 from `tests/fixtures/node_identity_vectors.toml`.
 const CONDUCTOR_SCALAR_HEX: &str =
     "0000000000000000000000000000000000000000000000000000000000000001";
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
 
 fn unhex(value: &str) -> Vec<u8> {
     assert!(value.len().is_multiple_of(2), "hex length must be even");
@@ -64,7 +63,10 @@ fn x_only_public_key() -> [u8; 32] {
 fn conductor_node_id() -> String {
     let mut input = b"omakure/node-id/v1\0".to_vec();
     input.extend_from_slice(&x_only_public_key());
-    format!("omk1_{}", hex(Sha256::digest(input).as_slice()))
+    format!(
+        "omk1_{}",
+        hex_support::encode(Sha256::digest(input).as_slice())
+    )
 }
 
 fn vectors() -> toml::Value {
@@ -124,11 +126,11 @@ fn the_contract_identifies_itself_and_changes_no_frozen_construction() {
     assert!(!boolean(&v, &["transport_code_changed"]));
 
     assert_eq!(
-        hex(ENVELOPE_DOMAIN),
+        hex_support::encode(ENVELOPE_DOMAIN),
         text(&v, &["envelope_signature_domain_hex"])
     );
     assert_eq!(
-        hex(RUN_ID_DOMAIN),
+        hex_support::encode(RUN_ID_DOMAIN),
         text(&v, &["run_id_domain_hex"]),
         "the run-id derivation must have its own domain separator so a cue_id \
          can never be replayed as a preimage in another construction"
@@ -538,10 +540,10 @@ fn signed(kind: &str, payload: Value, session_id: &[u8; 32], nonce: [u8; 16], no
     let envelope = json!({
         "created_at": now,
         "kind": kind,
-        "nonce": hex(&nonce),
+        "nonce": hex_support::encode(&nonce),
         "payload": payload,
         "sender": conductor_node_id(),
-        "session_id": hex(session_id),
+        "session_id": hex_support::encode(session_id),
         "version": 1,
     });
     let canonical = serde_jcs::to_vec(&envelope).expect("canonicalize");

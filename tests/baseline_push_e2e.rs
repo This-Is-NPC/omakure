@@ -9,6 +9,8 @@
 //!
 //! Two real `node serve` processes, real transport, no mocks.
 
+#[path = "support/hex.rs"]
+mod hex_support;
 mod support;
 
 use serde_json::Value;
@@ -38,10 +40,6 @@ fn serve(workspace: &Path) -> support::HttpServer {
     )
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 fn trust_peer(
     workspace: &Path,
     peer_workspace: &Path,
@@ -49,7 +47,7 @@ fn trust_peer(
     role: &str,
     capabilities: &[&str],
 ) {
-    let certificate = hex(
+    let certificate = hex_support::encode(
         &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
             .expect("read peer transport certificate"),
     );
@@ -430,14 +428,16 @@ fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
         .scripts
         .iter()
         .map(|name| {
-            hex(&std::fs::read(fleet.conductor.path().join(name)).expect("read baseline script"))
+            hex_support::encode(
+                &std::fs::read(fleet.conductor.path().join(name)).expect("read baseline script"),
+            )
         })
         .collect::<Vec<_>>();
     let response = conductor_service.post_json(
         "/v1/node/baselines",
         &serde_json::json!({
             "peer_node_id": fleet.performer_id,
-            "manifest": hex(&std::fs::read(&fleet.manifest).expect("read manifest")),
+            "manifest": hex_support::encode(&std::fs::read(&fleet.manifest).expect("read manifest")),
             "scripts": scripts,
             "wait_seconds": 0,
         }),

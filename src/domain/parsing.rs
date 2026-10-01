@@ -8,36 +8,33 @@ use super::schema::Schema;
 /// Parses a schema JSON object from a string.
 pub fn parse_schema(output: &str) -> Result<Schema, SchemaError> {
     for (start, _) in output.match_indices('{') {
-        let json = &output[start..];
-        let mut deserializer = serde_json::Deserializer::from_str(json);
-        match Schema::deserialize(&mut deserializer) {
-            Ok(schema) => {
-                let mut probe = serde_json::Deserializer::from_str(json);
-                let object = Value::deserialize(&mut probe)?;
-                if let Value::Object(object) = object {
-                    for section in ["Outputs", "Queue"] {
-                        if object.contains_key(section) {
-                            return Err(SchemaError::InvalidJson(serde_json::Error::custom(
-                                format!("unsupported schema section: {section}"),
-                            )));
-                        }
-                    }
-                }
-                schema.validate()?;
-                return Ok(schema);
-            }
-            Err(error) => {
-                let mut probe = serde_json::Deserializer::from_str(json);
-                if let Ok(Value::Object(object)) = Value::deserialize(&mut probe) {
-                    if object.contains_key("Name") && object.contains_key("Fields") {
-                        return Err(SchemaError::InvalidJson(error));
-                    }
-                }
-            }
+        if let Some(schema) = parse_schema_candidate(&output[start..])? {
+            return Ok(schema);
         }
     }
 
     Err(SchemaError::JsonNotFound)
+}
+
+fn parse_schema_candidate(json: &str) -> Result<Option<Schema>, SchemaError> {
+    let mut probe = serde_json::Deserializer::from_str(json);
+    let Ok(Value::Object(object)) = Value::deserialize(&mut probe) else {
+        return Ok(None);
+    };
+    if !object.contains_key("Name") || !object.contains_key("Fields") {
+        return Ok(None);
+    }
+    for section in ["Outputs", "Queue"] {
+        if object.contains_key(section) {
+            return Err(SchemaError::InvalidJson(serde_json::Error::custom(
+                format!("unsupported schema section: {section}"),
+            )));
+        }
+    }
+    let mut deserializer = serde_json::Deserializer::from_str(json);
+    let schema = Schema::deserialize(&mut deserializer)?;
+    schema.validate()?;
+    Ok(Some(schema))
 }
 
 /// Extracts the schema block from a script file.

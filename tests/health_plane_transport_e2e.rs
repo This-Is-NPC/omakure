@@ -61,11 +61,6 @@ const FLEET_REACH_TIMEOUT: Duration = Duration::from_secs(110);
 // Node lifecycle helpers.
 // ---------------------------------------------------------------------------
 
-fn init_node(workspace: &Path) -> Value {
-    support::assert_node_success(&support::run_node(workspace, &["init".to_string()]));
-    support::assert_node_success(&support::run_node(workspace, &["status".to_string()]))
-}
-
 fn trust_peer(
     workspace: &Path,
     peer_workspace: &Path,
@@ -726,9 +721,9 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     let conductor = support::TestWorkspace::new("health_tx_conductor");
     let performer = support::TestWorkspace::new("health_tx_performer");
     let bystander = support::TestWorkspace::new("health_tx_bystander");
-    let conductor_status = init_node(conductor.path());
-    let performer_status = init_node(performer.path());
-    let bystander_status = init_node(bystander.path());
+    let conductor_status = support::init_node(conductor.path());
+    let performer_status = support::init_node(performer.path());
+    let bystander_status = support::init_node(bystander.path());
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()
@@ -962,9 +957,9 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
     let conductor = support::TestWorkspace::new("health_adv_conductor");
     let performer = support::TestWorkspace::new("health_adv_performer");
     let manager = support::TestWorkspace::new("health_adv_manager");
-    let conductor_status = init_node(conductor.path());
-    let performer_status = init_node(performer.path());
-    let manager_status = init_node(manager.path());
+    let conductor_status = support::init_node(conductor.path());
+    let performer_status = support::init_node(performer.path());
+    let manager_status = support::init_node(manager.path());
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()
@@ -1353,7 +1348,7 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
             .into_iter()
             .map(|label| {
                 let workspace = support::TestWorkspace::new(label);
-                let status = init_node(workspace.path());
+                let status = support::init_node(workspace.path());
                 (workspace, status)
             })
             .collect();

@@ -81,15 +81,25 @@ pub fn run_node_checked_signal(workspace: &Path, args: &[String]) -> Output {
     output
 }
 
+pub fn init_node(workspace: &Path) -> Value {
+    init_node_with(workspace, run_node, |_, output| assert_node_success(output))
+}
+
 pub fn init_node_checked_signal(workspace: &Path) -> Value {
-    assert_node_success_named(
-        "init",
-        &run_node_checked_signal(workspace, &["init".to_string()]),
-    );
-    assert_node_success_named(
-        "status",
-        &run_node_checked_signal(workspace, &["status".to_string()]),
+    init_node_with(
+        workspace,
+        run_node_checked_signal,
+        assert_node_success_named,
     )
+}
+
+fn init_node_with(
+    workspace: &Path,
+    run: fn(&Path, &[String]) -> Output,
+    assert: impl Fn(&str, &Output) -> Value,
+) -> Value {
+    assert("init", &run(workspace, &["init".to_string()]));
+    assert("status", &run(workspace, &["status".to_string()]))
 }
 
 fn run_node_with_paths(

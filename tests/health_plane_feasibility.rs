@@ -222,11 +222,6 @@ fn sign_health_envelope(
 // Node process helpers.
 // ---------------------------------------------------------------------------
 
-fn init_node(workspace: &Path) -> Value {
-    support::assert_node_success(&support::run_node(workspace, &["init".to_string()]));
-    support::assert_node_success(&support::run_node(workspace, &["status".to_string()]))
-}
-
 fn trust_peer(
     workspace: &Path,
     peer_workspace: &Path,
@@ -423,8 +418,8 @@ fn trust_snapshot(workspace: &Path) -> String {
 fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable() {
     let conductor = support::TestWorkspace::new("health_plane_conductor");
     let performer = support::TestWorkspace::new("health_plane_performer");
-    let conductor_status = init_node(conductor.path());
-    let performer_status = init_node(performer.path());
+    let conductor_status = support::init_node(conductor.path());
+    let performer_status = support::init_node(performer.path());
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()

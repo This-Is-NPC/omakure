@@ -14,7 +14,7 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 
 # Whole-file scan of src/**/*.rs and tests/**/*.rs for the toxic tempdir+chmod pair.
 # Allowlisted with reasons:
-#   src/auth.rs                       TempDir::new + fs::set_permissions in test fixtures only
+#   src/auth/tests.rs                 TempDir::new + fs::set_permissions in test fixtures only
 #   src/baseline_publisher.rs         tempfile::tempdir + set_mode/set_permissions in test fixtures only
 #   src/baseline_push/tests/mod.rs    tempfile::tempdir + set_permissions in test fixtures only
 #   src/enrollment_authority.rs       tempfile::tempdir + set_mode/set_permissions in test fixtures only
@@ -38,7 +38,7 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 
 is_allowlisted_tempdir_permissions() {
     case "$1" in
-        src/auth.rs)
+        src/auth/tests.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;

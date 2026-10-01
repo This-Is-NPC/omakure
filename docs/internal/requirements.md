@@ -30,7 +30,7 @@ must be updated in the same change.
 | FR-020 | CLI JSON uses `{ ok, data, error, schema_version }` and stable error codes. | `src/cli/json.rs`, `src/cli/args/` |
 | FR-021 | `api` exposes authenticated management routes for config, diagnostics, workspace, scripts, search, runs, queues, environments, Batteries, and secret metadata. | `src/cli/api/`, `src/operations/*.rs` |
 | FR-022 | `node serve` validates machine state, initializes one identity and empty trust registry when absent, then composes HTTP, optional workers, and optional scheduler with coordinated shutdown and readiness gates. | `src/cli/node_service.rs`, `src/operations/node/`, `src/cli/args/` |
-| FR-023 | Health and readiness are unauthenticated; other HTTP routes require scoped bearer tokens from a tokens file. | `src/auth.rs`, `src/cli/api/`, `src/cli/node_service.rs` |
+| FR-023 | Health and readiness are unauthenticated; other HTTP routes require scoped bearer tokens from a tokens file. | `src/auth/`, `src/cli/api/`, `src/cli/node_service.rs` |
 | FR-024 | Deploy policy controls route groups, auth modes, body limits, script limits, environment use, secret use, and node-service scheduler/worker defaults. | `src/policy.rs`, `src/cli/api/`, `src/cli/node_service.rs` |
 | FR-025 | Direct transport provides authenticated encrypted sessions with bounded framing, static peer validation, trust authorization, replay protection, revocation handling, and redacted audit outcomes. | `src/direct_transport/`, `src/direct_service/`, `src/node_transport.rs` |
 | FR-026 | LAN discovery is bounded and trust-neutral; manual enrollment and signed enrollment bundles validate identity binding, audience, expiry, replay, authority, and revocation before trust mutation. | `src/discovery.rs`, `src/enrollment.rs`, `src/node_registry/` |
@@ -49,7 +49,7 @@ must be updated in the same change.
 | NFR-002 | CLI and HTTP behavior remains protocol-neutral in `operations/`; adapters do not duplicate business rules. | `src/operations/`, `src/cli/`, `src/cli/api/` |
 | NFR-003 | SQLite uses WAL/busy-timeout behavior for concurrent local readers and writers; one workspace remains single-host storage. | `src/runs/`, `src/search_index.rs` |
 | NFR-004 | HTTP request bodies and script/tree responses are bounded, and unsafe paths/symlinks/metadata paths are rejected. | `src/cli/api/`, `src/operations/scripts.rs` |
-| NFR-005 | Bearer tokens are hashed, scopes are explicit, token values are redacted from logs/responses, and auth failures do not reveal secrets. | `src/auth.rs`, `src/cli/api/` |
+| NFR-005 | Bearer tokens are hashed, scopes are explicit, token values are redacted from logs/responses, and auth failures do not reveal secrets. | `src/auth/`, `src/cli/api/` |
 | NFR-006 | Release CI tests the eight x86_64/aarch64 target assets, denies clippy warnings, checks formatting, and verifies binary-only archives; GitHub generates release notes from commits. | `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `tests/packaging_smoke.rs` |
 | NFR-007 | The shipped package contains no TUI/theme/widget code or removed direct dependencies, and does declare the vendored Lua runtime that makes `.lua` need no system Lua. | `tests/packaging_smoke.rs`, `Cargo.toml` |
 | NFR-008 | Linux CI runs the bounded four-service transport certification; Linux, macOS, and Windows CI run native protocol/build/lifecycle coverage without Docker assumptions. | `scripts/tasks/cert/transport`, `.github/workflows/ci.yml` |

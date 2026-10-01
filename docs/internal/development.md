@@ -161,7 +161,7 @@ only under their documented preconditions.
 - `src/run_executor.rs`: one execution path for direct, queued, and scheduled runs.
 - `src/adapters/`: filesystem repository, process runner, environments, and
   runtime checks.
-- `src/auth.rs`, `src/policy.rs`, `src/secrets.rs`, `src/redaction.rs`: deploy
+- `src/auth/`, `src/policy.rs`, `src/secrets.rs`, `src/redaction.rs`: deploy
   trust boundaries and secret handling.
 
 The HTTP layer must remain an adapter. Add shared validation or behavior to an

@@ -183,7 +183,7 @@ src/
 ├── search_index.rs          SQLite full-text index
 ├── runtime.rs               Script-kind detection and command construction
 ├── workspace.rs             one workspace root and metadata layout
-├── auth.rs                  token-file authentication
+├── auth/                    token-file parsing, bearer verification, scopes, and reload
 ├── policy.rs                deploy-time route and runtime policy
 ├── secrets.rs               secret references and provider resolution
 ├── redaction.rs             output and trace redaction

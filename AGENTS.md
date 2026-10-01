@@ -85,7 +85,7 @@ src/
 ├── adapters/, ports/, use_cases/  # filesystem/process adapters and interfaces
 ├── runs/, run_executor.rs   # runs.sqlite state machine; shared child lifecycle
 ├── runtime.rs, search_index.rs, workspace.rs
-├── auth.rs, policy.rs, secrets.rs, redaction.rs
+├── auth/, policy.rs, secrets.rs, redaction.rs
 ├── cli_http_parity/, operation_catalog.rs  # versioned parity and operation catalogs
 ├── installer.rs             # standalone installer binary
 └── fleet planes:

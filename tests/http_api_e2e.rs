@@ -1789,7 +1789,7 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     let tokens_path_str = tokens_path.to_str().expect("tokens path utf8");
 
     // Generate a narrowly-scoped token (config:read only) into a tokens file.
-    let gen = support::workspace_command::<15>(
+    let generated = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1804,8 +1804,8 @@ fn tokens_file_mode_enforces_per_token_scopes() {
             "--confirmed",
         ],
     );
-    assert_success(&gen);
-    let config_token = support::json_envelope(&gen.stdout)["data"]["token"]
+    assert_success(&generated);
+    let config_token = support::json_envelope(&generated.stdout)["data"]["token"]
         .as_str()
         .expect("generated token plaintext")
         .to_string();

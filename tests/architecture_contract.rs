@@ -195,12 +195,11 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_lit(&mut self, literal: &'ast Lit) {
-        if self.rule == Rule::RunsSql {
-            if let Lit::Str(value) = literal {
-                if contains_run_table_sql(&value.value()) {
-                    self.record("ARCH-RUNS-SQL", "run-table SQL belongs only to runs/");
-                }
-            }
+        if self.rule == Rule::RunsSql
+            && let Lit::Str(value) = literal
+            && contains_run_table_sql(&value.value())
+        {
+            self.record("ARCH-RUNS-SQL", "run-table SQL belongs only to runs/");
         }
         visit::visit_lit(self, literal);
     }
@@ -219,77 +218,73 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_expr_call(&mut self, node: &'ast ExprCall) {
-        if self.rule == Rule::HealthProcess {
-            if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
-                let segments = Self::path_segments(path);
-                if segments.ends_with(&["Command".into(), "new".into()]) {
-                    self.record(
-                        "ARCH-HEALTH-PROCESS",
-                        "runtime process execution belongs in adapters/system_checks",
-                    );
-                }
+        if self.rule == Rule::HealthProcess
+            && let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref()
+            && Self::path_segments(path).ends_with(&["Command".into(), "new".into()])
+        {
+            self.record(
+                "ARCH-HEALTH-PROCESS",
+                "runtime process execution belongs in adapters/system_checks",
+            );
+        }
+        if self.rule == Rule::BatteryFilesystem
+            && let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref()
+        {
+            let segments = Self::path_segments(path);
+            if segments.first().map(String::as_str) == Some("libc")
+                && matches!(
+                    segments.last().map(String::as_str),
+                    Some("open" | "openat" | "renameat" | "linkat" | "unlinkat")
+                )
+            {
+                self.record(
+                    "ARCH-BATTERY-FS",
+                    "raw filesystem calls belong in adapters/fs",
+                );
             }
         }
-        if self.rule == Rule::BatteryFilesystem {
-            if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
-                let segments = Self::path_segments(path);
-                if segments.first().map(String::as_str) == Some("libc")
-                    && matches!(
-                        segments.last().map(String::as_str),
-                        Some("open" | "openat" | "renameat" | "linkat" | "unlinkat")
-                    )
-                {
-                    self.record(
-                        "ARCH-BATTERY-FS",
-                        "raw filesystem calls belong in adapters/fs",
-                    );
-                }
-            }
+        if self.rule == Rule::GitProcess
+            && let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref()
+            && Self::path_segments(path).ends_with(&["Command".into(), "new".into()])
+        {
+            self.record(
+                "ARCH-GIT-PROCESS",
+                "Git subprocesses belong in adapters/git",
+            );
         }
-        if self.rule == Rule::GitProcess {
-            if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
-                let segments = Self::path_segments(path);
-                if segments.ends_with(&["Command".into(), "new".into()]) {
+        if self.rule == Rule::Executor
+            && let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref()
+        {
+            let Some(name) = path
+                .segments
+                .last()
+                .map(|segment| segment.ident.to_string())
+            else {
+                visit::visit_expr_call(self, node);
+                return;
+            };
+            let direct_executor = path
+                .segments
+                .iter()
+                .any(|segment| segment.ident == "run_executor");
+            let module_alias = path
+                .segments
+                .first()
+                .map(|segment| self.executor_modules.contains(&segment.ident.to_string()))
+                .unwrap_or(false);
+            let imported_target = self.executor_aliases.get(&name).cloned();
+            let from_executor = direct_executor || module_alias || imported_target.is_some();
+            if from_executor {
+                let target = imported_target.unwrap_or_else(|| name.clone());
+                self.executor_calls.push(target.clone());
+                if !matches!(
+                    target.as_str(),
+                    "execute_with_heartbeat" | "execute_with_heartbeat_guarded"
+                ) {
                     self.record(
-                        "ARCH-GIT-PROCESS",
-                        "Git subprocesses belong in adapters/git",
+                        "ARCH-EXECUTOR-CONVERGENCE",
+                        "direct and queued runs must use the heartbeat executor",
                     );
-                }
-            }
-        }
-        if self.rule == Rule::Executor {
-            if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
-                let Some(name) = path
-                    .segments
-                    .last()
-                    .map(|segment| segment.ident.to_string())
-                else {
-                    visit::visit_expr_call(self, node);
-                    return;
-                };
-                let direct_executor = path
-                    .segments
-                    .iter()
-                    .any(|segment| segment.ident == "run_executor");
-                let module_alias = path
-                    .segments
-                    .first()
-                    .map(|segment| self.executor_modules.contains(&segment.ident.to_string()))
-                    .unwrap_or(false);
-                let imported_target = self.executor_aliases.get(&name).cloned();
-                let from_executor = direct_executor || module_alias || imported_target.is_some();
-                if from_executor {
-                    let target = imported_target.unwrap_or_else(|| name.clone());
-                    self.executor_calls.push(target.clone());
-                    if !matches!(
-                        target.as_str(),
-                        "execute_with_heartbeat" | "execute_with_heartbeat_guarded"
-                    ) {
-                        self.record(
-                            "ARCH-EXECUTOR-CONVERGENCE",
-                            "direct and queued runs must use the heartbeat executor",
-                        );
-                    }
                 }
             }
         }

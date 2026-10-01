@@ -215,10 +215,10 @@ impl ComposeGuard {
 
 impl Drop for ComposeGuard {
     fn drop(&mut self) {
-        if !self.finalized {
-            if let Err(error) = cleanup(self) {
-                eprintln!("signed-bundle Docker cleanup after panic failed: {error}");
-            }
+        if !self.finalized
+            && let Err(error) = cleanup(self)
+        {
+            eprintln!("signed-bundle Docker cleanup after panic failed: {error}");
         }
     }
 }

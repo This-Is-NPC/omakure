@@ -59,11 +59,12 @@ fn strip_verbatim_prefix(mut path: String) -> String {
 
 #[cfg(windows)]
 fn bash_safe_drive_path(path: &str) -> String {
-    if let Some((drive, rest)) = path.split_once(':') {
-        if drive.len() == 1 && drive.chars().all(|c| c.is_ascii_alphabetic()) {
-            let rest = rest.strip_prefix('/').unwrap_or(rest);
-            return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
-        }
+    if let Some((drive, rest)) = path.split_once(':')
+        && drive.len() == 1
+        && drive.chars().all(|c| c.is_ascii_alphabetic())
+    {
+        let rest = rest.strip_prefix('/').unwrap_or(rest);
+        return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
     }
     path.to_string()
 }
@@ -173,10 +174,10 @@ fn well_known_git_bash_paths() -> Vec<PathBuf> {
 
 #[cfg(windows)]
 fn resolve_packaging_bash_on_windows() -> Option<PathBuf> {
-    if let Ok(path_var) = std::env::var("PATH") {
-        if let Some(path) = resolve_packaging_bash_in_path(&path_var) {
-            return Some(path);
-        }
+    if let Ok(path_var) = std::env::var("PATH")
+        && let Some(path) = resolve_packaging_bash_in_path(&path_var)
+    {
+        return Some(path);
     }
     well_known_git_bash_paths()
         .into_iter()

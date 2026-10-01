@@ -1135,12 +1135,11 @@ fn rejected_error_codes(workspace: &Path) -> Vec<i64> {
     let mut statement = connection
         .prepare("SELECT error_code FROM transport_audit WHERE outcome = 'rejected'")
         .expect("prepare rejected audit query");
-    let codes = statement
+    let rows = statement
         .query_map([], |row| row.get::<_, Option<i64>>(0))
-        .expect("query rejected audit rows")
-        .filter_map(|code| code.expect("read error code"))
-        .collect();
-    codes
+        .expect("query rejected audit rows");
+    rows.filter_map(|code| code.expect("read error code"))
+        .collect()
 }
 
 /// Wait until `server` records a transport failure for `peer_node_id`.

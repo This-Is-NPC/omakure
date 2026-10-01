@@ -798,10 +798,10 @@ impl Receiver {
         }
 
         // Step 9: capability.
-        if let Some(required) = kind.required_capability() {
-            if !peer.capabilities.iter().any(|value| value == required) {
-                return Err(HealthCode::MissingCapability);
-            }
+        if let Some(required) = kind.required_capability()
+            && !peer.capabilities.iter().any(|value| value == required)
+        {
+            return Err(HealthCode::MissingCapability);
         }
 
         // Step 10: freshness.

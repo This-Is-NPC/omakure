@@ -1112,13 +1112,12 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
             unix_seconds(),
             seed,
         );
-        if let Some((kind, payload)) = reply.reply {
-            if kind == "health_error"
-                && payload["error"]["code"] == json!(HealthCode::RateLimited.code())
-            {
-                rate_limited = true;
-                break;
-            }
+        if let Some((kind, payload)) = reply.reply
+            && kind == "health_error"
+            && payload["error"]["code"] == json!(HealthCode::RateLimited.code())
+        {
+            rate_limited = true;
+            break;
         }
     }
     assert!(

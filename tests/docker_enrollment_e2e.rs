@@ -153,10 +153,10 @@ fn generate_auth(directory: &Path, id: &str) -> (PathBuf, PathBuf) {
 
 impl Drop for ComposeGuard {
     fn drop(&mut self) {
-        if !self.finalized {
-            if let Err(error) = cleanup(self) {
-                eprintln!("enrollment Docker cleanup after panic failed: {error}");
-            }
+        if !self.finalized
+            && let Err(error) = cleanup(self)
+        {
+            eprintln!("enrollment Docker cleanup after panic failed: {error}");
         }
     }
 }

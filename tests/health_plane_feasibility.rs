@@ -73,10 +73,10 @@ fn decide(row: Option<&TrustRow>, kind: &str) -> Decision {
     if row.role != required_role {
         return Decision::WrongRole;
     }
-    if let Some(capability) = required_capability {
-        if !row.capabilities.iter().any(|value| value == capability) {
-            return Decision::MissingCapability;
-        }
+    if let Some(capability) = required_capability
+        && !row.capabilities.iter().any(|value| value == capability)
+    {
+        return Decision::MissingCapability;
     }
     Decision::Allow
 }

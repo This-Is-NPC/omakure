@@ -313,10 +313,9 @@ fn baseline_audit_rows(workspace: &Path) -> Vec<(String, String, Option<i64>)> {
         .expect("prepare baseline audit query");
     let rows = statement
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-        .expect("query baseline audit rows")
-        .collect::<Result<Vec<_>, _>>()
-        .expect("read baseline audit rows");
-    rows
+        .expect("query baseline audit rows");
+    rows.collect::<Result<Vec<_>, _>>()
+        .expect("read baseline audit rows")
 }
 
 /// An ack that misses the caller's budget must be recorded as what it was.

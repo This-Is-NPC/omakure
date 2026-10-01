@@ -203,13 +203,12 @@ fn wait_for_pulse_after(server: &support::HttpServer, node_id: &str, sequence: u
     let mut last = Value::Null;
     while Instant::now() < deadline {
         last = fleet_status_http(server);
-        if let Some(node) = node_row(&last, node_id) {
-            if node["pulse"]["sequence"]
+        if let Some(node) = node_row(&last, node_id)
+            && node["pulse"]["sequence"]
                 .as_u64()
                 .is_some_and(|next| next > sequence)
-            {
-                return last;
-            }
+        {
+            return last;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -231,10 +230,10 @@ fn wait_for_presence_within(
     let mut last = Value::Null;
     while Instant::now() < deadline {
         last = fleet_status_http(server);
-        if let Some(node) = node_row(&last, node_id) {
-            if node["presence"] == presence {
-                return last;
-            }
+        if let Some(node) = node_row(&last, node_id)
+            && node["presence"] == presence
+        {
+            return last;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -492,12 +491,11 @@ fn health_audit_codes(workspace: &Path) -> Vec<i64> {
     let mut statement = connection
         .prepare("SELECT error_code FROM health_audit WHERE error_code IS NOT NULL")
         .expect("prepare health audit query");
-    let codes = statement
+    statement
         .query_map([], |row| row.get::<_, i64>(0))
         .expect("query health audit")
         .map(|row| row.expect("audit row"))
-        .collect();
-    codes
+        .collect()
 }
 
 /// Assert the frozen "drop, audit, and send nothing" outcome.
@@ -1136,12 +1134,12 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
             unix_seconds(),
             seed,
         );
-        if let Some((kind, payload)) = reply.reply {
-            if kind == "health_error" && payload["error"]["code"] == HealthCode::RateLimited.code()
-            {
-                rate_limited = true;
-                break;
-            }
+        if let Some((kind, payload)) = reply.reply
+            && kind == "health_error"
+            && payload["error"]["code"] == HealthCode::RateLimited.code()
+        {
+            rate_limited = true;
+            break;
         }
     }
     assert!(

@@ -368,7 +368,7 @@ pub(super) fn windows_security_access_allowed(
 
 #[cfg(windows)]
 #[link(name = "kernel32")]
-extern "system" {
+unsafe extern "system" {
     fn GetFileAttributesW(path: *const u16) -> u32;
     fn GetFileInformationByHandle(
         handle: *mut std::ffi::c_void,
@@ -379,7 +379,7 @@ extern "system" {
 
 #[cfg(windows)]
 #[link(name = "advapi32")]
-extern "system" {
+unsafe extern "system" {
     fn GetSecurityInfo(
         handle: *mut std::ffi::c_void,
         object_type: u32,

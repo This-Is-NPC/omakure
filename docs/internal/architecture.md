@@ -116,7 +116,7 @@ verify workspace paths or host runtimes.
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Language | Rust 2021 | Portable application and CLI |
+| Language | Rust 2024 | Portable application and CLI |
 | CLI | clap 4.5, clap_complete 4.5 | Commands, help, and completions |
 | Serialization | serde, serde_json, toml 1.1, serde_urlencoded 0.7 | Schemas, envelopes, config, policy, HTTP query strings |
 | Canonical JSON | serde_jcs 0.2 | RFC 8785 bytes for signed envelopes and Health reports |

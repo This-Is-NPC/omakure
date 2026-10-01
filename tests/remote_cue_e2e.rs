@@ -334,12 +334,16 @@ fn wait_for_signal(conductor: &Path, expected_run_id: &str) -> bool {
         let feed = support::run_node_checked_signal(conductor, &["signals".to_string()]);
         if feed.status.success() {
             let envelope = support::json_envelope(&feed.stdout);
-            if let Some(signals) = envelope["data"]["signals"].as_array() {
-                if signals.iter().any(|entry| {
-                    entry["kind"] == "run-completed" && entry["run"]["run_id"] == expected_run_id
-                }) {
-                    return true;
-                }
+            if envelope["data"]["signals"]
+                .as_array()
+                .is_some_and(|signals| {
+                    signals.iter().any(|entry| {
+                        entry["kind"] == "run-completed"
+                            && entry["run"]["run_id"] == expected_run_id
+                    })
+                })
+            {
+                return true;
             }
         }
         std::thread::sleep(Duration::from_millis(500));

@@ -63,10 +63,11 @@ fn write_python3_shim(dir: &Path) -> PathBuf {
 fn which_in_path(program: &str, path: &str) -> Option<PathBuf> {
     for dir in path.split(':').filter(|d| !d.is_empty()) {
         let candidate = Path::new(dir).join(program);
-        if let Ok(meta) = fs::metadata(&candidate) {
-            if meta.is_file() && meta.permissions().mode() & 0o111 != 0 {
-                return Some(candidate);
-            }
+        if let Ok(meta) = fs::metadata(&candidate)
+            && meta.is_file()
+            && meta.permissions().mode() & 0o111 != 0
+        {
+            return Some(candidate);
         }
     }
     None

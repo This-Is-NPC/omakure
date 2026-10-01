@@ -38,11 +38,11 @@ fn main() {
         return;
     }
 
-    if let Some(parent) = path.parent() {
-        if let Err(error) = fs::create_dir_all(parent) {
-            eprintln!("cannot create {}: {error}", parent.display());
-            std::process::exit(1);
-        }
+    if let Some(parent) = path.parent()
+        && let Err(error) = fs::create_dir_all(parent)
+    {
+        eprintln!("cannot create {}: {error}", parent.display());
+        std::process::exit(1);
     }
     if let Err(error) = fs::write(path, expected) {
         eprintln!("cannot write {REFERENCE}: {error}");

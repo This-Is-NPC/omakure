@@ -41,12 +41,12 @@ fn windows_documents_dir() -> Option<PathBuf> {
     ];
 
     for subkey in subkeys {
-        if let Ok(key) = hkcu.open_subkey(subkey) {
-            if let Ok(value) = key.get_value::<String, _>("Personal") {
-                let trimmed = value.trim();
-                if !trimmed.is_empty() {
-                    return Some(PathBuf::from(expand_windows_env_vars(trimmed)));
-                }
+        if let Ok(key) = hkcu.open_subkey(subkey)
+            && let Ok(value) = key.get_value::<String, _>("Personal")
+        {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Some(PathBuf::from(expand_windows_env_vars(trimmed)));
             }
         }
     }

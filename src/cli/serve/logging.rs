@@ -10,7 +10,8 @@ pub(super) fn log_file(workspace: &Workspace) -> PathBuf {
 
 pub(super) fn log_line(path: &Path, level: &str, message: &str) {
     let line = format!("{} [{}] {}\n", Utc::now().to_rfc3339(), level, message);
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+    let opened = OpenOptions::new().create(true).append(true).open(path);
+    if let Ok(mut file) = opened {
         let _ = file.write_all(line.as_bytes());
     } else {
         eprintln!("{line}");

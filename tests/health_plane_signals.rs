@@ -302,10 +302,8 @@ fn health_audit(node: &Node) -> Vec<(String, Option<i64>)> {
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?))
         })
-        .expect("query health audit")
-        .map(|row| row.expect("audit row"))
-        .collect();
-    rows
+        .expect("query health audit");
+    rows.map(|row| row.expect("audit row")).collect()
 }
 
 /// The complete trust and identity state, so a rejection can be proven inert.

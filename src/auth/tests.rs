@@ -262,13 +262,13 @@ fn batteries_write_covers_finer_battery_scopes() {
 
 #[test]
 fn generate_token_uses_prefix_and_verifiable_hash() {
-    let gen = generate_token("ci", &["runs:read".into(), "scripts:read".into()]).unwrap();
-    assert!(gen.token.starts_with(TOKEN_PREFIX));
-    assert!(gen.hash.contains("argon2id"));
-    assert!(gen.tokens_file_entry.contains("id = \"ci\""));
-    assert!(verify_argon2(&gen.hash, &gen.token));
-    assert!(!gen.tokens_file_entry.contains(&gen.token));
-    let parsed = argon2::password_hash::PasswordHash::new(&gen.hash).unwrap();
+    let generated = generate_token("ci", &["runs:read".into(), "scripts:read".into()]).unwrap();
+    assert!(generated.token.starts_with(TOKEN_PREFIX));
+    assert!(generated.hash.contains("argon2id"));
+    assert!(generated.tokens_file_entry.contains("id = \"ci\""));
+    assert!(verify_argon2(&generated.hash, &generated.token));
+    assert!(!generated.tokens_file_entry.contains(&generated.token));
+    let parsed = argon2::password_hash::PasswordHash::new(&generated.hash).unwrap();
     let mut salt_bytes = [0u8; argon2::password_hash::Salt::RECOMMENDED_LENGTH];
     assert_eq!(
         parsed
@@ -421,8 +421,8 @@ fn append_token_entry_preserves_the_existing_file_mode() {
 fn append_token_entry_writes_parseable_file() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("tokens.toml");
-    let gen = generate_token("a", &["runs:read".into()]).unwrap();
-    append_token_entry(&path, &gen.id, &gen.tokens_file_entry).unwrap();
+    let generated = generate_token("a", &["runs:read".into()]).unwrap();
+    append_token_entry(&path, &generated.id, &generated.tokens_file_entry).unwrap();
     let tokens = load_tokens_file(&path).unwrap();
     assert_eq!(tokens.len(), 1);
     assert_eq!(tokens[0].id, "a");
@@ -517,8 +517,8 @@ fn append_token_entry_does_not_clobber_symlink_at_guessable_tmp_path() {
     fs::write(&victim, "do-not-clobber").unwrap();
     symlink(&victim, &guessable).unwrap();
 
-    let gen = generate_token("a", &["runs:read".into()]).unwrap();
-    append_token_entry(&path, &gen.id, &gen.tokens_file_entry).unwrap();
+    let generated = generate_token("a", &["runs:read".into()]).unwrap();
+    append_token_entry(&path, &generated.id, &generated.tokens_file_entry).unwrap();
 
     // Victim survives untouched; tokens file is created and parseable.
     assert_eq!(fs::read_to_string(&victim).unwrap(), "do-not-clobber");
@@ -531,8 +531,8 @@ fn append_token_entry_writes_owner_only_permissions() {
     use std::os::unix::fs::PermissionsExt;
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("tokens.toml");
-    let gen = generate_token("a", &["runs:read".into()]).unwrap();
-    append_token_entry(&path, &gen.id, &gen.tokens_file_entry).unwrap();
+    let generated = generate_token("a", &["runs:read".into()]).unwrap();
+    append_token_entry(&path, &generated.id, &generated.tokens_file_entry).unwrap();
     let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600, "tokens file must be owner-only, got {mode:o}");
 }

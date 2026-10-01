@@ -1,5 +1,5 @@
 use super::admission::parse_args_json;
-use super::environment::bash_safe_current_exe;
+use super::environment::{bash_safe_current_exe, write_redaction_file, RedactionFileError};
 use super::*;
 use crate::adapters::environments::resolve_run_env;
 use crate::runs::{self, EnqueueOptions, RunTrigger};
@@ -299,6 +299,29 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
     let redaction_file = result.completion.stdout.trim();
     assert!(!redaction_file.is_empty());
     assert!(!PathBuf::from(redaction_file).exists());
+
+    let history_backup = ws.root().join("history-backup");
+    fs::rename(ws.history_dir(), &history_backup).unwrap();
+    fs::write(ws.history_dir(), "blocked redaction directory").unwrap();
+    assert!(matches!(
+        write_redaction_file(&ws, &row.run_id, &["redaction-file-secret".into()]),
+        Err(RedactionFileError::CreateDir(_))
+    ));
+    let blocked = execute_with_heartbeat(
+        &ws,
+        &row,
+        vec![("TOKEN".into(), "redaction-file-secret".into())],
+        None,
+    );
+    assert_eq!(blocked.terminal, ExecutionTerminal::Errored);
+    assert!(blocked
+        .completion
+        .error
+        .as_deref()
+        .is_some_and(|error| error.starts_with("create redaction dir failed: ")));
+    assert!(blocked.completion.stdout.is_empty());
+    fs::remove_file(ws.history_dir()).unwrap();
+    fs::rename(history_backup, ws.history_dir()).unwrap();
     let _ = fs::remove_dir_all(ws.root());
 }
 

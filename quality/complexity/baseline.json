@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "e1dad00f4a742c788512471c12c029b869087ba0eb22eabc0757fa859423155f",
+  "canonical_sha256": "152ae9ad0dca48e4c83c989884a01bc193b0498c15b84e5c632d4a6c8f61a35a",
   "config_identity": "no-config",
   "files": [
     {
@@ -4404,12 +4404,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 4,
+        "invocations": 1,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 3,
-        "cyclomatic": 12
+        "cyclomatic": 9
       },
       "path": "src/run_executor/environment.rs",
       "source_class": "handwritten"
@@ -96484,14 +96484,14 @@
       },
       "identity": "crate::run_executor::environment::drop",
       "kind": "method",
-      "line": 12,
+      "line": 23,
       "name": "drop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 12,
+        "line": 23,
         "name": "drop"
       },
       "path": "src/run_executor/environment.rs",
@@ -96505,101 +96505,23 @@
         "identity": "crate::run_executor::environment::write_redaction_file",
         "macro_expansion": "not_measured",
         "path": "src/run_executor/environment.rs",
-        "signature": "pub(super) fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, String>",
+        "signature": "pub(super) fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, RedactionFileError>",
         "source_class": "handwritten"
       },
       "identity": "crate::run_executor::environment::write_redaction_file",
       "kind": "function",
-      "line": 17,
+      "line": 28,
       "name": "write_redaction_file",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 17,
+        "line": 28,
         "name": "write_redaction_file"
       },
       "path": "src/run_executor/environment.rs",
-      "signature": "pub(super) fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, String>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::environment::write_redaction_file::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor/environment.rs",
-        "signature": ".map_err(|err| format!(\"create redaction dir failed: {err}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::environment::write_redaction_file::<closure>",
-      "kind": "closure",
-      "line": 26,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 26,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor/environment.rs",
-      "signature": ".map_err(|err| format!(\"create redaction dir failed: {err}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::environment::write_redaction_file::<closure>@42#2",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor/environment.rs",
-        "signature": ".map_err(|err| format!(\"open redaction file failed: {err}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::environment::write_redaction_file::<closure>@42#2",
-      "kind": "closure",
-      "line": 42,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 42,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor/environment.rs",
-      "signature": ".map_err(|err| format!(\"open redaction file failed: {err}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::environment::write_redaction_file::<closure>@44#3",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor/environment.rs",
-        "signature": ".map_err(|err| format!(\"write redaction file failed: {err}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::environment::write_redaction_file::<closure>@44#3",
-      "kind": "closure",
-      "line": 44,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 44,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor/environment.rs",
-      "signature": ".map_err(|err| format!(\"write redaction file failed: {err}\"))?;",
+      "signature": "pub(super) fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, RedactionFileError>",
       "source_class": "handwritten"
     },
     {
@@ -96614,14 +96536,14 @@
       },
       "identity": "crate::run_executor::environment::sanitize_run_id_for_filename",
       "kind": "function",
-      "line": 48,
+      "line": 56,
       "name": "sanitize_run_id_for_filename",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 48,
+        "line": 56,
         "name": "sanitize_run_id_for_filename"
       },
       "path": "src/run_executor/environment.rs",
@@ -96640,14 +96562,14 @@
       },
       "identity": "crate::run_executor::environment::sanitize_run_id_for_filename::<closure>",
       "kind": "closure",
-      "line": 51,
+      "line": 59,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 51,
+        "line": 59,
         "name": "<closure>"
       },
       "path": "src/run_executor/environment.rs",
@@ -96666,14 +96588,14 @@
       },
       "identity": "crate::run_executor::environment::push_reserved_run_env",
       "kind": "function",
-      "line": 56,
+      "line": 64,
       "name": "push_reserved_run_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 56,
+        "line": 64,
         "name": "push_reserved_run_env"
       },
       "path": "src/run_executor/environment.rs",
@@ -96692,14 +96614,14 @@
       },
       "identity": "crate::run_executor::environment::bash_safe_current_exe",
       "kind": "function",
-      "line": 71,
+      "line": 79,
       "name": "bash_safe_current_exe",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 71,
+        "line": 79,
         "name": "bash_safe_current_exe"
       },
       "path": "src/run_executor/environment.rs",
@@ -96718,14 +96640,14 @@
       },
       "identity": "crate::run_executor::environment::bash_safe_current_exe::<closure>",
       "kind": "closure",
-      "line": 72,
+      "line": 80,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 72,
+        "line": 80,
         "name": "<closure>"
       },
       "path": "src/run_executor/environment.rs",

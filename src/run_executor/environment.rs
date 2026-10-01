@@ -1,8 +1,19 @@
 use crate::runtime::bash_safe_path;
 use crate::workspace::Workspace;
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::PathBuf;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub(super) enum RedactionFileError {
+    #[error("create redaction dir failed: {0}")]
+    CreateDir(#[source] io::Error),
+    #[error("open redaction file failed: {0}")]
+    Open(#[source] io::Error),
+    #[error("write redaction file failed: {0}")]
+    Write(#[source] io::Error),
+}
 
 pub(super) struct RedactionFile {
     pub(super) path: PathBuf,
@@ -18,12 +29,11 @@ pub(super) fn write_redaction_file(
     workspace: &Workspace,
     run_id: &str,
     secrets: &[String],
-) -> Result<Option<RedactionFile>, String> {
+) -> Result<Option<RedactionFile>, RedactionFileError> {
     let Some(value) = crate::secrets::secrets_env_value(secrets) else {
         return Ok(None);
     };
-    fs::create_dir_all(workspace.history_dir())
-        .map_err(|err| format!("create redaction dir failed: {err}"))?;
+    fs::create_dir_all(workspace.history_dir()).map_err(RedactionFileError::CreateDir)?;
     let path = workspace.history_dir().join(format!(
         ".redact.{}.{}.tmp",
         sanitize_run_id_for_filename(run_id),
@@ -37,11 +47,9 @@ pub(super) fn write_redaction_file(
         options.mode(0o600);
         options.custom_flags(libc::O_NOFOLLOW);
     }
-    let mut file = options
-        .open(&path)
-        .map_err(|err| format!("open redaction file failed: {err}"))?;
+    let mut file = options.open(&path).map_err(RedactionFileError::Open)?;
     file.write_all(value.as_bytes())
-        .map_err(|err| format!("write redaction file failed: {err}"))?;
+        .map_err(RedactionFileError::Write)?;
     Ok(Some(RedactionFile { path }))
 }
 

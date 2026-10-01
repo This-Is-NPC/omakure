@@ -241,7 +241,7 @@ pub fn execute_with_heartbeat_guarded(
     let redaction_file = match write_redaction_file(workspace, &row.run_id, &resolved_args.secrets)
     {
         Ok(file) => file,
-        Err(err) => return execution_error(ExecutionTerminal::Errored, err),
+        Err(err) => return execution_error(ExecutionTerminal::Errored, err.to_string()),
     };
     if let Some(file) = &redaction_file {
         env.push((

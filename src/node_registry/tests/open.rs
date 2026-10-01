@@ -73,15 +73,16 @@ fn observational_registry_reads_succeed_while_writer_is_reserved() {
     let identity = NodeIdentity::load_or_initialize(&node_context).unwrap();
     let registry = NodeRegistry::open(&node_context, identity.public_status()).unwrap();
     registry
-        .record_transport_audit(
-            "snapshot_probe",
-            &identity.public_status().node_id,
-            None,
-            None,
-            0,
-            "accepted",
-            None,
-        )
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "snapshot_probe",
+            node_id: &identity.public_status().node_id,
+            session_id: None,
+            direction: None,
+            byte_count: 0,
+            outcome: "accepted",
+            error_code: None,
+            cue: None,
+        })
         .unwrap();
     let mut writer = Connection::open(node_context.database_path()).unwrap();
     configure_connection(&mut writer).unwrap();
@@ -159,15 +160,16 @@ fn open_existing_succeeds_after_clean_close_without_sidecars() {
     {
         let registry = NodeRegistry::open(&context, identity.public_status()).unwrap();
         registry
-            .record_transport_audit(
-                "cold_open_probe",
-                &identity.public_status().node_id,
-                None,
-                None,
-                0,
-                "accepted",
-                None,
-            )
+            .record_transport_audit(crate::node_registry::TransportAudit {
+                event_type: "cold_open_probe",
+                node_id: &identity.public_status().node_id,
+                session_id: None,
+                direction: None,
+                byte_count: 0,
+                outcome: "accepted",
+                error_code: None,
+                cue: None,
+            })
             .unwrap();
     }
 

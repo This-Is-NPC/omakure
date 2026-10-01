@@ -224,15 +224,16 @@ fn serve_connection(
             // revoked refusal before telling it to stop. The outer rejection
             // audit below handles failures before authentication; recording
             // here avoids turning one revoked handshake into two rows.
-            registry.record_transport_audit(
-                "probe_rejected",
-                remote.node_id(),
-                None,
-                Some(1),
-                0,
-                "rejected",
-                Some(TransportError::Revoked.code() as u16),
-            )?;
+            registry.record_transport_audit(crate::node_registry::TransportAudit {
+                event_type: "probe_rejected",
+                node_id: remote.node_id(),
+                session_id: None,
+                direction: Some(1),
+                byte_count: 0,
+                outcome: "rejected",
+                error_code: Some(TransportError::Revoked.code() as u16),
+                cue: None,
+            })?;
             rejection_audit_recorded = true;
             let mut session = handshake.into_session()?;
             if let Ok(frame) =
@@ -295,15 +296,16 @@ fn serve_connection(
         )?;
         let ack = sign_ack(&identity, session.session_id(), nonce, unix_seconds())?;
         let encoded_ack = ack.encoded();
-        registry.record_transport_audit(
-            "probe_accepted",
-            remote.node_id(),
-            Some(session.session_id()),
-            Some(1),
-            request.body.len() + ack.encoded().len(),
-            "accepted",
-            None,
-        )?;
+        registry.record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "probe_accepted",
+            node_id: remote.node_id(),
+            session_id: Some(session.session_id()),
+            direction: Some(1),
+            byte_count: request.body.len() + ack.encoded().len(),
+            outcome: "accepted",
+            error_code: None,
+            cue: None,
+        })?;
         write_bytes(
             &mut stream,
             &session.write(ENVELOPE_KIND, &encoded_ack)?,
@@ -367,15 +369,18 @@ fn serve_connection(
                 DirectServiceError::Protocol(error) => Some(error.code() as u16),
                 _ => None,
             };
-            Some(registry.record_transport_audit(
-                "probe_rejected",
-                node_id,
-                None,
-                Some(1),
-                0,
-                "rejected",
-                protocol,
-            ))
+            Some(
+                registry.record_transport_audit(crate::node_registry::TransportAudit {
+                    event_type: "probe_rejected",
+                    node_id,
+                    session_id: None,
+                    direction: Some(1),
+                    byte_count: 0,
+                    outcome: "rejected",
+                    error_code: protocol,
+                    cue: None,
+                }),
+            )
         }
     } else {
         None

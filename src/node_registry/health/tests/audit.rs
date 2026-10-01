@@ -63,15 +63,16 @@ fn transport_audit_survives_main_file_copy_while_observational_connection_is_ope
     let writer = NodeRegistry::open_existing(&fixture.context, identity.public_status()).unwrap();
     let local = writer.local_node_id().to_string();
     writer
-        .record_transport_audit(
-            "unsupported_downgrade",
-            &local,
-            None,
-            None,
-            0,
-            "rejected",
-            Some(1001),
-        )
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "unsupported_downgrade",
+            node_id: &local,
+            session_id: None,
+            direction: None,
+            byte_count: 0,
+            outcome: "rejected",
+            error_code: Some(1001),
+            cue: None,
+        })
         .unwrap();
     let snapshot = fixture._temp.path().join("node.sqlite.snapshot");
     std::fs::copy(fixture.registry.path(), &snapshot).unwrap();

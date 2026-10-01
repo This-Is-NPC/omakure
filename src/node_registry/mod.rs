@@ -24,6 +24,7 @@ mod validate;
 
 pub mod health;
 
+pub(crate) use audit::{CueAudit, TransportAudit};
 pub(crate) use bundle::PendingBootstrapCleanup;
 pub use error::RegistryError;
 pub use types::{

@@ -78,15 +78,16 @@ pub fn request_manual_enrollment(
     } else {
         None
     };
-    registry.record_transport_audit(
-        "enrollment_request",
-        remote.node_id(),
-        Some(session.session_id()),
-        Some(0),
-        request.len() + response.body.len(),
-        if accepted { "accepted" } else { "rejected" },
-        None,
-    )?;
+    registry.record_transport_audit(crate::node_registry::TransportAudit {
+        event_type: "enrollment_request",
+        node_id: remote.node_id(),
+        session_id: Some(session.session_id()),
+        direction: Some(0),
+        byte_count: request.len() + response.body.len(),
+        outcome: if accepted { "accepted" } else { "rejected" },
+        error_code: None,
+        cue: None,
+    })?;
     if let Some((reciprocal_request, reciprocal_code)) = reciprocal {
         let reciprocal_request = ManualEnrollmentRequest::decode(&reciprocal_request)
             .map_err(|_| TransportError::InvalidFrame)?;

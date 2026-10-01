@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "32d929caabbf79eba1ecb103b7f312d88cc8b60b81faa4e259430032e887192c",
+  "canonical_sha256": "3cfc1d82f4a4723bb133a53df5b2146b673a911cdb2a9964bd7719bdca822337",
   "config_identity": "no-config",
   "files": [
     {
@@ -2864,12 +2864,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 8,
+        "invocations": 6,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 22,
-        "cyclomatic": 41
+        "cognitive": 17,
+        "cyclomatic": 32
       },
       "path": "src/node_registry/audit.rs",
       "source_class": "handwritten"
@@ -65675,6 +65675,58 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 12,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::node_registry::audit::validate_transport_audit",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "fn validate_transport_audit(input: &TransportAudit<'_>) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::validate_transport_audit",
+      "kind": "function",
+      "line": 31,
+      "name": "validate_transport_audit",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 12,
+        "cyclomatic": 9,
+        "kind": "function",
+        "line": 31,
+        "name": "validate_transport_audit"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "fn validate_transport_audit(input: &TransportAudit<'_>) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::validate_transport_audit::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": ".is_some_and(|code| !(1000..=1999).contains(&code))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::validate_transport_audit::<closure>",
+      "kind": "closure",
+      "line": 54,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 54,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": ".is_some_and(|code| !(1000..=1999).contains(&code))",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -65686,14 +65738,14 @@
       },
       "identity": "crate::node_registry::audit::audit_events",
       "kind": "method",
-      "line": 15,
+      "line": 64,
       "name": "audit_events",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 15,
+        "line": 64,
         "name": "audit_events"
       },
       "path": "src/node_registry/audit.rs",
@@ -65712,14 +65764,14 @@
       },
       "identity": "crate::node_registry::audit::audit_events::<closure>",
       "kind": "closure",
-      "line": 16,
+      "line": 65,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 16,
+        "line": 65,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
@@ -65738,14 +65790,14 @@
       },
       "identity": "crate::node_registry::audit::lifecycle_trust_events",
       "kind": "method",
-      "line": 40,
+      "line": 89,
       "name": "lifecycle_trust_events",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 40,
+        "line": 89,
         "name": "lifecycle_trust_events"
       },
       "path": "src/node_registry/audit.rs",
@@ -65764,18 +65816,356 @@
       },
       "identity": "crate::node_registry::audit::lifecycle_trust_events::<closure>",
       "kind": "closure",
-      "line": 41,
+      "line": 90,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 41,
+        "line": 90,
         "name": "<closure>"
       },
       "path": "src/node_registry/audit.rs",
       "signature": "self.with_connection(|connection| lifecycle_trust_events_in(connection, limit))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_transport_audit",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "pub(crate) fn record_transport_audit( &self, input: TransportAudit<'_>, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_transport_audit",
+      "kind": "method",
+      "line": 94,
+      "name": "record_transport_audit",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 94,
+        "name": "record_transport_audit"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "pub(crate) fn record_transport_audit( &self, input: TransportAudit<'_>, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_transport_audit::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "self.with_mutating_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_transport_audit::<closure>",
+      "kind": "closure",
+      "line": 100,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 100,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "self.with_mutating_connection(|connection| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_transport_audit::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": ".query_row(\"SELECT COUNT(*) FROM transport_audit\", [], |row| row.get(0))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_transport_audit::<closure>::<closure>",
+      "kind": "closure",
+      "line": 105,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 105,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": ".query_row(\"SELECT COUNT(*) FROM transport_audit\", [], |row| row.get(0))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::audit::consume_cue_rate",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "pub fn consume_cue_rate(&self, node_id: &str, now: i64) -> Result<bool, RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::consume_cue_rate",
+      "kind": "method",
+      "line": 138,
+      "name": "consume_cue_rate",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 138,
+        "name": "consume_cue_rate"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "pub fn consume_cue_rate(&self, node_id: &str, now: i64) -> Result<bool, RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::audit::consume_cue_rate::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "self.with_mutating_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::consume_cue_rate::<closure>",
+      "kind": "closure",
+      "line": 145,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "closure",
+        "line": 145,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "self.with_mutating_connection(|connection| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::consume_cue_rate::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::consume_cue_rate::<closure>::<closure>",
+      "kind": "closure",
+      "line": 152,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 152,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_enrollment_audit",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "pub fn record_enrollment_audit( &self, event_code: &str, request_id: Option<&[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_enrollment_audit",
+      "kind": "method",
+      "line": 181,
+      "name": "record_enrollment_audit",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 181,
+        "name": "record_enrollment_audit"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "pub fn record_enrollment_audit( &self, event_code: &str, request_id: Option<&[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_enrollment_audit::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "self.with_mutating_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_enrollment_audit::<closure>",
+      "kind": "closure",
+      "line": 194,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 194,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "self.with_mutating_connection(|connection| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_enrollment_audit_tx",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "pub(super) fn record_enrollment_audit_tx( transaction: &Transaction<'_>, event_code: &str, request_id: Option<&[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_enrollment_audit_tx",
+      "kind": "function",
+      "line": 212,
+      "name": "record_enrollment_audit_tx",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 212,
+        "name": "record_enrollment_audit_tx"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "pub(super) fn record_enrollment_audit_tx( transaction: &Transaction<'_>, event_code: &str, request_id: Option<&[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_enrollment_audit_tx::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "transaction.query_row(\"SELECT COUNT(*) FROM enrollment_audits\", [], |row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_enrollment_audit_tx::<closure>",
+      "kind": "closure",
+      "line": 222,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 222,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "transaction.query_row(\"SELECT COUNT(*) FROM enrollment_audits\", [], |row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::record_audit",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "pub(super) fn record_audit( transaction: &Transaction<'_>, input: AuditInput<'_>, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::record_audit",
+      "kind": "function",
+      "line": 255,
+      "name": "record_audit",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 255,
+        "name": "record_audit"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "pub(super) fn record_audit( transaction: &Transaction<'_>, input: AuditInput<'_>, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::lifecycle_trust_events_in",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "pub(crate) fn lifecycle_trust_events_in( connection: &Connection, limit: usize, ) -> Result<Vec<AuditEvent>, RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::lifecycle_trust_events_in",
+      "kind": "function",
+      "line": 284,
+      "name": "lifecycle_trust_events_in",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 284,
+        "name": "lifecycle_trust_events_in"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "pub(crate) fn lifecycle_trust_events_in( connection: &Connection, limit: usize, ) -> Result<Vec<AuditEvent>, RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::audit::audit_from_row",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/audit.rs",
+        "signature": "pub(super) fn audit_from_row(row: &Row<'_>) -> rusqlite::Result<AuditEvent>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::audit::audit_from_row",
+      "kind": "function",
+      "line": 299,
+      "name": "audit_from_row",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 299,
+        "name": "audit_from_row"
+      },
+      "path": "src/node_registry/audit.rs",
+      "signature": "pub(super) fn audit_from_row(row: &Row<'_>) -> rusqlite::Result<AuditEvent>",
       "source_class": "handwritten"
     },
     {
@@ -65961,214 +66351,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 5,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_transport_audit",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub fn record_transport_audit( &self, event_type: &str, node_id: &str, session_id: Option<&[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_transport_audit",
-      "kind": "method",
-      "line": 48,
-      "name": "record_transport_audit",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 5,
-        "kind": "method",
-        "line": 48,
-        "name": "record_transport_audit"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub fn record_transport_audit( &self, event_type: &str, node_id: &str, session_id: Option<&[u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_transport_audit::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "|| error_code.is_some_and(|code| !(1000..=1999).contains(&code))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_transport_audit::<closure>",
-      "kind": "closure",
-      "line": 69,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 69,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "|| error_code.is_some_and(|code| !(1000..=1999).contains(&code))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_transport_audit::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "|row| row.get(0),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_transport_audit::<closure>::<closure>",
-      "kind": "closure",
-      "line": 82,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 82,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "|row| row.get(0),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 11,
-      "cyclomatic": 10,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_cue_transport_audit",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub fn record_cue_transport_audit( &self, event_type: &str, node_id: &str, session_id: Option<&[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_cue_transport_audit",
-      "kind": "method",
-      "line": 113,
-      "name": "record_cue_transport_audit",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 11,
-        "cyclomatic": 10,
-        "kind": "method",
-        "line": 113,
-        "name": "record_cue_transport_audit"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub fn record_cue_transport_audit( &self, event_type: &str, node_id: &str, session_id: Option<&[u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_cue_transport_audit::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": ".query_row(\"SELECT COUNT(*) FROM transport_audit\", [], |row| row.get(0))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_cue_transport_audit::<closure>::<closure>",
-      "kind": "closure",
-      "line": 163,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 163,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": ".query_row(\"SELECT COUNT(*) FROM transport_audit\", [], |row| row.get(0))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node_registry::audit::consume_cue_rate",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub fn consume_cue_rate(&self, node_id: &str, now: i64) -> Result<bool, RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::consume_cue_rate",
-      "kind": "method",
-      "line": 196,
-      "name": "consume_cue_rate",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "method",
-        "line": 196,
-        "name": "consume_cue_rate"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub fn consume_cue_rate(&self, node_id: &str, now: i64) -> Result<bool, RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::consume_cue_rate::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::consume_cue_rate::<closure>::<closure>",
-      "kind": "closure",
-      "line": 210,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 210,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_enrollment_audit",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub fn record_enrollment_audit( &self, event_code: &str, request_id: Option<&[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_enrollment_audit",
-      "kind": "method",
-      "line": 239,
-      "name": "record_enrollment_audit",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 239,
-        "name": "record_enrollment_audit"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub fn record_enrollment_audit( &self, event_code: &str, request_id: Option<&[u8",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -66192,58 +66374,6 @@
       },
       "path": "src/node_registry/open.rs",
       "signature": "pub(super) fn with_connection<T>( &self, operation: impl FnOnce(&mut Connection) -> Result<T, RegistryError>, ) -> Result<T, RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_enrollment_audit_tx",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub(super) fn record_enrollment_audit_tx( transaction: &Transaction<'_>, event_code: &str, request_id: Option<&[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_enrollment_audit_tx",
-      "kind": "function",
-      "line": 270,
-      "name": "record_enrollment_audit_tx",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 270,
-        "name": "record_enrollment_audit_tx"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub(super) fn record_enrollment_audit_tx( transaction: &Transaction<'_>, event_code: &str, request_id: Option<&[u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::record_enrollment_audit_tx::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "transaction.query_row(\"SELECT COUNT(*) FROM enrollment_audits\", [], |row| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_enrollment_audit_tx::<closure>",
-      "kind": "closure",
-      "line": 280,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 280,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "transaction.query_row(\"SELECT COUNT(*) FROM enrollment_audits\", [], |row| {",
       "source_class": "handwritten"
     },
     {
@@ -68304,32 +68434,6 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::audit::record_audit",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub(super) fn record_audit( transaction: &Transaction<'_>, input: AuditInput<'_>, ) -> Result<(), RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::record_audit",
-      "kind": "function",
-      "line": 313,
-      "name": "record_audit",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 313,
-        "name": "record_audit"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub(super) fn record_audit( transaction: &Transaction<'_>, input: AuditInput<'_>, ) -> Result<(), RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
         "identity": "crate::node_registry::peers::load_peer",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/peers.rs",
@@ -68532,58 +68636,6 @@
       },
       "path": "src/node_registry/peers.rs",
       "signature": "pub(super) fn revocation_from_row(row: &Row<'_>) -> rusqlite::Result<RevocationRecord>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::lifecycle_trust_events_in",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub(crate) fn lifecycle_trust_events_in( connection: &Connection, limit: usize, ) -> Result<Vec<AuditEvent>, RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::lifecycle_trust_events_in",
-      "kind": "function",
-      "line": 342,
-      "name": "lifecycle_trust_events_in",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 342,
-        "name": "lifecycle_trust_events_in"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub(crate) fn lifecycle_trust_events_in( connection: &Connection, limit: usize, ) -> Result<Vec<AuditEvent>, RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::audit::audit_from_row",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/audit.rs",
-        "signature": "pub(super) fn audit_from_row(row: &Row<'_>) -> rusqlite::Result<AuditEvent>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::audit::audit_from_row",
-      "kind": "function",
-      "line": 357,
-      "name": "audit_from_row",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 357,
-        "name": "audit_from_row"
-      },
-      "path": "src/node_registry/audit.rs",
-      "signature": "pub(super) fn audit_from_row(row: &Row<'_>) -> rusqlite::Result<AuditEvent>",
       "source_class": "handwritten"
     },
     {

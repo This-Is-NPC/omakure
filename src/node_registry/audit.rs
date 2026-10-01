@@ -11,18 +11,47 @@ use crate::util::hex;
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, TransactionBehavior, params};
 
-fn validate_transport_audit_metadata(
-    event_type: &str,
-    node_id: &str,
-    outcome: &str,
-    direction: Option<u8>,
-    error_code: Option<u16>,
-) -> Result<(), RegistryError> {
-    validate_bounded_text("transport event type", event_type, 64)?;
-    validate_node_id(node_id)?;
-    validate_bounded_text("transport outcome", outcome, 32)?;
-    if !matches!(direction, None | Some(0) | Some(1))
-        || error_code.is_some_and(|code| !(1000..=1999).contains(&code))
+pub(crate) struct TransportAudit<'a> {
+    pub(crate) event_type: &'a str,
+    pub(crate) node_id: &'a str,
+    pub(crate) session_id: Option<&'a [u8; 32]>,
+    pub(crate) direction: Option<u8>,
+    pub(crate) byte_count: usize,
+    pub(crate) outcome: &'a str,
+    pub(crate) error_code: Option<u16>,
+    pub(crate) cue: Option<CueAudit<'a>>,
+}
+
+pub(crate) struct CueAudit<'a> {
+    pub(crate) id: Option<&'a str>,
+    pub(crate) script: Option<&'a str>,
+    pub(crate) reason: Option<&'a str>,
+}
+
+fn validate_transport_audit(input: &TransportAudit<'_>) -> Result<(), RegistryError> {
+    if let Some(cue) = &input.cue {
+        if cue.id.is_some() != cue.script.is_some() || cue.id.is_some() != cue.reason.is_some() {
+            return Err(RegistryError::InvalidInput(
+                "Cue audit correlation must be complete".to_string(),
+            ));
+        }
+        if let Some(cue_id) = cue.id {
+            if cue_id.len() != 32 || !hex::is_lower(cue_id) {
+                return Err(RegistryError::InvalidInput(
+                    "Cue audit id must be 32 lowercase hex characters".to_string(),
+                ));
+            }
+            validate_bounded_text("Cue audit script", cue.script.unwrap_or_default(), 64)?;
+            validate_bounded_text("Cue audit reason", cue.reason.unwrap_or_default(), 128)?;
+        }
+    }
+    validate_bounded_text("transport event type", input.event_type, 64)?;
+    validate_node_id(input.node_id)?;
+    validate_bounded_text("transport outcome", input.outcome, 32)?;
+    if !matches!(input.direction, None | Some(0) | Some(1))
+        || input
+            .error_code
+            .is_some_and(|code| !(1000..=1999).contains(&code))
     {
         return Err(RegistryError::InvalidInput(
             "transport audit metadata is invalid".to_string(),
@@ -61,87 +90,12 @@ impl NodeRegistry {
         self.with_connection(|connection| lifecycle_trust_events_in(connection, limit))
     }
 
-    /// Append a redacted transport outcome. The method deliberately accepts
-    /// only bounded metadata and never accepts frames, plaintext, keys, or
-    /// signatures.
-    #[allow(clippy::too_many_arguments)]
-    pub fn record_transport_audit(
+    /// Append a redacted transport outcome with optional bounded Cue correlation.
+    pub(crate) fn record_transport_audit(
         &self,
-        event_type: &str,
-        node_id: &str,
-        session_id: Option<&[u8; 32]>,
-        direction: Option<u8>,
-        byte_count: usize,
-        outcome: &str,
-        error_code: Option<u16>,
+        input: TransportAudit<'_>,
     ) -> Result<(), RegistryError> {
-        validate_transport_audit_metadata(event_type, node_id, outcome, direction, error_code)?;
-        let now = chrono::Utc::now().timestamp();
-        self.with_mutating_connection(|connection| {
-            let transaction =
-                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let audit_count: i64 = transaction.query_row(
-                "SELECT COUNT(*) FROM transport_audit",
-                [],
-                |row| row.get(0),
-            )?;
-            if audit_count >= MAX_TRANSPORT_AUDIT_ROWS {
-                return Err(RegistryError::AuditCapacity);
-            }
-            transaction.execute(
-                "INSERT INTO transport_audit
-                 (event_type, node_id, session_id, bundle_id, direction, byte_count, outcome, error_code, occurred_at)
-                 VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8)",
-                params![
-                    event_type,
-                    node_id,
-                    session_id.map(|value| value.as_slice()),
-                    direction,
-                    i64::try_from(byte_count).map_err(|_| RegistryError::InvalidInput(
-                        "transport byte count is too large".to_string()
-                    ))?,
-                    outcome,
-                    error_code,
-                    now,
-                ],
-            )?;
-            transaction.commit()?;
-            Ok(())
-        })
-    }
-
-    /// Append a transport audit row with the bounded Cue correlation fields.
-    /// The caller omits these fields for trust failures so unauthorized peers
-    /// cannot turn the audit path into a subject-disclosure channel.
-    #[allow(clippy::too_many_arguments)]
-    pub fn record_cue_transport_audit(
-        &self,
-        event_type: &str,
-        node_id: &str,
-        session_id: Option<&[u8; 32]>,
-        direction: Option<u8>,
-        byte_count: usize,
-        outcome: &str,
-        error_code: Option<u16>,
-        cue_id: Option<&str>,
-        cue_script: Option<&str>,
-        cue_reason: Option<&str>,
-    ) -> Result<(), RegistryError> {
-        if cue_id.is_some() != cue_script.is_some() || cue_id.is_some() != cue_reason.is_some() {
-            return Err(RegistryError::InvalidInput(
-                "Cue audit correlation must be complete".to_string(),
-            ));
-        }
-        if let Some(cue_id) = cue_id {
-            if cue_id.len() != 32 || !hex::is_lower(cue_id) {
-                return Err(RegistryError::InvalidInput(
-                    "Cue audit id must be 32 lowercase hex characters".to_string(),
-                ));
-            }
-            validate_bounded_text("Cue audit script", cue_script.unwrap_or_default(), 64)?;
-            validate_bounded_text("Cue audit reason", cue_reason.unwrap_or_default(), 128)?;
-        }
-        validate_transport_audit_metadata(event_type, node_id, outcome, direction, error_code)?;
+        validate_transport_audit(&input)?;
         let now = chrono::Utc::now().timestamp();
         self.with_mutating_connection(|connection| {
             let transaction =
@@ -158,18 +112,18 @@ impl NodeRegistry {
                   error_code, cue_id, cue_script, cue_reason, occurred_at)
                  VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 params![
-                    event_type,
-                    node_id,
-                    session_id.map(|value| value.as_slice()),
-                    direction,
-                    i64::try_from(byte_count).map_err(|_| RegistryError::InvalidInput(
+                    input.event_type,
+                    input.node_id,
+                    input.session_id.map(|value| value.as_slice()),
+                    input.direction,
+                    i64::try_from(input.byte_count).map_err(|_| RegistryError::InvalidInput(
                         "transport byte count is too large".to_string()
                     ))?,
-                    outcome,
-                    error_code,
-                    cue_id,
-                    cue_script,
-                    cue_reason,
+                    input.outcome,
+                    input.error_code,
+                    input.cue.as_ref().and_then(|cue| cue.id),
+                    input.cue.as_ref().and_then(|cue| cue.script),
+                    input.cue.as_ref().and_then(|cue| cue.reason),
                     now,
                 ],
             )?;

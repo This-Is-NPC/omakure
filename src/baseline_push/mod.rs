@@ -548,15 +548,18 @@ impl<'a> BaselineSession<'a> {
     }
 
     fn audit(&self, event: &str, outcome: &str, code: Option<BaselineCode>) {
-        let _ = self.registry.record_transport_audit(
-            event,
-            &self.remote_node_id,
-            Some(&self.session_id),
-            None,
-            0,
-            outcome,
-            code.map(BaselineCode::code),
-        );
+        let _ = self
+            .registry
+            .record_transport_audit(crate::node_registry::TransportAudit {
+                event_type: event,
+                node_id: &self.remote_node_id,
+                session_id: Some(&self.session_id),
+                direction: None,
+                byte_count: 0,
+                outcome,
+                error_code: code.map(BaselineCode::code),
+                cue: None,
+            });
     }
 
     fn refuse(

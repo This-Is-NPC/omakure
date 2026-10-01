@@ -46,15 +46,18 @@ impl<'a> CueSession<'a> {
                 .iter()
                 .any(|record| record.cue_id == cue_id)
             {
-                let _ = self.registry.record_transport_audit(
-                    "cue_rejected",
-                    &self.remote_node_id,
-                    None,
-                    None,
-                    0,
-                    "rejected",
-                    Some(CueCode::Duplicate.code()),
-                );
+                let _ =
+                    self.registry
+                        .record_transport_audit(crate::node_registry::TransportAudit {
+                            event_type: "cue_rejected",
+                            node_id: &self.remote_node_id,
+                            session_id: None,
+                            direction: None,
+                            byte_count: 0,
+                            outcome: "rejected",
+                            error_code: Some(CueCode::Duplicate.code()),
+                            cue: None,
+                        });
                 return CueOutcome::Repeat;
             }
             self.remember_cue(cue_id, crate::util::time::unix_seconds() as i64);
@@ -80,19 +83,22 @@ impl<'a> CueSession<'a> {
         // Audit every decision, including acceptance. A remote instruction that
         // left no trace would undermine the transport audit trail used to explain
         // each outcome.
-        let _ = self.registry.record_transport_audit(
-            if code.is_some() {
-                "cue_rejected"
-            } else {
-                "cue_accepted"
-            },
-            &self.remote_node_id,
-            None,
-            None,
-            0,
-            outcome,
-            code.map(CueCode::code),
-        );
+        let _ = self
+            .registry
+            .record_transport_audit(crate::node_registry::TransportAudit {
+                event_type: if code.is_some() {
+                    "cue_rejected"
+                } else {
+                    "cue_accepted"
+                },
+                node_id: &self.remote_node_id,
+                session_id: None,
+                direction: None,
+                byte_count: 0,
+                outcome,
+                error_code: code.map(CueCode::code),
+                cue: None,
+            });
 
         CueOutcome::Decided(decision)
     }

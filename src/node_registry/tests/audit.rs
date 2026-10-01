@@ -29,29 +29,32 @@ fn cue_audit_persists_correlation_and_leaves_plain_rows_null() {
     let cue_id = "0123456789abcdef0123456789abcdef";
 
     registry
-        .record_cue_transport_audit(
-            "cue_rejected",
-            &identity.public_status().node_id,
-            None,
-            None,
-            0,
-            "rejected",
-            Some(1206),
-            Some(cue_id),
-            Some("deploy.sh"),
-            Some("approved by operator"),
-        )
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "cue_rejected",
+            node_id: &identity.public_status().node_id,
+            session_id: None,
+            direction: None,
+            byte_count: 0,
+            outcome: "rejected",
+            error_code: Some(1206),
+            cue: Some(crate::node_registry::CueAudit {
+                id: Some(cue_id),
+                script: Some("deploy.sh"),
+                reason: Some("approved by operator"),
+            }),
+        })
         .unwrap();
     registry
-        .record_transport_audit(
-            "plain_event",
-            &identity.public_status().node_id,
-            None,
-            None,
-            0,
-            "accepted",
-            None,
-        )
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "plain_event",
+            node_id: &identity.public_status().node_id,
+            session_id: None,
+            direction: None,
+            byte_count: 0,
+            outcome: "accepted",
+            error_code: None,
+            cue: None,
+        })
         .unwrap();
 
     let connection = Connection::open(node_context.database_path()).unwrap();
@@ -91,7 +94,16 @@ fn transport_audit_validation_keeps_cue_precedence_and_metadata_errors() {
     let node_id = identity.public_status().node_id.clone();
 
     let invalid_event = registry
-        .record_transport_audit("", &node_id, None, Some(2), 0, "rejected", None)
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "",
+            node_id: &node_id,
+            session_id: None,
+            direction: Some(2),
+            byte_count: 0,
+            outcome: "rejected",
+            error_code: None,
+            cue: None,
+        })
         .unwrap_err();
     assert_eq!(
         invalid_event.to_string(),
@@ -99,18 +111,20 @@ fn transport_audit_validation_keeps_cue_precedence_and_metadata_errors() {
     );
 
     let incomplete_cue = registry
-        .record_cue_transport_audit(
-            "",
-            &node_id,
-            None,
-            Some(2),
-            0,
-            "rejected",
-            None,
-            Some("bad"),
-            None,
-            None,
-        )
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "",
+            node_id: &node_id,
+            session_id: None,
+            direction: Some(2),
+            byte_count: 0,
+            outcome: "rejected",
+            error_code: None,
+            cue: Some(crate::node_registry::CueAudit {
+                id: Some("bad"),
+                script: None,
+                reason: None,
+            }),
+        })
         .unwrap_err();
     assert_eq!(
         incomplete_cue.to_string(),
@@ -118,18 +132,20 @@ fn transport_audit_validation_keeps_cue_precedence_and_metadata_errors() {
     );
 
     let invalid_direction = registry
-        .record_cue_transport_audit(
-            "cue_rejected",
-            &node_id,
-            None,
-            Some(2),
-            0,
-            "rejected",
-            None,
-            None,
-            None,
-            None,
-        )
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "cue_rejected",
+            node_id: &node_id,
+            session_id: None,
+            direction: Some(2),
+            byte_count: 0,
+            outcome: "rejected",
+            error_code: None,
+            cue: Some(crate::node_registry::CueAudit {
+                id: None,
+                script: None,
+                reason: None,
+            }),
+        })
         .unwrap_err();
     assert_eq!(
         invalid_direction.to_string(),

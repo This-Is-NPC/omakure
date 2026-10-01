@@ -363,15 +363,16 @@ pub fn dispatch_cue(
     // Performer never sent.
     let acknowledgement = read_cue_ack(&mut stream, &mut session, &remote, &cue_id, deadline);
 
-    registry.record_transport_audit(
-        "cue_dispatched",
-        remote.node_id(),
-        Some(session.session_id()),
-        Some(0),
-        dispatch.encoded().len(),
-        "accepted",
-        None,
-    )?;
+    registry.record_transport_audit(crate::node_registry::TransportAudit {
+        event_type: "cue_dispatched",
+        node_id: remote.node_id(),
+        session_id: Some(session.session_id()),
+        direction: Some(0),
+        byte_count: dispatch.encoded().len(),
+        outcome: "accepted",
+        error_code: None,
+        cue: None,
+    })?;
     // The Conductor computes the opaque run id it will see on the
     // `run-completed` Signal from the cue id it just minted. No message
     // carries a correlation field; both sides derive it.

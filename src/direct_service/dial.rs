@@ -242,15 +242,16 @@ pub(super) fn connect_and_hold(
         &stream,
     )?;
     registry
-        .record_transport_audit(
-            "probe_accepted",
-            remote.node_id(),
-            Some(&session_id),
-            Some(0),
-            response.body.len() + probe.encoded().len(),
-            "accepted",
-            None,
-        )
+        .record_transport_audit(crate::node_registry::TransportAudit {
+            event_type: "probe_accepted",
+            node_id: remote.node_id(),
+            session_id: Some(&session_id),
+            direction: Some(0),
+            byte_count: response.body.len() + probe.encoded().len(),
+            outcome: "accepted",
+            error_code: None,
+            cue: None,
+        })
         .map_err(|_| TransportError::Internal)?;
     let health = HealthSession::new(
         &identity,
@@ -361,14 +362,15 @@ pub fn probe(
         session.session_id(),
         &nonce,
     )?;
-    registry.record_transport_audit(
-        "probe_accepted",
-        remote.node_id(),
-        Some(session.session_id()),
-        Some(0),
-        response.body.len(),
-        "accepted",
-        None,
-    )?;
+    registry.record_transport_audit(crate::node_registry::TransportAudit {
+        event_type: "probe_accepted",
+        node_id: remote.node_id(),
+        session_id: Some(session.session_id()),
+        direction: Some(0),
+        byte_count: response.body.len(),
+        outcome: "accepted",
+        error_code: None,
+        cue: None,
+    })?;
     Ok(())
 }

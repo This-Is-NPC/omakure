@@ -344,18 +344,22 @@ impl<'a> CueSession<'a> {
         dispatch: Option<&CueDispatch>,
     ) {
         let metadata = dispatch.filter(|_| code.is_none_or(CueCode::is_reportable));
-        let _ = self.registry.record_cue_transport_audit(
-            event,
-            &self.remote_node_id,
-            Some(&self.session_id),
-            None,
-            0,
-            outcome,
-            code.map(CueCode::code),
-            metadata.map(|dispatch| dispatch.cue_id.as_str()),
-            metadata.map(|dispatch| dispatch.script.as_str()),
-            metadata.map(|dispatch| dispatch.reason.as_str()),
-        );
+        let _ = self
+            .registry
+            .record_transport_audit(crate::node_registry::TransportAudit {
+                event_type: event,
+                node_id: &self.remote_node_id,
+                session_id: Some(&self.session_id),
+                direction: None,
+                byte_count: 0,
+                outcome,
+                error_code: code.map(CueCode::code),
+                cue: Some(crate::node_registry::CueAudit {
+                    id: metadata.map(|dispatch| dispatch.cue_id.as_str()),
+                    script: metadata.map(|dispatch| dispatch.script.as_str()),
+                    reason: metadata.map(|dispatch| dispatch.reason.as_str()),
+                }),
+            });
     }
 
     /// Audit the true code, report the narrowed one, and only to a sender

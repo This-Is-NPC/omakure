@@ -313,15 +313,18 @@ impl ActiveSession<'_, '_, '_, '_> {
                 true
             }
             BaselineAckMatch::Late { accepted, code } => {
-                let _ = self.registry.record_transport_audit(
-                    "baseline_answered_late",
-                    self.peer_node_id,
-                    Some(self.transport.session_id()),
-                    None,
-                    0,
-                    if accepted { "accepted" } else { "rejected" },
-                    (!accepted).then_some(code),
-                );
+                let _ =
+                    self.registry
+                        .record_transport_audit(crate::node_registry::TransportAudit {
+                            event_type: "baseline_answered_late",
+                            node_id: self.peer_node_id,
+                            session_id: Some(self.transport.session_id()),
+                            direction: None,
+                            byte_count: 0,
+                            outcome: if accepted { "accepted" } else { "rejected" },
+                            error_code: (!accepted).then_some(code),
+                            cue: None,
+                        });
                 self.outbound_baseline = None;
                 true
             }
@@ -521,14 +524,15 @@ pub(super) fn audit_error(
     session_id: Option<&[u8; 32]>,
     error: &TransportError,
 ) -> Result<(), DirectServiceError> {
-    registry.record_transport_audit(
-        "probe_rejected",
+    registry.record_transport_audit(crate::node_registry::TransportAudit {
+        event_type: "probe_rejected",
         node_id,
         session_id,
-        Some(0),
-        0,
-        "rejected",
-        Some(error.code() as u16),
-    )?;
+        direction: Some(0),
+        byte_count: 0,
+        outcome: "rejected",
+        error_code: Some(error.code() as u16),
+        cue: None,
+    })?;
     Ok(())
 }

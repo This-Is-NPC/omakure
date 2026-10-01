@@ -9,7 +9,7 @@ use std::fs;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::Output;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -23,12 +23,7 @@ mod docker_output;
 use docker::{bounded_command, safe_generation_stderr};
 use docker_output::{json_output, output_text};
 
-fn compose_project() -> &'static str {
-    static PROJECT: OnceLock<String> = OnceLock::new();
-    PROJECT
-        .get_or_init(|| format!("omakure-enrollment-{}", std::process::id()))
-        .as_str()
-}
+static PROJECT: LazyLock<String> = LazyLock::new(|| docker::compose_project_name("enrollment"));
 
 struct ComposeGuard {
     root: PathBuf,
@@ -162,7 +157,7 @@ impl Drop for ComposeGuard {
 
 fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
     docker::cleanup_project(
-        compose_project(),
+        PROJECT.as_str(),
         &["down", "--volumes", "--remove-orphans"],
         |args| compose(guard, args),
     )
@@ -182,7 +177,7 @@ fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
     docker::compose_command(
         &guard.root,
         |command| guard.env.apply(command),
-        &["-p", compose_project()],
+        &["-p", PROJECT.as_str()],
         args,
     )
     .output()
@@ -194,7 +189,7 @@ fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
     guard.env.apply(&mut command);
     command
         .current_dir(&guard.root)
-        .args(["compose", "-p", compose_project(), "exec", "-T", service])
+        .args(["compose", "-p", PROJECT.as_str(), "exec", "-T", service])
         .args(args);
     command.output().expect("run docker compose exec")
 }
@@ -309,7 +304,7 @@ fn copy_from_container(guard: &ComposeGuard, service: &str, source: &str, destin
         .args([
             "compose",
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "cp",
             &format!("{service}:{source}"),
             destination,

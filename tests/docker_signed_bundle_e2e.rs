@@ -15,19 +15,14 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
 
 const COMPOSE_FILE: &str = "ci/compose/compose.signed-bundle.e2e.yaml";
 
-fn compose_project() -> &'static str {
-    static PROJECT: OnceLock<String> = OnceLock::new();
-    PROJECT
-        .get_or_init(|| format!("omakure-signed-bundle-{}", std::process::id()))
-        .as_str()
-}
+static PROJECT: LazyLock<String> = LazyLock::new(|| docker::compose_project_name("signed-bundle"));
 
 struct ComposeGuard {
     root: PathBuf,
@@ -225,7 +220,7 @@ impl Drop for ComposeGuard {
 
 fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
     docker::cleanup_project(
-        compose_project(),
+        PROJECT.as_str(),
         &[
             "--profile",
             "autojoin",
@@ -262,7 +257,7 @@ mod cleanup_tests {
                 "-f",
                 super::COMPOSE_FILE,
                 "-p",
-                super::compose_project(),
+                super::PROJECT.as_str(),
                 "ps",
             ]
         );
@@ -295,7 +290,7 @@ fn compose_command(guard: &ComposeGuard, args: &[&str]) -> Command {
         |command| {
             command.envs(&guard.compose_env);
         },
-        &["-f", COMPOSE_FILE, "-p", compose_project()],
+        &["-f", COMPOSE_FILE, "-p", PROJECT.as_str()],
         args,
     )
 }

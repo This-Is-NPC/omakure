@@ -5,6 +5,10 @@ use std::time::{Duration, Instant};
 const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
 const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
 
+pub fn compose_project_name(label: &str) -> String {
+    format!("omakure-{label}-{}", std::process::id())
+}
+
 fn bounded_command_within(program: &str, budget: &str) -> Command {
     let mut command = Command::new("timeout");
     command.args(["--foreground", "--kill-after=10s", budget, program]);

@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Output;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
@@ -22,12 +22,7 @@ mod docker_output;
 use docker::{bounded_command, safe_generation_stderr};
 use docker_output::{json_output, output_text};
 
-fn compose_project() -> &'static str {
-    static PROJECT: OnceLock<String> = OnceLock::new();
-    PROJECT
-        .get_or_init(|| format!("omakure-discovery-{}", std::process::id()))
-        .as_str()
-}
+static PROJECT: LazyLock<String> = LazyLock::new(|| docker::compose_project_name("discovery"));
 
 struct ComposeGuard {
     root: PathBuf,
@@ -69,7 +64,7 @@ impl ComposeGuard {
                 self,
                 &[
                     "-p",
-                    compose_project(),
+                    PROJECT.as_str(),
                     "up",
                     "--build",
                     "-d",
@@ -86,7 +81,7 @@ impl ComposeGuard {
                 self,
                 &[
                     "-p",
-                    compose_project(),
+                    PROJECT.as_str(),
                     "up",
                     "--build",
                     "-d",
@@ -106,7 +101,7 @@ impl ComposeGuard {
             self,
             &[
                 "-p",
-                compose_project(),
+                PROJECT.as_str(),
                 "up",
                 "--build",
                 "-d",
@@ -187,10 +182,10 @@ impl Drop for ComposeGuard {
 
 fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
     docker::cleanup_project(
-        compose_project(),
+        PROJECT.as_str(),
         &[
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "down",
             "--volumes",
             "--remove-orphans",
@@ -215,12 +210,12 @@ fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
         .expect("run docker compose")
 }
 fn compose_diagnostics(guard: &ComposeGuard) -> String {
-    let ps = compose(guard, &["-p", compose_project(), "ps", "-a"]);
+    let ps = compose(guard, &["-p", PROJECT.as_str(), "ps", "-a"]);
     let logs = compose(
         guard,
         &[
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "logs",
             "--no-color",
             "--tail",
@@ -241,14 +236,14 @@ fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
     guard.env.apply(&mut command);
     command
         .current_dir(&guard.root)
-        .args(["compose", "-p", compose_project(), "exec", "-T", service])
+        .args(["compose", "-p", PROJECT.as_str(), "exec", "-T", service])
         .args(args)
         .output()
         .expect("run docker compose exec")
 }
 
 fn container_ip(guard: &ComposeGuard, service: &str) -> String {
-    let id = compose(guard, &["-p", compose_project(), "ps", "-q", service]);
+    let id = compose(guard, &["-p", PROJECT.as_str(), "ps", "-q", service]);
     assert!(
         id.status.success(),
         "cannot locate {service}: {}",
@@ -273,7 +268,7 @@ fn container_ip(guard: &ComposeGuard, service: &str) -> String {
 }
 
 fn compose_service_healthy(guard: &ComposeGuard, service: &str) -> bool {
-    let id = compose(guard, &["-p", compose_project(), "ps", "-q", service]);
+    let id = compose(guard, &["-p", PROJECT.as_str(), "ps", "-q", service]);
     if !id.status.success() {
         return false;
     }
@@ -339,7 +334,7 @@ fn wait_for_stopped(guard: &ComposeGuard, service: &str) {
             guard,
             &[
                 "-p",
-                compose_project(),
+                PROJECT.as_str(),
                 "ps",
                 "--status",
                 "running",
@@ -437,7 +432,7 @@ fn copy_state(guard: &ComposeGuard, service: &str, destination: &Path) {
         .args([
             "compose",
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "cp",
             &format!("{service}:/var/lib/omakure/node.sqlite"),
             destination,
@@ -476,7 +471,7 @@ fn copy_from_container(guard: &ComposeGuard, service: &str, source: &str, destin
         .args([
             "compose",
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "cp",
             &format!("{service}:{source}"),
             destination,
@@ -687,7 +682,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     assert!(
         compose(
             &compose_guard,
-            &["-p", compose_project(), "stop", "enrollment-candidate"]
+            &["-p", PROJECT.as_str(), "stop", "enrollment-candidate"]
         )
         .status
         .success()
@@ -696,7 +691,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     assert!(
         compose(
             &compose_guard,
-            &["-p", compose_project(), "stop", "enrollment-target"]
+            &["-p", PROJECT.as_str(), "stop", "enrollment-target"]
         )
         .status
         .success()
@@ -707,7 +702,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
             &compose_guard,
             &[
                 "-p",
-                compose_project(),
+                PROJECT.as_str(),
                 "up",
                 "-d",
                 "--no-deps",
@@ -739,7 +734,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     assert!(
         compose(
             &compose_guard,
-            &["-p", compose_project(), "start", "enrollment-candidate"]
+            &["-p", PROJECT.as_str(), "start", "enrollment-candidate"]
         )
         .status
         .success()

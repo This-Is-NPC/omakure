@@ -1,5 +1,35 @@
 use super::*;
 
+#[tokio::test(flavor = "current_thread")]
+async fn node_routes_use_the_shared_blocking_gate_after_validation() {
+    let dir = TempDir::new().unwrap();
+    let workspace = crate::test_support::workspace_in(&dir);
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    gate.close();
+    let app = super::super::router::router_with_blocking_gate(workspace, gate);
+
+    for path in ["/v1/node/status", "/v1/node/peers", "/v1/node/enrollments"] {
+        let response = app.clone().oneshot(authed_request(path)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(response_json(response).await["error"]["code"], "io_failed");
+    }
+
+    let malformed = app
+        .clone()
+        .oneshot(authed_json_request("/v1/node/init", "{"))
+        .await
+        .unwrap();
+    assert_eq!(malformed.status(), StatusCode::BAD_REQUEST);
+
+    assert_eq!(
+        app.oneshot(authed_request("/v1/health"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+}
+
 #[tokio::test]
 async fn discovery_status_requires_its_explicit_scope_and_redacts_addresses() {
     let dir = TempDir::new().unwrap();

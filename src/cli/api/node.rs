@@ -1,4 +1,5 @@
 use super::bearer::{require_capability, require_scope};
+use super::blocking::{operation_response_bounded, run_bounded_with_join};
 use super::query::{query_pairs, query_value};
 use super::respond::{operation_error_response, operation_response, parse_json_body};
 use super::state::{ApiCapability, ApiState};
@@ -128,21 +129,24 @@ pub(super) async fn node_status_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
-    operation_response(node_context().and_then(|context| {
-        node_ops::public_node_status(&context).map(|mut status| {
-            status.transport = state
-                .transport
-                .as_ref()
-                .and_then(|transport| transport.lock().ok().map(|status| status.clone()));
-            status.discovery = node_ops::public_discovery_status_with_config(
-                state.discovery.as_ref(),
-                false,
-                status.config.as_ref(),
-            )
-            .ok();
-            status
+    operation_response_bounded("node", state.blocking_operation_gate.clone(), move || {
+        node_context().and_then(|context| {
+            node_ops::public_node_status(&context).map(|mut status| {
+                status.transport = state
+                    .transport
+                    .as_ref()
+                    .and_then(|transport| transport.lock().ok().map(|status| status.clone()));
+                status.discovery = node_ops::public_discovery_status_with_config(
+                    state.discovery.as_ref(),
+                    false,
+                    status.config.as_ref(),
+                )
+                .ok();
+                status
+            })
         })
-    }))
+    })
+    .await
 }
 
 pub(super) async fn node_discovery_handler(
@@ -157,15 +161,18 @@ pub(super) async fn node_discovery_handler(
         .ok()
         .and_then(|pairs| query_value(&pairs, "include_addresses"))
         .is_some_and(|value| matches!(value.as_str(), "1" | "true"));
-    operation_response(node_context().and_then(|context| {
-        node_ops::public_node_status(&context).and_then(|status| {
-            node_ops::public_discovery_status_with_config(
-                state.discovery.as_ref(),
-                include_addresses,
-                status.config.as_ref(),
-            )
+    operation_response_bounded("node", state.blocking_operation_gate.clone(), move || {
+        node_context().and_then(|context| {
+            node_ops::public_node_status(&context).and_then(|status| {
+                node_ops::public_discovery_status_with_config(
+                    state.discovery.as_ref(),
+                    include_addresses,
+                    status.config.as_ref(),
+                )
+            })
         })
-    }))
+    })
+    .await
 }
 
 pub(super) async fn node_initialize_handler(
@@ -181,9 +188,12 @@ pub(super) async fn node_initialize_handler(
     {
         return operation_error_response(error);
     }
-    operation_response(node_context().and_then(|context| {
-        node_ops::initialize_node_nonblocking(&context, &crate::domain::NodeConfig::default())
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate.clone(), || {
+        node_context().and_then(|context| {
+            node_ops::initialize_node_nonblocking(&context, &crate::domain::NodeConfig::default())
+        })
+    })
+    .await
 }
 
 /// Thin adapter over the protocol-neutral fleet-status operation.
@@ -220,22 +230,30 @@ pub(super) async fn node_signals_handler(
     operation_response(crate::operations::health::signal_feed(&registry))
 }
 
-pub(super) async fn node_peers_handler(Extension(auth_ctx): Extension<AuthContext>) -> Response {
+pub(super) async fn node_peers_handler(
+    State(state): State<ApiState>,
+    Extension(auth_ctx): Extension<AuthContext>,
+) -> Response {
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
-    operation_response(node_context().and_then(|context| node_ops::list_trusted_peers(&context)))
+    operation_response_bounded("node", state.blocking_operation_gate, || {
+        node_context().and_then(|context| node_ops::list_trusted_peers(&context))
+    })
+    .await
 }
 
 pub(super) async fn node_enrollments_handler(
+    State(state): State<ApiState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::EnrollmentRead) {
         return response;
     }
-    operation_response(
-        node_context().and_then(|context| node_ops::list_pending_enrollments(&context)),
-    )
+    operation_response_bounded("node", state.blocking_operation_gate, || {
+        node_context().and_then(|context| node_ops::list_pending_enrollments(&context))
+    })
+    .await
 }
 
 pub(super) async fn node_enrollment_stage_handler(
@@ -253,13 +271,16 @@ pub(super) async fn node_enrollment_stage_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    operation_response(node_context().and_then(|context| {
-        node_ops::stage_manual_enrollment_hex(
-            &context,
-            &body.request_hex,
-            &body.transport_certificate,
-        )
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            node_ops::stage_manual_enrollment_hex(
+                &context,
+                &body.request_hex,
+                &body.transport_certificate,
+            )
+        })
+    })
+    .await
 }
 
 pub(super) async fn node_enrollment_approve_handler(
@@ -280,20 +301,23 @@ pub(super) async fn node_enrollment_approve_handler(
         Ok(body) => body,
         Err(error) => return operation_error_response(error),
     };
-    operation_response(node_context().and_then(|context| {
-        node_ops::approve_manual_enrollment(
-            &context,
-            node_ops::ManualEnrollmentApprovalRequest {
-                request_hex: body.request_hex,
-                transport_certificate: body.transport_certificate,
-                code: body.code,
-                actor: body.actor,
-                reason: body.reason,
-                confirmed: body.confirmed,
-                expected_node_id: Some(node_id),
-            },
-        )
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            node_ops::approve_manual_enrollment(
+                &context,
+                node_ops::ManualEnrollmentApprovalRequest {
+                    request_hex: body.request_hex,
+                    transport_certificate: body.transport_certificate,
+                    code: body.code,
+                    actor: body.actor,
+                    reason: body.reason,
+                    confirmed: body.confirmed,
+                    expected_node_id: Some(node_id),
+                },
+            )
+        })
+    })
+    .await
 }
 
 pub(super) async fn node_enrollment_reject_handler(
@@ -312,17 +336,20 @@ pub(super) async fn node_enrollment_reject_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    operation_response(node_context().and_then(|context| {
-        node_ops::reject_manual_enrollment(
-            &context,
-            node_ops::ManualEnrollmentRejectionRequest {
-                node_id,
-                actor: body.actor,
-                reason: body.reason,
-                confirmed: body.confirmed,
-            },
-        )
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            node_ops::reject_manual_enrollment(
+                &context,
+                node_ops::ManualEnrollmentRejectionRequest {
+                    node_id,
+                    actor: body.actor,
+                    reason: body.reason,
+                    confirmed: body.confirmed,
+                },
+            )
+        })
+    })
+    .await
 }
 
 pub(super) async fn node_signed_bundle_apply_handler(
@@ -346,18 +373,22 @@ pub(super) async fn node_signed_bundle_apply_handler(
         Ok(body) => body,
         Err(error) => return operation_error_response(error),
     };
-    operation_response(node_context().and_then(|context| {
-        node_ops::apply_signed_bundle_from_local_token(
-            &context,
-            node_ops::SignedBundleApplyRequest {
-                bundle_hex: body.bundle_hex,
-                bootstrap_token: String::new(),
-                bootstrap_nonce: body.bootstrap_nonce,
-                bootstrap_token_path: None,
-            },
-            &auth_ctx.token_id,
-        )
-    }))
+    let token_id = auth_ctx.token_id;
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            node_ops::apply_signed_bundle_from_local_token(
+                &context,
+                node_ops::SignedBundleApplyRequest {
+                    bundle_hex: body.bundle_hex,
+                    bootstrap_token: String::new(),
+                    bootstrap_nonce: body.bootstrap_nonce,
+                    bootstrap_token_path: None,
+                },
+                &token_id,
+            )
+        })
+    })
+    .await
 }
 
 pub(super) async fn node_trust_handler(
@@ -373,21 +404,24 @@ pub(super) async fn node_trust_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    operation_response(node_context().and_then(|context| {
-        node_ops::import_manual_trust(
-            &context,
-            node_ops::ManualTrustRequest {
-                node_id: body.node_id,
-                public_key: body.public_key,
-                transport_certificate: body.transport_certificate,
-                role: body.role,
-                capabilities: body.capabilities,
-                actor: body.actor,
-                reason: body.reason,
-                confirmed: body.confirmed,
-            },
-        )
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            node_ops::import_manual_trust(
+                &context,
+                node_ops::ManualTrustRequest {
+                    node_id: body.node_id,
+                    public_key: body.public_key,
+                    transport_certificate: body.transport_certificate,
+                    role: body.role,
+                    capabilities: body.capabilities,
+                    actor: body.actor,
+                    reason: body.reason,
+                    confirmed: body.confirmed,
+                },
+            )
+        })
+    })
+    .await
 }
 
 pub(super) async fn node_capabilities_handler(
@@ -406,18 +440,21 @@ pub(super) async fn node_capabilities_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    operation_response(node_context().and_then(|context| {
-        node_ops::update_peer_capabilities(
-            &context,
-            node_ops::CapabilityUpdateRequest {
-                node_id,
-                capabilities: body.capabilities,
-                actor: body.actor,
-                reason: body.reason,
-                confirmed: body.confirmed,
-            },
-        )
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            node_ops::update_peer_capabilities(
+                &context,
+                node_ops::CapabilityUpdateRequest {
+                    node_id,
+                    capabilities: body.capabilities,
+                    actor: body.actor,
+                    reason: body.reason,
+                    confirmed: body.confirmed,
+                },
+            )
+        })
+    })
+    .await
 }
 
 /// Dispatch one Cue over the session this process already holds.
@@ -467,15 +504,20 @@ pub(super) async fn node_cue_handler(
     let wait = Duration::from_secs(u64::from(body.wait_seconds.min(MAX_CUE_WAIT_SECONDS)));
     // The dispatch blocks on the session thread, so it must not hold a runtime
     // worker for its whole budget.
-    let dispatched = tokio::task::spawn_blocking(move || {
-        dispatcher.dispatch(
-            &body.peer_node_id,
-            &body.script,
-            &body.reason,
-            wait,
-            body.cue_id.as_deref(),
-        )
-    })
+    let dispatched = run_bounded_with_join(
+        "cue dispatch",
+        state.blocking_operation_gate,
+        move || {
+            dispatcher.dispatch(
+                &body.peer_node_id,
+                &body.script,
+                &body.reason,
+                wait,
+                body.cue_id.as_deref(),
+            )
+        },
+        |_| OperationError::new(OperationErrorCode::IoFailed, "cue dispatch task failed"),
+    )
     .await;
     let result = match dispatched {
         Ok(Ok(outcome)) => Ok(serde_json::json!({
@@ -492,10 +534,7 @@ pub(super) async fn node_cue_handler(
             OperationErrorCode::InvalidInput,
             format!("cue dispatch failed: {error}"),
         )),
-        Err(_) => Err(OperationError::new(
-            OperationErrorCode::IoFailed,
-            "cue dispatch task failed",
-        )),
+        Err(error) => Err(error),
     };
     operation_response(result)
 }
@@ -553,9 +592,12 @@ pub(super) async fn node_baseline_handler(
     let wait = Duration::from_secs(u64::from(body.wait_seconds.min(MAX_CUE_WAIT_SECONDS)));
     // The push blocks on the session thread, so it must not hold a runtime
     // worker for its whole budget.
-    let pushed = tokio::task::spawn_blocking(move || {
-        dispatcher.push_baseline(&body.peer_node_id, &manifest, &scripts, wait)
-    })
+    let pushed = run_bounded_with_join(
+        "baseline push",
+        state.blocking_operation_gate,
+        move || dispatcher.push_baseline(&body.peer_node_id, &manifest, &scripts, wait),
+        |_| OperationError::new(OperationErrorCode::IoFailed, "baseline push task failed"),
+    )
     .await;
     let result = match pushed {
         Ok(Ok(outcome)) => Ok(serde_json::json!({
@@ -570,10 +612,7 @@ pub(super) async fn node_baseline_handler(
             OperationErrorCode::InvalidInput,
             format!("baseline push failed: {error}"),
         )),
-        Err(_) => Err(OperationError::new(
-            OperationErrorCode::IoFailed,
-            "baseline push task failed",
-        )),
+        Err(error) => Err(error),
     };
     operation_response(result)
 }
@@ -608,15 +647,18 @@ pub(super) async fn node_baseline_rollback_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    operation_response(node_context().and_then(|context| {
-        let policy = crate::baseline_push::read_policy(&context);
-        crate::operations::baseline::rollback_baseline(
-            &state.workspace,
-            &policy,
-            body.confirmed,
-            crate::direct_transport::unix_seconds() as i64,
-        )
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            let policy = crate::baseline_push::read_policy(&context);
+            crate::operations::baseline::rollback_baseline(
+                &state.workspace,
+                &policy,
+                body.confirmed,
+                crate::direct_transport::unix_seconds() as i64,
+            )
+        })
+    })
+    .await
 }
 
 /// Decode lowercase hex, refusing upper case so one artefact has one spelling.
@@ -641,18 +683,21 @@ pub(super) async fn node_revoke_handler(
             Ok(body) => body,
             Err(error) => return operation_error_response(error),
         };
-    operation_response(node_context().and_then(|context| {
-        node_ops::revoke_peer(
-            &context,
-            &state.workspace,
-            node_ops::RevocationRequest {
-                node_id,
-                actor: body.actor,
-                reason: body.reason,
-                confirmed: body.confirmed,
-            },
-        )
-    }))
+    operation_response_bounded("node", state.blocking_operation_gate, move || {
+        node_context().and_then(|context| {
+            node_ops::revoke_peer(
+                &context,
+                &state.workspace,
+                node_ops::RevocationRequest {
+                    node_id,
+                    actor: body.actor,
+                    reason: body.reason,
+                    confirmed: body.confirmed,
+                },
+            )
+        })
+    })
+    .await
 }
 
 fn node_context() -> OperationResult<crate::node::NodeContext> {

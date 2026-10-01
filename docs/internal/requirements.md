@@ -11,7 +11,7 @@ must be updated in the same change.
 | FR-001 | No-argument invocation prints CLI help; JSON mode returns one `invalid_argument` envelope. | `src/main.rs`, `tests/cli_no_subcommand.rs` |
 | FR-002 | Global `--scripts-dir` and environment overrides resolve one workspace root; positional paths are rejected. | `src/main.rs`, `src/cli/args/`, `tests/cli_surface_e2e.rs` |
 | FR-003 | Recursive script listing supports `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`, nested `.omakureignore`, and repeatable AND tag filters. | `src/adapters/workspace_repository.rs`, `src/runtime.rs`, `src/cli/list.rs` |
-| FR-004 | Embedded PascalCase schemas parse and validate fields, outputs, queue declarations, secret fields, and schedules. | `src/domain/schema.rs`, `src/domain/parsing.rs` |
+| FR-004 | Embedded PascalCase schemas parse and validate fields, secret fields, and schedules. | `src/domain/schema.rs`, `src/domain/parsing.rs` |
 | FR-005 | `describe` returns a complete parsed schema and resolved path; malformed schemas and missing scripts have stable errors. | `src/cli/describe.rs`, `src/operations/core.rs` |
 | FR-006 | SQLite full-text search refreshes and queries one transaction per CLI or HTTP request, supports repeatable tag filters, and reports refresh or commit failures instead of serving stale results. | `src/search_index.rs`, `src/cli/search.rs`, `src/cli/api/`, `src/operations/search.rs` |
 | FR-007 | `init` creates schema-bearing Bash, PowerShell, Python, or Lua templates, validates supplied schema JSON, reads optional body stdin, and protects existing files unless forced. | `src/cli/init.rs` |

@@ -1,4 +1,5 @@
 use super::bearer::require_capability;
+use super::blocking::{run_bounded, run_bounded_with_join};
 use super::query::{query_pairs, query_value, query_values};
 use super::respond::{operation_error_response, operation_response};
 use super::state::{ApiCapability, ApiState};
@@ -10,12 +11,24 @@ use crate::operations::{OperationError, OperationErrorCode};
 use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
 use axum::Extension;
+use serde::Serialize;
+use std::sync::Arc;
 
 pub(super) const MAX_SEARCH_QUERY_LEN: usize = 256;
 
 pub(super) const MAX_SEARCH_TAGS: usize = 16;
 
 pub(super) const MAX_SEARCH_TAG_LEN: usize = 64;
+
+async fn script_operation_response<T: Serialize + Send + 'static>(
+    gate: Arc<tokio::sync::Semaphore>,
+    task: impl FnOnce() -> crate::operations::OperationResult<T> + Send + 'static,
+) -> Response {
+    let result = run_bounded("script", gate, task)
+        .await
+        .and_then(std::convert::identity);
+    operation_response(result)
+}
 
 pub(super) async fn search_handler(
     State(state): State<ApiState>,
@@ -59,15 +72,20 @@ pub(super) async fn search_handler(
         Ok(request) => request,
         Err(err) => return operation_error_response(err),
     };
-    let result =
-        tokio::task::spawn_blocking(move || search_ops::search_scripts(&state.workspace, request))
-            .await
-            .unwrap_or_else(|err| {
-                Err(OperationError::new(
-                    OperationErrorCode::IoFailed,
-                    format!("Search task failed: {err}"),
-                ))
-            });
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    let result = run_bounded_with_join(
+        "search",
+        gate,
+        move || search_ops::search_scripts(&state.workspace, request),
+        |err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("Search task failed: {err}"),
+            )
+        },
+    )
+    .await
+    .and_then(std::convert::identity);
     operation_response(result)
 }
 
@@ -79,10 +97,14 @@ pub(super) async fn list_scripts_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    let request = query_pairs(raw_query.as_deref()).map(|pairs| core::ListScriptsRequest {
-        tags: query_values(&pairs, "tag"),
-    });
-    operation_response(request.and_then(|request| core::list_scripts(&state.workspace, request)))
+    let request = match query_pairs(raw_query.as_deref()) {
+        Ok(pairs) => core::ListScriptsRequest {
+            tags: query_values(&pairs, "tag"),
+        },
+        Err(err) => return operation_error_response(err),
+    };
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    script_operation_response(gate, move || core::list_scripts(&state.workspace, request)).await
 }
 
 async fn describe_script_handler(
@@ -93,10 +115,14 @@ async fn describe_script_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(core::describe_script(
-        &state.workspace,
-        core::DescribeScriptRequest { script: script_id },
-    ))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    script_operation_response(gate, move || {
+        core::describe_script(
+            &state.workspace,
+            core::DescribeScriptRequest { script: script_id },
+        )
+    })
+    .await
 }
 
 async fn script_schema_handler(
@@ -107,13 +133,15 @@ async fn script_schema_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    script_operation_response(gate, move || {
         core::describe_script(
             &state.workspace,
             core::DescribeScriptRequest { script: script_id },
         )
-        .map(|description| description.schema),
-    )
+        .map(|description| description.schema)
+    })
+    .await
 }
 
 pub(super) async fn script_path_handler(
@@ -147,11 +175,15 @@ async fn script_content_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(scripts_ops::read_script_content(
-        &state.workspace,
-        scripts_ops::ReadScriptContentRequest { script: script_id },
-        state.deploy.scripts.max_content_bytes as u64,
-    ))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    script_operation_response(gate, move || {
+        scripts_ops::read_script_content(
+            &state.workspace,
+            scripts_ops::ReadScriptContentRequest { script: script_id },
+            state.deploy.scripts.max_content_bytes as u64,
+        )
+    })
+    .await
 }
 
 pub(super) async fn tree_root_handler(
@@ -161,11 +193,15 @@ pub(super) async fn tree_root_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(scripts_ops::list_tree(
-        &state.workspace,
-        scripts_ops::ListTreeRequest { path: None },
-        state.deploy.scripts.tree_entry_limit,
-    ))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    script_operation_response(gate, move || {
+        scripts_ops::list_tree(
+            &state.workspace,
+            scripts_ops::ListTreeRequest { path: None },
+            state.deploy.scripts.tree_entry_limit,
+        )
+    })
+    .await
 }
 
 pub(super) async fn tree_path_handler(
@@ -176,9 +212,13 @@ pub(super) async fn tree_path_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::ScriptsRead) {
         return response;
     }
-    operation_response(scripts_ops::list_tree(
-        &state.workspace,
-        scripts_ops::ListTreeRequest { path: Some(path) },
-        state.deploy.scripts.tree_entry_limit,
-    ))
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    script_operation_response(gate, move || {
+        scripts_ops::list_tree(
+            &state.workspace,
+            scripts_ops::ListTreeRequest { path: Some(path) },
+            state.deploy.scripts.tree_entry_limit,
+        )
+    })
+    .await
 }

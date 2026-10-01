@@ -1,5 +1,28 @@
 use super::*;
 
+#[tokio::test(flavor = "current_thread")]
+async fn script_routes_use_the_shared_blocking_gate() {
+    let dir = TempDir::new().unwrap();
+    let workspace = crate::test_support::workspace_in(&dir);
+    write_script(workspace.scripts_root(), "job.sh");
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    gate.close();
+    let app = super::super::router::router_with_blocking_gate(workspace, gate);
+
+    for path in ["/v1/scripts/job.sh/content", "/v1/search?q=job"] {
+        let response = app.clone().oneshot(authed_request(path)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(response_json(response).await["error"]["code"], "io_failed");
+    }
+    assert_eq!(
+        app.oneshot(authed_request("/v1/health"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+}
+
 #[tokio::test]
 async fn scripts_and_schema_endpoints_return_operation_data() {
     let dir = TempDir::new().unwrap();

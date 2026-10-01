@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "a23431381fb435e9aaff7266549e6ce30e5965aae554ba8ec354d1dabd8d6c93",
+  "canonical_sha256": "72e4b0b10ecf517a391cec52e4b886136abc1ccbae71d2dcde2bcbdc4ea36780",
   "config_identity": "no-config",
   "files": [
     {
@@ -1156,12 +1156,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 20,
+        "invocations": 38,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 61,
-        "cyclomatic": 84
+        "cognitive": 59,
+        "cyclomatic": 100
       },
       "path": "src/cli/node_service.rs",
       "source_class": "handwritten"
@@ -29682,14 +29682,14 @@
       },
       "identity": "crate::cli::node_service::new",
       "kind": "method",
-      "line": 47,
+      "line": 48,
       "name": "new",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 47,
+        "line": 48,
         "name": "new"
       },
       "path": "src/cli/node_service.rs",
@@ -29708,14 +29708,14 @@
       },
       "identity": "crate::cli::node_service::enter",
       "kind": "method",
-      "line": 56,
+      "line": 57,
       "name": "enter",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 56,
+        "line": 57,
         "name": "enter"
       },
       "path": "src/cli/node_service.rs",
@@ -29734,14 +29734,14 @@
       },
       "identity": "crate::cli::node_service::set_alive",
       "kind": "method",
-      "line": 68,
+      "line": 69,
       "name": "set_alive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 68,
+        "line": 69,
         "name": "set_alive"
       },
       "path": "src/cli/node_service.rs",
@@ -29752,22 +29752,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::drop",
+        "identity": "crate::cli::node_service::drop@552#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "fn drop(&mut self)",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::drop",
+      "identity": "crate::cli::node_service::drop@552#2",
       "kind": "method",
-      "line": 77,
+      "line": 552,
       "name": "drop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 77,
+        "line": 552,
         "name": "drop"
       },
       "path": "src/cli/node_service.rs",
@@ -29786,14 +29786,14 @@
       },
       "identity": "crate::cli::node_service::run_tracked_loop",
       "kind": "function",
-      "line": 84,
+      "line": 85,
       "name": "run_tracked_loop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 84,
+        "line": 85,
         "name": "run_tracked_loop"
       },
       "path": "src/cli/node_service.rs",
@@ -29801,8 +29801,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 33,
-      "cyclomatic": 28,
+      "cognitive": 11,
+      "cyclomatic": 10,
       "derived": {
         "identity": "crate::cli::node_service::run",
         "macro_expansion": "not_measured",
@@ -29812,14 +29812,14 @@
       },
       "identity": "crate::cli::node_service::run",
       "kind": "function",
-      "line": 89,
+      "line": 252,
       "name": "run",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 33,
-        "cyclomatic": 28,
+        "cognitive": 11,
+        "cyclomatic": 10,
         "kind": "function",
-        "line": 89,
+        "line": 252,
         "name": "run"
       },
       "path": "src/cli/node_service.rs",
@@ -29833,45 +29833,19 @@
         "identity": "crate::cli::node_service::run::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
-        "signature": ".map_err(|_| \"discovery_secret_invalid\")?,",
+        "signature": "direct_bind.map(|bind| bind.port()),",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::node_service::run::<closure>",
       "kind": "closure",
-      "line": 194,
+      "line": 340,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 194,
-        "name": "<closure>"
-      },
-      "path": "src/cli/node_service.rs",
-      "signature": ".map_err(|_| \"discovery_secret_invalid\")?,",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@200#2",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/node_service.rs",
-        "signature": "direct_bind.map(|bind| bind.port()),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::node_service::run::<closure>@200#2",
-      "kind": "closure",
-      "line": 200,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 200,
+        "line": 340,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -29882,22 +29856,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@225#3",
+        "identity": "crate::cli::node_service::run::<closure>@362#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": ".map(|service| service.cue_dispatcher());",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>@225#3",
+      "identity": "crate::cli::node_service::run::<closure>@362#2",
       "kind": "closure",
-      "line": 225,
+      "line": 362,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 225,
+        "line": 362,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -29908,22 +29882,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@228#4",
+        "identity": "crate::cli::node_service::run::<closure>@365#3",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": ".map(|service| service.baseline_dispatcher());",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>@228#4",
+      "identity": "crate::cli::node_service::run::<closure>@365#3",
       "kind": "closure",
-      "line": 228,
+      "line": 365,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 228,
+        "line": 365,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -29934,22 +29908,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@229#5",
+        "identity": "crate::cli::node_service::run::<closure>@366#4",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "let transport_status = direct_service.as_ref().map(|service| service.status());",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>@229#5",
+      "identity": "crate::cli::node_service::run::<closure>@366#4",
       "kind": "closure",
-      "line": 229,
+      "line": 366,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 229,
+        "line": 366,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -29960,22 +29934,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@230#6",
+        "identity": "crate::cli::node_service::run::<closure>@367#5",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "let discovery_status = discovery_service.as_ref().map(|service| service.status());",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>@230#6",
+      "identity": "crate::cli::node_service::run::<closure>@367#5",
       "kind": "closure",
-      "line": 230,
+      "line": 367,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 230,
+        "line": 367,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -29986,48 +29960,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@232#7",
+        "identity": "crate::cli::node_service::scheduler_readiness_clears_when_loop_panics::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
-        "signature": "let transport_watcher = transport_status.as_ref().map(|status| {",
+        "signature": "let handle = thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>@232#7",
+      "identity": "crate::cli::node_service::scheduler_readiness_clears_when_loop_panics::<closure>",
       "kind": "closure",
-      "line": 232,
+      "line": 735,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 232,
-        "name": "<closure>"
-      },
-      "path": "src/cli/node_service.rs",
-      "signature": "let transport_watcher = transport_status.as_ref().map(|status| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::cli::node_service::run::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/node_service.rs",
-        "signature": "let handle = thread::spawn(move || {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::node_service::run::<closure>::<closure>",
-      "kind": "closure",
-      "line": 237,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "closure",
-        "line": 237,
+        "line": 735,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30038,22 +29986,22 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>::<closure>::<closure>",
+        "identity": "crate::cli::node_service::spawn_transport_watcher::<closure>::<closure>::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "let connected = status.lock().ok().is_some_and(|status| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>::<closure>::<closure>",
+      "identity": "crate::cli::node_service::spawn_transport_watcher::<closure>::<closure>::<closure>",
       "kind": "closure",
-      "line": 239,
+      "line": 166,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 239,
+        "line": 166,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30064,48 +30012,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@266#8",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/node_service.rs",
-        "signature": "worker_handles.push(thread::spawn(move || {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::node_service::run::<closure>@266#8",
-      "kind": "closure",
-      "line": 266,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 266,
-        "name": "<closure>"
-      },
-      "path": "src/cli/node_service.rs",
-      "signature": "worker_handles.push(thread::spawn(move || {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::node_service::run::<closure>::<closure>@267#2",
+        "identity": "crate::cli::node_service::scheduler_readiness_clears_when_loop_panics::<closure>::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "run_tracked_loop(lifecycle, || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>::<closure>@267#2",
+      "identity": "crate::cli::node_service::scheduler_readiness_clears_when_loop_panics::<closure>::<closure>",
       "kind": "closure",
-      "line": 267,
+      "line": 736,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 267,
+        "line": 736,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30116,22 +30038,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@292#9",
+        "identity": "crate::cli::node_service::run::<closure>@392#6",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "thread::spawn(move || health_maintenance_loop(context, workspace, flag))",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>@292#9",
+      "identity": "crate::cli::node_service::run::<closure>@392#6",
       "kind": "closure",
-      "line": 292,
+      "line": 392,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 292,
+        "line": 392,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30142,22 +30064,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>@299#10",
+        "identity": "crate::cli::node_service::run::<closure>@399#7",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "Some(thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>@299#10",
+      "identity": "crate::cli::node_service::run::<closure>@399#7",
       "kind": "closure",
-      "line": 299,
+      "line": 399,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 299,
+        "line": 399,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30168,22 +30090,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::run::<closure>::<closure>@300#3",
+        "identity": "crate::cli::node_service::run::<closure>::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "run_tracked_loop(lifecycle, || scheduler_loop(ws, flag));",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::run::<closure>::<closure>@300#3",
+      "identity": "crate::cli::node_service::run::<closure>::<closure>",
       "kind": "closure",
-      "line": 300,
+      "line": 400,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 300,
+        "line": 400,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30202,14 +30124,14 @@
       },
       "identity": "crate::cli::node_service::health_maintenance_loop",
       "kind": "function",
-      "line": 380,
+      "line": 481,
       "name": "health_maintenance_loop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 8,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 380,
+        "line": 481,
         "name": "health_maintenance_loop"
       },
       "path": "src/cli/node_service.rs",
@@ -30217,8 +30139,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 5,
-      "cyclomatic": 6,
+      "cognitive": 4,
+      "cyclomatic": 5,
       "derived": {
         "identity": "crate::cli::node_service::run_health_maintenance",
         "macro_expansion": "not_measured",
@@ -30228,14 +30150,14 @@
       },
       "identity": "crate::cli::node_service::run_health_maintenance",
       "kind": "function",
-      "line": 400,
+      "line": 501,
       "name": "run_health_maintenance",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 6,
+        "cognitive": 4,
+        "cyclomatic": 5,
         "kind": "function",
-        "line": 400,
+        "line": 501,
         "name": "run_health_maintenance"
       },
       "path": "src/cli/node_service.rs",
@@ -30254,14 +30176,14 @@
       },
       "identity": "crate::cli::node_service::run_health_maintenance::<closure>",
       "kind": "closure",
-      "line": 402,
+      "line": 503,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 402,
+        "line": 503,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30280,14 +30202,14 @@
       },
       "identity": "crate::cli::node_service::scheduler_loop",
       "kind": "function",
-      "line": 432,
+      "line": 530,
       "name": "scheduler_loop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 8,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 432,
+        "line": 530,
         "name": "scheduler_loop"
       },
       "path": "src/cli/node_service.rs",
@@ -30306,14 +30228,14 @@
       },
       "identity": "crate::cli::node_service::readiness_gate_defaults_ready_without_requirements",
       "kind": "function",
-      "line": 465,
+      "line": 658,
       "name": "readiness_gate_defaults_ready_without_requirements",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 465,
+        "line": 658,
         "name": "readiness_gate_defaults_ready_without_requirements"
       },
       "path": "src/cli/node_service.rs",
@@ -30332,14 +30254,14 @@
       },
       "identity": "crate::cli::node_service::readiness_requires_worker_fails_until_alive",
       "kind": "function",
-      "line": 471,
+      "line": 664,
       "name": "readiness_requires_worker_fails_until_alive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 471,
+        "line": 664,
         "name": "readiness_requires_worker_fails_until_alive"
       },
       "path": "src/cli/node_service.rs",
@@ -30358,14 +30280,14 @@
       },
       "identity": "crate::cli::node_service::readiness_requires_scheduler_fails_until_alive",
       "kind": "function",
-      "line": 479,
+      "line": 672,
       "name": "readiness_requires_scheduler_fails_until_alive",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 479,
+        "line": 672,
         "name": "readiness_requires_scheduler_fails_until_alive"
       },
       "path": "src/cli/node_service.rs",
@@ -30384,14 +30306,14 @@
       },
       "identity": "crate::cli::node_service::readiness_requires_worker_ignored_when_workers_not_configured",
       "kind": "function",
-      "line": 487,
+      "line": 680,
       "name": "readiness_requires_worker_ignored_when_workers_not_configured",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 487,
+        "line": 680,
         "name": "readiness_requires_worker_ignored_when_workers_not_configured"
       },
       "path": "src/cli/node_service.rs",
@@ -30410,14 +30332,14 @@
       },
       "identity": "crate::cli::node_service::readiness_requires_scheduler_ignored_when_scheduler_disabled",
       "kind": "function",
-      "line": 493,
+      "line": 686,
       "name": "readiness_requires_scheduler_ignored_when_scheduler_disabled",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 493,
+        "line": 686,
         "name": "readiness_requires_scheduler_ignored_when_scheduler_disabled"
       },
       "path": "src/cli/node_service.rs",
@@ -30436,14 +30358,14 @@
       },
       "identity": "crate::cli::node_service::worker_readiness_tracks_entry_and_unexpected_exit",
       "kind": "function",
-      "line": 499,
+      "line": 692,
       "name": "worker_readiness_tracks_entry_and_unexpected_exit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 499,
+        "line": 692,
         "name": "worker_readiness_tracks_entry_and_unexpected_exit"
       },
       "path": "src/cli/node_service.rs",
@@ -30462,14 +30384,14 @@
       },
       "identity": "crate::cli::node_service::worker_readiness_tracks_entry_and_unexpected_exit::<closure>",
       "kind": "closure",
-      "line": 506,
+      "line": 699,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 506,
+        "line": 699,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30488,14 +30410,14 @@
       },
       "identity": "crate::cli::node_service::worker_readiness_tracks_entry_and_unexpected_exit::<closure>::<closure>",
       "kind": "closure",
-      "line": 507,
+      "line": 700,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 507,
+        "line": 700,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30506,22 +30428,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::node_service::worker_readiness_tracks_entry_and_unexpected_exit::<closure>@517#2",
+        "identity": "crate::cli::node_service::worker_readiness_tracks_entry_and_unexpected_exit::<closure>@710#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/node_service.rs",
         "signature": "let second = thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::node_service::worker_readiness_tracks_entry_and_unexpected_exit::<closure>@517#2",
+      "identity": "crate::cli::node_service::worker_readiness_tracks_entry_and_unexpected_exit::<closure>@710#2",
       "kind": "closure",
-      "line": 517,
+      "line": 710,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 517,
+        "line": 710,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30540,14 +30462,14 @@
       },
       "identity": "crate::cli::node_service::scheduler_readiness_clears_when_loop_panics",
       "kind": "function",
-      "line": 537,
+      "line": 730,
       "name": "scheduler_readiness_clears_when_loop_panics",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 537,
+        "line": 730,
         "name": "scheduler_readiness_clears_when_loop_panics"
       },
       "path": "src/cli/node_service.rs",
@@ -30566,14 +30488,14 @@
       },
       "identity": "crate::cli::node_service::scheduler_readiness_clears_when_loop_panics::<closure>",
       "kind": "closure",
-      "line": 542,
+      "line": 735,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 542,
+        "line": 735,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -30592,14 +30514,14 @@
       },
       "identity": "crate::cli::node_service::scheduler_readiness_clears_when_loop_panics::<closure>::<closure>",
       "kind": "closure",
-      "line": 543,
+      "line": 736,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 543,
+        "line": 736,
         "name": "<closure>"
       },
       "path": "src/cli/node_service.rs",
@@ -106420,6 +106342,422 @@
       },
       "path": "src/operations/battery/git.rs",
       "signature": "fn unsafe_git_config_key(section: &str, key: &str) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::cli::node_service::start_discovery_service",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn start_discovery_service( settings: crate::domain::DiscoverySettings, context: crate::node::NodeContext, direct_port: Option<u16>, secret: Option<String>, ) -> Result<Option<crate::discovery::DiscoveryService>, crate::discovery::DiscoveryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::start_discovery_service",
+      "kind": "function",
+      "line": 89,
+      "name": "start_discovery_service",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 89,
+        "name": "start_discovery_service"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn start_discovery_service( settings: crate::domain::DiscoverySettings, context: crate::node::NodeContext, direct_port: Option<u16>, secret: Option<String>, ) -> Result<Option<crate::discovery::DiscoveryService>, crate::discovery::DiscoveryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 5,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::cli::node_service::resolve_direct_bind",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn resolve_direct_bind( override_bind: Option<SocketAddr>, configured_bind: Option<&str>, allow_non_loopback: bool, ) -> Result<Option<SocketAddr>, Box<dyn Error>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::resolve_direct_bind",
+      "kind": "function",
+      "line": 108,
+      "name": "resolve_direct_bind",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 5,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 108,
+        "name": "resolve_direct_bind"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn resolve_direct_bind( override_bind: Option<SocketAddr>, configured_bind: Option<&str>, allow_non_loopback: bool, ) -> Result<Option<SocketAddr>, Box<dyn Error>>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::cli::node_service::scheduler_enabled",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn scheduler_enabled(no_scheduler: bool, scheduler: bool, configured: Option<bool>) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::scheduler_enabled",
+      "kind": "function",
+      "line": 129,
+      "name": "scheduler_enabled",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 129,
+        "name": "scheduler_enabled"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn scheduler_enabled(no_scheduler: bool, scheduler: bool, configured: Option<bool>) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::cli::node_service::resolve_discovery_secret",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn resolve_discovery_secret( config: &crate::domain::NodeConfig, workspace: &Workspace, ) -> Result<Option<String>, Box<dyn Error>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::resolve_discovery_secret",
+      "kind": "function",
+      "line": 139,
+      "name": "resolve_discovery_secret",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 139,
+        "name": "resolve_discovery_secret"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn resolve_discovery_secret( config: &crate::domain::NodeConfig, workspace: &Workspace, ) -> Result<Option<String>, Box<dyn Error>>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::resolve_discovery_secret::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": ".map_err(|_| \"discovery_secret_invalid\".into())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::resolve_discovery_secret::<closure>",
+      "kind": "closure",
+      "line": 152,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 152,
+        "name": "<closure>"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": ".map_err(|_| \"discovery_secret_invalid\".into())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::spawn_transport_watcher",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn spawn_transport_watcher( status: Option<&crate::direct_service::TransportStatusHandle>, readiness: &Arc<ReadinessGate>, ) -> Option<(Arc<AtomicBool>, thread::JoinHandle<()>)>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::spawn_transport_watcher",
+      "kind": "function",
+      "line": 155,
+      "name": "spawn_transport_watcher",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 155,
+        "name": "spawn_transport_watcher"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn spawn_transport_watcher( status: Option<&crate::direct_service::TransportStatusHandle>, readiness: &Arc<ReadinessGate>, ) -> Option<(Arc<AtomicBool>, thread::JoinHandle<()>)>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::spawn_transport_watcher::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "status.map(|status| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::spawn_transport_watcher::<closure>",
+      "kind": "closure",
+      "line": 159,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 159,
+        "name": "<closure>"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "status.map(|status| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::cli::node_service::spawn_workers",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn spawn_workers( workers: u32, workspace: &Workspace, context: &crate::node::NodeContext, args: &NodeServeArgs, readiness: &Arc<ReadinessGate>, cancel_flag: &Arc<AtomicBool>, ) -> Vec<thread::JoinHandle<()>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::spawn_workers",
+      "kind": "function",
+      "line": 178,
+      "name": "spawn_workers",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 178,
+        "name": "spawn_workers"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn spawn_workers( workers: u32, workspace: &Workspace, context: &crate::node::NodeContext, args: &NodeServeArgs, readiness: &Arc<ReadinessGate>, cancel_flag: &Arc<AtomicBool>, ) -> Vec<thread::JoinHandle<()>>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::spawn_workers::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "handles.push(thread::spawn(move || {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::spawn_workers::<closure>",
+      "kind": "closure",
+      "line": 198,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 198,
+        "name": "<closure>"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "handles.push(thread::spawn(move || {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::cli::node_service::stop_live_services",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn stop_live_services( cancel_flag: &Arc<AtomicBool>, transport_watcher: Option<(Arc<AtomicBool>, thread::JoinHandle<()>)>, direct_service: &mut Option<crate::direct_service::DirectService>, discovery_service: &mut Option<crate::discovery::DiscoveryService>, readiness: &Arc<ReadinessGate>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::stop_live_services",
+      "kind": "function",
+      "line": 216,
+      "name": "stop_live_services",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 216,
+        "name": "stop_live_services"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn stop_live_services( cancel_flag: &Arc<AtomicBool>, transport_watcher: Option<(Arc<AtomicBool>, thread::JoinHandle<()>)>, direct_service: &mut Option<crate::direct_service::DirectService>, discovery_service: &mut Option<crate::discovery::DiscoveryService>, readiness: &Arc<ReadinessGate>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::cli::node_service::join_background_loops",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn join_background_loops( scheduler_handle: Option<thread::JoinHandle<()>>, health_maintenance: thread::JoinHandle<()>, worker_handles: Vec<thread::JoinHandle<()>>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::join_background_loops",
+      "kind": "function",
+      "line": 238,
+      "name": "join_background_loops",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 238,
+        "name": "join_background_loops"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn join_background_loops( scheduler_handle: Option<thread::JoinHandle<()>>, health_maintenance: thread::JoinHandle<()>, worker_handles: Vec<thread::JoinHandle<()>>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::direct_bind_override_and_loopback_guard_keep_the_same_errors",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn direct_bind_override_and_loopback_guard_keep_the_same_errors()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::direct_bind_override_and_loopback_guard_keep_the_same_errors",
+      "kind": "function",
+      "line": 563,
+      "name": "direct_bind_override_and_loopback_guard_keep_the_same_errors",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 563,
+        "name": "direct_bind_override_and_loopback_guard_keep_the_same_errors"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn direct_bind_override_and_loopback_guard_keep_the_same_errors()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::scheduler_flags_keep_their_precedence",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn scheduler_flags_keep_their_precedence()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::scheduler_flags_keep_their_precedence",
+      "kind": "function",
+      "line": 594,
+      "name": "scheduler_flags_keep_their_precedence",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 594,
+        "name": "scheduler_flags_keep_their_precedence"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn scheduler_flags_keep_their_precedence()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::discovery_secret_is_resolved_only_when_enabled_and_named",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn discovery_secret_is_resolved_only_when_enabled_and_named()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::discovery_secret_is_resolved_only_when_enabled_and_named",
+      "kind": "function",
+      "line": 602,
+      "name": "discovery_secret_is_resolved_only_when_enabled_and_named",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 602,
+        "name": "discovery_secret_is_resolved_only_when_enabled_and_named"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn discovery_secret_is_resolved_only_when_enabled_and_named()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node_service::shutdown_stops_watcher_before_clearing_loop_readiness",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "fn shutdown_stops_watcher_before_clearing_loop_readiness()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::shutdown_stops_watcher_before_clearing_loop_readiness",
+      "kind": "function",
+      "line": 627,
+      "name": "shutdown_stops_watcher_before_clearing_loop_readiness",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 627,
+        "name": "shutdown_stops_watcher_before_clearing_loop_readiness"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "fn shutdown_stops_watcher_before_clearing_loop_readiness()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::cli::node_service::shutdown_stops_watcher_before_clearing_loop_readiness::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node_service.rs",
+        "signature": "let watcher = thread::spawn(move || {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node_service::shutdown_stops_watcher_before_clearing_loop_readiness::<closure>",
+      "kind": "closure",
+      "line": 637,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 637,
+        "name": "<closure>"
+      },
+      "path": "src/cli/node_service.rs",
+      "signature": "let watcher = thread::spawn(move || {",
       "source_class": "handwritten"
     }
   ],

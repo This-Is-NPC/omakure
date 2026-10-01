@@ -15,6 +15,7 @@ use std::fs;
 use std::net::UdpSocket;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::time::{Duration, Instant};
 
 pub const CASE_IDS: &[&str] = &[
     "exact.node-init",
@@ -45,6 +46,7 @@ const CAPS: &[&str] = &[
 ];
 const PEER_ID: &str = "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92";
 const PEER_KEY: &str = "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+const NODE_CLI_TIMEOUT: Duration = Duration::from_secs(30);
 
 type Probe = fn(&BehavioralContext) -> Result<ProbeEvidence, String>;
 
@@ -113,20 +115,37 @@ fn node_cli_any(ctx: &BehavioralContext, tail: &[&str]) -> Value {
         config.as_str(),
     ];
     args.extend_from_slice(tail);
-    let output = ctx.cli_with_env(
+    let started = Instant::now();
+    let output = ctx.cli_with_env_timeout(
         &args,
         &[
             ("OMAKURE_NODE_TEST_MODE", "1"),
             ("OMAKURE_NODE_STATE_DIR", state.as_str()),
             ("OMAKURE_NODE_CONFIG", config.as_str()),
         ],
+        NODE_CLI_TIMEOUT,
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let line = stdout
         .lines()
         .find(|line| !line.trim().is_empty())
         .unwrap_or("");
-    serde_json::from_str(line).expect("CLI node adapter emitted no JSON envelope")
+    serde_json::from_str(line).unwrap_or_else(|error| {
+        let problem = if line.is_empty() {
+            "no JSON envelope"
+        } else {
+            "invalid JSON envelope"
+        };
+        panic!(
+            "CLI node adapter emitted {problem} for {} in {}: {error}; status={}, elapsed={:?}, stdout_len={}, stderr_len={}, budget={NODE_CLI_TIMEOUT:?}",
+            tail.first().copied().unwrap_or("unknown"),
+            ctx.workspace.path().display(),
+            output.status,
+            started.elapsed(),
+            output.stdout.len(),
+            output.stderr.len(),
+        )
+    })
 }
 
 fn http(

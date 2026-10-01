@@ -189,6 +189,15 @@ impl BehavioralContext {
     }
 
     pub fn cli_with_env(&self, args: &[&str], envs: &[(&str, &str)]) -> Output {
+        self.cli_with_env_timeout(args, envs, Duration::from_secs(10))
+    }
+
+    pub fn cli_with_env_timeout(
+        &self,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        timeout: Duration,
+    ) -> Output {
         let mut command = support::omakure_command();
         command
             .arg("--scripts-dir")
@@ -198,7 +207,7 @@ impl BehavioralContext {
         for (key, value) in envs {
             command.env(key, value);
         }
-        support::command_with_timeout(&mut command, Duration::from_secs(10))
+        support::command_with_timeout(&mut command, timeout)
     }
 
     pub fn cli_json(&self, args: &[&str]) -> Value {

@@ -1,5 +1,6 @@
 use super::bearer::require_capability;
-use super::respond::error_response;
+use super::blocking::run_bounded;
+use super::respond::{error_response, operation_error_response};
 use super::state::{ApiCapability, ApiState};
 use crate::auth::AuthContext;
 use crate::cli::json;
@@ -8,6 +9,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use axum::Json;
+use std::sync::Arc;
 
 pub(super) async fn list_secrets_metadata_handler(
     State(state): State<ApiState>,
@@ -26,6 +28,14 @@ pub(super) async fn list_secrets_metadata_handler(
     let access = state.policy.secret_access(&auth_ctx);
     // Metadata listing also accepts credentials:use as a read-adjacent scope when
     // secrets:read-metadata is granted; secret_access already folds both scopes.
-    let metadata = crate::secrets::list_secret_metadata(&state.workspace, &access);
+    let gate = Arc::clone(&state.blocking_operation_gate);
+    let metadata = match run_bounded("secret metadata", gate, move || {
+        crate::secrets::list_secret_metadata(&state.workspace, &access)
+    })
+    .await
+    {
+        Ok(metadata) => metadata,
+        Err(err) => return operation_error_response(err),
+    };
     (StatusCode::OK, Json(json::ok_envelope(metadata))).into_response()
 }

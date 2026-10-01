@@ -163,6 +163,124 @@ fn freshness_boundaries_are_inclusive_exactly_where_the_contract_says() {
 }
 
 #[test]
+fn authorization_rejections_precede_freshness() {
+    let fixture = fixture();
+    let local = fixture.registry.local_node_id().to_string();
+    let (stranger, _, _) = peer_identity(9);
+    let conductor = trust(&fixture.registry, 2, PeerRole::Conductor, &[]);
+    let limited = trust(&fixture.registry, 3, PeerRole::Performer, &[]);
+    let future = BASE_NOW + MAX_FUTURE_SKEW_SECONDS + 1;
+
+    assert_eq!(
+        apply_at(
+            &fixture.registry,
+            &stranger,
+            &profile(&local, 1, 1),
+            future,
+            BASE_NOW
+        ),
+        HealthDecision::Rejected(HealthCode::Revoked)
+    );
+    assert_eq!(
+        apply_at(
+            &fixture.registry,
+            &conductor,
+            &profile(&local, 2, 1),
+            future,
+            BASE_NOW
+        ),
+        HealthDecision::Rejected(HealthCode::WrongRole)
+    );
+    assert_eq!(
+        apply_at(
+            &fixture.registry,
+            &limited,
+            &profile(&local, 3, 1),
+            future,
+            BASE_NOW
+        ),
+        HealthDecision::Rejected(HealthCode::MissingCapability)
+    );
+    assert!(fixture.registry.health_peer_states().unwrap().is_empty());
+}
+
+#[test]
+fn rate_rejection_precedes_message_replay_without_consuming_the_replay_key() {
+    let fixture = fixture();
+    let node_id = performer(&fixture.registry);
+    let local = fixture.registry.local_node_id().to_string();
+    let first = pulse(&local, 1, 1, BASE_NOW);
+
+    assert_eq!(
+        apply(&fixture.registry, &node_id, &first, BASE_NOW),
+        accepted(0)
+    );
+    assert_eq!(
+        apply(&fixture.registry, &node_id, &first, BASE_NOW + 1),
+        HealthDecision::Rejected(HealthCode::RateLimited)
+    );
+    assert_eq!(
+        apply(&fixture.registry, &node_id, &first, BASE_NOW + 10),
+        HealthDecision::Rejected(HealthCode::Replay)
+    );
+    let connection = Connection::open(fixture.registry.path()).unwrap();
+    let replay_keys: i64 = connection
+        .query_row("SELECT COUNT(*) FROM health_replay_keys", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(replay_keys, 1);
+    assert_eq!(
+        fixture.registry.health_peer_states().unwrap()[0].last_pulse_sequence,
+        1
+    );
+}
+
+#[test]
+fn message_replay_precedes_signal_ordering() {
+    let fixture = fixture();
+    let node_id = performer(&fixture.registry);
+    let local = fixture.registry.local_node_id().to_string();
+    assert_eq!(
+        apply(
+            &fixture.registry,
+            &node_id,
+            &profile(&local, 1, 1),
+            BASE_NOW
+        ),
+        accepted(0)
+    );
+
+    let out_of_order = signal(
+        &local,
+        1,
+        crate::health_plane::bounds::REORDER_BUFFER_ENTRIES + 1,
+        10,
+        BASE_NOW,
+    );
+    assert_eq!(
+        apply(&fixture.registry, &node_id, &out_of_order, BASE_NOW),
+        HealthDecision::Rejected(HealthCode::Replay)
+    );
+    let fresh_id = signal(
+        &local,
+        2,
+        crate::health_plane::bounds::REORDER_BUFFER_ENTRIES + 1,
+        11,
+        BASE_NOW,
+    );
+    assert_eq!(
+        apply(&fixture.registry, &node_id, &fresh_id, BASE_NOW),
+        HealthDecision::Rejected(HealthCode::Reordered)
+    );
+    let connection = Connection::open(fixture.registry.path()).unwrap();
+    let signals: i64 = connection
+        .query_row("SELECT COUNT(*) FROM health_signals", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(signals, 0);
+}
+
+#[test]
 fn unauthorized_and_revoked_peers_cannot_mutate_any_health_state() {
     let fixture = fixture();
     let local = fixture.registry.local_node_id().to_string();

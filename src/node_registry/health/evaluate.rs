@@ -16,7 +16,45 @@ pub(super) fn evaluate(
     request: &HealthApplyRequest<'_>,
 ) -> Result<HealthDecision, RegistryError> {
     let kind = request.payload.body.kind();
+    let stored_role = match authorize_sender(transaction, request, kind)? {
+        Ok(role) => role,
+        Err(code) => return Ok(HealthDecision::Rejected(code)),
+    };
+    if let Some(code) = freshness_rejection(request) {
+        return Ok(HealthDecision::Rejected(code));
+    }
+    let mut state = load_peer_state(transaction, request.sender)?;
+    if let Some(existing) = state.as_ref() {
+        if let Some(code) = rate_check(transaction, existing, kind, request.now)? {
+            return Ok(HealthDecision::Rejected(code));
+        }
+    }
+    let message_id = decode_opaque_id(&request.payload.message_id)?;
+    if replayed_message(transaction, &message_id)? {
+        return Ok(HealthDecision::Rejected(HealthCode::Replay));
+    }
+    let hold = match ordering_gate(transaction, request, state.as_ref())? {
+        Ok(hold) => hold,
+        Err(code) => return Ok(HealthDecision::Rejected(code)),
+    };
+    if let Some(code) = capacity_rejection(transaction, request, state.is_none())? {
+        return Ok(HealthDecision::Rejected(code));
+    }
+    apply_message(
+        transaction,
+        request,
+        &message_id,
+        stored_role,
+        &mut state,
+        hold,
+    )
+}
 
+fn authorize_sender(
+    transaction: &Transaction<'_>,
+    request: &HealthApplyRequest<'_>,
+    kind: HealthKind,
+) -> Result<Result<i64, HealthCode>, RegistryError> {
     // Step 7: trust, read from the local registry only.
     let authorization = transaction
         .query_row(
@@ -36,7 +74,7 @@ pub(super) fn evaluate(
         )
         .optional()?;
     let Some((identity_state, role, capabilities, trust_state)) = authorization else {
-        return Ok(HealthDecision::Rejected(HealthCode::Revoked));
+        return Ok(Err(HealthCode::Revoked));
     };
     let authorization = health_authorization_from_row(
         request.sender,
@@ -46,13 +84,13 @@ pub(super) fn evaluate(
         trust_state.as_deref(),
     )?;
     if authorization.state != PeerState::Active || trust_state.is_none() {
-        return Ok(HealthDecision::Rejected(HealthCode::Revoked));
+        return Ok(Err(HealthCode::Revoked));
     }
 
     // Step 8: role and the single-Conductor bound.
     let stored_role = authorization.role.code();
     if stored_role != kind.required_role() {
-        return Ok(HealthDecision::Rejected(HealthCode::WrongRole));
+        return Ok(Err(HealthCode::WrongRole));
     }
     if stored_role == 1 {
         let other_conductors: i64 = transaction.query_row(
@@ -61,7 +99,7 @@ pub(super) fn evaluate(
             |row| row.get(0),
         )?;
         if other_conductors >= MAX_CONDUCTORS_PER_PERFORMER {
-            return Ok(HealthDecision::Rejected(HealthCode::WrongRole));
+            return Ok(Err(HealthCode::WrongRole));
         }
     }
 
@@ -72,63 +110,57 @@ pub(super) fn evaluate(
             .iter()
             .any(|entry| entry == required)
         {
-            return Ok(HealthDecision::Rejected(HealthCode::MissingCapability));
+            return Ok(Err(HealthCode::MissingCapability));
         }
     }
 
-    // Step 10: freshness.
+    Ok(Ok(stored_role))
+}
+
+fn freshness_rejection(request: &HealthApplyRequest<'_>) -> Option<HealthCode> {
     if request.created_at
         > request
             .now
             .saturating_add(crate::health_plane::bounds::MAX_FUTURE_SKEW_SECONDS)
     {
-        return Ok(HealthDecision::Rejected(HealthCode::Future));
+        return Some(HealthCode::Future);
     }
     if request.now.saturating_sub(request.created_at) > crate::health_plane::bounds::MAX_AGE_SECONDS
     {
-        return Ok(HealthDecision::Rejected(HealthCode::Stale));
+        return Some(HealthCode::Stale);
     }
+    None
+}
 
-    let mut state = load_peer_state(transaction, request.sender)?;
-
-    // Step 11: rate.
-    if let Some(existing) = state.as_ref() {
-        if let Some(code) = rate_check(transaction, existing, kind, request.now)? {
-            return Ok(HealthDecision::Rejected(code));
-        }
-    }
-
-    // Step 12: replay.
-    let message_id = decode_opaque_id(&request.payload.message_id)?;
+fn replayed_message(
+    transaction: &Transaction<'_>,
+    message_id: &[u8],
+) -> Result<bool, RegistryError> {
     let seen: i64 = transaction.query_row(
         "SELECT COUNT(*) FROM health_replay_keys WHERE message_id = ?1",
         params![message_id],
         |row| row.get(0),
     )?;
-    if seen > 0 {
-        return Ok(HealthDecision::Rejected(HealthCode::Replay));
-    }
+    Ok(seen > 0)
+}
 
-    // Step 13: ordering.
-    let cursor = state.as_ref().map(|state| state.cursor).unwrap_or(0);
-    let mut hold = false;
+fn ordering_gate(
+    transaction: &Transaction<'_>,
+    request: &HealthApplyRequest<'_>,
+    state: Option<&HealthPeerState>,
+) -> Result<Result<bool, HealthCode>, RegistryError> {
+    let cursor = state.map(|state| state.cursor).unwrap_or(0);
     match &request.payload.body {
         HealthBody::Profile(profile) => {
-            let last = state
-                .as_ref()
-                .map(|state| state.last_profile_revision)
-                .unwrap_or(0);
+            let last = state.map(|state| state.last_profile_revision).unwrap_or(0);
             if profile.profile_revision <= last {
-                return Ok(HealthDecision::Rejected(HealthCode::Replay));
+                return Ok(Err(HealthCode::Replay));
             }
         }
         HealthBody::Pulse(pulse) => {
-            let last = state
-                .as_ref()
-                .map(|state| state.last_pulse_sequence)
-                .unwrap_or(0);
+            let last = state.map(|state| state.last_pulse_sequence).unwrap_or(0);
             if pulse.sequence <= last {
-                return Ok(HealthDecision::Rejected(HealthCode::Replay));
+                return Ok(Err(HealthCode::Replay));
             }
         }
         HealthBody::Signal(signal) => {
@@ -140,22 +172,28 @@ pub(super) fn evaluate(
                 |row| row.get(0),
             )?;
             if signal.sequence <= cursor || duplicate > 0 {
-                return Ok(HealthDecision::Rejected(HealthCode::Replay));
+                return Ok(Err(HealthCode::Replay));
             }
             if signal.sequence > cursor.saturating_add(REORDER_BUFFER_ENTRIES) {
-                return Ok(HealthDecision::Rejected(HealthCode::Reordered));
+                return Ok(Err(HealthCode::Reordered));
             }
-            hold = signal.sequence != cursor + 1;
+            return Ok(Ok(signal.sequence != cursor + 1));
         }
         HealthBody::Ack(_) | HealthBody::Error(_) => {}
     }
+    Ok(Ok(false))
+}
 
-    // Step 14: capacity.
-    if state.is_none() {
+fn capacity_rejection(
+    transaction: &Transaction<'_>,
+    request: &HealthApplyRequest<'_>,
+    new_peer: bool,
+) -> Result<Option<HealthCode>, RegistryError> {
+    if new_peer {
         let tracked: i64 =
             transaction.query_row("SELECT COUNT(*) FROM health_peers", [], |row| row.get(0))?;
         if tracked >= MAX_PERFORMERS_PER_CONDUCTOR {
-            return Ok(HealthDecision::Rejected(HealthCode::QueueFull));
+            return Ok(Some(HealthCode::QueueFull));
         }
     }
     if matches!(request.payload.body, HealthBody::Signal(_)) {
@@ -167,12 +205,21 @@ pub(super) fn evaluate(
         let global: i64 =
             transaction.query_row("SELECT COUNT(*) FROM health_signals", [], |row| row.get(0))?;
         if stored >= SIGNAL_INBOX_CAPACITY || global >= SIGNAL_GLOBAL_INBOX_CAPACITY {
-            return Ok(HealthDecision::Rejected(HealthCode::QueueFull));
+            return Ok(Some(HealthCode::QueueFull));
         }
     }
+    Ok(None)
+}
 
-    // Step 15: apply, inside this single transaction.
-    if !record_replay_key(transaction, &message_id, request.sender, request.now)? {
+fn apply_message(
+    transaction: &Transaction<'_>,
+    request: &HealthApplyRequest<'_>,
+    message_id: &[u8],
+    stored_role: i64,
+    state: &mut Option<HealthPeerState>,
+    hold: bool,
+) -> Result<HealthDecision, RegistryError> {
+    if !record_replay_key(transaction, message_id, request.sender, request.now)? {
         return Ok(HealthDecision::Rejected(HealthCode::RateLimited));
     }
     if state.is_none() {
@@ -184,14 +231,19 @@ pub(super) fn evaluate(
              VALUES (?1, ?2, 0, 0, 0, NULL, NULL, ?3, 0, 0, ?3, 0, ?3, ?3)",
             params![request.sender, stored_role, request.now],
         )?;
-        state = load_peer_state(transaction, request.sender)?;
+        *state = load_peer_state(transaction, request.sender)?;
     }
     let Some(existing) = state else {
         return Err(RegistryError::Corrupt(
             "health peer state disappeared during apply".to_string(),
         ));
     };
-    count_rate(transaction, request.sender, kind, request.now)?;
+    count_rate(
+        transaction,
+        request.sender,
+        request.payload.body.kind(),
+        request.now,
+    )?;
 
     let decision = match &request.payload.body {
         HealthBody::Profile(profile) => {

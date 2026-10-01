@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Output;
 use std::time::Duration;
+use support::assert_success;
 
 const SECRET_DEFAULT: &str = "http-schema-secret-default-plain-value";
 const QUEUE_SECRET: &str = "http-queue-secret-provider-plain-value";
@@ -459,7 +460,7 @@ fn authorized_secret_ref_enqueue_worker_and_history_do_not_leak_secret() {
         .expect("run id")
         .to_string();
 
-    let worker = omakure_with_env(
+    let worker = support::workspace_command_with_env::<15>(
         workspace.path(),
         &["--json", "queue", "worker", "--once"],
         &[
@@ -872,7 +873,10 @@ fn runs_queue_family_routes() {
         "body: {}",
         fail_enqueue.safe_body()
     );
-    let worker = omakure(workspace.path(), &["--json", "queue", "worker", "--once"]);
+    let worker = support::workspace_command::<15>(
+        workspace.path(),
+        &["--json", "queue", "worker", "--once"],
+    );
     assert_success(&worker);
 
     let dead = server.post_json("/v1/runs/http-dead-letter/dead-letter", &json!({}));
@@ -972,7 +976,7 @@ fn batteries_family_routes() {
     // Register via CLI with a local path, then rewrite registry to https URL
     // so inspect/scripts/install/sync/delete exercise the HTTP surface without
     // contacting a remote host.
-    let add = omakure(
+    let add = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -984,7 +988,10 @@ fn batteries_family_routes() {
         ],
     );
     assert_success(&add);
-    let sync = omakure(workspace.path(), &["--json", "battery", "sync", "fixture"]);
+    let sync = support::workspace_command::<15>(
+        workspace.path(),
+        &["--json", "battery", "sync", "fixture"],
+    );
     assert_success(&sync);
     rewrite_battery_git_url_to_https(workspace.path(), "fixture");
 
@@ -1603,7 +1610,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
         ("OMAKURE_NODE_STATE_DIR", state_arg.as_str()),
         ("OMAKURE_NODE_CONFIG", config_arg.as_str()),
     ];
-    let cli_init = omakure_with_env(
+    let cli_init = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1620,7 +1627,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
     let cli_init_json = support::json_envelope(&cli_init.stdout);
     assert_eq!(cli_init_json["data"]["status"]["initialized"], true);
 
-    let cli_trust = omakure_with_env(
+    let cli_trust = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1644,7 +1651,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
     );
     assert_success(&cli_trust);
 
-    let cli_status = omakure_with_env(
+    let cli_status = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1660,7 +1667,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
     assert_success(&cli_status);
     let cli_status_json = support::json_envelope(&cli_status.stdout);
 
-    let cli_peers = omakure_with_env(
+    let cli_peers = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1773,7 +1780,7 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     let tokens_path_str = tokens_path.to_str().expect("tokens path utf8");
 
     // Generate a narrowly-scoped token (config:read only) into a tokens file.
-    let gen = omakure(
+    let gen = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1797,7 +1804,7 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     // A SECOND token with a DISJOINT scope (scripts:read only). Two tokens with
     // non-overlapping scopes prove the enforced scope comes from the *presented*
     // token, not a fixed/first entry in the file.
-    let gen2 = omakure(
+    let gen2 = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1867,29 +1874,6 @@ fn tokens_file_mode_enforces_per_token_scopes() {
         401,
         "OMAKURE_TOKENS_FILE must not apply once --tokens-file is set; body: {}",
         harness.safe_body()
-    );
-}
-
-fn omakure(workspace: &Path, args: &[&str]) -> Output {
-    omakure_with_env(workspace, args, &[])
-}
-
-fn omakure_with_env(workspace: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = support::omakure_command();
-    command.arg("--scripts-dir").arg(workspace).args(args);
-    for (key, value) in envs {
-        command.env(key, value);
-    }
-    support::command_with_timeout(&mut command, Duration::from_secs(15))
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "expected success, status: {:?}, stdout_len: {}, stderr_len: {}",
-        output.status.code(),
-        output.stdout.len(),
-        output.stderr.len()
     );
 }
 

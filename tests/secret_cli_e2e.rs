@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::Path;
 use std::process::Output;
-use std::time::Duration;
+use support::assert_success;
 
 const RUN_SECRET: &str = "run-secret-cli-e2e-plain-value";
 const ENV_TOKEN: &str = "env-token-cli-e2e-plain-value";
@@ -17,7 +17,7 @@ fn run_secret_json_and_history_redact_plaintext() {
     write_secret_echo_script(workspace.path(), "secret-run.sh");
 
     let direct_secret = format!("TOKEN={RUN_SECRET}");
-    let output = omakure_with_env(
+    let output = support::workspace_command_with_env::<15>(
         workspace.path(),
         &["--json", "run", "secret-run.sh", "--secret", &direct_secret],
         &[("OMAKURE_EXPECTED_TOKEN", RUN_SECRET)],
@@ -31,7 +31,8 @@ fn run_secret_json_and_history_redact_plaintext() {
     assert_eq!(envelope["data"]["stdout"], "script-saw-redacted-ok\n");
     assert_redacted_run_row(&envelope["data"], RUN_SECRET);
 
-    let history = omakure(workspace.path(), &["--json", "history", "show", run_id]);
+    let history =
+        support::workspace_command::<15>(workspace.path(), &["--json", "history", "show", run_id]);
     assert_success(&history);
     assert_no_plaintext(&history, RUN_SECRET);
     let history_envelope = support::json_envelope(&history.stdout);
@@ -65,13 +66,14 @@ fn env_lifecycle_masks_sensitive_values_without_stdout_or_stderr_leaks() {
         vec!["--json", "env", "activate", "prod"],
         vec!["--json", "env", "deactivate"],
     ] {
-        let output = omakure(workspace.path(), &args);
+        let output = support::workspace_command::<15>(workspace.path(), &args);
         assert_success(&output);
         assert_no_plaintext(&output, ENV_TOKEN);
         assert_no_plaintext(&output, ENV_API_KEY);
     }
 
-    let show = omakure(workspace.path(), &["--json", "env", "show", "prod"]);
+    let show =
+        support::workspace_command::<15>(workspace.path(), &["--json", "env", "show", "prod"]);
     assert_success(&show);
     assert_no_plaintext(&show, ENV_TOKEN);
     assert_no_plaintext(&show, ENV_API_KEY);
@@ -89,7 +91,7 @@ fn queue_worker_and_history_redact_reconstructable_secret_refs() {
     let workspace = support::TestWorkspace::new("secret_queue");
     write_secret_echo_script(workspace.path(), "secret-queue.sh");
 
-    let add = omakure_with_env(
+    let add = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -109,7 +111,7 @@ fn queue_worker_and_history_redact_reconstructable_secret_refs() {
     assert_eq!(add_envelope["data"]["state"], "queued");
     assert_redacted_run_row(&add_envelope["data"], QUEUE_SECRET);
 
-    let worker = omakure_with_env(
+    let worker = support::workspace_command_with_env::<15>(
         workspace.path(),
         &["--json", "queue", "worker", "--once"],
         &[
@@ -120,7 +122,8 @@ fn queue_worker_and_history_redact_reconstructable_secret_refs() {
     assert_success(&worker);
     assert_no_plaintext(&worker, QUEUE_SECRET);
 
-    let history = omakure(workspace.path(), &["--json", "history", "show", run_id]);
+    let history =
+        support::workspace_command::<15>(workspace.path(), &["--json", "history", "show", run_id]);
     assert_success(&history);
     assert_no_plaintext(&history, QUEUE_SECRET);
     let history_envelope = support::json_envelope(&history.stdout);
@@ -138,7 +141,7 @@ fn queue_add_rejects_plaintext_secret_args_that_workers_cannot_reconstruct() {
     let workspace = support::TestWorkspace::new("secret_queue_reject");
     write_secret_echo_script(workspace.path(), "secret-queue.sh");
 
-    let output = omakure(
+    let output = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -188,29 +191,6 @@ fi
     )
     .expect("write secret script");
     support::set_executable(&script);
-}
-
-fn omakure(workspace: &Path, args: &[&str]) -> Output {
-    omakure_with_env(workspace, args, &[])
-}
-
-fn omakure_with_env(workspace: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = support::omakure_command();
-    command.arg("--scripts-dir").arg(workspace).args(args);
-    for (key, value) in envs {
-        command.env(key, value);
-    }
-    support::command_with_timeout(&mut command, Duration::from_secs(15))
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "expected success, status: {:?}, stdout_len: {}, stderr_len: {}",
-        output.status.code(),
-        output.stdout.len(),
-        output.stderr.len()
-    );
 }
 
 fn assert_no_plaintext(output: &Output, secret: &str) {

@@ -39,6 +39,33 @@ pub fn omakure_command() -> Command {
     Command::new(omakure_bin())
 }
 
+pub fn workspace_command<const TIMEOUT_SECS: u64>(workspace: &Path, args: &[&str]) -> Output {
+    workspace_command_with_env::<TIMEOUT_SECS>(workspace, args, &[])
+}
+
+pub fn workspace_command_with_env<const TIMEOUT_SECS: u64>(
+    workspace: &Path,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Output {
+    let mut command = omakure_command();
+    command.arg("--scripts-dir").arg(workspace).args(args);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command_with_timeout(&mut command, Duration::from_secs(TIMEOUT_SECS))
+}
+
+pub fn assert_success(output: &Output) {
+    assert!(
+        output.status.success(),
+        "expected success, status: {:?}, stdout_len: {}, stderr_len: {}",
+        output.status.code(),
+        output.stdout.len(),
+        output.stderr.len()
+    );
+}
+
 pub struct TestWorkspace {
     dir: tempfile::TempDir,
 }

@@ -26,9 +26,7 @@ fn audit_hook_slot() -> &'static RwLock<Option<AuditHook>> {
 
 pub(super) fn emit_http_audit(event: HttpAuditEvent) {
     if let Ok(guard) = audit_hook_slot().read() {
-        if let Some(hook) = guard.as_ref() {
-            hook(&event);
-        }
+        guard.iter().for_each(|hook| hook(&event));
     }
     if let Ok(line) = serde_json::to_string(&event) {
         // Operators correlate enqueue/cancel/dead-letter via token_id in this line.

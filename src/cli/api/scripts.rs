@@ -141,15 +141,12 @@ pub(super) async fn script_path_handler(
     Extension(auth_ctx): Extension<AuthContext>,
     AxumPath(script_id): AxumPath<String>,
 ) -> Response {
-    if let Some(script_id) = script_id.strip_suffix("/content") {
-        if !script_id.is_empty() {
-            return script_content_handler(
-                State(state),
-                Extension(auth_ctx),
-                script_id.to_string(),
-            )
+    if let Some(script_id) = script_id
+        .strip_suffix("/content")
+        .filter(|id| !id.is_empty())
+    {
+        return script_content_handler(State(state), Extension(auth_ctx), script_id.to_string())
             .await;
-        }
     }
     match script_id.strip_suffix("/schema") {
         Some(script_id) if !script_id.is_empty() => {

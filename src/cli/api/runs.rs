@@ -160,10 +160,11 @@ pub(super) async fn enqueue_run_handler(
             requested_run_id,
         );
     }
-    if !body.secret_fields.is_empty() || args_use_secret_provider {
-        if let Some(response) = require_capability(&auth_ctx, ApiCapability::SecretProviderUse) {
-            return attach_audit_run_id(response, requested_run_id);
-        }
+    if let Some(response) = (!body.secret_fields.is_empty() || args_use_secret_provider)
+        .then(|| require_capability(&auth_ctx, ApiCapability::SecretProviderUse))
+        .flatten()
+    {
+        return attach_audit_run_id(response, requested_run_id);
     }
     let gate = Arc::clone(&state.blocking_operation_gate);
     let fallback_run_id = requested_run_id.clone();
@@ -292,14 +293,17 @@ fn require_implicit_secret_capabilities(
             )))
         }
     };
-    if secret_fields.iter().any(|field| {
-        run_env
-            .iter()
-            .any(|(key, _)| key.eq_ignore_ascii_case(&field.name))
-    }) {
-        if let Some(response) = require_capability(auth_ctx, ApiCapability::EnvUse) {
-            return Some(response);
-        }
+    if let Some(response) = secret_fields
+        .iter()
+        .any(|field| {
+            run_env
+                .iter()
+                .any(|(key, _)| key.eq_ignore_ascii_case(&field.name))
+        })
+        .then(|| require_capability(auth_ctx, ApiCapability::EnvUse))
+        .flatten()
+    {
+        return Some(response);
     }
 
     None

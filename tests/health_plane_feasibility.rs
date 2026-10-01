@@ -26,9 +26,9 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io::Write;
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 
@@ -463,8 +463,26 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
             .expect("deliver health plane envelope to the production listener");
     }
 
-    // Give the listener a bounded moment to process the delivered frames.
-    std::thread::sleep(Duration::from_millis(500));
+    stream
+        .shutdown(Shutdown::Write)
+        .expect("finish sending health plane frames");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let status = conductor_server.get("/v1/node/status");
+        let transport = if status.status == 200 {
+            status.json()["data"]["transport"].clone()
+        } else {
+            Value::Null
+        };
+        if transport["connected_peer_count"] == 0 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "production listener did not finish the health plane session: {transport}"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
 
     // 3. No Health Plane message mutated identity, trust, capability, or
     //    revocation state on the production node.

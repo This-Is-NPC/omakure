@@ -287,9 +287,9 @@ fn assert_raw_rejection<F>(workspace: &Path, attack: F)
 where
     F: FnOnce(),
 {
+    wait_for_audit(workspace, "rejected", 1);
     let before_rows = registry_snapshot(workspace);
     let before_rejected = protocol_rejection_count(workspace);
-    std::thread::sleep(Duration::from_millis(150));
     attack();
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline && protocol_rejection_count(workspace) < before_rejected + 1 {
@@ -810,7 +810,6 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
         second_status["identity"]["node_id"].as_str().unwrap(),
     );
     assert!(!untrusted_probe.status.success());
-    wait_for_audit(second.path(), "rejected", 1);
 
     let endpoint = format!("127.0.0.1:{second_port}");
     assert_raw_rejection(second.path(), || {

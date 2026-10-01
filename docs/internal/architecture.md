@@ -175,7 +175,7 @@ src/
 │   ├── health.rs            fleet-status and Signal-feed projections
 │   ├── cue.rs               Cue service dispatch validation and outcomes
 │   ├── baseline/            baseline delivery, install, status, and rollback
-│   └── worker.rs            queue worker lifecycle, claiming, Cue preflight, and run finalization
+│   └── worker.rs            queue worker lifecycle, Cue recovery, preflight, and finalization
 ├── adapters/                filesystem, process, environment, and checks
 │   ├── git.rs               isolated Git process execution and bounded probes
 │   └── signals.rs           process shutdown signal registration

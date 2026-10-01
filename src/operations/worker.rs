@@ -1,7 +1,7 @@
 use crate::node_identity::NodeIdentityError;
 use crate::node_registry::RegistryError;
 use crate::run_executor::ExecutionTerminal;
-use crate::runs::{self, ClaimFilters, RunCompletion, RunRow, RunStore};
+use crate::runs::{self, ClaimFilters, RunCompletion, RunRow, RunStore, RunsError};
 use crate::workspace::Workspace;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -47,6 +47,13 @@ pub(crate) fn run_standalone_workers(workspace: &Workspace, options: StandaloneW
 
 /// Internal poll interval for an idle worker thread (no eligible jobs).
 const WORKER_IDLE_POLL_MS: u64 = 250;
+
+pub(crate) fn recover_abandoned_remote_runs(workspace: &Workspace) -> Result<(), RunsError> {
+    for run_id in RunStore::open(workspace)?.recover_abandoned_cue_runs()? {
+        eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");
+    }
+    Ok(())
+}
 
 /// One worker thread's main loop. Claim, execute, finalize, repeat.
 /// Exits when `cancel_flag` flips, or after one cycle when `once = true`.
@@ -119,13 +126,7 @@ fn worker_loop_inner(
     // Best effort on purpose: a worker that cannot open the database has bigger
     // problems than an unresolved row, and failing to start over it would take
     // out the queue as well.
-    if let Ok(store) = RunStore::open(&workspace) {
-        if let Ok(recovered) = store.recover_abandoned_cue_runs() {
-            for run_id in recovered {
-                eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");
-            }
-        }
-    }
+    let _ = recover_abandoned_remote_runs(&workspace);
 
     loop {
         if cancel_flag.load(Ordering::SeqCst) {
@@ -401,5 +402,28 @@ mod cue_preflight_tests {
             error.to_string(),
             "Cue sender is no longer an active trusted peer"
         );
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+    use crate::test_support::workspace_in;
+
+    #[test]
+    fn abandoned_cue_recovery_retries_after_store_returns() {
+        let temp = tempfile::tempdir().unwrap();
+        let workspace = workspace_in(&temp);
+        let history = workspace.history_dir();
+        let backup = temp.path().join("history-backup");
+        std::fs::rename(history, &backup).unwrap();
+        std::fs::write(history, "blocked").unwrap();
+
+        let error = recover_abandoned_remote_runs(&workspace).unwrap_err();
+        assert!(error.to_string().starts_with("Create history dir failed: "));
+
+        std::fs::remove_file(history).unwrap();
+        std::fs::rename(&backup, history).unwrap();
+        recover_abandoned_remote_runs(&workspace).unwrap();
     }
 }

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "328af30f389eb12c4f7a14ea310090b5dfe9ddc6262eaacc0a4ba31741f49285",
+  "canonical_sha256": "138b1757ee5a1da308a01ba63b99da18e63fd6b7abd10e060d8bd759a76bc305",
   "config_identity": "no-config",
   "files": [
     {
@@ -1170,12 +1170,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 38,
+        "invocations": 37,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 59,
-        "cyclomatic": 100
+        "cognitive": 56,
+        "cyclomatic": 96
       },
       "path": "src/cli/node_service.rs",
       "source_class": "handwritten"
@@ -4180,11 +4180,11 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 12,
+        "invocations": 13,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 34,
+        "cognitive": 29,
         "cyclomatic": 44
       },
       "path": "src/operations/worker.rs",
@@ -29913,8 +29913,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 11,
-      "cyclomatic": 10,
+      "cognitive": 10,
+      "cyclomatic": 9,
       "derived": {
         "identity": "crate::cli::node_service::run",
         "macro_expansion": "not_measured",
@@ -29924,14 +29924,14 @@
       },
       "identity": "crate::cli::node_service::run",
       "kind": "function",
-      "line": 252,
+      "line": 251,
       "name": "run",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 11,
-        "cyclomatic": 10,
+        "cognitive": 10,
+        "cyclomatic": 9,
         "kind": "function",
-        "line": 252,
+        "line": 251,
         "name": "run"
       },
       "path": "src/cli/node_service.rs",
@@ -30251,8 +30251,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 5,
+      "cognitive": 2,
+      "cyclomatic": 3,
       "derived": {
         "identity": "crate::cli::node_service::run_health_maintenance",
         "macro_expansion": "not_measured",
@@ -30262,44 +30262,18 @@
       },
       "identity": "crate::cli::node_service::run_health_maintenance",
       "kind": "function",
-      "line": 501,
+      "line": 497,
       "name": "run_health_maintenance",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 5,
+        "cognitive": 2,
+        "cyclomatic": 3,
         "kind": "function",
-        "line": 501,
+        "line": 497,
         "name": "run_health_maintenance"
       },
       "path": "src/cli/node_service.rs",
       "signature": "fn run_health_maintenance(context: &crate::node::NodeContext, workspace: &Workspace)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::node_service::run_health_maintenance::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/node_service.rs",
-        "signature": ".and_then(|conn| crate::runs::recover_abandoned_cue_runs(&conn))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::node_service::run_health_maintenance::<closure>",
-      "kind": "closure",
-      "line": 503,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 503,
-        "name": "<closure>"
-      },
-      "path": "src/cli/node_service.rs",
-      "signature": ".and_then(|conn| crate::runs::recover_abandoned_cue_runs(&conn))",
       "source_class": "handwritten"
     },
     {
@@ -91325,6 +91299,32 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::worker::recover_abandoned_remote_runs",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "pub(crate) fn recover_abandoned_remote_runs(workspace: &Workspace) -> Result<(), RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::recover_abandoned_remote_runs",
+      "kind": "function",
+      "line": 51,
+      "name": "recover_abandoned_remote_runs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 51,
+        "name": "recover_abandoned_remote_runs"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "pub(crate) fn recover_abandoned_remote_runs(workspace: &Workspace) -> Result<(), RunsError>",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
@@ -91429,8 +91429,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 17,
-      "cyclomatic": 12,
+      "cognitive": 11,
+      "cyclomatic": 9,
       "derived": {
         "identity": "crate::operations::worker::worker_loop_inner",
         "macro_expansion": "not_measured",
@@ -91440,14 +91440,14 @@
       },
       "identity": "crate::operations::worker::worker_loop_inner",
       "kind": "function",
-      "line": 96,
+      "line": 103,
       "name": "worker_loop_inner",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 17,
-        "cyclomatic": 12,
+        "cognitive": 11,
+        "cyclomatic": 9,
         "kind": "function",
-        "line": 96,
+        "line": 103,
         "name": "worker_loop_inner"
       },
       "path": "src/operations/worker.rs",
@@ -91660,6 +91660,32 @@
       },
       "path": "src/operations/worker.rs",
       "signature": "fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::worker::abandoned_cue_recovery_retries_after_store_returns",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/worker.rs",
+        "signature": "fn abandoned_cue_recovery_retries_after_store_returns()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::worker::abandoned_cue_recovery_retries_after_store_returns",
+      "kind": "function",
+      "line": 414,
+      "name": "abandoned_cue_recovery_retries_after_store_returns",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 414,
+        "name": "abandoned_cue_recovery_retries_after_store_returns"
+      },
+      "path": "src/operations/worker.rs",
+      "signature": "fn abandoned_cue_recovery_retries_after_store_returns()",
       "source_class": "handwritten"
     },
     {

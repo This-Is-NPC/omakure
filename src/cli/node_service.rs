@@ -472,12 +472,8 @@ const HEALTH_MAINTENANCE_INTERVAL: Duration =
 /// Slice between cancellation checks inside one maintenance wait.
 const HEALTH_MAINTENANCE_SLICE: Duration = Duration::from_millis(200);
 
-/// Run the frozen Health Plane retention rules on a bounded cadence.
-///
-/// Every decision belongs to the Wave 2 shared operations: this loop chooses
-/// nothing, writes no Health Plane row itself, and never touches identity,
-/// trust, revocation, or run state. A failure is a bounded no-op that is
-/// retried on the next pass rather than a reason to stop serving.
+/// Retry run recovery, revoked Cue cleanup, and Health Plane retention on a
+/// bounded cadence without stopping the service after an individual failure.
 fn health_maintenance_loop(
     context: crate::node::NodeContext,
     workspace: Workspace,
@@ -499,15 +495,8 @@ fn health_maintenance_loop(
 }
 
 fn run_health_maintenance(context: &crate::node::NodeContext, workspace: &Workspace) {
-    match crate::runs::open(workspace)
-        .and_then(|conn| crate::runs::recover_abandoned_cue_runs(&conn))
-    {
-        Ok(recovered) => {
-            for run_id in recovered {
-                eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");
-            }
-        }
-        Err(error) => eprintln!("omakure: abandoned Cue recovery remains pending: {error}"),
+    if let Err(error) = crate::operations::worker::recover_abandoned_remote_runs(workspace) {
+        eprintln!("omakure: abandoned Cue recovery remains pending: {error}");
     }
     if let Err(error) = crate::operations::node::reconcile_revoked_cue_runs(context, workspace) {
         eprintln!("omakure: revoked Cue cleanup remains pending: {error}");

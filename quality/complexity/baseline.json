@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "f09309fe684e937c6cb4918dccee6a886102d5797028105114f34bb13a1dd367",
+  "canonical_sha256": "d37c9e3517219dcf5c2c67bbeb75e14ea70a200e8cbcc536002a785e7f947663",
   "config_identity": "no-config",
   "files": [
     {
@@ -3975,7 +3975,7 @@
       },
       "native": {
         "cognitive": 7,
-        "cyclomatic": 60
+        "cyclomatic": 53
       },
       "path": "src/operations/node/errors.rs",
       "source_class": "handwritten"
@@ -4706,6 +4706,20 @@
         "cyclomatic": 18
       },
       "path": "src/workspace.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 2,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 1,
+        "cyclomatic": 2
+      },
+      "path": "src/operations/node/tests/errors.rs",
       "source_class": "handwritten"
     }
   ],
@@ -87758,6 +87772,136 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
+        "identity": "crate::operations::node::errors::map_config_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/errors.rs",
+        "signature": "fn map_config_error(error: NodeConfigError) -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::errors::map_config_error",
+      "kind": "function",
+      "line": 69,
+      "name": "map_config_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 69,
+        "name": "map_config_error"
+      },
+      "path": "src/operations/node/errors.rs",
+      "signature": "fn map_config_error(error: NodeConfigError) -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 8,
+      "derived": {
+        "identity": "crate::operations::node::errors::map_node_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/errors.rs",
+        "signature": "pub(crate) fn map_node_error(error: NodeError) -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::errors::map_node_error",
+      "kind": "function",
+      "line": 73,
+      "name": "map_node_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 8,
+        "kind": "function",
+        "line": 73,
+        "name": "map_node_error"
+      },
+      "path": "src/operations/node/errors.rs",
+      "signature": "pub(crate) fn map_node_error(error: NodeError) -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::operations::node::errors::map_identity_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/errors.rs",
+        "signature": "pub(crate) fn map_identity_error(error: NodeIdentityError) -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::errors::map_identity_error",
+      "kind": "function",
+      "line": 104,
+      "name": "map_identity_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 104,
+        "name": "map_identity_error"
+      },
+      "path": "src/operations/node/errors.rs",
+      "signature": "pub(crate) fn map_identity_error(error: NodeIdentityError) -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 17,
+      "derived": {
+        "identity": "crate::operations::node::errors::map_registry_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/errors.rs",
+        "signature": "pub(crate) fn map_registry_error(error: RegistryError) -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::errors::map_registry_error",
+      "kind": "function",
+      "line": 117,
+      "name": "map_registry_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 17,
+        "kind": "function",
+        "line": 117,
+        "name": "map_registry_error"
+      },
+      "path": "src/operations/node/errors.rs",
+      "signature": "pub(crate) fn map_registry_error(error: RegistryError) -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::errors::registry_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/errors.rs",
+        "signature": "pub(crate) fn registry_error(message: impl Into<String>) -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::errors::registry_error",
+      "kind": "function",
+      "line": 185,
+      "name": "registry_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 185,
+        "name": "registry_error"
+      },
+      "path": "src/operations/node/errors.rs",
+      "signature": "pub(crate) fn registry_error(message: impl Into<String>) -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
         "identity": "crate::operations::node::status::open_registry_for_baseline",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/status.rs",
@@ -88483,136 +88627,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::errors::map_config_error",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/errors.rs",
-        "signature": "fn map_config_error(error: NodeConfigError) -> OperationError",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::errors::map_config_error",
-      "kind": "function",
-      "line": 69,
-      "name": "map_config_error",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 69,
-        "name": "map_config_error"
-      },
-      "path": "src/operations/node/errors.rs",
-      "signature": "fn map_config_error(error: NodeConfigError) -> OperationError",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 8,
-      "derived": {
-        "identity": "crate::operations::node::errors::map_node_error",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/errors.rs",
-        "signature": "pub(crate) fn map_node_error(error: NodeError) -> OperationError",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::errors::map_node_error",
-      "kind": "function",
-      "line": 73,
-      "name": "map_node_error",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 8,
-        "kind": "function",
-        "line": 73,
-        "name": "map_node_error"
-      },
-      "path": "src/operations/node/errors.rs",
-      "signature": "pub(crate) fn map_node_error(error: NodeError) -> OperationError",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::operations::node::errors::map_identity_error",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/errors.rs",
-        "signature": "pub(crate) fn map_identity_error(error: NodeIdentityError) -> OperationError",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::errors::map_identity_error",
-      "kind": "function",
-      "line": 104,
-      "name": "map_identity_error",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 5,
-        "kind": "function",
-        "line": 104,
-        "name": "map_identity_error"
-      },
-      "path": "src/operations/node/errors.rs",
-      "signature": "pub(crate) fn map_identity_error(error: NodeIdentityError) -> OperationError",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 24,
-      "derived": {
-        "identity": "crate::operations::node::errors::map_registry_error",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/errors.rs",
-        "signature": "pub(crate) fn map_registry_error(error: RegistryError) -> OperationError",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::errors::map_registry_error",
-      "kind": "function",
-      "line": 117,
-      "name": "map_registry_error",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 24,
-        "kind": "function",
-        "line": 117,
-        "name": "map_registry_error"
-      },
-      "path": "src/operations/node/errors.rs",
-      "signature": "pub(crate) fn map_registry_error(error: RegistryError) -> OperationError",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::errors::registry_error",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/errors.rs",
-        "signature": "pub(crate) fn registry_error(message: impl Into<String>) -> OperationError",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::errors::registry_error",
-      "kind": "function",
-      "line": 205,
-      "name": "registry_error",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 205,
-        "name": "registry_error"
-      },
-      "path": "src/operations/node/errors.rs",
-      "signature": "pub(crate) fn registry_error(message: impl Into<String>) -> OperationError",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 2,
       "cyclomatic": 2,
       "derived": {
@@ -88624,14 +88638,14 @@
       },
       "identity": "crate::operations::node::tests::fail_enrollment_audits",
       "kind": "function",
-      "line": 27,
+      "line": 28,
       "name": "fail_enrollment_audits",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 27,
+        "line": 28,
         "name": "fail_enrollment_audits"
       },
       "path": "src/operations/node/tests/mod.rs",
@@ -88650,14 +88664,14 @@
       },
       "identity": "crate::operations::node::tests::fail_cleanup_completion_audit",
       "kind": "function",
-      "line": 50,
+      "line": 51,
       "name": "fail_cleanup_completion_audit",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 50,
+        "line": 51,
         "name": "fail_cleanup_completion_audit"
       },
       "path": "src/operations/node/tests/mod.rs",
@@ -88676,14 +88690,14 @@
       },
       "identity": "crate::operations::node::tests::write_secure_token",
       "kind": "function",
-      "line": 74,
+      "line": 75,
       "name": "write_secure_token",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 74,
+        "line": 75,
         "name": "write_secure_token"
       },
       "path": "src/operations/node/tests/mod.rs",
@@ -88702,14 +88716,14 @@
       },
       "identity": "crate::operations::node::tests::signed_bundle_fixture",
       "kind": "function",
-      "line": 92,
+      "line": 93,
       "name": "signed_bundle_fixture",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 92,
+        "line": 93,
         "name": "signed_bundle_fixture"
       },
       "path": "src/operations/node/tests/mod.rs",
@@ -88728,14 +88742,14 @@
       },
       "identity": "crate::operations::node::tests::peer_request",
       "kind": "function",
-      "line": 156,
+      "line": 157,
       "name": "peer_request",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 156,
+        "line": 157,
         "name": "peer_request"
       },
       "path": "src/operations/node/tests/mod.rs",
@@ -108032,6 +108046,32 @@
       },
       "path": "src/node_registry/manual_enrollment.rs",
       "signature": "fn ensure_pending_transport_key( transaction: &Transaction<'_>, node_id: &str, certificate: &TransportCertificate, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::node::tests::errors::registry_error_mapping_preserves_public_codes_and_messages",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/errors.rs",
+        "signature": "fn registry_error_mapping_preserves_public_codes_and_messages()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::errors::registry_error_mapping_preserves_public_codes_and_messages",
+      "kind": "function",
+      "line": 5,
+      "name": "registry_error_mapping_preserves_public_codes_and_messages",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 5,
+        "name": "registry_error_mapping_preserves_public_codes_and_messages"
+      },
+      "path": "src/operations/node/tests/errors.rs",
+      "signature": "fn registry_error_mapping_preserves_public_codes_and_messages()",
       "source_class": "handwritten"
     }
   ],

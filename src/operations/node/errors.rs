@@ -143,58 +143,38 @@ pub(crate) fn map_registry_error(error: RegistryError) -> OperationError {
         ),
         RegistryError::Unchanged(error) => OperationError::new(OperationErrorCode::Conflict, error),
         RegistryError::NotFound(error) => OperationError::new(OperationErrorCode::NotFound, error),
-        RegistryError::InvalidSchema(_) | RegistryError::Corrupt(_) => {
+        RegistryError::InvalidSchema(_) | RegistryError::Corrupt(_) | RegistryError::Sqlite(_) => {
             registry_error("node trust registry is invalid or corrupt")
         }
         RegistryError::Io(error) => {
             OperationError::new(OperationErrorCode::IoFailed, error.to_string())
         }
-        RegistryError::Sqlite(_) => registry_error("node trust registry is invalid or corrupt"),
         RegistryError::Node(error) => map_node_error(error),
         RegistryError::AuditCapacity => {
             registry_error("node transport audit capacity is exhausted")
         }
-        RegistryError::SelfTrust => {
-            OperationError::new(OperationErrorCode::Conflict, "peer cannot trust itself")
+        conflict @ (RegistryError::SelfTrust
+        | RegistryError::BundleConflict
+        | RegistryError::ConductorConflict
+        | RegistryError::PublisherConductorConflict) => {
+            OperationError::new(OperationErrorCode::Conflict, conflict.to_string())
         }
-        RegistryError::EnrollmentReplay => OperationError::new(
-            OperationErrorCode::EnrollmentReplay,
-            "manual enrollment request was replayed",
-        ),
+        replay @ (RegistryError::EnrollmentReplay
+        | RegistryError::BundleReplay
+        | RegistryError::BootstrapProofConsumed) => {
+            OperationError::new(OperationErrorCode::EnrollmentReplay, replay.to_string())
+        }
         RegistryError::EnrollmentConflict => OperationError::new(
             OperationErrorCode::Conflict,
             "manual enrollment conflicts with existing trust state",
         ),
-        RegistryError::EnrollmentCapacity => {
-            registry_error("manual enrollment replay capacity is exhausted")
+        capacity @ (RegistryError::EnrollmentCapacity | RegistryError::BundleCapacity) => {
+            registry_error(capacity.to_string())
         }
         RegistryError::EnrollmentMismatch => OperationError::new(
             OperationErrorCode::EnrollmentMismatch,
             "manual enrollment evidence does not match staged state",
         ),
-        RegistryError::BundleReplay => OperationError::new(
-            OperationErrorCode::EnrollmentReplay,
-            "signed enrollment bundle was replayed",
-        ),
-        RegistryError::BundleConflict => OperationError::new(
-            OperationErrorCode::Conflict,
-            "signed enrollment bundle conflicts with existing trust state",
-        ),
-        RegistryError::BootstrapProofConsumed => OperationError::new(
-            OperationErrorCode::EnrollmentReplay,
-            "signed enrollment bootstrap proof was already consumed",
-        ),
-        RegistryError::ConductorConflict => OperationError::new(
-            OperationErrorCode::Conflict,
-            "an active conductor already exists",
-        ),
-        RegistryError::PublisherConductorConflict => OperationError::new(
-            OperationErrorCode::Conflict,
-            "a baseline publisher cannot also be a conductor",
-        ),
-        RegistryError::BundleCapacity => {
-            registry_error("signed enrollment replay capacity is exhausted")
-        }
         RegistryError::BundleRateLimited => OperationError::new(
             OperationErrorCode::EnrollmentRateLimited,
             "signed enrollment bundle rate limit exceeded",

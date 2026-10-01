@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "8314051ae68df4c1542ecc474c59743fc4167efe0fcd191e1ab073c6a108196c",
+  "canonical_sha256": "e530e8075a558f4dda327851db790af0f9a0bb60db0982707026a82c1e08f610",
   "config_identity": "no-config",
   "files": [
     {
@@ -307,7 +307,7 @@
       },
       "native": {
         "cognitive": 3,
-        "cyclomatic": 11
+        "cyclomatic": 12
       },
       "path": "src/auth/token.rs",
       "source_class": "handwritten"
@@ -1525,7 +1525,7 @@
       },
       "native": {
         "cognitive": 53,
-        "cyclomatic": 72
+        "cyclomatic": 75
       },
       "path": "src/cli_http_parity/manifest.rs",
       "source_class": "handwritten"
@@ -3788,12 +3788,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 2,
+        "invocations": 0,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 12,
-        "cyclomatic": 25
+        "cognitive": 8,
+        "cyclomatic": 24
       },
       "path": "src/operations/core/run_queries.rs",
       "source_class": "handwritten"
@@ -3830,12 +3830,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 56,
+        "invocations": 66,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 6,
-        "cyclomatic": 34
+        "cognitive": 7,
+        "cyclomatic": 38
       },
       "path": "src/operations/core/tests.rs",
       "source_class": "handwritten"
@@ -4558,12 +4558,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 18,
+        "invocations": 5,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 14,
-        "cyclomatic": 42
+        "cyclomatic": 44
       },
       "path": "src/runs/query.rs",
       "source_class": "handwritten"
@@ -4790,6 +4790,76 @@
         "cyclomatic": 2
       },
       "path": "src/operations/node/tests/errors.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 39,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 26,
+        "cyclomatic": 64
+      },
+      "path": "src/inventory/command.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/inventory/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/inventory/routes.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 7,
+        "cyclomatic": 7
+      },
+      "path": "src/runs/store.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 2
+      },
+      "path": "src/util/entropy.rs",
       "source_class": "handwritten"
     }
   ],
@@ -82509,8 +82579,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 2,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::operations::core::run_queries::show_run",
         "macro_expansion": "not_measured",
@@ -82524,8 +82594,8 @@
       "name": "show_run",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
         "line": 26,
         "name": "show_run"
@@ -83104,32 +83174,6 @@
       },
       "path": "src/operations/core/run_queries.rs",
       "signature": ".map(|state| RunState::from_str(state).map_err(invalid_input))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::operations::core::run_queries::require_run",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/core/run_queries.rs",
-        "signature": "pub(super) fn require_run(conn: &rusqlite::Connection, run_id: &str) -> OperationResult<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::core::run_queries::require_run",
-      "kind": "function",
-      "line": 98,
-      "name": "require_run",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 98,
-        "name": "require_run"
-      },
-      "path": "src/operations/core/run_queries.rs",
-      "signature": "pub(super) fn require_run(conn: &rusqlite::Connection, run_id: &str) -> OperationResult<()>",
       "source_class": "handwritten"
     },
     {
@@ -108948,6 +108992,1540 @@
       },
       "path": "src/operations/node/tests/errors.rs",
       "signature": "fn registry_error_mapping_preserves_public_codes_and_messages()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::auth::token::hash_token::<closure>@66#2",
+        "macro_expansion": "not_measured",
+        "path": "src/auth/token.rs",
+        "signature": "let salt = SaltString::encode_b64(&salt_bytes).map_err(|e| AuthError::Parse(e.to_string()))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::auth::token::hash_token::<closure>@66#2",
+      "kind": "closure",
+      "line": 66,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 66,
+        "name": "<closure>"
+      },
+      "path": "src/auth/token.rs",
+      "signature": "let salt = SaltString::encode_b64(&salt_bytes).map_err(|e| AuthError::Parse(e.to_string()))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli_http_parity::manifest::normalize_route::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli_http_parity/manifest.rs",
+        "signature": ".and_then(|name| name.strip_suffix('}'))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli_http_parity::manifest::normalize_route::<closure>::<closure>",
+      "kind": "closure",
+      "line": 359,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 359,
+        "name": "<closure>"
+      },
+      "path": "src/cli_http_parity/manifest.rs",
+      "signature": ".and_then(|name| name.strip_suffix('}'))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli_http_parity::manifest::normalize_route::<closure>::<closure>@360#2",
+        "macro_expansion": "not_measured",
+        "path": "src/cli_http_parity/manifest.rs",
+        "signature": ".or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli_http_parity::manifest::normalize_route::<closure>::<closure>@360#2",
+      "kind": "closure",
+      "line": 360,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 360,
+        "name": "<closure>"
+      },
+      "path": "src/cli_http_parity/manifest.rs",
+      "signature": ".or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli_http_parity::manifest::normalize_route::<closure>::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli_http_parity/manifest.rs",
+        "signature": ".and_then(|name| name.strip_suffix('}'))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli_http_parity::manifest::normalize_route::<closure>::<closure>::<closure>",
+      "kind": "closure",
+      "line": 363,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 363,
+        "name": "<closure>"
+      },
+      "path": "src/cli_http_parity/manifest.rs",
+      "signature": ".and_then(|name| name.strip_suffix('}'))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::command_inventory",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "pub(crate) fn command_inventory() -> Vec<InventoryCommand>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::command_inventory",
+      "kind": "function",
+      "line": 65,
+      "name": "command_inventory",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 65,
+        "name": "command_inventory"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "pub(crate) fn command_inventory() -> Vec<InventoryCommand>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::command_inventory::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".filter(|argument| argument.is_global_set())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::command_inventory::<closure>",
+      "kind": "closure",
+      "line": 69,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 69,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".filter(|argument| argument.is_global_set())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::command_inventory::<closure>@75#2",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "entries.sort_by(|a, b| a.id.cmp(&b.id));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::command_inventory::<closure>@75#2",
+      "kind": "closure",
+      "line": 75,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 75,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "entries.sort_by(|a, b| a.id.cmp(&b.id));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::inventory::command::collect_commands",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn collect_commands( command: &clap::Command, path: &mut Vec<String>, entries: &mut Vec<InventoryCommand>, inherited: &[InventoryOption], )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::collect_commands",
+      "kind": "function",
+      "line": 79,
+      "name": "collect_commands",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 79,
+        "name": "collect_commands"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn collect_commands( command: &clap::Command, path: &mut Vec<String>, entries: &mut Vec<InventoryCommand>, inherited: &[InventoryOption], )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::collect_commands::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".map(|sub| format!(\"{} {}\", id, sub.get_name()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::collect_commands::<closure>",
+      "kind": "closure",
+      "line": 90,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 90,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".map(|sub| format!(\"{} {}\", id, sub.get_name()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::option_sort_key",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn option_sort_key(option: &InventoryOption) -> (bool, String, String)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::option_sort_key",
+      "kind": "function",
+      "line": 124,
+      "name": "option_sort_key",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 124,
+        "name": "option_sort_key"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn option_sort_key(option: &InventoryOption) -> (bool, String, String)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_option",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn inventory_option(argument: &clap::Arg) -> InventoryOption",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_option",
+      "kind": "function",
+      "line": 132,
+      "name": "inventory_option",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 132,
+        "name": "inventory_option"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn inventory_option(argument: &clap::Arg) -> InventoryOption",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_option::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".map(|range| (Some(range.min_values()), Some(range.max_values())))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_option::<closure>",
+      "kind": "closure",
+      "line": 151,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 151,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".map(|range| (Some(range.min_values()), Some(range.max_values())))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_option::<closure>@152#2",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".unwrap_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_option::<closure>@152#2",
+      "kind": "closure",
+      "line": 152,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 152,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".unwrap_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_option::<closure>@165#3",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".map(|value| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_option::<closure>@165#3",
+      "kind": "closure",
+      "line": 165,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 165,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".map(|value| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_option::<closure>@183#4",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "possible_values.sort_by(|a, b| a.name.cmp(&b.name));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_option::<closure>@183#4",
+      "kind": "closure",
+      "line": 183,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 183,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "possible_values.sort_by(|a, b| a.name.cmp(&b.name));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_option::<closure>@201#5",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".map(|value| value.to_string_lossy().into_owned())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_option::<closure>@201#5",
+      "kind": "closure",
+      "line": 201,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 201,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".map(|value| value.to_string_lossy().into_owned())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::normalize_generated_text",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "pub fn normalize_generated_text(text: &str) -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::normalize_generated_text",
+      "kind": "function",
+      "line": 220,
+      "name": "normalize_generated_text",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 220,
+        "name": "normalize_generated_text"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "pub fn normalize_generated_text(text: &str) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::inventory::command::render_cli_reference",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "pub fn render_cli_reference() -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_cli_reference",
+      "kind": "function",
+      "line": 226,
+      "name": "render_cli_reference",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 226,
+        "name": "render_cli_reference"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "pub fn render_cli_reference() -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::reference_header",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn reference_header() -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::reference_header",
+      "kind": "function",
+      "line": 235,
+      "name": "reference_header",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 235,
+        "name": "reference_header"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn reference_header() -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::render_command",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn render_command(output: &mut String, command: &InventoryCommand)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_command",
+      "kind": "function",
+      "line": 243,
+      "name": "render_command",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 243,
+        "name": "render_command"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn render_command(output: &mut String, command: &InventoryCommand)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::inventory::command::render_command_details",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn render_command_details(output: &mut String, command: &InventoryCommand)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_command_details",
+      "kind": "function",
+      "line": 253,
+      "name": "render_command_details",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 253,
+        "name": "render_command_details"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn render_command_details(output: &mut String, command: &InventoryCommand)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::inventory::command::render_aliases",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn render_aliases(output: &mut String, command: &InventoryCommand)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_aliases",
+      "kind": "function",
+      "line": 268,
+      "name": "render_aliases",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 268,
+        "name": "render_aliases"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn render_aliases(output: &mut String, command: &InventoryCommand)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::inventory::command::render_options",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn render_options(output: &mut String, command: &InventoryCommand)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_options",
+      "kind": "function",
+      "line": 283,
+      "name": "render_options",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 283,
+        "name": "render_options"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn render_options(output: &mut String, command: &InventoryCommand)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::render_options::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "if !command.options.iter().any(|option| !option.hidden) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_options::<closure>",
+      "kind": "closure",
+      "line": 284,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 284,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "if !command.options.iter().any(|option| !option.hidden) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::render_options::<closure>@288#2",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "for option in command.options.iter().filter(|option| !option.hidden) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_options::<closure>@288#2",
+      "kind": "closure",
+      "line": 288,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 288,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "for option in command.options.iter().filter(|option| !option.hidden) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::inventory::command::render_option",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn render_option(output: &mut String, option: &InventoryOption)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_option",
+      "kind": "function",
+      "line": 293,
+      "name": "render_option",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 293,
+        "name": "render_option"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn render_option(output: &mut String, option: &InventoryOption)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::render_option::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".map(|value| value.name.as_str())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_option::<closure>",
+      "kind": "closure",
+      "line": 315,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 315,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".map(|value| value.name.as_str())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::inventory::command::render_subcommands",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn render_subcommands(output: &mut String, command: &InventoryCommand)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::render_subcommands",
+      "kind": "function",
+      "line": 323,
+      "name": "render_subcommands",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 323,
+        "name": "render_subcommands"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn render_subcommands(output: &mut String, command: &InventoryCommand)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::inventory::command::option_syntax",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn option_syntax(option: &InventoryOption) -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::option_syntax",
+      "kind": "function",
+      "line": 335,
+      "name": "option_syntax",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 335,
+        "name": "option_syntax"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn option_syntax(option: &InventoryOption) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::anchor",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn anchor(value: &str) -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::anchor",
+      "kind": "function",
+      "line": 372,
+      "name": "anchor",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 372,
+        "name": "anchor"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn anchor(value: &str) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn inventory_is_sorted_and_has_stable_full_paths()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths",
+      "kind": "function",
+      "line": 381,
+      "name": "inventory_is_sorted_and_has_stable_full_paths",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 381,
+        "name": "inventory_is_sorted_and_has_stable_full_paths"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn inventory_is_sorted_and_has_stable_full_paths()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "let ids: Vec<&str> = inventory.iter().map(|entry| entry.id.as_str()).collect();",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_is_sorted_and_has_stable_full_paths::<closure>",
+      "kind": "closure",
+      "line": 384,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 384,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "let ids: Vec<&str> = inventory.iter().map(|entry| entry.id.as_str()).collect();",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn inventory_carries_defaults_constraints_aliases_and_hidden_metadata()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
+      "kind": "function",
+      "line": 395,
+      "name": "inventory_carries_defaults_constraints_aliases_and_hidden_metadata",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 395,
+        "name": "inventory_carries_defaults_constraints_aliases_and_hidden_metadata"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn inventory_carries_defaults_constraints_aliases_and_hidden_metadata()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".find(|entry| entry.id == \"queue add\")",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>",
+      "kind": "closure",
+      "line": 399,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 399,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".find(|entry| entry.id == \"queue add\")",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@404#2",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".find(|option| option.long.as_deref() == Some(\"actor\"))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@404#2",
+      "kind": "closure",
+      "line": 404,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 404,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".find(|option| option.long.as_deref() == Some(\"actor\"))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@412#3",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".find(|entry| entry.id == \"node authority issue\")",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@412#3",
+      "kind": "closure",
+      "line": 412,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 412,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".find(|entry| entry.id == \"node authority issue\")",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@417#4",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".find(|option| option.long.as_deref() == Some(\"role\"))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@417#4",
+      "kind": "closure",
+      "line": 417,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 417,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".find(|option| option.long.as_deref() == Some(\"role\"))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@431#5",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".find(|entry| entry.id == \"queue worker\")",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@431#5",
+      "kind": "closure",
+      "line": 431,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 431,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".find(|entry| entry.id == \"queue worker\")",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@436#6",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": ".find(|option| option.long.as_deref() == Some(\"once\"))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@436#6",
+      "kind": "closure",
+      "line": 436,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 436,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": ".find(|option| option.long.as_deref() == Some(\"once\"))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@440#7",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "let doctor = inventory.iter().find(|entry| entry.id == \"doctor\").unwrap();",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::inventory_carries_defaults_constraints_aliases_and_hidden_metadata::<closure>@440#7",
+      "kind": "closure",
+      "line": 440,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 440,
+        "name": "<closure>"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "let doctor = inventory.iter().find(|entry| entry.id == \"doctor\").unwrap();",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::reference_links_match_command_heading_slugs",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn reference_links_match_command_heading_slugs()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::reference_links_match_command_heading_slugs",
+      "kind": "function",
+      "line": 445,
+      "name": "reference_links_match_command_heading_slugs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 445,
+        "name": "reference_links_match_command_heading_slugs"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn reference_links_match_command_heading_slugs()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::reference_omits_hidden_options",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn reference_omits_hidden_options()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::reference_omits_hidden_options",
+      "kind": "function",
+      "line": 452,
+      "name": "reference_omits_hidden_options",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 452,
+        "name": "reference_omits_hidden_options"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn reference_omits_hidden_options()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::inventory::command::every_reference_subcommand_link_resolves",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn every_reference_subcommand_link_resolves()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::every_reference_subcommand_link_resolves",
+      "kind": "function",
+      "line": 458,
+      "name": "every_reference_subcommand_link_resolves",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 458,
+        "name": "every_reference_subcommand_link_resolves"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn every_reference_subcommand_link_resolves()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::generated_reference_freshness_treats_crlf_checkout_as_lf",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn generated_reference_freshness_treats_crlf_checkout_as_lf()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::generated_reference_freshness_treats_crlf_checkout_as_lf",
+      "kind": "function",
+      "line": 471,
+      "name": "generated_reference_freshness_treats_crlf_checkout_as_lf",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 471,
+        "name": "generated_reference_freshness_treats_crlf_checkout_as_lf"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn generated_reference_freshness_treats_crlf_checkout_as_lf()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::two_reference_generations_are_identical",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn two_reference_generations_are_identical()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::two_reference_generations_are_identical",
+      "kind": "function",
+      "line": 479,
+      "name": "two_reference_generations_are_identical",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 479,
+        "name": "two_reference_generations_are_identical"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn two_reference_generations_are_identical()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::inventory::command::two_inventory_builds_are_equal",
+        "macro_expansion": "not_measured",
+        "path": "src/inventory/command.rs",
+        "signature": "fn two_inventory_builds_are_equal()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::inventory::command::two_inventory_builds_are_equal",
+      "kind": "function",
+      "line": 484,
+      "name": "two_inventory_builds_are_equal",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 484,
+        "name": "two_inventory_builds_are_equal"
+      },
+      "path": "src/inventory/command.rs",
+      "signature": "fn two_inventory_builds_are_equal()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::core::run_queries::map_required_run_error",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/core/run_queries.rs",
+        "signature": "fn map_required_run_error(error: RunsError) -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::core::run_queries::map_required_run_error",
+      "kind": "function",
+      "line": 103,
+      "name": "map_required_run_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 103,
+        "name": "map_required_run_error"
+      },
+      "path": "src/operations/core/run_queries.rs",
+      "signature": "fn map_required_run_error(error: RunsError) -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::operations::core::tests::missing_run_queries_preserve_not_found_code_and_text",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/core/tests.rs",
+        "signature": "fn missing_run_queries_preserve_not_found_code_and_text()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::core::tests::missing_run_queries_preserve_not_found_code_and_text",
+      "kind": "function",
+      "line": 586,
+      "name": "missing_run_queries_preserve_not_found_code_and_text",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 586,
+        "name": "missing_run_queries_preserve_not_found_code_and_text"
+      },
+      "path": "src/operations/core/tests.rs",
+      "signature": "fn missing_run_queries_preserve_not_found_code_and_text()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::query::get_run_required",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/query.rs",
+        "signature": "pub(super) fn get_run_required(conn: &Connection, run_id: &str) -> Result<RunRow, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::query::get_run_required",
+      "kind": "function",
+      "line": 134,
+      "name": "get_run_required",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 134,
+        "name": "get_run_required"
+      },
+      "path": "src/runs/query.rs",
+      "signature": "pub(super) fn get_run_required(conn: &Connection, run_id: &str) -> Result<RunRow, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::query::get_run_required::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/query.rs",
+        "signature": "get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFound(run_id.to_owned()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::query::get_run_required::<closure>",
+      "kind": "closure",
+      "line": 135,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 135,
+        "name": "<closure>"
+      },
+      "path": "src/runs/query.rs",
+      "signature": "get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFound(run_id.to_owned()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::open",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn open(workspace: &Workspace) -> Result<Self, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::open",
+      "kind": "method",
+      "line": 15,
+      "name": "open",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 15,
+        "name": "open"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn open(workspace: &Workspace) -> Result<Self, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::query_runs",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn query_runs(&self, filters: &RunFilters) -> Result<Vec<RunRow>, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::query_runs",
+      "kind": "method",
+      "line": 21,
+      "name": "query_runs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 21,
+        "name": "query_runs"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn query_runs(&self, filters: &RunFilters) -> Result<Vec<RunRow>, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::get_run_required",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn get_run_required(&self, run_id: &str) -> Result<RunRow, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::get_run_required",
+      "kind": "method",
+      "line": 25,
+      "name": "get_run_required",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 25,
+        "name": "get_run_required"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn get_run_required(&self, run_id: &str) -> Result<RunRow, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::query_traces",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn query_traces( &self, run_id: &str, level: Option<TraceLevel>, since_sequence: Option<i64>, ) -> Result<Vec<TraceRow>, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::query_traces",
+      "kind": "method",
+      "line": 29,
+      "name": "query_traces",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 29,
+        "name": "query_traces"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn query_traces( &self, run_id: &str, level: Option<TraceLevel>, since_sequence: Option<i64>, ) -> Result<Vec<TraceRow>, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::stats",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn stats(&self) -> Result<RunStats, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::stats",
+      "kind": "method",
+      "line": 38,
+      "name": "stats",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 38,
+        "name": "stats"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn stats(&self) -> Result<RunStats, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::cancel",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn cancel(&self, run_id: &str, reason: Option<String>) -> Result<RunRow, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::cancel",
+      "kind": "method",
+      "line": 42,
+      "name": "cancel",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 42,
+        "name": "cancel"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn cancel(&self, run_id: &str, reason: Option<String>) -> Result<RunRow, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::dead_letter",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn dead_letter( &self, run_id: &str, reason: Option<String>, ) -> Result<RunRow, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::dead_letter",
+      "kind": "method",
+      "line": 46,
+      "name": "dead_letter",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 46,
+        "name": "dead_letter"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn dead_letter( &self, run_id: &str, reason: Option<String>, ) -> Result<RunRow, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::util::entropy::fill_bytes",
+        "macro_expansion": "not_measured",
+        "path": "src/util/entropy.rs",
+        "signature": "pub fn fill_bytes(bytes: &mut [u8])",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::util::entropy::fill_bytes",
+      "kind": "function",
+      "line": 4,
+      "name": "fill_bytes",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 4,
+        "name": "fill_bytes"
+      },
+      "path": "src/util/entropy.rs",
+      "signature": "pub fn fill_bytes(bytes: &mut [u8])",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::util::entropy::next_u32",
+        "macro_expansion": "not_measured",
+        "path": "src/util/entropy.rs",
+        "signature": "pub fn next_u32() -> u32",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::util::entropy::next_u32",
+      "kind": "function",
+      "line": 10,
+      "name": "next_u32",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 10,
+        "name": "next_u32"
+      },
+      "path": "src/util/entropy.rs",
+      "signature": "pub fn next_u32() -> u32",
       "source_class": "handwritten"
     }
   ],
